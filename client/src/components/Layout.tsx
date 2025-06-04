@@ -42,14 +42,13 @@ export default function Layout({ children }: LayoutProps) {
         {/* Mobile Header with Hamburger */}
         <header className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={toggleSidebar}
-              className="p-2"
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors touch-manipulation"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <Menu className="h-5 w-5" />
-            </Button>
+              <Menu className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+            </button>
             <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
               {company?.name || 'Dashboard'}
             </h1>
