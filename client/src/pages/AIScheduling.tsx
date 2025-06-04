@@ -40,7 +40,7 @@ export default function AIScheduling() {
     <div className="min-h-screen bg-background">
       <div className="flex">
         <Sidebar user={user} company={user.company} />
-        <div className="flex-1 ml-0 lg:ml-64">
+        <div className="flex-1 sm:ml-64">
           <Header 
             title="AI Scheduling" 
             subtitle="Intelligent scheduling and resource optimization powered by AI"
