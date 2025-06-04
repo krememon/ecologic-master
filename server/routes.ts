@@ -213,9 +213,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/clients', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const company = await storage.getUserCompany(userId);
+      let company = await storage.getUserCompany(userId);
+      
+      // If no company exists, create one
       if (!company) {
-        return res.status(404).json({ message: "Company not found" });
+        const user = await storage.getUser(userId);
+        company = await storage.createCompany({
+          name: `${user?.firstName || 'Your'} ${user?.lastName || 'Company'}`,
+          primaryColor: '#3B82F6',
+          secondaryColor: '#1E40AF',
+          ownerId: userId
+        });
       }
       
       const clients = await storage.getClients(company.id);
@@ -337,9 +345,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const company = await storage.getUserCompany(userId);
+      let company = await storage.getUserCompany(userId);
+      
+      // If no company exists, create one
       if (!company) {
-        return res.status(404).json({ message: "Company not found" });
+        const user = await storage.getUser(userId);
+        company = await storage.createCompany({
+          name: `${user?.firstName || 'Your'} ${user?.lastName || 'Company'}`,
+          primaryColor: '#3B82F6',
+          secondaryColor: '#1E40AF',
+          ownerId: userId
+        });
       }
       
       const jobs = await storage.getJobs(company.id);
@@ -461,9 +477,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const company = await storage.getUserCompany(userId);
+      let company = await storage.getUserCompany(userId);
+      
+      // If no company exists, create one
       if (!company) {
-        return res.status(404).json({ message: "Company not found" });
+        const user = await storage.getUser(userId);
+        company = await storage.createCompany({
+          name: `${user?.firstName || 'Your'} ${user?.lastName || 'Company'}`,
+          primaryColor: '#3B82F6',
+          secondaryColor: '#1E40AF',
+          ownerId: userId
+        });
       }
       
       const stats = await storage.getDashboardStats(company.id);
