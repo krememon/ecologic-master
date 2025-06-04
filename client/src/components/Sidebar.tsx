@@ -7,7 +7,8 @@ import {
   UserCheck, 
   FileText, 
   FolderOpen, 
-  MessageSquare 
+  MessageSquare,
+  Brain
 } from "lucide-react";
 
 const navigation = [
@@ -16,6 +17,7 @@ const navigation = [
   { name: "Subcontractors", href: "/subcontractors", icon: Users },
   { name: "Clients", href: "/clients", icon: UserCheck },
   { name: "Invoicing", href: "/invoicing", icon: FileText },
+  { name: "AI Scheduling", href: "/ai-scheduling", icon: Brain },
   { name: "Documents", href: "/documents", icon: FolderOpen },
   { name: "Messages", href: "/messages", icon: MessageSquare },
 ];

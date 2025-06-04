@@ -13,6 +13,7 @@ import Clients from "@/pages/Clients";
 import Invoicing from "@/pages/Invoicing";
 import Documents from "@/pages/Documents";
 import Messages from "@/pages/Messages";
+import AIScheduling from "@/pages/AIScheduling";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -30,6 +31,7 @@ function Router() {
           <Route path="/invoicing" component={Invoicing} />
           <Route path="/documents" component={Documents} />
           <Route path="/messages" component={Messages} />
+          <Route path="/ai-scheduling" component={AIScheduling} />
         </>
       )}
       <Route component={NotFound} />
