@@ -93,6 +93,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }, express.static(uploadsDir));
 
+  // Email authentication routes
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const { firstName, lastName, email, password } = req.body;
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists with this email" });
+      }
+      
+      // Hash password
+      const hashedPassword = await hashPassword(password);
+      
+      // Create user
+      const user = await storage.createUser({
+        firstName,
+        lastName,
+        email,
+        password: hashedPassword,
+        emailVerified: false,
+      });
+      
+      // Create session
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
+        res.status(201).json(user);
+      });
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ message: "Failed to create account" });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Check password
+      const isValid = await comparePasswords(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Create session
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
+        res.json(user);
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Failed to sign in" });
+    }
+  });
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
