@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -110,7 +109,6 @@ export default function Header({ title, subtitle, user }: HeaderProps) {
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-4">
-          <ThemeToggle />
           <Button variant="ghost" size="icon" className="hidden sm:flex">
             <Download className="w-6 h-6" />
           </Button>

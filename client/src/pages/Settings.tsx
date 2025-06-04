@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "@/components/ThemeProvider";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +18,7 @@ import { User, Building2, Palette, Bell, Shield, LogOut, Smartphone } from "luci
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { theme } = useTheme();
   const { 
     isSupported, 
     isSubscribed, 
@@ -191,9 +194,12 @@ export default function Settings() {
                     <h4 className="font-medium">Dark Mode</h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Switch between light and dark themes</p>
                   </div>
-                  <Button variant="outline" disabled>
-                    Auto
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="capitalize">
+                      {theme}
+                    </Badge>
+                    <ThemeToggle />
+                  </div>
                 </div>
                 
                 <Separator />
