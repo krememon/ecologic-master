@@ -1,8 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useLocation } from "wouter";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 import { 
   Building2, 
   DollarSign, 
@@ -15,9 +21,289 @@ import {
   UserPlus,
   FileText
 } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+// Form Components
+function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    startDate: '',
+    endDate: '',
+    budget: '',
+    priority: 'medium',
+    status: 'planning'
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      ...formData,
+      budget: parseFloat(formData.budget) || 0
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="title">Job Title</Label>
+        <Input
+          id="title"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          placeholder="Enter job title"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Job description"
+          rows={3}
+        />
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="startDate">Start Date</Label>
+          <Input
+            id="startDate"
+            type="date"
+            value={formData.startDate}
+            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label htmlFor="endDate">End Date</Label>
+          <Input
+            id="endDate"
+            type="date"
+            value={formData.endDate}
+            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+          />
+        </div>
+      </div>
+      
+      <div>
+        <Label htmlFor="budget">Budget</Label>
+        <Input
+          id="budget"
+          type="number"
+          value={formData.budget}
+          onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+          placeholder="0.00"
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="priority">Priority</Label>
+        <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="low">Low</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="urgent">Urgent</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? "Creating..." : "Create Job"}
+      </Button>
+    </form>
+  );
+}
+
+function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    skills: '',
+    hourlyRate: '',
+    availability: 'available'
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      ...formData,
+      hourlyRate: parseFloat(formData.hourlyRate) || 0,
+      skills: formData.skills.split(',').map(skill => skill.trim()).filter(Boolean)
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="name">Full Name</Label>
+        <Input
+          id="name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="Enter full name"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          placeholder="email@example.com"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="phone">Phone</Label>
+        <Input
+          id="phone"
+          value={formData.phone}
+          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          placeholder="Phone number"
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="company">Company</Label>
+        <Input
+          id="company"
+          value={formData.company}
+          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+          placeholder="Company name"
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="skills">Skills (comma separated)</Label>
+        <Input
+          id="skills"
+          value={formData.skills}
+          onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
+          placeholder="plumbing, electrical, carpentry"
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="hourlyRate">Hourly Rate</Label>
+        <Input
+          id="hourlyRate"
+          type="number"
+          value={formData.hourlyRate}
+          onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
+          placeholder="0.00"
+        />
+      </div>
+      
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? "Adding..." : "Add Subcontractor"}
+      </Button>
+    </form>
+  );
+}
+
+function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+  const [formData, setFormData] = useState({
+    clientName: '',
+    jobTitle: '',
+    amount: '',
+    dueDate: '',
+    description: '',
+    status: 'draft'
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      ...formData,
+      amount: parseFloat(formData.amount) || 0,
+      issueDate: new Date().toISOString().split('T')[0]
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="clientName">Client Name</Label>
+        <Input
+          id="clientName"
+          value={formData.clientName}
+          onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+          placeholder="Client name"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="jobTitle">Job Title</Label>
+        <Input
+          id="jobTitle"
+          value={formData.jobTitle}
+          onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+          placeholder="Job description"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="amount">Amount</Label>
+        <Input
+          id="amount"
+          type="number"
+          step="0.01"
+          value={formData.amount}
+          onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+          placeholder="0.00"
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="dueDate">Due Date</Label>
+        <Input
+          id="dueDate"
+          type="date"
+          value={formData.dueDate}
+          onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+          required
+        />
+      </div>
+      
+      <div>
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Invoice description"
+          rows={3}
+        />
+      </div>
+      
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? "Generating..." : "Generate Invoice"}
+      </Button>
+    </form>
+  );
+}
 
 export default function Dashboard() {
-  const [location, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [isJobDialogOpen, setIsJobDialogOpen] = useState(false);
+  const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats"],
@@ -25,6 +311,74 @@ export default function Dashboard() {
 
   const { data: jobs, isLoading: jobsLoading } = useQuery({
     queryKey: ["/api/jobs"],
+  });
+
+  // Mutations for creating new items
+  const createJobMutation = useMutation({
+    mutationFn: async (jobData: any) => {
+      const res = await apiRequest("POST", "/api/jobs", jobData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setIsJobDialogOpen(false);
+      toast({
+        title: "Job Created",
+        description: "New job has been created successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createSubcontractorMutation = useMutation({
+    mutationFn: async (subcontractorData: any) => {
+      const res = await apiRequest("POST", "/api/subcontractors", subcontractorData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
+      setIsSubcontractorDialogOpen(false);
+      toast({
+        title: "Subcontractor Added",
+        description: "New subcontractor has been added successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createInvoiceMutation = useMutation({
+    mutationFn: async (invoiceData: any) => {
+      const res = await apiRequest("POST", "/api/invoices", invoiceData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      setIsInvoiceDialogOpen(false);
+      toast({
+        title: "Invoice Generated",
+        description: "New invoice has been generated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   if (statsLoading || jobsLoading) {
@@ -215,39 +569,59 @@ export default function Dashboard() {
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Quick Actions</h3>
             </div>
             <CardContent className="p-6 space-y-4">
-              <Button 
-                className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
-                variant="default"
-                onClick={() => {
-                  // Add visual feedback before navigation
-                  setTimeout(() => setLocation("/jobs"), 150);
-                }}
-              >
-                <Plus className="w-5 h-5 mr-2 transition-transform duration-200" />
-                Create New Job
-              </Button>
+              <Dialog open={isJobDialogOpen} onOpenChange={setIsJobDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
+                    variant="default"
+                  >
+                    <Plus className="w-5 h-5 mr-2 transition-transform duration-200" />
+                    Create New Job
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Create New Job</DialogTitle>
+                  </DialogHeader>
+                  <CreateJobForm onSubmit={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
+                </DialogContent>
+              </Dialog>
               
-              <Button 
-                className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
-                variant="outline"
-                onClick={() => {
-                  setTimeout(() => setLocation("/subcontractors"), 150);
-                }}
-              >
-                <UserPlus className="w-5 h-5 mr-2 transition-transform duration-200" />
-                Add Subcontractor
-              </Button>
+              <Dialog open={isSubcontractorDialogOpen} onOpenChange={setIsSubcontractorDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
+                    variant="outline"
+                  >
+                    <UserPlus className="w-5 h-5 mr-2 transition-transform duration-200" />
+                    Add Subcontractor
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Subcontractor</DialogTitle>
+                  </DialogHeader>
+                  <CreateSubcontractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+                </DialogContent>
+              </Dialog>
 
-              <Button 
-                className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
-                variant="outline"
-                onClick={() => {
-                  setTimeout(() => setLocation("/invoicing"), 150);
-                }}
-              >
-                <FileText className="w-5 h-5 mr-2 transition-transform duration-200" />
-                Generate Invoice
-              </Button>
+              <Dialog open={isInvoiceDialogOpen} onOpenChange={setIsInvoiceDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
+                    variant="outline"
+                  >
+                    <FileText className="w-5 h-5 mr-2 transition-transform duration-200" />
+                    Generate Invoice
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Generate New Invoice</DialogTitle>
+                  </DialogHeader>
+                  <CreateInvoiceForm onSubmit={createInvoiceMutation.mutate} isLoading={createInvoiceMutation.isPending} />
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 
