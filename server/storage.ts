@@ -42,7 +42,7 @@ export interface IStorage {
   resetPassword(token: string, newPassword: string): Promise<User | undefined>;
   
   // Company operations
-  getUserCompany(userId: string): Promise<Company | undefined>;
+  getUserCompany(userId: number): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company>;
   
