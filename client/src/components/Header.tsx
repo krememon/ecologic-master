@@ -81,7 +81,7 @@ export default function Header({ title, subtitle, user }: HeaderProps) {
                       <Link key={item.name} href={item.href}>
                         <div
                           className={cn(
-                            "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer",
+                            "flex items-center space-x-3 px-3 py-3 rounded-lg text-base font-medium transition-colors cursor-pointer",
                             isActive
                               ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                               : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800"
