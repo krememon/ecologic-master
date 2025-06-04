@@ -10,7 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertJobSchema, type InsertJob } from "@shared/schema";
+import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
+
+interface JobWithClient extends Job {
+  client?: Client | null;
+}
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -173,7 +177,7 @@ export default function Jobs() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: jobs = [], isLoading: jobsLoading } = useQuery({
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
   });
@@ -328,7 +332,7 @@ export default function Jobs() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job: any) => (
+          {jobs.map((job: JobWithClient) => (
             <Card key={job.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">
