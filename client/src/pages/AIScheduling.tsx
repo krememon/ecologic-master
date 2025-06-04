@@ -377,7 +377,7 @@ export default function AIScheduling() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full h-8 text-xs"
+                      className="w-full h-6 text-xs py-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800"
                       onClick={() => {
                         setSelectedItem({
                           id: '',
@@ -393,8 +393,7 @@ export default function AIScheduling() {
                         setIsDialogOpen(true);
                       }}
                     >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Add
+                      <Plus className="w-3 h-3" />
                     </Button>
                   </div>
                 </div>
