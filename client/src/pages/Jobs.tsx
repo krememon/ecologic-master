@@ -189,26 +189,19 @@ export default function Jobs() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Jobs Management</h1>
-          <p className="text-slate-600 dark:text-slate-400">Manage all your construction projects and track their progress</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Job
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[350px] rounded-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Job</DialogTitle>
-            </DialogHeader>
-            <CreateJobForm onSubmit={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Jobs Management</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage all your construction projects and track their progress</p>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Create New Job</DialogTitle>
+          </DialogHeader>
+          <CreateJobForm onSubmit={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">

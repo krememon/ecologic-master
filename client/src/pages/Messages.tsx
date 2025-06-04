@@ -136,26 +136,19 @@ export default function Messages() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Messages</h1>
-          <p className="text-slate-600 dark:text-slate-400">Communicate with clients and subcontractors</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              New Message
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[350px] rounded-2xl">
-            <DialogHeader>
-              <DialogTitle>Send New Message</DialogTitle>
-            </DialogHeader>
-            <CreateMessageForm onSubmit={createMessageMutation.mutate} isLoading={createMessageMutation.isPending} />
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Messages</h1>
+        <p className="text-slate-600 dark:text-slate-400">Communicate with clients and subcontractors</p>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Send New Message</DialogTitle>
+          </DialogHeader>
+          <CreateMessageForm onSubmit={createMessageMutation.mutate} isLoading={createMessageMutation.isPending} />
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">

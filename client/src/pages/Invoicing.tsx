@@ -169,26 +169,19 @@ export default function Invoicing() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Invoicing</h1>
-          <p className="text-slate-600 dark:text-slate-400">Create and manage invoices for your projects</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Invoice
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[350px] rounded-2xl">
-            <DialogHeader>
-              <DialogTitle>Generate New Invoice</DialogTitle>
-            </DialogHeader>
-            <CreateInvoiceForm onSubmit={createInvoiceMutation.mutate} isLoading={createInvoiceMutation.isPending} />
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Invoicing</h1>
+        <p className="text-slate-600 dark:text-slate-400">Create and manage invoices for your projects</p>
       </div>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Generate New Invoice</DialogTitle>
+          </DialogHeader>
+          <CreateInvoiceForm onSubmit={createInvoiceMutation.mutate} isLoading={createInvoiceMutation.isPending} />
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
