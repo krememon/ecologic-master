@@ -32,7 +32,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
   const [location] = useLocation();
 
   return (
-    <aside className="hidden sm:flex sm:w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col relative z-30 h-screen">
+    <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:z-50 lg:w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col">
       {/* Logo Section */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center space-x-3">

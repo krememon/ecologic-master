@@ -62,13 +62,13 @@ export default function Settings() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="flex">
         <Sidebar user={user} company={user.company} />
-        <div className="flex-1 ml-64">
+        <div className="flex-1 lg:ml-64">
           <Header 
             title="Settings" 
             subtitle="Manage your account and company preferences"
             user={user} 
           />
-          <main className="p-6 space-y-6">
+          <main className="p-4 lg:p-6 space-y-6 max-w-4xl mx-auto">
             
             {/* Profile Settings */}
             <Card>
