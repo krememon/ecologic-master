@@ -9,6 +9,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
+import AuthPage from "@/pages/auth-page";
 import Home from "@/pages/Home";
 import Jobs from "@/pages/Jobs";
 import Subcontractors from "@/pages/Subcontractors";
