@@ -32,6 +32,13 @@ export default function MobileNav({ user, company }: MobileNavProps) {
     setIsOpen(false);
   };
 
+  const handleNavItemClick = () => {
+    // Add a small delay for visual feedback before closing
+    setTimeout(() => {
+      setIsOpen(false);
+    }, 150);
+  };
+
   const navigationItems = [
     { href: "/", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/jobs", icon: Building2, label: "Jobs" },
@@ -66,16 +73,24 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       </div>
 
       {/* Mobile Menu Overlay */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 sm:hidden">
-          {/* Background overlay */}
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50"
-            onClick={handleClose}
-          />
-          
-          {/* Sidebar */}
-          <div className="fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl">
+      <div className={cn(
+        "fixed inset-0 z-50 sm:hidden transition-all duration-300 ease-in-out",
+        isOpen ? "opacity-100 visible" : "opacity-0 invisible"
+      )}>
+        {/* Background overlay */}
+        <div 
+          className={cn(
+            "fixed inset-0 bg-black transition-all duration-300 ease-in-out",
+            isOpen ? "bg-opacity-50 backdrop-blur-sm" : "bg-opacity-0"
+          )}
+          onClick={handleClose}
+        />
+        
+        {/* Sidebar */}
+        <div className={cn(
+          "fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
             {/* Header */}
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between">
@@ -110,25 +125,24 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                     <Link 
                       key={item.href} 
                       href={item.href}
-                      onClick={handleClose}
+                      onClick={handleNavItemClick}
                     >
                       <div className={cn(
-                        "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                        "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105",
                         isActive 
-                          ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800" 
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-sm" 
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm"
                       )}>
-                        <Icon className="w-5 h-5" />
-                        <span>{item.label}</span>
+                        <Icon className="w-5 h-5 transition-transform duration-200" />
+                        <span className="transition-all duration-200">{item.label}</span>
                       </div>
                     </Link>
                   );
                 })}
               </div>
             </nav>
-          </div>
         </div>
-      )}
+      </div>
     </>
   );
 }
