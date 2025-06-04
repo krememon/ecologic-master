@@ -93,10 +93,10 @@ export const subcontractors = pgTable("subcontractors", {
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
-  clientId: integer("client_id").notNull().references(() => clients.id),
+  clientId: integer("client_id").references(() => clients.id),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  status: varchar("status").notNull().default("planning"), // planning, in_progress, completed, cancelled, urgent
+  status: varchar("status").notNull().default("pending"), // pending, active, completed, cancelled
   priority: varchar("priority").default("medium"), // low, medium, high, urgent
   startDate: date("start_date"),
   endDate: date("end_date"),
