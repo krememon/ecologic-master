@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, UserCheck, Mail, Phone, Star } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Plus, UserCheck, Mail, Phone, Star, Edit, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertSubcontractorSchema, type InsertSubcontractor } from "@shared/schema";
 import { useForm } from "react-hook-form";
@@ -16,15 +17,25 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: InsertSubcontractor) => void; isLoading: boolean }) {
+function SubcontractorForm({ 
+  onSubmit, 
+  isLoading, 
+  initialData, 
+  isEdit 
+}: { 
+  onSubmit: (data: InsertSubcontractor) => void; 
+  isLoading: boolean; 
+  initialData?: any;
+  isEdit?: boolean;
+}) {
   const form = useForm<InsertSubcontractor>({
     resolver: zodResolver(insertSubcontractorSchema),
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      skills: [],
-      isAvailable: true,
+      name: initialData?.name || "",
+      email: initialData?.email || "",
+      phone: initialData?.phone || "",
+      skills: initialData?.skills || [],
+      isAvailable: initialData?.isAvailable !== undefined ? initialData.isAvailable : true,
     },
   });
 
@@ -99,6 +110,7 @@ export default function Subcontractors() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingSubcontractor, setEditingSubcontractor] = useState(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -142,6 +154,48 @@ export default function Subcontractors() {
     },
   });
 
+  const updateSubcontractorMutation = useMutation({
+    mutationFn: async ({ subcontractorId, subcontractorData }: { subcontractorId: number, subcontractorData: InsertSubcontractor }) => {
+      const res = await apiRequest("PATCH", `/api/subcontractors/${subcontractorId}`, subcontractorData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
+      toast({
+        title: "Success",
+        description: "Subcontractor updated successfully!",
+      });
+      setEditingSubcontractor(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteSubcontractorMutation = useMutation({
+    mutationFn: async (subcontractorId: number) => {
+      await apiRequest("DELETE", `/api/subcontractors/${subcontractorId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
+      toast({
+        title: "Success",
+        description: "Subcontractor deleted successfully!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading || !isAuthenticated || subcontractorsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -162,7 +216,22 @@ export default function Subcontractors() {
           <DialogHeader>
             <DialogTitle>Add New Subcontractor</DialogTitle>
           </DialogHeader>
-          <CreateSubcontractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+          <SubcontractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Subcontractor Dialog */}
+      <Dialog open={!!editingSubcontractor} onOpenChange={(open) => !open && setEditingSubcontractor(null)}>
+        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Subcontractor</DialogTitle>
+          </DialogHeader>
+          <SubcontractorForm 
+            onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor.id, subcontractorData: data })} 
+            isLoading={updateSubcontractorMutation.isPending}
+            initialData={editingSubcontractor}
+            isEdit={true}
+          />
         </DialogContent>
       </Dialog>
 
