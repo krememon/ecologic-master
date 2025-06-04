@@ -29,6 +29,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
           secondaryColor: '#1E40AF',
           ownerId: userId
         });
+
+        // Create sample data for demonstration
+        try {
+          // Create sample clients
+          const client1 = await storage.createClient({
+            companyId: company.id,
+            name: "Green Valley Resort",
+            email: "contact@greenvalleyresort.com",
+            phone: "(555) 123-4567",
+            address: "123 Mountain View Drive, Green Valley, CA 90210",
+            notes: "Eco-friendly resort project focusing on sustainable construction"
+          });
+
+          const client2 = await storage.createClient({
+            companyId: company.id,
+            name: "Sunrise Apartments",
+            email: "manager@sunriseapts.com", 
+            phone: "(555) 987-6543",
+            address: "456 Oak Street, Sunrise City, CA 90211",
+            notes: "Multi-unit residential development with energy-efficient systems"
+          });
+
+          // Create sample subcontractors
+          await storage.createSubcontractor({
+            companyId: company.id,
+            name: "Mike Thompson",
+            email: "mike@watersystems.com",
+            phone: "(555) 234-5678",
+            skills: ["Plumbing", "Water Systems", "Pipe Installation", "Leak Detection"],
+            rating: 4.8,
+            isAvailable: true,
+            hourlyRate: 85,
+            notes: "Specialist in eco-friendly water systems and conservation"
+          });
+
+          await storage.createSubcontractor({
+            companyId: company.id,
+            name: "Sarah Chen",
+            email: "sarah@greenwiring.com",
+            phone: "(555) 345-6789", 
+            skills: ["Electrical", "Solar Installation", "Smart Systems", "Energy Efficiency"],
+            rating: 4.9,
+            isAvailable: true,
+            hourlyRate: 95,
+            notes: "Expert in renewable energy and smart building systems"
+          });
+
+          await storage.createSubcontractor({
+            companyId: company.id,
+            name: "Carlos Rodriguez",
+            email: "carlos@ecobuild.com",
+            phone: "(555) 456-7890",
+            skills: ["HVAC", "Air Quality", "Ventilation", "Climate Control"],
+            rating: 4.7,
+            isAvailable: false,
+            hourlyRate: 90,
+            notes: "Specializes in energy-efficient heating and cooling systems"
+          });
+
+          // Create sample jobs
+          await storage.createJob({
+            companyId: company.id,
+            clientId: client1.id,
+            title: "Resort Water Treatment System Installation",
+            description: "Install eco-friendly water treatment and recycling system for the resort's spa and pool facilities",
+            status: "planning",
+            priority: "high",
+            startDate: "2024-07-15",
+            endDate: "2024-08-30", 
+            estimatedCost: 75000,
+            location: "Green Valley, CA",
+            notes: "Focus on sustainable water management and conservation technologies"
+          });
+
+          await storage.createJob({
+            companyId: company.id,
+            clientId: client2.id,
+            title: "Apartment Smart Energy Systems",
+            description: "Install solar panels, smart thermostats, and energy monitoring systems across all units",
+            status: "in_progress",
+            priority: "medium",
+            startDate: "2024-06-01",
+            endDate: "2024-09-15",
+            estimatedCost: 120000,
+            actualCost: 85000,
+            location: "Sunrise City, CA", 
+            notes: "Comprehensive energy efficiency upgrade for 24-unit building"
+          });
+
+          await storage.createJob({
+            companyId: company.id,
+            clientId: client1.id,
+            title: "Resort Landscaping Water Conservation",
+            description: "Design and install drip irrigation system and native plant landscaping",
+            status: "planning",
+            priority: "low",
+            estimatedCost: 35000,
+            location: "Green Valley, CA",
+            notes: "Drought-resistant landscaping with automated irrigation controls"
+          });
+        } catch (error) {
+          console.log("Sample data creation failed (may already exist):", error.message);
+        }
       }
       
       res.json({ ...user, company });
