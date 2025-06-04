@@ -8,6 +8,7 @@ import { z } from "zod";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import express from "express";
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -84,6 +85,13 @@ async function sendPushNotification(userId: string, notification: any) {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+
+  // Serve uploaded files
+  app.use('/uploads', (req, res, next) => {
+    // Add proper headers for images
+    res.header('Cache-Control', 'public, max-age=86400'); // 1 day cache
+    next();
+  }, express.static(uploadsDir));
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -214,6 +222,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Profile picture upload route
+  app.post('/api/auth/user/profile-image', isAuthenticated, upload.single('profileImage'), async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No image file provided" });
+      }
+
+      // Create the URL for the uploaded image
+      const imageUrl = `/uploads/${req.file.filename}`;
+      
+      // Update user profile with new image URL
+      const updatedUser = await storage.upsertUser({
+        id: userId,
+        profileImageUrl: imageUrl,
+      });
+
+      res.json({ 
+        message: "Profile picture updated successfully",
+        profileImageUrl: imageUrl,
+        user: updatedUser
+      });
+    } catch (error) {
+      console.error("Error uploading profile picture:", error);
+      
+      // Clean up uploaded file if there was an error
+      if (req.file) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          console.error("Error cleaning up file:", unlinkError);
+        }
+      }
+      
+      res.status(500).json({ message: "Failed to upload profile picture" });
     }
   });
 
