@@ -53,7 +53,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
       
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 z-50 w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col transition-transform duration-300 ease-in-out",
+        "flex fixed inset-y-0 z-50 w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col transition-transform duration-300 ease-in-out",
         "lg:translate-x-0", // Always visible on large screens
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0" // Toggle on mobile, always visible on desktop
       )}>
