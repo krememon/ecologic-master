@@ -579,7 +579,7 @@ export default function Dashboard() {
                     Create New Job
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[400px] rounded-2xl">
                   <DialogHeader>
                     <DialogTitle>Create New Job</DialogTitle>
                   </DialogHeader>
@@ -597,7 +597,7 @@ export default function Dashboard() {
                     Add Subcontractor
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[400px] rounded-2xl">
                   <DialogHeader>
                     <DialogTitle>Add New Subcontractor</DialogTitle>
                   </DialogHeader>
@@ -615,7 +615,7 @@ export default function Dashboard() {
                     Generate Invoice
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[400px] rounded-2xl">
                   <DialogHeader>
                     <DialogTitle>Generate New Invoice</DialogTitle>
                   </DialogHeader>
