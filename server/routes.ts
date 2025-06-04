@@ -345,20 +345,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      console.log("Fetching jobs for user:", userId);
+      
       let company = await storage.getUserCompany(userId);
+      console.log("Found company for jobs:", company);
       
       // If no company exists, create one
       if (!company) {
         const user = await storage.getUser(userId);
+        console.log("Creating company for jobs for user:", user);
         company = await storage.createCompany({
           name: `${user?.firstName || 'Your'} ${user?.lastName || 'Company'}`,
           primaryColor: '#3B82F6',
           secondaryColor: '#1E40AF',
           ownerId: userId
         });
+        console.log("Created company for jobs:", company);
       }
       
       const jobs = await storage.getJobs(company.id);
+      console.log("Retrieved jobs:", jobs);
       res.json(jobs);
     } catch (error) {
       console.error("Error fetching jobs:", error);
