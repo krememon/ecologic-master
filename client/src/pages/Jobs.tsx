@@ -18,8 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: InsertJob) => void; isLoading: boolean }) {
-  const form = useForm<InsertJob>({
-    resolver: zodResolver(insertJobSchema),
+  const form = useForm({
     defaultValues: {
       title: "",
       description: "",
@@ -29,7 +28,7 @@ function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: InsertJob) =>
     },
   });
 
-  const handleSubmit = (data: InsertJob) => {
+  const handleSubmit = (data: any) => {
     console.log("Form submitting with data:", data);
     onSubmit(data);
   };
@@ -58,7 +57,10 @@ function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: InsertJob) =>
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea placeholder="Complete kitchen remodel including cabinets, countertops..." {...field} />
+                <Textarea 
+                  placeholder="Complete kitchen remodel including cabinets, countertops..." 
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -72,7 +74,10 @@ function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: InsertJob) =>
             <FormItem>
               <FormLabel>Location</FormLabel>
               <FormControl>
-                <Input placeholder="123 Main St, City, State" {...field} />
+                <Input 
+                  placeholder="123 Main St, City, State" 
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
