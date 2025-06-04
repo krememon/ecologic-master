@@ -193,7 +193,6 @@ export class DatabaseStorage implements IStorage {
         priority: jobs.priority,
         startDate: jobs.startDate,
         endDate: jobs.endDate,
-        budget: jobs.budget,
         location: jobs.location,
         description: jobs.description,
         notes: jobs.notes,
@@ -223,7 +222,6 @@ export class DatabaseStorage implements IStorage {
         priority: jobs.priority,
         startDate: jobs.startDate,
         endDate: jobs.endDate,
-        budget: jobs.budget,
         location: jobs.location,
         description: jobs.description,
         notes: jobs.notes,
@@ -270,8 +268,7 @@ export class DatabaseStorage implements IStorage {
         amount: invoices.amount,
         status: invoices.status,
         dueDate: invoices.dueDate,
-        issuedDate: invoices.issuedDate,
-        description: invoices.description,
+        issueDate: invoices.issueDate,
         clientId: invoices.clientId,
         jobId: invoices.jobId,
         companyId: invoices.companyId,
@@ -408,7 +405,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(invoices.companyId, companyId),
           eq(invoices.status, "paid"),
-          sql`DATE_TRUNC('month', issued_date) = DATE_TRUNC('month', CURRENT_DATE)`
+          sql`DATE_TRUNC('month', issue_date) = DATE_TRUNC('month', CURRENT_DATE)`
         )
       );
 
