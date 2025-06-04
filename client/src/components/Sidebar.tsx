@@ -1,7 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/hooks/useSidebar";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { 
   Building2, 
   LayoutDashboard, 
@@ -30,16 +29,17 @@ const navigation = [
 interface SidebarProps {
   user: any;
   company: any;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function Sidebar({ user, company }: SidebarProps) {
+export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
-  const { isOpen, close } = useSidebar();
 
   // Close sidebar on route change (mobile)
   useEffect(() => {
-    close();
-  }, [location, close]);
+    onClose();
+  }, [location, onClose]);
 
   return (
     <>
@@ -49,7 +49,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
           "fixed inset-0 bg-black transition-opacity duration-300 ease-in-out sm:hidden z-40",
           isOpen ? "opacity-50" : "opacity-0 pointer-events-none"
         )}
-        onClick={close}
+        onClick={onClose}
       />
       
       {/* Sidebar */}

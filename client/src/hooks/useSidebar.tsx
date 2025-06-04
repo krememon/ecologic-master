@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface SidebarContextType {
   isOpen: boolean;
@@ -9,10 +10,13 @@ interface SidebarContextType {
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
-export function SidebarProvider({ children }: { children: ReactNode }): React.JSX.Element {
+export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const toggle = () => setIsOpen(!isOpen);
+  const toggle = () => {
+    console.log('Toggle sidebar clicked, current state:', isOpen);
+    setIsOpen(!isOpen);
+  };
   const close = () => setIsOpen(false);
   const open = () => setIsOpen(true);
 
