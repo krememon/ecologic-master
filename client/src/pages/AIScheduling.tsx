@@ -235,7 +235,7 @@ export default function AIScheduling() {
   };
 
   const weekDates = getWeekDates(selectedWeek);
-  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   const getStatusColor = (status: string) => {
     switch (status) {
