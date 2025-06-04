@@ -490,8 +490,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(job);
     } catch (error) {
       console.error("Error creating job:", error);
-      console.error("Error stack:", error.stack);
-      res.status(500).json({ message: "Failed to create job", error: error.message });
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+      res.status(500).json({ message: "Failed to create job", error: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -842,13 +842,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data.toString());
         
         if (message.type === 'auth' && message.userId) {
-          userId = message.userId;
+          userId = String(message.userId);
           
           // Add this connection to the user's connections
-          if (!userConnections.has(userId)) {
+          if (userId && !userConnections.has(userId)) {
             userConnections.set(userId, []);
           }
-          userConnections.get(userId)!.push(ws);
+          if (userId) {
+            userConnections.get(userId)!.push(ws);
+          }
           
           console.log('WebSocket authenticated for user:', userId);
           
