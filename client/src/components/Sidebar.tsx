@@ -38,7 +38,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
         <div className="flex items-center space-x-3">
           <div 
             className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: company?.secondaryColor || '#059669' }}
+            style={{ backgroundColor: company?.secondaryColor || '#5EEAD4' }}
           >
             <Building2 className="w-6 h-6 text-white" />
           </div>
@@ -65,7 +65,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
                   ? "text-white" 
                   : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               )}
-              style={isActive ? { backgroundColor: company?.primaryColor || '#2563EB' } : {}}
+              style={isActive ? { backgroundColor: company?.primaryColor || '#0EA5E9' } : {}}
               >
                 <Icon className="w-5 h-5 mr-3" />
                 {item.name}
@@ -96,7 +96,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
           <button className={cn(
             "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
             location === "/settings"
-              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+              ? "bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300"
               : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
           )}>
             <Settings className="w-4 h-4" />

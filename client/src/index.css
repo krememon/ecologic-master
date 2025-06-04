@@ -3,51 +3,51 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 11% 98%; /* #F5F7FA */
+  --background: 160 60% 97%; /* #F0FDFA */
   --foreground: 222 84% 5%; /* #0F172A */
-  --muted: 210 40% 96%; /* #F1F5F9 */
+  --muted: 160 40% 94%; /* #E6FFFA */
   --muted-foreground: 215 16% 47%; /* #64748B */
   --popover: 0 0% 100%; /* #FFFFFF */
   --popover-foreground: 222 84% 5%; /* #0F172A */
   --card: 0 0% 100%; /* #FFFFFF */
   --card-foreground: 222 84% 5%; /* #0F172A */
-  --border: 214 32% 91%; /* #E2E8F0 */
-  --input: 214 32% 91%; /* #E2E8F0 */
-  --primary: 217 91% 60%; /* #2563EB */
-  --primary-foreground: 210 40% 98%; /* #F8FAFC */
-  --secondary: 142 76% 36%; /* #059669 */
-  --secondary-foreground: 0 0% 100%; /* #FFFFFF */
-  --accent: 0 84% 60%; /* #DC2626 */
+  --border: 160 30% 88%; /* #CCFBF1 */
+  --input: 160 30% 88%; /* #CCFBF1 */
+  --primary: 200 90% 55%; /* #0EA5E9 */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 160 84% 70%; /* #5EEAD4 */
+  --secondary-foreground: 160 84% 15%; /* #134E4A */
+  --accent: 217 91% 60%; /* #3B82F6 */
   --accent-foreground: 0 0% 100%; /* #FFFFFF */
   --destructive: 0 84% 60%; /* #DC2626 */
   --destructive-foreground: 0 0% 100%; /* #FFFFFF */
-  --success: 142 71% 45%; /* #10B981 */
+  --success: 160 84% 45%; /* #14B8A6 */
   --warning: 45 93% 47%; /* #F59E0B */
   --urgent: 0 84% 60%; /* #EF4444 */
-  --ring: 217 91% 60%; /* #2563EB */
+  --ring: 200 90% 55%; /* #0EA5E9 */
   --radius: 0.75rem;
 }
 
 .dark {
-  --background: 222 84% 5%; /* #0F172A */
-  --foreground: 210 40% 98%; /* #F8FAFC */
-  --muted: 217 33% 17%; /* #1E293B */
-  --muted-foreground: 215 20% 65%; /* #94A3B8 */
-  --popover: 222 84% 5%; /* #0F172A */
-  --popover-foreground: 210 40% 98%; /* #F8FAFC */
-  --card: 222 84% 5%; /* #0F172A */
-  --card-foreground: 210 40% 98%; /* #F8FAFC */
-  --border: 217 33% 17%; /* #1E293B */
-  --input: 217 33% 17%; /* #1E293B */
-  --primary: 217 91% 60%; /* #2563EB */
-  --primary-foreground: 210 40% 98%; /* #F8FAFC */
-  --secondary: 142 76% 36%; /* #059669 */
+  --background: 160 84% 8%; /* #0D1F1C */
+  --foreground: 160 40% 98%; /* #F0FDFA */
+  --muted: 160 30% 15%; /* #1F2937 */
+  --muted-foreground: 160 20% 65%; /* #6B7280 */
+  --popover: 160 84% 8%; /* #0D1F1C */
+  --popover-foreground: 160 40% 98%; /* #F0FDFA */
+  --card: 160 84% 8%; /* #0D1F1C */
+  --card-foreground: 160 40% 98%; /* #F0FDFA */
+  --border: 160 30% 20%; /* #1F2937 */
+  --input: 160 30% 20%; /* #1F2937 */
+  --primary: 200 90% 55%; /* #0EA5E9 */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 160 84% 40%; /* #14B8A6 */
   --secondary-foreground: 0 0% 100%; /* #FFFFFF */
-  --accent: 0 84% 60%; /* #DC2626 */
+  --accent: 217 91% 60%; /* #3B82F6 */
   --accent-foreground: 0 0% 100%; /* #FFFFFF */
   --destructive: 0 84% 60%; /* #DC2626 */
   --destructive-foreground: 0 0% 100%; /* #FFFFFF */
-  --success: 142 71% 45%; /* #10B981 */
+  --success: 160 84% 45%; /* #14B8A6 */
   --warning: 45 93% 47%; /* #F59E0B */
   --urgent: 0 84% 60%; /* #EF4444 */
   --ring: 217 91% 60%; /* #2563EB */
