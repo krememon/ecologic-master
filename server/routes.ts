@@ -115,7 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Email authentication routes
   app.post('/api/auth/register', async (req, res) => {
     try {
-      const { firstName, lastName, email, password } = req.body;
+      const { firstName, lastName, companyName, email, password } = req.body;
       
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -133,6 +133,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         password: hashedPassword,
         emailVerified: false,
+      });
+      
+      // Create company for the user
+      const company = await storage.createCompany({
+        name: companyName,
+        ownerId: user.id,
+        primaryColor: "#3B82F6",
+        secondaryColor: "#1E40AF",
       });
       
       // Create session
@@ -160,6 +168,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check password
+      if (!user.password) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
       const isValid = await comparePasswords(password, user.password);
       if (!isValid) {
         return res.status(401).json({ message: "Invalid email or password" });

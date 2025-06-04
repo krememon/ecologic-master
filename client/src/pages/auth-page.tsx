@@ -24,6 +24,7 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+  companyName: z.string().min(1, "Company name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
@@ -55,6 +56,7 @@ export default function AuthPage() {
     defaultValues: {
       firstName: "",
       lastName: "",
+      companyName: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -223,6 +225,22 @@ export default function AuthPage() {
                         <p className="text-sm text-red-500">{registerForm.formState.errors.lastName.message}</p>
                       )}
                     </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        id="companyName"
+                        placeholder="Your business name"
+                        className="pl-10"
+                        {...registerForm.register("companyName")}
+                      />
+                    </div>
+                    {registerForm.formState.errors.companyName && (
+                      <p className="text-sm text-red-500">{registerForm.formState.errors.companyName.message}</p>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
