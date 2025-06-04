@@ -1,15 +1,127 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, UserCheck, Mail, Phone, Star } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { insertSubcontractorSchema, type InsertSubcontractor } from "@shared/schema";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: InsertSubcontractor) => void; isLoading: boolean }) {
+  const form = useForm<InsertSubcontractor>({
+    resolver: zodResolver(insertSubcontractorSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      specialization: "",
+      status: "available",
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <Input placeholder="John Smith" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input type="email" placeholder="john@contractor.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="phone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone</FormLabel>
+              <FormControl>
+                <Input placeholder="(555) 123-4567" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="specialization"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Specialization</FormLabel>
+              <FormControl>
+                <Input placeholder="Plumbing, Electrical, Carpentry..." {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Status</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="available">Available</SelectItem>
+                  <SelectItem value="busy">Busy</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? "Adding..." : "Add Subcontractor"}
+        </Button>
+      </form>
+    </Form>
+  );
+}
 
 export default function Subcontractors() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -30,6 +142,29 @@ export default function Subcontractors() {
     enabled: isAuthenticated,
   });
 
+  const createSubcontractorMutation = useMutation({
+    mutationFn: async (subcontractorData: InsertSubcontractor) => {
+      const res = await apiRequest("POST", "/api/subcontractors", subcontractorData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Success",
+        description: "Subcontractor added successfully",
+      });
+      setIsDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading || !isAuthenticated || subcontractorsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -45,10 +180,20 @@ export default function Subcontractors() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Subcontractors</h1>
           <p className="text-slate-600 dark:text-slate-400">Manage your network of skilled subcontractors</p>
         </div>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Subcontractor
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Subcontractor
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[350px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Subcontractor</DialogTitle>
+            </DialogHeader>
+            <CreateSubcontractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="flex items-center justify-between">
