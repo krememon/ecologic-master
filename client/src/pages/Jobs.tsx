@@ -29,9 +29,14 @@ function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: InsertJob) =>
     },
   });
 
+  const handleSubmit = (data: InsertJob) => {
+    console.log("Form submitting with data:", data);
+    onSubmit(data);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="title"
