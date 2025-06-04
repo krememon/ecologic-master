@@ -8,7 +8,8 @@ import {
   FileText, 
   FolderOpen, 
   MessageSquare,
-  Brain
+  Brain,
+  Settings
 } from "lucide-react";
 
 const navigation = [
@@ -76,7 +77,7 @@ export default function Sidebar({ user, company }: SidebarProps) {
 
       {/* User Profile */}
       <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 mb-3">
           <img 
             src={user?.profileImageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.firstName || 'U')}&background=random`}
             alt="Profile picture" 
@@ -89,6 +90,19 @@ export default function Sidebar({ user, company }: SidebarProps) {
             <p className="text-xs text-slate-600 dark:text-slate-400">Project Manager</p>
           </div>
         </div>
+        
+        {/* Settings Button */}
+        <Link href="/settings">
+          <button className={cn(
+            "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+            location === "/settings"
+              ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+          )}>
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
+          </button>
+        </Link>
       </div>
     </aside>
   );
