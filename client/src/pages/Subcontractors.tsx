@@ -227,7 +227,7 @@ export default function Subcontractors() {
             <DialogTitle>Edit Subcontractor</DialogTitle>
           </DialogHeader>
           <SubcontractorForm 
-            onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor.id, subcontractorData: data })} 
+            onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor?.id, subcontractorData: data })} 
             isLoading={updateSubcontractorMutation.isPending}
             initialData={editingSubcontractor}
             isEdit={true}
@@ -293,10 +293,49 @@ export default function Subcontractors() {
                   </div>
                 )}
                 
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                   <p className="text-xs text-slate-500">
                     Added {new Date(subcontractor.createdAt).toLocaleDateString()}
                   </p>
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                      onClick={() => setEditingSubcontractor(subcontractor)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Subcontractor</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{subcontractor.name}"? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => deleteSubcontractorMutation.mutate(subcontractor.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                            disabled={deleteSubcontractorMutation.isPending}
+                          >
+                            {deleteSubcontractorMutation.isPending ? "Deleting..." : "Delete"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               </CardContent>
             </Card>
