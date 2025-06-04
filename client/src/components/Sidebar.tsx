@@ -41,10 +41,16 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
     console.log('Sidebar received isOpen state:', isOpen);
   }, [isOpen]);
 
-  // Close sidebar on route change (mobile)
+  // Close sidebar on route change (mobile only, not on initial mount)
+  const [hasMounted, setHasMounted] = useState(false);
+  
   useEffect(() => {
-    onClose();
-  }, [location, onClose]);
+    if (hasMounted) {
+      onClose();
+    } else {
+      setHasMounted(true);
+    }
+  }, [location, onClose, hasMounted]);
 
   return (
     <>
