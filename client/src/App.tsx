@@ -54,7 +54,7 @@ function Router() {
           <Route path="/messages" component={Messages} />
           <Route path="/ai-scheduling" component={AIScheduling} />
           <Route path="/settings" component={Settings} />
-          <Route path="/*" component={NotFound} />
+          <Route component={NotFound} />
         </>
       )}
     </Switch>
