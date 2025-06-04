@@ -166,9 +166,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: "carlos@ecobuild.com",
             phone: "(555) 456-7890",
             skills: ["HVAC", "Air Quality", "Ventilation", "Climate Control"],
-            rating: 4.7,
+            rating: "4.7",
             isAvailable: false,
-            hourlyRate: 90,
+            hourlyRate: "90",
             notes: "Specializes in energy-efficient heating and cooling systems"
           });
 
@@ -182,7 +182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             priority: "high",
             startDate: "2024-07-15",
             endDate: "2024-08-30", 
-            estimatedCost: 75000,
+            estimatedCost: "75000",
             location: "Green Valley, CA",
             notes: "Focus on sustainable water management and conservation technologies"
           });
@@ -196,8 +196,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             priority: "medium",
             startDate: "2024-06-01",
             endDate: "2024-09-15",
-            estimatedCost: 120000,
-            actualCost: 85000,
+            estimatedCost: "120000",
+            actualCost: "85000",
             location: "Sunrise City, CA", 
             notes: "Comprehensive energy efficiency upgrade for 24-unit building"
           });
@@ -209,12 +209,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             description: "Design and install drip irrigation system and native plant landscaping",
             status: "planning",
             priority: "low",
-            estimatedCost: 35000,
+            estimatedCost: "35000",
             location: "Green Valley, CA",
             notes: "Drought-resistant landscaping with automated irrigation controls"
           });
         } catch (error) {
-          console.log("Sample data creation failed (may already exist):", error.message);
+          console.log("Sample data creation failed (may already exist):", error instanceof Error ? error.message : error);
         }
       }
       

@@ -37,7 +37,7 @@ function CreateMessageForm({ onSubmit, isLoading }: { onSubmit: (data: InsertMes
             <FormItem>
               <FormLabel>Recipient ID</FormLabel>
               <FormControl>
-                <Input placeholder="recipient-user-id" {...field} />
+                <Input placeholder="recipient-user-id" {...field} value={field.value || ""} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -51,7 +51,7 @@ function CreateMessageForm({ onSubmit, isLoading }: { onSubmit: (data: InsertMes
             <FormItem>
               <FormLabel>Subject</FormLabel>
               <FormControl>
-                <Input placeholder="Project Update" {...field} />
+                <Input placeholder="Project Update" {...field} value={field.value || ""} />
               </FormControl>
               <FormMessage />
             </FormItem>
