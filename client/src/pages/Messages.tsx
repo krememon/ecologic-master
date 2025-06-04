@@ -1,15 +1,89 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MessageSquare, Send, Plus } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { insertMessageSchema, type InsertMessage } from "@shared/schema";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+function CreateMessageForm({ onSubmit, isLoading }: { onSubmit: (data: InsertMessage) => void; isLoading: boolean }) {
+  const form = useForm<InsertMessage>({
+    resolver: zodResolver(insertMessageSchema),
+    defaultValues: {
+      subject: "",
+      content: "",
+      recipientEmail: "",
+      isRead: false,
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="recipientEmail"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Recipient Email</FormLabel>
+              <FormControl>
+                <Input type="email" placeholder="john@contractor.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="subject"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Subject</FormLabel>
+              <FormControl>
+                <Input placeholder="Project Update" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="content"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Message</FormLabel>
+              <FormControl>
+                <Textarea placeholder="Enter your message here..." {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? "Sending..." : "Send Message"}
+        </Button>
+      </form>
+    </Form>
+  );
+}
 
 export default function Messages() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -30,6 +104,28 @@ export default function Messages() {
     enabled: isAuthenticated,
   });
 
+  const createMessageMutation = useMutation({
+    mutationFn: async (messageData: InsertMessage) => {
+      const res = await apiRequest("POST", "/api/messages", messageData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
+      toast({
+        title: "Success",
+        description: "Message sent successfully",
+      });
+      setIsDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading || !isAuthenticated || messagesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -45,10 +141,20 @@ export default function Messages() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Messages</h1>
           <p className="text-slate-600 dark:text-slate-400">Communicate with clients and subcontractors</p>
         </div>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          New Message
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              New Message
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[350px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Send New Message</DialogTitle>
+            </DialogHeader>
+            <CreateMessageForm onSubmit={createMessageMutation.mutate} isLoading={createMessageMutation.isPending} />
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="flex items-center justify-between">

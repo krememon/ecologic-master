@@ -23,8 +23,8 @@ function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: Ins
       name: "",
       email: "",
       phone: "",
-      specialization: "",
-      status: "available",
+      skills: [],
+      isAvailable: true,
     },
   });
 
@@ -52,7 +52,7 @@ function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: Ins
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="john@contractor.com" {...field} />
+                <Input type="email" placeholder="john@contractor.com" {...field} value={field.value || ""} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -66,7 +66,7 @@ function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: Ins
             <FormItem>
               <FormLabel>Phone</FormLabel>
               <FormControl>
-                <Input placeholder="(555) 123-4567" {...field} />
+                <Input placeholder="(555) 123-4567" {...field} value={field.value || ""} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -75,36 +75,13 @@ function CreateSubcontractorForm({ onSubmit, isLoading }: { onSubmit: (data: Ins
         
         <FormField
           control={form.control}
-          name="specialization"
+          name="notes"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Specialization</FormLabel>
+              <FormLabel>Skills & Notes</FormLabel>
               <FormControl>
-                <Input placeholder="Plumbing, Electrical, Carpentry..." {...field} />
+                <Textarea placeholder="Plumbing, Electrical, Carpentry..." {...field} value={field.value || ""} />
               </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="status"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="available">Available</SelectItem>
-                  <SelectItem value="busy">Busy</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
               <FormMessage />
             </FormItem>
           )}
