@@ -26,12 +26,12 @@ export default function Dashboard() {
 
   if (statsLoading || jobsLoading) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="responsive-container space-y-4 sm:space-y-6">
+        <div className="responsive-grid">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-20 bg-slate-200 rounded"></div>
+              <CardContent className="p-4 sm:p-6">
+                <div className="h-16 sm:h-20 bg-slate-200 rounded"></div>
               </CardContent>
             </Card>
           ))}

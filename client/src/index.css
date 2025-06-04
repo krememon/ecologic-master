@@ -84,4 +84,82 @@
   .status-cancelled {
     @apply bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300;
   }
+
+  /* Responsive design utilities */
+  .responsive-container {
+    @apply px-4 py-2 max-w-screen-2xl mx-auto;
+  }
+
+  @media (min-width: 640px) {
+    .responsive-container {
+      @apply px-6 py-4;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-container {
+      @apply px-8 py-6;
+    }
+  }
+
+  /* Mobile-first grid layouts */
+  .responsive-grid {
+    @apply grid grid-cols-1 gap-4;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-grid {
+      @apply grid-cols-2 gap-6;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .responsive-grid {
+      @apply grid-cols-3 gap-8;
+    }
+  }
+
+  /* Responsive text sizes */
+  .responsive-text-xs {
+    @apply text-xs;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-text-xs {
+      @apply text-sm;
+    }
+  }
+
+  .responsive-text-sm {
+    @apply text-sm;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-text-sm {
+      @apply text-base;
+    }
+  }
+
+  .responsive-text-base {
+    @apply text-base;
+  }
+
+  @media (min-width: 768px) {
+    .responsive-text-base {
+      @apply text-lg;
+    }
+  }
+
+  /* Touch-friendly button sizing */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
+  /* Safe area padding for mobile devices */
+  .safe-area-padding {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }

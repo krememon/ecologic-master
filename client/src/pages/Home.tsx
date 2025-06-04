@@ -34,9 +34,11 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
-      <Sidebar user={user} company={user?.company} />
-      <main className="flex-1 overflow-auto">
+    <div className="flex flex-col sm:flex-row h-screen bg-slate-50 dark:bg-slate-900">
+      <div className="hidden sm:block">
+        <Sidebar user={user} company={user?.company} />
+      </div>
+      <main className="flex-1 overflow-auto responsive-container">
         <Header 
           title="Dashboard Overview"
           subtitle={`Welcome back, ${user?.firstName}! Here's what's happening with your projects.`}
@@ -44,6 +46,7 @@ export default function Home() {
         />
         <Dashboard />
       </main>
+      {/* Mobile sidebar overlay would go here if needed */}
     </div>
   );
 }
