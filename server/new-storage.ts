@@ -424,9 +424,13 @@ export class DatabaseStorage implements IStorage {
         subject: messages.subject,
         content: messages.content,
         isRead: messages.isRead,
-        senderId: messages.senderId,
+        fromEmail: messages.fromEmail,
+        fromName: messages.fromName,
+        toEmail: messages.toEmail,
+        toName: messages.toName,
         companyId: messages.companyId,
         createdAt: messages.createdAt,
+        updatedAt: messages.updatedAt,
       })
       .from(messages)
       .where(eq(messages.companyId, companyId))
@@ -441,7 +445,7 @@ export class DatabaseStorage implements IStorage {
   async markMessageAsRead(id: number): Promise<void> {
     await db
       .update(messages)
-      .set({ isRead: true })
+      .set({ isRead: true, updatedAt: new Date() })
       .where(eq(messages.id, id));
   }
 
@@ -459,7 +463,7 @@ export class DatabaseStorage implements IStorage {
     const availableSubcontractorsCount = await db
       .select({ count: sql`count(*)` })
       .from(subcontractors)
-      .where(eq(subcontractors.companyId, companyId));
+      .where(and(eq(subcontractors.companyId, companyId), eq(subcontractors.status, "available")));
 
     const monthlyRevenueResult = await db
       .select({ total: sql`sum(amount)` })

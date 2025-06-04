@@ -44,13 +44,17 @@ async function sendPushNotification(userId: string, notification: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  await setupAuth(app);
+  // Set up authentication
+  setupAuth(app);
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', async (req: any, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -65,7 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: `${user.firstName || 'Your'} ${user.lastName || 'Company'}`,
           primaryColor: '#3B82F6',
           secondaryColor: '#1E40AF',
-          ownerId: userId
+          ownerId: userId.toString()
         });
 
         // Create sample data for demonstration
