@@ -14,7 +14,7 @@ import AuthPage from "@/pages/auth-page";
 import Home from "@/pages/Home";
 import Jobs from "@/pages/Jobs";
 import Subcontractors from "@/pages/Subcontractors";
-import ClientsSimple from "@/pages/ClientsSimple";
+import Clients from "@/pages/Clients";
 import Invoicing from "@/pages/Invoicing";
 import Documents from "@/pages/Documents";
 import Messages from "@/pages/Messages";
@@ -52,7 +52,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/jobs" component={Jobs} />
         <Route path="/subcontractors" component={Subcontractors} />
-        <Route path="/clients" component={ClientsSimple} />
+        <Route path="/clients" component={Clients} />
         <Route path="/invoicing" component={Invoicing} />
         <Route path="/documents" component={Documents} />
         <Route path="/messages" component={Messages} />
