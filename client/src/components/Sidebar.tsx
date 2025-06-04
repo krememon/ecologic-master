@@ -46,16 +46,17 @@ export default function Sidebar({ user, company }: SidebarProps) {
       {/* Mobile overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden" 
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 sm:hidden" 
           onClick={close}
         />
       )}
       
       {/* Sidebar */}
       <aside className={cn(
-        "flex fixed inset-y-0 z-50 w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col transition-transform duration-300 ease-in-out",
-        "lg:translate-x-0", // Always visible on large screens
-        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0" // Toggle on mobile, always visible on desktop
+        "flex w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col transition-transform duration-300 ease-in-out",
+        "sm:relative sm:translate-x-0", // Always visible and in layout on larger screens
+        "fixed inset-y-0 z-50", // Fixed position on mobile
+        isOpen ? "translate-x-0" : "-translate-x-full sm:translate-x-0" // Toggle on mobile, always visible on desktop
       )}>
       {/* Logo Section */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-800">

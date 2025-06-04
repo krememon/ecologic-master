@@ -36,13 +36,13 @@ export default function Home() {
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
       <Sidebar user={user} company={user?.company} />
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col min-w-0">
         <Header 
           title="Dashboard Overview"
           subtitle={`Welcome back, ${user?.firstName || 'User'}! Here's what's happening with your projects.`}
           user={user}
         />
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-6 overflow-auto">
           <Dashboard />
         </div>
       </main>
