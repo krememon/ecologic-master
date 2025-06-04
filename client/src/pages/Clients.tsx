@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import Sidebar from "@/components/Sidebar";
-import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -98,27 +96,14 @@ export default function Clients() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
-      <Sidebar user={user} company={user?.company} />
-      <main className="flex-1 overflow-auto">
-        <Header 
-          title="Clients"
-          subtitle="Manage your client relationships and contact information"
-          user={user}
-        />
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Clients</h1>
+          <p className="text-slate-600 dark:text-slate-400">Manage your client relationships and contact information</p>
+        </div>
         
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                All Clients ({clients?.length || 0})
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Keep track of your client information and project history
-              </p>
-            </div>
-            
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
