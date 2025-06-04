@@ -216,29 +216,36 @@ export default function Dashboard() {
             </div>
             <CardContent className="p-6 space-y-4">
               <Button 
-                className="w-full" 
+                className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
                 variant="default"
-                onClick={() => setLocation("/jobs")}
+                onClick={() => {
+                  // Add visual feedback before navigation
+                  setTimeout(() => setLocation("/jobs"), 150);
+                }}
               >
-                <Plus className="w-5 h-5 mr-2" />
+                <Plus className="w-5 h-5 mr-2 transition-transform duration-200" />
                 Create New Job
               </Button>
               
               <Button 
-                className="w-full" 
+                className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
                 variant="outline"
-                onClick={() => setLocation("/subcontractors")}
+                onClick={() => {
+                  setTimeout(() => setLocation("/subcontractors"), 150);
+                }}
               >
-                <UserPlus className="w-5 h-5 mr-2" />
+                <UserPlus className="w-5 h-5 mr-2 transition-transform duration-200" />
                 Add Subcontractor
               </Button>
 
               <Button 
-                className="w-full" 
+                className="w-full transition-all duration-200 ease-in-out transform hover:scale-105 hover:shadow-md" 
                 variant="outline"
-                onClick={() => setLocation("/invoicing")}
+                onClick={() => {
+                  setTimeout(() => setLocation("/invoicing"), 150);
+                }}
               >
-                <FileText className="w-5 h-5 mr-2" />
+                <FileText className="w-5 h-5 mr-2 transition-transform duration-200" />
                 Generate Invoice
               </Button>
             </CardContent>
