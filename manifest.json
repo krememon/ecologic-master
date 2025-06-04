@@ -1,0 +1,27 @@
+{
+  "name": "EcoLogic Construction Management",
+  "short_name": "EcoLogic",
+  "description": "Professional construction management platform with AI-powered scheduling",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0FDFA",
+  "theme_color": "#0EA5E9",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/vite.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "permissions": [
+    "notifications"
+  ]
+}
