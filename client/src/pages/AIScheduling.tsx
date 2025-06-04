@@ -37,16 +37,16 @@ export default function AIScheduling() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-background">
       <div className="flex">
         <Sidebar user={user} company={user.company} />
-        <div className="flex-1 ml-64">
+        <div className="flex-1 ml-0 lg:ml-64">
           <Header 
             title="AI Scheduling" 
             subtitle="Intelligent scheduling and resource optimization powered by AI"
             user={user} 
           />
-          <main className="p-6">
+          <main className="responsive-container space-y-6">
             <AIScheduler 
               companyId={user.company?.id || 0}
             />

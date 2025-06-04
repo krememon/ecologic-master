@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -145,19 +145,24 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">AI Schedule Optimizer</h2>
-          <p className="text-gray-600 dark:text-gray-400">Intelligent scheduling and resource allocation powered by AI</p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            AI Schedule Optimizer
+          </CardTitle>
+          <CardDescription>
+            Intelligent scheduling and resource allocation powered by AI
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="optimization">Job Optimization</TabsTrigger>
-          <TabsTrigger value="resources">Resource Allocation</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline Prediction</TabsTrigger>
+          <TabsTrigger value="optimization" className="text-xs sm:text-sm">Job Optimization</TabsTrigger>
+          <TabsTrigger value="resources" className="text-xs sm:text-sm">Resource Allocation</TabsTrigger>
+          <TabsTrigger value="timeline" className="text-xs sm:text-sm">Timeline Prediction</TabsTrigger>
         </TabsList>
 
         <TabsContent value="optimization" className="space-y-4">
@@ -183,31 +188,32 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                   </div>
 
                   {optimizeJobMutation.data && (
-                    <div className="mt-6 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="mt-4 space-y-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <Card>
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg">Recommended Timeline</CardTitle>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Clock className="h-4 w-4" />
+                              Timeline
+                            </CardTitle>
                           </CardHeader>
-                          <CardContent>
-                            <div className="space-y-2">
-                              <div className="flex justify-between">
-                                <span className="text-sm text-gray-600 dark:text-gray-400">Start Date:</span>
-                                <span className="font-medium">{optimizeJobMutation.data.optimalStartDate ? new Date(optimizeJobMutation.data.optimalStartDate).toLocaleDateString() : "TBD"}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-sm text-gray-600 dark:text-gray-400">Completion:</span>
-                                <span className="font-medium">{optimizeJobMutation.data.estimatedCompletionDate ? new Date(optimizeJobMutation.data.estimatedCompletionDate).toLocaleDateString() : "TBD"}</span>
-                              </div>
+                          <CardContent className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-muted-foreground">Start:</span>
+                              <span className="text-sm font-medium">{optimizeJobMutation.data.optimalStartDate ? new Date(optimizeJobMutation.data.optimalStartDate).toLocaleDateString() : "TBD"}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-muted-foreground">Completion:</span>
+                              <span className="text-sm font-medium">{optimizeJobMutation.data.estimatedCompletionDate ? new Date(optimizeJobMutation.data.estimatedCompletionDate).toLocaleDateString() : "TBD"}</span>
                             </div>
                           </CardContent>
                         </Card>
 
                         <Card>
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg flex items-center gap-2">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
                               <AlertTriangle className="h-4 w-4" />
-                              Risk Assessment
+                              Risk Level
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -216,7 +222,7 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                             </Badge>
                             <div className="mt-2 space-y-1">
                               {(optimizeJobMutation.data.riskAssessment?.factors || []).slice(0, 2).map((factor: string, index: number) => (
-                                <p key={index} className="text-sm text-gray-600 dark:text-gray-400">• {factor}</p>
+                                <p key={index} className="text-xs text-muted-foreground">• {factor}</p>
                               ))}
                             </div>
                           </CardContent>
@@ -311,39 +317,20 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                   </div>
                 </div>
               ) : resourceAllocation ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Overall Efficiency</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center gap-2">
-                          <Progress value={resourceAllocation.efficiency.overall} className="flex-1" />
-                          <span className="text-lg font-bold">{resourceAllocation.efficiency.overall}%</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Active Workers</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-2xl font-bold">{resourceAllocation.weeklySchedule.length}</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">Bottlenecks</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                          {resourceAllocation.efficiency.bottlenecks.length}
-                        </p>
-                      </CardContent>
-                    </Card>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-muted/50 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-primary">{resourceAllocation.efficiency.overall}%</div>
+                      <div className="text-sm text-muted-foreground">Efficiency</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold">{resourceAllocation.weeklySchedule.length}</div>
+                      <div className="text-sm text-muted-foreground">Active Workers</div>
+                    </div>
+                    <div className="bg-muted/50 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-destructive">{resourceAllocation.efficiency.bottlenecks.length}</div>
+                      <div className="text-sm text-muted-foreground">Bottlenecks</div>
+                    </div>
                   </div>
 
                   <Card>
