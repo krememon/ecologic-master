@@ -10,12 +10,12 @@ interface HeaderProps {
   className?: string;
 }
 
-export default function Header({ title, className }: HeaderProps) {
+export default function Header({ title, subtitle, user, className }: HeaderProps) {
   const { toggle } = useSidebar();
 
   return (
     <header className={cn(
-      "flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 lg:hidden",
+      "flex items-center justify-between p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800",
       className
     )}>
       <div className="flex items-center space-x-3">
@@ -23,13 +23,20 @@ export default function Header({ title, className }: HeaderProps) {
           variant="ghost"
           size="sm"
           onClick={toggle}
-          className="lg:hidden"
+          className="sm:hidden"
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          {title}
-        </h1>
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {subtitle}
+            </p>
+          )}
+        </div>
       </div>
     </header>
   );

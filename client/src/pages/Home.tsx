@@ -34,17 +34,15 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col sm:flex-row min-h-screen bg-slate-50 dark:bg-slate-900">
-      <div className="hidden sm:block">
-        <Sidebar user={user} company={user?.company} />
-      </div>
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
+      <Sidebar user={user} company={user?.company} />
       <main className="flex-1 flex flex-col">
         <Header 
           title="Dashboard Overview"
-          subtitle={`Welcome back, ${user?.firstName}! Here's what's happening with your projects.`}
+          subtitle={`Welcome back, ${user?.firstName || 'User'}! Here's what's happening with your projects.`}
           user={user}
         />
-        <div className="flex-1">
+        <div className="flex-1 p-6">
           <Dashboard />
         </div>
       </main>
