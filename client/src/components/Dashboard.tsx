@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 import { 
   Building2, 
   DollarSign, 
@@ -16,6 +17,8 @@ import {
 } from "lucide-react";
 
 export default function Dashboard() {
+  const [location, setLocation] = useLocation();
+  
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats"],
   });
@@ -212,17 +215,29 @@ export default function Dashboard() {
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Quick Actions</h3>
             </div>
             <CardContent className="p-6 space-y-4">
-              <Button className="w-full" variant="default">
+              <Button 
+                className="w-full" 
+                variant="default"
+                onClick={() => setLocation("/jobs")}
+              >
                 <Plus className="w-5 h-5 mr-2" />
                 Create New Job
               </Button>
               
-              <Button className="w-full" variant="outline">
+              <Button 
+                className="w-full" 
+                variant="outline"
+                onClick={() => setLocation("/subcontractors")}
+              >
                 <UserPlus className="w-5 h-5 mr-2" />
                 Add Subcontractor
               </Button>
 
-              <Button className="w-full" variant="outline">
+              <Button 
+                className="w-full" 
+                variant="outline"
+                onClick={() => setLocation("/invoicing")}
+              >
                 <FileText className="w-5 h-5 mr-2" />
                 Generate Invoice
               </Button>
