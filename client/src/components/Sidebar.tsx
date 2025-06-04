@@ -1,5 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/hooks/useSidebar";
+import { useEffect } from "react";
 import { 
   Building2, 
   LayoutDashboard, 
@@ -9,8 +11,10 @@ import {
   FolderOpen, 
   MessageSquare,
   Brain,
-  Settings
+  Settings,
+  X
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -30,9 +34,29 @@ interface SidebarProps {
 
 export default function Sidebar({ user, company }: SidebarProps) {
   const [location] = useLocation();
+  const { isOpen, close } = useSidebar();
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    close();
+  }, [location, close]);
 
   return (
-    <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:z-50 lg:w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col">
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden" 
+          onClick={close}
+        />
+      )}
+      
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed inset-y-0 z-50 w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col transition-transform duration-300 ease-in-out",
+        "lg:translate-x-0", // Always visible on large screens
+        isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0" // Toggle on mobile, always visible on desktop
+      )}>
       {/* Logo Section */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center space-x-3">
@@ -105,5 +129,6 @@ export default function Sidebar({ user, company }: SidebarProps) {
         </Link>
       </div>
     </aside>
+    </>
   );
 }
