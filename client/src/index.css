@@ -162,4 +162,54 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+
+  /* iPhone specific optimizations */
+  @media screen and (max-width: 430px) {
+    .responsive-container {
+      @apply px-2 py-2;
+    }
+    
+    .responsive-grid {
+      @apply gap-2;
+    }
+    
+    /* Better mobile header sizing */
+    h1 {
+      @apply text-lg leading-tight;
+    }
+    
+    h2 {
+      @apply text-base leading-tight;
+    }
+    
+    /* Smaller padding for mobile cards */
+    .card {
+      @apply p-3;
+    }
+    
+    /* Ensure buttons are touch-friendly */
+    button {
+      @apply min-h-[40px] text-sm;
+    }
+    
+    /* Mobile menu adjustments */
+    .sheet-content {
+      @apply w-[280px];
+    }
+  }
+
+  /* Very small screens (iPhone SE, etc.) */
+  @media screen and (max-width: 375px) {
+    .responsive-container {
+      @apply px-1 py-1;
+    }
+    
+    h1 {
+      @apply text-base;
+    }
+    
+    h2 {
+      @apply text-sm;
+    }
+  }
 }

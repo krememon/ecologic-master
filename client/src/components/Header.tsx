@@ -51,7 +51,7 @@ export default function Header({ title, subtitle, user }: HeaderProps) {
                 <Menu className="w-6 h-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
+            <SheetContent side="left" className="w-64 p-0" aria-describedby="mobile-navigation-description">
               <div className="flex flex-col h-full">
                 {/* Logo Section */}
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800">
@@ -95,6 +95,9 @@ export default function Header({ title, subtitle, user }: HeaderProps) {
                     );
                   })}
                 </nav>
+                <div id="mobile-navigation-description" className="sr-only">
+                  Mobile navigation menu for accessing all app features
+                </div>
               </div>
             </SheetContent>
           </Sheet>
