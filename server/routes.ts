@@ -19,7 +19,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Also get user's company
-      const company = await storage.getUserCompany(userId);
+      let company = await storage.getUserCompany(userId);
+      
+      // If user exists but no company, create a default company
+      if (!company) {
+        company = await storage.createCompany({
+          name: `${user.firstName || 'Your'} ${user.lastName || 'Company'}`,
+          primaryColor: '#3B82F6',
+          secondaryColor: '#1E40AF',
+          ownerId: userId
+        });
+      }
       
       res.json({ ...user, company });
     } catch (error) {
@@ -320,6 +330,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // AI Scheduling routes
+  app.post('/api/ai/optimize-job-schedule/:jobId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      const job = await storage.getJob(jobId);
+      
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found or access denied" });
+      }
+      
+      const { aiScheduler } = await import('./ai-scheduler');
+      const optimization = await aiScheduler.optimizeJobScheduling(jobId);
+      
+      res.json(optimization);
+    } catch (error) {
+      console.error("Error optimizing job schedule:", error);
+      res.status(500).json({ message: "Failed to optimize job schedule" });
+    }
+  });
+
+  app.get('/api/ai/resource-allocation', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const { aiScheduler } = await import('./ai-scheduler');
+      const allocation = await aiScheduler.generateResourceAllocation(company.id);
+      
+      res.json(allocation);
+    } catch (error) {
+      console.error("Error generating resource allocation:", error);
+      res.status(500).json({ message: "Failed to generate resource allocation" });
+    }
+  });
+
+  app.post('/api/ai/predict-timeline/:jobId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      const job = await storage.getJob(jobId);
+      
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found or access denied" });
+      }
+      
+      const { aiScheduler } = await import('./ai-scheduler');
+      const timeline = await aiScheduler.predictProjectTimeline(jobId);
+      
+      res.json(timeline);
+    } catch (error) {
+      console.error("Error predicting timeline:", error);
+      res.status(500).json({ message: "Failed to predict timeline" });
     }
   });
 

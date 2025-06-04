@@ -18,7 +18,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema } from "@shared/schema";
 import { z } from "zod";
-import { Plus, Building2, Calendar, DollarSign, MapPin } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Brain } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AIScheduler from "@/components/AIScheduler";
 
 const jobFormSchema = insertJobSchema.extend({
   startDate: z.string().optional(),
