@@ -78,20 +78,24 @@ export default function Header({ title, subtitle, user }: HeaderProps) {
                     const isActive = location === item.href;
                     
                     return (
-                      <Link key={item.name} href={item.href}>
-                        <div
-                          className={cn(
-                            "flex items-center space-x-3 px-3 py-3 rounded-lg text-base font-medium transition-colors cursor-pointer",
-                            isActive
-                              ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800"
-                          )}
-                          onClick={() => setIsOpen(false)}
-                        >
-                          <Icon className="w-5 h-5" />
-                          <span>{item.name}</span>
-                        </div>
-                      </Link>
+                      <div key={item.name}>
+                        <Link href={item.href}>
+                          <div
+                            className={cn(
+                              "flex items-center space-x-3 px-3 py-3 rounded-lg text-base font-medium transition-colors cursor-pointer",
+                              isActive
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800"
+                            )}
+                            onClick={() => {
+                              setTimeout(() => setIsOpen(false), 100);
+                            }}
+                          >
+                            <Icon className="w-5 h-5" />
+                            <span>{item.name}</span>
+                          </div>
+                        </Link>
+                      </div>
                     );
                   })}
                 </nav>
