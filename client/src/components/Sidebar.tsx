@@ -36,6 +36,11 @@ interface SidebarProps {
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Sidebar received isOpen state:', isOpen);
+  }, [isOpen]);
+
   // Close sidebar on route change (mobile)
   useEffect(() => {
     onClose();

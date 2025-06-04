@@ -20,7 +20,9 @@ export default function Layout({ children }: LayoutProps) {
 
   const toggleSidebar = () => {
     console.log('Hamburger clicked, current state:', sidebarOpen);
-    setSidebarOpen(!sidebarOpen);
+    const newState = !sidebarOpen;
+    setSidebarOpen(newState);
+    console.log('Sidebar state changed to:', newState);
   };
 
   const closeSidebar = () => {
