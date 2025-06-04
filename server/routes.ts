@@ -368,22 +368,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
+      console.log("Creating job - Request body:", req.body);
       const userId = req.user.claims.sub;
-      const company = await storage.getUserCompany(userId);
+      console.log("User ID:", userId);
+      
+      let company = await storage.getUserCompany(userId);
+      console.log("Found company:", company);
+      
+      // If no company exists, create one
       if (!company) {
-        return res.status(404).json({ message: "Company not found" });
+        const user = await storage.getUser(userId);
+        console.log("Creating company for user:", user);
+        company = await storage.createCompany({
+          name: `${user?.firstName || 'Your'} ${user?.lastName || 'Company'}`,
+          primaryColor: '#3B82F6',
+          secondaryColor: '#1E40AF',
+          ownerId: userId
+        });
+        console.log("Created company:", company);
       }
       
       const jobData = insertJobSchema.parse({
         ...req.body,
         companyId: company.id,
       });
+      console.log("Parsed job data:", jobData);
       
       const job = await storage.createJob(jobData);
+      console.log("Created job:", job);
       res.json(job);
     } catch (error) {
       console.error("Error creating job:", error);
-      res.status(500).json({ message: "Failed to create job" });
+      console.error("Error stack:", error.stack);
+      res.status(500).json({ message: "Failed to create job", error: error.message });
     }
   });
 
