@@ -356,10 +356,10 @@ export default function Jobs() {
                     {job.location}
                   </div>
                 )}
-                {job.budget && (
+                {job.estimatedCost && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <DollarSign className="h-4 w-4" />
-                    ${job.budget.toLocaleString()}
+                    ${Number(job.estimatedCost).toLocaleString()}
                   </div>
                 )}
                 {job.startDate && (
@@ -371,7 +371,7 @@ export default function Jobs() {
                 
                 <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                   <p className="text-xs text-slate-500">
-                    Created {new Date(job.createdAt).toLocaleDateString()}
+                    Created {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                   <div className="flex gap-1">
                     <Button 

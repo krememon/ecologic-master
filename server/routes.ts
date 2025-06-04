@@ -142,9 +142,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: "mike@watersystems.com",
             phone: "(555) 234-5678",
             skills: ["Plumbing", "Water Systems", "Pipe Installation", "Leak Detection"],
-            rating: 4.8,
+            rating: "4.8",
             isAvailable: true,
-            hourlyRate: 85,
+            hourlyRate: "85",
             notes: "Specialist in eco-friendly water systems and conservation"
           });
 
@@ -154,9 +154,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: "sarah@greenwiring.com",
             phone: "(555) 345-6789", 
             skills: ["Electrical", "Solar Installation", "Smart Systems", "Energy Efficiency"],
-            rating: 4.9,
+            rating: "4.9",
             isAvailable: true,
-            hourlyRate: 95,
+            hourlyRate: "95",
             notes: "Expert in renewable energy and smart building systems"
           });
 

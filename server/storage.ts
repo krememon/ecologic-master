@@ -10,7 +10,7 @@ import {
   documents,
   messages,
   type User,
-  type InsertUser,
+  type UpsertUser,
   type Company,
   type InsertCompany,
   type Client,
