@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Brain
 } from "lucide-react";
-import logoImage from "@assets/IMG_6171.jpg";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -36,12 +35,11 @@ export default function Sidebar({ user, company }: SidebarProps) {
       {/* Logo Section */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg overflow-hidden">
-            <img 
-              src={logoImage} 
-              alt="EcoLogic Logo" 
-              className="w-full h-full object-contain"
-            />
+          <div 
+            className="w-10 h-10 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: company?.secondaryColor || '#059669' }}
+          >
+            <Building2 className="w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
