@@ -44,12 +44,13 @@ export default function Sidebar({ user, company }: SidebarProps) {
   return (
     <>
       {/* Mobile overlay */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black bg-opacity-50 sm:hidden" 
-          onClick={close}
-        />
-      )}
+      <div 
+        className={cn(
+          "fixed inset-0 bg-black transition-opacity duration-300 ease-in-out sm:hidden z-40",
+          isOpen ? "opacity-50" : "opacity-0 pointer-events-none"
+        )}
+        onClick={close}
+      />
       
       {/* Sidebar */}
       <aside className={cn(
