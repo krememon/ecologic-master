@@ -214,8 +214,8 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Smartphone className="h-5 w-5" />
-                  iPhone Push Notifications
+                  <Bell className="h-5 w-5" />
+                  Mobile Push Notifications
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -231,7 +231,7 @@ export default function Settings() {
                       <div>
                         <h4 className="font-medium">Real-time Alerts</h4>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Get instant notifications on your iPhone for job updates and messages
+                          Get instant notifications on your phone for job updates, messages, and schedule changes
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -257,7 +257,7 @@ export default function Settings() {
                             if (success) {
                               toast({
                                 title: "Notifications Enabled",
-                                description: "You'll now receive alerts on your iPhone",
+                                description: "You'll now receive alerts on your mobile device",
                               });
                             } else {
                               toast({
@@ -270,7 +270,7 @@ export default function Settings() {
                           disabled={notificationLoading}
                           className="w-full"
                         >
-                          {notificationLoading ? "Enabling..." : "Enable iPhone Notifications"}
+                          {notificationLoading ? "Enabling..." : "Enable Mobile Notifications"}
                         </Button>
                       ) : (
                         <div className="flex gap-2">
