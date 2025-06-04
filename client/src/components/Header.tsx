@@ -41,7 +41,7 @@ export default function Header({ title, subtitle, user }: HeaderProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-4">
+    <header className="bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800 px-2 sm:px-6 py-2 sm:py-4">
       <div className="flex items-center justify-between">
         {/* Mobile menu button */}
         <div className="flex items-center space-x-3">
