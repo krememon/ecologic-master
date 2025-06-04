@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,13 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "next-themes";
-import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield } from "lucide-react";
+import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -35,6 +38,66 @@ export default function Settings() {
     queryKey: ["/api/company"],
     enabled: isAuthenticated,
   });
+
+  // Profile picture upload mutation
+  const updateProfilePictureMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const res = await fetch("/api/auth/user/profile-image", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Failed to upload profile picture");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      setProfileImagePreview(null);
+      toast({
+        title: "Success",
+        description: "Profile picture updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update profile picture",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+          title: "Error",
+          description: "Image size must be less than 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setProfileImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleImageUpload = () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (file) {
+      const formData = new FormData();
+      formData.append("profileImage", file);
+      updateProfilePictureMutation.mutate(formData);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -61,18 +124,69 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Profile Picture Section */}
             <div className="flex items-center space-x-4">
-              <Avatar className="w-16 h-16">
-                <AvatarImage src={user?.profileImageUrl} />
-                <AvatarFallback>
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
-                </AvatarFallback>
-              </Avatar>
-              <div>
+              <div className="relative">
+                <Avatar className="w-20 h-20">
+                  <AvatarImage src={profileImagePreview || user?.profileImageUrl} />
+                  <AvatarFallback>
+                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full p-0 shadow-lg border-2 border-white dark:border-slate-800"
+                  onClick={triggerFileInput}
+                  disabled={updateProfilePictureMutation.isPending}
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex-1">
                 <h3 className="font-medium">{user?.firstName} {user?.lastName}</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400">{user?.email}</p>
+                {profileImagePreview && (
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      onClick={handleImageUpload}
+                      disabled={updateProfilePictureMutation.isPending}
+                      className="h-8 text-xs"
+                    >
+                      {updateProfilePictureMutation.isPending ? (
+                        <>Uploading...</>
+                      ) : (
+                        <>
+                          <Upload className="h-3 w-3 mr-1" />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setProfileImagePreview(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                      className="h-8 text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
+            
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
             
             <div className="space-y-3">
               <div>
