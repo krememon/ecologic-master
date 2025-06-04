@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2 } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob } from "@shared/schema";
 import { useForm } from "react-hook-form";
@@ -18,14 +18,24 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: InsertJob) => void; isLoading: boolean }) {
+function JobForm({ 
+  onSubmit, 
+  isLoading, 
+  initialData, 
+  isEdit = false 
+}: { 
+  onSubmit: (data: InsertJob) => void; 
+  isLoading: boolean; 
+  initialData?: any;
+  isEdit?: boolean;
+}) {
   const form = useForm({
     defaultValues: {
-      title: "",
-      description: "",
-      location: "",
-      status: "pending",
-      priority: "medium",
+      title: initialData?.title || "",
+      description: initialData?.description || "",
+      location: initialData?.location || "",
+      status: initialData?.status || "pending",
+      priority: initialData?.priority || "medium",
     },
   });
 
@@ -147,6 +157,7 @@ export default function Jobs() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<any>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -222,6 +233,40 @@ export default function Jobs() {
     },
   });
 
+  const updateJobMutation = useMutation({
+    mutationFn: async ({ jobId, jobData }: { jobId: number; jobData: Partial<InsertJob> }) => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, jobData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Success",
+        description: "Job updated successfully",
+      });
+      setEditingJob(null);
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to update job",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading || !isAuthenticated || jobsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -242,7 +287,22 @@ export default function Jobs() {
           <DialogHeader>
             <DialogTitle>Create New Job</DialogTitle>
           </DialogHeader>
-          <CreateJobForm onSubmit={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
+          <JobForm onSubmit={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Job Dialog */}
+      <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
+        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Job</DialogTitle>
+          </DialogHeader>
+          <JobForm 
+            onSubmit={(data) => updateJobMutation.mutate({ jobId: editingJob.id, jobData: data })} 
+            isLoading={updateJobMutation.isPending}
+            initialData={editingJob}
+            isEdit={true}
+          />
         </DialogContent>
       </Dialog>
 
