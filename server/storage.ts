@@ -35,6 +35,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   
+  // Email authentication operations
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(userData: any): Promise<User>;
+  
   // Company operations
   getUserCompany(userId: string): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
@@ -100,6 +104,26 @@ export class DatabaseStorage implements IStorage {
           ...userData,
           updatedAt: new Date(),
         },
+      })
+      .returning();
+    return user;
+  }
+
+  // Email authentication operations
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(userData: any): Promise<User> {
+    // Generate a unique ID for email-based users
+    const userId = `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const [user] = await db
+      .insert(users)
+      .values({
+        id: userId,
+        ...userData,
       })
       .returning();
     return user;
