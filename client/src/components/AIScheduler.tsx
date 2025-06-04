@@ -87,7 +87,7 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
   const [activeTab, setActiveTab] = useState("optimization");
 
   const optimizeJobMutation = useMutation({
-    mutationFn: async (id: number): Promise<ScheduleOptimization> => {
+    mutationFn: async (id: number) => {
       return await apiRequest(`/api/ai/optimize-job-schedule/${id}`, "POST");
     },
     onSuccess: () => {
@@ -107,9 +107,7 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
 
   const timelineMutation = useMutation({
     mutationFn: async (id: number) => {
-      return await apiRequest(`/api/ai/predict-timeline/${id}`, {
-        method: "POST",
-      });
+      return await apiRequest(`/api/ai/predict-timeline/${id}`, "POST");
     },
     onSuccess: () => {
       toast({
@@ -195,11 +193,11 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                             <div className="space-y-2">
                               <div className="flex justify-between">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">Start Date:</span>
-                                <span className="font-medium">{new Date(optimizeJobMutation.data.optimalStartDate).toLocaleDateString()}</span>
+                                <span className="font-medium">{optimizeJobMutation.data.optimalStartDate ? new Date(optimizeJobMutation.data.optimalStartDate).toLocaleDateString() : "TBD"}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-sm text-gray-600 dark:text-gray-400">Completion:</span>
-                                <span className="font-medium">{new Date(optimizeJobMutation.data.estimatedCompletionDate).toLocaleDateString()}</span>
+                                <span className="font-medium">{optimizeJobMutation.data.estimatedCompletionDate ? new Date(optimizeJobMutation.data.estimatedCompletionDate).toLocaleDateString() : "TBD"}</span>
                               </div>
                             </div>
                           </CardContent>
@@ -213,11 +211,11 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
-                            <Badge className={getRiskColor(optimizeJobMutation.data.riskAssessment.level)}>
-                              {optimizeJobMutation.data.riskAssessment.level.toUpperCase()} RISK
+                            <Badge className={getRiskColor(optimizeJobMutation.data.riskAssessment?.level || "medium")}>
+                              {(optimizeJobMutation.data.riskAssessment?.level || "MEDIUM").toUpperCase()} RISK
                             </Badge>
                             <div className="mt-2 space-y-1">
-                              {optimizeJobMutation.data.riskAssessment.factors.slice(0, 2).map((factor, index) => (
+                              {(optimizeJobMutation.data.riskAssessment?.factors || []).slice(0, 2).map((factor: string, index: number) => (
                                 <p key={index} className="text-sm text-gray-600 dark:text-gray-400">• {factor}</p>
                               ))}
                             </div>
@@ -234,7 +232,7 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {optimizeJobMutation.data.recommendedSubcontractors.map((sub, index) => (
+                            {(optimizeJobMutation.data.recommendedSubcontractors || []).map((sub: any, index: number) => (
                               <div key={index} className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
@@ -265,18 +263,18 @@ export default function AIScheduler({ jobId, companyId }: AISchedulerProps) {
                             <div>
                               <p className="text-sm text-gray-600 dark:text-gray-400">Skills Needed</p>
                               <div className="flex flex-wrap gap-1 mt-1">
-                                {optimizeJobMutation.data.resourceRequirements.skillsNeeded.map((skill, index) => (
+                                {(optimizeJobMutation.data.resourceRequirements?.skillsNeeded || []).map((skill: string, index: number) => (
                                   <Badge key={index} variant="secondary">{skill}</Badge>
                                 ))}
                               </div>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600 dark:text-gray-400">Estimated Hours</p>
-                              <p className="text-lg font-bold">{optimizeJobMutation.data.resourceRequirements.estimatedHours}h</p>
+                              <p className="text-lg font-bold">{optimizeJobMutation.data.resourceRequirements?.estimatedHours || 0}h</p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600 dark:text-gray-400">Budget Recommendation</p>
-                              <p className="text-lg font-bold">${optimizeJobMutation.data.resourceRequirements.budgetRecommendation.toLocaleString()}</p>
+                              <p className="text-lg font-bold">${(optimizeJobMutation.data.resourceRequirements?.budgetRecommendation || 0).toLocaleString()}</p>
                             </div>
                           </div>
                         </CardContent>
