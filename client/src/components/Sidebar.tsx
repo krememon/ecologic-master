@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Brain,
   Settings,
+  LogOut,
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,15 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             <span>Settings</span>
           </button>
         </Link>
+        
+        {/* Logout Button */}
+        <button 
+          onClick={() => window.location.href = '/api/logout'}
+          className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:text-red-700 dark:hover:text-red-300 mt-2"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sign Out</span>
+        </button>
       </div>
     </aside>
     </>
