@@ -31,18 +31,12 @@ import { eq, and, desc, sql } from "drizzle-orm";
 
 // Interface for storage operations
 export interface IStorage {
-  // User operations for email/password and social authentication
-  getUser(id: number): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
-  verifyEmail(token: string): Promise<User | undefined>;
-  setResetPasswordToken(email: string, token: string, expires: Date): Promise<void>;
-  resetPassword(token: string, newPassword: string): Promise<User | undefined>;
+  // User operations (IMPORTANT) these user operations are mandatory for Replit Auth.
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
   
   // Company operations
-  getUserCompany(userId: number): Promise<Company | undefined>;
+  getUserCompany(userId: string): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company>;
   
@@ -89,83 +83,29 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // User operations for email/password and social authentication
+  // User operations (IMPORTANT) these user operations are mandatory for Replit Auth.
 
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
-  }
-
-  async getUserByProvider(provider: string, providerId: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(
-      and(eq(users.provider, provider), eq(users.providerId, providerId))
-    );
-    return user || undefined;
-  }
-
-  async createUser(userData: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(userData).returning();
-    return user;
-  }
-
-  async updateUser(id: number, userData: Partial<InsertUser>): Promise<User> {
+  async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
-      .update(users)
-      .set({ ...userData, updatedAt: new Date() })
-      .where(eq(users.id, id))
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
       .returning();
     return user;
   }
 
-  async verifyEmail(token: string): Promise<User | undefined> {
-    const [user] = await db
-      .update(users)
-      .set({ 
-        emailVerified: true, 
-        emailVerificationToken: null,
-        updatedAt: new Date()
-      })
-      .where(eq(users.emailVerificationToken, token))
-      .returning();
-    return user || undefined;
-  }
-
-  async setResetPasswordToken(email: string, token: string, expires: Date): Promise<void> {
-    await db
-      .update(users)
-      .set({ 
-        resetPasswordToken: token, 
-        resetPasswordExpires: expires,
-        updatedAt: new Date()
-      })
-      .where(eq(users.email, email));
-  }
-
-  async resetPassword(token: string, newPassword: string): Promise<User | undefined> {
-    const [user] = await db
-      .update(users)
-      .set({ 
-        password: newPassword,
-        resetPasswordToken: null,
-        resetPasswordExpires: null,
-        updatedAt: new Date()
-      })
-      .where(
-        and(
-          eq(users.resetPasswordToken, token),
-          sql`reset_password_expires > NOW()`
-        )
-      )
-      .returning();
-    return user || undefined;
-  }
-
-  async getUserCompany(userId: number): Promise<Company | undefined> {
+  async getUserCompany(userId: string): Promise<Company | undefined> {
     const [membership] = await db
       .select({ company: companies })
       .from(companyMembers)
