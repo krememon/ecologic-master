@@ -369,35 +369,45 @@ export default function Jobs() {
                   <p className="text-xs text-slate-500">
                     Created {new Date(job.createdAt).toLocaleDateString()}
                   </p>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Job</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete "{job.title}"? This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => deleteJobMutation.mutate(job.id)}
-                          className="bg-red-600 hover:bg-red-700"
-                          disabled={deleteJobMutation.isPending}
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                      onClick={() => setEditingJob(job)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                         >
-                          {deleteJobMutation.isPending ? "Deleting..." : "Delete"}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Job</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete "{job.title}"? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => deleteJobMutation.mutate(job.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                            disabled={deleteJobMutation.isPending}
+                          >
+                            {deleteJobMutation.isPending ? "Deleting..." : "Delete"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               </CardContent>
             </Card>
