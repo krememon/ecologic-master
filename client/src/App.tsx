@@ -25,10 +25,21 @@ function Router() {
   useWebSocket();
   usePushNotifications();
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
+      {!isAuthenticated ? (
+        <>
+          <Route path="/" component={Landing} />
+          <Route path="/*" component={Landing} />
+        </>
       ) : (
         <>
           <Route path="/" component={Home} />
@@ -40,9 +51,9 @@ function Router() {
           <Route path="/messages" component={Messages} />
           <Route path="/ai-scheduling" component={AIScheduling} />
           <Route path="/settings" component={Settings} />
+          <Route path="/*" component={NotFound} />
         </>
       )}
-      <Route component={NotFound} />
     </Switch>
   );
 }
