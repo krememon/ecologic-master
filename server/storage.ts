@@ -10,7 +10,7 @@ import {
   documents,
   messages,
   type User,
-  type UpsertUser,
+  type InsertUser,
   type Company,
   type InsertCompany,
   type Client,
@@ -31,9 +31,15 @@ import { eq, and, desc, sql } from "drizzle-orm";
 
 // Interface for storage operations
 export interface IStorage {
-  // User operations (IMPORTANT) these user operations are mandatory for Replit Auth.
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
+  // User operations for email/password and social authentication
+  getUser(id: number): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
+  verifyEmail(token: string): Promise<User | undefined>;
+  setResetPasswordToken(email: string, token: string, expires: Date): Promise<void>;
+  resetPassword(token: string, newPassword: string): Promise<User | undefined>;
   
   // Company operations
   getUserCompany(userId: string): Promise<Company | undefined>;
