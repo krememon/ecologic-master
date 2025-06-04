@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Building2, Calendar, DollarSign, MapPin } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob } from "@shared/schema";
 import { useForm } from "react-hook-form";
@@ -189,6 +190,38 @@ export default function Jobs() {
     },
   });
 
+  const deleteJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      await apiRequest("DELETE", `/api/jobs/${jobId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      toast({
+        title: "Success",
+        description: "Job deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to delete job",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (isLoading || !isAuthenticated || jobsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -272,10 +305,39 @@ export default function Jobs() {
                   </div>
                 )}
                 
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                   <p className="text-xs text-slate-500">
                     Created {new Date(job.createdAt).toLocaleDateString()}
                   </p>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Job</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete "{job.title}"? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => deleteJobMutation.mutate(job.id)}
+                          className="bg-red-600 hover:bg-red-700"
+                          disabled={deleteJobMutation.isPending}
+                        >
+                          {deleteJobMutation.isPending ? "Deleting..." : "Delete"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </CardContent>
             </Card>
