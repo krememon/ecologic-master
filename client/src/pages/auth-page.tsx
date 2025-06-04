@@ -35,10 +35,10 @@ export default function AuthPage() {
                 <Building2 className="h-8 w-8 text-white" />
               </div>
               <CardTitle className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                Welcome to EcoLogic
+                Welcome Back
               </CardTitle>
               <CardDescription className="text-slate-600 dark:text-slate-300">
-                Sign in to manage your contracting business
+                Sign in to access your contractor management platform
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -48,7 +48,7 @@ export default function AuthPage() {
                 className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 <Shield className="mr-2 h-5 w-5" />
-                Continue with Replit
+                Sign In
               </Button>
 
               <div className="relative">
