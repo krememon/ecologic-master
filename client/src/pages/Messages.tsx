@@ -1,7 +1,12 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { insertMessageSchema } from "@shared/schema";
+import { z } from "zod";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { Button } from "@/components/ui/button";
@@ -11,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   MessageSquare, 
@@ -23,11 +29,57 @@ import {
   Users
 } from "lucide-react";
 
+type MessageFormData = z.infer<typeof insertMessageSchema>;
+
+const messageFormSchema = insertMessageSchema.extend({
+  subject: z.string().min(1, "Subject is required"),
+  content: z.string().min(1, "Message content is required"),
+  recipientId: z.string().optional(),
+  jobId: z.number().optional(),
+});
+
 export default function Messages() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
+
+  const form = useForm<z.infer<typeof messageFormSchema>>({
+    resolver: zodResolver(messageFormSchema),
+    defaultValues: {
+      subject: "",
+      content: "",
+      recipientId: "",
+      jobId: undefined,
+    },
+  });
+
+  const createMessageMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof messageFormSchema>) => {
+      const messageData = {
+        ...data,
+        jobId: data.jobId || null,
+        recipientId: data.recipientId || null,
+      };
+      return await apiRequest("/api/messages", "POST", messageData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Message sent",
+        description: "Your message has been sent successfully.",
+      });
+      form.reset();
+      setIsDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -153,52 +205,76 @@ export default function Messages() {
                   <DialogHeader>
                     <DialogTitle>Send New Message</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Subject
-                      </label>
-                      <Input placeholder="Message subject" className="mt-1" />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Related Job (Optional)
-                      </label>
-                      <Select>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select a job" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {jobs?.map((job: any) => (
-                            <SelectItem key={job.id} value={job.id.toString()}>
-                              {job.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Message
-                      </label>
-                      <Textarea 
-                        placeholder="Write your message..." 
-                        className="mt-1 min-h-[120px]"
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit((data) => createMessageMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="subject"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Subject</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Message subject" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                    </div>
-                    
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button>
-                        <Send className="w-4 h-4 mr-2" />
-                        Send Message
-                      </Button>
-                    </div>
-                  </div>
+                      
+                      <FormField
+                        control={form.control}
+                        name="jobId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Related Job (Optional)</FormLabel>
+                            <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)} value={field.value?.toString() || ""}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select a job" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {jobs?.map((job: any) => (
+                                  <SelectItem key={job.id} value={job.id.toString()}>
+                                    {job.title}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="content"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Message</FormLabel>
+                            <FormControl>
+                              <Textarea 
+                                placeholder="Write your message..." 
+                                className="min-h-[120px]"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="flex justify-end space-x-2">
+                        <Button variant="outline" type="button" onClick={() => setIsDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={createMessageMutation.isPending}>
+                          <Send className="w-4 h-4 mr-2" />
+                          {createMessageMutation.isPending ? "Sending..." : "Send Message"}
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
                 </DialogContent>
               </Dialog>
             </div>
