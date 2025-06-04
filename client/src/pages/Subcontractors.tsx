@@ -187,7 +187,7 @@ export default function Subcontractors() {
             <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
               Build your network by adding trusted subcontractors.
             </p>
-            <Button>
+            <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Your First Subcontractor
             </Button>

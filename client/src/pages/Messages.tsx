@@ -171,7 +171,7 @@ export default function Messages() {
             <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
               Start communicating with your team and clients.
             </p>
-            <Button>
+            <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Send Your First Message
             </Button>

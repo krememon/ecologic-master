@@ -204,7 +204,7 @@ export default function Invoicing() {
             <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
               Start billing your clients by creating your first invoice.
             </p>
-            <Button>
+            <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Create Your First Invoice
             </Button>
