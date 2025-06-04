@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MessageSquare, Send, Plus } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertMessageSchema, type InsertMessage } from "@shared/schema";
+import { insertMessageSchema, type InsertMessage, type Message } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";

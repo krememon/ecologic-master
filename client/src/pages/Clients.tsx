@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertClientSchema } from "@shared/schema";
+import { insertClientSchema, type Client } from "@shared/schema";
 import { z } from "zod";
 import { Plus, UserCheck, Mail, Phone, MapPin, Building } from "lucide-react";
 
@@ -38,7 +38,7 @@ export default function Clients() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: clients = [], isLoading: clientsLoading } = useQuery({
+  const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
     enabled: isAuthenticated,
   });

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, FileText, DollarSign, Calendar } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertInvoiceSchema, type InsertInvoice } from "@shared/schema";
+import { insertInvoiceSchema, type InsertInvoice, type Invoice } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -131,7 +131,7 @@ export default function Invoicing() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: invoices = [], isLoading: invoicesLoading } = useQuery({
+  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
     enabled: isAuthenticated,
   });

@@ -110,7 +110,7 @@ export default function Subcontractors() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingSubcontractor, setEditingSubcontractor] = useState(null);
+  const [editingSubcontractor, setEditingSubcontractor] = useState<Subcontractor | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -126,7 +126,7 @@ export default function Subcontractors() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery({
+  const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery<Subcontractor[]>({
     queryKey: ["/api/subcontractors"],
     enabled: isAuthenticated,
   });
@@ -227,7 +227,7 @@ export default function Subcontractors() {
             <DialogTitle>Edit Subcontractor</DialogTitle>
           </DialogHeader>
           <SubcontractorForm 
-            onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor?.id, subcontractorData: data })} 
+            onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor!.id, subcontractorData: data })} 
             isLoading={updateSubcontractorMutation.isPending}
             initialData={editingSubcontractor}
             isEdit={true}
