@@ -1,9 +1,47 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertCompanySchema, insertClientSchema, insertSubcontractorSchema, insertJobSchema, insertInvoiceSchema } from "@shared/schema";
+import { insertCompanySchema, insertClientSchema, insertSubcontractorSchema, insertJobSchema, insertInvoiceSchema, insertMessageSchema } from "@shared/schema";
 import { z } from "zod";
+
+// WebSocket connection management
+const userConnections = new Map<string, WebSocket[]>();
+const userSubscriptions = new Map<string, any>();
+
+// WebSocket helper functions
+function broadcastToUser(userId: string, message: any) {
+  const connections = userConnections.get(userId) || [];
+  const data = JSON.stringify(message);
+  
+  connections.forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(data);
+    }
+  });
+}
+
+async function sendPushNotification(userId: string, notification: any) {
+  try {
+    const subscription = userSubscriptions.get(userId);
+    if (!subscription) {
+      console.log('No push subscription found for user:', userId);
+      return;
+    }
+
+    // Here you would integrate with a push service like Web Push API
+    // For now, we'll log the notification
+    console.log('Sending push notification to user:', userId);
+    console.log('Notification:', notification);
+    
+    // In a real implementation, you would use libraries like 'web-push'
+    // to send actual push notifications to the user's device
+    
+  } catch (error) {
+    console.error('Error sending push notification:', error);
+  }
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -505,11 +543,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Document routes
+  app.get('/api/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const documents = await storage.getDocuments(company.id);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  // Message routes
+  app.get('/api/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const messages = await storage.getMessages(company.id);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.post('/api/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const messageData = {
+        ...req.body,
+        senderId: userId,
+        companyId: company.id,
+      };
+      
+      const message = await storage.createMessage(messageData);
+      
+      // Send real-time notification to recipients
+      if (req.body.recipientId && req.body.recipientId !== userId) {
+        // Broadcast to WebSocket clients
+        broadcastToUser(req.body.recipientId, {
+          type: 'new_message',
+          data: {
+            id: message.id,
+            content: message.content,
+            senderName: req.user.claims.first_name || 'Someone',
+            timestamp: message.createdAt
+          }
+        });
+        
+        // Send push notification
+        await sendPushNotification(req.body.recipientId, {
+          title: 'New Message',
+          body: `${req.user.claims.first_name || 'Someone'} sent you a message`,
+          icon: '/manifest-icon-192.png',
+          badge: '/manifest-icon-192.png',
+          tag: 'message',
+          data: {
+            messageId: message.id,
+            url: '/messages'
+          }
+        });
+      }
+      
+      res.json(message);
+    } catch (error) {
+      console.error("Error creating message:", error);
+      res.status(500).json({ message: "Failed to create message" });
+    }
+  });
+
+  app.patch('/api/messages/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const messageId = parseInt(req.params.id);
+      await storage.markMessageAsRead(messageId);
+      res.json({ message: "Message marked as read" });
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+      res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
+
   // Push notification routes
   app.post('/api/notifications/subscribe', isAuthenticated, async (req: any, res) => {
     try {
       const { subscription } = req.body;
       const userId = req.user.claims.sub;
+      
+      // Store the subscription for this user
+      userSubscriptions.set(userId, subscription);
       
       console.log('Push subscription registered for user:', userId);
       console.log('Subscription details:', subscription);
@@ -526,6 +662,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { endpoint } = req.body;
       const userId = req.user.claims.sub;
       
+      // Remove the subscription for this user
+      userSubscriptions.delete(userId);
+      
       console.log('Push subscription removed for user:', userId);
       console.log('Endpoint:', endpoint);
       
@@ -540,6 +679,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       
+      // Send test notification
+      await sendPushNotification(userId, {
+        title: 'Test Notification',
+        body: 'This is a test notification from your app',
+        icon: '/manifest-icon-192.png'
+      });
+      
       console.log('Test notification sent to user:', userId);
       
       res.json({ success: true, message: "Test notification sent" });
@@ -550,5 +696,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Setup WebSocket server
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection');
+    
+    let userId: string | null = null;
+    
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        
+        if (message.type === 'auth' && message.userId) {
+          userId = message.userId;
+          
+          // Add this connection to the user's connections
+          if (!userConnections.has(userId)) {
+            userConnections.set(userId, []);
+          }
+          userConnections.get(userId)!.push(ws);
+          
+          console.log('WebSocket authenticated for user:', userId);
+          
+          ws.send(JSON.stringify({ type: 'auth_success' }));
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      if (userId) {
+        // Remove this connection from the user's connections
+        const connections = userConnections.get(userId) || [];
+        const index = connections.indexOf(ws);
+        if (index > -1) {
+          connections.splice(index, 1);
+        }
+        
+        // Clean up empty connection arrays
+        if (connections.length === 0) {
+          userConnections.delete(userId);
+        }
+        
+        console.log('WebSocket disconnected for user:', userId);
+      }
+    });
+    
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+    });
+  });
+
   return httpServer;
 }
