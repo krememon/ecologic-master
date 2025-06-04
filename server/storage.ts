@@ -118,6 +118,14 @@ export class DatabaseStorage implements IStorage {
 
   async createCompany(companyData: InsertCompany): Promise<Company> {
     const [company] = await db.insert(companies).values(companyData).returning();
+    
+    // Create company membership for the owner
+    await db.insert(companyMembers).values({
+      companyId: company.id,
+      userId: companyData.ownerId,
+      role: "owner"
+    });
+    
     return company;
   }
 
