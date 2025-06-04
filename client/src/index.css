@@ -15,7 +15,7 @@ html, body {
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
-  height: 100vh;
+  min-height: 100vh;
   overflow-x: hidden;
 }
 
