@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { SidebarProvider } from "@/hooks/useSidebar";
+import Layout from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -47,18 +47,20 @@ function Router() {
   }
 
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/jobs" component={Jobs} />
-      <Route path="/subcontractors" component={Subcontractors} />
-      <Route path="/clients" component={Clients} />
-      <Route path="/invoicing" component={Invoicing} />
-      <Route path="/documents" component={Documents} />
-      <Route path="/messages" component={Messages} />
-      <Route path="/ai-scheduling" component={AIScheduling} />
-      <Route path="/settings" component={Settings} />
-      <Route component={NotFound} />
-    </Switch>
+    <Layout>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/jobs" component={Jobs} />
+        <Route path="/subcontractors" component={Subcontractors} />
+        <Route path="/clients" component={Clients} />
+        <Route path="/invoicing" component={Invoicing} />
+        <Route path="/documents" component={Documents} />
+        <Route path="/messages" component={Messages} />
+        <Route path="/ai-scheduling" component={AIScheduling} />
+        <Route path="/settings" component={Settings} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
 
@@ -67,10 +69,8 @@ function App() {
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <SidebarProvider>
-            <Toaster />
-            <Router />
-          </SidebarProvider>
+          <Toaster />
+          <Router />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
