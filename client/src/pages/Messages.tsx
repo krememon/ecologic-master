@@ -22,7 +22,7 @@ function CreateMessageForm({ onSubmit, isLoading }: { onSubmit: (data: InsertMes
     defaultValues: {
       subject: "",
       content: "",
-      recipientEmail: "",
+      recipientId: "",
       isRead: false,
     },
   });
@@ -32,12 +32,12 @@ function CreateMessageForm({ onSubmit, isLoading }: { onSubmit: (data: InsertMes
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
-          name="recipientEmail"
+          name="recipientId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Recipient Email</FormLabel>
+              <FormLabel>Recipient ID</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="john@contractor.com" {...field} />
+                <Input placeholder="recipient-user-id" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -99,7 +99,7 @@ export default function Messages() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: messages = [], isLoading: messagesLoading } = useQuery({
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages"],
     enabled: isAuthenticated,
   });

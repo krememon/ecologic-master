@@ -34,7 +34,7 @@ export default function Settings() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: company } = useQuery({
+  const { data: company = {} } = useQuery<any>({
     queryKey: ["/api/company"],
     enabled: isAuthenticated,
   });
@@ -128,7 +128,7 @@ export default function Settings() {
             <div className="flex items-center space-x-4">
               <div className="relative">
                 <Avatar className="w-20 h-20">
-                  <AvatarImage src={profileImagePreview || user?.profileImageUrl} />
+                  <AvatarImage src={profileImagePreview || user?.profileImageUrl || undefined} />
                   <AvatarFallback>
                     {user?.firstName?.[0]}{user?.lastName?.[0]}
                   </AvatarFallback>

@@ -305,11 +305,11 @@ export default function Dashboard() {
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats = {}, isLoading: statsLoading } = useQuery<any>({
     queryKey: ["/api/dashboard/stats"],
   });
 
-  const { data: jobs, isLoading: jobsLoading } = useQuery({
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<any[]>({
     queryKey: ["/api/jobs"],
   });
 
