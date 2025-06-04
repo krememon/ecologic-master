@@ -35,28 +35,28 @@ function Router() {
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/" component={AuthPage} />
+        <Route path="/auth" component={AuthPage} />
+        <Route component={AuthPage} />
+      </Switch>
+    );
+  }
+
   return (
     <Switch>
-      {!isAuthenticated ? (
-        <>
-          <Route path="/" component={AuthPage} />
-          <Route path="/auth" component={AuthPage} />
-          <Route path="/*" component={AuthPage} />
-        </>
-      ) : (
-        <>
-          <Route path="/" component={Home} />
-          <Route path="/jobs" component={Jobs} />
-          <Route path="/subcontractors" component={Subcontractors} />
-          <Route path="/clients" component={Clients} />
-          <Route path="/invoicing" component={Invoicing} />
-          <Route path="/documents" component={Documents} />
-          <Route path="/messages" component={Messages} />
-          <Route path="/ai-scheduling" component={AIScheduling} />
-          <Route path="/settings" component={Settings} />
-          <Route component={NotFound} />
-        </>
-      )}
+      <Route path="/" component={Home} />
+      <Route path="/jobs" component={Jobs} />
+      <Route path="/subcontractors" component={Subcontractors} />
+      <Route path="/clients" component={Clients} />
+      <Route path="/invoicing" component={Invoicing} />
+      <Route path="/documents" component={Documents} />
+      <Route path="/messages" component={Messages} />
+      <Route path="/ai-scheduling" component={AIScheduling} />
+      <Route path="/settings" component={Settings} />
+      <Route component={NotFound} />
     </Switch>
   );
 }
