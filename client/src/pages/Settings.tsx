@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +11,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { User, Building2, Palette, Bell, Shield, LogOut } from "lucide-react";
+import { User, Building2, Palette, Bell, Shield, LogOut, Smartphone } from "lucide-react";
 
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { 
+    isSupported, 
+    isSubscribed, 
+    isLoading: notificationLoading, 
+    subscribeToPush, 
+    unsubscribeFromPush, 
+    sendTestNotification 
+  } = usePushNotifications();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -205,32 +214,103 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5" />
-                  Notifications
+                  <Smartphone className="h-5 w-5" />
+                  iPhone Push Notifications
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">Email Notifications</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Receive updates about jobs and schedules</p>
+                {!isSupported ? (
+                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Push notifications are not supported in this browser
+                    </p>
                   </div>
-                  <Button variant="outline" disabled>
-                    Enabled
-                  </Button>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">AI Scheduling Alerts</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Get notified about optimization suggestions</p>
-                  </div>
-                  <Button variant="outline" disabled>
-                    Enabled
-                  </Button>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">Real-time Alerts</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Get instant notifications on your iPhone for job updates and messages
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isSubscribed ? (
+                          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            Disabled
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <Separator />
+                    
+                    <div className="flex flex-col gap-3">
+                      {!isSubscribed ? (
+                        <Button 
+                          onClick={async () => {
+                            const success = await subscribeToPush();
+                            if (success) {
+                              toast({
+                                title: "Notifications Enabled",
+                                description: "You'll now receive alerts on your iPhone",
+                              });
+                            } else {
+                              toast({
+                                title: "Failed to Enable",
+                                description: "Please check permissions and try again",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          disabled={notificationLoading}
+                          className="w-full"
+                        >
+                          {notificationLoading ? "Enabling..." : "Enable iPhone Notifications"}
+                        </Button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={async () => {
+                              const success = await sendTestNotification();
+                              if (success) {
+                                toast({
+                                  title: "Test Sent",
+                                  description: "Check your iPhone for the notification",
+                                });
+                              }
+                            }}
+                            variant="outline"
+                            className="flex-1"
+                            disabled={notificationLoading}
+                          >
+                            Send Test
+                          </Button>
+                          <Button 
+                            onClick={async () => {
+                              const success = await unsubscribeFromPush();
+                              if (success) {
+                                toast({
+                                  title: "Notifications Disabled",
+                                  description: "You won't receive alerts anymore",
+                                });
+                              }
+                            }}
+                            variant="destructive"
+                            className="flex-1"
+                            disabled={notificationLoading}
+                          >
+                            Disable
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

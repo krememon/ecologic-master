@@ -58,14 +58,8 @@ export function usePushNotifications() {
       });
 
       // Send subscription to server
-      await apiRequest('/api/notifications/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({
-          subscription: sub.toJSON()
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      await apiRequest('/api/notifications/subscribe', 'POST', {
+        subscription: sub.toJSON()
       });
 
       setSubscription(sub);
@@ -87,14 +81,8 @@ export function usePushNotifications() {
       await subscription.unsubscribe();
       
       // Notify server
-      await apiRequest('/api/notifications/unsubscribe', {
-        method: 'POST',
-        body: JSON.stringify({
-          endpoint: subscription.endpoint
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      await apiRequest('/api/notifications/unsubscribe', 'POST', {
+        endpoint: subscription.endpoint
       });
 
       setSubscription(null);
@@ -110,12 +98,7 @@ export function usePushNotifications() {
 
   const sendTestNotification = async () => {
     try {
-      await apiRequest('/api/notifications/test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      await apiRequest('/api/notifications/test', 'POST');
       return true;
     } catch (error) {
       console.error('Error sending test notification:', error);

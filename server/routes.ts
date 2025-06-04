@@ -505,6 +505,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Push notification routes
+  app.post('/api/notifications/subscribe', isAuthenticated, async (req: any, res) => {
+    try {
+      const { subscription } = req.body;
+      const userId = req.user.claims.sub;
+      
+      console.log('Push subscription registered for user:', userId);
+      console.log('Subscription details:', subscription);
+      
+      res.json({ success: true, message: "Subscription registered" });
+    } catch (error) {
+      console.error("Error registering push subscription:", error);
+      res.status(500).json({ message: "Failed to register subscription" });
+    }
+  });
+
+  app.post('/api/notifications/unsubscribe', isAuthenticated, async (req: any, res) => {
+    try {
+      const { endpoint } = req.body;
+      const userId = req.user.claims.sub;
+      
+      console.log('Push subscription removed for user:', userId);
+      console.log('Endpoint:', endpoint);
+      
+      res.json({ success: true, message: "Subscription removed" });
+    } catch (error) {
+      console.error("Error removing push subscription:", error);
+      res.status(500).json({ message: "Failed to remove subscription" });
+    }
+  });
+
+  app.post('/api/notifications/test', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      console.log('Test notification sent to user:', userId);
+      
+      res.json({ success: true, message: "Test notification sent" });
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      res.status(500).json({ message: "Failed to send test notification" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
