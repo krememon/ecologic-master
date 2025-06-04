@@ -18,7 +18,9 @@ export default function Layout({ children }: LayoutProps) {
     enabled: !!user,
   });
 
-  const toggleSidebar = () => {
+  const toggleSidebar = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     console.log('Hamburger clicked, current state:', sidebarOpen);
     const newState = !sidebarOpen;
     setSidebarOpen(newState);
@@ -40,19 +42,24 @@ export default function Layout({ children }: LayoutProps) {
       
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Header with Hamburger */}
-        <header className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+        <header className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 relative z-40">
           <div className="flex items-center justify-between">
             <button
               onClick={toggleSidebar}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors touch-manipulation"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
+              onTouchStart={() => console.log('Touch started on hamburger')}
+              onMouseDown={() => console.log('Mouse down on hamburger')}
+              className="relative z-50 p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+              style={{ 
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation'
+              }}
             >
-              <Menu className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+              <Menu className="h-6 w-6 text-slate-600 dark:text-slate-400" />
             </button>
             <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
               {company?.name || 'Dashboard'}
             </h1>
-            <div className="w-9" /> {/* Spacer for centering */}
+            <div className="w-11" /> {/* Spacer for centering */}
           </div>
         </header>
 
