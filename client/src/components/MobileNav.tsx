@@ -105,7 +105,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                     </p>
                   </div>
                 </div>
-                <div onClick={handleClose} className="p-1 cursor-pointer -mt-1">
+                <div onClick={handleClose} className="p-1 cursor-pointer mt-1">
                   <X className="h-5 w-5 text-slate-400" />
                 </div>
               </div>
