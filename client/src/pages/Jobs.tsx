@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
+import JobPhotoFeed from "@/components/JobPhotoFeed";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -162,6 +163,7 @@ export default function Jobs() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
+  const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -374,6 +376,14 @@ export default function Jobs() {
                     Created {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                   <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-green-500 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                      onClick={() => setSelectedJob(job)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     <Button 
                       variant="ghost" 
                       size="sm" 

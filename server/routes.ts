@@ -703,6 +703,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Job Photo endpoints
+  app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const photos = await storage.getJobPhotos(jobId);
+      res.json(photos);
+    } catch (error) {
+      console.error("Error fetching job photos:", error);
+      res.status(500).json({ message: "Failed to fetch job photos" });
+    }
+  });
+
+  app.post('/api/jobs/:jobId/photos', isAuthenticated, upload.single('photo'), async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const userId = req.user?.claims?.sub;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No photo file provided" });
+      }
+
+      const photoUrl = `/uploads/${req.file.filename}`;
+      const { title, description, phase, weather, location } = req.body;
+
+      const photo = await storage.createJobPhoto({
+        jobId,
+        uploadedBy: userId,
+        title,
+        description,
+        photoUrl,
+        location,
+        phase,
+        weather,
+        isPublic: true,
+      });
+
+      // Broadcast to WebSocket clients
+      const userConnections = wsClients.get(userId);
+      if (userConnections) {
+        userConnections.forEach(ws => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'job_photo_uploaded',
+              jobId,
+              photo,
+            }));
+          }
+        });
+      }
+
+      res.status(201).json(photo);
+    } catch (error) {
+      console.error("Error uploading job photo:", error);
+      res.status(500).json({ message: "Failed to upload photo" });
+    }
+  });
+
+  app.delete('/api/jobs/photos/:photoId', isAuthenticated, async (req, res) => {
+    try {
+      const photoId = parseInt(req.params.photoId);
+      await storage.deleteJobPhoto(photoId);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error("Error deleting job photo:", error);
+      res.status(500).json({ message: "Failed to delete photo" });
+    }
+  });
+
   // AI Scheduling routes
   app.post('/api/ai/optimize-job-schedule/:jobId', isAuthenticated, async (req: any, res) => {
     try {
