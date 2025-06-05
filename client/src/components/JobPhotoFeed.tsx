@@ -65,7 +65,7 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
   });
 
   // Fetch job photos
-  const { data: photos = [], isLoading } = useQuery({
+  const { data: photos = [], isLoading } = useQuery<JobPhoto[]>({
     queryKey: [`/api/jobs/${jobId}/photos`],
     enabled: !!jobId,
   });

@@ -715,10 +715,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/jobs/:jobId/photos', isAuthenticated, upload.single('photo'), async (req, res) => {
+  app.post('/api/jobs/:jobId/photos', isAuthenticated, upload.single('photo'), async (req: any, res) => {
     try {
       const jobId = parseInt(req.params.jobId);
-      const userId = req.user?.claims?.sub;
+      const userId = req.user?.claims?.sub || req.user?.id;
       
       if (!req.file) {
         return res.status(400).json({ message: "No photo file provided" });
@@ -740,18 +740,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Broadcast to WebSocket clients
-      const userConnections = wsClients.get(userId);
-      if (userConnections) {
-        userConnections.forEach(ws => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'job_photo_uploaded',
-              jobId,
-              photo,
-            }));
-          }
-        });
-      }
+      broadcastToUser(userId, {
+        type: 'job_photo_uploaded',
+        jobId,
+        photo,
+      });
 
       res.status(201).json(photo);
     } catch (error) {

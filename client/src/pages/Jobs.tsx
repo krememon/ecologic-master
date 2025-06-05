@@ -312,6 +312,81 @@ export default function Jobs() {
         </DialogContent>
       </Dialog>
 
+      {/* Job Detail Modal with Photo Feed */}
+      <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              {selectedJob?.title}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedJob && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Job Details */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Job Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Status:</span>
+                      <Badge variant={selectedJob.status === 'active' ? 'default' : 'secondary'}>
+                        {selectedJob.status}
+                      </Badge>
+                    </div>
+                    {selectedJob.client && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Client:</span>
+                        <span className="text-sm">{selectedJob.client.name}</span>
+                      </div>
+                    )}
+                    {selectedJob.location && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Location:</span>
+                        <span className="text-sm">{selectedJob.location}</span>
+                      </div>
+                    )}
+                    {selectedJob.estimatedCost && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Estimated Cost:</span>
+                        <span className="text-sm">${Number(selectedJob.estimatedCost).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {selectedJob.startDate && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Start Date:</span>
+                        <span className="text-sm">{new Date(selectedJob.startDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {selectedJob.endDate && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">End Date:</span>
+                        <span className="text-sm">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {selectedJob.description && (
+                      <div>
+                        <span className="text-sm font-medium">Description:</span>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                          {selectedJob.description}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Photo Feed */}
+              <div className="space-y-4">
+                <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Jobs ({jobs.length})
