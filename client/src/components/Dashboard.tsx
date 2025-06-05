@@ -19,7 +19,10 @@ import {
   CheckCircle,
   Plus,
   UserPlus,
-  FileText
+  FileText,
+  Calendar,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -304,6 +307,84 @@ export default function Dashboard() {
   const [isJobDialogOpen, setIsJobDialogOpen] = useState(false);
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+
+  // Helper functions for schedule
+  const getDaysOfWeek = () => {
+    const today = new Date();
+    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 1)); // Monday
+    
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      
+      // Sample job data - replace with real data
+      let jobs: any[] = [];
+      if (i < 5) { // Weekdays have jobs
+        jobs = [
+          {
+            title: i === 0 ? 'Office Renovation' : 
+                   i === 1 ? 'Site Inspection' :
+                   i === 2 ? 'Emergency Repair' :
+                   i === 3 ? 'Flooring Install' : 'Final Walkthrough',
+            time: i === 0 ? '9:00 AM' : i === 1 ? '2:00 PM' : i === 2 ? '10:30 AM' : i === 3 ? '8:00 AM' : '3:00 PM',
+            type: 'construction',
+            priority: i === 2 ? 'high' : i === 3 ? 'medium' : 'low',
+            subcontractor: i === 0 ? 'BuildPro' : i === 1 ? 'InspectCorp' : i === 2 ? 'FixIt Fast' : i === 3 ? 'FloorMasters' : 'QualityCheck'
+          }
+        ];
+        
+        if (i < 2) {
+          jobs.push({
+            title: 'Kitchen Install',
+            time: '1:00 PM',
+            type: 'installation',
+            priority: 'medium',
+            subcontractor: 'KitchenPro'
+          });
+        }
+      }
+      
+      days.push({
+        name: dayNames[i],
+        date: 9 + i,
+        jobs: jobs
+      });
+    }
+    
+    return days;
+  };
+
+  const getWeekStats = () => {
+    const days = getDaysOfWeek();
+    const totalJobs = days.reduce((sum, day) => sum + day.jobs.length, 0);
+    const urgentJobs = days.reduce((sum, day) => 
+      sum + day.jobs.filter((job: any) => job.priority === 'high').length, 0);
+    
+    return {
+      totalJobs,
+      activeSubcontractors: 8,
+      urgentJobs,
+      utilization: Math.round((totalJobs / 14) * 100) // Based on 2 jobs per day max
+    };
+  };
+
+  const getJobColor = (type: string) => {
+    switch (type) {
+      case 'construction':
+        return 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-800';
+      case 'installation':
+        return 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200 border-green-200 dark:border-green-800';
+      case 'inspection':
+        return 'bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-800';
+      case 'repair':
+        return 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800';
+      default:
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700';
+    }
+  };
   
   const { data: stats = {}, isLoading: statsLoading } = useQuery<any>({
     queryKey: ["/api/dashboard/stats"],
@@ -659,49 +740,98 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Schedule Overview */}
-      <Card className="border-slate-200 dark:border-slate-800">
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+      {/* Enhanced Schedule Overview */}
+      <Card className="border-slate-200 dark:border-slate-800 rounded-2xl">
+        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">This Week's Schedule</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-600" />
+                This Week's Schedule
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                December 9-15, 2024 • {getWeekStats().totalJobs} jobs scheduled
+              </p>
+            </div>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                Previous
+              <Button variant="outline" size="sm" className="rounded-xl">
+                <ChevronLeft className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="sm">
-                Next
+              <Button variant="outline" size="sm" className="rounded-xl">
+                <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>
         </div>
         <CardContent className="p-6">
-          <div className="grid grid-cols-7 gap-4">
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
-              <div key={day} className="text-center">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-3">{day}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">
-                  Dec {9 + index}
-                </p>
+          <div className="grid grid-cols-7 gap-3">
+            {getDaysOfWeek().map((day, index) => (
+              <div key={day.date} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 min-h-[180px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <div className="text-center mb-4">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{day.name}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-700 rounded-full px-2 py-1 inline-block">
+                    Dec {day.date}
+                  </p>
+                </div>
+                
                 <div className="space-y-2">
-                  {index < 5 && (
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded text-xs text-blue-800 dark:text-blue-200 font-medium">
-                      {index === 0 ? 'Office Reno' : 
-                       index === 1 ? 'Site Inspection' :
-                       index === 2 ? 'Emergency Repair' :
-                       index === 3 ? 'Flooring' : 'Final Walkthrough'}
+                  {day.jobs.map((job, jobIndex) => (
+                    <div 
+                      key={jobIndex} 
+                      className={`p-2 rounded-lg text-xs font-medium shadow-sm border transition-all hover:shadow-md cursor-pointer ${getJobColor(job.type)}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="truncate">{job.title}</span>
+                        {job.priority && (
+                          <span className={`w-2 h-2 rounded-full ${job.priority === 'high' ? 'bg-red-400' : job.priority === 'medium' ? 'bg-orange-400' : 'bg-green-400'}`}></span>
+                        )}
+                      </div>
+                      <div className="flex items-center text-xs opacity-75">
+                        <Clock className="w-3 h-3 mr-1" />
+                        {job.time}
+                      </div>
+                      {job.subcontractor && (
+                        <div className="flex items-center text-xs opacity-75 mt-1">
+                          <Users className="w-3 h-3 mr-1" />
+                          {job.subcontractor}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {index < 2 && (
-                    <div className="p-2 bg-green-100 dark:bg-green-900 rounded text-xs text-green-800 dark:text-green-200 font-medium">
-                      Kitchen Install
+                  ))}
+                  
+                  {day.jobs.length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-2 flex items-center justify-center">
+                        <Plus className="w-4 h-4 text-slate-400" />
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">No jobs</p>
                     </div>
-                  )}
-                  {index >= 5 && (
-                    <p className="text-xs text-slate-400 dark:text-slate-500">No jobs scheduled</p>
                   )}
                 </div>
               </div>
             ))}
+          </div>
+          
+          {/* Schedule Statistics */}
+          <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">{getWeekStats().totalJobs}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Total Jobs</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">{getWeekStats().activeSubcontractors}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Active Teams</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-orange-600">{getWeekStats().urgentJobs}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Urgent</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-purple-600">{getWeekStats().utilization}%</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Utilization</p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
