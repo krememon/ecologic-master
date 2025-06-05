@@ -957,9 +957,7 @@ export default function Dashboard() {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="truncate">{job.title}</span>
-                        {job.priority && (
-                          <span className={`w-2 h-2 rounded-full ${job.priority === 'high' ? 'bg-red-400' : job.priority === 'medium' ? 'bg-orange-400' : 'bg-green-400'}`}></span>
-                        )}
+
                       </div>
                       {job.time && (
                         <div className="flex items-center text-xs opacity-75">
