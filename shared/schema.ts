@@ -161,6 +161,21 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Job Photos table for real-time progress tracking
+export const jobPhotos = pgTable("job_photos", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => jobs.id),
+  uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
+  title: varchar("title", { length: 255 }),
+  description: text("description"),
+  photoUrl: varchar("photo_url").notNull(),
+  location: text("location"), // GPS coordinates or description
+  phase: varchar("phase"), // foundation, framing, roofing, electrical, etc.
+  weather: varchar("weather"), // sunny, rainy, cloudy, etc.
+  isPublic: boolean("is_public").default(true), // visible to clients
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedCompanies: many(companies),
@@ -224,6 +239,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   invoices: many(invoices),
   documents: many(documents),
   messages: many(messages),
+  photos: many(jobPhotos),
 }));
 
 export const jobAssignmentsRelations = relations(jobAssignments, ({ one }) => ({
@@ -288,6 +304,17 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
+export const jobPhotosRelations = relations(jobPhotos, ({ one }) => ({
+  job: one(jobs, {
+    fields: [jobPhotos.jobId],
+    references: [jobs.id],
+  }),
+  uploader: one(users, {
+    fields: [jobPhotos.uploadedBy],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertCompanySchema = createInsertSchema(companies).omit({
   id: true,
@@ -329,6 +356,11 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   createdAt: true,
 });
 
+export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -346,3 +378,5 @@ export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type JobPhoto = typeof jobPhotos.$inferSelect;
+export type InsertJobPhoto = z.infer<typeof insertJobPhotoSchema>;
