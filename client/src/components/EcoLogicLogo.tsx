@@ -16,57 +16,52 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
         xmlns="http://www.w3.org/2000/svg"
         className="flex-shrink-0"
       >
-        {/* Water droplet shape - more accurate teardrop */}
+        {/* Outer water droplet outline */}
         <path
-          d="M50 8C50 8 22 38 22 58C22 73.464 34.536 86 50 86C65.464 86 78 73.464 78 58C78 38 50 8 50 8Z"
-          fill="url(#waterGradient)"
-          stroke="#1E3A8A"
-          strokeWidth="2.5"
+          d="M50 5C50 5 20 35 20 58C20 75.673 34.327 90 52 90C69.673 90 84 75.673 84 58C84 35 50 5 50 5Z"
+          fill="none"
+          stroke="#2563EB"
+          strokeWidth="4"
+          strokeLinecap="round"
           strokeLinejoin="round"
         />
         
-        {/* Leaf shape inside droplet - more organic curve */}
+        {/* Inner water droplet curve */}
         <path
-          d="M45 42C45 42 48 38 54 40C60 42 62 48 60 52C58 56 52 58 48 56C44 54 43 48 45 42Z"
-          fill="#84CC16"
-          stroke="#1E3A8A"
-          strokeWidth="2"
+          d="M50 20C50 20 30 45 30 62C30 73.046 38.954 82 50 82C61.046 82 70 73.046 70 62C70 45 50 20 50 20Z"
+          fill="none"
+          stroke="#2563EB"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
         
-        {/* Leaf vein - curved line */}
+        {/* Leaf shape - elliptical with precise positioning */}
+        <ellipse
+          cx="52"
+          cy="48"
+          rx="14"
+          ry="9"
+          fill="#84CC16"
+          stroke="#2563EB"
+          strokeWidth="3"
+          transform="rotate(-15 52 48)"
+        />
+        
+        {/* Leaf center vein */}
         <path
-          d="M47 44C49 46 52 48 55 50"
-          stroke="#1E3A8A"
-          strokeWidth="1.5"
+          d="M44 44L60 52"
+          stroke="#2563EB"
+          strokeWidth="2"
           strokeLinecap="round"
           fill="none"
         />
         
-        {/* Water highlight - softer glow */}
-        <ellipse
-          cx="40"
-          cy="32"
-          rx="5"
-          ry="8"
-          fill="rgba(255,255,255,0.4)"
-          transform="rotate(-25 40 32)"
-        />
-        
-        {/* Small highlight dot */}
-        <circle
-          cx="38"
-          cy="28"
-          r="2"
-          fill="rgba(255,255,255,0.6)"
-        />
-        
-        {/* Gradients */}
+        {/* Gradients for consistent unique IDs */}
         <defs>
-          <linearGradient id="waterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#7DD3FC" />
-            <stop offset="30%" stopColor="#38BDF8" />
-            <stop offset="70%" stopColor="#0EA5E9" />
-            <stop offset="100%" stopColor="#0284C7" />
+          <linearGradient id={`waterGradient-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#60A5FA" />
+            <stop offset="100%" stopColor="#3B82F6" />
           </linearGradient>
         </defs>
       </svg>
