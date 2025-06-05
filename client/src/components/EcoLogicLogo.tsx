@@ -8,17 +8,12 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
   return (
     <div className={`flex items-center gap-3 ${className}`}>
       {/* Water Droplet with Leaf SVG Logo */}
-      <div 
-        style={{ 
-          width: size, 
-          height: size,
-          backgroundImage: 'url(/attached_assets/IMG_6171_1749092157103.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          borderRadius: '8px'
-        }}
-        className="flex-shrink-0"
+      <img
+        src="/ecologic-logo.jpg"
+        alt="EcoLogic Water Droplet Logo"
+        width={size}
+        height={size}
+        className="flex-shrink-0 object-contain"
       />
       
       {/* EcoLogic Text */}
