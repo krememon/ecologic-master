@@ -9,6 +9,7 @@ import {
   invoices,
   documents,
   messages,
+  jobPhotos,
   type User,
   type UpsertUser,
   type Company,
@@ -25,6 +26,8 @@ import {
   type InsertDocument,
   type Message,
   type InsertMessage,
+  type JobPhoto,
+  type InsertJobPhoto,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -84,6 +87,11 @@ export interface IStorage {
   
   // Dashboard statistics
   getDashboardStats(companyId: number): Promise<any>;
+  
+  // Job Photo operations
+  getJobPhotos(jobId: number): Promise<JobPhoto[]>;
+  createJobPhoto(photo: InsertJobPhoto): Promise<JobPhoto>;
+  deleteJobPhoto(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -446,6 +454,24 @@ export class DatabaseStorage implements IStorage {
       availableSubcontractors: Number(availableSubcontractorsCount[0].count) || 0,
       monthlyRevenue: Number(monthlyRevenueResult[0].total) || 0,
     };
+  }
+
+  // Job Photo operations
+  async getJobPhotos(jobId: number): Promise<JobPhoto[]> {
+    return await db
+      .select()
+      .from(jobPhotos)
+      .where(eq(jobPhotos.jobId, jobId))
+      .orderBy(desc(jobPhotos.createdAt));
+  }
+
+  async createJobPhoto(photoData: InsertJobPhoto): Promise<JobPhoto> {
+    const [photo] = await db.insert(jobPhotos).values(photoData).returning();
+    return photo;
+  }
+
+  async deleteJobPhoto(id: number): Promise<void> {
+    await db.delete(jobPhotos).where(eq(jobPhotos.id, id));
   }
 }
 
