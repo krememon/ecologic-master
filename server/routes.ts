@@ -896,6 +896,263 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // E-signature Approval Workflow routes
+  app.get('/api/approvals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const workflows = await storage.getApprovalWorkflows(company.id);
+      res.json(workflows);
+    } catch (error) {
+      console.error("Error fetching approval workflows:", error);
+      res.status(500).json({ message: "Failed to fetch approval workflows" });
+    }
+  });
+
+  app.post('/api/approvals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const workflowData = {
+        ...req.body,
+        companyId: company.id,
+        createdBy: userId,
+      };
+
+      const workflow = await storage.createApprovalWorkflow(workflowData);
+      
+      // Create audit history
+      await storage.createApprovalHistory({
+        workflowId: workflow.id,
+        action: 'created',
+        description: `Approval workflow "${workflow.title}" created`,
+        performedBy: userId,
+      });
+
+      res.status(201).json(workflow);
+    } catch (error) {
+      console.error("Error creating approval workflow:", error);
+      res.status(500).json({ message: "Failed to create approval workflow" });
+    }
+  });
+
+  app.get('/api/approvals/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const workflowId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const workflow = await storage.getApprovalWorkflow(workflowId);
+      if (!workflow || workflow.companyId !== company.id) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+
+      const signatures = await storage.getApprovalSignatures(workflowId);
+      const history = await storage.getApprovalHistory(workflowId);
+
+      res.json({
+        ...workflow,
+        signatures,
+        history,
+      });
+    } catch (error) {
+      console.error("Error fetching approval workflow:", error);
+      res.status(500).json({ message: "Failed to fetch approval workflow" });
+    }
+  });
+
+  app.post('/api/approvals/:id/signatures', isAuthenticated, async (req: any, res) => {
+    try {
+      const workflowId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const workflow = await storage.getApprovalWorkflow(workflowId);
+      if (!workflow || workflow.companyId !== company.id) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+
+      // Generate unique access token for signature
+      const accessToken = require('crypto').randomBytes(32).toString('hex');
+      
+      const signatureData = {
+        ...req.body,
+        workflowId,
+        accessToken,
+      };
+
+      const signature = await storage.createApprovalSignature(signatureData);
+      
+      // Create audit history
+      await storage.createApprovalHistory({
+        workflowId,
+        action: 'sent',
+        description: `Signature request sent to ${signature.signerEmail}`,
+        performedBy: userId,
+        performedByEmail: req.user.claims.email,
+      });
+
+      res.status(201).json(signature);
+    } catch (error) {
+      console.error("Error creating signature request:", error);
+      res.status(500).json({ message: "Failed to create signature request" });
+    }
+  });
+
+  // Public signature endpoint (no authentication required)
+  app.get('/api/sign/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      const signature = await storage.getApprovalSignatureByToken(token);
+      
+      if (!signature) {
+        return res.status(404).json({ message: "Invalid or expired signature link" });
+      }
+
+      const workflow = await storage.getApprovalWorkflow(signature.workflowId);
+      if (!workflow) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+
+      // Check if workflow is expired
+      if (workflow.expiresAt && new Date() > new Date(workflow.expiresAt)) {
+        return res.status(410).json({ message: "This approval request has expired" });
+      }
+
+      // Create view history
+      await storage.createApprovalHistory({
+        workflowId: workflow.id,
+        action: 'viewed',
+        description: `Signature page viewed by ${signature.signerEmail}`,
+        performedByEmail: signature.signerEmail,
+        metadata: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+        },
+      });
+
+      res.json({
+        workflow: {
+          id: workflow.id,
+          title: workflow.title,
+          description: workflow.description,
+          type: workflow.type,
+          documentUrl: workflow.documentUrl,
+          documentType: workflow.documentType,
+        },
+        signature: {
+          id: signature.id,
+          signerName: signature.signerName,
+          signerEmail: signature.signerEmail,
+          signerType: signature.signerType,
+          status: signature.status,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching signature request:", error);
+      res.status(500).json({ message: "Failed to fetch signature request" });
+    }
+  });
+
+  app.post('/api/sign/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { signatureData, comments, action } = req.body; // action: 'sign' or 'decline'
+      
+      const signature = await storage.getApprovalSignatureByToken(token);
+      if (!signature) {
+        return res.status(404).json({ message: "Invalid or expired signature link" });
+      }
+
+      const workflow = await storage.getApprovalWorkflow(signature.workflowId);
+      if (!workflow) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+
+      // Check if workflow is expired
+      if (workflow.expiresAt && new Date() > new Date(workflow.expiresAt)) {
+        return res.status(410).json({ message: "This approval request has expired" });
+      }
+
+      // Check if already signed/declined
+      if (signature.status !== 'pending') {
+        return res.status(400).json({ message: "This request has already been processed" });
+      }
+
+      const updateData: any = {
+        status: action === 'sign' ? 'signed' : 'declined',
+        signedAt: new Date(),
+        comments,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      };
+
+      if (action === 'sign' && signatureData) {
+        updateData.signatureData = signatureData;
+      }
+
+      const updatedSignature = await storage.updateApprovalSignature(signature.id, updateData);
+
+      // Create audit history
+      await storage.createApprovalHistory({
+        workflowId: workflow.id,
+        action: action === 'sign' ? 'signed' : 'declined',
+        description: `${signature.signerEmail} ${action === 'sign' ? 'signed' : 'declined'} the approval request`,
+        performedByEmail: signature.signerEmail,
+        metadata: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          comments,
+        },
+      });
+
+      // Check if all signatures are completed to update workflow status
+      const allSignatures = await storage.getApprovalSignatures(workflow.id);
+      const pendingSignatures = allSignatures.filter(s => s.status === 'pending');
+      const declinedSignatures = allSignatures.filter(s => s.status === 'declined');
+
+      let newWorkflowStatus = workflow.status;
+      if (declinedSignatures.length > 0) {
+        newWorkflowStatus = 'rejected';
+      } else if (pendingSignatures.length === 0) {
+        newWorkflowStatus = 'approved';
+      }
+
+      if (newWorkflowStatus !== workflow.status) {
+        await storage.updateApprovalWorkflow(workflow.id, { status: newWorkflowStatus });
+        
+        await storage.createApprovalHistory({
+          workflowId: workflow.id,
+          action: newWorkflowStatus,
+          description: `Approval workflow ${newWorkflowStatus}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: action === 'sign' ? 'Document signed successfully' : 'Document declined',
+        signature: updatedSignature,
+      });
+    } catch (error) {
+      console.error("Error processing signature:", error);
+      res.status(500).json({ message: "Failed to process signature" });
+    }
+  });
+
   // AI Scheduling routes
   app.post('/api/ai/optimize-job-schedule/:jobId', isAuthenticated, async (req: any, res) => {
     try {

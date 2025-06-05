@@ -28,6 +28,15 @@ import {
   type InsertMessage,
   type JobPhoto,
   type InsertJobPhoto,
+  approvalWorkflows,
+  approvalSignatures,
+  approvalHistory,
+  type ApprovalWorkflow,
+  type InsertApprovalWorkflow,
+  type ApprovalSignature,
+  type InsertApprovalSignature,
+  type ApprovalHistory,
+  type InsertApprovalHistory,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -491,6 +500,107 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobPhoto(id: number): Promise<void> {
     await db.delete(jobPhotos).where(eq(jobPhotos.id, id));
+  }
+
+  // Approval Workflow operations
+  async getApprovalWorkflows(companyId: number): Promise<ApprovalWorkflow[]> {
+    return await db
+      .select()
+      .from(approvalWorkflows)
+      .where(eq(approvalWorkflows.companyId, companyId))
+      .orderBy(desc(approvalWorkflows.createdAt));
+  }
+
+  async getApprovalWorkflow(id: number): Promise<ApprovalWorkflow | undefined> {
+    const [workflow] = await db
+      .select()
+      .from(approvalWorkflows)
+      .where(eq(approvalWorkflows.id, id));
+    return workflow;
+  }
+
+  async createApprovalWorkflow(workflowData: InsertApprovalWorkflow): Promise<ApprovalWorkflow> {
+    const [workflow] = await db
+      .insert(approvalWorkflows)
+      .values(workflowData)
+      .returning();
+    return workflow;
+  }
+
+  async updateApprovalWorkflow(id: number, workflowData: Partial<InsertApprovalWorkflow>): Promise<ApprovalWorkflow> {
+    const [workflow] = await db
+      .update(approvalWorkflows)
+      .set({ ...workflowData, updatedAt: new Date() })
+      .where(eq(approvalWorkflows.id, id))
+      .returning();
+    return workflow;
+  }
+
+  async deleteApprovalWorkflow(id: number): Promise<void> {
+    await db.delete(approvalWorkflows).where(eq(approvalWorkflows.id, id));
+  }
+
+  // Approval Signature operations
+  async getApprovalSignatures(workflowId: number): Promise<ApprovalSignature[]> {
+    return await db
+      .select()
+      .from(approvalSignatures)
+      .where(eq(approvalSignatures.workflowId, workflowId))
+      .orderBy(desc(approvalSignatures.createdAt));
+  }
+
+  async getApprovalSignature(id: number): Promise<ApprovalSignature | undefined> {
+    const [signature] = await db
+      .select()
+      .from(approvalSignatures)
+      .where(eq(approvalSignatures.id, id));
+    return signature;
+  }
+
+  async getApprovalSignatureByToken(accessToken: string): Promise<ApprovalSignature | undefined> {
+    const [signature] = await db
+      .select()
+      .from(approvalSignatures)
+      .where(eq(approvalSignatures.accessToken, accessToken));
+    return signature;
+  }
+
+  async createApprovalSignature(signatureData: InsertApprovalSignature): Promise<ApprovalSignature> {
+    const [signature] = await db
+      .insert(approvalSignatures)
+      .values(signatureData)
+      .returning();
+    return signature;
+  }
+
+  async updateApprovalSignature(id: number, signatureData: Partial<InsertApprovalSignature>): Promise<ApprovalSignature> {
+    const [signature] = await db
+      .update(approvalSignatures)
+      .set(signatureData)
+      .where(eq(approvalSignatures.id, id))
+      .returning();
+    return signature;
+  }
+
+  async deleteApprovalSignature(id: number): Promise<void> {
+    await db.delete(approvalSignatures).where(eq(approvalSignatures.id, id));
+  }
+
+  // Approval History operations
+  async createApprovalHistory(historyData: InsertApprovalHistory): Promise<ApprovalHistory> {
+    const [history] = await db
+      .insert(approvalHistory)
+      .values(historyData)
+      .returning();
+    return history;
+  }
+
+  async getApprovalHistory(workflowId: number): Promise<ApprovalHistory[]> {
+    return await db
+      .select()
+      .from(approvalHistory)
+      .where(eq(approvalHistory.workflowId, workflowId))
+      .orderBy(desc(approvalHistory.timestamp));
   }
 }
 
