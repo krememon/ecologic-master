@@ -506,66 +506,76 @@ export default function Dashboard() {
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
-  // Helper functions for schedule
+  // Helper functions for schedule using real job data
   const getDaysOfWeek = () => {
     const today = new Date();
-    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 1)); // Monday
+    const currentWeek = new Date(today);
+    const startOfWeek = new Date(currentWeek.setDate(currentWeek.getDate() - currentWeek.getDay() + 1)); // Monday
+    
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     const days = [];
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
       
-      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      
-      // Sample job data - replace with real data
-      let jobs: any[] = [];
-      if (i < 5) { // Weekdays have jobs
-        jobs = [
-          {
-            title: i === 0 ? 'Office Renovation' : 
-                   i === 1 ? 'Site Inspection' :
-                   i === 2 ? 'Emergency Repair' :
-                   i === 3 ? 'Flooring Install' : 'Final Walkthrough',
-            time: i === 0 ? '9:00 AM' : i === 1 ? '2:00 PM' : i === 2 ? '10:30 AM' : i === 3 ? '8:00 AM' : '3:00 PM',
-            type: 'construction',
-            priority: i === 2 ? 'high' : i === 3 ? 'medium' : 'low',
-            subcontractor: i === 0 ? 'BuildPro' : i === 1 ? 'InspectCorp' : i === 2 ? 'FixIt Fast' : i === 3 ? 'FloorMasters' : 'QualityCheck'
-          }
-        ];
-        
-        if (i < 2) {
-          jobs.push({
-            title: 'Kitchen Install',
-            time: '1:00 PM',
-            type: 'installation',
-            priority: 'medium',
-            subcontractor: 'KitchenPro'
-          });
-        }
-      }
+      // Filter jobs for this specific day
+      const dayJobs = jobs?.filter((job: any) => {
+        if (!job.startDate) return false;
+        const jobDate = new Date(job.startDate);
+        return jobDate.toDateString() === date.toDateString();
+      }).map((job: any) => ({
+        id: job.id,
+        title: job.title,
+        time: job.startDate ? new Date(job.startDate).toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          hour12: true 
+        }) : '9:00 AM',
+        type: getJobType(job.description || job.title),
+        priority: job.priority || 'medium',
+        status: job.status,
+        location: job.location,
+        client: job.client?.name
+      })) || [];
       
       days.push({
         name: dayNames[i],
-        date: 9 + i,
-        jobs: jobs
+        date: date.getDate(),
+        month: monthNames[date.getMonth()],
+        fullDate: date,
+        jobs: dayJobs,
+        isToday: date.toDateString() === new Date().toDateString()
       });
     }
     
     return days;
   };
 
+  const getJobType = (description: string) => {
+    const desc = description.toLowerCase();
+    if (desc.includes('renovation') || desc.includes('construction') || desc.includes('build')) return 'construction';
+    if (desc.includes('install') || desc.includes('setup')) return 'installation';
+    if (desc.includes('inspect') || desc.includes('check')) return 'inspection';
+    if (desc.includes('repair') || desc.includes('fix') || desc.includes('maintenance')) return 'repair';
+    if (desc.includes('plumb')) return 'plumbing';
+    if (desc.includes('electric')) return 'electrical';
+    return 'general';
+  };
+
   const getWeekStats = () => {
     const days = getDaysOfWeek();
-    const totalJobs = days.reduce((sum, day) => sum + day.jobs.length, 0);
+    const weekJobs = days.reduce((sum, day) => sum + day.jobs.length, 0);
     const urgentJobs = days.reduce((sum, day) => 
       sum + day.jobs.filter((job: any) => job.priority === 'high').length, 0);
+    const activeJobs = jobs?.filter((job: any) => job.status === 'in_progress' || job.status === 'active').length || 0;
     
     return {
-      totalJobs,
-      activeSubcontractors: 8,
+      totalJobs: weekJobs,
+      activeJobs,
       urgentJobs,
-      utilization: Math.round((totalJobs / 14) * 100) // Based on 2 jobs per day max
+      utilization: weekJobs > 0 ? Math.round((weekJobs / 14) * 100) : 0
     };
   };
 
@@ -916,24 +926,14 @@ export default function Dashboard() {
       {/* Enhanced Schedule Overview */}
       <Card className="border-slate-200 dark:border-slate-800 rounded-2xl">
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-600" />
-                This Week's Schedule
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                December 9-15, 2024 • {getWeekStats().totalJobs} jobs scheduled
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" className="rounded-xl">
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              This Week's Schedule
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              {getDaysOfWeek()[0]?.month} {getDaysOfWeek()[0]?.date}-{getDaysOfWeek()[6]?.date}, {new Date().getFullYear()} • {getWeekStats().totalJobs} jobs scheduled
+            </p>
           </div>
         </div>
         <CardContent className="p-6">
@@ -942,8 +942,12 @@ export default function Dashboard() {
               <div key={day.date} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 min-h-[180px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                 <div className="text-center mb-4">
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{day.name}</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-700 rounded-full px-2 py-1 inline-block">
-                    Dec {day.date}
+                  <p className={`text-xs rounded-full px-2 py-1 inline-block ${
+                    day.isToday 
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-medium' 
+                      : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}>
+                    {day.month} {day.date}
                   </p>
                 </div>
                 
@@ -963,10 +967,15 @@ export default function Dashboard() {
                         <Clock className="w-3 h-3 mr-1" />
                         {job.time}
                       </div>
-                      {job.subcontractor && (
+                      {job.client && (
                         <div className="flex items-center text-xs opacity-75 mt-1">
                           <Users className="w-3 h-3 mr-1" />
-                          {job.subcontractor}
+                          {job.client}
+                        </div>
+                      )}
+                      {job.location && (
+                        <div className="text-xs opacity-60 mt-1 truncate">
+                          📍 {job.location}
                         </div>
                       )}
                     </div>
@@ -990,19 +999,19 @@ export default function Dashboard() {
             <div className="grid grid-cols-4 gap-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-600">{getWeekStats().totalJobs}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Total Jobs</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">This Week</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">{getWeekStats().activeSubcontractors}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Active Teams</p>
+                <p className="text-2xl font-bold text-green-600">{getWeekStats().activeJobs}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Active Jobs</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-orange-600">{getWeekStats().urgentJobs}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Urgent</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">High Priority</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-purple-600">{getWeekStats().utilization}%</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Utilization</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Capacity</p>
               </div>
             </div>
           </div>
