@@ -532,7 +532,7 @@ export default function Dashboard() {
           hour: 'numeric', 
           minute: '2-digit', 
           hour12: true 
-        }) : '9:00 AM',
+        }) : null,
         type: getJobType(job.description || job.title),
         priority: job.priority || 'medium',
         status: job.status,
@@ -963,10 +963,12 @@ export default function Dashboard() {
                           <span className={`w-2 h-2 rounded-full ${job.priority === 'high' ? 'bg-red-400' : job.priority === 'medium' ? 'bg-orange-400' : 'bg-green-400'}`}></span>
                         )}
                       </div>
-                      <div className="flex items-center text-xs opacity-75">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {job.time}
-                      </div>
+                      {job.time && (
+                        <div className="flex items-center text-xs opacity-75">
+                          <Clock className="w-3 h-3 mr-1" />
+                          {job.time}
+                        </div>
+                      )}
                       {job.client && (
                         <div className="flex items-center text-xs opacity-75 mt-1">
                           <Users className="w-3 h-3 mr-1" />
