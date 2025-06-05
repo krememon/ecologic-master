@@ -163,7 +163,17 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
           )}
         />
         
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={isLoading}
+          onClick={() => {
+            console.log("Submit button clicked");
+            console.log("Form is valid:", form.formState.isValid);
+            console.log("Form errors:", form.formState.errors);
+            console.log("Form values:", form.getValues());
+          }}
+        >
           {isLoading ? "Creating..." : "Create Invoice"}
         </Button>
       </form>
