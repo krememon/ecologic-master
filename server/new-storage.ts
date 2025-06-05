@@ -456,7 +456,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(jobs.companyId, companyId), eq(jobs.status, "active")));
 
     const outstandingInvoicesAmount = await db
-      .select({ total: sql`sum(amount)` })
+      .select({ total: sql`sum(CAST(amount AS DECIMAL))` })
       .from(invoices)
       .where(eq(invoices.companyId, companyId));
 
