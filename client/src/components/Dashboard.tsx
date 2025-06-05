@@ -520,19 +520,17 @@ export default function Dashboard() {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
       
-      // Filter jobs for this specific day
+      // Filter jobs for this specific day (only show jobs from current year and with proper dates)
       const dayJobs = jobs?.filter((job: any) => {
         if (!job.startDate) return false;
         const jobDate = new Date(job.startDate);
-        return jobDate.toDateString() === date.toDateString();
+        const currentYear = new Date().getFullYear();
+        // Only show jobs from current year and that match this specific date
+        return jobDate.getFullYear() === currentYear && jobDate.toDateString() === date.toDateString();
       }).map((job: any) => ({
         id: job.id,
         title: job.title,
-        time: job.startDate ? new Date(job.startDate).toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
-          hour12: true 
-        }) : null,
+        time: null, // Remove time display entirely
         type: getJobType(job.description || job.title),
         priority: job.priority || 'medium',
         status: job.status,
