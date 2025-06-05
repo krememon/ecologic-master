@@ -486,10 +486,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      const subcontractorData = insertSubcontractorSchema.parse({
+      // Convert numeric fields to strings for schema validation
+      const processedBody = {
         ...req.body,
         companyId: company.id,
-      });
+        hourlyRate: req.body.hourlyRate ? String(req.body.hourlyRate) : undefined,
+        rating: req.body.rating ? String(req.body.rating) : undefined,
+      };
+      
+      const subcontractorData = insertSubcontractorSchema.parse(processedBody);
       
       const subcontractor = await storage.createSubcontractor(subcontractorData);
       res.json(subcontractor);
@@ -502,7 +507,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/subcontractors/:id', isAuthenticated, async (req: any, res) => {
     try {
       const subcontractorId = parseInt(req.params.id);
-      const subcontractorData = insertSubcontractorSchema.partial().parse(req.body);
+      
+      // Convert numeric fields to strings for schema validation
+      const processedBody = {
+        ...req.body,
+        hourlyRate: req.body.hourlyRate ? String(req.body.hourlyRate) : undefined,
+        rating: req.body.rating ? String(req.body.rating) : undefined,
+      };
+      
+      const subcontractorData = insertSubcontractorSchema.partial().parse(processedBody);
       
       const subcontractor = await storage.updateSubcontractor(subcontractorId, subcontractorData);
       res.json(subcontractor);
