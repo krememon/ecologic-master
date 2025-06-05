@@ -236,20 +236,20 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Appearance Settings */}
+        {/* Appearance & Language Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-              Appearance
+              {t('settings.appearance')}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="dark-mode">Dark Mode</Label>
+                <Label htmlFor="dark-mode">{t('settings.darkMode')}</Label>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Switch between light and dark themes
+                  {t('settings.darkModeDescription')}
                 </p>
               </div>
               <Switch
@@ -257,6 +257,13 @@ export default function Settings() {
                 checked={theme === 'dark'}
                 onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
               />
+            </div>
+            
+            <div className="border-t pt-4">
+              <LanguageSelector variant="dropdown" showLabel={true} />
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                {t('settings.languageDescription')}
+              </p>
             </div>
           </CardContent>
         </Card>
