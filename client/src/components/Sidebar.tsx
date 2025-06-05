@@ -10,6 +10,7 @@ import {
   FolderOpen, 
   MessageSquare,
   Brain,
+  PenTool,
   Settings,
   LogOut,
   X
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Clients", href: "/clients", icon: UserCheck },
   { name: "Invoicing", href: "/invoicing", icon: FileText },
   { name: "AI Scheduling", href: "/ai-scheduling", icon: Brain },
+  { name: "Approvals", href: "/approvals", icon: PenTool },
   { name: "Documents", href: "/documents", icon: FolderOpen },
   { name: "Messages", href: "/messages", icon: MessageSquare },
 ];
