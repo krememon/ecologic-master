@@ -9,12 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "next-themes";
-import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
+import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload, Globe } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useTranslation } from "react-i18next";
+import LanguageSelector from "@/components/LanguageSelector";
 
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
@@ -110,8 +113,8 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Settings</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage your account and application preferences</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('settings.title')}</h1>
+        <p className="text-slate-600 dark:text-slate-400">{t('settings.subtitle')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
