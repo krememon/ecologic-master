@@ -74,22 +74,23 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
           name="clientId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Client {clients.length === 0 && "(Optional - no clients added yet)"}</FormLabel>
-              <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
+              <FormLabel>Client {(!clients || clients.length === 0) && "(Optional - no clients added yet)"}</FormLabel>
+              <Select onValueChange={(value) => field.onChange(value ? parseInt(value) : null)} defaultValue={field.value?.toString()}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder={clients.length === 0 ? "No clients available" : "Select a client"} />
+                    <SelectValue placeholder={(!clients || clients.length === 0) ? "No clients available" : "Select a client"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {clients.length === 0 ? (
-                    <SelectItem value="" disabled>No clients available</SelectItem>
-                  ) : (
+                  <SelectItem value="">No client</SelectItem>
+                  {clients && Array.isArray(clients) && clients.length > 0 ? (
                     clients.map((client: any) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.name}
+                      <SelectItem key={client?.id || 'unknown'} value={client?.id?.toString() || ''}>
+                        {client?.name || 'Unknown Client'}
                       </SelectItem>
                     ))
+                  ) : (
+                    <SelectItem value="" disabled>No clients available</SelectItem>
                   )}
                 </SelectContent>
               </Select>
