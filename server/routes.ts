@@ -696,6 +696,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const stats = await storage.getDashboardStats(company.id);
+      console.log("Dashboard stats for company", company.id, ":", stats);
+      
+      // Prevent caching to ensure fresh data
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
       res.json(stats);
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
