@@ -29,9 +29,15 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
     },
   });
 
+  const handleSubmit = (data: any) => {
+    console.log("Form submitting with data:", data);
+    console.log("Form errors:", form.formState.errors);
+    onSubmit(data);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="invoiceNumber"
