@@ -38,7 +38,17 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
   const handleSubmit = (data: any) => {
     console.log("Form submitting with data:", data);
     console.log("Form errors:", form.formState.errors);
-    onSubmit(data);
+    
+    // Ensure all required fields are present
+    const formattedData = {
+      ...data,
+      invoiceNumber: data.invoiceNumber || `INV-${Date.now()}`, // Generate if empty
+      amount: data.amount || "0.00",
+      clientId: data.clientId || null,
+    };
+    
+    console.log("Formatted data:", formattedData);
+    onSubmit(formattedData);
   };
 
   return (
@@ -94,7 +104,15 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
             <FormItem>
               <FormLabel>Amount</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" placeholder="1500.00" {...field} />
+                <Input 
+                  type="text" 
+                  placeholder="1500.00" 
+                  {...field}
+                  onChange={(e) => {
+                    // Ensure we store as string for the schema
+                    field.onChange(e.target.value);
+                  }}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
