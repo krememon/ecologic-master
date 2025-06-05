@@ -764,6 +764,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Weather integration routes
+  app.get('/api/weather/current/:location', isAuthenticated, async (req, res) => {
+    try {
+      const { location } = req.params;
+      const { weatherService } = await import('./weather-service');
+      const weatherData = await weatherService.getWeatherData(location);
+      res.json(weatherData);
+    } catch (error) {
+      console.error("Error fetching weather data:", error);
+      res.status(500).json({ message: "Failed to fetch weather data" });
+    }
+  });
+
+  app.post('/api/weather/analyze-job/:jobId', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found or access denied" });
+      }
+
+      if (!job.location || !job.startDate) {
+        return res.status(400).json({ message: "Job must have location and start date for weather analysis" });
+      }
+
+      const { weatherService } = await import('./weather-service');
+      const weatherData = await weatherService.getWeatherData(job.location);
+      
+      const endDate = job.endDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const analysis = weatherService.analyzeWeatherForJob(
+        weatherData.forecast,
+        job.startDate,
+        endDate,
+        'construction'
+      );
+
+      analysis.jobId = jobId;
+      analysis.location = job.location;
+
+      res.json({
+        weather: weatherData,
+        analysis,
+      });
+    } catch (error) {
+      console.error("Error analyzing weather for job:", error);
+      res.status(500).json({ message: "Failed to analyze weather for job" });
+    }
+  });
+
   // AI Scheduling routes
   app.post('/api/ai/optimize-job-schedule/:jobId', isAuthenticated, async (req: any, res) => {
     try {

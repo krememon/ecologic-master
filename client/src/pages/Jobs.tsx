@@ -12,6 +12,7 @@ import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camer
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
+import WeatherDashboard from "@/components/WeatherDashboard";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -322,14 +323,14 @@ export default function Jobs() {
             </DialogTitle>
           </DialogHeader>
           {selectedJob && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Job Details */}
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Job Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
+            <div className="space-y-6">
+              {/* Job Information Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Job Information</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Status:</span>
                       <Badge variant={selectedJob.status === 'active' ? 'default' : 'secondary'}>
@@ -366,22 +367,30 @@ export default function Jobs() {
                         <span className="text-sm">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
                       </div>
                     )}
-                    {selectedJob.description && (
-                      <div>
-                        <span className="text-sm font-medium">Description:</span>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                          {selectedJob.description}
-                        </p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
+                  </div>
+                  {selectedJob.description && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <span className="text-sm font-medium">Description:</span>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                        {selectedJob.description}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Weather Dashboard */}
+              {selectedJob.location && (
+                <WeatherDashboard
+                  jobId={selectedJob.id}
+                  location={selectedJob.location}
+                  startDate={selectedJob.startDate}
+                  endDate={selectedJob.endDate}
+                />
+              )}
 
               {/* Photo Feed */}
-              <div className="space-y-4">
-                <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
-              </div>
+              <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
             </div>
           )}
         </DialogContent>
