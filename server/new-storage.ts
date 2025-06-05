@@ -458,7 +458,7 @@ export class DatabaseStorage implements IStorage {
     const outstandingInvoicesCount = await db
       .select({ count: sql`count(*)` })
       .from(invoices)
-      .where(and(eq(invoices.companyId, companyId), eq(invoices.status, "pending")));
+      .where(eq(invoices.companyId, companyId));
 
     const availableSubcontractorsCount = await db
       .select({ count: sql`count(*)` })
