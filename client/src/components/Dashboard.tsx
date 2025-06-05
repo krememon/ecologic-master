@@ -26,6 +26,204 @@ import {
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
+// Recent Alerts Component
+function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) {
+  const generateAlerts = () => {
+    const alerts: Array<{
+      id: string;
+      type: 'error' | 'warning' | 'success' | 'info';
+      title: string;
+      message: string;
+      timestamp: Date;
+      icon: any;
+      bgColor: string;
+      borderColor: string;
+      iconColor: string;
+    }> = [];
+
+    const today = new Date();
+    
+    // Check for overdue invoices
+    if (invoices) {
+      invoices.forEach((invoice: any) => {
+        if (invoice.status === 'pending' && invoice.dueDate) {
+          const dueDate = new Date(invoice.dueDate);
+          const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysOverdue > 0) {
+            alerts.push({
+              id: `invoice-overdue-${invoice.id}`,
+              type: 'error',
+              title: 'Payment Overdue',
+              message: `Invoice ${invoice.invoiceNumber} is ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} overdue ($${parseFloat(invoice.amount).toLocaleString()})`,
+              timestamp: dueDate,
+              icon: AlertTriangle,
+              bgColor: 'bg-red-50 dark:bg-red-900/20',
+              borderColor: 'border-red-200 dark:border-red-800',
+              iconColor: 'text-red-600 dark:text-red-400'
+            });
+          } else if (daysOverdue > -3) {
+            // Due within 3 days
+            alerts.push({
+              id: `invoice-due-${invoice.id}`,
+              type: 'warning',
+              title: 'Payment Due Soon',
+              message: `Invoice ${invoice.invoiceNumber} due ${daysOverdue === 0 ? 'today' : `in ${Math.abs(daysOverdue)} day${Math.abs(daysOverdue) > 1 ? 's' : ''}`} ($${parseFloat(invoice.amount).toLocaleString()})`,
+              timestamp: dueDate,
+              icon: Clock,
+              bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+              borderColor: 'border-orange-200 dark:border-orange-800',
+              iconColor: 'text-orange-600 dark:text-orange-400'
+            });
+          }
+        }
+      });
+    }
+
+    // Check for job deadlines approaching
+    if (jobs) {
+      jobs.forEach((job: any) => {
+        if (job.endDate && job.status !== 'completed') {
+          const endDate = new Date(job.endDate);
+          const daysUntilDeadline = Math.floor((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysUntilDeadline < 0) {
+            // Overdue job
+            alerts.push({
+              id: `job-overdue-${job.id}`,
+              type: 'error',
+              title: 'Job Overdue',
+              message: `"${job.title}" deadline passed ${Math.abs(daysUntilDeadline)} day${Math.abs(daysUntilDeadline) > 1 ? 's' : ''} ago`,
+              timestamp: endDate,
+              icon: AlertTriangle,
+              bgColor: 'bg-red-50 dark:bg-red-900/20',
+              borderColor: 'border-red-200 dark:border-red-800',
+              iconColor: 'text-red-600 dark:text-red-400'
+            });
+          } else if (daysUntilDeadline <= 3) {
+            // Deadline within 3 days
+            alerts.push({
+              id: `job-deadline-${job.id}`,
+              type: 'warning',
+              title: 'Deadline Approaching',
+              message: `"${job.title}" due ${daysUntilDeadline === 0 ? 'today' : `in ${daysUntilDeadline} day${daysUntilDeadline > 1 ? 's' : ''}`}`,
+              timestamp: endDate,
+              icon: Clock,
+              bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+              borderColor: 'border-orange-200 dark:border-orange-800',
+              iconColor: 'text-orange-600 dark:text-orange-400'
+            });
+          }
+        }
+      });
+    }
+
+    // Check for recently completed jobs
+    if (jobs) {
+      const recentlyCompleted = jobs.filter((job: any) => {
+        if (job.status === 'completed' && job.updatedAt) {
+          const completedDate = new Date(job.updatedAt);
+          const daysSinceCompleted = Math.floor((today.getTime() - completedDate.getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceCompleted <= 1; // Within last day
+        }
+        return false;
+      });
+
+      recentlyCompleted.forEach((job: any) => {
+        alerts.push({
+          id: `job-completed-${job.id}`,
+          type: 'success',
+          title: 'Job Completed',
+          message: `"${job.title}" marked as complete`,
+          timestamp: new Date(job.updatedAt),
+          icon: CheckCircle,
+          bgColor: 'bg-green-50 dark:bg-green-900/20',
+          borderColor: 'border-green-200 dark:border-green-800',
+          iconColor: 'text-green-600 dark:text-green-400'
+        });
+      });
+    }
+
+    // Sort alerts by priority and timestamp
+    const priorityOrder = { error: 1, warning: 2, info: 3, success: 4 };
+    return alerts
+      .sort((a, b) => {
+        if (priorityOrder[a.type] !== priorityOrder[b.type]) {
+          return priorityOrder[a.type] - priorityOrder[b.type];
+        }
+        return b.timestamp.getTime() - a.timestamp.getTime();
+      })
+      .slice(0, 5); // Show only top 5 alerts
+  };
+
+  const alerts = generateAlerts();
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInHours / 24);
+    
+    if (diffInDays > 0) {
+      return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+    } else if (diffInHours > 0) {
+      return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    } else {
+      return 'Just now';
+    }
+  };
+
+  return (
+    <Card className="border-slate-200 dark:border-slate-800">
+      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recent Alerts</h3>
+          {alerts.length > 0 && (
+            <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
+              {alerts.filter(a => a.type === 'error' || a.type === 'warning').length}
+            </Badge>
+          )}
+        </div>
+      </div>
+      <CardContent className="p-6">
+        {alerts.length === 0 ? (
+          <div className="text-center py-8">
+            <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+            <p className="text-slate-600 dark:text-slate-400 font-medium">All caught up!</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">No alerts or issues to address</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {alerts.map((alert) => {
+              const IconComponent = alert.icon;
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex items-start space-x-3 p-3 border rounded-lg hover:shadow-sm transition-shadow ${alert.bgColor} ${alert.borderColor}`}
+                >
+                  <IconComponent className={`w-5 h-5 mt-0.5 ${alert.iconColor}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {alert.title}
+                      </p>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
+                        {formatTimeAgo(alert.timestamp)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 break-words">
+                      {alert.message}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Form Components
 function CreateJobForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
   const [formData, setFormData] = useState({
@@ -394,6 +592,10 @@ export default function Dashboard() {
     queryKey: ["/api/jobs"],
   });
 
+  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<any[]>({
+    queryKey: ["/api/invoices"],
+  });
+
   // Mutations for creating new items
   const createJobMutation = useMutation({
     mutationFn: async (jobData: any) => {
@@ -462,7 +664,7 @@ export default function Dashboard() {
     },
   });
 
-  if (statsLoading || jobsLoading) {
+  if (statsLoading || jobsLoading || invoicesLoading) {
     return (
       <div className="responsive-container space-y-4 sm:space-y-6">
         <div className="responsive-grid">
@@ -707,36 +909,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Alerts & Notifications */}
-          <Card className="border-slate-200 dark:border-slate-800">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Recent Alerts</h3>
-            </div>
-            <CardContent className="p-6 space-y-4">
-              <div className="flex items-start space-x-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Payment Overdue</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Invoice #INV-2024-0156 is 15 days overdue</p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Schedule Conflict</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Two jobs scheduled for same crew tomorrow</p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Job Completed</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Downtown Office Renovation marked complete</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <RecentAlertsCard jobs={jobs} invoices={invoices} />
         </div>
       </div>
 
