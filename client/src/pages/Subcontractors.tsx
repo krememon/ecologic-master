@@ -39,9 +39,15 @@ function SubcontractorForm({
     },
   });
 
+  const handleFormSubmit = (data: InsertSubcontractor) => {
+    console.log("Form submitted with data:", data);
+    console.log("Form errors:", form.formState.errors);
+    onSubmit(data);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -155,6 +161,7 @@ export default function Subcontractors() {
 
   const createSubcontractorMutation = useMutation({
     mutationFn: async (subcontractorData: InsertSubcontractor) => {
+      console.log("Submitting subcontractor data:", subcontractorData);
       const res = await apiRequest("POST", "/api/subcontractors", subcontractorData);
       return await res.json();
     },
@@ -168,6 +175,7 @@ export default function Subcontractors() {
       setIsDialogOpen(false);
     },
     onError: (error: Error) => {
+      console.error("Subcontractor creation error:", error);
       toast({
         title: "Error",
         description: error.message,
