@@ -45,15 +45,15 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   };
 
   const navigationItems = [
-    { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/jobs", icon: Building2, label: "Jobs" },
-    { href: "/subcontractors", icon: UserCheck, label: "Subcontractors" },
-    { href: "/clients", icon: Users, label: "Clients" },
-    { href: "/invoicing", icon: FileText, label: "Invoicing" },
-    { href: "/documents", icon: FolderOpen, label: "Documents" },
-    { href: "/messages", icon: MessageSquare, label: "Messages" },
-    { href: "/ai-scheduling", icon: Calendar, label: "AI Scheduling" },
-    { href: "/settings", icon: Settings, label: "Settings" },
+    { href: "/", icon: LayoutDashboard, label: t('navigation.home') },
+    { href: "/jobs", icon: Building2, label: t('navigation.jobs') },
+    { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors') },
+    { href: "/clients", icon: Users, label: t('navigation.clients') },
+    { href: "/invoicing", icon: FileText, label: t('navigation.invoicing') },
+    { href: "/ai-scheduling", icon: Brain, label: t('navigation.aiScheduling') },
+    { href: "/documents", icon: FolderOpen, label: t('navigation.documents') },
+    { href: "/messages", icon: MessageSquare, label: t('navigation.messages') },
+    { href: "/settings", icon: Settings, label: t('navigation.settings') },
   ];
 
   return (
@@ -69,9 +69,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             <Menu className="h-6 w-6 text-slate-600 dark:text-slate-400" />
           </div>
           
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
-            {company?.name || 'Dashboard'}
-          </h1>
+          <EcoLogicLogo size={32} showText={false} />
           
           <div className="w-10" />
         </div>
@@ -99,18 +97,12 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             {/* Header */}
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className="w-10 h-10 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: company?.secondaryColor || '#5EEAD4' }}
-                  >
-                    <Building2 className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                      {company?.name || 'EcoLogic'}
-                    </h1>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Construction Management</p>
+                <div className="flex-1">
+                  <EcoLogicLogo size={40} showText={true} className="justify-start" />
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                      {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
+                    </p>
                   </div>
                 </div>
                 <div onClick={handleClose} className="p-1 cursor-pointer">
