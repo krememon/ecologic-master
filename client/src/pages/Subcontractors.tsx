@@ -34,6 +34,7 @@ function SubcontractorForm({
       name: initialData?.name || "",
       email: initialData?.email || "",
       phone: initialData?.phone || "",
+      skills: initialData?.skills || [],
       notes: initialData?.notes || "",
       isAvailable: initialData?.isAvailable !== undefined ? initialData.isAvailable : true,
     },
@@ -42,7 +43,15 @@ function SubcontractorForm({
   const handleFormSubmit = (data: InsertSubcontractor) => {
     console.log("Form submitted with data:", data);
     console.log("Form errors:", form.formState.errors);
-    onSubmit(data);
+    
+    // Convert skills from text to array if needed
+    const processedData = {
+      ...data,
+      skills: data.notes ? data.notes.split(',').map(skill => skill.trim()).filter(Boolean) : []
+    };
+    
+    console.log("Processed data:", processedData);
+    onSubmit(processedData);
   };
 
   return (
