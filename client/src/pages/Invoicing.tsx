@@ -9,200 +9,130 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, FileText, DollarSign, Calendar } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertInvoiceSchema, type InsertInvoice, type Invoice } from "@shared/schema";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ErrorBoundary, InvoiceErrorFallback } from "@/components/ErrorBoundary";
 
-function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInvoice) => void; isLoading: boolean }) {
+function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
   // Fetch clients for selection
   const { data: clients = [] } = useQuery<any[]>({
     queryKey: ["/api/clients"],
   });
 
-  const form = useForm<InsertInvoice>({
-    resolver: zodResolver(insertInvoiceSchema),
-    defaultValues: {
-      invoiceNumber: "",
-      clientId: undefined,
-      amount: "",
-      status: "pending",
-      issueDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-      notes: "",
-    },
+  const [formData, setFormData] = useState({
+    invoiceNumber: `INV-${Date.now()}`,
+    amount: "",
+    clientId: "none",
+    status: "pending",
+    issueDate: new Date().toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    notes: "",
   });
 
-  const handleSubmit = async (data: any) => {
-    console.log("Form submitting with data:", data);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    // Validate required fields
-    if (!data.invoiceNumber) {
-      data.invoiceNumber = `INV-${Date.now()}`;
-    }
-    if (!data.amount || data.amount === "") {
-      console.error("Amount is required");
+    if (!formData.amount || formData.amount === "") {
+      alert("Amount is required");
       return;
     }
     
-    // Ensure all required fields are present and properly formatted
-    const formattedData = {
-      invoiceNumber: data.invoiceNumber,
-      clientId: data.clientId === "none" ? null : (data.clientId ? parseInt(data.clientId) : null),
-      amount: data.amount.toString(),
-      status: data.status || "pending",
-      issueDate: data.issueDate || new Date().toISOString().split('T')[0],
-      dueDate: data.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      notes: data.notes || "",
+    const submitData = {
+      invoiceNumber: formData.invoiceNumber,
+      clientId: formData.clientId === "none" ? null : parseInt(formData.clientId),
+      amount: formData.amount,
+      status: formData.status,
+      issueDate: formData.issueDate,
+      dueDate: formData.dueDate,
+      notes: formData.notes,
     };
     
-    console.log("Formatted data being sent:", formattedData);
-    
-    try {
-      await onSubmit(formattedData);
-    } catch (error) {
-      console.error("Submit error:", error);
-    }
+    await onSubmit(submitData);
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="invoiceNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Invoice Number</FormLabel>
-              <FormControl>
-                <Input placeholder="INV-001" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="text-sm font-medium">Invoice Number</label>
+        <Input 
+          value={formData.invoiceNumber}
+          onChange={(e) => setFormData({...formData, invoiceNumber: e.target.value})}
+          placeholder="INV-001"
         />
-        
-        <FormField
-          control={form.control}
-          name="clientId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Client {(!clients || clients.length === 0) && "(Optional - no clients added yet)"}</FormLabel>
-              <Select onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))} defaultValue={field.value?.toString()}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={(!clients || clients.length === 0) ? "No clients available" : "Select a client"} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="none">No client</SelectItem>
-                  {clients && Array.isArray(clients) && clients.length > 0 && (
-                    clients.map((client: any) => (
-                      <SelectItem key={client?.id || 'unknown'} value={client?.id?.toString() || 'unknown'}>
-                        {client?.name || 'Unknown Client'}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="amount"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Amount</FormLabel>
-              <FormControl>
-                <Input 
-                  type="text" 
-                  placeholder="1500.00" 
-                  {...field}
-                  onChange={(e) => {
-                    // Ensure we store as string for the schema
-                    field.onChange(e.target.value);
-                  }}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="issueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Issue Date</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium">Client {(!clients || clients.length === 0) && "(Optional)"}</label>
+        <Select 
+          value={formData.clientId} 
+          onValueChange={(value) => setFormData({...formData, clientId: value})}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a client" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No client</SelectItem>
+            {clients && Array.isArray(clients) && clients.length > 0 && (
+              clients.map((client: any) => (
+                <SelectItem key={client?.id || 'unknown'} value={client?.id?.toString() || 'unknown'}>
+                  {client?.name || 'Unknown Client'}
+                </SelectItem>
+              ))
             )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="dueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Date</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium">Amount *</label>
+        <Input 
+          type="text" 
+          value={formData.amount}
+          onChange={(e) => setFormData({...formData, amount: e.target.value})}
+          placeholder="1500.00"
+          required
+        />
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-sm font-medium">Issue Date</label>
+          <Input 
+            type="date" 
+            value={formData.issueDate}
+            onChange={(e) => setFormData({...formData, issueDate: e.target.value})}
           />
         </div>
         
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Notes</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Payment terms and additional notes..." {...field} value={field.value || ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+        <div>
+          <label className="text-sm font-medium">Due Date</label>
+          <Input 
+            type="date" 
+            value={formData.dueDate}
+            onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
+          />
+        </div>
+      </div>
+      
+      <div>
+        <label className="text-sm font-medium">Notes</label>
+        <Textarea 
+          value={formData.notes}
+          onChange={(e) => setFormData({...formData, notes: e.target.value})}
+          placeholder="Payment terms and additional notes..."
         />
-        
-        <Button 
-          type="button" 
-          className="w-full" 
-          disabled={isLoading}
-          onClick={async () => {
-            console.log("Submit button clicked");
-            const values = form.getValues();
-            console.log("Form values:", values);
-            
-            const isValid = await form.trigger();
-            console.log("Form is valid:", isValid);
-            console.log("Form errors:", form.formState.errors);
-            
-            if (isValid) {
-              await handleSubmit(values);
-            } else {
-              console.log("Validation failed, errors:", form.formState.errors);
-            }
-          }}
-        >
-          {isLoading ? "Creating..." : "Create Invoice"}
-        </Button>
-      </form>
-    </Form>
+      </div>
+      
+      <Button 
+        type="submit" 
+        className="w-full" 
+        disabled={isLoading}
+      >
+        {isLoading ? "Creating..." : "Create Invoice"}
+      </Button>
+    </form>
   );
 }
 
