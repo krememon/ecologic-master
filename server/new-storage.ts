@@ -455,8 +455,8 @@ export class DatabaseStorage implements IStorage {
       .from(jobs)
       .where(and(eq(jobs.companyId, companyId), eq(jobs.status, "active")));
 
-    const outstandingInvoicesCount = await db
-      .select({ count: sql`count(*)` })
+    const outstandingInvoicesAmount = await db
+      .select({ total: sql`sum(amount)` })
       .from(invoices)
       .where(eq(invoices.companyId, companyId));
 
@@ -478,7 +478,7 @@ export class DatabaseStorage implements IStorage {
 
     return {
       activeJobs: Number(activeJobsCount[0].count) || 0,
-      outstandingInvoices: Number(outstandingInvoicesCount[0].count) || 0,
+      outstandingInvoices: Number(outstandingInvoicesAmount[0].total) || 0,
       availableSubcontractors: Number(availableSubcontractorsCount[0].count) || 0,
       monthlyRevenue: Number(monthlyRevenueResult[0].total) || 0,
     };
