@@ -34,7 +34,7 @@ function SubcontractorForm({
       name: initialData?.name || "",
       email: initialData?.email || "",
       phone: initialData?.phone || "",
-      skills: initialData?.skills || [],
+      notes: initialData?.notes || "",
       isAvailable: initialData?.isAvailable !== undefined ? initialData.isAvailable : true,
     },
   });
@@ -98,8 +98,30 @@ function SubcontractorForm({
           )}
         />
         
+        <FormField
+          control={form.control}
+          name="isAvailable"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Availability Status</FormLabel>
+              <FormControl>
+                <Select onValueChange={(value) => field.onChange(value === "true")} value={field.value ? "true" : "false"}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select availability" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Available</SelectItem>
+                    <SelectItem value="false">Unavailable</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Adding..." : "Add Subcontractor"}
+          {isLoading ? "Adding..." : (isEdit ? "Update Subcontractor" : "Add Subcontractor")}
         </Button>
       </form>
     </Form>
