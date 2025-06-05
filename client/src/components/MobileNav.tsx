@@ -12,8 +12,11 @@ import {
   MessageSquare, 
   Calendar, 
   Settings,
-  LogOut
+  LogOut,
+  Brain
 } from "lucide-react";
+import EcoLogicLogo from "./EcoLogicLogo";
+import { useTranslation } from "react-i18next";
 
 interface MobileNavProps {
   user: any;
@@ -23,6 +26,7 @@ interface MobileNavProps {
 export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
+  const { t } = useTranslation();
 
   const handleToggle = () => {
     console.log('Mobile nav toggle clicked, current state:', isOpen);

@@ -16,16 +16,18 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import EcoLogicLogo from "./EcoLogicLogo";
+import { useTranslation } from "react-i18next";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Jobs", href: "/jobs", icon: Building2 },
-  { name: "Subcontractors", href: "/subcontractors", icon: Users },
-  { name: "Clients", href: "/clients", icon: UserCheck },
-  { name: "Invoicing", href: "/invoicing", icon: FileText },
-  { name: "AI Scheduling", href: "/ai-scheduling", icon: Brain },
-  { name: "Documents", href: "/documents", icon: FolderOpen },
-  { name: "Messages", href: "/messages", icon: MessageSquare },
+const getNavigation = (t: any) => [
+  { name: t('navigation.home'), href: "/", icon: LayoutDashboard },
+  { name: t('navigation.jobs'), href: "/jobs", icon: Building2 },
+  { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users },
+  { name: t('navigation.clients'), href: "/clients", icon: UserCheck },
+  { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText },
+  { name: t('navigation.aiScheduling'), href: "/ai-scheduling", icon: Brain },
+  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen },
+  { name: t('navigation.messages'), href: "/messages", icon: MessageSquare },
 ];
 
 interface SidebarProps {
@@ -37,6 +39,8 @@ interface SidebarProps {
 
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
+  const { t } = useTranslation();
+  const navigation = getNavigation(t);
 
   // Debug logging
   useEffect(() => {
@@ -74,19 +78,11 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       )}>
       {/* Logo Section */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-        <div className="flex items-center space-x-3">
-          <div 
-            className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: company?.secondaryColor || '#5EEAD4' }}
-          >
-            <Building2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {company?.name || 'EcoLogic'}
-            </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">Construction Management</p>
-          </div>
+        <EcoLogicLogo size={48} showText={true} className="justify-center" />
+        <div className="mt-3 text-center">
+          <h2 className="text-sm font-medium text-slate-600 dark:text-slate-400">
+            {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
+          </h2>
         </div>
       </div>
 
