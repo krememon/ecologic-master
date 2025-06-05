@@ -193,7 +193,10 @@ export default function Invoicing() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Invoices ({invoices.length})
         </h3>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button onClick={() => {
+          console.log("Create Invoice button clicked");
+          setIsDialogOpen(true);
+        }}>
           <Plus className="w-4 h-4 mr-2" />
           Create Invoice
         </Button>
