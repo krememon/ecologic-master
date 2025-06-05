@@ -289,13 +289,6 @@ export default function Invoicing() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Invoices ({invoices.length})
         </h3>
-        <Button onClick={() => {
-          console.log("Create Invoice button clicked");
-          setIsDialogOpen(true);
-        }}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Invoice
-        </Button>
       </div>
 
       {invoices.length === 0 ? (
@@ -354,6 +347,16 @@ export default function Invoicing() {
           ))}
         </div>
       )}
+      
+      <div className="flex justify-center mt-6">
+        <Button onClick={() => {
+          console.log("Create Invoice button clicked");
+          setIsDialogOpen(true);
+        }}>
+          <Plus className="w-4 h-4 mr-2" />
+          Create Invoice
+        </Button>
+      </div>
     </div>
   );
 }
