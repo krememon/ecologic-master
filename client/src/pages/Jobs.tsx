@@ -386,7 +386,7 @@ export default function Jobs() {
                   jobId={selectedJob.id}
                   jobDescription={selectedJob.description}
                   jobType={selectedJob.title}
-                  location={selectedJob.location}
+                  location={selectedJob.location || undefined}
                   estimatedCost={selectedJob.estimatedCost ? Number(selectedJob.estimatedCost) : undefined}
                 />
               )}
