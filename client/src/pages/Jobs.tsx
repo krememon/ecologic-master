@@ -412,6 +412,10 @@ export default function Jobs() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Jobs ({jobs.length})
         </h3>
+        <Button onClick={() => setIsDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Create New Job
+        </Button>
       </div>
 
       {jobs.length === 0 ? (
