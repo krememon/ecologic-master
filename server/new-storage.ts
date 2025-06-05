@@ -459,6 +459,8 @@ export class DatabaseStorage implements IStorage {
       .select({ total: sql`sum(CAST(amount AS DECIMAL))` })
       .from(invoices)
       .where(eq(invoices.companyId, companyId));
+    
+    console.log("Raw SQL result for invoice amounts:", outstandingInvoicesAmount);
 
     const availableSubcontractorsCount = await db
       .select({ count: sql`count(*)` })
