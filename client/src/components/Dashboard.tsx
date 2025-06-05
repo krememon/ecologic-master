@@ -540,11 +540,11 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Outstanding Invoices</p>
                 <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
-                  ${stats?.outstandingInvoices?.amount?.toLocaleString() || 0}
+                  ${(stats?.outstandingInvoices || 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-orange-600 dark:text-orange-400 mt-2 flex items-center">
                   <AlertTriangle className="w-4 h-4 mr-1" />
-                  <span>{stats?.outstandingInvoices?.count || 0} overdue</span>
+                  <span>Pending payment</span>
                 </p>
               </div>
               <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full">
