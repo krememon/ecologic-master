@@ -13,6 +13,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import WeatherDashboard from "@/components/WeatherDashboard";
+import AIScopeAnalyzer from "@/components/AIScopeAnalyzer";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -378,6 +379,17 @@ export default function Jobs() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* AI Job Scope Analyzer */}
+              {selectedJob.description && (
+                <AIScopeAnalyzer
+                  jobId={selectedJob.id}
+                  jobDescription={selectedJob.description}
+                  jobType={selectedJob.title}
+                  location={selectedJob.location}
+                  estimatedCost={selectedJob.estimatedCost ? Number(selectedJob.estimatedCost) : undefined}
+                />
+              )}
 
               {/* Weather Dashboard */}
               {selectedJob.location && (

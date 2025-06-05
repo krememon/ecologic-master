@@ -819,6 +819,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Scope Analysis routes
+  app.post('/api/ai/analyze-scope', isAuthenticated, async (req: any, res) => {
+    try {
+      const { jobDescription, jobType, location, budget } = req.body;
+      
+      if (!jobDescription) {
+        return res.status(400).json({ message: "Job description is required" });
+      }
+
+      const { aiScopeAnalyzer } = await import('./ai-scope-analyzer');
+      const analysis = await aiScopeAnalyzer.analyzeJobScope(
+        jobDescription,
+        jobType,
+        location,
+        budget
+      );
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing job scope:", error);
+      res.status(500).json({ message: "Failed to analyze job scope" });
+    }
+  });
+
+  app.post('/api/ai/quick-estimate', isAuthenticated, async (req: any, res) => {
+    try {
+      const { jobDescription } = req.body;
+      
+      if (!jobDescription) {
+        return res.status(400).json({ message: "Job description is required" });
+      }
+
+      const { aiScopeAnalyzer } = await import('./ai-scope-analyzer');
+      const estimate = await aiScopeAnalyzer.generateQuickEstimate(jobDescription);
+
+      res.json(estimate);
+    } catch (error) {
+      console.error("Error generating quick estimate:", error);
+      res.status(500).json({ message: "Failed to generate estimate" });
+    }
+  });
+
+  app.post('/api/ai/analyze-job-scope/:jobId', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found or access denied" });
+      }
+
+      if (!job.description) {
+        return res.status(400).json({ message: "Job must have a description for scope analysis" });
+      }
+
+      const { aiScopeAnalyzer } = await import('./ai-scope-analyzer');
+      const analysis = await aiScopeAnalyzer.analyzeJobScope(
+        job.description,
+        job.title,
+        job.location,
+        job.estimatedCost ? Number(job.estimatedCost) : undefined
+      );
+
+      analysis.jobId = jobId;
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing job scope:", error);
+      res.status(500).json({ message: "Failed to analyze job scope" });
+    }
+  });
+
   // AI Scheduling routes
   app.post('/api/ai/optimize-job-schedule/:jobId', isAuthenticated, async (req: any, res) => {
     try {
