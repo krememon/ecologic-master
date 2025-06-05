@@ -17,10 +17,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInvoice) => void; isLoading: boolean }) {
+  // Fetch clients for selection
+  const { data: clients = [] } = useQuery({
+    queryKey: ["/api/clients"],
+  });
+
   const form = useForm<InsertInvoice>({
     resolver: zodResolver(insertInvoiceSchema),
     defaultValues: {
       invoiceNumber: "",
+      clientId: undefined,
       amount: "",
       status: "pending",
       issueDate: new Date().toISOString().split('T')[0],
@@ -47,6 +53,35 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
               <FormControl>
                 <Input placeholder="INV-001" {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="clientId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Client {clients.length === 0 && "(Optional - no clients added yet)"}</FormLabel>
+              <Select onValueChange={(value) => field.onChange(parseInt(value))} defaultValue={field.value?.toString()}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder={clients.length === 0 ? "No clients available" : "Select a client"} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {clients.length === 0 ? (
+                    <SelectItem value="" disabled>No clients available</SelectItem>
+                  ) : (
+                    clients.map((client: any) => (
+                      <SelectItem key={client.id} value={client.id.toString()}>
+                        {client.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

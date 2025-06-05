@@ -123,7 +123,7 @@ export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   jobId: integer("job_id").references(() => jobs.id),
-  clientId: integer("client_id").notNull().references(() => clients.id),
+  clientId: integer("client_id").references(() => clients.id),
   invoiceNumber: varchar("invoice_number").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   status: varchar("status").notNull().default("pending"), // pending, paid, overdue, cancelled
