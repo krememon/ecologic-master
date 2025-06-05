@@ -15,10 +15,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ErrorBoundary, InvoiceErrorFallback } from "@/components/ErrorBoundary";
 
 function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInvoice) => void; isLoading: boolean }) {
   // Fetch clients for selection
-  const { data: clients = [] } = useQuery({
+  const { data: clients = [] } = useQuery<any[]>({
     queryKey: ["/api/clients"],
   });
 
@@ -197,8 +198,18 @@ export default function Invoicing() {
 
   const createInvoiceMutation = useMutation({
     mutationFn: async (invoiceData: InsertInvoice) => {
-      const res = await apiRequest("POST", "/api/invoices", invoiceData);
-      return await res.json();
+      console.log("Sending invoice data:", invoiceData);
+      try {
+        const res = await apiRequest("POST", "/api/invoices", invoiceData);
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errorText}`);
+        }
+        return await res.json();
+      } catch (error) {
+        console.error("Invoice creation failed:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -210,11 +221,13 @@ export default function Invoicing() {
       setIsDialogOpen(false);
     },
     onError: (error: Error) => {
+      console.error("Invoice creation error:", error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to create invoice",
         variant: "destructive",
       });
+      // Don't close the dialog on error so user can try again
     },
   });
 
@@ -238,7 +251,9 @@ export default function Invoicing() {
           <DialogHeader>
             <DialogTitle>Generate New Invoice</DialogTitle>
           </DialogHeader>
-          <CreateInvoiceForm onSubmit={createInvoiceMutation.mutate} isLoading={createInvoiceMutation.isPending} />
+          <ErrorBoundary fallback={InvoiceErrorFallback}>
+            <CreateInvoiceForm onSubmit={createInvoiceMutation.mutate} isLoading={createInvoiceMutation.isPending} />
+          </ErrorBoundary>
         </DialogContent>
       </Dialog>
 
