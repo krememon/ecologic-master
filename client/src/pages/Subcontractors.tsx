@@ -23,31 +23,26 @@ function SubcontractorForm({
   initialData, 
   isEdit 
 }: { 
-  onSubmit: (data: InsertSubcontractor) => void; 
+  onSubmit: (data: any) => void; 
   isLoading: boolean; 
   initialData?: any;
   isEdit?: boolean;
 }) {
-  const form = useForm<InsertSubcontractor>({
-    resolver: zodResolver(insertSubcontractorSchema),
-    defaultValues: {
-      name: initialData?.name || "",
-      email: initialData?.email || "",
-      phone: initialData?.phone || "",
-      skills: initialData?.skills || [],
-      notes: initialData?.notes || "",
-      isAvailable: initialData?.isAvailable !== undefined ? initialData.isAvailable : true,
-    },
+  const [formData, setFormData] = useState({
+    name: initialData?.name || "",
+    email: initialData?.email || "",
+    phone: initialData?.phone || "",
+    notes: initialData?.notes || "",
+    isAvailable: initialData?.isAvailable !== undefined ? initialData.isAvailable : true,
   });
 
-  const handleFormSubmit = (data: InsertSubcontractor) => {
-    console.log("Form submitted with data:", data);
-    console.log("Form errors:", form.formState.errors);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Simple form submitted with data:", formData);
     
-    // Convert skills from text to array if needed
     const processedData = {
-      ...data,
-      skills: data.notes ? data.notes.split(',').map(skill => skill.trim()).filter(Boolean) : []
+      ...formData,
+      skills: formData.notes ? formData.notes.split(',').map(skill => skill.trim()).filter(Boolean) : []
     };
     
     console.log("Processed data:", processedData);
@@ -55,91 +50,62 @@ function SubcontractorForm({
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input placeholder="John Smith" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Name</label>
+        <Input 
+          placeholder="John Smith" 
+          value={formData.name}
+          onChange={(e) => setFormData({...formData, name: e.target.value})}
+          required
         />
-        
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="john@contractor.com" {...field} value={field.value || ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      </div>
+      
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Email</label>
+        <Input 
+          type="email" 
+          placeholder="john@contractor.com" 
+          value={formData.email}
+          onChange={(e) => setFormData({...formData, email: e.target.value})}
         />
-        
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone</FormLabel>
-              <FormControl>
-                <Input placeholder="(555) 123-4567" {...field} value={field.value || ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      </div>
+      
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Phone</label>
+        <Input 
+          placeholder="(555) 123-4567" 
+          value={formData.phone}
+          onChange={(e) => setFormData({...formData, phone: e.target.value})}
         />
-        
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Skills & Notes</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Plumbing, Electrical, Carpentry..." {...field} value={field.value || ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      </div>
+      
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Skills & Notes</label>
+        <Textarea 
+          placeholder="Plumbing, Electrical, Carpentry..." 
+          value={formData.notes}
+          onChange={(e) => setFormData({...formData, notes: e.target.value})}
         />
-        
-        <FormField
-          control={form.control}
-          name="isAvailable"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Availability Status</FormLabel>
-              <FormControl>
-                <Select onValueChange={(value) => field.onChange(value === "true")} value={field.value ? "true" : "false"}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select availability" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="true">Available</SelectItem>
-                    <SelectItem value="false">Unavailable</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Adding..." : (isEdit ? "Update Subcontractor" : "Add Subcontractor")}
-        </Button>
-      </form>
-    </Form>
+      </div>
+      
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Availability Status</label>
+        <Select onValueChange={(value) => setFormData({...formData, isAvailable: value === "true"})} value={formData.isAvailable ? "true" : "false"}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select availability" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="true">Available</SelectItem>
+            <SelectItem value="false">Unavailable</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <Button type="submit" className="w-full" disabled={isLoading}>
+        {isLoading ? "Adding..." : (isEdit ? "Update Subcontractor" : "Add Subcontractor")}
+      </Button>
+    </form>
   );
 }
 
