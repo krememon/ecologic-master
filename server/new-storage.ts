@@ -467,7 +467,7 @@ export class DatabaseStorage implements IStorage {
     const availableSubcontractorsCount = await db
       .select({ count: sql`count(*)` })
       .from(subcontractors)
-      .where(and(eq(subcontractors.companyId, companyId), eq(subcontractors.status, "available")));
+      .where(eq(subcontractors.companyId, companyId));
 
     const monthlyRevenueResult = await db
       .select({ total: sql`sum(amount)` })
