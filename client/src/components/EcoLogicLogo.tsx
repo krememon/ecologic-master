@@ -7,7 +7,7 @@ interface EcoLogicLogoProps {
 export default function EcoLogicLogo({ size = 40, showText = true, className = "" }: EcoLogicLogoProps) {
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      {/* Water Droplet with Leaf SVG Logo */}
+      {/* Water Droplet SVG Logo */}
       <svg
         width={size}
         height={size}
@@ -16,7 +16,7 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
         xmlns="http://www.w3.org/2000/svg"
         className="flex-shrink-0"
       >
-        {/* Main water droplet shape - exact from reference */}
+        {/* Main water droplet shape */}
         <path
           d="M50 10C50 10 20 45 20 70C20 88.225 34.775 103 53 103C71.225 103 86 88.225 86 70C86 45 50 10 50 10Z"
           fill="#B8E4F0"
@@ -36,7 +36,7 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
           strokeLinejoin="round"
         />
         
-        {/* Green leaf - positioned exactly as in reference */}
+        {/* Green leaf */}
         <ellipse
           cx="58"
           cy="65"
