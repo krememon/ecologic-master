@@ -695,12 +695,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const stats = await storage.getDashboardStats(company.id);
-      
       // Debug: Check invoice amounts
       const invoices = await storage.getInvoices(company.id);
       console.log("Invoices for company", company.id, ":", invoices);
+      
+      // Calculate invoice total manually
+      const totalInvoiceAmount = invoices.reduce((sum, invoice) => {
+        return sum + parseFloat(invoice.amount || '0');
+      }, 0);
+      console.log("Manual total calculation:", totalInvoiceAmount);
+      
+      const stats = await storage.getDashboardStats(company.id);
       console.log("Dashboard stats for company", company.id, ":", stats);
+      
+      // Override the outstanding invoices with the correct calculation
+      stats.outstandingInvoices = totalInvoiceAmount;
       
       // Prevent caching to ensure fresh data
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
