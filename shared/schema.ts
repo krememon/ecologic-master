@@ -315,6 +315,94 @@ export const jobPhotosRelations = relations(jobPhotos, ({ one }) => ({
   }),
 }));
 
+// Approval workflows table
+export const approvalWorkflows = pgTable("approval_workflows", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  type: varchar("type", { length: 50 }).notNull(), // 'quote', 'design', 'scope_change', 'contract', 'custom'
+  status: varchar("status", { length: 50 }).notNull().default("draft"), // 'draft', 'pending', 'approved', 'rejected', 'expired'
+  documentUrl: varchar("document_url", { length: 500 }),
+  documentType: varchar("document_type", { length: 100 }), // 'pdf', 'image', 'link'
+  relatedJobId: integer("related_job_id").references(() => jobs.id, { onDelete: "set null" }),
+  relatedClientId: integer("related_client_id").references(() => clients.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+});
+
+// Approval signatures table
+export const approvalSignatures = pgTable("approval_signatures", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => approvalWorkflows.id, { onDelete: "cascade" }),
+  signerName: varchar("signer_name", { length: 255 }).notNull(),
+  signerEmail: varchar("signer_email", { length: 255 }).notNull(),
+  signerType: varchar("signer_type", { length: 50 }).notNull(), // 'client', 'subcontractor', 'company_rep'
+  signatureData: text("signature_data"), // Base64 encoded signature image
+  ipAddress: varchar("ip_address", { length: 45 }),
+  userAgent: text("user_agent"),
+  signedAt: timestamp("signed_at"),
+  status: varchar("status", { length: 50 }).notNull().default("pending"), // 'pending', 'signed', 'declined'
+  comments: text("comments"),
+  notificationSentAt: timestamp("notification_sent_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  accessToken: varchar("access_token", { length: 255 }).unique(), // For secure access without login
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Approval workflow history/audit trail
+export const approvalHistory = pgTable("approval_history", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => approvalWorkflows.id, { onDelete: "cascade" }),
+  action: varchar("action", { length: 100 }).notNull(), // 'created', 'sent', 'viewed', 'signed', 'declined', 'expired', 'reminded'
+  description: text("description"),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByEmail: varchar("performed_by_email", { length: 255 }),
+  metadata: jsonb("metadata"), // Additional data like IP, user agent, etc.
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+export const approvalWorkflowsRelations = relations(approvalWorkflows, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [approvalWorkflows.companyId],
+    references: [companies.id],
+  }),
+  job: one(jobs, {
+    fields: [approvalWorkflows.relatedJobId],
+    references: [jobs.id],
+  }),
+  client: one(clients, {
+    fields: [approvalWorkflows.relatedClientId],
+    references: [clients.id],
+  }),
+  creator: one(users, {
+    fields: [approvalWorkflows.createdBy],
+    references: [users.id],
+  }),
+  signatures: many(approvalSignatures),
+  history: many(approvalHistory),
+}));
+
+export const approvalSignaturesRelations = relations(approvalSignatures, ({ one }) => ({
+  workflow: one(approvalWorkflows, {
+    fields: [approvalSignatures.workflowId],
+    references: [approvalWorkflows.id],
+  }),
+}));
+
+export const approvalHistoryRelations = relations(approvalHistory, ({ one }) => ({
+  workflow: one(approvalWorkflows, {
+    fields: [approvalHistory.workflowId],
+    references: [approvalWorkflows.id],
+  }),
+  performedByUser: one(users, {
+    fields: [approvalHistory.performedBy],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertCompanySchema = createInsertSchema(companies).omit({
   id: true,
@@ -361,6 +449,23 @@ export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({
   createdAt: true,
 });
 
+export const insertApprovalWorkflowSchema = createInsertSchema(approvalWorkflows).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertApprovalSignatureSchema = createInsertSchema(approvalSignatures).omit({
+  id: true,
+  createdAt: true,
+  signedAt: true,
+});
+
+export const insertApprovalHistorySchema = createInsertSchema(approvalHistory).omit({
+  id: true,
+  timestamp: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -380,3 +485,9 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type JobPhoto = typeof jobPhotos.$inferSelect;
 export type InsertJobPhoto = z.infer<typeof insertJobPhotoSchema>;
+export type ApprovalWorkflow = typeof approvalWorkflows.$inferSelect;
+export type InsertApprovalWorkflow = z.infer<typeof insertApprovalWorkflowSchema>;
+export type ApprovalSignature = typeof approvalSignatures.$inferSelect;
+export type InsertApprovalSignature = z.infer<typeof insertApprovalSignatureSchema>;
+export type ApprovalHistory = typeof approvalHistory.$inferSelect;
+export type InsertApprovalHistory = z.infer<typeof insertApprovalHistorySchema>;

@@ -92,6 +92,25 @@ export interface IStorage {
   getJobPhotos(jobId: number): Promise<JobPhoto[]>;
   createJobPhoto(photo: InsertJobPhoto): Promise<JobPhoto>;
   deleteJobPhoto(id: number): Promise<void>;
+  
+  // Approval Workflow operations
+  getApprovalWorkflows(companyId: number): Promise<ApprovalWorkflow[]>;
+  getApprovalWorkflow(id: number): Promise<ApprovalWorkflow | undefined>;
+  createApprovalWorkflow(workflow: InsertApprovalWorkflow): Promise<ApprovalWorkflow>;
+  updateApprovalWorkflow(id: number, workflow: Partial<InsertApprovalWorkflow>): Promise<ApprovalWorkflow>;
+  deleteApprovalWorkflow(id: number): Promise<void>;
+  
+  // Approval Signature operations
+  getApprovalSignatures(workflowId: number): Promise<ApprovalSignature[]>;
+  getApprovalSignature(id: number): Promise<ApprovalSignature | undefined>;
+  getApprovalSignatureByToken(accessToken: string): Promise<ApprovalSignature | undefined>;
+  createApprovalSignature(signature: InsertApprovalSignature): Promise<ApprovalSignature>;
+  updateApprovalSignature(id: number, signature: Partial<InsertApprovalSignature>): Promise<ApprovalSignature>;
+  deleteApprovalSignature(id: number): Promise<void>;
+  
+  // Approval History operations
+  createApprovalHistory(history: InsertApprovalHistory): Promise<ApprovalHistory>;
+  getApprovalHistory(workflowId: number): Promise<ApprovalHistory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
