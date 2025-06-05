@@ -11,62 +11,51 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
       <svg
         width={size}
         height={size}
-        viewBox="0 0 100 100"
+        viewBox="0 0 120 150"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="flex-shrink-0"
       >
-        {/* Main water droplet shape - exact match to reference */}
+        {/* Outer water droplet outline */}
         <path
-          d="M50 8C50 8 18 40 18 62C18 79.673 32.327 94 50 94C67.673 94 82 79.673 82 62C82 40 50 8 50 8Z"
-          fill={`url(#lightBlueGradient-${size})`}
-          stroke="#334155"
-          strokeWidth="5"
+          d="M60 10C60 10 25 50 25 85C25 110.405 45.595 131 71 131C96.405 131 117 110.405 117 85C117 50 60 10 60 10Z"
+          fill="#B8E6FF"
+          stroke="#2C5AA0"
+          strokeWidth="8"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         
-        {/* Inner droplet curve - creating the layered effect */}
+        {/* Inner water droplet curve */}
         <path
-          d="M50 25C50 25 35 50 35 65C35 75.493 43.507 84 54 84C64.493 84 73 75.493 73 65C73 50 50 25 50 25Z"
+          d="M60 30C60 30 40 65 40 90C40 105.464 52.536 118 68 118C83.464 118 96 105.464 96 90C96 65 60 30 60 30Z"
           fill="none"
-          stroke="#334155"
-          strokeWidth="4"
+          stroke="#2C5AA0"
+          strokeWidth="6"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         
-        {/* Leaf shape - positioned like reference image */}
+        {/* Green leaf shape */}
         <ellipse
-          cx="54"
-          cy="52"
-          rx="15"
-          ry="10"
-          fill="#84CC16"
-          stroke="#334155"
-          strokeWidth="4"
-          transform="rotate(-20 54 52)"
+          cx="65"
+          cy="75"
+          rx="20"
+          ry="12"
+          fill="#8BC34A"
+          stroke="#2C5AA0"
+          strokeWidth="5"
+          transform="rotate(-10 65 75)"
         />
         
-        {/* Leaf center vein - dark line through leaf */}
+        {/* Leaf vein */}
         <path
-          d="M45 47C50 50 58 55 63 58"
-          stroke="#334155"
-          strokeWidth="2.5"
+          d="M52 70C58 74 72 78 78 82"
+          stroke="#2C5AA0"
+          strokeWidth="3"
           strokeLinecap="round"
           fill="none"
         />
-        
-        {/* Gradients matching reference image colors */}
-        <defs>
-          <radialGradient id={`lightBlueGradient-${size}`} cx="50%" cy="30%" r="70%">
-            <stop offset="0%" stopColor="#E0F2FE" />
-            <stop offset="30%" stopColor="#BAE6FD" />
-            <stop offset="60%" stopColor="#7DD3FC" />
-            <stop offset="80%" stopColor="#38BDF8" />
-            <stop offset="100%" stopColor="#0EA5E9" />
-          </radialGradient>
-        </defs>
       </svg>
       
       {/* EcoLogic Text */}
