@@ -11,48 +11,46 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
       <svg
         width={size}
         height={size}
-        viewBox="0 0 120 150"
+        viewBox="0 0 100 100"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="flex-shrink-0"
       >
-        {/* Outer water droplet outline */}
+        {/* Exact recreation of reference image water droplet */}
         <path
-          d="M60 10C60 10 25 50 25 85C25 110.405 45.595 131 71 131C96.405 131 117 110.405 117 85C117 50 60 10 60 10Z"
-          fill="#B8E6FF"
-          stroke="#2C5AA0"
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        
-        {/* Inner water droplet curve */}
-        <path
-          d="M60 30C60 30 40 65 40 90C40 105.464 52.536 118 68 118C83.464 118 96 105.464 96 90C96 65 60 30 60 30Z"
-          fill="none"
-          stroke="#2C5AA0"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        
-        {/* Green leaf shape */}
-        <ellipse
-          cx="65"
-          cy="75"
-          rx="20"
-          ry="12"
-          fill="#8BC34A"
-          stroke="#2C5AA0"
+          d="M50 8L49.5 8.5C49.5 8.5 20 40 20 60C20 77.673 34.327 92 52 92C69.673 92 84 77.673 84 60C84 40 50.5 8.5 50 8Z"
+          fill="#C8E6F5"
+          stroke="#334155"
           strokeWidth="5"
-          transform="rotate(-10 65 75)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
         
-        {/* Leaf vein */}
+        {/* Inner droplet curve from reference */}
         <path
-          d="M52 70C58 74 72 78 78 82"
-          stroke="#2C5AA0"
-          strokeWidth="3"
+          d="M50 25C50 25 35 50 35 65C35 75.493 43.507 84 54 84C64.493 84 73 75.493 73 65C73 50 50 25 50 25Z"
+          fill="none"
+          stroke="#334155"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        
+        {/* Green leaf matching reference position and shape */}
+        <path
+          d="M40 45C40 45 45 42 55 44C65 46 70 55 68 62C66 69 58 72 50 70C42 68 38 58 40 45Z"
+          fill="#8FBC8F"
+          stroke="#334155"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        
+        {/* Leaf vein exactly as shown in reference */}
+        <path
+          d="M44 50C48 53 56 58 62 62"
+          stroke="#334155"
+          strokeWidth="2.5"
           strokeLinecap="round"
           fill="none"
         />
