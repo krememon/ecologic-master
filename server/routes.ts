@@ -696,6 +696,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const stats = await storage.getDashboardStats(company.id);
+      
+      // Debug: Check invoice amounts
+      const invoices = await storage.getInvoices(company.id);
+      console.log("Invoices for company", company.id, ":", invoices);
       console.log("Dashboard stats for company", company.id, ":", stats);
       
       // Prevent caching to ensure fresh data
