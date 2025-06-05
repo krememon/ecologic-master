@@ -16,20 +16,20 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
         xmlns="http://www.w3.org/2000/svg"
         className="flex-shrink-0"
       >
-        {/* Outer water droplet outline */}
+        {/* Outer water droplet with gradient fill */}
         <path
           d="M50 5C50 5 20 35 20 58C20 75.673 34.327 90 52 90C69.673 90 84 75.673 84 58C84 35 50 5 50 5Z"
-          fill="none"
+          fill={`url(#waterGradient-${size})`}
           stroke="#2563EB"
           strokeWidth="4"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         
-        {/* Inner water droplet curve */}
+        {/* Inner water droplet curve with lighter fill */}
         <path
           d="M50 20C50 20 30 45 30 62C30 73.046 38.954 82 50 82C61.046 82 70 73.046 70 62C70 45 50 20 50 20Z"
-          fill="none"
+          fill={`url(#innerWaterGradient-${size})`}
           stroke="#2563EB"
           strokeWidth="3"
           strokeLinecap="round"
@@ -60,8 +60,17 @@ export default function EcoLogicLogo({ size = 40, showText = true, className = "
         {/* Gradients for consistent unique IDs */}
         <defs>
           <linearGradient id={`waterGradient-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#60A5FA" />
-            <stop offset="100%" stopColor="#3B82F6" />
+            <stop offset="0%" stopColor="#7DD3FC" />
+            <stop offset="25%" stopColor="#38BDF8" />
+            <stop offset="50%" stopColor="#0EA5E9" />
+            <stop offset="75%" stopColor="#0284C7" />
+            <stop offset="100%" stopColor="#0369A1" />
+          </linearGradient>
+          <linearGradient id={`innerWaterGradient-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#E0F2FE" />
+            <stop offset="30%" stopColor="#BAE6FD" />
+            <stop offset="60%" stopColor="#7DD3FC" />
+            <stop offset="100%" stopColor="#38BDF8" />
           </linearGradient>
         </defs>
       </svg>
