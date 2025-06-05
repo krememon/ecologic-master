@@ -96,7 +96,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         )}>
             {/* Header */}
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <EcoLogicLogo size={40} showText={true} className="justify-start" />
                   <div className="mt-2">
@@ -105,7 +105,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                     </p>
                   </div>
                 </div>
-                <div onClick={handleClose} className="p-1 cursor-pointer -mt-2">
+                <div onClick={handleClose} className="p-1 cursor-pointer -mt-1">
                   <X className="h-5 w-5 text-slate-400" />
                 </div>
               </div>
