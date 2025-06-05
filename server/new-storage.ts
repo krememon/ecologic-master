@@ -455,12 +455,14 @@ export class DatabaseStorage implements IStorage {
       .from(jobs)
       .where(and(eq(jobs.companyId, companyId), eq(jobs.status, "active")));
 
-    const outstandingInvoicesAmount = await db
-      .select({ total: sql`sum(CAST(amount AS DECIMAL))` })
-      .from(invoices)
-      .where(eq(invoices.companyId, companyId));
+    // Get all invoices and calculate total manually
+    const allInvoices = await this.getInvoices(companyId);
+    const totalInvoiceAmount = allInvoices.reduce((sum, invoice) => {
+      return sum + parseFloat(invoice.amount || '0');
+    }, 0);
     
-    console.log("Raw SQL result for invoice amounts:", outstandingInvoicesAmount);
+    console.log("Manual calculation - Invoice amounts:", allInvoices.map(inv => inv.amount));
+    console.log("Manual calculation - Total:", totalInvoiceAmount);
 
     const availableSubcontractorsCount = await db
       .select({ count: sql`count(*)` })
@@ -480,7 +482,7 @@ export class DatabaseStorage implements IStorage {
 
     return {
       activeJobs: Number(activeJobsCount[0].count) || 0,
-      outstandingInvoices: Number(outstandingInvoicesAmount[0].total) || 0,
+      outstandingInvoices: totalInvoiceAmount,
       availableSubcontractors: Number(availableSubcontractorsCount[0].count) || 0,
       monthlyRevenue: Number(monthlyRevenueResult[0].total) || 0,
     };
