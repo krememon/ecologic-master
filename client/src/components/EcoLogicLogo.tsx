@@ -64,6 +64,15 @@ export default function EcoLogicLogo({
         />
       </svg>
 
+      {/* Water Droplet PNG Image to the left */}
+      {showText && (
+        <img
+          src={logoImage}
+          alt="EcoLogic Water Droplet"
+          className="w-8 h-8 flex-shrink-0"
+        />
+      )}
+      
       {/* EcoLogic Text */}
       {showText && (
         <span
@@ -76,15 +85,6 @@ export default function EcoLogicLogo({
         >
           ECOLOGIC
         </span>
-      )}
-      
-      {/* Water Droplet PNG Image to the right */}
-      {showText && (
-        <img
-          src={logoImage}
-          alt="EcoLogic Water Droplet"
-          className="w-8 h-8 flex-shrink-0"
-        />
       )}
     </div>
   );
