@@ -36,15 +36,23 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
     },
   });
 
-  const handleSubmit = (data: any) => {
+  const handleSubmit = async (data: any) => {
     console.log("Form submitting with data:", data);
-    console.log("Form errors:", form.formState.errors);
+    
+    // Validate required fields
+    if (!data.invoiceNumber) {
+      data.invoiceNumber = `INV-${Date.now()}`;
+    }
+    if (!data.amount || data.amount === "") {
+      console.error("Amount is required");
+      return;
+    }
     
     // Ensure all required fields are present and properly formatted
     const formattedData = {
-      invoiceNumber: data.invoiceNumber || `INV-${Date.now()}`,
+      invoiceNumber: data.invoiceNumber,
       clientId: data.clientId === "none" ? null : (data.clientId ? parseInt(data.clientId) : null),
-      amount: data.amount || "0.00",
+      amount: data.amount.toString(),
       status: data.status || "pending",
       issueDate: data.issueDate || new Date().toISOString().split('T')[0],
       dueDate: data.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -52,7 +60,12 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
     };
     
     console.log("Formatted data being sent:", formattedData);
-    onSubmit(formattedData);
+    
+    try {
+      await onSubmit(formattedData);
+    } catch (error) {
+      console.error("Submit error:", error);
+    }
   };
 
   return (
@@ -167,23 +180,23 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: InsertInv
         />
         
         <Button 
-          type="submit" 
+          type="button" 
           className="w-full" 
           disabled={isLoading}
-          onClick={(e) => {
+          onClick={async () => {
             console.log("Submit button clicked");
             const values = form.getValues();
             console.log("Form values:", values);
+            
+            const isValid = await form.trigger();
+            console.log("Form is valid:", isValid);
             console.log("Form errors:", form.formState.errors);
             
-            // Manually trigger validation
-            form.trigger().then((isValid) => {
-              console.log("Form is valid:", isValid);
-              if (!isValid) {
-                console.log("Validation failed, errors:", form.formState.errors);
-                e.preventDefault();
-              }
-            });
+            if (isValid) {
+              await handleSubmit(values);
+            } else {
+              console.log("Validation failed, errors:", form.formState.errors);
+            }
           }}
         >
           {isLoading ? "Creating..." : "Create Invoice"}
