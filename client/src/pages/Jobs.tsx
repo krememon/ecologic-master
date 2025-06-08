@@ -194,10 +194,6 @@ export default function Jobs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({
-        title: "Success",
-        description: "Job created successfully",
-      });
       setIsDialogOpen(false);
     },
     onError: (error: Error) => {
