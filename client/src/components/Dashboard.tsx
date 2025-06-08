@@ -928,11 +928,11 @@ export default function Dashboard() {
             {getWeekDays().map((day, index) => (
               <div 
                 key={day.dateString} 
-                className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 min-h-[120px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer group"
+                className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 min-h-[140px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer group flex flex-col items-center justify-center"
                 onClick={() => handleScheduleClick(day)}
               >
-                <div className="text-center mb-4">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{day.shortName}</p>
+                <div className="text-center mb-3">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">{day.shortName}</p>
                   <p className={`text-xs rounded-full px-2 py-1 inline-block ${
                     day.isToday 
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-medium' 
@@ -942,10 +942,8 @@ export default function Dashboard() {
                   </p>
                 </div>
                 
-                <div className="flex items-center justify-center">
-                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-900 transition-colors">
-                    <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
+                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-900 transition-colors">
+                  <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
             ))}
