@@ -13,6 +13,7 @@ import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "@/components/LanguageSelector";
+import CompanyInviteCode from "@/components/CompanyInviteCode";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -292,6 +293,9 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Company Management */}
+        <CompanyInviteCode />
 
         {/* Security Settings */}
         <Card className="md:col-span-2">
