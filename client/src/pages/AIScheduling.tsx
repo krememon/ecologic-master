@@ -33,9 +33,10 @@ interface EditScheduleDialogProps {
   onClose: () => void;
   onSave: (item: ScheduleItem) => void;
   onDelete?: (id: string) => void;
+  isLoading?: boolean;
 }
 
-function EditScheduleDialog({ item, isOpen, onClose, onSave, onDelete }: EditScheduleDialogProps) {
+function EditScheduleDialog({ item, isOpen, onClose, onSave, onDelete, isLoading }: EditScheduleDialogProps) {
   const [formData, setFormData] = useState<Partial<ScheduleItem>>({});
 
   useEffect(() => {
@@ -63,7 +64,6 @@ function EditScheduleDialog({ item, isOpen, onClose, onSave, onDelete }: EditSch
         jobId: item?.jobId || Math.floor(Math.random() * 1000),
         subcontractorId: item?.subcontractorId || Math.floor(Math.random() * 1000),
       } as ScheduleItem);
-      onClose();
     }
   };
 
@@ -177,7 +177,9 @@ function EditScheduleDialog({ item, isOpen, onClose, onSave, onDelete }: EditSch
           </div>
           <div className="space-x-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave}>Save</Button>
+            <Button onClick={handleSave} disabled={isLoading}>
+              {isLoading ? "Saving..." : "Save"}
+            </Button>
           </div>
         </div>
       </DialogContent>
@@ -247,22 +249,39 @@ export default function AIScheduling() {
     }
   };
 
+  // Mutation to create actual jobs
+  const createJobMutation = useMutation({
+    mutationFn: async (scheduleItem: ScheduleItem) => {
+      const jobData = {
+        title: scheduleItem.jobTitle,
+        description: `Scheduled with ${scheduleItem.subcontractorName}`,
+        location: scheduleItem.location || '',
+        status: 'planning',
+        priority: 'medium',
+        startDate: scheduleItem.date,
+        notes: `${scheduleItem.startTime} - ${scheduleItem.endTime}${scheduleItem.notes ? '\n' + scheduleItem.notes : ''}`
+      };
+      
+      const res = await apiRequest("POST", "/api/jobs", jobData);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setIsDialogOpen(false);
+      setSelectedItem(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: "Failed to save schedule item",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSaveItem = (item: ScheduleItem) => {
-    setScheduleItems(prev => {
-      const existing = prev.findIndex(i => i.id === item.id);
-      if (existing >= 0) {
-        const updated = [...prev];
-        updated[existing] = item;
-        return updated;
-      } else {
-        return [...prev, item];
-      }
-    });
-    
-    toast({
-      title: "Schedule Updated",
-      description: "The schedule item has been saved successfully.",
-    });
+    createJobMutation.mutate(item);
   };
 
   const handleDeleteItem = (id: string) => {
@@ -449,6 +468,7 @@ export default function AIScheduling() {
         onClose={closeDialog}
         onSave={handleSaveItem}
         onDelete={handleDeleteItem}
+        isLoading={createJobMutation.isPending}
       />
     </div>
   );
