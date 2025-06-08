@@ -25,6 +25,10 @@ import {
   type InsertDocument,
   type Message,
   type InsertMessage,
+  type UserRole,
+  type UserPermissions,
+  defaultOwnerPermissions,
+  defaultWorkerPermissions,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -45,6 +49,14 @@ export interface IStorage {
   getUserCompany(userId: number): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company>;
+  
+  // Role-based operations for business owners and workers
+  getUserRole(userId: string, companyId: number): Promise<{ role: UserRole; permissions: UserPermissions } | undefined>;
+  addWorkerToCompany(companyId: number, userEmail: string, role: UserRole): Promise<void>;
+  getCompanyWorkers(companyId: number): Promise<Array<{ user: User; role: UserRole; permissions: UserPermissions }>>;
+  removeWorkerFromCompany(companyId: number, userId: string): Promise<void>;
+  updateWorkerPermissions(companyId: number, userId: string, permissions: UserPermissions): Promise<void>;
+  isBusinessOwner(userId: string, companyId: number): Promise<boolean>;
   
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
@@ -489,6 +501,95 @@ export class DatabaseStorage implements IStorage {
         monthlyRevenue: 0,
       };
     }
+  }
+
+  // Role-based operations for business owners and workers
+  async getUserRole(userId: string, companyId: number): Promise<{ role: UserRole; permissions: UserPermissions } | undefined> {
+    const [member] = await db
+      .select()
+      .from(companyMembers)
+      .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
+
+    if (!member) return undefined;
+
+    return {
+      role: member.role as UserRole,
+      permissions: member.permissions as UserPermissions
+    };
+  }
+
+  async addWorkerToCompany(companyId: number, userEmail: string, role: UserRole): Promise<void> {
+    // Find user by email
+    const [user] = await db.select().from(users).where(eq(users.email, userEmail));
+    if (!user) {
+      throw new Error("User not found with that email address");
+    }
+
+    // Check if user is already a member
+    const existingMember = await db
+      .select()
+      .from(companyMembers)
+      .where(and(eq(companyMembers.userId, user.id), eq(companyMembers.companyId, companyId)));
+
+    if (existingMember.length > 0) {
+      throw new Error("User is already a member of this company");
+    }
+
+    // Add user as company member
+    const permissions = role === 'owner' ? defaultOwnerPermissions : defaultWorkerPermissions;
+    await db.insert(companyMembers).values({
+      companyId,
+      userId: user.id,
+      role,
+      permissions
+    });
+  }
+
+  async getCompanyWorkers(companyId: number): Promise<Array<{ user: User; role: UserRole; permissions: UserPermissions }>> {
+    const workers = await db
+      .select({
+        user: users,
+        role: companyMembers.role,
+        permissions: companyMembers.permissions
+      })
+      .from(companyMembers)
+      .innerJoin(users, eq(companyMembers.userId, users.id))
+      .where(eq(companyMembers.companyId, companyId));
+
+    return workers.map(worker => ({
+      user: worker.user,
+      role: worker.role as UserRole,
+      permissions: worker.permissions as UserPermissions
+    }));
+  }
+
+  async removeWorkerFromCompany(companyId: number, userId: string): Promise<void> {
+    await db
+      .delete(companyMembers)
+      .where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, userId)));
+  }
+
+  async updateWorkerPermissions(companyId: number, userId: string, permissions: UserPermissions): Promise<void> {
+    await db
+      .update(companyMembers)
+      .set({ permissions, updatedAt: new Date() })
+      .where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.userId, userId)));
+  }
+
+  async isBusinessOwner(userId: string, companyId: number): Promise<boolean> {
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    if (!company) return false;
+    
+    // Check if user is the company owner
+    if (company.ownerId === userId) return true;
+    
+    // Check if user has owner role in company members
+    const [member] = await db
+      .select()
+      .from(companyMembers)
+      .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
+    
+    return member?.role === 'owner';
   }
 }
 

@@ -53,13 +53,15 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Company members table
+// Company members table - defines who works for which business
 export const companyMembers = pgTable("company_members", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   userId: varchar("user_id").notNull().references(() => users.id),
-  role: varchar("role").notNull().default("member"), // owner, admin, manager, member
+  role: varchar("role").notNull().default("worker"), // owner, worker
+  permissions: jsonb("permissions").default('{"canCreateJobs": false, "canManageInvoices": false, "canViewSchedule": true}'),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Clients table
@@ -415,6 +417,42 @@ export const insertClientSchema = createInsertSchema(clients).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertCompanyMemberSchema = createInsertSchema(companyMembers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Type definitions for role-based system
+export type UserRole = 'owner' | 'worker';
+
+export interface UserPermissions {
+  canCreateJobs: boolean;
+  canManageInvoices: boolean;
+  canViewSchedule: boolean;
+  canManageClients: boolean;
+  canManageSubcontractors: boolean;
+  canViewReports: boolean;
+}
+
+export const defaultOwnerPermissions: UserPermissions = {
+  canCreateJobs: true,
+  canManageInvoices: true,
+  canViewSchedule: true,
+  canManageClients: true,
+  canManageSubcontractors: true,
+  canViewReports: true,
+};
+
+export const defaultWorkerPermissions: UserPermissions = {
+  canCreateJobs: false,
+  canManageInvoices: false,
+  canViewSchedule: true,
+  canManageClients: false,
+  canManageSubcontractors: false,
+  canViewReports: false,
+};
 
 export const insertSubcontractorSchema = createInsertSchema(subcontractors).omit({
   id: true,
