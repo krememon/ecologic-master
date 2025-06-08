@@ -371,26 +371,34 @@ export default function AIScheduling() {
               return (
                 <div 
                   key={dateStr} 
-                  className={`min-h-[100px] border rounded-lg p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
+                  className={`min-h-[120px] border rounded-lg p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
                     selectedDay === dateStr ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950' : ''
                   }`}
                   onClick={() => setSelectedDay(dateStr)}
                 >
-                  <div className="text-sm font-medium text-center mb-2">
-                    {dayNames[index]}
-                  </div>
-                  <div className="text-lg text-center text-slate-900 dark:text-slate-100 mb-2">
-                    {date.getDate()}
-                  </div>
-                  
-                  {dayJobs.length > 0 && (
-                    <div className="text-center">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mb-1"></div>
-                      <div className="text-xs text-slate-600 dark:text-slate-400">
-                        {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
-                      </div>
+                  <div className="flex flex-col items-center h-full">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">
+                      {dayNames[index]}
                     </div>
-                  )}
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
+                      {date.getDate()}
+                    </div>
+                    
+                    <div className="flex-1 flex items-center justify-center">
+                      {dayJobs.length > 0 ? (
+                        <div className="text-center">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full mx-auto mb-2"></div>
+                          <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                            {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 dark:text-slate-500">
+                          No jobs
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })}
