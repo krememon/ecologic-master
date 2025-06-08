@@ -505,14 +505,17 @@ export default function Dashboard() {
   const [isJobDialogOpen, setIsJobDialogOpen] = useState(false);
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<any>(null);
 
-  // Helper functions for schedule using real job data
-  const getDaysOfWeek = () => {
+  // Helper function for clean weekly schedule
+  const getWeekDays = () => {
     const today = new Date();
     const currentWeek = new Date(today);
     const startOfWeek = new Date(currentWeek.setDate(currentWeek.getDate() - currentWeek.getDay() + 1)); // Monday
     
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const shortNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     const days = [];
@@ -520,31 +523,14 @@ export default function Dashboard() {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
       
-      // Filter jobs for this specific day (only show jobs from current year and with proper dates)
-      const dayJobs = jobs?.filter((job: any) => {
-        if (!job.startDate) return false;
-        const jobDate = new Date(job.startDate);
-        const currentYear = new Date().getFullYear();
-        // Only show jobs from current year and that match this specific date
-        return jobDate.getFullYear() === currentYear && jobDate.toDateString() === date.toDateString();
-      }).map((job: any) => ({
-        id: job.id,
-        title: job.title,
-        time: null, // Remove time display entirely
-        type: getJobType(job.description || job.title),
-        priority: job.priority || 'medium',
-        status: job.status,
-        location: job.location,
-        client: job.client?.name
-      })) || [];
-      
       days.push({
-        name: dayNames[i],
+        fullName: dayNames[i],
+        shortName: shortNames[i],
         date: date.getDate(),
         month: monthNames[date.getMonth()],
         fullDate: date,
-        jobs: dayJobs,
-        isToday: date.toDateString() === new Date().toDateString()
+        isToday: date.toDateString() === new Date().toDateString(),
+        dateString: date.toISOString().split('T')[0]
       });
     }
     
@@ -563,18 +549,21 @@ export default function Dashboard() {
   };
 
   const getWeekStats = () => {
-    const days = getDaysOfWeek();
-    const weekJobs = days.reduce((sum, day) => sum + day.jobs.length, 0);
-    const urgentJobs = days.reduce((sum, day) => 
-      sum + day.jobs.filter((job: any) => job.priority === 'high').length, 0);
     const activeJobs = jobs?.filter((job: any) => job.status === 'in_progress' || job.status === 'active').length || 0;
+    const urgentJobs = jobs?.filter((job: any) => job.priority === 'high').length || 0;
+    const totalJobs = jobs?.length || 0;
     
     return {
-      totalJobs: weekJobs,
+      totalJobs,
       activeJobs,
       urgentJobs,
-      utilization: weekJobs > 0 ? Math.round((weekJobs / 14) * 100) : 0
+      utilization: totalJobs > 0 ? Math.round((activeJobs / totalJobs) * 100) : 0
     };
+  };
+
+  const handleScheduleClick = (day: any) => {
+    setSelectedDay(day);
+    setIsScheduleDialogOpen(true);
   };
 
   const getJobColor = (type: string) => {
@@ -930,16 +919,20 @@ export default function Dashboard() {
               This Week's Schedule
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              {getDaysOfWeek()[0]?.month} {getDaysOfWeek()[0]?.date}-{getDaysOfWeek()[6]?.date}, {new Date().getFullYear()} • {getWeekStats().totalJobs} jobs scheduled
+              {getWeekDays()[0]?.month} {getWeekDays()[0]?.date}-{getWeekDays()[6]?.date}, {new Date().getFullYear()}
             </p>
           </div>
         </div>
         <CardContent className="p-6">
-          <div className="grid grid-cols-7 gap-3">
-            {getDaysOfWeek().map((day, index) => (
-              <div key={day.date} className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 min-h-[180px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <div className="grid grid-cols-7 gap-4">
+            {getWeekDays().map((day, index) => (
+              <div 
+                key={day.dateString} 
+                className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 min-h-[120px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer group"
+                onClick={() => handleScheduleClick(day)}
+              >
                 <div className="text-center mb-4">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{day.name}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{day.shortName}</p>
                   <p className={`text-xs rounded-full px-2 py-1 inline-block ${
                     day.isToday 
                       ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 font-medium' 
@@ -949,72 +942,61 @@ export default function Dashboard() {
                   </p>
                 </div>
                 
-                <div className="space-y-2">
-                  {day.jobs.map((job, jobIndex) => (
-                    <div 
-                      key={jobIndex} 
-                      className={`p-2 rounded-lg text-xs font-medium shadow-sm border transition-all hover:shadow-md cursor-pointer ${getJobColor(job.type)}`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="truncate">{job.title}</span>
-
-                      </div>
-                      {job.time && (
-                        <div className="flex items-center text-xs opacity-75">
-                          <Clock className="w-3 h-3 mr-1" />
-                          {job.time}
-                        </div>
-                      )}
-                      {job.client && (
-                        <div className="flex items-center text-xs opacity-75 mt-1">
-                          <Users className="w-3 h-3 mr-1" />
-                          {job.client}
-                        </div>
-                      )}
-                      {job.location && (
-                        <div className="text-xs opacity-60 mt-1 truncate">
-                          📍 {job.location}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  
-                  {day.jobs.length === 0 && (
-                    <div className="text-center py-8">
-                      <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-2 flex items-center justify-center">
-                        <Plus className="w-4 h-4 text-slate-400" />
-                      </div>
-                      <p className="text-xs text-slate-400 dark:text-slate-500">No jobs</p>
-                    </div>
-                  )}
+                <div className="flex items-center justify-center">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-900 transition-colors">
+                    <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-          
-          {/* Schedule Statistics */}
-          <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{getWeekStats().totalJobs}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">This Week</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-600">{getWeekStats().activeJobs}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Active Jobs</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-orange-600">{getWeekStats().urgentJobs}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">High Priority</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">{getWeekStats().utilization}%</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Capacity</p>
+        </CardContent>
+      </Card>
+
+      {/* Schedule Dialog */}
+      <Dialog open={isScheduleDialogOpen} onOpenChange={setIsScheduleDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Schedule for {selectedDay?.fullName}, {selectedDay?.month} {selectedDay?.date}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
+                Schedule Your Day
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                Add jobs, appointments, or tasks for this day
+              </p>
+              <div className="space-y-3">
+                <Button 
+                  onClick={() => {
+                    setIsScheduleDialogOpen(false);
+                    setIsJobDialogOpen(true);
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Schedule New Job
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => {
+                    // Navigate to full scheduling page
+                    window.location.href = '/scheduling';
+                  }}
+                >
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Open Full Scheduler
+                </Button>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
