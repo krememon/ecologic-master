@@ -374,7 +374,10 @@ export default function AIScheduling() {
                   className={`min-h-[100px] border rounded-lg p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
                     selectedDay === dateStr ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950' : ''
                   }`}
-                  onClick={() => setSelectedDay(dateStr)}
+                  onClick={() => {
+                    console.log('Clicked day:', dateStr);
+                    setSelectedDay(dateStr);
+                  }}
                 >
                   <div className="text-sm font-medium text-center mb-2">
                     {dayNames[index]}
@@ -451,6 +454,7 @@ export default function AIScheduling() {
       </div>
 
       {/* Day Details View */}
+      {console.log('Current selectedDay:', selectedDay)}
       {selectedDay && (
         <Card>
           <CardHeader>
