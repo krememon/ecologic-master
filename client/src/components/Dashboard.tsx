@@ -983,12 +983,12 @@ export default function Dashboard() {
                   variant="outline" 
                   className="w-full"
                   onClick={() => {
-                    // Navigate to full scheduling page
-                    window.location.href = '/scheduling';
+                    // Navigate to AI scheduling page
+                    window.location.href = '/ai-scheduling';
                   }}
                 >
                   <Calendar className="w-4 h-4 mr-2" />
-                  Open Full Scheduler
+                  Open AI Scheduler
                 </Button>
               </div>
             </div>
