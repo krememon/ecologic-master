@@ -298,64 +298,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Also get user's company
       let company = await storage.getUserCompany(parseInt(user.id));
       
-      // If user exists but no company, create a default company
+      // Return user with company info (company might be null for employees without access)
+      const responseData = {
+        ...user,
+        company: company ? {
+          id: company.id,
+          name: company.name,
+          logo: company.logo,
+          primaryColor: company.primaryColor,
+          secondaryColor: company.secondaryColor
+        } : null
+      };
+      
+      res.json(responseData);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Company routes
+  app.get('/api/company', async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = req.user;
+      let company = await storage.getUserCompany(parseInt(user.id));
+      
+      // Add invite code for business owners
+      if (company) {
+        const isOwner = await storage.isBusinessOwner(user.id, company.id);
+        const responseData = {
+          ...company,
+          inviteCode: isOwner ? company.id.toString() : undefined
+        };
+        res.json(responseData);
+      } else {
+        res.status(404).json({ message: "No company found" });
+      }
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  // Company routes
+  app.post('/api/companies', async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = req.user;
+      const { name, logo, primaryColor, secondaryColor } = req.body;
+      
+      const company = await storage.createCompany({
+        name,
+        logo,
+        primaryColor,
+        secondaryColor,
+        ownerId: parseInt(user.id)
+      });
+      
+      res.status(201).json(company);
+    } catch (error) {
+      console.error("Error creating company:", error);
+      res.status(500).json({ message: "Failed to create company" });
+    }
+  });
+
+  // Client routes
+  app.get('/api/clients', async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = req.user;
+      const company = await storage.getUserCompany(parseInt(user.id));
+      
       if (!company) {
-        company = await storage.createCompany({
-          name: `${user.firstName || 'Your'} ${user.lastName || 'Company'}`,
-          primaryColor: '#3B82F6',
-          secondaryColor: '#1E40AF',
-          ownerId: user.id
-        });
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const clients = await storage.getClients(company.id);
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching clients:", error);
+      res.status(500).json({ message: "Failed to fetch clients" });
+    }
+  });
 
-        // Create sample data for demonstration
-        try {
-          // Create sample clients
-          const client1 = await storage.createClient({
-            companyId: company.id,
-            name: "Green Valley Resort",
-            email: "contact@greenvalleyresort.com",
-            phone: "(555) 123-4567",
-            address: "123 Mountain View Drive, Green Valley, CA 90210",
-            notes: "Eco-friendly resort project focusing on sustainable construction"
-          });
-
-          const client2 = await storage.createClient({
-            companyId: company.id,
-            name: "Sunrise Apartments",
-            email: "manager@sunriseapts.com", 
-            phone: "(555) 987-6543",
-            address: "456 Oak Street, Sunrise City, CA 90211",
-            notes: "Multi-unit residential development with energy-efficient systems"
-          });
-
-          // Create sample subcontractors
-          await storage.createSubcontractor({
-            companyId: company.id,
-            name: "Mike Thompson",
-            email: "mike@watersystems.com",
-            phone: "(555) 234-5678",
-            skills: ["Plumbing", "Water Systems", "Pipe Installation", "Leak Detection"],
-            rating: "4.8",
-            isAvailable: true,
-            hourlyRate: "85",
-            notes: "Specialist in eco-friendly water systems and conservation"
-          });
-
-          await storage.createSubcontractor({
-            companyId: company.id,
-            name: "Sarah Chen",
-            email: "sarah@greenwiring.com",
-            phone: "(555) 345-6789", 
-            skills: ["Electrical", "Solar Installation", "Smart Systems", "Energy Efficiency"],
-            rating: "4.9",
-            isAvailable: true,
-            hourlyRate: "95",
-            notes: "Expert in renewable energy and smart building systems"
-          });
-
-          await storage.createSubcontractor({
-            companyId: company.id,
-            name: "Carlos Rodriguez",
+  // Create client route
+  app.post('/api/clients', async (req: any, res) => {
             email: "carlos@ecobuild.com",
             phone: "(555) 456-7890",
             skills: ["HVAC", "Air Quality", "Ventilation", "Climate Control"],
