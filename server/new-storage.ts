@@ -344,8 +344,9 @@ export class DatabaseStorage implements IStorage {
         amount: invoices.amount,
         status: invoices.status,
         dueDate: invoices.dueDate,
-        issuedDate: invoices.issuedDate,
-        description: invoices.description,
+        issueDate: invoices.issueDate,
+        paidDate: invoices.paidDate,
+        notes: invoices.notes,
         clientId: invoices.clientId,
         jobId: invoices.jobId,
         companyId: invoices.companyId,
@@ -376,8 +377,9 @@ export class DatabaseStorage implements IStorage {
         amount: invoices.amount,
         status: invoices.status,
         dueDate: invoices.dueDate,
-        issuedDate: invoices.issuedDate,
-        description: invoices.description,
+        issueDate: invoices.issueDate,
+        paidDate: invoices.paidDate,
+        notes: invoices.notes,
         clientId: invoices.clientId,
         jobId: invoices.jobId,
         companyId: invoices.companyId,
@@ -438,13 +440,11 @@ export class DatabaseStorage implements IStorage {
         subject: messages.subject,
         content: messages.content,
         isRead: messages.isRead,
-        fromEmail: messages.fromEmail,
-        fromName: messages.fromName,
-        toEmail: messages.toEmail,
-        toName: messages.toName,
+        senderId: messages.senderId,
+        recipientId: messages.recipientId,
+        jobId: messages.jobId,
         companyId: messages.companyId,
         createdAt: messages.createdAt,
-        updatedAt: messages.updatedAt,
       })
       .from(messages)
       .where(eq(messages.companyId, companyId))
@@ -459,7 +459,7 @@ export class DatabaseStorage implements IStorage {
   async markMessageAsRead(id: number): Promise<void> {
     await db
       .update(messages)
-      .set({ isRead: true, updatedAt: new Date() })
+      .set({ isRead: true })
       .where(eq(messages.id, id));
   }
 
