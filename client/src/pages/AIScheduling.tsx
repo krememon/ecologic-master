@@ -361,7 +361,12 @@ export default function AIScheduling() {
           <div className="grid grid-cols-7 gap-2">
             {weekDates.map((date, index) => {
               const dateStr = date.toISOString().split('T')[0];
-              const dayItems = scheduleItems.filter(item => item.date === dateStr);
+              // Filter real jobs for this specific day
+              const dayJobs = jobs?.filter((job: any) => {
+                if (!job.startDate) return false;
+                const jobDate = new Date(job.startDate).toISOString().split('T')[0];
+                return jobDate === dateStr;
+              }) || [];
               
               return (
                 <div key={dateStr} className="min-h-[200px] border rounded-lg p-2">
@@ -373,22 +378,23 @@ export default function AIScheduling() {
                   </div>
                   
                   <div className="space-y-2">
-                    {dayItems.map(item => (
+                    {dayJobs.map((job: any) => (
                       <div
-                        key={item.id}
-                        className="p-2 rounded border cursor-pointer hover:shadow-sm transition-shadow"
-                        onClick={() => openEditDialog(item)}
+                        key={job.id}
+                        className="p-2 rounded border cursor-pointer hover:shadow-sm transition-shadow bg-slate-50 dark:bg-slate-800"
                       >
-                        <div className="text-xs font-medium truncate">{item.jobTitle}</div>
+                        <div className="text-xs font-medium truncate">{job.title}</div>
                         <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {item.subcontractorName}
+                          {job.location || 'No location'}
                         </div>
-                        <div className="text-xs flex items-center gap-1 mt-1">
-                          <Clock className="w-3 h-3" />
-                          {item.startTime} - {item.endTime}
-                        </div>
-                        <Badge className={`text-xs mt-1 ${getStatusColor(item.status)}`}>
-                          {item.status}
+                        {job.notes && job.notes.includes(' - ') && (
+                          <div className="text-xs flex items-center gap-1 mt-1">
+                            <Clock className="w-3 h-3" />
+                            {job.notes.split('\n')[0]}
+                          </div>
+                        )}
+                        <Badge className={`text-xs mt-1 ${getStatusColor(job.status)}`}>
+                          {job.status}
                         </Badge>
                       </div>
                     ))}
@@ -426,25 +432,37 @@ export default function AIScheduling() {
       <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Weekly Utilization</CardTitle>
+            <CardTitle className="text-sm font-medium">Weekly Jobs</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Math.round((scheduleItems.length / 7) * 100)}%</div>
+            <div className="text-2xl font-bold">
+              {weekDates.reduce((total, date) => {
+                const dateStr = date.toISOString().split('T')[0];
+                const dayJobs = jobs?.filter((job: any) => {
+                  if (!job.startDate) return false;
+                  const jobDate = new Date(job.startDate).toISOString().split('T')[0];
+                  return jobDate === dateStr;
+                }) || [];
+                return total + dayJobs.length;
+              }, 0)}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {scheduleItems.length} scheduled items this week
+              Jobs scheduled this week
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Schedule Conflicts</CardTitle>
+            <CardTitle className="text-sm font-medium">Planning Jobs</CardTitle>
             <AlertTriangle className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">No conflicts detected</p>
+            <div className="text-2xl font-bold">
+              {jobs?.filter((job: any) => job.status === 'planning').length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">In planning phase</p>
           </CardContent>
         </Card>
 
@@ -455,7 +473,7 @@ export default function AIScheduling() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {scheduleItems.filter(item => item.status === 'in-progress').length}
+              {jobs?.filter((job: any) => job.status === 'in_progress' || job.status === 'active').length || 0}
             </div>
             <p className="text-xs text-muted-foreground">Currently in progress</p>
           </CardContent>
