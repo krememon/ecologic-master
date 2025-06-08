@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Building2, UserCheck, Shield, Mail, Lock, User } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, UserCheck, Shield, Mail, Lock, User, Users } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
@@ -24,13 +25,28 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  companyName: z.string().min(1, "Company name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
+  role: z.enum(["owner", "worker"], {
+    errorMap: () => ({ message: "Please select a role" })
+  }),
+  companyName: z.string().optional(),
+  companyInviteCode: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
+}).refine((data) => {
+  if (data.role === "owner" && !data.companyName) {
+    return false;
+  }
+  if (data.role === "worker" && !data.companyInviteCode) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Company name is required for business owners and invite code is required for employees",
+  path: ["companyName"],
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -56,12 +72,16 @@ export default function AuthPage() {
     defaultValues: {
       firstName: "",
       lastName: "",
-      companyName: "",
       email: "",
       password: "",
       confirmPassword: "",
+      role: "owner",
+      companyName: "",
+      companyInviteCode: "",
     },
   });
+
+  const selectedRole = registerForm.watch("role");
 
   // Login mutation
   const loginMutation = useMutation({
@@ -228,20 +248,72 @@ export default function AuthPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="companyName">Company Name</Label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-                      <Input
-                        id="companyName"
-                        placeholder="Your business name"
-                        className="pl-10"
-                        {...registerForm.register("companyName")}
-                      />
-                    </div>
-                    {registerForm.formState.errors.companyName && (
-                      <p className="text-sm text-red-500">{registerForm.formState.errors.companyName.message}</p>
+                    <Label htmlFor="role">I am a</Label>
+                    <Select 
+                      value={registerForm.watch("role")} 
+                      onValueChange={(value) => registerForm.setValue("role", value as "owner" | "worker")}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select your role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="owner">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-blue-600" />
+                            <span>Business Owner</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="worker">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-green-600" />
+                            <span>Employee</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {registerForm.formState.errors.role && (
+                      <p className="text-sm text-red-500">{registerForm.formState.errors.role.message}</p>
                     )}
                   </div>
+
+                  {selectedRole === "owner" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company Name</Label>
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <Input
+                          id="companyName"
+                          placeholder="Your business name"
+                          className="pl-10"
+                          {...registerForm.register("companyName")}
+                        />
+                      </div>
+                      {registerForm.formState.errors.companyName && (
+                        <p className="text-sm text-red-500">{registerForm.formState.errors.companyName.message}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedRole === "worker" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="companyInviteCode">Company Invite Code</Label>
+                      <div className="relative">
+                        <Shield className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <Input
+                          id="companyInviteCode"
+                          placeholder="Enter invite code from your employer"
+                          className="pl-10"
+                          {...registerForm.register("companyInviteCode")}
+                        />
+                      </div>
+                      {registerForm.formState.errors.companyInviteCode && (
+                        <p className="text-sm text-red-500">{registerForm.formState.errors.companyInviteCode.message}</p>
+                      )}
+                      <p className="text-xs text-slate-500">
+                        Ask your employer for the company invite code to join their business.
+                      </p>
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <Label htmlFor="registerEmail">Email</Label>

@@ -174,7 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Email authentication routes
   app.post('/api/auth/register', async (req, res) => {
     try {
-      const { firstName, lastName, companyName, email, password } = req.body;
+      const { firstName, lastName, companyName, email, password, role, companyInviteCode } = req.body;
       
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -194,13 +194,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emailVerified: false,
       });
       
-      // Create company for the user
-      const company = await storage.createCompany({
-        name: companyName,
-        ownerId: user.id,
-        primaryColor: "#3B82F6",
-        secondaryColor: "#1E40AF",
-      });
+      if (role === 'owner') {
+        // Business owner registration - create new company
+        if (!companyName) {
+          return res.status(400).json({ message: "Company name is required for business owners" });
+        }
+        
+        const company = await storage.createCompany({
+          name: companyName,
+          ownerId: user.id,
+          primaryColor: "#3B82F6",
+          secondaryColor: "#1E40AF",
+        });
+        
+        // Add owner as company member with full permissions
+        await storage.addWorkerToCompany(company.id, user.email, 'owner');
+        
+      } else if (role === 'worker') {
+        // Employee registration - join existing company
+        if (!companyInviteCode) {
+          return res.status(400).json({ message: "Company invite code is required for employees" });
+        }
+        
+        // For now, use company ID as invite code (in production, you'd want a more secure system)
+        const companyId = parseInt(companyInviteCode);
+        if (isNaN(companyId)) {
+          return res.status(400).json({ message: "Invalid company invite code" });
+        }
+        
+        try {
+          await storage.addWorkerToCompany(companyId, user.email, 'worker');
+        } catch (error) {
+          console.error("Failed to add worker to company:", error);
+          return res.status(400).json({ message: "Invalid company invite code or company not found" });
+        }
+      } else {
+        return res.status(400).json({ message: "Role must be either 'owner' or 'worker'" });
+      }
       
       // Create session
       req.login(user, (err) => {
@@ -1241,6 +1271,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error processing signature:", error);
       res.status(500).json({ message: "Failed to process signature" });
+    }
+  });
+
+  // Company member management routes
+  app.get('/api/company/members', isAuthenticated, requireOwner, async (req: any, res) => {
+    try {
+      const company = req.company;
+      const workers = await storage.getCompanyWorkers(company.id);
+      res.json(workers);
+    } catch (error) {
+      console.error("Error fetching company workers:", error);
+      res.status(500).json({ message: "Failed to fetch company workers" });
+    }
+  });
+
+  app.post('/api/company/members', isAuthenticated, requireOwner, async (req: any, res) => {
+    try {
+      const company = req.company;
+      const { email, role } = req.body;
+      
+      if (!email || !role) {
+        return res.status(400).json({ message: "Email and role are required" });
+      }
+      
+      if (!['owner', 'worker'].includes(role)) {
+        return res.status(400).json({ message: "Role must be 'owner' or 'worker'" });
+      }
+      
+      await storage.addWorkerToCompany(company.id, email, role);
+      res.json({ message: "Worker added successfully" });
+    } catch (error) {
+      console.error("Error adding worker:", error);
+      if (error.message.includes("User not found")) {
+        res.status(404).json({ message: "No user found with that email address" });
+      } else if (error.message.includes("already a member")) {
+        res.status(400).json({ message: "User is already a member of this company" });
+      } else {
+        res.status(500).json({ message: "Failed to add worker" });
+      }
+    }
+  });
+
+  app.delete('/api/company/members/:userId', isAuthenticated, requireOwner, async (req: any, res) => {
+    try {
+      const company = req.company;
+      const userId = req.params.userId;
+      
+      await storage.removeWorkerFromCompany(company.id, userId);
+      res.json({ message: "Worker removed successfully" });
+    } catch (error) {
+      console.error("Error removing worker:", error);
+      res.status(500).json({ message: "Failed to remove worker" });
+    }
+  });
+
+  app.put('/api/company/members/:userId/permissions', isAuthenticated, requireOwner, async (req: any, res) => {
+    try {
+      const company = req.company;
+      const userId = req.params.userId;
+      const { permissions } = req.body;
+      
+      if (!permissions) {
+        return res.status(400).json({ message: "Permissions are required" });
+      }
+      
+      await storage.updateWorkerPermissions(company.id, userId, permissions);
+      res.json({ message: "Permissions updated successfully" });
+    } catch (error) {
+      console.error("Error updating permissions:", error);
+      res.status(500).json({ message: "Failed to update permissions" });
+    }
+  });
+
+  app.get('/api/user/role', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const userRole = await storage.getUserRole(userId, company.id);
+      const isOwner = await storage.isBusinessOwner(userId, company.id);
+      
+      res.json({
+        role: userRole?.role || 'worker',
+        permissions: userRole?.permissions || {},
+        isOwner,
+        companyId: company.id,
+        companyName: company.name
+      });
+    } catch (error) {
+      console.error("Error fetching user role:", error);
+      res.status(500).json({ message: "Failed to fetch user role" });
     }
   });
 
