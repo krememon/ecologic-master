@@ -185,8 +185,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await hashPassword(password);
       
+      // Generate unique user ID
+      const userId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      
       // Create user
       const user = await storage.createUser({
+        id: userId,
         firstName,
         lastName,
         email,
