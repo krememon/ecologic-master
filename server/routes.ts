@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage";
+import { storage } from "./new-storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertCompanySchema, insertClientSchema, insertSubcontractorSchema, insertJobSchema, insertInvoiceSchema, insertMessageSchema } from "@shared/schema";
+import { insertCompanySchema, insertClientSchema, insertSubcontractorSchema, insertJobSchema, insertInvoiceSchema, insertMessageSchema, type UserRole, type UserPermissions } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import path from "path";
@@ -100,6 +100,65 @@ async function sendPushNotification(userId: string, notification: any) {
     console.error('Error sending push notification:', error);
   }
 }
+
+// Role-based permission middleware
+const requirePermission = (permission: keyof UserPermissions) => {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const userRole = await storage.getUserRole(userId, company.id);
+      if (!userRole) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!userRole.permissions[permission]) {
+        return res.status(403).json({ message: `Permission denied: ${permission}` });
+      }
+
+      req.userRole = userRole;
+      req.company = company;
+      next();
+    } catch (error) {
+      console.error("Permission check error:", error);
+      res.status(500).json({ message: "Permission check failed" });
+    }
+  };
+};
+
+// Business owner only middleware
+const requireOwner = async (req: any, res: any, next: any) => {
+  try {
+    const userId = req.user?.claims?.sub;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const company = await storage.getUserCompany(userId);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    const isOwner = await storage.isBusinessOwner(userId, company.id);
+    if (!isOwner) {
+      return res.status(403).json({ message: "Business owner access required" });
+    }
+
+    req.company = company;
+    next();
+  } catch (error) {
+    console.error("Owner check error:", error);
+    res.status(500).json({ message: "Owner check failed" });
+  }
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
