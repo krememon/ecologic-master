@@ -385,17 +385,8 @@ export default function AIScheduling() {
                     </div>
                     
                     <div className="flex-1 flex items-center justify-center">
-                      {dayJobs.length > 0 ? (
-                        <div className="text-center">
-                          <div className="w-3 h-3 bg-blue-500 rounded-full mx-auto mb-2"></div>
-                          <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">
-                            {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-slate-400 dark:text-slate-500">
-                          No jobs
-                        </div>
+                      {dayJobs.length > 0 && (
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                       )}
                     </div>
                   </div>
