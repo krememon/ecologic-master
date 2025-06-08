@@ -216,10 +216,6 @@ export default function Jobs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({
-        title: "Success",
-        description: "Job deleted successfully",
-      });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
