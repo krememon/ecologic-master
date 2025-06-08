@@ -25,6 +25,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import CompanyInviteCode from "./CompanyInviteCode";
 
 // Recent Alerts Component
 function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) {
@@ -904,6 +905,9 @@ export default function Dashboard() {
               </Dialog>
             </CardContent>
           </Card>
+
+          {/* Company Invite Code */}
+          <CompanyInviteCode />
 
           {/* Alerts & Notifications */}
           <RecentAlertsCard jobs={jobs} invoices={invoices} />

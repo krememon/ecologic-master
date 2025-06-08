@@ -455,6 +455,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Company routes
+  app.get('/api/company', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      let company = await storage.getUserCompany(userId);
+      
+      // If no company exists, create one for business owners
+      if (!company) {
+        const user = await storage.getUser(userId);
+        company = await storage.createCompany({
+          name: `${user?.firstName || 'Your'} ${user?.lastName || 'Company'}`,
+          primaryColor: '#3B82F6',
+          secondaryColor: '#1E40AF',
+          ownerId: userId
+        });
+      }
+      
+      // Add invite code for business owners
+      const isOwner = await storage.isBusinessOwner(userId, company.id);
+      const responseData = {
+        ...company,
+        inviteCode: isOwner ? company.id.toString() : undefined
+      };
+      
+      res.json(responseData);
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
   app.post('/api/companies', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
