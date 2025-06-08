@@ -497,80 +497,288 @@ export default function AIScheduling() {
           </CardHeader>
           <CardContent>
             {(() => {
-              const dayJobs = Array.isArray(jobs) ? jobs.filter((job: any) => {
-                if (!job.startDate) return false;
-                const jobDate = new Date(job.startDate).toISOString().split('T')[0];
-                return jobDate === selectedDay;
-              }) : [];
+              // Show all jobs, not just ones for the selected day
+              const allJobs = Array.isArray(jobs) ? jobs : [];
 
-              if (dayJobs.length === 0) {
+              if (allJobs.length === 0) {
                 return (
                   <div className="text-center py-8">
                     <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
-                      No jobs scheduled
+                      No jobs planned
                     </h3>
                     <p className="text-slate-600 dark:text-slate-400 mb-4">
-                      Click "Add Job" to schedule work for this day.
+                      Click "Add Job" to start planning work.
                     </p>
                   </div>
                 );
               }
 
-              return (
-                <div className="space-y-4">
-                  {dayJobs.map((job: any) => (
-                    <div
-                      key={job.id}
-                      className="p-4 border rounded-lg hover:shadow-md transition-shadow bg-white dark:bg-slate-800"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-medium text-slate-900 dark:text-slate-100">
-                            {job.title}
-                          </h3>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {job.description}
-                          </p>
-                        </div>
-                        <Badge className={getStatusColor(job.status)}>
-                          {job.status}
-                        </Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className="h-4 w-4 text-slate-500" />
-                          <span>{job.location || 'No location specified'}</span>
-                        </div>
-                        
-                        {job.notes && job.notes.includes(' - ') && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Clock className="h-4 w-4 text-slate-500" />
-                            <span>{job.notes.split('\n')[0]}</span>
-                          </div>
-                        )}
-                        
-                        <div className="flex items-center gap-2 text-sm">
-                          <AlertCircle className="h-4 w-4 text-slate-500" />
-                          <span className="capitalize">{job.priority} priority</span>
-                        </div>
-                        
-                        {job.client && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <User className="h-4 w-4 text-slate-500" />
-                            <span>{job.client.name}</span>
-                          </div>
-                        )}
-                      </div>
+              // Group jobs by status for better organization
+              const jobsByStatus = {
+                planning: allJobs.filter((job: any) => job.status === 'planning'),
+                active: allJobs.filter((job: any) => job.status === 'active' || job.status === 'in_progress'),
+                completed: allJobs.filter((job: any) => job.status === 'completed'),
+                other: allJobs.filter((job: any) => !['planning', 'active', 'in_progress', 'completed'].includes(job.status))
+              };
 
-                      {job.notes && job.notes.split('\n').length > 1 && (
-                        <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-700 rounded text-sm">
-                          <strong>Notes:</strong> {job.notes.split('\n').slice(1).join('\n')}
-                        </div>
-                      )}
+              return (
+                <div className="space-y-6">
+                  {/* Planning Jobs */}
+                  {jobsByStatus.planning.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+                        <Brain className="h-5 w-5 text-orange-500" />
+                        Planning Phase ({jobsByStatus.planning.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {jobsByStatus.planning.map((job: any) => (
+                          <div
+                            key={job.id}
+                            className="p-4 border rounded-lg hover:shadow-md transition-shadow bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h4 className="font-medium text-slate-900 dark:text-slate-100">
+                                  {job.title}
+                                </h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                  {job.description}
+                                </p>
+                              </div>
+                              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                                {job.status}
+                              </Badge>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                              <div className="flex items-center gap-2 text-sm">
+                                <MapPin className="h-4 w-4 text-slate-500" />
+                                <span>{job.location || 'No location specified'}</span>
+                              </div>
+                              
+                              {job.startDate && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Calendar className="h-4 w-4 text-slate-500" />
+                                  <span>Scheduled: {new Date(job.startDate).toLocaleDateString()}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-2 text-sm">
+                                <AlertCircle className="h-4 w-4 text-slate-500" />
+                                <span className="capitalize">{job.priority} priority</span>
+                              </div>
+                              
+                              {job.client && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <User className="h-4 w-4 text-slate-500" />
+                                  <span>{job.client.name}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {job.notes && (
+                              <div className="mt-3 p-2 bg-orange-100 dark:bg-orange-900 rounded text-sm">
+                                <strong>Notes:</strong> {job.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Active Jobs */}
+                  {jobsByStatus.active.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+                        <Zap className="h-5 w-5 text-green-500" />
+                        Active Jobs ({jobsByStatus.active.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {jobsByStatus.active.map((job: any) => (
+                          <div
+                            key={job.id}
+                            className="p-4 border rounded-lg hover:shadow-md transition-shadow bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h4 className="font-medium text-slate-900 dark:text-slate-100">
+                                  {job.title}
+                                </h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                  {job.description}
+                                </p>
+                              </div>
+                              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                {job.status}
+                              </Badge>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                              <div className="flex items-center gap-2 text-sm">
+                                <MapPin className="h-4 w-4 text-slate-500" />
+                                <span>{job.location || 'No location specified'}</span>
+                              </div>
+                              
+                              {job.startDate && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Calendar className="h-4 w-4 text-slate-500" />
+                                  <span>Started: {new Date(job.startDate).toLocaleDateString()}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-2 text-sm">
+                                <AlertCircle className="h-4 w-4 text-slate-500" />
+                                <span className="capitalize">{job.priority} priority</span>
+                              </div>
+                              
+                              {job.client && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <User className="h-4 w-4 text-slate-500" />
+                                  <span>{job.client.name}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {job.notes && (
+                              <div className="mt-3 p-2 bg-green-100 dark:bg-green-900 rounded text-sm">
+                                <strong>Notes:</strong> {job.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Completed Jobs */}
+                  {jobsByStatus.completed.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-blue-500" />
+                        Completed Jobs ({jobsByStatus.completed.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {jobsByStatus.completed.map((job: any) => (
+                          <div
+                            key={job.id}
+                            className="p-4 border rounded-lg hover:shadow-md transition-shadow bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h4 className="font-medium text-slate-900 dark:text-slate-100">
+                                  {job.title}
+                                </h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                  {job.description}
+                                </p>
+                              </div>
+                              <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {job.status}
+                              </Badge>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                              <div className="flex items-center gap-2 text-sm">
+                                <MapPin className="h-4 w-4 text-slate-500" />
+                                <span>{job.location || 'No location specified'}</span>
+                              </div>
+                              
+                              {job.endDate && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Calendar className="h-4 w-4 text-slate-500" />
+                                  <span>Completed: {new Date(job.endDate).toLocaleDateString()}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-2 text-sm">
+                                <AlertCircle className="h-4 w-4 text-slate-500" />
+                                <span className="capitalize">{job.priority} priority</span>
+                              </div>
+                              
+                              {job.client && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <User className="h-4 w-4 text-slate-500" />
+                                  <span>{job.client.name}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {job.notes && (
+                              <div className="mt-3 p-2 bg-blue-100 dark:bg-blue-900 rounded text-sm">
+                                <strong>Notes:</strong> {job.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other Status Jobs */}
+                  {jobsByStatus.other.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-3 flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-slate-500" />
+                        Other Jobs ({jobsByStatus.other.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {jobsByStatus.other.map((job: any) => (
+                          <div
+                            key={job.id}
+                            className="p-4 border rounded-lg hover:shadow-md transition-shadow bg-slate-50 dark:bg-slate-800"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h4 className="font-medium text-slate-900 dark:text-slate-100">
+                                  {job.title}
+                                </h4>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                  {job.description}
+                                </p>
+                              </div>
+                              <Badge className={getStatusColor(job.status)}>
+                                {job.status}
+                              </Badge>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                              <div className="flex items-center gap-2 text-sm">
+                                <MapPin className="h-4 w-4 text-slate-500" />
+                                <span>{job.location || 'No location specified'}</span>
+                              </div>
+                              
+                              {job.startDate && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Calendar className="h-4 w-4 text-slate-500" />
+                                  <span>Date: {new Date(job.startDate).toLocaleDateString()}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-2 text-sm">
+                                <AlertCircle className="h-4 w-4 text-slate-500" />
+                                <span className="capitalize">{job.priority} priority</span>
+                              </div>
+                              
+                              {job.client && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <User className="h-4 w-4 text-slate-500" />
+                                  <span>{job.client.name}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {job.notes && (
+                              <div className="mt-3 p-2 bg-slate-100 dark:bg-slate-700 rounded text-sm">
+                                <strong>Notes:</strong> {job.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
