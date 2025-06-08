@@ -36,11 +36,11 @@ import { eq, and, desc, sql } from "drizzle-orm";
 // Interface for storage operations
 export interface IStorage {
   // User operations for email/password and social authentication
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, user: Partial<InsertUser>): Promise<User>;
+  createUser(user: UpsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<UpsertUser>): Promise<User>;
   verifyEmail(token: string): Promise<User | undefined>;
   setResetPasswordToken(email: string, token: string, expires: Date): Promise<void>;
   resetPassword(token: string, newPassword: string): Promise<User | undefined>;
@@ -103,7 +103,7 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // User operations for email/password and social authentication
 
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
@@ -120,12 +120,12 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async createUser(userData: InsertUser): Promise<User> {
+  async createUser(userData: UpsertUser): Promise<User> {
     const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
 
-  async updateUser(id: number, userData: Partial<InsertUser>): Promise<User> {
+  async updateUser(id: number, userData: Partial<UpsertUser>): Promise<User> {
     const [user] = await db
       .update(users)
       .set({ ...userData, updatedAt: new Date() })
