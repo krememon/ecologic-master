@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, Brain, Zap, TrendingUp, Edit3, Plus, Trash2, Clock, User, MapPin, AlertTriangle } from "lucide-react";
+import { Calendar, Brain, Zap, TrendingUp, Edit3, Plus, Trash2, Clock, User, MapPin, AlertTriangle, X, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface ScheduleItem {
@@ -193,6 +193,7 @@ export default function AIScheduling() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<string>(() => {
     const today = new Date();
     const monday = new Date(today.setDate(today.getDate() - today.getDay() + 1));
@@ -361,66 +362,35 @@ export default function AIScheduling() {
           <div className="grid grid-cols-7 gap-2">
             {weekDates.map((date, index) => {
               const dateStr = date.toISOString().split('T')[0];
-              // Filter real jobs for this specific day
-              const dayJobs = jobs?.filter((job: any) => {
+              const dayJobs = (jobs as any[])?.filter((job: any) => {
                 if (!job.startDate) return false;
                 const jobDate = new Date(job.startDate).toISOString().split('T')[0];
                 return jobDate === dateStr;
               }) || [];
               
               return (
-                <div key={dateStr} className="min-h-[200px] border rounded-lg p-2">
+                <div 
+                  key={dateStr} 
+                  className={`min-h-[100px] border rounded-lg p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
+                    selectedDay === dateStr ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950' : ''
+                  }`}
+                  onClick={() => setSelectedDay(dateStr)}
+                >
                   <div className="text-sm font-medium text-center mb-2">
                     {dayNames[index]}
                   </div>
-                  <div className="text-xs text-center text-slate-600 dark:text-slate-400 mb-3">
+                  <div className="text-lg text-center text-slate-900 dark:text-slate-100 mb-2">
                     {date.getDate()}
                   </div>
                   
-                  <div className="space-y-2">
-                    {dayJobs.map((job: any) => (
-                      <div
-                        key={job.id}
-                        className="p-2 rounded border cursor-pointer hover:shadow-sm transition-shadow bg-slate-50 dark:bg-slate-800"
-                      >
-                        <div className="text-xs font-medium truncate">{job.title}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {job.location || 'No location'}
-                        </div>
-                        {job.notes && job.notes.includes(' - ') && (
-                          <div className="text-xs flex items-center gap-1 mt-1">
-                            <Clock className="w-3 h-3" />
-                            {job.notes.split('\n')[0]}
-                          </div>
-                        )}
-                        <Badge className={`text-xs mt-1 ${getStatusColor(job.status)}`}>
-                          {job.status}
-                        </Badge>
+                  {dayJobs.length > 0 && (
+                    <div className="text-center">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mb-1"></div>
+                      <div className="text-xs text-slate-600 dark:text-slate-400">
+                        {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
                       </div>
-                    ))}
-                    
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full h-6 text-xs py-1 px-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => {
-                        setSelectedItem({
-                          id: '',
-                          jobId: 0,
-                          jobTitle: '',
-                          subcontractorId: 0,
-                          subcontractorName: '',
-                          startTime: '09:00',
-                          endTime: '17:00',
-                          date: dateStr,
-                          status: 'scheduled'
-                        });
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      <Plus className="w-3 h-3" />
-                    </Button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -439,11 +409,11 @@ export default function AIScheduling() {
             <div className="text-2xl font-bold">
               {weekDates.reduce((total, date) => {
                 const dateStr = date.toISOString().split('T')[0];
-                const dayJobs = jobs?.filter((job: any) => {
+                const dayJobs = Array.isArray(jobs) ? jobs.filter((job: any) => {
                   if (!job.startDate) return false;
                   const jobDate = new Date(job.startDate).toISOString().split('T')[0];
                   return jobDate === dateStr;
-                }) || [];
+                }) : [];
                 return total + dayJobs.length;
               }, 0)}
             </div>
@@ -460,7 +430,7 @@ export default function AIScheduling() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {jobs?.filter((job: any) => job.status === 'planning').length || 0}
+              {Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'planning').length : 0}
             </div>
             <p className="text-xs text-muted-foreground">In planning phase</p>
           </CardContent>
@@ -473,12 +443,140 @@ export default function AIScheduling() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {jobs?.filter((job: any) => job.status === 'in_progress' || job.status === 'active').length || 0}
+              {Array.isArray(jobs) ? jobs.filter((job: any) => job.status === 'in_progress' || job.status === 'active').length : 0}
             </div>
             <p className="text-xs text-muted-foreground">Currently in progress</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Day Details View */}
+      {selectedDay && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Jobs for {new Date(selectedDay).toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    setSelectedItem({
+                      id: '',
+                      jobId: 0,
+                      jobTitle: '',
+                      subcontractorId: 0,
+                      subcontractorName: '',
+                      startTime: '09:00',
+                      endTime: '17:00',
+                      date: selectedDay,
+                      status: 'scheduled'
+                    });
+                    setIsDialogOpen(true);
+                  }}
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Job
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedDay(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const dayJobs = Array.isArray(jobs) ? jobs.filter((job: any) => {
+                if (!job.startDate) return false;
+                const jobDate = new Date(job.startDate).toISOString().split('T')[0];
+                return jobDate === selectedDay;
+              }) : [];
+
+              if (dayJobs.length === 0) {
+                return (
+                  <div className="text-center py-8">
+                    <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
+                      No jobs scheduled
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-4">
+                      Click "Add Job" to schedule work for this day.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-4">
+                  {dayJobs.map((job: any) => (
+                    <div
+                      key={job.id}
+                      className="p-4 border rounded-lg hover:shadow-md transition-shadow bg-white dark:bg-slate-800"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="font-medium text-slate-900 dark:text-slate-100">
+                            {job.title}
+                          </h3>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                            {job.description}
+                          </p>
+                        </div>
+                        <Badge className={getStatusColor(job.status)}>
+                          {job.status}
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <MapPin className="h-4 w-4 text-slate-500" />
+                          <span>{job.location || 'No location specified'}</span>
+                        </div>
+                        
+                        {job.notes && job.notes.includes(' - ') && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Clock className="h-4 w-4 text-slate-500" />
+                            <span>{job.notes.split('\n')[0]}</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <AlertCircle className="h-4 w-4 text-slate-500" />
+                          <span className="capitalize">{job.priority} priority</span>
+                        </div>
+                        
+                        {job.client && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <User className="h-4 w-4 text-slate-500" />
+                            <span>{job.client.name}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {job.notes && job.notes.split('\n').length > 1 && (
+                        <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-700 rounded text-sm">
+                          <strong>Notes:</strong> {job.notes.split('\n').slice(1).join('\n')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       <EditScheduleDialog
         item={selectedItem}
