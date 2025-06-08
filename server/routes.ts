@@ -284,16 +284,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const user = req.user;
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
       
       // Also get user's company
-      let company = await storage.getUserCompany(userId);
+      let company = await storage.getUserCompany(parseInt(user.id));
       
       // If user exists but no company, create a default company
       if (!company) {
@@ -301,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: `${user.firstName || 'Your'} ${user.lastName || 'Company'}`,
           primaryColor: '#3B82F6',
           secondaryColor: '#1E40AF',
-          ownerId: userId
+          ownerId: user.id
         });
 
         // Create sample data for demonstration
