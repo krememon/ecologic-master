@@ -1041,6 +1041,14 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+            </CardContent>
+          </Card>
+
+          {/* Recent Alerts */}
+          <RecentAlertsCard jobs={jobs} invoices={invoices} />
+          </div>
+          </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
