@@ -26,26 +26,56 @@ interface AnalyticsProps {
 }
 
 export function AdvancedAnalytics({ jobs, invoices, subcontractors, stats }: AnalyticsProps) {
-  // Generate revenue trend data
+  // Calculate actual revenue trend data from real invoices
   const revenueData = Array.from({ length: 12 }, (_, i) => {
     const month = new Date();
     month.setMonth(month.getMonth() - (11 - i));
+    const monthKey = month.toLocaleDateString('en-US', { month: 'short' });
+    
+    // Filter invoices for this month
+    const monthInvoices = invoices.filter(invoice => {
+      if (!invoice.createdAt) return false;
+      const invoiceDate = new Date(invoice.createdAt);
+      return invoiceDate.getMonth() === month.getMonth() && 
+             invoiceDate.getFullYear() === month.getFullYear();
+    });
+    
+    const monthRevenue = monthInvoices
+      .filter(inv => inv.status === 'paid')
+      .reduce((sum, inv) => sum + parseFloat(inv.amount || '0'), 0);
+    
+    const estimatedExpenses = monthRevenue * 0.7; // 70% expense ratio
+    
     return {
-      month: month.toLocaleDateString('en-US', { month: 'short' }),
-      revenue: Math.floor(Math.random() * 50000) + 20000,
-      expenses: Math.floor(Math.random() * 30000) + 10000,
-      profit: 0
+      month: monthKey,
+      revenue: monthRevenue,
+      expenses: estimatedExpenses,
+      profit: monthRevenue - estimatedExpenses
     };
-  }).map(item => ({
-    ...item,
-    profit: item.revenue - item.expenses
-  }));
+  });
 
-  // Project completion rates
+  // Calculate real project completion rates from job data
+  const completedJobs = jobs.filter(job => job.status === 'completed').length;
+  const activeJobs = jobs.filter(job => job.status === 'active' || job.status === 'in_progress').length;
+  const plannedJobs = jobs.filter(job => job.status === 'planning').length;
+  const totalJobs = jobs.length;
+  
   const completionData = [
-    { name: 'On Time', value: 75, color: '#10B981' },
-    { name: 'Delayed', value: 20, color: '#F59E0B' },
-    { name: 'Overdue', value: 5, color: '#EF4444' }
+    { 
+      name: 'Completed', 
+      value: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0, 
+      color: '#10B981' 
+    },
+    { 
+      name: 'Active', 
+      value: totalJobs > 0 ? Math.round((activeJobs / totalJobs) * 100) : 0, 
+      color: '#3B82F6' 
+    },
+    { 
+      name: 'Planning', 
+      value: totalJobs > 0 ? Math.round((plannedJobs / totalJobs) * 100) : 0, 
+      color: '#F59E0B' 
+    }
   ];
 
   // Team performance data
@@ -59,44 +89,44 @@ export function AdvancedAnalytics({ jobs, invoices, subcontractors, stats }: Ana
   // Key performance indicators
   const kpis = [
     {
-      title: "Project Efficiency",
-      value: "87%",
-      change: "+5.2%",
+      title: "Job Completion Rate",
+      value: `${stats?.jobCompletionRate || 0}%`,
+      change: `${stats?.completedJobs || 0}/${stats?.totalJobs || 0}`,
       trend: "up",
       icon: Target,
       color: "text-green-600",
       bgColor: "bg-green-50",
-      description: "Projects completed on schedule"
+      description: "Projects completed successfully"
     },
     {
-      title: "Revenue Growth",
-      value: "$42.5K",
-      change: "+12.3%",
+      title: "Total Revenue",
+      value: `$${(stats?.totalRevenue || 0).toLocaleString()}`,
+      change: `$${(stats?.monthlyRevenue || 0).toLocaleString()} this month`,
       trend: "up",
       icon: TrendingUp,
       color: "text-blue-600",
       bgColor: "bg-blue-50",
-      description: "Monthly recurring revenue"
+      description: "Total business revenue"
     },
     {
-      title: "Client Satisfaction",
-      value: "4.8/5",
-      change: "+0.3",
+      title: "Payment Collection",
+      value: `${stats?.paymentCollectionRate || 0}%`,
+      change: `${stats?.totalPayments || 0} payments tracked`,
       trend: "up",
-      icon: Trophy,
+      icon: DollarSign,
       color: "text-purple-600",
       bgColor: "bg-purple-50",
-      description: "Average client rating"
+      description: "Invoice payment success rate"
     },
     {
-      title: "Cost Efficiency", 
-      value: "92%",
-      change: "-2.1%",
-      trend: "down",
-      icon: DollarSign,
+      title: "Average Job Value", 
+      value: `$${(stats?.averageJobValue || 0).toLocaleString()}`,
+      change: `${stats?.availableSubcontractors || 0} contractors`,
+      trend: "up",
+      icon: Trophy,
       color: "text-orange-600",
       bgColor: "bg-orange-50",
-      description: "Budget utilization rate"
+      description: "Revenue per completed project"
     }
   ];
 
