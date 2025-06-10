@@ -475,52 +475,77 @@ export class DatabaseStorage implements IStorage {
 
   // Payment operations
   async getPayments(companyId: number): Promise<any[]> {
-    const result = await db
-      .select({
-        id: payments.id,
-        amount: payments.amount,
-        paymentMethod: payments.paymentMethod,
-        status: payments.status,
-        paidDate: payments.paidDate,
-        notes: payments.notes,
-        createdAt: payments.createdAt,
-        jobId: payments.jobId,
-        jobTitle: jobs.title,
-        clientName: clients.name,
-      })
-      .from(payments)
-      .innerJoin(jobs, eq(payments.jobId, jobs.id))
-      .leftJoin(clients, eq(jobs.clientId, clients.id))
-      .where(eq(payments.companyId, companyId))
-      .orderBy(desc(payments.createdAt));
-    
-    return result;
+    try {
+      const result = await db
+        .select({
+          id: payments.id,
+          amount: payments.amount,
+          paymentMethod: payments.paymentMethod,
+          status: payments.status,
+          paidDate: payments.paidDate,
+          notes: payments.notes,
+          createdAt: payments.createdAt,
+          jobId: payments.jobId,
+          jobTitle: jobs.title,
+          clientName: clients.name,
+        })
+        .from(payments)
+        .innerJoin(jobs, eq(payments.jobId, jobs.id))
+        .leftJoin(clients, eq(jobs.clientId, clients.id))
+        .where(eq(payments.companyId, companyId))
+        .orderBy(desc(payments.createdAt));
+      
+      return result;
+    } catch (error) {
+      console.error("Error fetching payments:", error);
+      return [];
+    }
   }
 
   async getPayment(id: number): Promise<Payment | undefined> {
-    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
-    return payment;
+    try {
+      const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+      return payment;
+    } catch (error) {
+      console.error("Error fetching payment:", error);
+      return undefined;
+    }
   }
 
   async createPayment(paymentData: InsertPayment): Promise<Payment> {
-    const [payment] = await db
-      .insert(payments)
-      .values(paymentData)
-      .returning();
-    return payment;
+    try {
+      const [payment] = await db
+        .insert(payments)
+        .values(paymentData)
+        .returning();
+      return payment;
+    } catch (error) {
+      console.error("Error creating payment:", error);
+      throw error;
+    }
   }
 
   async updatePayment(id: number, paymentData: Partial<InsertPayment>): Promise<Payment> {
-    const [payment] = await db
-      .update(payments)
-      .set({ ...paymentData, updatedAt: new Date() })
-      .where(eq(payments.id, id))
-      .returning();
-    return payment;
+    try {
+      const [payment] = await db
+        .update(payments)
+        .set({ ...paymentData, updatedAt: new Date() })
+        .where(eq(payments.id, id))
+        .returning();
+      return payment;
+    } catch (error) {
+      console.error("Error updating payment:", error);
+      throw error;
+    }
   }
 
   async deletePayment(id: number): Promise<void> {
-    await db.delete(payments).where(eq(payments.id, id));
+    try {
+      await db.delete(payments).where(eq(payments.id, id));
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+      throw error;
+    }
   }
 
   async getDashboardStats(companyId: number): Promise<any> {
