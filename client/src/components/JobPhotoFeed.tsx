@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,7 +51,6 @@ const weatherOptions = [
 ];
 
 export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -98,11 +96,7 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
       }
     },
     onError: (error: Error) => {
-      toast({
-        title: "Upload Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("Upload failed:", error);
     },
   });
 
@@ -114,28 +108,15 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}/photos`] });
-      toast({
-        title: "Success",
-        description: "Photo deleted successfully",
-      });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Delete Failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("Delete failed:", error);
     },
   });
 
   const handleUpload = () => {
     const fileInput = fileInputRef.current;
     if (!fileInput?.files?.[0]) {
-      toast({
-        title: "No File Selected",
-        description: "Please select a photo to upload",
-        variant: "destructive",
-      });
       return;
     }
 
