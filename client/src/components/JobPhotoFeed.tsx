@@ -54,6 +54,7 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<JobPhoto | null>(null);
   const [uploadForm, setUploadForm] = useState({
     title: "",
     description: "",
@@ -281,7 +282,8 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
                   <img
                     src={photo.photoUrl}
                     alt={photo.title || "Job site photo"}
-                    className="w-full h-64 object-cover"
+                    className="w-full h-64 object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => setSelectedPhoto(photo)}
                   />
                   {canUpload && (
                     <Button
@@ -343,6 +345,65 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
           </div>
         )}
       </CardContent>
+
+      {/* Image Expansion Modal */}
+      {selectedPhoto && (
+        <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+            <DialogHeader className="p-6 pb-0">
+              <DialogTitle className="text-left">
+                {selectedPhoto.title || "Job Site Photo"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="p-6 pt-0">
+              <div className="relative mb-4">
+                <img
+                  src={selectedPhoto.photoUrl}
+                  alt={selectedPhoto.title || "Job site photo"}
+                  className="w-full max-h-[60vh] object-contain rounded-lg"
+                />
+              </div>
+              
+              {selectedPhoto.description && (
+                <p className="text-slate-600 dark:text-slate-300 mb-4">
+                  {selectedPhoto.description}
+                </p>
+              )}
+              
+              <div className="flex flex-wrap gap-2 mb-4">
+                {selectedPhoto.phase && (
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedPhoto.phase}
+                  </Badge>
+                )}
+                {selectedPhoto.weather && (
+                  <Badge variant="outline" className="text-xs">
+                    <Cloud className="h-3 w-3 mr-1" />
+                    {selectedPhoto.weather}
+                  </Badge>
+                )}
+                {selectedPhoto.location && (
+                  <Badge variant="outline" className="text-xs">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    {selectedPhoto.location}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-sm text-slate-500">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  {format(new Date(selectedPhoto.createdAt), 'MMM d, yyyy h:mm a')}
+                </div>
+                <div className="flex items-center gap-1">
+                  <User className="h-4 w-4" />
+                  Uploaded by team
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   );
 }
