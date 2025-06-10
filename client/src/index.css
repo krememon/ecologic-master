@@ -19,6 +19,28 @@ html, body {
   overflow-x: hidden;
 }
 
+/* Smooth dialog animations */
+[data-radix-dialog-overlay] {
+  background-color: rgba(0, 0, 0, 0.5);
+  transition: background-color 200ms ease-out;
+}
+
+[data-radix-dialog-content] {
+  transition: all 200ms ease-out;
+  animation: dialogSlideIn 200ms ease-out;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 /* Mobile dialog positioning */
 @media screen and (max-width: 768px) {
   [data-radix-dialog-content] {
@@ -30,6 +52,22 @@ html, body {
     max-width: 400px !important;
     max-height: 90vh !important;
     margin: 0 !important;
+    transition: all 200ms ease-out !important;
+  }
+  
+  @keyframes dialogSlideInMobile {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -45%) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  
+  [data-radix-dialog-content] {
+    animation: dialogSlideInMobile 200ms ease-out !important;
   }
 }
 
