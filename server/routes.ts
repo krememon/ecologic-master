@@ -9,6 +9,7 @@ import { promisify } from "util";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
 
@@ -43,6 +44,17 @@ async function sendPushNotification(userId: string, notification: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Ensure uploads directory exists
+  if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads', { recursive: true });
+  }
+
+  // Serve uploaded files
+  app.use('/uploads', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+  }, express.static('uploads'));
+
   // Auth middleware
   await setupAuth(app);
 
@@ -301,6 +313,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating job:", error);
       res.status(500).json({ message: "Failed to create job" });
+    }
+  });
+
+  // Job Photos routes
+  app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const photos = await storage.getJobPhotos(jobId);
+      res.json(photos);
+    } catch (error) {
+      console.error("Error fetching job photos:", error);
+      res.status(500).json({ message: "Failed to fetch job photos" });
+    }
+  });
+
+  app.post('/api/jobs/:jobId/photos', isAuthenticated, upload.single('photo'), async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const userId = req.user.claims.sub;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ message: "No photo file uploaded" });
+      }
+
+      // Move file to permanent location
+      const fileName = `${Date.now()}-${file.originalname}`;
+      const filePath = path.join('uploads', fileName);
+      fs.renameSync(file.path, filePath);
+
+      const photoData = {
+        jobId,
+        uploadedBy: userId,
+        title: req.body.title || null,
+        description: req.body.description || null,
+        photoUrl: `/uploads/${fileName}`,
+        location: req.body.location || null,
+        phase: req.body.phase || null,
+        weather: req.body.weather || null,
+        isPublic: true,
+      };
+
+      const photo = await storage.createJobPhoto(photoData);
+      res.status(201).json(photo);
+    } catch (error) {
+      console.error("Error uploading job photo:", error);
+      res.status(500).json({ message: "Failed to upload photo" });
+    }
+  });
+
+  app.delete('/api/jobs/photos/:photoId', isAuthenticated, async (req: any, res) => {
+    try {
+      const photoId = parseInt(req.params.photoId);
+      await storage.deleteJobPhoto(photoId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting job photo:", error);
+      res.status(500).json({ message: "Failed to delete photo" });
     }
   });
 

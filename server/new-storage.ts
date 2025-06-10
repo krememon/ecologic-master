@@ -108,6 +108,11 @@ export interface IStorage {
   
   // Dashboard statistics
   getDashboardStats(companyId: number): Promise<any>;
+  
+  // Job Photos operations
+  getJobPhotos(jobId: number): Promise<JobPhoto[]>;
+  createJobPhoto(photoData: InsertJobPhoto): Promise<JobPhoto>;
+  deleteJobPhoto(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -722,6 +727,24 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
     
     return member?.role === 'owner';
+  }
+
+  // Job Photos operations
+  async getJobPhotos(jobId: number): Promise<JobPhoto[]> {
+    return await db
+      .select()
+      .from(jobPhotos)
+      .where(eq(jobPhotos.jobId, jobId))
+      .orderBy(desc(jobPhotos.createdAt));
+  }
+
+  async createJobPhoto(photoData: InsertJobPhoto): Promise<JobPhoto> {
+    const [photo] = await db.insert(jobPhotos).values(photoData).returning();
+    return photo;
+  }
+
+  async deleteJobPhoto(id: number): Promise<void> {
+    await db.delete(jobPhotos).where(eq(jobPhotos.id, id));
   }
 }
 
