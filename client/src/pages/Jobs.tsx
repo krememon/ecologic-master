@@ -308,7 +308,7 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
@@ -323,7 +323,7 @@ export default function Jobs() {
                   <CardTitle className="text-lg">Job Information</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Status:</span>
                       <Badge variant={selectedJob.status === 'active' ? 'default' : 'secondary'}>
@@ -333,13 +333,13 @@ export default function Jobs() {
                     {selectedJob.client && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Client:</span>
-                        <span className="text-sm">{selectedJob.client.name}</span>
+                        <span className="text-sm truncate ml-2">{selectedJob.client.name}</span>
                       </div>
                     )}
                     {selectedJob.location && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Location:</span>
-                        <span className="text-sm">{selectedJob.location}</span>
+                        <span className="text-sm truncate ml-2">{selectedJob.location}</span>
                       </div>
                     )}
                     {selectedJob.estimatedCost && (
