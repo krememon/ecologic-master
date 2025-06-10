@@ -151,7 +151,8 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
   }
 
   return (
-    <Card className="w-full">
+    <>
+      <Card className="w-full">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -283,7 +284,10 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
                     src={photo.photoUrl}
                     alt={photo.title || "Job site photo"}
                     className="w-full h-64 object-cover cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setSelectedPhoto(photo)}
+                    onClick={() => {
+                      console.log('Image clicked:', photo);
+                      setSelectedPhoto(photo);
+                    }}
                   />
                   {canUpload && (
                     <Button
@@ -345,66 +349,67 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
           </div>
         )}
       </CardContent>
+    </Card>
 
-      {/* Image Expansion Modal */}
-      {selectedPhoto && (
-        <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
-          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-auto">
-            <DialogHeader className="p-6 pb-0">
-              <DialogTitle className="text-left">
-                {selectedPhoto.title || "Job Site Photo"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="p-6 pt-0">
-              <div className="relative mb-4">
-                <img
-                  src={selectedPhoto.photoUrl}
-                  alt={selectedPhoto.title || "Job site photo"}
-                  className="w-auto h-auto max-w-none rounded-lg"
-                  style={{ maxWidth: 'calc(95vw - 3rem)', maxHeight: 'calc(95vh - 12rem)' }}
-                />
-              </div>
-              
-              {selectedPhoto.description && (
-                <p className="text-slate-600 dark:text-slate-300 mb-4">
-                  {selectedPhoto.description}
-                </p>
+    {/* Image Expansion Modal */}
+    {selectedPhoto && (
+      <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-auto">
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle className="text-left">
+              {selectedPhoto.title || "Job Site Photo"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-6 pt-0">
+            <div className="relative mb-4">
+              <img
+                src={selectedPhoto.photoUrl}
+                alt={selectedPhoto.title || "Job site photo"}
+                className="w-auto h-auto max-w-none rounded-lg"
+                style={{ maxWidth: 'calc(95vw - 3rem)', maxHeight: 'calc(95vh - 12rem)' }}
+              />
+            </div>
+            
+            {selectedPhoto.description && (
+              <p className="text-slate-600 dark:text-slate-300 mb-4">
+                {selectedPhoto.description}
+              </p>
+            )}
+            
+            <div className="flex flex-wrap gap-2 mb-4">
+              {selectedPhoto.phase && (
+                <Badge variant="secondary" className="text-xs">
+                  {selectedPhoto.phase}
+                </Badge>
               )}
-              
-              <div className="flex flex-wrap gap-2 mb-4">
-                {selectedPhoto.phase && (
-                  <Badge variant="secondary" className="text-xs">
-                    {selectedPhoto.phase}
-                  </Badge>
-                )}
-                {selectedPhoto.weather && (
-                  <Badge variant="outline" className="text-xs">
-                    <Cloud className="h-3 w-3 mr-1" />
-                    {selectedPhoto.weather}
-                  </Badge>
-                )}
-                {selectedPhoto.location && (
-                  <Badge variant="outline" className="text-xs">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {selectedPhoto.location}
-                  </Badge>
-                )}
-              </div>
+              {selectedPhoto.weather && (
+                <Badge variant="outline" className="text-xs">
+                  <Cloud className="h-3 w-3 mr-1" />
+                  {selectedPhoto.weather}
+                </Badge>
+              )}
+              {selectedPhoto.location && (
+                <Badge variant="outline" className="text-xs">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {selectedPhoto.location}
+                </Badge>
+              )}
+            </div>
 
-              <div className="flex items-center justify-between text-sm text-slate-500">
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  {format(new Date(selectedPhoto.createdAt), 'MMM d, yyyy h:mm a')}
-                </div>
-                <div className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  Uploaded by team
-                </div>
+            <div className="flex items-center justify-between text-sm text-slate-500">
+              <div className="flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                {format(new Date(selectedPhoto.createdAt), 'MMM d, yyyy h:mm a')}
+              </div>
+              <div className="flex items-center gap-1">
+                <User className="h-4 w-4" />
+                Uploaded by team
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
-    </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 }
