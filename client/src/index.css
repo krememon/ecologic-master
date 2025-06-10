@@ -19,18 +19,17 @@ html, body {
   overflow-x: hidden;
 }
 
-/* Force portrait orientation on mobile */
+/* Mobile dialog positioning */
 @media screen and (max-width: 768px) {
-  @media screen and (orientation: landscape) {
-    html {
-      transform: rotate(-90deg);
-      transform-origin: left top;
-      width: 100vh;
-      overflow-x: hidden;
-      position: absolute;
-      top: 100%;
-      left: 0;
-    }
+  [data-radix-dialog-content] {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 95vw !important;
+    max-width: 400px !important;
+    max-height: 90vh !important;
+    margin: 0 !important;
   }
 }
 
