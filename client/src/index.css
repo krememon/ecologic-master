@@ -19,25 +19,28 @@ html, body {
   overflow-x: hidden;
 }
 
-/* Smooth dialog animations */
+/* Smooth dialog animations with hardware acceleration */
 [data-radix-dialog-overlay] {
   background-color: rgba(0, 0, 0, 0.5);
-  transition: background-color 200ms ease-out;
+  transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity;
 }
 
 [data-radix-dialog-content] {
-  transition: all 200ms ease-out;
-  animation: dialogSlideIn 200ms ease-out;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  animation: dialogSlideIn 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes dialogSlideIn {
   from {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.96);
+    transform: translate3d(-50%, -48%, 0) scale3d(0.98, 0.98, 1);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate3d(-50%, -50%, 0) scale3d(1, 1, 1);
   }
 }
 
@@ -47,27 +50,28 @@ html, body {
     position: fixed !important;
     top: 50% !important;
     left: 50% !important;
-    transform: translate(-50%, -50%) !important;
+    transform: translate3d(-50%, -50%, 0) !important;
     width: 95vw !important;
     max-width: 400px !important;
     max-height: 90vh !important;
     margin: 0 !important;
-    transition: all 200ms ease-out !important;
+    will-change: transform, opacity !important;
+    backface-visibility: hidden !important;
   }
   
   @keyframes dialogSlideInMobile {
     from {
       opacity: 0;
-      transform: translate(-50%, -45%) scale(0.95);
+      transform: translate3d(-50%, -47%, 0) scale3d(0.97, 0.97, 1);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translate3d(-50%, -50%, 0) scale3d(1, 1, 1);
     }
   }
   
   [data-radix-dialog-content] {
-    animation: dialogSlideInMobile 200ms ease-out !important;
+    animation: dialogSlideInMobile 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
   }
 }
 
