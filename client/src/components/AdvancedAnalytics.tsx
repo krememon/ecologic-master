@@ -209,7 +209,7 @@ export function AdvancedAnalytics({ jobs, invoices, subcontractors, stats }: Ana
               <div key={index} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
-                    {member.name.split(' ').map(n => n[0]).join('')}
+                    {member.name.split(' ').map((n: string) => n[0]).join('')}
                   </div>
                   <div>
                     <h4 className="font-medium text-slate-900 dark:text-slate-100">{member.name}</h4>

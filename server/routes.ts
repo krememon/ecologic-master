@@ -10,7 +10,6 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import OpenAI from "openai";
-import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { aiScheduler } from "./ai-scheduler";
 
 const scryptAsync = promisify(scrypt);
@@ -71,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             logo: null,
             primaryColor: "#3B82F6",
             secondaryColor: "#1E40AF",
-            ownerId: parseInt(user.id)
+            ownerId: user.id
           });
         }
       }
@@ -135,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logo,
         primaryColor,
         secondaryColor,
-        ownerId: parseInt(user.claims.sub)
+        ownerId: user.claims.sub
       });
       
       res.status(201).json(company);
