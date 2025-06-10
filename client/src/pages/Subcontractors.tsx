@@ -217,7 +217,7 @@ export default function Subcontractors() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+        <DialogContent className="w-[95vw] max-w-[400px] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Add New Subcontractor</DialogTitle>
           </DialogHeader>
@@ -227,7 +227,7 @@ export default function Subcontractors() {
 
       {/* Edit Subcontractor Dialog */}
       <Dialog open={!!editingSubcontractor} onOpenChange={(open) => !open && setEditingSubcontractor(null)}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+        <DialogContent className="w-[95vw] max-w-[400px] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Edit Subcontractor</DialogTitle>
           </DialogHeader>
