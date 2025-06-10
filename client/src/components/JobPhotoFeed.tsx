@@ -349,7 +349,7 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
       {/* Image Expansion Modal */}
       {selectedPhoto && (
         <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-auto">
             <DialogHeader className="p-6 pb-0">
               <DialogTitle className="text-left">
                 {selectedPhoto.title || "Job Site Photo"}
@@ -360,7 +360,8 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
                 <img
                   src={selectedPhoto.photoUrl}
                   alt={selectedPhoto.title || "Job site photo"}
-                  className="w-full max-h-[60vh] object-contain rounded-lg"
+                  className="w-auto h-auto max-w-none rounded-lg"
+                  style={{ maxWidth: 'calc(95vw - 3rem)', maxHeight: 'calc(95vh - 12rem)' }}
                 />
               </div>
               
