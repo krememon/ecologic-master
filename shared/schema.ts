@@ -178,6 +178,19 @@ export const jobPhotos = pgTable("job_photos", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").references(() => companies.id).notNull(),
+  jobId: integer("job_id").references(() => jobs.id).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentMethod: varchar("payment_method").notNull(), // cash, check, credit_card, bank_transfer, other
+  status: varchar("status").notNull().default("pending"), // pending, completed, failed, refunded
+  paidDate: timestamp("paid_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedCompanies: many(companies),
@@ -523,6 +536,9 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type JobPhoto = typeof jobPhotos.$inferSelect;
 export type InsertJobPhoto = z.infer<typeof insertJobPhotoSchema>;
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
 export type ApprovalWorkflow = typeof approvalWorkflows.$inferSelect;
 export type InsertApprovalWorkflow = z.infer<typeof insertApprovalWorkflowSchema>;
 export type ApprovalSignature = typeof approvalSignatures.$inferSelect;

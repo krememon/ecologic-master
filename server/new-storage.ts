@@ -96,6 +96,13 @@ export interface IStorage {
   createMessage(message: InsertMessage): Promise<Message>;
   markMessageAsRead(id: number): Promise<void>;
   
+  // Payment operations
+  getPayments(companyId: number): Promise<any[]>;
+  getPayment(id: number): Promise<Payment | undefined>;
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment>;
+  deletePayment(id: number): Promise<void>;
+  
   // Dashboard statistics
   getDashboardStats(companyId: number): Promise<any>;
 }
