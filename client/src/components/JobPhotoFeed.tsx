@@ -96,10 +96,6 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      toast({
-        title: "Success",
-        description: "Photo uploaded successfully",
-      });
     },
     onError: (error: Error) => {
       toast({
