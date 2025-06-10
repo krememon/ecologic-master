@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./new-storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import multer from "multer";
@@ -206,6 +207,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // AI Job Scope Analysis
+  app.post('/api/ai/analyze-job-scope', isAuthenticated, async (req: any, res) => {
+    try {
+      const { description } = req.body;
+      
+      if (!description || description.trim().length < 10) {
+        return res.status(400).json({ message: "Please provide a detailed job description (minimum 10 characters)" });
+      }
+
+      const analysis = await aiScopeAnalyzer.analyzeJobScope(description);
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analyzing job scope:", error);
+      res.status(500).json({ message: "Failed to analyze job scope. Please try again." });
+    }
+  });
+
+  // Subcontractors routes
+  app.get('/api/subcontractors', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const subcontractors = await storage.getSubcontractors(company.id);
+      res.json(subcontractors);
+    } catch (error) {
+      console.error("Error fetching subcontractors:", error);
+      res.status(500).json({ message: "Failed to fetch subcontractors" });
+    }
+  });
+
+  app.post('/api/subcontractors', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const subcontractor = await storage.createSubcontractor({
+        ...req.body,
+        companyId: company.id
+      });
+      
+      res.status(201).json(subcontractor);
+    } catch (error) {
+      console.error("Error creating subcontractor:", error);
+      res.status(500).json({ message: "Failed to create subcontractor" });
+    }
+  });
+
+  // Jobs routes
+  app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobs = await storage.getJobs(company.id);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching jobs:", error);
+      res.status(500).json({ message: "Failed to fetch jobs" });
+    }
+  });
+
+  app.post('/api/jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const job = await storage.createJob({
+        ...req.body,
+        companyId: company.id
+      });
+      
+      res.status(201).json(job);
+    } catch (error) {
+      console.error("Error creating job:", error);
+      res.status(500).json({ message: "Failed to create job" });
     }
   });
 

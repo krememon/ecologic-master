@@ -601,6 +601,10 @@ export default function Dashboard() {
     queryKey: ["/api/invoices"],
   });
 
+  const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery<any[]>({
+    queryKey: ["/api/subcontractors"],
+  });
+
   // Mutations for creating new items
   const createJobMutation = useMutation({
     mutationFn: async (jobData: any) => {
@@ -716,6 +720,10 @@ export default function Dashboard() {
   };
 
   const recentJobs = jobs?.slice(0, 4) || [];
+
+  const handleCreateJob = (jobData: any) => {
+    createJobMutation.mutate(jobData);
+  };
 
   return (
     <div className="p-6 space-y-6">
