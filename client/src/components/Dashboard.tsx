@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { 
@@ -22,9 +23,16 @@ import {
   FileText,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  BarChart3,
+  Brain,
+  Target,
+  Zap
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AdvancedAnalytics } from "./AdvancedAnalytics";
+import { ProjectTimeline } from "./ProjectTimeline";
+import { AIJobScoping } from "./AIJobScoping";
 
 // Recent Alerts Component
 function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) {
@@ -711,8 +719,54 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Business Dashboard</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">Comprehensive project management and analytics</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Dialog open={isJobDialogOpen} onOpenChange={setIsJobDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                New Job
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Job</DialogTitle>
+              </DialogHeader>
+              <CreateJobForm onSubmit={handleCreateJob} isLoading={createJobMutation.isPending} />
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Premium Tabbed Interface */}
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex items-center gap-2">
+            <Target className="w-4 h-4" />
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Timeline
+          </TabsTrigger>
+          <TabsTrigger value="ai-scoping" className="flex items-center gap-2">
+            <Brain className="w-4 h-4" />
+            AI Scoping
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {/* Stats Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="border-slate-200 dark:border-slate-800">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -995,6 +1049,28 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <AdvancedAnalytics 
+            jobs={jobs} 
+            invoices={invoices} 
+            subcontractors={subcontractors} 
+            stats={stats}
+          />
+        </TabsContent>
+
+        <TabsContent value="timeline" className="space-y-6">
+          <ProjectTimeline 
+            jobs={jobs} 
+            subcontractors={subcontractors}
+          />
+        </TabsContent>
+
+        <TabsContent value="ai-scoping" className="space-y-6">
+          <AIJobScoping />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
