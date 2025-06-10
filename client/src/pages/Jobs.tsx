@@ -308,7 +308,7 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-3">
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-3 rounded-3xl border-0 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
