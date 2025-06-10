@@ -224,7 +224,7 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">${pendingPayments.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-yellow-600">${pendingPaymentsValue.toLocaleString()}</p>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
                 <Clock className="w-6 h-6 text-yellow-600" />
