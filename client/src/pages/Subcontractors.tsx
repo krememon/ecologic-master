@@ -50,49 +50,53 @@ function SubcontractorForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-none">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Name</label>
+        <label className="text-sm font-medium block">Name</label>
         <Input 
           placeholder="John Smith" 
           value={formData.name}
           onChange={(e) => setFormData({...formData, name: e.target.value})}
           required
+          className="w-full"
         />
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium">Email</label>
+        <label className="text-sm font-medium block">Email</label>
         <Input 
           type="email" 
           placeholder="john@contractor.com" 
           value={formData.email}
           onChange={(e) => setFormData({...formData, email: e.target.value})}
+          className="w-full"
         />
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium">Phone</label>
+        <label className="text-sm font-medium block">Phone</label>
         <Input 
           placeholder="(555) 123-4567" 
           value={formData.phone}
           onChange={(e) => setFormData({...formData, phone: e.target.value})}
+          className="w-full"
         />
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium">Skills & Notes</label>
+        <label className="text-sm font-medium block">Skills & Notes</label>
         <Textarea 
           placeholder="Plumbing, Electrical, Carpentry..." 
           value={formData.notes}
           onChange={(e) => setFormData({...formData, notes: e.target.value})}
+          className="w-full"
         />
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium">Availability Status</label>
+        <label className="text-sm font-medium block">Availability Status</label>
         <Select onValueChange={(value) => setFormData({...formData, isAvailable: value === "true"})} value={formData.isAvailable ? "true" : "false"}>
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="Select availability" />
           </SelectTrigger>
           <SelectContent>
@@ -227,7 +231,7 @@ export default function Subcontractors() {
 
       {/* Edit Subcontractor Dialog */}
       <Dialog open={!!editingSubcontractor} onOpenChange={(open) => !open && setEditingSubcontractor(null)}>
-        <DialogContent className="w-[95vw] max-w-[400px] rounded-2xl">
+        <DialogContent className="w-[95vw] max-w-[400px] rounded-2xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>Edit Subcontractor</DialogTitle>
           </DialogHeader>
