@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Upload, MapPin, Cloud, Calendar, User, Trash2 } from "lucide-react";
+import { Camera, Upload, MapPin, Cloud, Calendar, User, Trash2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 
 interface JobPhoto {
@@ -55,6 +55,7 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<JobPhoto | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [uploadForm, setUploadForm] = useState({
     title: "",
     description: "",
@@ -287,6 +288,7 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
                     onClick={() => {
                       console.log('Image clicked:', photo);
                       setSelectedPhoto(photo);
+                      setZoomLevel(1); // Reset zoom when opening new image
                     }}
                   />
                   {canUpload && (
@@ -354,19 +356,54 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
     {/* Image Expansion Modal */}
     {selectedPhoto && (
       <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-auto">
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0">
           <DialogHeader className="p-6 pb-0">
-            <DialogTitle className="text-left">
-              {selectedPhoto.title || "Job Site Photo"}
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-left">
+                {selectedPhoto.title || "Job Site Photo"}
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setZoomLevel(Math.max(0.5, zoomLevel - 0.25))}
+                  disabled={zoomLevel <= 0.5}
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-slate-600 min-w-[60px] text-center">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setZoomLevel(Math.min(3, zoomLevel + 0.25))}
+                  disabled={zoomLevel >= 3}
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setZoomLevel(1)}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </DialogHeader>
           <div className="p-6 pt-0">
-            <div className="relative mb-4">
+            <div className="relative mb-4 overflow-auto border rounded-lg" style={{ maxHeight: 'calc(95vh - 16rem)' }}>
               <img
                 src={selectedPhoto.photoUrl}
                 alt={selectedPhoto.title || "Job site photo"}
-                className="w-auto h-auto max-w-none rounded-lg"
-                style={{ maxWidth: 'calc(95vw - 3rem)', maxHeight: 'calc(95vh - 12rem)' }}
+                className="rounded-lg transition-transform duration-200 cursor-move"
+                style={{ 
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'center',
+                  maxWidth: 'none',
+                  maxHeight: 'none'
+                }}
               />
             </div>
             
