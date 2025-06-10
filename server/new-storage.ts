@@ -9,6 +9,7 @@ import {
   invoices,
   documents,
   messages,
+  payments,
   type User,
   type UpsertUser,
   type Company,
@@ -25,6 +26,8 @@ import {
   type InsertDocument,
   type Message,
   type InsertMessage,
+  type Payment,
+  type InsertPayment,
   type UserRole,
   type UserPermissions,
   defaultOwnerPermissions,
@@ -468,6 +471,56 @@ export class DatabaseStorage implements IStorage {
       .update(messages)
       .set({ isRead: true })
       .where(eq(messages.id, id));
+  }
+
+  // Payment operations
+  async getPayments(companyId: number): Promise<any[]> {
+    const result = await db
+      .select({
+        id: payments.id,
+        amount: payments.amount,
+        paymentMethod: payments.paymentMethod,
+        status: payments.status,
+        paidDate: payments.paidDate,
+        notes: payments.notes,
+        createdAt: payments.createdAt,
+        jobId: payments.jobId,
+        jobTitle: jobs.title,
+        clientName: clients.name,
+      })
+      .from(payments)
+      .innerJoin(jobs, eq(payments.jobId, jobs.id))
+      .leftJoin(clients, eq(jobs.clientId, clients.id))
+      .where(eq(payments.companyId, companyId))
+      .orderBy(desc(payments.createdAt));
+    
+    return result;
+  }
+
+  async getPayment(id: number): Promise<Payment | undefined> {
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+    return payment;
+  }
+
+  async createPayment(paymentData: InsertPayment): Promise<Payment> {
+    const [payment] = await db
+      .insert(payments)
+      .values(paymentData)
+      .returning();
+    return payment;
+  }
+
+  async updatePayment(id: number, paymentData: Partial<InsertPayment>): Promise<Payment> {
+    const [payment] = await db
+      .update(payments)
+      .set({ ...paymentData, updatedAt: new Date() })
+      .where(eq(payments.id, id))
+      .returning();
+    return payment;
+  }
+
+  async deletePayment(id: number): Promise<void> {
+    await db.delete(payments).where(eq(payments.id, id));
   }
 
   async getDashboardStats(companyId: number): Promise<any> {

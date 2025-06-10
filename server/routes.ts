@@ -304,6 +304,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Payments routes
+  app.get('/api/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const payments = await storage.getPayments(company.id);
+      res.json(payments);
+    } catch (error) {
+      console.error("Error fetching payments:", error);
+      res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post('/api/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const payment = await storage.createPayment({
+        ...req.body,
+        companyId: company.id
+      });
+      
+      res.status(201).json(payment);
+    } catch (error) {
+      console.error("Error creating payment:", error);
+      res.status(500).json({ message: "Failed to create payment" });
+    }
+  });
+
+  app.patch('/api/payments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const paymentId = parseInt(req.params.id);
+      const payment = await storage.updatePayment(paymentId, req.body);
+      res.json(payment);
+    } catch (error) {
+      console.error("Error updating payment:", error);
+      res.status(500).json({ message: "Failed to update payment" });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
