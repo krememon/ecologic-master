@@ -754,7 +754,7 @@ export default function Dashboard() {
 
       {/* Premium Tabbed Interface */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
             Overview
@@ -766,6 +766,10 @@ export default function Dashboard() {
           <TabsTrigger value="timeline" className="flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             Timeline
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4" />
+            Payments
           </TabsTrigger>
           <TabsTrigger value="ai-scoping" className="flex items-center gap-2">
             <Brain className="w-4 h-4" />
@@ -1073,6 +1077,12 @@ export default function Dashboard() {
           <ProjectTimeline 
             jobs={jobs} 
             subcontractors={subcontractors}
+          />
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-6">
+          <PaymentsTracker 
+            jobs={jobs}
           />
         </TabsContent>
 
