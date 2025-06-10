@@ -550,42 +550,87 @@ export class DatabaseStorage implements IStorage {
 
   async getDashboardStats(companyId: number): Promise<any> {
     try {
-      const activeJobsCount = await db
-        .select({ count: sql`count(*)` })
-        .from(jobs)
-        .where(and(eq(jobs.companyId, companyId), eq(jobs.status, "active")));
+      // Get job statistics
+      const allJobs = await this.getJobs(companyId);
+      const activeJobs = allJobs.filter(job => job.status === "active").length;
+      const completedJobs = allJobs.filter(job => job.status === "completed").length;
+      const totalJobs = allJobs.length;
 
-      // Get all invoices and calculate total manually
+      // Get invoice statistics
       const allInvoices = await this.getInvoices(companyId);
-      const totalInvoiceAmount = allInvoices.reduce((sum, invoice) => {
-        return sum + parseFloat(invoice.amount || '0');
-      }, 0);
+      const outstandingInvoices = allInvoices
+        .filter(invoice => invoice.status === "sent" || invoice.status === "overdue")
+        .reduce((sum, invoice) => sum + parseFloat(invoice.amount || '0'), 0);
       
-      console.log("Manual calculation - Invoice amounts:", allInvoices.map(inv => inv.amount));
-      console.log("Manual calculation - Total:", totalInvoiceAmount);
+      const paidInvoices = allInvoices
+        .filter(invoice => invoice.status === "paid")
+        .reduce((sum, invoice) => sum + parseFloat(invoice.amount || '0'), 0);
 
+      // Calculate monthly revenue from completed payments
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      
+      const allPayments = await this.getPayments(companyId);
+      const monthlyRevenue = allPayments
+        .filter(payment => {
+          if (!payment.paidDate) return false;
+          const paymentDate = new Date(payment.paidDate);
+          return paymentDate.getMonth() === currentMonth && 
+                 paymentDate.getFullYear() === currentYear &&
+                 payment.status === "completed";
+        })
+        .reduce((sum, payment) => sum + parseFloat(payment.amount || '0'), 0);
+
+      // Get subcontractor count
       const availableSubcontractorsCount = await db
         .select({ count: sql`count(*)` })
         .from(subcontractors)
         .where(eq(subcontractors.companyId, companyId));
 
-      // Skip monthly revenue calculation for now
+      // Calculate total revenue
+      const totalRevenue = paidInvoices + allPayments
+        .filter(payment => payment.status === "completed")
+        .reduce((sum, payment) => sum + parseFloat(payment.amount || '0'), 0);
+
+      // Calculate profit margin (assuming 30% average margin)
+      const estimatedProfit = totalRevenue * 0.3;
+
       const result = {
-        activeJobs: Number(activeJobsCount[0].count) || 0,
-        outstandingInvoices: totalInvoiceAmount,
+        activeJobs,
+        completedJobs,
+        totalJobs,
+        outstandingInvoices,
+        paidInvoices,
+        totalRevenue,
+        monthlyRevenue,
+        estimatedProfit,
         availableSubcontractors: Number(availableSubcontractorsCount[0].count) || 0,
-        monthlyRevenue: 0,
+        totalPayments: allPayments.length,
+        pendingPayments: allPayments.filter(p => p.status === "pending").length,
+        // Analytics ratios
+        jobCompletionRate: totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : 0,
+        averageJobValue: totalJobs > 0 ? Math.round(totalRevenue / totalJobs) : 0,
+        paymentCollectionRate: allInvoices.length > 0 ? Math.round((allInvoices.filter(i => i.status === "paid").length / allInvoices.length) * 100) : 0,
       };
       
-      console.log("Final dashboard result:", result);
       return result;
     } catch (error) {
       console.error("Error in getDashboardStats:", error);
       return {
         activeJobs: 0,
+        completedJobs: 0,
+        totalJobs: 0,
         outstandingInvoices: 0,
-        availableSubcontractors: 0,
+        paidInvoices: 0,
+        totalRevenue: 0,
         monthlyRevenue: 0,
+        estimatedProfit: 0,
+        availableSubcontractors: 0,
+        totalPayments: 0,
+        pendingPayments: 0,
+        jobCompletionRate: 0,
+        averageJobValue: 0,
+        paymentCollectionRate: 0,
       };
     }
   }

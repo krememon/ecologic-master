@@ -775,86 +775,142 @@ export default function Dashboard() {
         <TabsContent value="overview" className="space-y-6">
           {/* Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-slate-200 dark:border-slate-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Active Jobs</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
-                  {stats?.activeJobs || 0}
-                </p>
-                <p className="text-sm text-green-600 dark:text-green-400 mt-2 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-1" />
-                  <span>+12% from last month</span>
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
-                <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Active Jobs</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      {stats?.activeJobs || 0}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      {stats?.totalJobs || 0} total • {stats?.jobCompletionRate || 0}% completion rate
+                    </p>
+                  </div>
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
+                    <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="border-slate-200 dark:border-slate-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Outstanding Invoices</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
-                  ${(stats?.outstandingInvoices || 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-orange-600 dark:text-orange-400 mt-2 flex items-center">
-                  <AlertTriangle className="w-4 h-4 mr-1" />
-                  <span>Pending payment</span>
-                </p>
-              </div>
-              <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full">
-                <DollarSign className="w-6 h-6 text-orange-600 dark:text-orange-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Revenue</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      ${stats?.totalRevenue?.toLocaleString() || 0}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      ${stats?.monthlyRevenue?.toLocaleString() || 0} this month
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                    <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="border-slate-200 dark:border-slate-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Available Subcontractors</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
-                  {stats?.availableSubcontractors || 0}
-                </p>
-                <p className="text-sm text-green-600 dark:text-green-400 mt-2 flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                  <span>15 rated 5 stars</span>
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
-                <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Outstanding Invoices</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      ${(stats?.outstandingInvoices || 0).toLocaleString()}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      {stats?.paymentCollectionRate || 0}% collection rate
+                    </p>
+                  </div>
+                  <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-full">
+                    <FileText className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="border-slate-200 dark:border-slate-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">This Month's Revenue</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
-                  ${stats?.monthlyRevenue?.toLocaleString() || 0}
-                </p>
-                <p className="text-sm text-green-600 dark:text-green-400 mt-2 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-1" />
-                  <span>+18% vs last month</span>
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
-                <DollarSign className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Available Subcontractors</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      {stats?.availableSubcontractors || 0}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      Ready to assign to projects
+                    </p>
+                  </div>
+                  <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
+                    <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Additional Analytics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Estimated Profit</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      ${stats?.estimatedProfit?.toLocaleString() || 0}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      30% margin average
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-100 dark:bg-green-900 rounded-full">
+                    <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Average Job Value</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      ${stats?.averageJobValue?.toLocaleString() || 0}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      Per completed project
+                    </p>
+                  </div>
+                  <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
+                    <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 dark:border-slate-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Payment Tracking</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
+                      {stats?.totalPayments || 0}
+                    </p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                      {stats?.pendingPayments || 0} pending payments
+                    </p>
+                  </div>
+                  <div className="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-full">
+                    <DollarSign className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

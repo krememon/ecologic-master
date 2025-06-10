@@ -54,6 +54,10 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
     queryKey: ["/api/payments"],
   });
 
+  const { data: stats } = useQuery<any>({
+    queryKey: ["/api/dashboard/stats"],
+  });
+
   const form = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: {
@@ -161,9 +165,10 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
     return matchesStatus && (searchTerm === "" || matchesSearch);
   });
 
-  const totalPayments = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-  const completedPayments = payments.filter(p => p.status === "completed").reduce((sum, payment) => sum + (payment.amount || 0), 0);
-  const pendingPayments = payments.filter(p => p.status === "pending").reduce((sum, payment) => sum + (payment.amount || 0), 0);
+  // Use real dashboard statistics instead of calculated values
+  const totalPaymentsValue = stats?.totalRevenue || 0;
+  const completedPaymentsValue = stats?.paidInvoices || 0;
+  const pendingPaymentsValue = stats?.outstandingInvoices || 0;
 
   if (isLoading) {
     return (
@@ -191,7 +196,7 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Payments</p>
-                <p className="text-2xl font-bold text-gray-900">${totalPayments.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">${totalPaymentsValue.toLocaleString()}</p>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-blue-600" />
@@ -205,7 +210,7 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-green-600">${completedPayments.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-green-600">${completedPaymentsValue.toLocaleString()}</p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />
