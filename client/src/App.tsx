@@ -18,6 +18,7 @@ import Clients from "@/pages/Clients";
 import Invoicing from "@/pages/Invoicing";
 import Documents from "@/pages/Documents";
 import Messages from "@/pages/Messages";
+import PaymentsPage from "@/pages/payments-page";
 import AIScheduling from "@/pages/AIScheduling";
 import Settings from "@/pages/Settings";
 import Approvals from "@/pages/Approvals";
@@ -55,6 +56,7 @@ function Router() {
         <Route path="/subcontractors" component={Subcontractors} />
         <Route path="/clients" component={Clients} />
         <Route path="/invoicing" component={Invoicing} />
+        <Route path="/payments" component={PaymentsPage} />
         <Route path="/documents" component={Documents} />
         <Route path="/messages" component={Messages} />
         <Route path="/ai-scheduling" component={AIScheduling} />
