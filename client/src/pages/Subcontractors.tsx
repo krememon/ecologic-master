@@ -292,16 +292,22 @@ export default function Subcontractors() {
                   </p>
                 )}
                 {subcontractor.email && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <a 
+                    href={`mailto:${subcontractor.email}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
                     <Mail className="h-4 w-4" />
                     {subcontractor.email}
-                  </div>
+                  </a>
                 )}
                 {subcontractor.phone && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <a 
+                    href={`tel:${subcontractor.phone}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
                     <Phone className="h-4 w-4" />
                     {subcontractor.phone}
-                  </div>
+                  </a>
                 )}
                 {subcontractor.rating && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
