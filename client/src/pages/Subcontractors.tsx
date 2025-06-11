@@ -41,8 +41,12 @@ function SubcontractorForm({
     console.log("Simple form submitted with data:", formData);
     
     const processedData = {
-      ...formData,
-      skills: formData.notes ? formData.notes.split(',').map(skill => skill.trim()).filter(Boolean) : []
+      name: formData.name,
+      email: formData.email || null,
+      phone: formData.phone || null,
+      skills: formData.notes ? formData.notes.split(',').map((skill) => skill.trim()).filter(Boolean) : [],
+      isAvailable: formData.isAvailable,
+      notes: null // Remove notes field since we're using skills array
     };
     
     console.log("Processed data:", processedData);
@@ -282,9 +286,9 @@ export default function Subcontractors() {
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-2">
-                {subcontractor.skills && (
+                {subcontractor.skills && subcontractor.skills.length > 0 && (
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {subcontractor.skills}
+                    {Array.isArray(subcontractor.skills) ? subcontractor.skills.join(', ') : subcontractor.skills}
                   </p>
                 )}
                 {subcontractor.email && (
