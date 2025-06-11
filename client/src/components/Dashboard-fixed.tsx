@@ -133,29 +133,12 @@ function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) 
 
 export default function Dashboard() {
   const { toast } = useToast();
-  const [isJobDialogOpen, setIsJobDialogOpen] = useState(false);
 
   // Data queries
   const { data: jobs = [] } = useQuery({ queryKey: ["/api/jobs"] });
   const { data: invoices = [] } = useQuery({ queryKey: ["/api/invoices"] });
   const { data: subcontractors = [] } = useQuery({ queryKey: ["/api/subcontractors"] });
   const { data: stats = {} } = useQuery({ queryKey: ["/api/dashboard/stats"] });
-
-  const createJobMutation = useMutation({
-    mutationFn: async (jobData: any) => {
-      const res = await apiRequest("POST", "/api/jobs", jobData);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      setIsJobDialogOpen(false);
-      toast({ title: "Success", description: "Job created successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -201,89 +184,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Business Dashboard</h1>
           <p className="text-slate-600 dark:text-slate-400 mt-1">Comprehensive project management and analytics</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Dialog open={isJobDialogOpen} onOpenChange={setIsJobDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" />
-                New Job
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Job</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target as HTMLFormElement);
-                handleCreateJob({
-                  title: formData.get('title'),
-                  description: formData.get('description'),
-                  startDate: formData.get('startDate'),
-                  endDate: formData.get('endDate'),
-                  budget: parseFloat(formData.get('budget') as string) || 0,
-                  priority: formData.get('priority'),
-                  status: formData.get('status')
-                });
-              }} className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Job Title</Label>
-                  <Input name="title" placeholder="Enter job title" required />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea name="description" placeholder="Job description" rows={3} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="startDate">Start Date</Label>
-                    <Input name="startDate" type="date" />
-                  </div>
-                  <div>
-                    <Label htmlFor="endDate">End Date</Label>
-                    <Input name="endDate" type="date" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="budget">Budget</Label>
-                  <Input name="budget" type="number" step="0.01" placeholder="0.00" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="priority">Priority</Label>
-                    <Select name="priority" defaultValue="medium">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="status">Status</Label>
-                    <Select name="status" defaultValue="planning">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="planning">Planning</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={createJobMutation.isPending}>
-                  {createJobMutation.isPending ? "Creating..." : "Create Job"}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+
       </div>
 
       {/* Premium Tabbed Interface */}
