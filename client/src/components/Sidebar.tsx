@@ -137,7 +137,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
               : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
           )}>
             <Settings className="w-4 h-4" />
-            <span>Settings</span>
+            <span>{t('navigation.settings')}</span>
           </button>
         </Link>
         
