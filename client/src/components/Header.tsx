@@ -2,6 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
+import LanguageSelector from "./LanguageSelector";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface HeaderProps {
   title: string;
@@ -37,6 +39,11 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
             </p>
           )}
         </div>
+      </div>
+      
+      <div className="flex items-center space-x-4">
+        <LanguageSelector variant="button" showLabel={false} />
+        <ThemeToggle />
       </div>
     </header>
   );

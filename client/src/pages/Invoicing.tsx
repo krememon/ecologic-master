@@ -14,8 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ErrorBoundary, InvoiceErrorFallback } from "@/components/ErrorBoundary";
+import { useTranslation } from "react-i18next";
 
 function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   
   // Fetch clients for selection
