@@ -478,15 +478,26 @@ export default function Clients() {
                   </a>
                 )}
                 {client.address && (
-                  <a 
-                    href={`https://maps.google.com/?q=${encodeURIComponent(client.address)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  <button
+                    onClick={() => {
+                      const address = encodeURIComponent(client.address);
+                      // Try to open with device's default maps app
+                      if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
+                        // iOS - opens in Apple Maps by default, or user's preferred maps app
+                        window.open(`maps://maps.apple.com/?q=${address}`, '_self');
+                      } else if (navigator.userAgent.includes('Android')) {
+                        // Android - opens in default maps app (Google Maps, Waze, etc.)
+                        window.open(`geo:0,0?q=${address}`, '_self');
+                      } else {
+                        // Desktop/other - fallback to Google Maps
+                        window.open(`https://maps.google.com/?q=${address}`, '_blank');
+                      }
+                    }}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left"
                   >
                     <MapPin className="h-4 w-4" />
                     {client.address}
-                  </a>
+                  </button>
                 )}
                 {client.notes && (
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
