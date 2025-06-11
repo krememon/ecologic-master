@@ -460,16 +460,22 @@ export default function Clients() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {client.email && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <a 
+                    href={`mailto:${client.email}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
                     <Mail className="h-4 w-4" />
                     {client.email}
-                  </div>
+                  </a>
                 )}
                 {client.phone && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <a 
+                    href={`tel:${client.phone}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
                     <Phone className="h-4 w-4" />
                     {client.phone}
-                  </div>
+                  </a>
                 )}
                 {client.address && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
