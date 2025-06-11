@@ -16,6 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
 
 function SubcontractorForm({ 
   onSubmit, 
@@ -28,6 +29,7 @@ function SubcontractorForm({
   initialData?: any;
   isEdit?: boolean;
 }) {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
     email: initialData?.email || "",
@@ -44,7 +46,7 @@ function SubcontractorForm({
       name: formData.name,
       email: formData.email || null,
       phone: formData.phone || null,
-      skills: formData.notes ? formData.notes.split(',').map((skill) => skill.trim()).filter(Boolean) : [],
+      skills: formData.notes ? formData.notes.split(',').map((skill: string) => skill.trim()).filter(Boolean) : [],
       isAvailable: formData.isAvailable,
       notes: null // Remove notes field since we're using skills array
     };

@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 type ClientFormData = z.infer<typeof insertClientSchema>;
 
 export default function Clients() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -194,14 +195,14 @@ export default function Clients() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Clients</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage your client relationships and contact information</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('clients.title')}</h1>
+        <p className="text-slate-600 dark:text-slate-400">{t('clients.subtitle')}</p>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add New Client</DialogTitle>
+            <DialogTitle>{t('clients.addClient')}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))} className="space-y-4">
@@ -210,9 +211,9 @@ export default function Clients() {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Client Name</FormLabel>
+                    <FormLabel>{t('clients.fields.name')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter client name or company" {...field} />
+                      <Input placeholder={t('clients.fields.name')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -225,9 +226,9 @@ export default function Clients() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel>{t('clients.fields.email')}</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="client@example.com" {...field} value={field.value || ""} />
+                        <Input type="email" placeholder={t('clients.fields.email')} {...field} value={field.value || ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -239,9 +240,9 @@ export default function Clients() {
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone</FormLabel>
+                      <FormLabel>{t('clients.fields.phone')}</FormLabel>
                       <FormControl>
-                        <Input placeholder="(555) 123-4567" {...field} value={field.value || ""} />
+                        <Input placeholder={t('clients.fields.phone')} {...field} value={field.value || ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -254,9 +255,9 @@ export default function Clients() {
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>{t('clients.fields.address')}</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Enter client address" {...field} value={field.value || ""} />
+                      <Textarea placeholder={t('clients.fields.address')} {...field} value={field.value || ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -268,9 +269,9 @@ export default function Clients() {
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Notes</FormLabel>
+                    <FormLabel>{t('clients.fields.notes')}</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Any additional notes about this client" {...field} value={field.value || ""} />
+                      <Textarea placeholder={t('clients.fields.notes')} {...field} value={field.value || ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -279,10 +280,10 @@ export default function Clients() {
               
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" disabled={createClientMutation.isPending}>
-                  {createClientMutation.isPending ? "Creating..." : "Create Client"}
+                  {createClientMutation.isPending ? t('common.loading') : t('clients.addClient')}
                 </Button>
               </div>
             </form>
