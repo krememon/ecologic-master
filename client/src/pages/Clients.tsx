@@ -478,10 +478,15 @@ export default function Clients() {
                   </a>
                 )}
                 {client.address && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <a 
+                    href={`https://maps.google.com/?q=${encodeURIComponent(client.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
                     <MapPin className="h-4 w-4" />
                     {client.address}
-                  </div>
+                  </a>
                 )}
                 {client.notes && (
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
