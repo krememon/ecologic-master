@@ -17,6 +17,7 @@ import { z } from "zod";
 import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useTranslation } from "react-i18next";
 
 type ClientFormData = z.infer<typeof insertClientSchema>;
 

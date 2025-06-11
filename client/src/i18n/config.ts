@@ -9,7 +9,7 @@ const resources = {
       navigation: {
         home: "Home",
         jobs: "Jobs",
-        subcontractors: "Subcontractors",
+        subcontractors: "Subcontractors", 
         clients: "Clients",
         invoicing: "Invoicing",
         documents: "Documents",
@@ -22,11 +22,22 @@ const resources = {
         title: "Dashboard",
         welcome: "Welcome back",
         activeJobs: "Active Jobs",
+        completedJobs: "Completed Jobs",
         outstandingInvoices: "Outstanding Invoices",
-        pendingApprovals: "Pending Approvals",
+        pendingApprovals: "Pending Approvals", 
         totalRevenue: "Total Revenue",
         recentActivity: "Recent Activity",
-        quickActions: "Quick Actions"
+        quickActions: "Quick Actions",
+        recentAlerts: "Recent Alerts",
+        analytics: "Analytics",
+        availableSubcontractors: "Available Subcontractors",
+        overdueInvoices: "Overdue Invoices",
+        jobCompletionRate: "Job Completion Rate",
+        averageProjectValue: "Average Project Value",
+        monthlyRevenue: "Monthly Revenue",
+        clientSatisfaction: "Client Satisfaction",
+        noRecentActivity: "No recent activity",
+        viewAll: "View All"
       },
       jobs: {
         title: "Jobs",
@@ -34,7 +45,7 @@ const resources = {
         addJob: "Add Job",
         status: {
           pending: "Pending",
-          inProgress: "In Progress",
+          inProgress: "In Progress", 
           completed: "Completed",
           cancelled: "Cancelled"
         },
@@ -53,6 +64,90 @@ const resources = {
           priority: "Priority",
           client: "Client"
         }
+      },
+      clients: {
+        title: "Clients",
+        subtitle: "Manage your client relationships and contact information",
+        addClient: "Add New Client",
+        editClient: "Edit Client", 
+        deleteClient: "Delete Client",
+        deleteConfirm: "Are you sure you want to delete this client? This action cannot be undone.",
+        noClients: "No clients yet",
+        noClientsDescription: "Start building your client base by adding your first client.",
+        addFirstClient: "Add Your First Client",
+        fields: {
+          name: "Company Name",
+          contactPerson: "Contact Person",
+          email: "Email Address",
+          phone: "Phone Number",
+          address: "Address",
+          notes: "Notes"
+        },
+        created: "Added",
+        contactInfo: "Contact Information"
+      },
+      subcontractors: {
+        title: "Subcontractors",
+        subtitle: "Manage your network of skilled subcontractors",
+        addSubcontractor: "Add New Subcontractor",
+        editSubcontractor: "Edit Subcontractor",
+        deleteSubcontractor: "Delete Subcontractor", 
+        deleteConfirm: "Are you sure you want to delete this subcontractor? This action cannot be undone.",
+        noSubcontractors: "No subcontractors yet",
+        noSubcontractorsDescription: "Build your network by adding trusted subcontractors.",
+        addFirstSubcontractor: "Add Your First Subcontractor",
+        fields: {
+          name: "Name",
+          email: "Email",
+          phone: "Phone",
+          skills: "Skills & Notes",
+          availability: "Availability Status"
+        },
+        availability: {
+          available: "Available",
+          busy: "Busy"
+        },
+        rating: "rating",
+        skillsPlaceholder: "Plumbing, Electrical, Carpentry..."
+      },
+      invoicing: {
+        title: "Invoicing",
+        subtitle: "Create and manage invoices for your projects",
+        addInvoice: "Create New Invoice",
+        scanInvoice: "Scan Invoice with AI",
+        takePhoto: "Take Photo",
+        uploadImage: "Upload Image",
+        analyzing: "Analyzing invoice with AI...",
+        scanSuccess: "Invoice Scanned Successfully",
+        scanSuccessDescription: "Invoice details have been automatically filled",
+        scanFailed: "Scan Failed",
+        cameraError: "Camera Error",
+        cameraErrorDescription: "Could not access camera. Please try uploading an image instead.",
+        capture: "Capture",
+        fields: {
+          invoiceNumber: "Invoice Number",
+          client: "Client",
+          amount: "Amount",
+          issueDate: "Issue Date",
+          dueDate: "Due Date",
+          notes: "Notes",
+          status: "Status"
+        },
+        status: {
+          pending: "Pending",
+          paid: "Paid",
+          overdue: "Overdue",
+          cancelled: "Cancelled"
+        },
+        clientOptional: "(Optional)",
+        notesPlaceholder: "Payment terms and additional notes...",
+        creating: "Creating...",
+        createInvoice: "Create Invoice",
+        noClient: "No client",
+        selectClient: "Select a client",
+        amountRequired: "Amount is required",
+        paymentOverdue: "Payment Overdue",
+        daysOverdue: "days overdue"
       },
       settings: {
         title: "Settings",
@@ -88,7 +183,32 @@ const resources = {
         search: "Search",
         filter: "Filter",
         sort: "Sort",
-        actions: "Actions"
+        actions: "Actions",
+        close: "Close",
+        submit: "Submit",
+        upload: "Upload",
+        download: "Download",
+        view: "View",
+        copy: "Copy",
+        print: "Print",
+        email: "Email",
+        phone: "Phone",
+        address: "Address",
+        name: "Name",
+        description: "Description",
+        notes: "Notes",
+        date: "Date",
+        amount: "Amount",
+        status: "Status",
+        priority: "Priority",
+        total: "Total",
+        subtotal: "Subtotal",
+        tax: "Tax",
+        discount: "Discount",
+        yes: "Yes",
+        no: "No",
+        required: "Required",
+        optional: "Optional"
       }
     }
   },
@@ -110,11 +230,22 @@ const resources = {
         title: "Panel de Control",
         welcome: "Bienvenido de nuevo",
         activeJobs: "Trabajos Activos",
+        completedJobs: "Trabajos Completados",
         outstandingInvoices: "Facturas Pendientes",
         pendingApprovals: "Aprobaciones Pendientes",
         totalRevenue: "Ingresos Totales",
         recentActivity: "Actividad Reciente",
-        quickActions: "Acciones Rápidas"
+        quickActions: "Acciones Rápidas",
+        recentAlerts: "Alertas Recientes",
+        analytics: "Analíticas",
+        availableSubcontractors: "Subcontratistas Disponibles",
+        overdueInvoices: "Facturas Vencidas",
+        jobCompletionRate: "Tasa de Finalización de Trabajos",
+        averageProjectValue: "Valor Promedio del Proyecto",
+        monthlyRevenue: "Ingresos Mensuales",
+        clientSatisfaction: "Satisfacción del Cliente",
+        noRecentActivity: "No hay actividad reciente",
+        viewAll: "Ver Todo"
       },
       jobs: {
         title: "Trabajos",
@@ -141,6 +272,90 @@ const resources = {
           priority: "Prioridad",
           client: "Cliente"
         }
+      },
+      clients: {
+        title: "Clientes",
+        subtitle: "Gestiona las relaciones con tus clientes e información de contacto",
+        addClient: "Agregar Nuevo Cliente",
+        editClient: "Editar Cliente",
+        deleteClient: "Eliminar Cliente",
+        deleteConfirm: "¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer.",
+        noClients: "No hay clientes aún",
+        noClientsDescription: "Comienza a construir tu base de clientes agregando tu primer cliente.",
+        addFirstClient: "Agregar Tu Primer Cliente",
+        fields: {
+          name: "Nombre de la Empresa",
+          contactPerson: "Persona de Contacto",
+          email: "Dirección de Correo",
+          phone: "Número de Teléfono",
+          address: "Dirección",
+          notes: "Notas"
+        },
+        created: "Agregado",
+        contactInfo: "Información de Contacto"
+      },
+      subcontractors: {
+        title: "Subcontratistas",
+        subtitle: "Gestiona tu red de subcontratistas especializados",
+        addSubcontractor: "Agregar Nuevo Subcontratista",
+        editSubcontractor: "Editar Subcontratista",
+        deleteSubcontractor: "Eliminar Subcontratista",
+        deleteConfirm: "¿Estás seguro de que quieres eliminar este subcontratista? Esta acción no se puede deshacer.",
+        noSubcontractors: "No hay subcontratistas aún",
+        noSubcontractorsDescription: "Construye tu red agregando subcontratistas de confianza.",
+        addFirstSubcontractor: "Agregar Tu Primer Subcontratista",
+        fields: {
+          name: "Nombre",
+          email: "Correo",
+          phone: "Teléfono",
+          skills: "Habilidades y Notas",
+          availability: "Estado de Disponibilidad"
+        },
+        availability: {
+          available: "Disponible",
+          busy: "Ocupado"
+        },
+        rating: "calificación",
+        skillsPlaceholder: "Plomería, Eléctrico, Carpintería..."
+      },
+      invoicing: {
+        title: "Facturación",
+        subtitle: "Crea y gestiona facturas para tus proyectos",
+        addInvoice: "Crear Nueva Factura",
+        scanInvoice: "Escanear Factura con IA",
+        takePhoto: "Tomar Foto",
+        uploadImage: "Subir Imagen",
+        analyzing: "Analizando factura con IA...",
+        scanSuccess: "Factura Escaneada Exitosamente",
+        scanSuccessDescription: "Los detalles de la factura se han llenado automáticamente",
+        scanFailed: "Escaneo Fallido",
+        cameraError: "Error de Cámara",
+        cameraErrorDescription: "No se pudo acceder a la cámara. Por favor intenta subir una imagen en su lugar.",
+        capture: "Capturar",
+        fields: {
+          invoiceNumber: "Número de Factura",
+          client: "Cliente",
+          amount: "Cantidad",
+          issueDate: "Fecha de Emisión",
+          dueDate: "Fecha de Vencimiento",
+          notes: "Notas",
+          status: "Estado"
+        },
+        status: {
+          pending: "Pendiente",
+          paid: "Pagado",
+          overdue: "Vencido",
+          cancelled: "Cancelado"
+        },
+        clientOptional: "(Opcional)",
+        notesPlaceholder: "Términos de pago y notas adicionales...",
+        creating: "Creando...",
+        createInvoice: "Crear Factura",
+        noClient: "Sin cliente",
+        selectClient: "Seleccionar un cliente",
+        amountRequired: "La cantidad es requerida",
+        paymentOverdue: "Pago Vencido",
+        daysOverdue: "días vencidos"
       },
       settings: {
         title: "Configuración",
@@ -176,359 +391,32 @@ const resources = {
         search: "Buscar",
         filter: "Filtrar",
         sort: "Ordenar",
-        actions: "Acciones"
-      }
-    }
-  },
-  fr: {
-    translation: {
-      navigation: {
-        home: "Accueil",
-        jobs: "Travaux",
-        subcontractors: "Sous-traitants",
-        clients: "Clients",
-        invoicing: "Facturation",
-        documents: "Documents",
-        messages: "Messages",
-        aiScheduling: "Planification IA",
-        approvals: "Approbations",
-        settings: "Paramètres"
-      },
-      dashboard: {
-        title: "Tableau de Bord",
-        welcome: "Bon retour",
-        activeJobs: "Travaux Actifs",
-        outstandingInvoices: "Factures Impayées",
-        pendingApprovals: "Approbations en Attente",
-        totalRevenue: "Revenus Totaux",
-        recentActivity: "Activité Récente",
-        quickActions: "Actions Rapides"
-      },
-      jobs: {
-        title: "Travaux",
-        subtitle: "Gérez vos projets de construction et suivez les progrès",
-        addJob: "Ajouter un Travail",
-        status: {
-          pending: "En Attente",
-          inProgress: "En Cours",
-          completed: "Terminé",
-          cancelled: "Annulé"
-        },
-        priority: {
-          low: "Faible",
-          medium: "Moyenne",
-          high: "Élevée"
-        },
-        fields: {
-          title: "Titre du Travail",
-          description: "Description",
-          location: "Emplacement",
-          startDate: "Date de Début",
-          endDate: "Date de Fin",
-          status: "Statut",
-          priority: "Priorité",
-          client: "Client"
-        }
-      },
-      settings: {
-        title: "Paramètres",
-        subtitle: "Gérez votre compte et les préférences de l'application",
-        profile: "Profil",
-        company: "Entreprise",
-        appearance: "Apparence et Langue",
-        notifications: "Notifications",
-        security: "Sécurité",
-        language: "Langue",
-        darkMode: "Mode Sombre",
-        darkModeDescription: "Basculer entre les thèmes clair et sombre",
-        languageDescription: "Choisissez votre langue préférée pour l'interface",
-        updateProfile: "Mettre à jour le Profil",
-        updateCompany: "Mettre à jour l'Entreprise",
-        changePassword: "Changer le Mot de Passe"
-      },
-      common: {
-        save: "Enregistrer",
-        cancel: "Annuler",
-        edit: "Modifier",
-        delete: "Supprimer",
-        add: "Ajouter",
-        update: "Mettre à jour",
-        create: "Créer",
-        loading: "Chargement...",
-        error: "Erreur",
-        success: "Succès",
-        confirm: "Confirmer",
-        back: "Retour",
-        next: "Suivant",
-        previous: "Précédent",
-        search: "Rechercher",
-        filter: "Filtrer",
-        sort: "Trier",
-        actions: "Actions"
-      }
-    }
-  },
-  de: {
-    translation: {
-      navigation: {
-        home: "Startseite",
-        jobs: "Aufträge",
-        subcontractors: "Subunternehmer",
-        clients: "Kunden",
-        invoicing: "Rechnungsstellung",
-        documents: "Dokumente",
-        messages: "Nachrichten",
-        aiScheduling: "KI-Planung",
-        approvals: "Genehmigungen",
-        settings: "Einstellungen"
-      },
-      dashboard: {
-        title: "Dashboard",
-        welcome: "Willkommen zurück",
-        activeJobs: "Aktive Aufträge",
-        outstandingInvoices: "Offene Rechnungen",
-        pendingApprovals: "Ausstehende Genehmigungen",
-        totalRevenue: "Gesamtumsatz",
-        recentActivity: "Letzte Aktivität",
-        quickActions: "Schnellaktionen"
-      },
-      jobs: {
-        title: "Aufträge",
-        subtitle: "Verwalten Sie Ihre Bauprojekte und verfolgen Sie den Fortschritt",
-        addJob: "Auftrag hinzufügen",
-        status: {
-          pending: "Ausstehend",
-          inProgress: "In Bearbeitung",
-          completed: "Abgeschlossen",
-          cancelled: "Storniert"
-        },
-        priority: {
-          low: "Niedrig",
-          medium: "Mittel",
-          high: "Hoch"
-        },
-        fields: {
-          title: "Auftragstitel",
-          description: "Beschreibung",
-          location: "Standort",
-          startDate: "Startdatum",
-          endDate: "Enddatum",
-          status: "Status",
-          priority: "Priorität",
-          client: "Kunde"
-        }
-      },
-      settings: {
-        title: "Einstellungen",
-        subtitle: "Verwalten Sie Ihr Konto und Anwendungseinstellungen",
-        profile: "Profil",
-        company: "Unternehmen",
-        appearance: "Aussehen und Sprache",
-        notifications: "Benachrichtigungen",
-        security: "Sicherheit",
-        language: "Sprache",
-        darkMode: "Dunkler Modus",
-        darkModeDescription: "Zwischen hellen und dunklen Themen wechseln",
-        languageDescription: "Wählen Sie Ihre bevorzugte Sprache für die Benutzeroberfläche",
-        updateProfile: "Profil aktualisieren",
-        updateCompany: "Unternehmen aktualisieren",
-        changePassword: "Passwort ändern"
-      },
-      common: {
-        save: "Speichern",
-        cancel: "Abbrechen",
-        edit: "Bearbeiten",
-        delete: "Löschen",
-        add: "Hinzufügen",
-        update: "Aktualisieren",
-        create: "Erstellen",
-        loading: "Laden...",
-        error: "Fehler",
-        success: "Erfolg",
-        confirm: "Bestätigen",
-        back: "Zurück",
-        next: "Weiter",
-        previous: "Vorherige",
-        search: "Suchen",
-        filter: "Filtern",
-        sort: "Sortieren",
-        actions: "Aktionen"
-      }
-    }
-  },
-  it: {
-    translation: {
-      navigation: {
-        home: "Home",
-        jobs: "Lavori",
-        subcontractors: "Subappaltatori",
-        clients: "Clienti",
-        invoicing: "Fatturazione",
-        documents: "Documenti",
-        messages: "Messaggi",
-        aiScheduling: "Pianificazione AI",
-        approvals: "Approvazioni",
-        settings: "Impostazioni"
-      },
-      dashboard: {
-        title: "Dashboard",
-        welcome: "Bentornato",
-        activeJobs: "Lavori Attivi",
-        outstandingInvoices: "Fatture in Sospeso",
-        pendingApprovals: "Approvazioni in Attesa",
-        totalRevenue: "Ricavi Totali",
-        recentActivity: "Attività Recente",
-        quickActions: "Azioni Rapide"
-      },
-      jobs: {
-        title: "Lavori",
-        subtitle: "Gestisci i tuoi progetti di costruzione e monitora i progressi",
-        addJob: "Aggiungi Lavoro",
-        status: {
-          pending: "In Attesa",
-          inProgress: "In Corso",
-          completed: "Completato",
-          cancelled: "Annullato"
-        },
-        priority: {
-          low: "Bassa",
-          medium: "Media",
-          high: "Alta"
-        },
-        fields: {
-          title: "Titolo del Lavoro",
-          description: "Descrizione",
-          location: "Posizione",
-          startDate: "Data di Inizio",
-          endDate: "Data di Fine",
-          status: "Stato",
-          priority: "Priorità",
-          client: "Cliente"
-        }
-      },
-      settings: {
-        title: "Impostazioni",
-        subtitle: "Gestisci il tuo account e le preferenze dell'applicazione",
-        profile: "Profilo",
-        company: "Azienda",
-        appearance: "Aspetto e Lingua",
-        notifications: "Notifiche",
-        security: "Sicurezza",
-        language: "Lingua",
-        darkMode: "Modalità Scura",
-        darkModeDescription: "Passa tra temi chiari e scuri",
-        languageDescription: "Scegli la tua lingua preferita per l'interfaccia",
-        updateProfile: "Aggiorna Profilo",
-        updateCompany: "Aggiorna Azienda",
-        changePassword: "Cambia Password"
-      },
-      common: {
-        save: "Salva",
-        cancel: "Annulla",
-        edit: "Modifica",
-        delete: "Elimina",
-        add: "Aggiungi",
-        update: "Aggiorna",
-        create: "Crea",
-        loading: "Caricamento...",
-        error: "Errore",
-        success: "Successo",
-        confirm: "Conferma",
-        back: "Indietro",
-        next: "Avanti",
-        previous: "Precedente",
-        search: "Cerca",
-        filter: "Filtra",
-        sort: "Ordina",
-        actions: "Azioni"
-      }
-    }
-  },
-  pt: {
-    translation: {
-      navigation: {
-        home: "Início",
-        jobs: "Trabalhos",
-        subcontractors: "Subcontratados",
-        clients: "Clientes",
-        invoicing: "Faturamento",
-        documents: "Documentos",
-        messages: "Mensagens",
-        aiScheduling: "Agendamento IA",
-        approvals: "Aprovações",
-        settings: "Configurações"
-      },
-      dashboard: {
-        title: "Painel",
-        welcome: "Bem-vindo de volta",
-        activeJobs: "Trabalhos Ativos",
-        outstandingInvoices: "Faturas Pendentes",
-        pendingApprovals: "Aprovações Pendentes",
-        totalRevenue: "Receita Total",
-        recentActivity: "Atividade Recente",
-        quickActions: "Ações Rápidas"
-      },
-      jobs: {
-        title: "Trabalhos",
-        subtitle: "Gerencie seus projetos de construção e acompanhe o progresso",
-        addJob: "Adicionar Trabalho",
-        status: {
-          pending: "Pendente",
-          inProgress: "Em Andamento",
-          completed: "Concluído",
-          cancelled: "Cancelado"
-        },
-        priority: {
-          low: "Baixa",
-          medium: "Média",
-          high: "Alta"
-        },
-        fields: {
-          title: "Título do Trabalho",
-          description: "Descrição",
-          location: "Localização",
-          startDate: "Data de Início",
-          endDate: "Data de Fim",
-          status: "Status",
-          priority: "Prioridade",
-          client: "Cliente"
-        }
-      },
-      settings: {
-        title: "Configurações",
-        subtitle: "Gerencie sua conta e preferências do aplicativo",
-        profile: "Perfil",
-        company: "Empresa",
-        appearance: "Aparência e Idioma",
-        notifications: "Notificações",
-        security: "Segurança",
-        language: "Idioma",
-        darkMode: "Modo Escuro",
-        darkModeDescription: "Alternar entre temas claro e escuro",
-        languageDescription: "Escolha seu idioma preferido para a interface",
-        updateProfile: "Atualizar Perfil",
-        updateCompany: "Atualizar Empresa",
-        changePassword: "Alterar Senha"
-      },
-      common: {
-        save: "Salvar",
-        cancel: "Cancelar",
-        edit: "Editar",
-        delete: "Excluir",
-        add: "Adicionar",
-        update: "Atualizar",
-        create: "Criar",
-        loading: "Carregando...",
-        error: "Erro",
-        success: "Sucesso",
-        confirm: "Confirmar",
-        back: "Voltar",
-        next: "Próximo",
-        previous: "Anterior",
-        search: "Pesquisar",
-        filter: "Filtrar",
-        sort: "Classificar",
-        actions: "Ações"
+        actions: "Acciones",
+        close: "Cerrar",
+        submit: "Enviar",
+        upload: "Subir",
+        download: "Descargar",
+        view: "Ver",
+        copy: "Copiar",
+        print: "Imprimir",
+        email: "Correo",
+        phone: "Teléfono",
+        address: "Dirección",
+        name: "Nombre",
+        description: "Descripción",
+        notes: "Notas",
+        date: "Fecha",
+        amount: "Cantidad",
+        status: "Estado",
+        priority: "Prioridad",
+        total: "Total",
+        subtotal: "Subtotal",
+        tax: "Impuesto",
+        discount: "Descuento",
+        yes: "Sí",
+        no: "No",
+        required: "Requerido",
+        optional: "Opcional"
       }
     }
   }
