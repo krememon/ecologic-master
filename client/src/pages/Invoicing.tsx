@@ -1,12 +1,12 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, FileText, DollarSign, Calendar } from "lucide-react";
+import { Plus, FileText, DollarSign, Calendar, Camera, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertInvoiceSchema, type InsertInvoice, type Invoice } from "@shared/schema";
 
@@ -16,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ErrorBoundary, InvoiceErrorFallback } from "@/components/ErrorBoundary";
 
 function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => void; isLoading: boolean }) {
+  const { toast } = useToast();
+  
   // Fetch clients for selection
   const { data: clients = [] } = useQuery<any[]>({
     queryKey: ["/api/clients"],
@@ -30,6 +32,108 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => v
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     notes: "",
   });
+
+  const [isScanning, setIsScanning] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const scanInvoiceMutation = useMutation({
+    mutationFn: async (imageData: string) => {
+      const res = await apiRequest("POST", "/api/scan-invoice", { imageData });
+      return await res.json();
+    },
+    onSuccess: (extractedData) => {
+      setFormData({
+        ...formData,
+        ...extractedData,
+        invoiceNumber: extractedData.invoiceNumber || formData.invoiceNumber,
+      });
+      toast({
+        title: "Invoice Scanned Successfully",
+        description: "Invoice details have been automatically filled",
+      });
+      setIsScanning(false);
+      setCapturedImage(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Scan Failed",
+        description: error.message || "Could not extract invoice details",
+        variant: "destructive",
+      });
+      setIsScanning(false);
+    },
+  });
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setIsScanning(true);
+      }
+    } catch (error) {
+      toast({
+        title: "Camera Error",
+        description: "Could not access camera. Please try uploading an image instead.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        setCapturedImage(imageData);
+        
+        // Stop camera
+        const stream = video.srcObject as MediaStream;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Process the image
+        scanInvoiceMutation.mutate(imageData);
+      }
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageData = e.target?.result as string;
+        setCapturedImage(imageData);
+        scanInvoiceMutation.mutate(imageData);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const stopScanning = () => {
+    if (videoRef.current) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    }
+    setIsScanning(false);
+    setCapturedImage(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +158,67 @@ function CreateInvoiceForm({ onSubmit, isLoading }: { onSubmit: (data: any) => v
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Invoice Scanning Section */}
+      <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4">
+        <div className="text-center space-y-3">
+          <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Scan Invoice with AI
+          </h3>
+          
+          {isScanning ? (
+            <div className="space-y-3">
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                className="w-full max-w-sm mx-auto rounded-lg"
+              />
+              <div className="flex gap-2 justify-center">
+                <Button type="button" onClick={capturePhoto} disabled={scanInvoiceMutation.isPending}>
+                  <Camera className="w-4 h-4 mr-2" />
+                  Capture
+                </Button>
+                <Button type="button" variant="outline" onClick={stopScanning}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 justify-center">
+              <Button type="button" variant="outline" onClick={startCamera}>
+                <Camera className="w-4 h-4 mr-2" />
+                Take Photo
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={scanInvoiceMutation.isPending}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Image
+              </Button>
+            </div>
+          )}
+          
+          {scanInvoiceMutation.isPending && (
+            <p className="text-sm text-blue-600 dark:text-blue-400">
+              Analyzing invoice with AI...
+            </p>
+          )}
+          
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+      </div>
+
       <div>
         <label className="text-sm font-medium">Invoice Number</label>
         <Input 

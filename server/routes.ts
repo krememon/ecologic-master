@@ -470,6 +470,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Invoice scanning route with OpenAI vision
+  app.post('/api/scan-invoice', isAuthenticated, async (req: any, res) => {
+    try {
+      const { imageData } = req.body;
+      
+      if (!imageData) {
+        return res.status(400).json({ message: "Image data is required" });
+      }
+
+      // Import OpenAI client
+      const OpenAI = require('openai');
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Please analyze this invoice image and extract the following information in JSON format:
+                {
+                  "invoiceNumber": "string (invoice number)",
+                  "amount": "string (total amount as decimal)",
+                  "issueDate": "string (YYYY-MM-DD format)",
+                  "dueDate": "string (YYYY-MM-DD format)",
+                  "clientName": "string (vendor/company name)",
+                  "notes": "string (any additional details or line items)"
+                }
+                
+                If any field cannot be determined from the image, use null for that field. For dates, convert to YYYY-MM-DD format. For amount, extract only the number without currency symbols.`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: imageData
+                }
+              }
+            ]
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 500
+      });
+
+      const extractedData = JSON.parse(response.choices[0].message.content);
+      
+      // Find matching client if clientName is provided
+      let clientId = null;
+      if (extractedData.clientName) {
+        const userId = req.user.claims.sub;
+        const company = await storage.getUserCompany(parseInt(userId));
+        
+        if (company) {
+          const clients = await storage.getClients(company.id);
+          const matchingClient = clients.find(client => 
+            client.name.toLowerCase().includes(extractedData.clientName.toLowerCase()) ||
+            extractedData.clientName.toLowerCase().includes(client.name.toLowerCase())
+          );
+          
+          if (matchingClient) {
+            clientId = matchingClient.id.toString();
+          }
+        }
+      }
+
+      // Format the response to match form structure
+      const formattedData = {
+        invoiceNumber: extractedData.invoiceNumber || null,
+        amount: extractedData.amount || "",
+        clientId: clientId || "none",
+        issueDate: extractedData.issueDate || new Date().toISOString().split('T')[0],
+        dueDate: extractedData.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        notes: extractedData.notes || ""
+      };
+
+      res.json(formattedData);
+    } catch (error) {
+      console.error("Error scanning invoice:", error);
+      res.status(500).json({ message: "Failed to analyze invoice image" });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
