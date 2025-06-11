@@ -248,6 +248,10 @@ export default function Subcontractors() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Subcontractors ({subcontractors.length})
         </h3>
+        <Button onClick={() => setIsDialogOpen(true)}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add New Subcontractor
+        </Button>
       </div>
 
       {subcontractors.length === 0 ? (
