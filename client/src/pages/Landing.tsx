@@ -39,18 +39,14 @@ export default function Landing() {
             general: "Invalid email or password. Please check your credentials and try again." 
           });
         } else {
-          toast({
-            title: "Login failed",
-            description: errorData.message || "Login failed",
-            variant: "destructive"
+          setErrors({ 
+            general: errorData.message || "Login failed. Please try again." 
           });
         }
       }
     } catch (error) {
-      toast({
-        title: "Login failed",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive"
+      setErrors({ 
+        general: "Something went wrong. Please try again." 
       });
     } finally {
       setIsLoading(false);
