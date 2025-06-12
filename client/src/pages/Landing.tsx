@@ -3,51 +3,51 @@ import EcoLogicLogo from "@/components/EcoLogicLogo";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 dark:from-slate-900 dark:via-slate-950 dark:to-black flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 via-transparent to-emerald-900/20"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-transparent to-transparent"></div>
-      
+    <div className="min-h-screen bg-white dark:bg-slate-900 flex flex-col items-center justify-center px-6">
       {/* Main Content Container */}
-      <div className="relative z-10 flex flex-col items-center justify-center text-center px-6 py-12 max-w-lg mx-auto">
+      <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-8">
         
         {/* Logo */}
-        <div className="mb-12">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/25 mb-8">
-            <EcoLogicLogo size={48} showText={false} className="text-white" />
+        <div className="flex flex-col items-center space-y-6">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <EcoLogicLogo size={32} showText={false} className="text-white" />
+          </div>
+          
+          {/* Brand Name */}
+          <div className="flex items-center space-x-3">
+            <EcoLogicLogo size={32} showText={false} className="text-blue-600" />
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+              ECOLOGIC
+            </h1>
           </div>
         </div>
 
         {/* Welcome Text */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-light text-white mb-4 tracking-wide">
+        <div className="space-y-4">
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
             Welcome to EcoLogic
-          </h1>
-          <p className="text-lg text-slate-300 font-light leading-relaxed">
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
             Professional contractor management platform
           </p>
         </div>
 
         {/* Sign In Button */}
-        <div className="w-full mb-8">
+        <div className="w-full space-y-4">
           <Button 
             onClick={() => window.location.href = "/api/login"}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 text-lg font-medium rounded-xl shadow-lg shadow-blue-600/25 transition-all duration-200 hover:shadow-blue-600/40 hover:scale-[1.02]"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base font-medium rounded-lg shadow-sm transition-colors"
             size="lg"
           >
-            <span className="mr-2">→</span>
             Sign In with Replit
           </Button>
         </div>
 
         {/* Security Note */}
-        <p className="text-sm text-slate-400 font-light">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Secure authentication powered by Replit
         </p>
       </div>
-
-      {/* Bottom Gradient */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-950 to-transparent"></div>
     </div>
   );
 }
