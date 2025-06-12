@@ -41,9 +41,9 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
-        <Route path="/" component={AuthPage} />
+        <Route path="/" component={Landing} />
         <Route path="/auth" component={AuthPage} />
-        <Route component={AuthPage} />
+        <Route component={Landing} />
       </Switch>
     );
   }
