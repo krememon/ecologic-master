@@ -7,7 +7,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
-import { storage } from "./storage";
+import { storage } from "./new-storage";
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
@@ -181,14 +181,13 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "User with this email already exists" });
       }
 
-      // Hash password
-      const scrypt = require('crypto').scrypt;
-      const randomBytes = require('crypto').randomBytes;
-      const promisify = require('util').promisify;
-      const scryptAsync = promisify(scrypt);
+      // Hash password using crypto imports
+      const crypto = await import('crypto');
+      const util = await import('util');
+      const scryptAsync = util.promisify(crypto.scrypt);
       
-      const salt = randomBytes(16).toString("hex");
-      const buf = await scryptAsync(password, salt, 64);
+      const salt = crypto.randomBytes(16).toString("hex");
+      const buf = (await scryptAsync(password, salt, 64)) as Buffer;
       const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
       // Create user
@@ -219,7 +218,7 @@ export async function setupAuth(app: Express) {
         provider: 'email'
       };
 
-      req.login(sessionUser, (err) => {
+      req.login(sessionUser as any, (err) => {
         if (err) {
           console.error("Login error:", err);
           return res.status(500).json({ message: "Registration successful but login failed" });
@@ -248,14 +247,13 @@ export async function setupAuth(app: Express) {
       }
 
       // Verify password
-      const scrypt = require('crypto').scrypt;
-      const timingSafeEqual = require('crypto').timingSafeEqual;
-      const promisify = require('util').promisify;
-      const scryptAsync = promisify(scrypt);
+      const crypto = await import('crypto');
+      const util = await import('util');
+      const scryptAsync = util.promisify(crypto.scrypt);
 
       const [hashed, salt] = user.password.split(".");
       const hashedBuf = Buffer.from(hashed, "hex");
-      const suppliedBuf = await scryptAsync(password, salt, 64);
+      const suppliedBuf = (await scryptAsync(password, salt, 64)) as Buffer;
       
       if (!timingSafeEqual(hashedBuf, suppliedBuf)) {
         return res.status(401).json({ message: "Invalid email or password" });
