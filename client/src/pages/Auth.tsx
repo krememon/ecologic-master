@@ -131,11 +131,16 @@ export default function Auth() {
         }
       }
     } catch (error) {
-      toast({
-        title: "Registration failed",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive"
-      });
+      // Only show toast for unexpected errors, not duplicate email
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong. Please try again.";
+      if (!errorMessage.includes("already exists") && !errorMessage.includes("already in use")) {
+        toast({
+          title: "Registration failed",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      }
+      setErrors({ general: errorMessage });
     } finally {
       setIsLoading(false);
     }
