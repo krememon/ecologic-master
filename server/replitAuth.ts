@@ -166,6 +166,84 @@ export async function setupAuth(app: Express) {
     }
   );
 
+  // Password reset routes
+  app.post("/api/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists for security
+        return res.json({ message: "If an account with this email exists, you'll receive a password reset link." });
+      }
+
+      // Generate reset token
+      const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await storage.setResetPasswordToken(email, resetToken, resetExpires);
+
+      // For development, we'll return the token. In production, send email
+      if (process.env.NODE_ENV === 'development') {
+        return res.json({ 
+          message: "Reset token generated", 
+          resetToken,
+          resetUrl: `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`
+        });
+      }
+
+      // TODO: Send email with reset link in production
+      res.json({ message: "If an account with this email exists, you'll receive a password reset link." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.post("/api/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      const user = await storage.resetPassword(token, hashedPassword);
+      
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired reset token" });
+      }
+
+      // Auto-login after password reset
+      const sessionUser = {
+        claims: {
+          sub: user.id,
+          email: user.email,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          profile_image_url: user.profileImageUrl
+        },
+        provider: 'email'
+      };
+
+      req.login(sessionUser as any, (err) => {
+        if (err) {
+          console.error("Auto-login error:", err);
+          return res.json({ message: "Password reset successfully. Please log in." });
+        }
+        res.json({ message: "Password reset successfully. You're now logged in.", user: sessionUser });
+      });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
   // Email/Password Registration
   app.post("/api/register", async (req, res) => {
     try {

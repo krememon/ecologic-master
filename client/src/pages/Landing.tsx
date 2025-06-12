@@ -155,6 +155,16 @@ export default function Landing() {
                 >
                   {isLoading ? "Signing In..." : "Sign In"}
                 </Button>
+
+                <div className="text-center mt-3">
+                  <button
+                    type="button"
+                    onClick={() => window.location.href = "/forgot-password"}
+                    className="text-sm text-blue-600 hover:text-blue-700 underline focus:outline-none"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </form>
             )}
           </div>
