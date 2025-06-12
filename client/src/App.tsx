@@ -23,6 +23,8 @@ import PaymentsPage from "@/pages/payments-page";
 import AIScheduling from "@/pages/AIScheduling";
 import Settings from "@/pages/Settings";
 import Approvals from "@/pages/Approvals";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,6 +47,8 @@ function Router() {
         <Route path="/" component={Landing} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/register" component={Auth} />
+        <Route path="/forgot-password" component={ForgotPassword} />
+        <Route path="/reset-password" component={ResetPassword} />
         <Route component={Landing} />
       </Switch>
     );
