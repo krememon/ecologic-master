@@ -255,7 +255,7 @@ export async function setupAuth(app: Express) {
       const hashedBuf = Buffer.from(hashed, "hex");
       const suppliedBuf = (await scryptAsync(password, salt, 64)) as Buffer;
       
-      if (!timingSafeEqual(hashedBuf, suppliedBuf)) {
+      if (!crypto.timingSafeEqual(hashedBuf, suppliedBuf)) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
