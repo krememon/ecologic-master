@@ -11,6 +11,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/auth-page";
+import Auth from "@/pages/Auth";
 import Home from "@/pages/Home";
 import Jobs from "@/pages/Jobs";
 import Subcontractors from "@/pages/Subcontractors";
@@ -43,6 +44,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Landing} />
         <Route path="/auth" component={AuthPage} />
+        <Route path="/register" component={Auth} />
         <Route component={Landing} />
       </Switch>
     );

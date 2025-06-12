@@ -26,8 +26,15 @@ export default function Landing() {
         {/* Sign In Options */}
         <div className="space-y-3">
           <Button 
-            onClick={() => window.location.href = "/api/login"}
+            onClick={() => window.location.href = "/register"}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+          >
+            Create Account
+          </Button>
+          
+          <Button 
+            onClick={() => window.location.href = "/api/login"}
+            className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
           >
             Sign In with Replit
           </Button>

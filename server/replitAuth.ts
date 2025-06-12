@@ -166,6 +166,127 @@ export async function setupAuth(app: Express) {
     }
   );
 
+  // Email/Password Registration
+  app.post("/api/register", async (req, res) => {
+    try {
+      const { email, password, firstName, lastName } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Hash password
+      const scrypt = require('crypto').scrypt;
+      const randomBytes = require('crypto').randomBytes;
+      const promisify = require('util').promisify;
+      const scryptAsync = promisify(scrypt);
+      
+      const salt = randomBytes(16).toString("hex");
+      const buf = await scryptAsync(password, salt, 64);
+      const hashedPassword = `${buf.toString("hex")}.${salt}`;
+
+      // Create user
+      const userData = {
+        id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        email,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        profileImageUrl: null,
+        password: hashedPassword,
+        emailVerified: false,
+        verificationToken: null,
+        resetPasswordToken: null,
+        resetPasswordExpires: null
+      };
+
+      const user = await storage.createUser(userData);
+      
+      // Create session
+      const sessionUser = {
+        claims: {
+          sub: user.id,
+          email: user.email,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          profile_image_url: user.profileImageUrl
+        },
+        provider: 'email'
+      };
+
+      req.login(sessionUser, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).json({ message: "Registration successful but login failed" });
+        }
+        res.status(201).json({ message: "User registered successfully", user: sessionUser });
+      });
+
+    } catch (error) {
+      console.error("Registration error:", error);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // Email/Password Login
+  app.post("/api/login/email", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user || !user.password) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Verify password
+      const scrypt = require('crypto').scrypt;
+      const timingSafeEqual = require('crypto').timingSafeEqual;
+      const promisify = require('util').promisify;
+      const scryptAsync = promisify(scrypt);
+
+      const [hashed, salt] = user.password.split(".");
+      const hashedBuf = Buffer.from(hashed, "hex");
+      const suppliedBuf = await scryptAsync(password, salt, 64);
+      
+      if (!timingSafeEqual(hashedBuf, suppliedBuf)) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+
+      // Create session
+      const sessionUser = {
+        claims: {
+          sub: user.id,
+          email: user.email,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          profile_image_url: user.profileImageUrl
+        },
+        provider: 'email'
+      };
+
+      req.login(sessionUser, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        res.json({ message: "Login successful", user: sessionUser });
+      });
+
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
   app.get("/api/logout", (req, res) => {
     req.logout(() => {
       res.redirect(
