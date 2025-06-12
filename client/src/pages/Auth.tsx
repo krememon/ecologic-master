@@ -7,52 +7,89 @@ import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    confirmPassword: "",
     firstName: "",
     lastName: ""
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "First name is required";
+    }
+
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Last name is required";
+    }
+
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = "Please enter a valid email";
+    }
+
+    if (!formData.password) {
+      newErrors.password = "Password is required";
+    } else if (formData.password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
+
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Passwords don't match";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoading(true);
+    setErrors({});
 
     try {
-      if (isLogin) {
-        const response = await apiRequest("POST", "/api/login/email", {
-          email: formData.email,
-          password: formData.password
+      const response = await apiRequest("POST", "/api/register", {
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Account created successfully!",
+          description: "Welcome to EcoLogic. You're now logged in.",
         });
-        if (response.ok) {
-          window.location.href = "/";
-        } else {
-          const error = await response.text();
-          toast({
-            title: "Login failed",
-            description: error || "Invalid email or password",
-            variant: "destructive"
-          });
-        }
+        window.location.href = "/";
       } else {
-        const response = await apiRequest("POST", "/api/register", formData);
-        if (response.ok) {
-          window.location.href = "/";
+        const errorData = await response.json();
+        if (errorData.message?.includes("already exists")) {
+          setErrors({ email: "Email already in use" });
         } else {
-          const error = await response.text();
           toast({
             title: "Registration failed",
-            description: error || "Registration failed",
+            description: errorData.message || "Failed to create account",
             variant: "destructive"
           });
         }
       }
     } catch (error) {
       toast({
-        title: isLogin ? "Login failed" : "Registration failed",
+        title: "Registration failed",
         description: "Something went wrong. Please try again.",
         variant: "destructive"
       });
@@ -66,6 +103,13 @@ export default function Auth() {
       ...prev,
       [e.target.name]: e.target.value
     }));
+    // Clear error when user starts typing
+    if (errors[e.target.name]) {
+      setErrors(prev => ({
+        ...prev,
+        [e.target.name]: ""
+      }));
+    }
   };
 
   return (
@@ -85,38 +129,44 @@ export default function Auth() {
             EcoLogic
           </h1>
           <p className="text-slate-600 dark:text-slate-400 text-sm">
-            {isLogin ? "Sign in to your account" : "Create your account"}
+            Create your account
           </p>
         </div>
 
-        {/* Auth Form */}
+        {/* Registration Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  required={!isLogin}
-                />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  required={!isLogin}
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="firstName">First Name</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                type="text"
+                value={formData.firstName}
+                onChange={handleInputChange}
+                className={errors.firstName ? "border-red-500" : ""}
+                required
+              />
+              {errors.firstName && (
+                <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>
+              )}
             </div>
-          )}
+            <div>
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                type="text"
+                value={formData.lastName}
+                onChange={handleInputChange}
+                className={errors.lastName ? "border-red-500" : ""}
+                required
+              />
+              {errors.lastName && (
+                <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
+              )}
+            </div>
+          </div>
           
           <div>
             <Label htmlFor="email">Email</Label>
@@ -126,8 +176,12 @@ export default function Auth() {
               type="email"
               value={formData.email}
               onChange={handleInputChange}
+              className={errors.email ? "border-red-500" : ""}
               required
             />
+            {errors.email && (
+              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+            )}
           </div>
           
           <div>
@@ -138,8 +192,28 @@ export default function Auth() {
               type="password"
               value={formData.password}
               onChange={handleInputChange}
+              className={errors.password ? "border-red-500" : ""}
               required
             />
+            {errors.password && (
+              <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+            )}
+          </div>
+          
+          <div>
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={handleInputChange}
+              className={errors.confirmPassword ? "border-red-500" : ""}
+              required
+            />
+            {errors.confirmPassword && (
+              <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>
+            )}
           </div>
 
           <Button 
@@ -147,18 +221,18 @@ export default function Auth() {
             className="w-full bg-blue-500 hover:bg-blue-600 text-white"
             disabled={isLoading}
           >
-            {isLoading ? "Please wait..." : (isLogin ? "Sign In" : "Create Account")}
+            {isLoading ? "Creating Account..." : "Create Account"}
           </Button>
         </form>
 
-        {/* Toggle between login/register */}
+        {/* Back to Sign In */}
         <div className="mt-6 text-center">
           <button
             type="button"
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => window.location.href = "/"}
             className="text-sm text-blue-500 hover:text-blue-600"
           >
-            {isLogin ? "Need an account? Sign up" : "Already have an account? Sign in"}
+            Already have an account? Sign in
           </button>
         </div>
 
