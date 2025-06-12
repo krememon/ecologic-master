@@ -1,51 +1,35 @@
 import { Button } from "@/components/ui/button";
-import EcoLogicLogo from "@/components/EcoLogicLogo";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-900 flex flex-col items-center justify-center px-6">
-      {/* Main Content Container */}
-      <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="w-full max-w-sm mx-auto p-8">
         
-        {/* Logo */}
-        <div className="flex flex-col items-center space-y-6">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-            <EcoLogicLogo size={32} showText={false} className="text-white" />
+        {/* Simple Logo */}
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 bg-blue-500 rounded-lg mx-auto mb-4 flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/>
+            </svg>
           </div>
-          
-          {/* Brand Name */}
-          <div className="flex items-center space-x-3">
-            <EcoLogicLogo size={32} showText={false} className="text-blue-600" />
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              ECOLOGIC
-            </h1>
-          </div>
-        </div>
-
-        {/* Welcome Text */}
-        <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">
-            Welcome to EcoLogic
-          </h2>
-          <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-            Professional contractor management platform
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            EcoLogic
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 text-sm">
+            Construction Management Platform
           </p>
         </div>
 
-        {/* Sign In Button */}
-        <div className="w-full space-y-4">
-          <Button 
-            onClick={() => window.location.href = "/api/login"}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base font-medium rounded-lg shadow-sm transition-colors"
-            size="lg"
-          >
-            Sign In with Replit
-          </Button>
-        </div>
-
-        {/* Security Note */}
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Secure authentication powered by Replit
+        {/* Sign In */}
+        <Button 
+          onClick={() => window.location.href = "/api/login"}
+          className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+        >
+          Sign In
+        </Button>
+        
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
+          Powered by Replit
         </p>
       </div>
     </div>
