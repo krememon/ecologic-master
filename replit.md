@@ -123,7 +123,11 @@ EcoLogic is a professional construction management platform designed for trade c
 
 ## Changelog
 - June 12, 2025. Initial setup
+- June 12, 2025. Updated landing page with user's custom logo and Google OAuth integration
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Design preferences: Bold, uppercase "EcoLogic" branding with wide letter spacing
+Authentication: Dual sign-in options (Replit + Google OAuth)
+Logo: Custom water drop with leaf logo positioned above EcoLogic title
