@@ -102,13 +102,25 @@ export default function Auth() {
         });
         window.location.href = "/";
       } else {
-        const errorData = await response.json();
-        if (errorData.message?.includes("already exists")) {
-          setErrors({ email: "Email already in use" });
+        let errorMessage = "Failed to create account";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // If response is not JSON, try to get text
+          try {
+            errorMessage = await response.text();
+          } catch {
+            // Keep default message
+          }
+        }
+
+        if (errorMessage.includes("already exists") || errorMessage.includes("already in use")) {
+          setErrors({ email: "This email is already registered. Try signing in instead." });
         } else {
           toast({
             title: "Registration failed",
-            description: errorData.message || "Failed to create account",
+            description: errorMessage,
             variant: "destructive"
           });
         }
