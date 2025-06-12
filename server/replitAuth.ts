@@ -39,7 +39,7 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: sessionTtl,
     },
   });
@@ -223,7 +223,15 @@ export async function setupAuth(app: Express) {
           console.error("Login error:", err);
           return res.status(500).json({ message: "Registration successful but login failed" });
         }
-        res.status(201).json({ message: "User registered successfully", user: sessionUser });
+        
+        // Save session explicitly
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ message: "Registration successful but session failed" });
+          }
+          res.status(201).json({ message: "User registered successfully", user: sessionUser });
+        });
       });
 
     } catch (error) {
@@ -271,12 +279,20 @@ export async function setupAuth(app: Express) {
         provider: 'email'
       };
 
-      req.login(sessionUser, (err) => {
+      req.login(sessionUser as any, (err) => {
         if (err) {
           console.error("Login error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        res.json({ message: "Login successful", user: sessionUser });
+        
+        // Save session explicitly
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ message: "Login successful but session failed" });
+          }
+          res.json({ message: "Login successful", user: sessionUser });
+        });
       });
 
     } catch (error) {
@@ -300,7 +316,17 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  // For email/password users, no token refresh needed
+  if (user.provider === 'email') {
+    return next();
+  }
+
+  // For OAuth users, check token expiration and refresh if needed
+  if (!user.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
