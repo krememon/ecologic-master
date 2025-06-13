@@ -126,6 +126,7 @@ EcoLogic is a professional construction management platform designed for trade c
 - June 12, 2025. Updated landing page with user's custom logo and Google OAuth integration
 - June 12, 2025. Implemented comprehensive registration system with enhanced UX features and automatic login flow
 - June 13, 2025. Completed account linking system allowing users to sign in with either Google or email/password using same email address
+- June 13, 2025. Fixed Google OAuth authentication flow with proper session handling and error logging
 
 ## User Preferences
 
