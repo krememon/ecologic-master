@@ -231,7 +231,27 @@ export async function setupAuth(app: Express) {
         return res.redirect("/?error=no_user");
       }
       
-      // Log in the user
+      // Check if user is already logged in (account linking scenario)
+      if (req.isAuthenticated() && req.user) {
+        console.log("User already logged in, attempting to link Google account");
+        const currentUser = req.user as any;
+        const googleEmail = user.email;
+        
+        // Verify the Google email matches the current user's email
+        if (currentUser.claims?.email !== googleEmail) {
+          console.error("Google email mismatch:", { 
+            currentEmail: currentUser.claims?.email, 
+            googleEmail 
+          });
+          return res.redirect("/profile?error=email_mismatch&message=Google account email does not match your current account");
+        }
+        
+        // Account linking successful - Google account is already linked during OAuth strategy
+        console.log("Google account linked successfully to existing user");
+        return res.redirect("/profile?success=google_linked&message=Google account linked successfully");
+      }
+      
+      // Regular login flow for new sessions
       req.logIn(user, (loginErr) => {
         if (loginErr) {
           console.error("Login error after Google OAuth:", loginErr);

@@ -40,6 +40,7 @@ export const users = pgTable("users", {
   emailVerificationToken: varchar("email_verification_token"),
   resetPasswordToken: varchar("reset_password_token"),
   resetPasswordExpires: timestamp("reset_password_expires"),
+  googleLinked: boolean("google_linked").default(false), // Track Google account linking
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

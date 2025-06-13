@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,33 @@ export default function Profile() {
   });
 
   // Set password mutation for users who only have Google auth
+  // Handle URL parameters for Google account linking feedback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const message = urlParams.get('message');
+
+    if (success === 'google_linked') {
+      toast({
+        title: "Google Account Linked",
+        description: message || "Your Google account has been successfully linked.",
+      });
+      // Refresh linked accounts data
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/linked-accounts"] });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (error === 'email_mismatch') {
+      toast({
+        title: "Email Mismatch",
+        description: message || "The Google account email doesn't match your current account.",
+        variant: "destructive",
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [toast, queryClient]);
+
   const setPasswordMutation = useMutation({
     mutationFn: async (data: { password: string }) => {
       const response = await apiRequest("POST", "/api/set-password", data);
@@ -209,14 +236,24 @@ export default function Profile() {
                       </p>
                     </div>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-2">
                     {linkedAccounts?.hasGoogle ? (
                       <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Linked
                       </Badge>
                     ) : (
-                      <Badge variant="outline">Not Linked</Badge>
+                      <>
+                        <Badge variant="outline">Not Linked</Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.location.href = '/auth/google'}
+                          className="text-xs"
+                        >
+                          Link Google Account
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
