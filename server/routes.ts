@@ -35,6 +35,14 @@ const upload = multer({
   },
 });
 
+// Utility function to extract user ID consistently from different auth methods
+function getUserId(user: any): string {
+  if (user.claims && user.claims.sub) {
+    return user.claims.sub;
+  }
+  return user.id || user.sub;
+}
+
 function broadcastToUser(userId: string, message: any) {
   // WebSocket broadcasting implementation
 }
@@ -61,15 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      // Handle both session-based and Google OAuth authentication
-      let userId;
-      if (req.user.claims) {
-        // Replit/session-based auth
-        userId = req.user.claims.sub;
-      } else {
-        // Google OAuth or direct passport session
-        userId = req.user.id;
-      }
+      const userId = getUserId(req.user);
       
       console.log("Auth user endpoint - userId:", userId, "user object:", req.user);
       const user = await storage.getUser(userId);
@@ -118,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get linked account methods
   app.get('/api/auth/linked-accounts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const linkedAccounts = await storage.getLinkedAccountMethods(userId);
       res.json(linkedAccounts);
     } catch (error) {
@@ -130,7 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set password for users who signed up with Google only
   app.post('/api/set-password', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const { password } = req.body;
 
       if (!password || password.length < 8) {
@@ -303,14 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
-      // Handle both session-based and Google OAuth authentication
-      let userId;
-      if (req.user.claims) {
-        userId = req.user.claims.sub;
-      } else {
-        userId = req.user.id;
-      }
-      
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
