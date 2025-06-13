@@ -198,12 +198,17 @@ export async function setupAuth(app: Express) {
 
   // Google authentication routes
   app.get("/auth/google", (req, res, next) => {
-    passport.authenticate("google", { 
-      scope: ["profile", "email"],
-      prompt: "select_account",
-      accessType: "offline",
-      includeGrantedScopes: true
-    })(req, res, next);
+    // Build the OAuth URL with required parameters
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+      `redirect_uri=${encodeURIComponent(`${req.protocol}://${req.get('host')}/auth/google/callback`)}&` +
+      `response_type=code&` +
+      `scope=${encodeURIComponent('profile email')}&` +
+      `prompt=select_account&` +
+      `access_type=offline&` +
+      `include_granted_scopes=true`;
+    
+    res.redirect(authUrl);
   });
 
   app.get("/auth/google/callback",
