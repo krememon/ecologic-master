@@ -119,7 +119,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/linked-accounts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
+      console.log("Linked accounts endpoint - userId:", userId, "user object:", req.user);
+      
       const linkedAccounts = await storage.getLinkedAccountMethods(userId);
+      console.log("Linked accounts result:", linkedAccounts);
+      
       res.json(linkedAccounts);
     } catch (error) {
       console.error("Error fetching linked accounts:", error);

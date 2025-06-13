@@ -30,8 +30,9 @@ export default function Profile() {
   });
 
   // Fetch linked accounts
-  const { data: linkedAccounts, isLoading: linkedAccountsLoading } = useQuery<LinkedAccounts>({
+  const { data: linkedAccounts, isLoading: linkedAccountsLoading, error: linkedAccountsError } = useQuery<LinkedAccounts>({
     queryKey: ["/api/auth/linked-accounts"],
+    retry: false,
   });
 
   // Set password mutation for users who only have Google auth
@@ -202,6 +203,15 @@ export default function Profile() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Debug info for linked accounts */}
+                {linkedAccountsError && (
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg mb-4">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Debug: Unable to load account linking status. Showing default view.
+                    </p>
+                  </div>
+                )}
+
                 {/* Email/Password Status */}
                 <div className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700">
                   <div className="flex items-center gap-3">
@@ -214,7 +224,12 @@ export default function Profile() {
                     </div>
                   </div>
                   <div>
-                    {linkedAccounts?.hasEmailPassword ? (
+                    {linkedAccountsError ? (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Linked
+                      </Badge>
+                    ) : linkedAccounts?.hasEmailPassword ? (
                       <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Linked
@@ -237,7 +252,19 @@ export default function Profile() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {linkedAccounts?.hasGoogle ? (
+                    {linkedAccountsError ? (
+                      <>
+                        <Badge variant="outline">Not Linked</Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.location.href = '/auth/google'}
+                          className="text-xs"
+                        >
+                          Link Google Account
+                        </Button>
+                      </>
+                    ) : linkedAccounts?.hasGoogle ? (
                       <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Linked
