@@ -338,7 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Subcontractors routes
   app.get('/api/subcontractors', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
@@ -355,7 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/subcontractors', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
@@ -377,7 +377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Jobs routes
   app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
@@ -394,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
@@ -428,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/jobs/:jobId/photos', isAuthenticated, upload.single('photo'), async (req: any, res) => {
     try {
       const jobId = parseInt(req.params.jobId);
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const file = req.file;
 
       if (!file) {
@@ -474,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Payments routes
   app.get('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
@@ -491,7 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getUserId(req.user);
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {
@@ -572,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find matching client if clientName is provided
       let clientId = null;
       if (extractedData.clientName) {
-        const userId = req.user.claims.sub;
+        const userId = getUserId(req.user);
         const company = await storage.getUserCompany(parseInt(userId));
         
         if (company) {
