@@ -117,6 +117,13 @@ export interface IStorage {
   getJobPhotos(jobId: number): Promise<JobPhoto[]>;
   createJobPhoto(photoData: InsertJobPhoto): Promise<JobPhoto>;
   deleteJobPhoto(id: number): Promise<void>;
+  
+  // Account linking operations
+  getLinkedAccountMethods(userId: string): Promise<{
+    hasEmailPassword: boolean;
+    hasGoogle: boolean;
+    profileImageUrl?: string;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -764,6 +771,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobPhoto(id: number): Promise<void> {
     await db.delete(jobPhotos).where(eq(jobPhotos.id, id));
+  }
+
+  async getLinkedAccountMethods(userId: string): Promise<{
+    hasEmailPassword: boolean;
+    hasGoogle: boolean;
+    profileImageUrl?: string;
+  }> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      return { hasEmailPassword: false, hasGoogle: false };
+    }
+
+    return {
+      hasEmailPassword: !!user.password,
+      hasGoogle: user.id.startsWith('google_') || !!user.profileImageUrl,
+      profileImageUrl: user.profileImageUrl || undefined
+    };
   }
 }
 

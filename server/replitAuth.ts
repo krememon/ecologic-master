@@ -107,16 +107,47 @@ export async function setupAuth(app: Express) {
     },
     async (accessToken: string, refreshToken: string, profile: any, done: any) => {
       try {
-        // Create user data from Google profile
-        const userData = {
-          id: `google_${profile.id}`,
-          email: profile.emails?.[0]?.value || null,
-          firstName: profile.name?.givenName || null,
-          lastName: profile.name?.familyName || null,
-          profileImageUrl: profile.photos?.[0]?.value || null,
-        };
+        const email = profile.emails?.[0]?.value;
+        if (!email) {
+          return done(new Error("No email found in Google profile"), null);
+        }
+
+        // Check if user already exists with this email (account linking)
+        let user = await storage.getUserByEmail(email);
         
-        const user = await storage.upsertUser(userData);
+        if (user) {
+          // Link Google to existing account - update profile if needed
+          const updateData: any = {};
+          
+          if (!user.profileImageUrl && profile.photos?.[0]?.value) {
+            updateData.profileImageUrl = profile.photos[0].value;
+          }
+          
+          if (!user.firstName && profile.name?.givenName) {
+            updateData.firstName = profile.name.givenName;
+          }
+          if (!user.lastName && profile.name?.familyName) {
+            updateData.lastName = profile.name.familyName;
+          }
+          
+          updateData.emailVerified = true;
+          
+          // Update user with Google data
+          if (Object.keys(updateData).length > 0) {
+            user = await storage.updateUser(parseInt(user.id), updateData);
+          }
+        } else {
+          // Create new user with Google
+          user = await storage.createUser({
+            id: `google_${profile.id}`,
+            email: email,
+            firstName: profile.name?.givenName || '',
+            lastName: profile.name?.familyName || '',
+            profileImageUrl: profile.photos?.[0]?.value || null,
+            emailVerified: true
+          });
+        }
+        
         const sessionUser = { 
           claims: {
             sub: user.id,

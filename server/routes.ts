@@ -105,6 +105,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get linked account methods
+  app.get('/api/auth/linked-accounts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const linkedAccounts = await storage.getLinkedAccountMethods(userId);
+      res.json(linkedAccounts);
+    } catch (error) {
+      console.error("Error fetching linked accounts:", error);
+      res.status(500).json({ message: "Failed to fetch linked accounts" });
+    }
+  });
+
   // Company routes
   app.get('/api/company', async (req: any, res) => {
     try {
