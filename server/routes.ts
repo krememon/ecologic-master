@@ -117,6 +117,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Set password for users who signed up with Google only
+  app.post('/api/set-password', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { password } = req.body;
+
+      if (!password || password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters long" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.password) {
+        return res.status(400).json({ message: "Password already set for this account" });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      await storage.updateUser(parseInt(user.id), { password: hashedPassword });
+
+      res.json({ message: "Password set successfully" });
+    } catch (error) {
+      console.error("Error setting password:", error);
+      res.status(500).json({ message: "Failed to set password" });
+    }
+  });
+
   // Company routes
   app.get('/api/company', async (req: any, res) => {
     try {

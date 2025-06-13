@@ -128,10 +128,23 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
           </div>
         </div>
         
+        {/* Profile Button */}
+        <Link href="/profile">
+          <button className={cn(
+            "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+            location === "/profile"
+              ? "bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300"
+              : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+          )}>
+            <Settings className="w-4 h-4" />
+            <span>Profile</span>
+          </button>
+        </Link>
+        
         {/* Settings Button */}
         <Link href="/settings">
           <button className={cn(
-            "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+            "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mt-1",
             location === "/settings"
               ? "bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300"
               : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"

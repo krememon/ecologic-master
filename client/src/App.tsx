@@ -22,6 +22,7 @@ import Messages from "@/pages/Messages";
 import PaymentsPage from "@/pages/payments-page";
 import AIScheduling from "@/pages/AIScheduling";
 import Settings from "@/pages/Settings";
+import Profile from "@/pages/Profile";
 import Approvals from "@/pages/Approvals";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -68,6 +69,7 @@ function Router() {
         <Route path="/ai-scheduling" component={AIScheduling} />
         <Route path="/approvals" component={Approvals} />
         <Route path="/settings" component={Settings} />
+        <Route path="/profile" component={Profile} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
