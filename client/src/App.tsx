@@ -70,7 +70,7 @@ function Router() {
         <Route path="/ai-scheduling" component={AIScheduling} />
         <Route path="/approvals" component={Approvals} />
         <Route path="/settings" component={Settings} />
-        <Route path="/profile" component={ProfileNew} />
+        <Route path="/profile" component={Profile} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

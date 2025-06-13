@@ -341,95 +341,117 @@ export default function Settings() {
         <CompanyInviteCode />
 
         {/* Authentication Methods */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
+        <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 border-0 rounded-2xl overflow-hidden">
+          <CardHeader className="pb-6">
+            <CardTitle className="text-2xl font-bold flex items-center gap-3 text-slate-800 dark:text-slate-100">
+              <Shield className="h-7 w-7 text-blue-600 dark:text-blue-400" />
               Authentication Methods
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Ways you can sign in to your account
+            <p className="text-slate-600 dark:text-slate-400 text-base">
+              Secure ways to access your account
             </p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             {linkedAccountsLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="animate-pulse">
-                  <div className="h-16 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
                 </div>
                 <div className="animate-pulse">
-                  <div className="h-16 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
                 </div>
               </div>
             ) : linkedAccountsError ? (
-              <div className="text-sm text-red-600 dark:text-red-400">
-                Error loading authentication methods
+              <div className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl">
+                Unable to load authentication methods
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* Email/Password Method */}
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                    <div>
-                      <div className="font-medium">Email & Password</div>
-                      <div className="text-sm text-muted-foreground">
-                        Sign in with email and password
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                        <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                          Email & Password
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                          Traditional email and password authentication
+                        </p>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {linkedAccounts?.hasEmailPassword ? (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Linked
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">Not Linked</Badge>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {linkedAccounts?.hasEmailPassword ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 rounded-full">
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <span className="text-green-800 dark:text-green-200 font-medium text-sm">
+                            ✅ Linked
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 rounded-full">
+                          <span className="text-red-800 dark:text-red-200 font-medium text-sm">
+                            ❌ Not Linked
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Google Method */}
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <div className="flex items-center gap-3">
-                    <FaGoogle className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                    <div>
-                      <div className="font-medium">Google</div>
-                      <div className="text-sm text-muted-foreground">
-                        Sign in with your Google account
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
+                        <FaGoogle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                          Google
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                          Sign in with your Google account
+                        </p>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {linkedAccounts?.hasGoogle ? (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Linked
-                      </Badge>
-                    ) : (
-                      <>
-                        <Badge variant="outline">Not Linked</Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => window.location.href = '/api/auth/google'}
-                          className="ml-2"
-                        >
-                          Link Google Account
-                        </Button>
-                      </>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {linkedAccounts?.hasGoogle ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 rounded-full">
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <span className="text-green-800 dark:text-green-200 font-medium text-sm">
+                            ✅ Linked
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 rounded-full">
+                            <span className="text-red-800 dark:text-red-200 font-medium text-sm">
+                              ❌ Not Linked
+                            </span>
+                          </div>
+                          <Button
+                            onClick={() => window.location.href = '/api/auth/google'}
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 rounded-full px-6 py-2.5 font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                          >
+                            Link Google Account
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Debug Information */}
+            {/* Debug Information - Minimal Design */}
             {linkedAccounts && (
-              <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-2">Debug Status:</div>
-                <div className="text-xs font-mono space-y-1">
+              <div className="mt-6 p-4 bg-slate-100 dark:bg-slate-800/50 rounded-xl border-l-4 border-l-blue-500">
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">System Status</div>
+                <div className="text-xs font-mono space-y-1 text-slate-700 dark:text-slate-300">
                   <div>Email/Password: {linkedAccounts.hasEmailPassword ? '✅' : '❌'}</div>
                   <div>Google: {linkedAccounts.hasGoogle ? '✅' : '❌'}</div>
                 </div>
