@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload, Globe, CheckCircle, Mail } from "lucide-react";
+import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload, Globe, CheckCircle, Mail, X } from "lucide-react";
 import { FaGoogle } from "react-icons/fa";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -368,92 +368,63 @@ export default function Settings() {
             ) : (
               <div className="space-y-4">
                 {/* Email/Password Method */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md relative">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
                         <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                          Email & Password
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                            Email & Password
+                          </h3>
+                          {linkedAccounts?.hasEmailPassword && (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          )}
+                        </div>
                         <p className="text-slate-600 dark:text-slate-400">
                           Traditional email and password authentication
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {linkedAccounts?.hasEmailPassword ? (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 rounded-full">
-                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          <span className="text-green-800 dark:text-green-200 font-medium text-sm">
-                            ✅ Linked
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 rounded-full">
-                          <span className="text-red-800 dark:text-red-200 font-medium text-sm">
-                            ❌ Not Linked
-                          </span>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
 
                 {/* Google Method */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md relative">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
                         <FaGoogle className="h-6 w-6 text-red-600 dark:text-red-400" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                          Google
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                            Google
+                          </h3>
+                          {linkedAccounts?.hasGoogle ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <X className="h-4 w-4 text-red-500" />
+                          )}
+                        </div>
                         <p className="text-slate-600 dark:text-slate-400">
                           Sign in with your Google account
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {linkedAccounts?.hasGoogle ? (
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 rounded-full">
-                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          <span className="text-green-800 dark:text-green-200 font-medium text-sm">
-                            ✅ Linked
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/30 rounded-full">
-                            <span className="text-red-800 dark:text-red-200 font-medium text-sm">
-                              ❌ Not Linked
-                            </span>
-                          </div>
-                          <Button
-                            onClick={() => window.location.href = '/api/auth/google'}
-                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 rounded-full px-6 py-2.5 font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                          >
-                            Link Google Account
-                          </Button>
-                        </div>
-                      )}
-                    </div>
+                    {!linkedAccounts?.hasGoogle && (
+                      <div className="flex items-center">
+                        <Button
+                          onClick={() => window.location.href = '/api/auth/google'}
+                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 rounded-full px-6 py-2.5 font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                        >
+                          Link Google Account
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Debug Information - Minimal Design */}
-            {linkedAccounts && (
-              <div className="mt-6 p-4 bg-slate-100 dark:bg-slate-800/50 rounded-xl border-l-4 border-l-blue-500">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">System Status</div>
-                <div className="text-xs font-mono space-y-1 text-slate-700 dark:text-slate-300">
-                  <div>Email/Password: {linkedAccounts.hasEmailPassword ? '✅' : '❌'}</div>
-                  <div>Google: {linkedAccounts.hasGoogle ? '✅' : '❌'}</div>
                 </div>
               </div>
             )}
