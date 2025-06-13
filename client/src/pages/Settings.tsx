@@ -41,6 +41,34 @@ export default function Settings() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
+  // Handle URL parameters for Google account linking feedback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const message = urlParams.get('message');
+
+    if (success === 'google_linked') {
+      toast({
+        title: "Success",
+        description: message || "Google account linked successfully",
+        variant: "default",
+      });
+      // Clear URL parameters
+      window.history.replaceState({}, '', window.location.pathname);
+      // Refresh linked accounts data
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/linked-accounts"] });
+    } else if (error === 'email_mismatch') {
+      toast({
+        title: "Email Mismatch",
+        description: message || "Google account email doesn't match your current account email",
+        variant: "destructive",
+      });
+      // Clear URL parameters
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
+
   const { data: company = {} } = useQuery<any>({
     queryKey: ["/api/company"],
     enabled: isAuthenticated,

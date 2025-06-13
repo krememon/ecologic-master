@@ -145,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Redirect to Google OAuth with linking parameters
-      const googleAuthUrl = `/api/auth/google?link=true`;
+      const googleAuthUrl = `/auth/google?link=true`;
       res.redirect(googleAuthUrl);
     } catch (error) {
       console.error("Error starting Google account linking:", error);
