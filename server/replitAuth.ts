@@ -103,7 +103,7 @@ export async function setupAuth(app: Express) {
     passport.use(new GoogleStrategy({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `/auth/google/callback`,
+      callbackURL: `http://localhost:5000/auth/google/callback`,
       passReqToCallback: true
     },
     async (req: any, accessToken: string, refreshToken: string, params: any, profile: any, done: any) => {
@@ -216,6 +216,13 @@ export async function setupAuth(app: Express) {
     }, (err, user, info) => {
       if (err) {
         console.error("Google OAuth authentication error:", err);
+        
+        // Handle specific OAuth errors
+        if (err.code === 'invalid_grant' || err.message?.includes('Malformed auth code')) {
+          console.log("OAuth token expired or invalid, redirecting to retry");
+          return res.redirect("/?error=token_expired&message=Please try signing in again");
+        }
+        
         return res.redirect("/?error=auth_error");
       }
       
