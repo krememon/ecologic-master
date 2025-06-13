@@ -120,7 +120,77 @@ export async function setupAuth(app: Express) {
           return done(new Error("No email found in Google profile"), null);
         }
 
-        // Check if user already exists with this email (account linking)
+        // Check if this is an account linking request
+        const isLinking = req.session.linkingAccount?.action === 'link';
+        console.log("Is account linking request:", isLinking);
+        console.log("Session linking data:", req.session.linkingAccount);
+
+        if (isLinking) {
+          // Account linking flow
+          const linkingData = req.session.linkingAccount;
+          
+          // Verify email matches the current user's email
+          if (email.toLowerCase() !== linkingData.userEmail.toLowerCase()) {
+            console.error("Email mismatch during linking:", {
+              googleEmail: email,
+              userEmail: linkingData.userEmail
+            });
+            
+            // Clear linking session data
+            delete req.session.linkingAccount;
+            
+            // Pass error to be handled in callback route
+            return done(null, null, { 
+              error: 'email_mismatch',
+              message: `Google account email (${email}) doesn't match your current account email (${linkingData.userEmail})`
+            });
+          }
+
+          // Email matches - link the Google account
+          try {
+            const user = await storage.getUser(linkingData.userId);
+            if (!user) {
+              throw new Error("User not found during linking");
+            }
+
+            // Update user to mark Google as linked
+            const updateData: any = {
+              googleLinked: true,
+              emailVerified: true
+            };
+            
+            // Update profile info if not already set
+            if (!user.profileImageUrl && profile.photos?.[0]?.value) {
+              updateData.profileImageUrl = profile.photos[0].value;
+            }
+            if (!user.firstName && profile.name?.givenName) {
+              updateData.firstName = profile.name.givenName;
+            }
+            if (!user.lastName && profile.name?.familyName) {
+              updateData.lastName = profile.name.familyName;
+            }
+
+            const updatedUser = await storage.updateUser(parseInt(user.id), updateData);
+            console.log("Successfully linked Google account to user:", updatedUser.id);
+
+            // Clear linking session data
+            delete req.session.linkingAccount;
+
+            // Pass success info to be handled in callback route
+            return done(null, null, {
+              success: 'google_linked',
+              message: 'Google account successfully linked',
+              userId: user.id
+            });
+          } catch (error) {
+            console.error("Error linking Google account:", error);
+            delete req.session.linkingAccount;
+            return done(new Error("Failed to link Google account"), null);
+          }
+        }
+
+        // Regular login flow (not linking)
+        // Check if user already exists with this email
         let user = await storage.getUserByEmail(email);
         console.log("Existing user found:", !!user);
         
@@ -228,29 +298,22 @@ export async function setupAuth(app: Express) {
         return res.redirect("/?error=auth_error");
       }
       
+      // Handle account linking responses
+      if (info) {
+        console.log("Google OAuth callback with info:", info);
+        
+        if (info.error === 'email_mismatch') {
+          return res.redirect(`/settings?error=email_mismatch&message=${encodeURIComponent(info.message)}`);
+        }
+        
+        if (info.success === 'google_linked') {
+          return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
+        }
+      }
+      
       if (!user) {
         console.error("Google OAuth authentication failed, no user returned:", info);
         return res.redirect("/?error=no_user");
-      }
-      
-      // Check if user is already logged in (account linking scenario)
-      if (req.isAuthenticated() && req.user) {
-        console.log("User already logged in, attempting to link Google account");
-        const currentUser = req.user as any;
-        const googleEmail = user.email;
-        
-        // Verify the Google email matches the current user's email
-        if (currentUser.claims?.email !== googleEmail) {
-          console.error("Google email mismatch:", { 
-            currentEmail: currentUser.claims?.email, 
-            googleEmail 
-          });
-          return res.redirect("/profile?error=email_mismatch&message=Google account email does not match your current account");
-        }
-        
-        // Account linking successful - Google account is already linked during OAuth strategy
-        console.log("Google account linked successfully to existing user");
-        return res.redirect("/profile?success=google_linked&message=Google account linked successfully");
       }
       
       // Regular login flow for new sessions

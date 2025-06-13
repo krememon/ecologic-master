@@ -417,7 +417,7 @@ export default function Settings() {
                     {!linkedAccounts?.hasGoogle && (
                       <div className="flex items-center">
                         <Button
-                          onClick={() => window.location.href = '/api/auth/google'}
+                          onClick={() => window.location.href = '/api/auth/google/link'}
                           className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 rounded-full px-6 py-2.5 font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                         >
                           Link Google Account

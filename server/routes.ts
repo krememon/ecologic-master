@@ -131,6 +131,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Google account linking route
+  app.get('/api/auth/google/link', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      console.log("Starting Google account linking for user:", userId);
+      
+      // Store the linking intent in session
+      req.session.linkingAccount = {
+        userId: userId,
+        userEmail: req.user.claims.email,
+        action: 'link'
+      };
+      
+      // Redirect to Google OAuth with linking parameters
+      const googleAuthUrl = `/api/auth/google?link=true`;
+      res.redirect(googleAuthUrl);
+    } catch (error) {
+      console.error("Error starting Google account linking:", error);
+      res.status(500).json({ message: "Failed to start Google account linking" });
+    }
+  });
+
   // Set password for users who signed up with Google only
   app.post('/api/set-password', isAuthenticated, async (req: any, res) => {
     try {
