@@ -9,7 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload, Globe } from "lucide-react";
+import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload, Globe, CheckCircle, Mail } from "lucide-react";
+import { FaGoogle } from "react-icons/fa";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "@/components/LanguageSelector";
@@ -42,6 +45,44 @@ export default function Settings() {
     queryKey: ["/api/company"],
     enabled: isAuthenticated,
   });
+
+  // Fetch linked accounts for authentication methods section
+  const { data: linkedAccounts, isLoading: linkedAccountsLoading, error: linkedAccountsError } = useQuery<{
+    hasEmailPassword: boolean;
+    hasGoogle: boolean;
+    profileImageUrl?: string;
+  }>({
+    queryKey: ["/api/auth/linked-accounts"],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Handle URL parameters for Google account linking feedback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const message = urlParams.get('message');
+
+    if (success === 'google_linked') {
+      toast({
+        title: "Google Account Linked",
+        description: message || "Your Google account has been successfully linked.",
+      });
+      // Refresh linked accounts data
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/linked-accounts"] });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (error === 'email_mismatch') {
+      toast({
+        title: "Email Mismatch",
+        description: message || "The Google account email doesn't match your current account.",
+        variant: "destructive",
+      });
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [toast]);
 
   // Profile picture upload mutation
   const updateProfilePictureMutation = useMutation({
@@ -208,6 +249,104 @@ export default function Settings() {
             </div>
             
             <Button className="w-full">Update Profile</Button>
+          </CardContent>
+        </Card>
+
+        {/* Authentication Methods */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Authentication Methods
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Ways you can sign in to your account
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {linkedAccountsLoading ? (
+              <div className="space-y-3">
+                <div className="animate-pulse">
+                  <div className="h-16 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                </div>
+                <div className="animate-pulse">
+                  <div className="h-16 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                </div>
+              </div>
+            ) : linkedAccountsError ? (
+              <div className="text-sm text-red-600 dark:text-red-400">
+                Error loading authentication methods
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Email/Password Method */}
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <div className="flex items-center gap-3">
+                    <Mail className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                    <div>
+                      <div className="font-medium">Email & Password</div>
+                      <div className="text-sm text-muted-foreground">
+                        Sign in with email and password
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {linkedAccounts?.hasEmailPassword ? (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Linked
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">Not Linked</Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Google Method */}
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <div className="flex items-center gap-3">
+                    <FaGoogle className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                    <div>
+                      <div className="font-medium">Google</div>
+                      <div className="text-sm text-muted-foreground">
+                        Sign in with your Google account
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {linkedAccounts?.hasGoogle ? (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Linked
+                      </Badge>
+                    ) : (
+                      <>
+                        <Badge variant="outline">Not Linked</Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.location.href = '/api/auth/google'}
+                          className="ml-2"
+                        >
+                          Link Google Account
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Debug Information */}
+            {linkedAccounts && (
+              <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <div className="text-xs text-muted-foreground mb-2">Debug Status:</div>
+                <div className="text-xs font-mono space-y-1">
+                  <div>Email/Password: {linkedAccounts.hasEmailPassword ? '✅' : '❌'}</div>
+                  <div>Google: {linkedAccounts.hasGoogle ? '✅' : '❌'}</div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
