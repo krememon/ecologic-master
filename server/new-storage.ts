@@ -785,7 +785,7 @@ export class DatabaseStorage implements IStorage {
 
     return {
       hasEmailPassword: !!user.password,
-      hasGoogle: user.id.startsWith('google_') || !!user.profileImageUrl,
+      hasGoogle: user.id.startsWith('google_') || !!user.googleLinked,
       profileImageUrl: user.profileImageUrl || undefined
     };
   }

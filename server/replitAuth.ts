@@ -140,6 +140,7 @@ export async function setupAuth(app: Express) {
           }
           
           updateData.emailVerified = true;
+          updateData.googleLinked = true; // Mark Google account as linked
           
           // Update user with Google data
           if (Object.keys(updateData).length > 0) {
@@ -160,7 +161,8 @@ export async function setupAuth(app: Express) {
             firstName: profile.name?.givenName || '',
             lastName: profile.name?.familyName || '',
             profileImageUrl: profile.photos?.[0]?.value || null,
-            emailVerified: true
+            emailVerified: true,
+            googleLinked: true // New Google users have Google linked
           });
         }
         
