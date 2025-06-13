@@ -252,6 +252,94 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+
+
+        {/* Company Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <SettingsIcon className="h-5 w-5" />
+              Company
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="companyName">Company Name</Label>
+              <Input id="companyName" defaultValue={company?.name || ""} />
+            </div>
+            <div>
+              <Label htmlFor="companyEmail">Company Email</Label>
+              <Input id="companyEmail" type="email" defaultValue={company?.email || ""} />
+            </div>
+            <div>
+              <Label htmlFor="companyPhone">Phone Number</Label>
+              <Input id="companyPhone" defaultValue={company?.phone || ""} />
+            </div>
+            
+            <Button className="w-full">Update Company</Button>
+          </CardContent>
+        </Card>
+
+        {/* Appearance & Language Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              {t('settings.appearance')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="dark-mode">{t('settings.darkMode')}</Label>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {t('settings.darkModeDescription')}
+                </p>
+              </div>
+              <Switch
+                id="dark-mode"
+                checked={theme === 'dark'}
+                onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+              />
+            </div>
+            
+            <div className="border-t pt-4">
+              <LanguageSelector variant="dropdown" showLabel={true} />
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                {t('settings.languageDescription')}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Notification Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="notifications">Push Notifications</Label>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Receive notifications for important updates
+                </p>
+              </div>
+              <Switch
+                id="notifications"
+                checked={notifications}
+                onCheckedChange={setNotifications}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Company Management */}
+        <CompanyInviteCode />
+
         {/* Authentication Methods */}
         <Card>
           <CardHeader>
@@ -349,92 +437,6 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
-
-        {/* Company Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5" />
-              Company
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="companyName">Company Name</Label>
-              <Input id="companyName" defaultValue={company?.name || ""} />
-            </div>
-            <div>
-              <Label htmlFor="companyEmail">Company Email</Label>
-              <Input id="companyEmail" type="email" defaultValue={company?.email || ""} />
-            </div>
-            <div>
-              <Label htmlFor="companyPhone">Phone Number</Label>
-              <Input id="companyPhone" defaultValue={company?.phone || ""} />
-            </div>
-            
-            <Button className="w-full">Update Company</Button>
-          </CardContent>
-        </Card>
-
-        {/* Appearance & Language Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-              {t('settings.appearance')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="dark-mode">{t('settings.darkMode')}</Label>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {t('settings.darkModeDescription')}
-                </p>
-              </div>
-              <Switch
-                id="dark-mode"
-                checked={theme === 'dark'}
-                onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-              />
-            </div>
-            
-            <div className="border-t pt-4">
-              <LanguageSelector variant="dropdown" showLabel={true} />
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                {t('settings.languageDescription')}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Notification Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="notifications">Push Notifications</Label>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Receive notifications for important updates
-                </p>
-              </div>
-              <Switch
-                id="notifications"
-                checked={notifications}
-                onCheckedChange={setNotifications}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Company Management */}
-        <CompanyInviteCode />
 
         {/* Security Settings */}
         <Card className="md:col-span-2">
