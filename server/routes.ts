@@ -61,7 +61,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // Handle both session-based and Google OAuth authentication
+      let userId;
+      if (req.user.claims) {
+        // Replit/session-based auth
+        userId = req.user.claims.sub;
+      } else {
+        // Google OAuth or direct passport session
+        userId = req.user.id;
+      }
+      
+      console.log("Auth user endpoint - userId:", userId, "user object:", req.user);
       const user = await storage.getUser(userId);
       
       if (!user) {

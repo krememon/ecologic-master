@@ -107,13 +107,21 @@ export async function setupAuth(app: Express) {
     },
     async (accessToken: string, refreshToken: string, profile: any, done: any) => {
       try {
+        console.log("Google OAuth strategy called with profile:", {
+          id: profile.id,
+          email: profile.emails?.[0]?.value,
+          name: profile.name
+        });
+
         const email = profile.emails?.[0]?.value;
         if (!email) {
+          console.error("No email found in Google profile");
           return done(new Error("No email found in Google profile"), null);
         }
 
         // Check if user already exists with this email (account linking)
         let user = await storage.getUserByEmail(email);
+        console.log("Existing user found:", !!user);
         
         if (user) {
           // Link Google to existing account - update profile if needed
@@ -134,10 +142,12 @@ export async function setupAuth(app: Express) {
           
           // Update user with Google data
           if (Object.keys(updateData).length > 0) {
+            console.log("Updating existing user with Google data:", updateData);
             user = await storage.updateUser(parseInt(user.id), updateData);
           }
         } else {
           // Create new user with Google
+          console.log("Creating new user from Google profile");
           user = await storage.createUser({
             id: `google_${profile.id}`,
             email: email,
@@ -148,18 +158,12 @@ export async function setupAuth(app: Express) {
           });
         }
         
-        const sessionUser = { 
-          claims: {
-            sub: user.id,
-            email: user.email,
-            first_name: user.firstName,
-            last_name: user.lastName,
-            profile_image_url: user.profileImageUrl
-          },
-          provider: 'google'
-        };
-        return done(null, sessionUser);
+        console.log("User for session:", { id: user.id, email: user.email });
+        
+        // Return the user directly for passport session
+        return done(null, user);
       } catch (error) {
+        console.error("Google OAuth strategy error:", error);
         return done(error as Error, null);
       }
     }));
@@ -176,9 +180,32 @@ export async function setupAuth(app: Express) {
   );
 
   app.get("/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/login" }),
-    (req, res) => {
-      res.redirect("/");
+    passport.authenticate("google", { 
+      failureRedirect: "/?error=google_auth_failed",
+      session: true
+    }),
+    async (req, res) => {
+      try {
+        console.log("Google OAuth callback successful, user:", req.user);
+        
+        if (!req.user) {
+          console.error("No user found in Google OAuth callback");
+          return res.redirect("/?error=no_user");
+        }
+
+        // Ensure session is saved before redirect
+        req.session.save((err) => {
+          if (err) {
+            console.error("Session save error:", err);
+            return res.redirect("/?error=session_failed");
+          }
+          console.log("Session saved successfully, redirecting to dashboard");
+          res.redirect("/");
+        });
+      } catch (error) {
+        console.error("Google OAuth callback error:", error);
+        res.redirect("/?error=callback_failed");
+      }
     }
   );
 
@@ -408,22 +435,26 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated()) {
+  if (!req.isAuthenticated() || !req.user) {
+    console.log("Authentication failed: no session or user");
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // For email/password users, no token refresh needed
-  if (user.provider === 'email') {
+  const user = req.user as any;
+  console.log("Authentication check - user:", { 
+    id: user.id, 
+    email: user.email, 
+    provider: user.provider,
+    hasExpiresAt: !!user.expires_at 
+  });
+
+  // For Google OAuth users (no expires_at) or email/password users
+  if (!user.expires_at || user.provider === 'email') {
+    console.log("Allowing access for Google OAuth or email user");
     return next();
   }
 
-  // For OAuth users, check token expiration and refresh if needed
-  if (!user.expires_at) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
+  // For OAuth users with token expiration, check token and refresh if needed
   const now = Math.floor(Date.now() / 1000);
   if (now <= user.expires_at) {
     return next();
@@ -431,6 +462,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   const refreshToken = user.refresh_token;
   if (!refreshToken) {
+    console.log("Token expired and no refresh token available");
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
@@ -441,6 +473,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     updateUserSession(user, tokenResponse);
     return next();
   } catch (error) {
+    console.log("Token refresh failed:", error);
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
