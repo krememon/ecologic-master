@@ -303,7 +303,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // Handle both session-based and Google OAuth authentication
+      let userId;
+      if (req.user.claims) {
+        userId = req.user.claims.sub;
+      } else {
+        userId = req.user.id;
+      }
+      
       const company = await storage.getUserCompany(parseInt(userId));
       
       if (!company) {

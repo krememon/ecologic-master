@@ -103,7 +103,7 @@ export async function setupAuth(app: Express) {
     passport.use(new GoogleStrategy({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `/auth/google/callback`
+      callbackURL: `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}/auth/google/callback`
     },
     async (accessToken: string, refreshToken: string, profile: any, done: any) => {
       try {
@@ -143,7 +143,12 @@ export async function setupAuth(app: Express) {
           // Update user with Google data
           if (Object.keys(updateData).length > 0) {
             console.log("Updating existing user with Google data:", updateData);
-            user = await storage.updateUser(parseInt(user.id), updateData);
+            try {
+              user = await storage.updateUser(parseInt(user.id), updateData);
+            } catch (updateError) {
+              console.error("Error updating user with Google data:", updateError);
+              // Continue with original user if update fails
+            }
           }
         } else {
           // Create new user with Google
@@ -160,8 +165,25 @@ export async function setupAuth(app: Express) {
         
         console.log("User for session:", { id: user.id, email: user.email });
         
-        // Return the user directly for passport session
-        return done(null, user);
+        // Create consistent session user object
+        const sessionUser = {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          profileImageUrl: user.profileImageUrl,
+          provider: 'google',
+          claims: {
+            sub: user.id,
+            email: user.email,
+            first_name: user.firstName,
+            last_name: user.lastName,
+            profile_image_url: user.profileImageUrl
+          }
+        };
+        
+        console.log("Setting Google OAuth session user:", sessionUser);
+        return done(null, sessionUser);
       } catch (error) {
         console.error("Google OAuth strategy error:", error);
         return done(error as Error, null);
