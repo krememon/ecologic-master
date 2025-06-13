@@ -103,9 +103,10 @@ export async function setupAuth(app: Express) {
     passport.use(new GoogleStrategy({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `/auth/google/callback`
+      callbackURL: `/auth/google/callback`,
+      passReqToCallback: true
     },
-    async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+    async (req: any, accessToken: string, refreshToken: string, params: any, profile: any, done: any) => {
       try {
         console.log("Google OAuth strategy called with profile:", {
           id: profile.id,
@@ -197,49 +198,53 @@ export async function setupAuth(app: Express) {
   // Replit authentication removed
 
   // Google authentication routes
-  app.get("/auth/google", (req, res, next) => {
-    // Build the OAuth URL with required parameters
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
-      `redirect_uri=${encodeURIComponent(`${req.protocol}://${req.get('host')}/auth/google/callback`)}&` +
-      `response_type=code&` +
-      `scope=${encodeURIComponent('profile email')}&` +
-      `prompt=select_account&` +
-      `access_type=offline&` +
-      `include_granted_scopes=true`;
-    
-    res.redirect(authUrl);
-  });
+  app.get("/auth/google", 
+    passport.authenticate("google", { 
+      scope: ["profile", "email"],
+      prompt: "select_account",
+      accessType: "offline",
+      includeGrantedScopes: true
+    })
+  );
 
-  app.get("/auth/google/callback",
+  app.get("/auth/google/callback", (req, res, next) => {
+    console.log("Google OAuth callback received, processing...");
+    
     passport.authenticate("google", { 
       failureRedirect: "/?error=google_auth_failed",
       session: true
-    }),
-    async (req, res) => {
-      try {
-        console.log("Google OAuth callback successful, user:", req.user);
-        
-        if (!req.user) {
-          console.error("No user found in Google OAuth callback");
-          return res.redirect("/?error=no_user");
+    }, (err, user, info) => {
+      if (err) {
+        console.error("Google OAuth authentication error:", err);
+        return res.redirect("/?error=auth_error");
+      }
+      
+      if (!user) {
+        console.error("Google OAuth authentication failed, no user returned:", info);
+        return res.redirect("/?error=no_user");
+      }
+      
+      // Log in the user
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          console.error("Login error after Google OAuth:", loginErr);
+          return res.redirect("/?error=login_failed");
         }
-
+        
+        console.log("Google OAuth login successful, user:", user);
+        
         // Ensure session is saved before redirect
-        req.session.save((err) => {
-          if (err) {
-            console.error("Session save error:", err);
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
             return res.redirect("/?error=session_failed");
           }
           console.log("Session saved successfully, redirecting to dashboard");
           res.redirect("/");
         });
-      } catch (error) {
-        console.error("Google OAuth callback error:", error);
-        res.redirect("/?error=callback_failed");
-      }
-    }
-  );
+      });
+    })(req, res, next);
+  });
 
   // Password reset routes
   app.post("/api/forgot-password", async (req, res) => {
