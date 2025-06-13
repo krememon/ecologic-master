@@ -169,7 +169,7 @@ export default function Landing() {
             )}
           </div>
 
-          {/* Social Login Options */}
+          {/* Google Login Option */}
           <div className="space-y-2">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -179,13 +179,6 @@ export default function Landing() {
                 <span className="px-2 bg-slate-50 dark:bg-slate-900 text-gray-500">Or continue with</span>
               </div>
             </div>
-            
-            <Button 
-              onClick={() => window.location.href = "/api/login"}
-              className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300"
-            >
-              Sign In with Replit
-            </Button>
             
             <Button 
               onClick={() => window.location.href = "/auth/google"}
