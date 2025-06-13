@@ -103,8 +103,7 @@ export async function setupAuth(app: Express) {
     passport.use(new GoogleStrategy({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `/auth/google/callback`,
-      scope: ['profile', 'email']
+      callbackURL: `/auth/google/callback`
     },
     async (accessToken: string, refreshToken: string, profile: any, done: any) => {
       try {
@@ -198,12 +197,14 @@ export async function setupAuth(app: Express) {
   // Replit authentication removed
 
   // Google authentication routes
-  app.get("/auth/google", 
+  app.get("/auth/google", (req, res, next) => {
     passport.authenticate("google", { 
       scope: ["profile", "email"],
-      prompt: "select_account"
-    })
-  );
+      prompt: "select_account",
+      accessType: "offline",
+      includeGrantedScopes: true
+    })(req, res, next);
+  });
 
   app.get("/auth/google/callback",
     passport.authenticate("google", { 
