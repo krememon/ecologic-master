@@ -28,6 +28,19 @@ import Approvals from "@/pages/Approvals";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import ChoosePlan from "@/pages/ChoosePlan";
+import { withSubscriptionGuard } from "@/hooks/useSubscription";
+
+// Wrap protected components with subscription guard
+const ProtectedHome = withSubscriptionGuard(Home);
+const ProtectedJobs = withSubscriptionGuard(Jobs);
+const ProtectedSubcontractors = withSubscriptionGuard(Subcontractors);
+const ProtectedClients = withSubscriptionGuard(Clients);
+const ProtectedInvoicing = withSubscriptionGuard(Invoicing);
+const ProtectedPayments = withSubscriptionGuard(PaymentsPage);
+const ProtectedDocuments = withSubscriptionGuard(Documents);
+const ProtectedMessages = withSubscriptionGuard(Messages);
+const ProtectedAIScheduling = withSubscriptionGuard(AIScheduling);
+const ProtectedApprovals = withSubscriptionGuard(Approvals);
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -60,16 +73,17 @@ function Router() {
   return (
     <Layout>
       <Switch>
-        <Route path="/" component={Home} />
-        <Route path="/jobs" component={Jobs} />
-        <Route path="/subcontractors" component={Subcontractors} />
-        <Route path="/clients" component={Clients} />
-        <Route path="/invoicing" component={Invoicing} />
-        <Route path="/payments" component={PaymentsPage} />
-        <Route path="/documents" component={Documents} />
-        <Route path="/messages" component={Messages} />
-        <Route path="/ai-scheduling" component={AIScheduling} />
-        <Route path="/approvals" component={Approvals} />
+        <Route path="/choose-plan" component={ChoosePlan} />
+        <Route path="/" component={ProtectedHome} />
+        <Route path="/jobs" component={ProtectedJobs} />
+        <Route path="/subcontractors" component={ProtectedSubcontractors} />
+        <Route path="/clients" component={ProtectedClients} />
+        <Route path="/invoicing" component={ProtectedInvoicing} />
+        <Route path="/payments" component={ProtectedPayments} />
+        <Route path="/documents" component={ProtectedDocuments} />
+        <Route path="/messages" component={ProtectedMessages} />
+        <Route path="/ai-scheduling" component={ProtectedAIScheduling} />
+        <Route path="/approvals" component={ProtectedApprovals} />
         <Route path="/settings" component={Settings} />
         <Route path="/profile" component={Profile} />
         <Route component={NotFound} />

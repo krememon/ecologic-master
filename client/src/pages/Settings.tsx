@@ -17,6 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "@/components/LanguageSelector";
 import CompanyInviteCode from "@/components/CompanyInviteCode";
+import { BillingSection } from "@/components/BillingSection";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -458,6 +459,11 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        {/* Billing & Subscription */}
+        <div className="md:col-span-3">
+          <BillingSection />
+        </div>
 
         {/* Security Settings */}
         <Card className="md:col-span-2">

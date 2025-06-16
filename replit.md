@@ -132,6 +132,14 @@ EcoLogic is a professional construction management platform designed for trade c
 - June 13, 2025. Integrated Google account linking functionality into Settings page with proper positioning below Employee Access section
 - June 13, 2025. Fixed Google OAuth redirect URI configuration for Replit deployment domain
 - June 13, 2025. Enhanced Google OAuth flow to properly handle new account creation and existing account linking with comprehensive error handling
+- June 16, 2025. Implemented complete Stripe subscription system with access control:
+  - Added subscription plans (Starter $29, Professional $79, Enterprise $199)
+  - Created subscription-based access control middleware for all protected routes
+  - Built ChoosePlan page with 7-day free trial and Stripe payment integration
+  - Added billing management section to Settings page with plan management
+  - Implemented subscription status checking and automatic redirect to plan selection
+  - Added team size limits based on subscription plans
+  - Created subscription hooks for frontend access control
 
 ## User Preferences
 
