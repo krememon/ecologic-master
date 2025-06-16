@@ -27,6 +27,7 @@ import ProfileNew from "@/pages/ProfileNew";
 import Approvals from "@/pages/Approvals";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import ChoosePlan from "@/pages/ChoosePlan";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();

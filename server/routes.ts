@@ -376,8 +376,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let stripeCustomerId = user.stripeCustomerId;
       if (!stripeCustomerId) {
         const customer = await stripe.customers.create({
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`.trim(),
+          email: user.email || undefined,
+          name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         });
         stripeCustomerId = customer.id;
         await storage.updateUser(parseInt(user.id), { stripeCustomerId });
@@ -392,7 +392,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recurring: { interval: 'month' },
         product_data: {
           name: `EcoLogic ${planConfig.name} Plan`,
-          description: `${planConfig.name} plan with ${planConfig.maxUsers} users`,
         },
       });
 
@@ -418,9 +417,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         trialEndsAt: trialEnd
       });
 
+      const latestInvoice = subscription.latest_invoice;
+      const clientSecret = latestInvoice && typeof latestInvoice === 'object' && latestInvoice.payment_intent && typeof latestInvoice.payment_intent === 'object' 
+        ? latestInvoice.payment_intent.client_secret 
+        : null;
+
       res.json({
         subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+        clientSecret,
         trialEndsAt: trialEnd,
         status: subscription.status
       });
