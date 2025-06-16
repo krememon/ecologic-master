@@ -206,15 +206,31 @@ export async function setupAuth(app: Express) {
             // User already has Google linked, proceed normally
           } else {
             // User exists but doesn't have Google linked
-            // This means they registered with email/password and now trying to sign in with Google
-            console.log("User exists with email/password but trying to sign in with Google");
+            // Automatically link Google to their existing account and sign them in
+            console.log("User exists with email/password, automatically linking Google account");
             
-            // We should NOT automatically link Google here during sign-in
-            // Instead, redirect them with a message to link their account from Settings
-            return done(null, null, {
-              error: 'account_exists_email_only',
-              message: `An account with ${email} already exists. Please sign in with your email/password, then link your Google account from Settings.`
-            });
+            // Set Google as linked for this user
+            const linkData = {
+              googleLinked: true,
+              emailVerified: true
+            };
+            
+            try {
+              const userId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
+              console.log("Auto-linking Google to existing user ID:", userId);
+              
+              const updatedUser = await storage.updateUser(userId, linkData);
+              if (updatedUser) {
+                user = updatedUser;
+                console.log("Successfully auto-linked Google to existing account:", user.id);
+              } else {
+                console.warn("Auto-link update returned undefined, keeping original user");
+                // Continue with original user - we'll still sign them in
+              }
+            } catch (linkError) {
+              console.error("Error auto-linking Google to existing account:", linkError);
+              // Continue anyway - we can still sign them in even if linking failed
+            }
           }
           
           // Update user with Google data if needed (for already linked Google accounts)
@@ -362,10 +378,6 @@ export async function setupAuth(app: Express) {
         
         if (info.success === 'google_linked') {
           return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
-        }
-        
-        if (info.error === 'account_exists_email_only') {
-          return res.redirect(`/?error=account_exists_email_only&message=${encodeURIComponent(info.message)}`);
         }
       }
       
