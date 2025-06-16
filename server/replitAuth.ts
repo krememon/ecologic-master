@@ -197,7 +197,27 @@ export async function setupAuth(app: Express) {
         console.log("Existing user found:", !!user);
         
         if (user) {
-          // User exists - update with Google data if needed
+          // User exists with this email
+          console.log("User found with email:", email, "Google linked:", user.googleLinked);
+          
+          // Check if this user already has Google linked
+          if (user.googleLinked) {
+            console.log("User already has Google linked, proceeding with login");
+            // User already has Google linked, proceed normally
+          } else {
+            // User exists but doesn't have Google linked
+            // This means they registered with email/password and now trying to sign in with Google
+            console.log("User exists with email/password but trying to sign in with Google");
+            
+            // We should NOT automatically link Google here during sign-in
+            // Instead, redirect them with a message to link their account from Settings
+            return done(null, null, {
+              error: 'account_exists_email_only',
+              message: `An account with ${email} already exists. Please sign in with your email/password, then link your Google account from Settings.`
+            });
+          }
+          
+          // Update user with Google data if needed (for already linked Google accounts)
           const updateData: any = {};
           
           if (!user.profileImageUrl && profile.photos?.[0]?.value) {
@@ -212,22 +232,32 @@ export async function setupAuth(app: Express) {
           }
           
           updateData.emailVerified = true;
-          updateData.googleLinked = true; // Mark Google account as linked
           
-          // Update user with Google data
+          // Update user with Google data if there's anything to update
           if (Object.keys(updateData).length > 0) {
-            console.log("Updating existing user with Google data:", updateData);
+            console.log("Updating existing Google user with latest data:", updateData);
             try {
-              const updatedUser = await storage.updateUser(parseInt(user.id), updateData);
-              user = updatedUser; // Use the updated user
+              // Convert user ID to integer for database update
+              const userId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
+              console.log("Updating user ID:", userId, "with data:", updateData);
+              
+              const updatedUser = await storage.updateUser(userId, updateData);
+              console.log("Update result:", updatedUser);
+              
+              if (updatedUser) {
+                user = updatedUser; // Use the updated user
+                console.log("Successfully updated existing Google user:", user.id);
+              } else {
+                console.warn("Update returned undefined, keeping original user");
+              }
             } catch (updateError) {
-              console.error("Error updating user with Google data:", updateError);
+              console.error("Error updating existing Google user:", updateError);
               // Continue with original user if update fails
             }
           }
         } else {
-          // Create new user with Google
-          console.log("Creating new user from Google profile");
+          // No user exists with this email - create new Google account
+          console.log("No existing user found, creating new Google account for:", email);
           try {
             user = await storage.createUser({
               id: `google_${profile.id}`,
@@ -332,6 +362,10 @@ export async function setupAuth(app: Express) {
         
         if (info.success === 'google_linked') {
           return res.redirect(`/settings?success=google_linked&message=${encodeURIComponent(info.message)}`);
+        }
+        
+        if (info.error === 'account_exists_email_only') {
+          return res.redirect(`/?error=account_exists_email_only&message=${encodeURIComponent(info.message)}`);
         }
       }
       

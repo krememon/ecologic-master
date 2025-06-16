@@ -43,6 +43,9 @@ export default function Landing() {
         case 'google_auth_failed':
           title = "Google Sign In Failed";
           break;
+        case 'account_exists_email_only':
+          title = "Account Already Exists";
+          break;
       }
       
       toast({
