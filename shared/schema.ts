@@ -41,6 +41,7 @@ export const users = pgTable("users", {
   resetPasswordToken: varchar("reset_password_token"),
   resetPasswordExpires: timestamp("reset_password_expires"),
   googleLinked: boolean("google_linked").default(false), // Track Google account linking
+  stripeCustomerId: varchar("stripe_customer_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -53,6 +54,11 @@ export const companies = pgTable("companies", {
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),
   ownerId: varchar("owner_id").notNull().references(() => users.id),
+  stripeSubscriptionId: varchar("stripe_subscription_id"),
+  subscriptionStatus: varchar("subscription_status").default("inactive"), // active, past_due, canceled, incomplete, trialing, inactive
+  subscriptionPlan: varchar("subscription_plan"), // starter, professional, enterprise
+  maxUsers: integer("max_users").default(1),
+  trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -421,6 +427,25 @@ export const approvalHistoryRelations = relations(approvalHistory, ({ one }) => 
     references: [users.id],
   }),
 }));
+
+// Subscriptions table for tracking detailed subscription data
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  stripeSubscriptionId: varchar("stripe_subscription_id").unique().notNull(),
+  stripePriceId: varchar("stripe_price_id").notNull(),
+  status: varchar("status").notNull(), // active, past_due, canceled, incomplete, trialing
+  currentPeriodStart: timestamp("current_period_start").notNull(),
+  currentPeriodEnd: timestamp("current_period_end").notNull(),
+  planName: varchar("plan_name").notNull(), // starter, professional, enterprise
+  maxUsers: integer("max_users").notNull(),
+  monthlyPrice: decimal("monthly_price", { precision: 10, scale: 2 }).notNull(),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
+  trialStart: timestamp("trial_start"),
+  trialEnd: timestamp("trial_end"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 
 // Insert schemas
 export const insertCompanySchema = createInsertSchema(companies).omit({
