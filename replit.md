@@ -131,6 +131,7 @@ EcoLogic is a professional construction management platform designed for trade c
 - June 13, 2025. Fixed Google OAuth callback route with enhanced error handling and proper token validation
 - June 13, 2025. Integrated Google account linking functionality into Settings page with proper positioning below Employee Access section
 - June 13, 2025. Fixed Google OAuth redirect URI configuration for Replit deployment domain
+- June 13, 2025. Enhanced Google OAuth flow to properly handle new account creation and existing account linking with comprehensive error handling
 
 ## User Preferences
 

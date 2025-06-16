@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,44 @@ export default function Landing() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+
+  // Handle URL parameters for OAuth errors
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    const message = urlParams.get('message');
+
+    if (error && message) {
+      let title = "Sign In Error";
+      
+      switch (error) {
+        case 'token_expired':
+          title = "Session Expired";
+          break;
+        case 'account_creation_failed':
+          title = "Account Creation Failed";
+          break;
+        case 'account_processing_failed':
+          title = "Account Processing Failed";
+          break;
+        case 'auth_error':
+          title = "Authentication Error";
+          break;
+        case 'google_auth_failed':
+          title = "Google Sign In Failed";
+          break;
+      }
+      
+      toast({
+        title: title,
+        description: decodeURIComponent(message),
+        variant: "destructive",
+      });
+      
+      // Clear URL parameters
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();

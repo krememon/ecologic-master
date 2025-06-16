@@ -197,7 +197,7 @@ export async function setupAuth(app: Express) {
         console.log("Existing user found:", !!user);
         
         if (user) {
-          // Link Google to existing account - update profile if needed
+          // User exists - update with Google data if needed
           const updateData: any = {};
           
           if (!user.profileImageUrl && profile.photos?.[0]?.value) {
@@ -218,7 +218,8 @@ export async function setupAuth(app: Express) {
           if (Object.keys(updateData).length > 0) {
             console.log("Updating existing user with Google data:", updateData);
             try {
-              user = await storage.updateUser(parseInt(user.id), updateData);
+              const updatedUser = await storage.updateUser(parseInt(user.id), updateData);
+              user = updatedUser; // Use the updated user
             } catch (updateError) {
               console.error("Error updating user with Google data:", updateError);
               // Continue with original user if update fails
@@ -227,15 +228,27 @@ export async function setupAuth(app: Express) {
         } else {
           // Create new user with Google
           console.log("Creating new user from Google profile");
-          user = await storage.createUser({
-            id: `google_${profile.id}`,
-            email: email,
-            firstName: profile.name?.givenName || '',
-            lastName: profile.name?.familyName || '',
-            profileImageUrl: profile.photos?.[0]?.value || null,
-            emailVerified: true,
-            googleLinked: true // New Google users have Google linked
-          });
+          try {
+            user = await storage.createUser({
+              id: `google_${profile.id}`,
+              email: email,
+              firstName: profile.name?.givenName || '',
+              lastName: profile.name?.familyName || '',
+              profileImageUrl: profile.photos?.[0]?.value || null,
+              emailVerified: true,
+              googleLinked: true
+            });
+            console.log("Successfully created new Google user:", user.id);
+          } catch (createError) {
+            console.error("Error creating new Google user:", createError);
+            return done(new Error("Failed to create user account"), null);
+          }
+        }
+
+        // Ensure user object is valid
+        if (!user || !user.id) {
+          console.error("Invalid user object after Google OAuth:", user);
+          return done(new Error("Failed to process user account"), null);
         }
         
         console.log("User for session:", { id: user.id, email: user.email });
@@ -291,13 +304,22 @@ export async function setupAuth(app: Express) {
       if (err) {
         console.error("Google OAuth authentication error:", err);
         
-        // Handle specific OAuth errors
+        // Handle specific OAuth errors with user-friendly messages
         if (err.code === 'invalid_grant' || err.message?.includes('Malformed auth code')) {
           console.log("OAuth token expired or invalid, redirecting to retry");
           return res.redirect("/?error=token_expired&message=Please try signing in again");
         }
         
-        return res.redirect("/?error=auth_error");
+        if (err.message?.includes('Failed to create user account')) {
+          return res.redirect("/?error=account_creation_failed&message=Unable to create your account. Please try again or contact support");
+        }
+        
+        if (err.message?.includes('Failed to process user account')) {
+          return res.redirect("/?error=account_processing_failed&message=There was an issue processing your account. Please try again");
+        }
+        
+        // Generic error with helpful message
+        return res.redirect("/?error=auth_error&message=Authentication failed. Please try again or use email/password login");
       }
       
       // Handle account linking responses
