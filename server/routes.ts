@@ -12,37 +12,9 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import Stripe from "stripe";
+// Stripe removed
 
-// Initialize Stripe
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-05-28.basil",
-});
-
-// Subscription plans configuration
-const SUBSCRIPTION_PLANS = {
-  starter: {
-    name: 'Starter',
-    maxUsers: 3,
-    monthlyPrice: 29,
-    features: ['Basic job management', 'Client communication', 'Up to 3 team members']
-  },
-  professional: {
-    name: 'Professional', 
-    maxUsers: 10,
-    monthlyPrice: 79,
-    features: ['Advanced scheduling', 'AI optimization', 'Up to 10 team members', 'Document management']
-  },
-  enterprise: {
-    name: 'Enterprise',
-    maxUsers: 50,
-    monthlyPrice: 199,
-    features: ['Unlimited features', 'Up to 50 team members', 'Priority support', 'Custom integrations']
-  }
-};
+// Subscription plans removed
 
 const scryptAsync = promisify(scrypt);
 
@@ -82,41 +54,11 @@ async function sendPushNotification(userId: string, notification: any) {
   // Push notification implementation
 }
 
-// Subscription access control middleware
-async function requireActiveSubscription(req: any, res: any, next: any) {
+// Simple authentication middleware for protected routes
+async function requireAuthentication(req: any, res: any, next: any) {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-
-  const userId = getUserId(req.user);
-  const company = await storage.getUserCompany(parseInt(userId));
-  
-  if (!company) {
-    return res.status(403).json({ 
-      message: "No company found",
-      requiresSubscription: true,
-      redirectTo: "/choose-plan"
-    });
-  }
-
-  // Check if subscription is active
-  const hasActiveSubscription = company.subscriptionStatus === 'active' || 
-                                company.subscriptionStatus === 'trialing';
-  
-  // Check if trial is still valid
-  const isValidTrial = company.trialEndsAt && new Date() < company.trialEndsAt;
-  
-  if (!hasActiveSubscription && !isValidTrial) {
-    return res.status(403).json({ 
-      message: "Active subscription required",
-      requiresSubscription: true,
-      redirectTo: "/choose-plan",
-      subscriptionStatus: company.subscriptionStatus
-    });
-  }
-
-  // Add company data to request for use in routes
-  req.company = company;
   next();
 }
 
@@ -302,221 +244,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Subscription Routes
-  
-  // Get available subscription plans
-  app.get('/api/subscription/plans', async (req, res) => {
-    try {
-      res.json(SUBSCRIPTION_PLANS);
-    } catch (error) {
-      console.error("Error fetching subscription plans:", error);
-      res.status(500).json({ message: "Failed to fetch plans" });
-    }
-  });
-
-  // Get current subscription status
-  app.get('/api/subscription/status', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
-      
-      if (!company) {
-        return res.json({ 
-          hasCompany: false,
-          requiresSubscription: true,
-          redirectTo: "/choose-plan"
-        });
-      }
-
-      const hasActiveSubscription = company.subscriptionStatus === 'active' || 
-                                   company.subscriptionStatus === 'trialing';
-      const isValidTrial = company.trialEndsAt && new Date() < company.trialEndsAt;
-
-      res.json({
-        hasCompany: true,
-        subscriptionStatus: company.subscriptionStatus,
-        subscriptionPlan: company.subscriptionPlan,
-        maxUsers: company.maxUsers,
-        hasActiveSubscription: hasActiveSubscription || isValidTrial,
-        trialEndsAt: company.trialEndsAt,
-        requiresSubscription: !hasActiveSubscription && !isValidTrial,
-        redirectTo: !hasActiveSubscription && !isValidTrial ? "/choose-plan" : null
-      });
-    } catch (error) {
-      console.error("Error fetching subscription status:", error);
-      res.status(500).json({ message: "Failed to fetch subscription status" });
-    }
-  });
-
-  // Create subscription with 7-day free trial
-  app.post('/api/subscription/create', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req.user);
-      const { plan } = req.body;
-
-      if (!SUBSCRIPTION_PLANS[plan as keyof typeof SUBSCRIPTION_PLANS]) {
-        return res.status(400).json({ message: "Invalid subscription plan" });
-      }
-
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      let company = await storage.getUserCompany(parseInt(userId));
-      if (!company) {
-        // Create company if it doesn't exist
-        company = await storage.createCompany({
-          name: "My Company",
-          ownerId: user.id
-        });
-      }
-
-      // Create or get Stripe customer
-      let stripeCustomerId = user.stripeCustomerId;
-      if (!stripeCustomerId) {
-        const customer = await stripe.customers.create({
-          email: user.email || undefined,
-          name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-        });
-        stripeCustomerId = customer.id;
-        await storage.updateUser(parseInt(user.id), { stripeCustomerId });
-      }
-
-      const planConfig = SUBSCRIPTION_PLANS[plan as keyof typeof SUBSCRIPTION_PLANS];
-
-      // Create price in Stripe if it doesn't exist
-      const price = await stripe.prices.create({
-        currency: 'usd',
-        unit_amount: planConfig.monthlyPrice * 100, // Convert to cents
-        recurring: { interval: 'month' },
-        product_data: {
-          name: `EcoLogic ${planConfig.name} Plan`,
-        },
-      });
-
-      // Create subscription with 7-day free trial
-      const subscription = await stripe.subscriptions.create({
-        customer: stripeCustomerId,
-        items: [{ price: price.id }],
-        trial_period_days: 7,
-        payment_behavior: 'default_incomplete',
-        payment_settings: { save_default_payment_method: 'on_subscription' },
-        expand: ['latest_invoice.payment_intent'],
-      });
-
-      // Update company with subscription details
-      const trialEnd = new Date();
-      trialEnd.setDate(trialEnd.getDate() + 7);
-
-      await storage.updateCompany(company.id, {
-        stripeSubscriptionId: subscription.id,
-        subscriptionStatus: 'trialing',
-        subscriptionPlan: plan,
-        maxUsers: planConfig.maxUsers,
-        trialEndsAt: trialEnd
-      });
-
-      const latestInvoice = subscription.latest_invoice;
-      const clientSecret = latestInvoice && typeof latestInvoice === 'object' && latestInvoice.payment_intent && typeof latestInvoice.payment_intent === 'object' 
-        ? latestInvoice.payment_intent.client_secret 
-        : null;
-
-      res.json({
-        subscriptionId: subscription.id,
-        clientSecret,
-        trialEndsAt: trialEnd,
-        status: subscription.status
-      });
-    } catch (error) {
-      console.error("Error creating subscription:", error);
-      res.status(500).json({ message: "Failed to create subscription" });
-    }
-  });
-
-  // Update payment method
-  app.post('/api/subscription/update-payment-method', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req.user);
-      const { paymentMethodId } = req.body;
-
-      const user = await storage.getUser(userId);
-      if (!user || !user.stripeCustomerId) {
-        return res.status(404).json({ message: "Customer not found" });
-      }
-
-      // Attach payment method to customer
-      await stripe.paymentMethods.attach(paymentMethodId, {
-        customer: user.stripeCustomerId,
-      });
-
-      // Set as default payment method
-      await stripe.customers.update(user.stripeCustomerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
-      });
-
-      res.json({ message: "Payment method updated successfully" });
-    } catch (error) {
-      console.error("Error updating payment method:", error);
-      res.status(500).json({ message: "Failed to update payment method" });
-    }
-  });
-
-  // Cancel subscription
-  app.post('/api/subscription/cancel', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
-      
-      if (!company || !company.stripeSubscriptionId) {
-        return res.status(404).json({ message: "No active subscription found" });
-      }
-
-      // Check if user is company owner
-      if (company.ownerId !== userId) {
-        return res.status(403).json({ message: "Only the account owner can cancel subscription" });
-      }
-
-      // Cancel subscription at period end
-      await stripe.subscriptions.update(company.stripeSubscriptionId, {
-        cancel_at_period_end: true,
-      });
-
-      res.json({ message: "Subscription will be canceled at the end of the current period" });
-    } catch (error) {
-      console.error("Error canceling subscription:", error);
-      res.status(500).json({ message: "Failed to cancel subscription" });
-    }
-  });
-
-  // Reactivate canceled subscription
-  app.post('/api/subscription/reactivate', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
-      
-      if (!company || !company.stripeSubscriptionId) {
-        return res.status(404).json({ message: "No subscription found" });
-      }
-
-      // Check if user is company owner
-      if (company.ownerId !== userId) {
-        return res.status(403).json({ message: "Only the account owner can reactivate subscription" });
-      }
-
-      await stripe.subscriptions.update(company.stripeSubscriptionId, {
-        cancel_at_period_end: false,
-      });
-
-      res.json({ message: "Subscription reactivated successfully" });
-    } catch (error) {
-      console.error("Error reactivating subscription:", error);
-      res.status(500).json({ message: "Failed to reactivate subscription" });
-    }
-  });
+  // Subscription routes removed - app is now free to use
 
   // Client routes
-  app.get('/api/clients', requireActiveSubscription, async (req: any, res) => {
+  app.get('/api/clients', isAuthenticated, async (req: any, res) => {
     try {
       
       const user = req.user;
