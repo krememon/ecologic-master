@@ -89,10 +89,10 @@ export async function setupAuth(app: Express) {
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
   ) => {
-    const user = {};
+    const user = tokens.claims();
     updateUserSession(user, tokens);
     await upsertUser(tokens.claims());
-    verified(null, user);
+    verified(null, user as any);
   };
 
   // Setup Replit OAuth
@@ -634,6 +634,32 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Debug environment variable
+  console.log("BYPASS_AUTH environment variable:", process.env.BYPASS_AUTH);
+  
+  // Bypass authentication for development if BYPASS_AUTH is set
+  if (process.env.BYPASS_AUTH === 'true') {
+    console.log("🚀 Authentication bypassed for development");
+    // Set a mock user for bypassed authentication
+    req.user = {
+      id: '43456086',
+      email: 'pjpell077@gmail.com',
+      firstName: 'Peter',
+      lastName: 'Pellegrino',
+      profileImageUrl: null,
+      password: null,
+      emailVerified: true,
+      emailVerificationToken: null,
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+      googleLinked: false,
+      stripeCustomerId: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as any; // Use 'as any' to bypass strict typing for the bypass user
+    return next();
+  }
+
   if (!req.isAuthenticated() || !req.user) {
     console.log("Authentication failed: no session or user");
     return res.status(401).json({ message: "Unauthorized" });
