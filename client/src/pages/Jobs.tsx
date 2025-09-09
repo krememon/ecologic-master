@@ -166,6 +166,7 @@ export default function Jobs() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -207,11 +208,13 @@ export default function Jobs() {
 
   const deleteJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
+      console.debug('Deleting job', jobId);
       await apiRequest("DELETE", `/api/jobs/${jobId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setJobToDelete(null); // Reset modal state
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -484,35 +487,14 @@ export default function Jobs() {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Job</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete "{job.title}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => deleteJobMutation.mutate(job.id)}
-                            className="bg-red-600 hover:bg-red-700"
-                            disabled={deleteJobMutation.isPending}
-                          >
-                            {deleteJobMutation.isPending ? "Deleting..." : "Delete"}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                      onClick={() => setJobToDelete({ id: job.id, title: job.title })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -520,6 +502,33 @@ export default function Jobs() {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Modal - Single Source of Truth */}
+      <AlertDialog open={!!jobToDelete} onOpenChange={(open) => !open && setJobToDelete(null)}>
+        <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Job</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{jobToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (jobToDelete) {
+                  console.debug('Modal delete confirmation - Job ID:', jobToDelete.id, 'Job Title:', jobToDelete.title);
+                  deleteJobMutation.mutate(jobToDelete.id);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteJobMutation.isPending}
+            >
+              {deleteJobMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
