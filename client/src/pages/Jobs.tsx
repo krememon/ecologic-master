@@ -209,12 +209,22 @@ export default function Jobs() {
   const deleteJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
       console.debug('Deleting job', jobId);
-      await apiRequest("DELETE", `/api/jobs/${jobId}`);
+      const res = await apiRequest("DELETE", `/api/jobs/${jobId}`);
+      // Handle both 200 and 204 responses
+      if (res.status === 204) {
+        return; // No content to return
+      } else if (res.status === 200) {
+        return await res.json();
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       setJobToDelete(null); // Reset modal state
+      toast({
+        title: "Success",
+        description: "Job deleted successfully",
+      });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -238,7 +248,7 @@ export default function Jobs() {
 
   const updateJobMutation = useMutation({
     mutationFn: async ({ jobId, jobData }: { jobId: number; jobData: Partial<InsertJob> }) => {
-      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, jobData);
+      const res = await apiRequest("PATCH", `/api/jobs/${jobId}`, jobData);
       return await res.json();
     },
     onSuccess: () => {

@@ -449,6 +449,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update job (PATCH)
+  app.patch('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.id);
+      const job = await storage.updateJob(jobId, req.body);
+      
+      res.json(job);
+    } catch (error) {
+      console.error("Error updating job:", error);
+      res.status(500).json({ message: "Failed to update job" });
+    }
+  });
+
+  // Delete job
+  app.delete('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(parseInt(userId));
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.id);
+      await storage.deleteJob(jobId);
+      
+      res.status(204).send(); // No content response
+    } catch (error) {
+      console.error("Error deleting job:", error);
+      res.status(500).json({ message: "Failed to delete job" });
+    }
+  });
+
   // Job Photos routes
   app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
     try {
