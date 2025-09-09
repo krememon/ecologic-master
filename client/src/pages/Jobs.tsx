@@ -12,7 +12,6 @@ import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camer
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
-import WeatherDashboard from "@/components/WeatherDashboard";
 import AIScopeAnalyzer from "@/components/AIScopeAnalyzer";
 
 interface JobWithClient extends Job {
@@ -396,15 +395,6 @@ export default function Jobs() {
                 />
               )}
 
-              {/* Weather Dashboard */}
-              {selectedJob.location && (
-                <WeatherDashboard
-                  jobId={selectedJob.id}
-                  location={selectedJob.location}
-                  startDate={selectedJob.startDate}
-                  endDate={selectedJob.endDate}
-                />
-              )}
 
               {/* Photo Feed */}
               <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
