@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Camera, Upload, MapPin, Cloud, Calendar, User, Trash2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Camera, Upload, MapPin, User, Trash2, ZoomIn, ZoomOut, RotateCcw, Calendar } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 interface JobPhoto {
@@ -31,36 +30,15 @@ interface JobPhotoFeedProps {
   canUpload?: boolean;
 }
 
-const phases = [
-  "Site Preparation",
-  "Foundation",
-  "Framing",
-  "Roofing",
-  "Electrical",
-  "Plumbing",
-  "Insulation",
-  "Drywall",
-  "Flooring",
-  "Paint",
-  "Final Inspection",
-  "Completion"
-];
-
-const weatherOptions = [
-  "Sunny", "Cloudy", "Rainy", "Snowy", "Windy", "Overcast"
-];
 
 export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<JobPhoto | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [uploadForm, setUploadForm] = useState({
-    title: "",
-    description: "",
-    phase: "",
-    weather: "",
     location: "",
   });
 
@@ -87,18 +65,23 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
       queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}/photos`] });
       setIsUploadDialogOpen(false);
       setUploadForm({
-        title: "",
-        description: "",
-        phase: "",
-        weather: "",
         location: "",
       });
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      toast({
+        title: "Success",
+        description: "Photo uploaded successfully",
+      });
     },
     onError: (error: Error) => {
       console.error("Upload failed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to upload photo. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -124,10 +107,6 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
 
     const formData = new FormData();
     formData.append('photo', fileInput.files[0]);
-    formData.append('title', uploadForm.title);
-    formData.append('description', uploadForm.description);
-    formData.append('phase', uploadForm.phase);
-    formData.append('weather', uploadForm.weather);
     formData.append('location', uploadForm.location);
 
     uploadMutation.mutate(formData);
@@ -182,63 +161,6 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
                       ref={fileInputRef}
                       className="mt-1"
                     />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="title">Title</Label>
-                    <Input
-                      id="title"
-                      value={uploadForm.title}
-                      onChange={(e) => setUploadForm({...uploadForm, title: e.target.value})}
-                      placeholder="Progress update, milestone, etc."
-                      className="mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={uploadForm.description}
-                      onChange={(e) => setUploadForm({...uploadForm, description: e.target.value})}
-                      placeholder="Describe the progress, issues, or notes..."
-                      className="mt-1"
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phase">Phase</Label>
-                      <Select value={uploadForm.phase} onValueChange={(value) => setUploadForm({...uploadForm, phase: value})}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select phase" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {phases.map((phase) => (
-                            <SelectItem key={phase} value={phase}>
-                              {phase}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label htmlFor="weather">Weather</Label>
-                      <Select value={uploadForm.weather} onValueChange={(value) => setUploadForm({...uploadForm, weather: value})}>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Weather" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {weatherOptions.map((weather) => (
-                            <SelectItem key={weather} value={weather}>
-                              {weather}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
 
                   <div>
@@ -316,17 +238,6 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
                   )}
                   
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {photo.phase && (
-                      <Badge variant="secondary" className="text-xs">
-                        {photo.phase}
-                      </Badge>
-                    )}
-                    {photo.weather && (
-                      <Badge variant="outline" className="text-xs">
-                        <Cloud className="h-3 w-3 mr-1" />
-                        {photo.weather}
-                      </Badge>
-                    )}
                     {photo.location && (
                       <Badge variant="outline" className="text-xs">
                         <MapPin className="h-3 w-3 mr-1" />
@@ -414,17 +325,6 @@ export default function JobPhotoFeed({ jobId, canUpload = true }: JobPhotoFeedPr
             )}
             
             <div className="flex flex-wrap gap-2 mb-4">
-              {selectedPhoto.phase && (
-                <Badge variant="secondary" className="text-xs">
-                  {selectedPhoto.phase}
-                </Badge>
-              )}
-              {selectedPhoto.weather && (
-                <Badge variant="outline" className="text-xs">
-                  <Cloud className="h-3 w-3 mr-1" />
-                  {selectedPhoto.weather}
-                </Badge>
-              )}
               {selectedPhoto.location && (
                 <Badge variant="outline" className="text-xs">
                   <MapPin className="h-3 w-3 mr-1" />

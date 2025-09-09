@@ -519,12 +519,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const photoData = {
         jobId,
         uploadedBy: userId,
-        title: req.body.title || null,
-        description: req.body.description || null,
+        title: null, // Simplified: no longer capturing title
+        description: null, // Simplified: no longer capturing description
         photoUrl: `/uploads/${fileName}`,
         location: req.body.location || null,
-        phase: req.body.phase || null,
-        weather: req.body.weather || null,
+        phase: null, // Simplified: no longer capturing phase
+        weather: null, // Simplified: no longer capturing weather
         isPublic: true,
       };
 
