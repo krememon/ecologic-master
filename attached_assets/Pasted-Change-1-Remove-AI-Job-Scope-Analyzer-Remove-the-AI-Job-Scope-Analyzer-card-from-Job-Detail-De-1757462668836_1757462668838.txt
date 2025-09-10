@@ -1,0 +1,81 @@
+Change #1 — Remove AI Job Scope Analyzer
+
+Remove the AI Job Scope Analyzer card from Job Detail.
+
+Delete related button, text, icons, and backend/API references.
+
+Ensure layout closes the gap (Job Site Photos moves up).
+
+Change #2 — Fix Edit Job Button Label
+
+In Edit Job modal, change button text from “Create Job” → “Update Job.”
+
+Detect mode (create vs edit) and set label accordingly.
+
+Confirm correct API call: POST /api/jobs for create, PATCH /api/jobs/:id for edit.
+
+Change #3 — Remove Success Popup on Update
+
+After editing a job, remove the success toast/popup.
+
+Only show error toast if update fails.
+
+UI should silently update the list/details.
+
+Change #4 — Blank Fields in Create/Edit Job
+
+Create Job: Title, Description, Location fields must start blank (no placeholder text).
+
+Edit Job: Show only real saved values (blank if none).
+
+Keep dropdown defaults: Status = Pending, Priority = Medium.
+
+Add inline validation errors if required fields (Title, Location) are left empty.
+
+Change #5 — Google Places Autocomplete for Location
+
+Add Google Places Autocomplete to the Location field (Create & Edit modals).
+
+Show dropdown suggestions as user types; selecting fills field with formatted address.
+
+Save location (formatted address) plus hidden lat, lng, place_id.
+
+Restrict to USA, bias results toward Long Island, NY.
+
+If API unavailable, allow free-text typing (no blocking).
+
+Change #6 — Clickable Location → Open Maps/GPS
+
+Make job location (e.g., “📍 502 Hawkins Ave”) clickable.
+
+Format link: https://www.google.com/maps/search/?api=1&query=ENCODED_ADDRESS.
+
+Desktop: opens Google Maps in new tab.
+
+Mobile: deep-links to user’s GPS app (Google Maps, Apple Maps, Waze).
+
+Ensure proper URL encoding.
+
+Change #7 — Clickable Job Card → Open Job Detail
+
+Make Job cards clickable (at least job title, ideally full card except action icons).
+
+Clicking card navigates to /jobs/:id detail view.
+
+Icons (view, edit, delete) must remain separate actions.
+
+No double-routing or conflicts.
+
+Acceptance Criteria (all changes)
+
+Job Detail shows only Job Information + Job Site Photos (extras removed).
+
+Edit modal shows Update Job button and no placeholders.
+
+Creating/editing jobs works correctly with Google Places autocomplete.
+
+Clicking job location opens Maps/GPS.
+
+Clicking job card opens Job Detail page.
+
+No console errors or broken layouts.

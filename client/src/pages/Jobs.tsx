@@ -60,7 +60,7 @@ function JobForm({
             <FormItem>
               <FormLabel>Job Title</FormLabel>
               <FormControl>
-                <Input placeholder="Kitchen Renovation" {...field} />
+                <Input {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -74,10 +74,7 @@ function JobForm({
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea 
-                  placeholder="Complete kitchen remodel including cabinets, countertops..." 
-                  {...field}
-                />
+                <Textarea {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -91,10 +88,7 @@ function JobForm({
             <FormItem>
               <FormLabel>Location</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="123 Main St, City, State" 
-                  {...field}
-                />
+                <Input {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -152,7 +146,7 @@ function JobForm({
         </div>
         
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Creating..." : "Create Job"}
+          {isLoading ? (isEdit ? "Updating..." : "Creating...") : (isEdit ? "Update Job" : "Create Job")}
         </Button>
       </form>
     </Form>
@@ -253,10 +247,6 @@ export default function Jobs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({
-        title: "Success",
-        description: "Job updated successfully",
-      });
       setEditingJob(null);
     },
     onError: (error: Error) => {
@@ -384,16 +374,6 @@ export default function Jobs() {
                 </CardContent>
               </Card>
 
-              {/* AI Job Scope Analyzer */}
-              {selectedJob.description && (
-                <AIScopeAnalyzer
-                  jobId={selectedJob.id}
-                  jobDescription={selectedJob.description}
-                  jobType={selectedJob.title}
-                  location={selectedJob.location || undefined}
-                  estimatedCost={selectedJob.estimatedCost ? Number(selectedJob.estimatedCost) : undefined}
-                />
-              )}
 
 
               {/* Photo Feed */}
