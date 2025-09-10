@@ -346,7 +346,15 @@ export default function Jobs() {
                     {selectedJob.location && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Location:</span>
-                        <span className="text-sm truncate ml-2">{selectedJob.location}</span>
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 underline truncate ml-2 flex items-center gap-1"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          {selectedJob.location}
+                        </a>
                       </div>
                     )}
                     {selectedJob.estimatedCost && (
@@ -415,7 +423,11 @@ export default function Jobs() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job: JobWithClient) => (
-            <Card key={job.id} className="hover:shadow-md transition-shadow">
+            <Card 
+              key={job.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => setSelectedJob(job)}
+            >
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
@@ -433,10 +445,16 @@ export default function Jobs() {
                   </div>
                 )}
                 {job.location && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <MapPin className="h-4 w-4" />
                     {job.location}
-                  </div>
+                  </a>
                 )}
                 {job.estimatedCost && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
@@ -460,7 +478,10 @@ export default function Jobs() {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 text-green-500 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                      onClick={() => setSelectedJob(job)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedJob(job);
+                      }}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -468,7 +489,10 @@ export default function Jobs() {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                      onClick={() => setEditingJob(job)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingJob(job);
+                      }}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -476,7 +500,10 @@ export default function Jobs() {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                      onClick={() => setJobToDelete({ id: job.id, title: job.title })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setJobToDelete({ id: job.id, title: job.title });
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
