@@ -23,6 +23,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 
 function JobForm({ 
   onSubmit, 
@@ -88,7 +89,11 @@ function JobForm({
             <FormItem>
               <FormLabel>Location</FormLabel>
               <FormControl>
-                <Input {...field} />
+                <LocationAutocomplete
+                  value={field.value}
+                  onChange={(value) => field.onChange(value)}
+                  placeholder="Start typing an address..."
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
