@@ -227,17 +227,6 @@ export default function Jobs() {
     );
   };
 
-  // Outside click handler following user's exact specification
-  const handleOutsideClick = (event: MouseEvent, modalRootEl: Element | null, closeModalFn: () => void) => {
-    // If click was inside the modal, do nothing
-    if (modalRootEl && (event.target === modalRootEl || modalRootEl.contains(event.target as Node))) return;
-
-    // If click was inside Google Places dropdown, ignore it
-    if (isInPacContainer(event)) return;
-
-    // Otherwise close modal
-    closeModalFn();
-  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -253,39 +242,13 @@ export default function Jobs() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // Outside click listeners for each modal
-  useEffect(() => {
-    if (!isDialogOpen) return;
-    
-    const handler = (e: MouseEvent) => {
-      const modalElement = document.querySelector('[role="dialog"]');
-      handleOutsideClick(e, modalElement, () => setIsDialogOpen(false));
-    };
-    document.addEventListener('mousedown', handler, true);
-    return () => document.removeEventListener('mousedown', handler, true);
-  }, [isDialogOpen]);
-
-  useEffect(() => {
-    if (!editingJob) return;
-    
-    const handler = (e: MouseEvent) => {
-      const modalElement = document.querySelector('[role="dialog"]');
-      handleOutsideClick(e, modalElement, () => setEditingJob(null));
-    };
-    document.addEventListener('mousedown', handler, true);
-    return () => document.removeEventListener('mousedown', handler, true);
-  }, [editingJob]);
-
-  useEffect(() => {
-    if (!selectedJob) return;
-    
-    const handler = (e: MouseEvent) => {
-      const modalElement = document.querySelector('[role="dialog"]');
-      handleOutsideClick(e, modalElement, () => setSelectedJob(null));
-    };
-    document.addEventListener('mousedown', handler, true);
-    return () => document.removeEventListener('mousedown', handler, true);
-  }, [selectedJob]);
+  // Prevent modal closing when clicking Google Places autocomplete
+  const handleInteractOutside = (event: Event) => {
+    // If click was inside Google Places dropdown, prevent modal from closing
+    if (isInPacContainer(event)) {
+      event.preventDefault();
+    }
+  };
 
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
@@ -398,7 +361,7 @@ export default function Jobs() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+        <DialogContent className="sm:max-w-[350px] rounded-2xl" onInteractOutside={handleInteractOutside}>
           <DialogHeader>
             <DialogTitle>Create New Job</DialogTitle>
           </DialogHeader>
@@ -408,7 +371,7 @@ export default function Jobs() {
 
       {/* Edit Job Dialog */}
       <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl">
+        <DialogContent className="sm:max-w-[350px] rounded-2xl" onInteractOutside={handleInteractOutside}>
           <DialogHeader>
             <DialogTitle>Edit Job</DialogTitle>
           </DialogHeader>
@@ -423,7 +386,7 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-3 rounded-3xl border-0 shadow-2xl">
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-3 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
