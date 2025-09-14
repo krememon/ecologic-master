@@ -53,8 +53,6 @@ function JobForm({
   });
 
   const handleSubmit = (data: InsertJob) => {
-    console.log("Form submitting with data:", data);
-    console.log("Form validation errors:", form.formState.errors);
     onSubmit(data);
   };
 
@@ -198,13 +196,7 @@ function JobForm({
           />
         </div>
         
-        <Button 
-          type="submit" 
-          className="w-full" 
-          disabled={isLoading} 
-          data-testid="button-job-submit"
-          onClick={() => console.log("Create button clicked, form valid:", form.formState.isValid, "errors:", form.formState.errors)}
-        >
+        <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-job-submit">
           {isLoading ? (isEdit ? "Updating..." : "Creating...") : (isEdit ? "Update Job" : "Create Job")}
         </Button>
       </form>

@@ -509,6 +509,7 @@ export const insertSubcontractorSchema = createInsertSchema(subcontractors).omit
 
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
+  companyId: true, // Backend adds this automatically from authenticated user
   createdAt: true,
   updatedAt: true,
 }).extend({
