@@ -484,7 +484,12 @@ export default function Jobs() {
             <Card 
               key={job.id} 
               className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setSelectedJob(job)}
+              onClick={(event) => {
+                // Ignore clicks on anchors and autocomplete containers
+                const target = event.target as Element;
+                if (target?.closest('a') || target?.closest('.pac-container')) return;
+                setSelectedJob(job);
+              }}
             >
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">

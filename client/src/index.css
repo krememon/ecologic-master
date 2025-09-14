@@ -101,6 +101,15 @@ html, body {
   --radius: 0.75rem;
 }
 
+/* Google Places Autocomplete z-index fixes */
+.pac-container,
+.gm-style-pac-container,
+.pac-item,
+.autocomplete-container {
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}
+
 .dark {
   --background: 222 84% 5%; /* #0F172A */
   --foreground: 210 40% 98%; /* #F8FAFC */
