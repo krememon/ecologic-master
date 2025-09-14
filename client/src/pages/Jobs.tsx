@@ -212,6 +212,74 @@ export default function Jobs() {
   const [editingJob, setEditingJob] = useState<any>(null);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
+  const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [ignoreTimeoutId, setIgnoreTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track if we should ignore modal close (when autocomplete is clicked)
+  const [ignoreModalClose, setIgnoreModalClose] = useState(false);
+
+  // Helper to check if click is inside Google Places autocomplete using composedPath
+  const isPacClick = (event: Event): boolean => {
+    const path = (event as any).composedPath?.() || [];
+    return path.some((element: any) => {
+      return element instanceof Element && element.classList && (
+        element.classList.contains('pac-container') ||
+        element.classList.contains('gm-style-pac-container') ||
+        element.classList.contains('pac-item')
+      );
+    });
+  };
+
+  // Global click handler to detect autocomplete interactions
+  useEffect(() => {
+    const handleGlobalClick = (event: MouseEvent) => {
+      if (isPacClick(event)) {
+        setIgnoreModalClose(true);
+        // Clear any existing timeout
+        if (ignoreTimeoutId) {
+          clearTimeout(ignoreTimeoutId);
+        }
+        // Reset after a short delay
+        const timeoutId = setTimeout(() => {
+          setIgnoreModalClose(false);
+          setIgnoreTimeoutId(null);
+        }, 300);
+        setIgnoreTimeoutId(timeoutId);
+      }
+    };
+
+    document.addEventListener('click', handleGlobalClick, true);
+    return () => document.removeEventListener('click', handleGlobalClick, true);
+  }, [ignoreTimeoutId]);
+
+  // Enhanced modal close handler with autocomplete protection
+  const createModalCloseHandler = (setter: (value: any) => void) => {
+    return (open: boolean) => {
+      if (!open) {
+        if (ignoreModalClose) {
+          return; // Don't close if we just clicked autocomplete
+        }
+        
+        // Add small delay to allow autocomplete selection to complete
+        if (blurTimeoutId) {
+          clearTimeout(blurTimeoutId);
+        }
+        
+        const timeoutId = setTimeout(() => {
+          setter(null);
+          setBlurTimeoutId(null);
+        }, 150);
+        
+        setBlurTimeoutId(timeoutId);
+      } else {
+        // Cancel any pending close when opening
+        if (blurTimeoutId) {
+          clearTimeout(blurTimeoutId);
+          setBlurTimeoutId(null);
+        }
+      }
+    };
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -226,6 +294,18 @@ export default function Jobs() {
       return;
     }
   }, [isAuthenticated, isLoading, toast]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutId) {
+        clearTimeout(blurTimeoutId);
+      }
+      if (ignoreTimeoutId) {
+        clearTimeout(ignoreTimeoutId);
+      }
+    };
+  }, [blurTimeoutId, ignoreTimeoutId]);
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
@@ -336,7 +416,14 @@ export default function Jobs() {
         <p className="text-slate-600 dark:text-slate-400">Manage all your construction projects and track their progress</p>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          createModalCloseHandler(() => setIsDialogOpen(false))(false);
+        } else {
+          if (blurTimeoutId) clearTimeout(blurTimeoutId);
+          setIsDialogOpen(true);
+        }
+      }}>
         <DialogContent className="sm:max-w-[350px] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Create New Job</DialogTitle>
@@ -346,7 +433,7 @@ export default function Jobs() {
       </Dialog>
 
       {/* Edit Job Dialog */}
-      <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
+      <Dialog open={!!editingJob} onOpenChange={createModalCloseHandler(setEditingJob)}>
         <DialogContent className="sm:max-w-[350px] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Edit Job</DialogTitle>
@@ -361,7 +448,7 @@ export default function Jobs() {
       </Dialog>
 
       {/* Job Detail Modal with Photo Feed */}
-      <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
+      <Dialog open={!!selectedJob} onOpenChange={createModalCloseHandler(setSelectedJob)}>
         <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-3 rounded-3xl border-0 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -487,7 +574,7 @@ export default function Jobs() {
               onClick={(event) => {
                 // Ignore clicks on anchors and autocomplete containers
                 const target = event.target as Element;
-                if (target?.closest('a') || target?.closest('.pac-container')) return;
+                if (target?.closest('a') || isPacClick(event.nativeEvent)) return;
                 setSelectedJob(job);
               }}
             >
