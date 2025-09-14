@@ -1,0 +1,110 @@
+1) Replace the “outside click” handler so it ignores clicks inside Google’s dropdown
+
+Find the modal’s outside-click listener (document click handler or modal library callback) and replace it with this version:
+
+// utils/modalOutsideClickGuard.js
+function isInPacContainer(event) {
+  // works with shadow DOM / composedPath
+  const path = event.composedPath ? event.composedPath() : (event.path || []);
+  return path.some(el =>
+    el && el.classList && (
+      el.classList.contains('pac-container') ||
+      el.classList.contains('gm-style-pac-container') ||
+      el.classList.contains('autocomplete-container') ||
+      el.classList.contains('pac-item')
+    )
+  );
+}
+
+export function handleOutsideClick(event, modalRootEl, closeModalFn) {
+  // If click was inside the modal, do nothing
+  if (modalRootEl && (event.target === modalRootEl || modalRootEl.contains(event.target))) return;
+
+  // If click was inside Google Places dropdown, ignore it
+  if (isInPacContainer(event)) return;
+
+  // Otherwise close modal
+  closeModalFn();
+}
+
+
+Hook it up like:
+
+useEffect(() => {
+  const handler = (e) => handleOutsideClick(e, modalRef.current, closeModal);
+  document.addEventListener('mousedown', handler, true);
+  return () => document.removeEventListener('mousedown', handler, true);
+}, []);
+
+
+Why: Google injects the dropdown into document.body — it's outside the modal DOM, so naive outside-click logic thinks it's a click-outside.
+
+2) Fix blur-based close (if you close on input blur) — delay and re-check
+
+If you currently close the modal on blur or focusout of the location input, change that to a delayed check that respects clicks into the pac container:
+
+locationInput.addEventListener('blur', (e) => {
+  setTimeout(() => {
+    // if focus moved into pac-container or a google suggestion was clicked, don't close
+    const active = document.activeElement;
+    if (active && active.closest && active.closest('.pac-container')) return;
+    // also check mouse position (optional) or composedPath of last click
+    closeModal();
+  }, 150); // 100-200ms
+});
+
+
+Better: stop using blur to close; use the outside-click guard above instead.
+
+3) Prevent card/global click handlers from swallowing pac clicks
+
+If the job list card or modal wrapper has an onClick that does navigation/close, make it bail out early when the click target is inside the autocomplete:
+
+function onCardClick(e) {
+  // let anchors / autocomplete interactions proceed
+  if (e.target.closest && (e.target.closest('a') || e.target.closest('.pac-container') || e.target.closest('.gm-style-pac-container'))) {
+    return;
+  }
+  // existing behavior (open detail / close)
+}
+
+
+Also ensure the location anchor (if present) uses event.stopPropagation() on click if needed.
+
+4) Small CSS safety net (if not already applied)
+
+Add this global CSS to ensure suggestions receive clicks and render above overlays:
+
+.pac-container,
+.gm-style-pac-container {
+  z-index: 2147483647 !important;
+  pointer-events: auto !important;
+}
+
+Quick deploy steps (exact order)
+
+Apply code change (1) to modal outside-click handler.
+
+Apply code change (3) to any card/global click handlers.
+
+Remove blur-based close or apply change (2).
+
+Add CSS safety net (4).
+
+Build / redeploy app.
+
+QA checklist (run after deploy — try keyboard + mouse)
+
+Open Create Job modal.
+
+Type at least 3 characters into Location.
+
+Click a suggestion with mouse → modal stays open and Location input is filled.
+
+Use arrow keys + Enter to select suggestion → modal stays open and input is filled.
+
+Click outside modal (not on pac dropdown) → modal closes.
+
+No console errors.
+
+If any step fails, take a screenshot of DevTools Console and paste the full red error text here.
