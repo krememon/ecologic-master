@@ -212,11 +212,6 @@ export default function Jobs() {
   const [editingJob, setEditingJob] = useState<any>(null);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
-  const [blurTimeoutId, setBlurTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
-  const [ignoreTimeoutId, setIgnoreTimeoutId] = useState<ReturnType<typeof setTimeout> | null>(null);
-
-  // Track if we should ignore modal close (when autocomplete is clicked)
-  const [ignoreModalClose, setIgnoreModalClose] = useState(false);
 
   // Utility function for Google Places dropdown detection using composedPath
   const isInPacContainer = (event: Event): boolean => {
@@ -292,17 +287,6 @@ export default function Jobs() {
     return () => document.removeEventListener('mousedown', handler, true);
   }, [selectedJob]);
 
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (blurTimeoutId) {
-        clearTimeout(blurTimeoutId);
-      }
-      if (ignoreTimeoutId) {
-        clearTimeout(ignoreTimeoutId);
-      }
-    };
-  }, [blurTimeoutId, ignoreTimeoutId]);
 
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
@@ -563,7 +547,10 @@ export default function Jobs() {
               className="hover:shadow-md transition-shadow cursor-pointer"
               onClick={(e) => {
                 // let anchors / autocomplete interactions proceed
-                if (e.target && (e.target as Element).closest && ((e.target as Element).closest('a') || (e.target as Element).closest('.pac-container') || (e.target as Element).closest('.gm-style-pac-container'))) {
+                if (e.target && (e.target as Element).closest && (e.target as Element).closest('a')) {
+                  return;
+                }
+                if (isInPacContainer(e.nativeEvent)) {
                   return;
                 }
                 // existing behavior (open detail / close)
