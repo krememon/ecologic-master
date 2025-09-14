@@ -36,17 +36,23 @@ function JobForm({
   initialData?: any;
   isEdit?: boolean;
 }) {
-  const form = useForm({
+  const form = useForm<InsertJob>({
+    resolver: zodResolver(insertJobSchema),
     defaultValues: {
       title: initialData?.title || "",
       description: initialData?.description || "",
       location: initialData?.location || "",
+      city: initialData?.city || "",
+      postalCode: initialData?.postalCode || "",
+      locationLat: initialData?.locationLat || undefined,
+      locationLng: initialData?.locationLng || undefined,
+      locationPlaceId: initialData?.locationPlaceId || "",
       status: initialData?.status || "pending",
       priority: initialData?.priority || "medium",
     },
   });
 
-  const handleSubmit = (data: any) => {
+  const handleSubmit = (data: InsertJob) => {
     console.log("Form submitting with data:", data);
     onSubmit(data);
   };
@@ -61,7 +67,7 @@ function JobForm({
             <FormItem>
               <FormLabel>Job Title</FormLabel>
               <FormControl>
-                <Input {...field} />
+                <Input {...field} data-testid="input-job-title" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -75,7 +81,7 @@ function JobForm({
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea {...field} />
+                <Textarea {...field} data-testid="input-job-description" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -87,11 +93,22 @@ function JobForm({
           name="location"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Location</FormLabel>
+              <FormLabel>Location *</FormLabel>
               <FormControl>
                 <LocationAutocomplete
                   value={field.value}
-                  onChange={(value) => field.onChange(value)}
+                  onChange={(value, addressComponents) => {
+                    field.onChange(value);
+                    // Auto-populate city and postal code if address components are provided
+                    if (addressComponents) {
+                      form.setValue("city", addressComponents.city);
+                      form.setValue("postalCode", addressComponents.postalCode);
+                      // Store hidden location data for backend
+                      form.setValue("locationLat", addressComponents.lat);
+                      form.setValue("locationLng", addressComponents.lng);
+                      form.setValue("locationPlaceId", addressComponents.placeId);
+                    }
+                  }}
                   placeholder="Start typing an address..."
                 />
               </FormControl>
@@ -99,6 +116,36 @@ function JobForm({
             </FormItem>
           )}
         />
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="city"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>City</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="City name..." data-testid="input-job-city" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="postalCode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>ZIP / Postal Code</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="ZIP code..." data-testid="input-job-postal-code" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         
         <div className="grid grid-cols-2 gap-4">
           <FormField
@@ -150,7 +197,7 @@ function JobForm({
           />
         </div>
         
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-job-submit">
           {isLoading ? (isEdit ? "Updating..." : "Creating...") : (isEdit ? "Update Job" : "Create Job")}
         </Button>
       </form>
@@ -344,17 +391,28 @@ export default function Jobs() {
                       </div>
                     )}
                     {selectedJob.location && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Location:</span>
-                        <a 
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:text-blue-800 underline truncate ml-2 flex items-center gap-1"
-                        >
-                          <MapPin className="h-3 w-3" />
-                          {selectedJob.location}
-                        </a>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Location:</span>
+                          <a 
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:text-blue-800 underline truncate ml-2 flex items-center gap-1"
+                            data-testid="link-job-location"
+                          >
+                            <MapPin className="h-3 w-3" />
+                            {selectedJob.location}
+                          </a>
+                        </div>
+                        {(selectedJob.city || selectedJob.postalCode) && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">City/ZIP:</span>
+                            <span className="text-sm text-slate-600 dark:text-slate-300 ml-2" data-testid="text-job-city-zip-detail">
+                              {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {selectedJob.estimatedCost && (
@@ -453,7 +511,14 @@ export default function Jobs() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <MapPin className="h-4 w-4" />
-                    {job.location}
+                    <div className="flex flex-col">
+                      <span className="truncate" data-testid="text-job-location">{job.location}</span>
+                      {(job.city || job.postalCode) && (
+                        <span className="text-xs text-slate-500" data-testid="text-job-city-zip">
+                          {[job.city, job.postalCode].filter(Boolean).join(', ')}
+                        </span>
+                      )}
+                    </div>
                   </a>
                 )}
                 {job.estimatedCost && (

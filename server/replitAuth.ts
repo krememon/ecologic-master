@@ -7,7 +7,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
-import { storage } from "./new-storage";
+import { storage } from "./storage";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
@@ -172,7 +172,7 @@ export async function setupAuth(app: Express) {
               updateData.lastName = profile.name.familyName;
             }
 
-            const updatedUser = await storage.updateUser(parseInt(user.id), updateData);
+            const updatedUser = await storage.updateUser(user.id, updateData);
             console.log("Successfully linked Google account to user:", updatedUser.id);
 
             // Clear linking session data
@@ -216,10 +216,9 @@ export async function setupAuth(app: Express) {
             };
             
             try {
-              const userId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
-              console.log("Auto-linking Google to existing user ID:", userId);
+              console.log("Auto-linking Google to existing user ID:", user.id);
               
-              const updatedUser = await storage.updateUser(userId, linkData);
+              const updatedUser = await storage.updateUser(user.id, linkData);
               if (updatedUser) {
                 user = updatedUser;
                 console.log("Successfully auto-linked Google to existing account:", user.id);
@@ -253,11 +252,9 @@ export async function setupAuth(app: Express) {
           if (Object.keys(updateData).length > 0) {
             console.log("Updating existing Google user with latest data:", updateData);
             try {
-              // Convert user ID to integer for database update
-              const userId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
-              console.log("Updating user ID:", userId, "with data:", updateData);
+              console.log("Updating user ID:", user.id, "with data:", updateData);
               
-              const updatedUser = await storage.updateUser(userId, updateData);
+              const updatedUser = await storage.updateUser(user.id, updateData);
               console.log("Update result:", updatedUser);
               
               if (updatedUser) {

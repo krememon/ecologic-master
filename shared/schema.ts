@@ -116,7 +116,12 @@ export const jobs = pgTable("jobs", {
   endDate: date("end_date"),
   estimatedCost: decimal("estimated_cost", { precision: 10, scale: 2 }),
   actualCost: decimal("actual_cost", { precision: 10, scale: 2 }),
-  location: text("location"),
+  location: text("location"), // formatted address
+  city: varchar("city"),
+  postalCode: varchar("postal_code"),
+  locationLat: decimal("location_lat", { precision: 10, scale: 8 }),
+  locationLng: decimal("location_lng", { precision: 11, scale: 8 }),
+  locationPlaceId: varchar("location_place_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -506,6 +511,20 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Enhanced validation for required fields
+  title: z.string().min(1, "Job title is required"),
+  description: z.string().optional().transform(val => val || ""), // Ensure description is always a string
+  // Location validation rules
+  location: z.string().min(1, "Location is required"),
+  city: z.string().optional().transform(val => val || ""),
+  postalCode: z.string().optional().transform(val => val || ""),
+  // Handle lat/lng as both numbers and strings (DB returns strings)
+  locationLat: z.union([z.number(), z.string().transform(val => val ? parseFloat(val) : null)]).nullable().optional(),
+  locationLng: z.union([z.number(), z.string().transform(val => val ? parseFloat(val) : null)]).nullable().optional(),
+  locationPlaceId: z.string().optional().transform(val => val || ""),
+  status: z.enum(["pending", "active", "completed", "cancelled"]).default("pending"),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({

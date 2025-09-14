@@ -50,6 +50,20 @@ export interface IStorage {
   // Email authentication operations
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(userData: any): Promise<User>;
+  updateUser(id: string, user: Partial<UpsertUser>): Promise<User>;
+  
+  // Authentication methods
+  getLinkedAccountMethods(userId: string): Promise<any[]>;
+  setResetPasswordToken(email: string, token: string, expires: Date): Promise<void>;
+  resetPassword(token: string, newPassword: string): Promise<User | undefined>;
+  
+  // Role-based operations
+  isBusinessOwner(userId: string, companyId: number): Promise<boolean>;
+  
+  // Payment operations
+  getPayments(companyId: number): Promise<any[]>;
+  createPayment(payment: any): Promise<any>;
+  updatePayment(id: number, payment: any): Promise<any>;
   
   // Company operations
   getUserCompany(userId: string): Promise<Company | undefined>;
@@ -175,6 +189,93 @@ export class DatabaseStorage implements IStorage {
     
     return membership?.company;
   }
+  
+  async updateUser(id: string, userData: Partial<UpsertUser>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...userData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+  
+  async getLinkedAccountMethods(userId: string): Promise<any[]> {
+    // Simple implementation - return array indicating linked methods
+    const user = await this.getUser(userId);
+    if (!user) return [];
+    
+    const methods = [];
+    if (user.password) {
+      methods.push({ provider: 'email', email: user.email });
+    }
+    if (user.googleLinked) {
+      methods.push({ provider: 'google', email: user.email });
+    }
+    return methods;
+  }
+  
+  async setResetPasswordToken(email: string, token: string, expires: Date): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        resetPasswordToken: token, 
+        resetPasswordExpires: expires,
+        updatedAt: new Date()
+      })
+      .where(eq(users.email, email));
+  }
+  
+  async resetPassword(token: string, newPassword: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(
+        eq(users.resetPasswordToken, token),
+        sql`${users.resetPasswordExpires} > NOW()`
+      ));
+    
+    if (!user) return undefined;
+    
+    const [updatedUser] = await db
+      .update(users)
+      .set({ 
+        password: newPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, user.id))
+      .returning();
+    
+    return updatedUser;
+  }
+  
+  async isBusinessOwner(userId: string, companyId: number): Promise<boolean> {
+    const [membership] = await db
+      .select({ role: companyMembers.role })
+      .from(companyMembers)
+      .where(and(
+        eq(companyMembers.userId, userId),
+        eq(companyMembers.companyId, companyId)
+      ));
+    
+    return membership?.role === 'owner';
+  }
+  
+  async getPayments(companyId: number): Promise<any[]> {
+    // Implementation placeholder - return empty array for now
+    return [];
+  }
+  
+  async createPayment(payment: any): Promise<any> {
+    // Implementation placeholder
+    return payment;
+  }
+  
+  async updatePayment(id: number, payment: any): Promise<any> {
+    // Implementation placeholder
+    return payment;
+  }
 
   async createCompany(companyData: InsertCompany): Promise<Company> {
     const [company] = await db.insert(companies).values(companyData).returning();
@@ -262,6 +363,11 @@ export class DatabaseStorage implements IStorage {
         startDate: jobs.startDate,
         endDate: jobs.endDate,
         location: jobs.location,
+        city: jobs.city,
+        postalCode: jobs.postalCode,
+        locationLat: jobs.locationLat,
+        locationLng: jobs.locationLng,
+        locationPlaceId: jobs.locationPlaceId,
         description: jobs.description,
         notes: jobs.notes,
         clientId: jobs.clientId,
@@ -291,6 +397,11 @@ export class DatabaseStorage implements IStorage {
         startDate: jobs.startDate,
         endDate: jobs.endDate,
         location: jobs.location,
+        city: jobs.city,
+        postalCode: jobs.postalCode,
+        locationLat: jobs.locationLat,
+        locationLng: jobs.locationLng,
+        locationPlaceId: jobs.locationPlaceId,
         description: jobs.description,
         notes: jobs.notes,
         clientId: jobs.clientId,
@@ -311,14 +422,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJob(jobData: InsertJob): Promise<Job> {
-    const [job] = await db.insert(jobs).values(jobData).returning();
+    // Convert lat/lng to strings for database decimal fields
+    const dbJobData = {
+      ...jobData,
+      locationLat: jobData.locationLat !== null && jobData.locationLat !== undefined 
+        ? String(jobData.locationLat) 
+        : jobData.locationLat,
+      locationLng: jobData.locationLng !== null && jobData.locationLng !== undefined 
+        ? String(jobData.locationLng) 
+        : jobData.locationLng,
+    };
+    const [job] = await db.insert(jobs).values(dbJobData).returning();
     return job;
   }
 
   async updateJob(id: number, jobData: Partial<InsertJob>): Promise<Job> {
+    // Convert lat/lng to strings for database decimal fields
+    const dbJobData = {
+      ...jobData,
+      locationLat: jobData.locationLat !== null && jobData.locationLat !== undefined 
+        ? String(jobData.locationLat) 
+        : jobData.locationLat,
+      locationLng: jobData.locationLng !== null && jobData.locationLng !== undefined 
+        ? String(jobData.locationLng) 
+        : jobData.locationLng,
+      updatedAt: new Date()
+    };
     const [job] = await db
       .update(jobs)
-      .set({ ...jobData, updatedAt: new Date() })
+      .set(dbJobData)
       .where(eq(jobs.id, id))
       .returning();
     return job;

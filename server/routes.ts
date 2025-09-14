@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./new-storage";
+import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -12,6 +12,8 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
+import { insertJobSchema } from "../shared/schema";
+import { z } from "zod";
 // Stripe removed
 
 // Subscription plans removed
@@ -90,7 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user's company
-      let company = await storage.getUserCompany(parseInt(user.id));
+      let company = await storage.getUserCompany(user.id);
       
       // If no company exists, create a default one for business owners
       if (!company) {
@@ -184,7 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hashedPassword = await hashPassword(password);
-      await storage.updateUser(parseInt(user.id), { password: hashedPassword });
+      await storage.updateUser(user.id, { password: hashedPassword });
 
       res.json({ message: "Password set successfully" });
     } catch (error) {
@@ -201,7 +203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = req.user;
-      let company = await storage.getUserCompany(parseInt(user.claims.sub));
+      let company = await storage.getUserCompany(user.claims.sub);
       
       // Add invite code for business owners
       if (company) {
@@ -251,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       
       const user = req.user;
-      const company = await storage.getUserCompany(parseInt(user.claims.sub));
+      const company = await storage.getUserCompany(user.claims.sub);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -272,7 +274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = req.user;
-      const company = await storage.getUserCompany(parseInt(user.claims.sub));
+      const company = await storage.getUserCompany(user.claims.sub);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -297,7 +299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = req.user;
-      const company = await storage.getUserCompany(parseInt(user.claims.sub));
+      const company = await storage.getUserCompany(user.claims.sub);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -320,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const user = req.user;
-      const company = await storage.getUserCompany(parseInt(user.claims.sub));
+      const company = await storage.getUserCompany(user.claims.sub);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -340,7 +342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/dashboard/stats', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -375,7 +377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/subcontractors', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -392,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/subcontractors', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -414,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -431,14 +433,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
       }
       
+      // Validate request body with zod schema
+      const validationResult = insertJobSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
       const job = await storage.createJob({
-        ...req.body,
+        ...validationResult.data,
         companyId: company.id
       });
       
@@ -453,14 +464,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
       }
       
+      // Validate request body with partial zod schema (all fields optional for updates)
+      const updateJobSchema = insertJobSchema.partial();
+      const validationResult = updateJobSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
       const jobId = parseInt(req.params.id);
-      const job = await storage.updateJob(jobId, req.body);
+      const job = await storage.updateJob(jobId, validationResult.data);
       
       res.json(job);
     } catch (error) {
@@ -473,7 +494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -551,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -568,7 +589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(parseInt(userId));
+      const company = await storage.getUserCompany(userId);
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
@@ -649,7 +670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let clientId = null;
       if (extractedData.clientName) {
         const userId = getUserId(req.user);
-        const company = await storage.getUserCompany(parseInt(userId));
+        const company = await storage.getUserCompany(userId);
         
         if (company) {
           const clients = await storage.getClients(company.id);

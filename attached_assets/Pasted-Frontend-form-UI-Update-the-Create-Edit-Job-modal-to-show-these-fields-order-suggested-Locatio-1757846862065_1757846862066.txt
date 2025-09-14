@@ -1,0 +1,126 @@
+Frontend: form UI
+
+Update the Create/Edit Job modal to show these fields (order suggested):
+
+Location (autocomplete input) — required
+
+City (text input) — optional but prefilled on select
+
+ZIP / Postal Code (text input) — optional but prefilled on select
+
+(Hidden) Latitude, Longitude, place_id
+
+City and ZIP inputs must be editable by the user (prefilled values can be changed).
+
+If Location is cleared/changed to free text (not a selected place), do not overwrite City/ZIP automatically unless the user reselects a Place.
+
+Frontend: Places usage & data extraction
+
+When the user selects a prediction, call PlacesService.getDetails({ placeId, fields: ['address_components','formatted_address','geometry','place_id'] }).
+
+Parse place.address_components to extract:
+
+postal code → postalCode (types: postal_code)
+
+city → locality OR fallback to postal_town OR sublocality_level_1 OR administrative_area_level_2 (use best available)
+
+state → administrative_area_level_1 (optional to store)
+
+country → country (optional)
+
+Also get formatted_address, geometry.location.lat() and geometry.location.lng(), and place_id.
+
+Fill the fields:
+
+location ← formatted_address
+
+city ← parsed city
+
+postalCode ← parsed postal code
+
+lat, lng, placeId ← hidden storage
+
+Parsing helper (JS pseudocode to include in repo):
+
+function extractAddressComponents(place) {
+  const comps = place.address_components || [];
+  const find = (type) => {
+    const c = comps.find(x => x.types.includes(type));
+    return c ? c.long_name : '';
+  };
+  const postalCode = find('postal_code') || '';
+  const city =
+    find('locality') ||
+    find('postal_town') ||
+    find('sublocality_level_1') ||
+    find('administrative_area_level_2') ||
+    '';
+  const state = find('administrative_area_level_1') || '';
+  const country = find('country') || '';
+  const formatted = place.formatted_address || '';
+  const lat = place.geometry?.location?.lat?.() ?? null;
+  const lng = place.geometry?.location?.lng?.() ?? null;
+  const placeId = place.place_id || '';
+  return { formatted, postalCode, city, state, country, lat, lng, placeId };
+}
+
+Frontend: UX details
+
+Minimum behavior:
+
+Debounce keystrokes (300ms) and require min 3 characters (already in place).
+
+When a place is selected, focus next to the City field and let user edit if they need to change it.
+
+If the user types only a city name or a ZIP and presses enter, do NOT block. Optionally call Geocoding API to resolve it, but that’s extra — acceptable fallback is to save free-text city/zip.
+
+If the user later edits Location by selecting a new place, overwrite city/zip with newly parsed values (unless the user explicitly typed into those fields afterward — see note below).
+
+Backend / Job model
+
+Ensure Job model and API accept and persist new fields:
+
+job: {
+  id,
+  title,
+  location: string,        // formatted address
+  city?: string,
+  postalCode?: string,
+  locationLat?: number,
+  locationLng?: number,
+  locationPlaceId?: string,
+  // ... existing fields
+}
+
+
+Update POST /api/jobs and PATCH /api/jobs/:id handlers to accept and persist these fields. Validate postalCode length/characters lightly (no strict validation that could cause valid international zips to fail).
+
+Edge cases & fallbacks
+
+If postal_code or locality are missing in Google results, leave those fields blank and allow manual editing.
+
+If Places API is rate-limited/unavailable, keep free-text behavior (do not block job creation).
+
+Keep privacy in mind: don’t log API key or place details to public logs.
+
+Acceptance criteria / QA checks
+
+Create a new job, type a valid address, select a suggestion → Location populates with formatted address, City and ZIP automatically populate and are editable, lat/lng/placeId stored behind the scenes.
+
+Edit an existing job that has structured location fields → the modal shows the location, city, and ZIP correctly.
+
+If a user types only a city or ZIP (no selection), the form still allows save and stores city/postalCode as entered.
+
+Selecting a different place overwrites City & ZIP (unless the user actively edited City/ZIP after original selection — prefer latest user edits).
+
+No console errors, no crashes; API failures gracefully fall back to free text.
+
+Jobs list and job detail pages continue to display location and city/postalCode (if present).
+
+Small follow-ups (optional improvements)
+
+Use Geocoding API when user types only ZIP or city to suggest a formatted address (nice-to-have).
+
+Show small badge or pill on Job card with city and postalCode.
+
+Add validation dropdown for country/state if you later expand outside USA.
