@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search } from "lucide-react";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -524,9 +525,9 @@ export default function Jobs() {
             </div>
           </DialogHeader>
           {selectedJob && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] gap-4 h-full">
               {/* Left Column - Key Information */}
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Job Information</CardTitle>
@@ -624,7 +625,7 @@ export default function Jobs() {
               </div>
 
               {/* Right Column - Photos and Activity */}
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Accordion type="multiple" defaultValue={[]} className="w-full">
                   <AccordionItem value="photos" className="border rounded-lg">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline">
