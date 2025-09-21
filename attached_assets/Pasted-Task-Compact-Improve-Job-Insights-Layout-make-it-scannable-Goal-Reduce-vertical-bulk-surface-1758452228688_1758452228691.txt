@@ -1,0 +1,121 @@
+Task: Compact & Improve Job Insights Layout (make it scannable)
+
+Goal: Reduce vertical bulk, surface the important fields (title, status, client, location, date) immediately, collapse secondary content, and make the whole panel fast to scan on desktop and mobile.
+
+What to change (exact steps for the Agent)
+
+Two-column responsive layout (desktop)
+
+Left column (60%): Title, status pill, client name, metadata (location, city/ZIP, created date), short description (2-line preview), primary actions.
+
+Right column (40%): Job Site Photos thumbnail grid + Upload CTA, activity/logs collapsed.
+
+On small screens: stack columns vertically (single column).
+
+Compact header
+
+Reduce top/bottom padding on header cards (e.g., p-3 → p-2).
+
+Title: slightly smaller (xl → lg), bold.
+
+Place status pill inline right of title (small pill, 12–14px height).
+
+Single-line metadata row
+
+Render one horizontal row under title:
+
+[Status badge] • [📍 truncated location] • [City, ZIP] • [Created date]
+
+
+Truncate text with ellipsis; on hover show full value tooltip.
+
+Description: 2-line preview + Read more
+
+Use CSS line-clamp to show 2 lines by default:
+
+.job-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.job-desc.expanded { -webkit-line-clamp: unset; }
+
+
+Add inline Read more / Show less toggle; expand in place (no new modal unless long).
+
+Collapse secondary sections into accordions
+
+Job Site Photos, Activity/Notes, Attachments → collapsed by default (show title + count).
+
+Expand on click; animate height for smoothness.
+
+Photos: small thumbnail grid
+
+Show up to 3 columns of thumbnails and a compact “Upload Photo” button.
+
+If 0 photos: small rounded CTA button and tiny helper text (not a full card).
+
+Action icons
+
+Move Edit / Delete / View icons to top-right compact area.
+
+Use small icon buttons with aria-label. On mobile collapse to kebab menu.
+
+Spacing, borders, and typography
+
+Reduce card gap / margin (e.g., gap-4 → gap-2) to increase density.
+
+Use subtle borders and smaller radii to reduce perceived bulk.
+
+Accessibility
+
+Tooltips for truncated fields.
+
+Keyboard support for accordions.
+
+Proper aria-expanded and aria-controls.
+
+Performance
+
+Avoid rendering full photo lists or activity logs until expanded (lazy-render content on expand).
+
+Example JSX snippets (Agent can drop in)
+
+Metadata row
+
+<div className="meta-row flex items-center gap-3 text-sm text-muted">
+  <StatusBadge status={job.status} />
+  <a href={mapsUrl} target="_blank" rel="noopener" className="truncate max-w-[40%]" title={job.location}>
+    <MapIcon /> {job.location}
+  </a>
+  <span className="hidden md:inline">{job.city}, {job.postalCode}</span>
+  <span className="ml-auto text-xs">{formatDate(job.createdAt)}</span>
+</div>
+
+
+Description clamp
+
+<p className={`job-desc ${expanded ? 'expanded' : ''}`}>{job.description}</p>
+<button onClick={() => setExpanded(!expanded)} className="text-sm link">
+  {expanded ? 'Show less' : 'Read more'}
+</button>
+
+
+Accordion (photos)
+
+<Accordion defaultOpen={false} title={`Job Site Photos (${photos.length})`}>
+  <PhotoGrid photos={photos} />
+  <Button onClick={upload}>Upload Photo</Button>
+</Accordion>
+
+QA / Acceptance Criteria
+
+Job detail header occupies much less vertical space on load (no long scroll before key info).
+
+Title, status, client, truncated location, and date are visible at a glance without scrolling.
+
+Description shows 2-line preview with working Read more / Show less.
+
+Photos and activity are collapsed by default; expanding renders content and is fast.
+
+Edit/Delete/View remain present in a compact actions area and work as before.
+
+Desktop uses two-column layout; mobile stacks cleanly.
+
+No console errors; keyboard and screen-reader accessibility checks pass.
