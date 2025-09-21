@@ -525,9 +525,9 @@ export default function Jobs() {
             </div>
           </DialogHeader>
           {selectedJob && (
-            <div className="grid grid-cols-1 lg:grid-cols-[60%_40%] gap-4 h-full">
-              {/* Left Column - Key Information */}
-              <div className="space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 h-full">
+              {/* Left Column - Key Information (60%) */}
+              <div className="col-span-1 lg:col-span-3 space-y-3">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Job Information</CardTitle>
@@ -624,8 +624,8 @@ export default function Jobs() {
                 </Card>
               </div>
 
-              {/* Right Column - Photos and Activity */}
-              <div className="space-y-1">
+              {/* Right Column - Photos and Activity (40%) */}
+              <div className="col-span-1 lg:col-span-2 space-y-1">
                 <Accordion type="multiple" defaultValue={[]} className="w-full">
                   <AccordionItem value="photos" className="border rounded-lg">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline">
