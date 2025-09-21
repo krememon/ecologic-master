@@ -12,7 +12,6 @@ import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camer
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
-import AIScopeAnalyzer from "@/components/AIScopeAnalyzer";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -426,85 +425,87 @@ export default function Jobs() {
             </DialogTitle>
           </DialogHeader>
           {selectedJob && (
-            <div className="space-y-6">
-              {/* Job Information Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Job Information</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Status:</span>
-                      <Badge variant={selectedJob.status === 'active' ? 'default' : 'secondary'}>
-                        {selectedJob.status}
-                      </Badge>
-                    </div>
-                    {(selectedJob.clientName || selectedJob.client?.name) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+              {/* Left Column - Key Information */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Job Information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Client:</span>
-                        <span className="text-sm truncate ml-2" data-testid="text-job-client-detail">{selectedJob.clientName || selectedJob.client?.name}</span>
+                        <span className="text-sm font-medium">Status:</span>
+                        <Badge variant={selectedJob.status === 'active' ? 'default' : 'secondary'}>
+                          {selectedJob.status}
+                        </Badge>
                       </div>
-                    )}
-                    {selectedJob.location && (
-                      <div className="space-y-2">
+                      {(selectedJob.clientName || selectedJob.client?.name) && (
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Location:</span>
-                          <a 
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-blue-600 hover:text-blue-800 underline truncate ml-2 flex items-center gap-1"
-                            data-testid="link-job-location"
-                          >
-                            <MapPin className="h-3 w-3" />
-                            {selectedJob.location}
-                          </a>
+                          <span className="text-sm font-medium">Client:</span>
+                          <span className="text-sm truncate ml-2" data-testid="text-job-client-detail">{selectedJob.clientName || selectedJob.client?.name}</span>
                         </div>
-                        {(selectedJob.city || selectedJob.postalCode) && (
+                      )}
+                      {selectedJob.location && (
+                        <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">City/ZIP:</span>
-                            <span className="text-sm text-slate-600 dark:text-slate-300 ml-2" data-testid="text-job-city-zip-detail">
-                              {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
-                            </span>
+                            <span className="text-sm font-medium">Location:</span>
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:text-blue-800 underline truncate ml-2 flex items-center gap-1"
+                              data-testid="link-job-location"
+                            >
+                              <MapPin className="h-3 w-3" />
+                              {selectedJob.location}
+                            </a>
                           </div>
-                        )}
-                      </div>
-                    )}
-                    {selectedJob.estimatedCost && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Estimated Cost:</span>
-                        <span className="text-sm">${Number(selectedJob.estimatedCost).toLocaleString()}</span>
-                      </div>
-                    )}
-                    {selectedJob.startDate && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Start Date:</span>
-                        <span className="text-sm">{new Date(selectedJob.startDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                    {selectedJob.endDate && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">End Date:</span>
-                        <span className="text-sm">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </div>
-                  {selectedJob.description && (
-                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                      <span className="text-sm font-medium">Description:</span>
-                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                        {selectedJob.description}
-                      </p>
+                          {(selectedJob.city || selectedJob.postalCode) && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">City/ZIP:</span>
+                              <span className="text-sm text-slate-600 dark:text-slate-300 ml-2" data-testid="text-job-city-zip-detail">
+                                {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {selectedJob.estimatedCost && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Estimated Cost:</span>
+                          <span className="text-sm">${Number(selectedJob.estimatedCost).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {selectedJob.startDate && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Start Date:</span>
+                          <span className="text-sm">{new Date(selectedJob.startDate).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      {selectedJob.endDate && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">End Date:</span>
+                          <span className="text-sm">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      {selectedJob.description && (
+                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                          <span className="text-sm font-medium">Description:</span>
+                          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                            {selectedJob.description}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
 
-
-
-              {/* Photo Feed */}
-              <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
+              {/* Right Column - Photos and Activity */}
+              <div className="space-y-4">
+                <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
+              </div>
             </div>
           )}
         </DialogContent>
