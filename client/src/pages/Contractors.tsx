@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTranslation } from "react-i18next";
 
-function SubcontractorForm({ 
+function ContractorForm({ 
   onSubmit, 
   isLoading, 
   initialData, 
@@ -113,13 +113,13 @@ function SubcontractorForm({
       </div>
       
       <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? "Adding..." : (isEdit ? "Update Subcontractor" : "Add Subcontractor")}
+        {isLoading ? "Adding..." : (isEdit ? "Update Contractor" : "Add Contractor")}
       </Button>
     </form>
   );
 }
 
-export default function Subcontractors() {
+export default function Contractors() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -155,7 +155,7 @@ export default function Subcontractors() {
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       toast({
         title: "Success",
-        description: "Subcontractor added successfully",
+        description: "Contractor added successfully",
       });
       setIsDialogOpen(false);
     },
@@ -178,7 +178,7 @@ export default function Subcontractors() {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
       toast({
         title: "Success",
-        description: "Subcontractor updated successfully!",
+        description: "Contractor updated successfully!",
       });
       setEditingSubcontractor(null);
     },
@@ -199,7 +199,7 @@ export default function Subcontractors() {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
       toast({
         title: "Success",
-        description: "Subcontractor deleted successfully!",
+        description: "Contractor deleted successfully!",
       });
     },
     onError: (error: Error) => {
@@ -222,26 +222,26 @@ export default function Subcontractors() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Subcontractors</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage your network of skilled subcontractors</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Contractors</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage your network of skilled contractors</p>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="w-[95vw] max-w-[400px] max-h-[90vh] rounded-2xl overflow-y-auto transform-none fixed inset-4 mx-auto my-auto">
           <DialogHeader>
-            <DialogTitle>Add New Subcontractor</DialogTitle>
+            <DialogTitle>Add New Contractor</DialogTitle>
           </DialogHeader>
-          <SubcontractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+          <ContractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
         </DialogContent>
       </Dialog>
 
-      {/* Edit Subcontractor Dialog */}
+      {/* Edit Contractor Dialog */}
       <Dialog open={!!editingSubcontractor} onOpenChange={(open) => !open && setEditingSubcontractor(null)}>
         <DialogContent className="w-[95vw] max-w-[400px] max-h-[90vh] rounded-2xl overflow-y-auto transform-none fixed inset-4 mx-auto my-auto">
           <DialogHeader>
-            <DialogTitle>Edit Subcontractor</DialogTitle>
+            <DialogTitle>Edit Contractor</DialogTitle>
           </DialogHeader>
-          <SubcontractorForm 
+          <ContractorForm 
             onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor!.id, subcontractorData: data })} 
             isLoading={updateSubcontractorMutation.isPending}
             initialData={editingSubcontractor}
@@ -252,11 +252,11 @@ export default function Subcontractors() {
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Subcontractors ({subcontractors.length})
+          All Contractors ({subcontractors.length})
         </h3>
         <Button onClick={() => setIsDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Add New Subcontractor
+          Add New Contractor
         </Button>
       </div>
 
@@ -264,13 +264,13 @@ export default function Subcontractors() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <UserCheck className="h-12 w-12 text-slate-400 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No subcontractors yet</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No contractors yet</h3>
             <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
-              Build your network by adding trusted subcontractors.
+              Build your network by adding trusted contractors.
             </p>
             <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Your First Subcontractor
+              Add Your First Contractor
             </Button>
           </CardContent>
         </Card>
@@ -343,7 +343,7 @@ export default function Subcontractors() {
                       </AlertDialogTrigger>
                       <AlertDialogContent className="sm:max-w-[350px] rounded-2xl">
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Subcontractor</AlertDialogTitle>
+                          <AlertDialogTitle>Delete Contractor</AlertDialogTitle>
                           <AlertDialogDescription>
                             Are you sure you want to delete "{subcontractor.name}"? This action cannot be undone.
                           </AlertDialogDescription>

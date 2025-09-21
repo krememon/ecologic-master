@@ -2,7 +2,7 @@
   "navigation": {
     "dashboard": "Panel de Control",
     "jobs": "Trabajos",
-    "subcontractors": "Subcontratistas",
+    "subcontractors": "Contratistas",
     "clients": "Clientes",
     "invoicing": "Facturación",
     "aiScheduling": "Programación IA",
@@ -75,7 +75,7 @@
     "quickActions": "Acciones Rápidas",
     "createJob": "Crear Trabajo",
     "addClient": "Agregar Cliente",
-    "addSubcontractor": "Agregar Subcontratista",
+    "addSubcontractor": "Agregar Contratista",
     "generateInvoice": "Generar Factura"
   },
   "jobs": {
@@ -134,8 +134,8 @@
   "subcontractors": {
     "title": "Subcontratistas",
     "subtitle": "Gestiona tu red de subcontratistas",
-    "addSubcontractor": "Agregar Subcontratista",
-    "editSubcontractor": "Editar Subcontratista",
+    "addSubcontractor": "Agregar Contratista",
+    "editSubcontractor": "Editar Contratista",
     "name": "Nombre",
     "email": "Correo Electrónico",
     "phone": "Teléfono",
@@ -143,11 +143,11 @@
     "hourlyRate": "Tarifa por Hora",
     "availability": "Disponibilidad",
     "rating": "Calificación",
-    "noSubcontractors": "No se encontraron subcontratistas",
-    "createFirstSubcontractor": "Agrega tu primer subcontratista",
-    "subcontractorCreated": "Subcontratista creado exitosamente",
-    "subcontractorUpdated": "Subcontratista actualizado exitosamente",
-    "subcontractorDeleted": "Subcontratista eliminado exitosamente",
+    "noSubcontractors": "No se encontraron contratistas",
+    "createFirstSubcontractor": "Agrega tu primer contratista",
+    "subcontractorCreated": "Contratista creado exitosamente",
+    "subcontractorUpdated": "Contratista actualizado exitosamente",
+    "subcontractorDeleted": "Contratista eliminado exitosamente",
     "deleteConfirmation": "¿Estás seguro de que quieres eliminar este subcontratista?"
   },
   "invoicing": {
@@ -208,7 +208,7 @@
     },
     "signerTypes": {
       "client": "Cliente",
-      "subcontractor": "Subcontratista",
+      "subcontractor": "Contratista",
       "companyRep": "Representante de la Empresa"
     },
     "statuses": {

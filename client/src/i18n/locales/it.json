@@ -2,7 +2,7 @@
   "navigation": {
     "dashboard": "Cruscotto",
     "jobs": "Lavori",
-    "subcontractors": "Subappaltatori",
+    "subcontractors": "Appaltatori",
     "clients": "Clienti",
     "invoicing": "Fatturazione",
     "aiScheduling": "Pianificazione IA",

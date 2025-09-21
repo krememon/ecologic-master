@@ -2,7 +2,7 @@
   "navigation": {
     "dashboard": "Tableau de bord",
     "jobs": "Travaux",
-    "subcontractors": "Sous-traitants",
+    "subcontractors": "Entrepreneurs",
     "clients": "Clients",
     "invoicing": "Facturation",
     "aiScheduling": "Planification IA",
@@ -75,7 +75,7 @@
     "quickActions": "Actions rapides",
     "createJob": "Créer un travail",
     "addClient": "Ajouter un client",
-    "addSubcontractor": "Ajouter un sous-traitant",
+    "addSubcontractor": "Ajouter un entrepreneur",
     "generateInvoice": "Générer une facture"
   },
   "jobs": {

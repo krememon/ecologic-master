@@ -92,7 +92,7 @@ export default function AuthPage() {
               </div>
               <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-2">Team Management</h3>
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Coordinate subcontractors and track project progress
+                Coordinate contractors and track project progress
               </p>
             </div>
 

@@ -2,7 +2,7 @@
   "navigation": {
     "dashboard": "Dashboard",
     "jobs": "Aufträge",
-    "subcontractors": "Subunternehmer",
+    "subcontractors": "Auftragnehmer",
     "clients": "Kunden",
     "invoicing": "Rechnungswesen",
     "aiScheduling": "KI-Planung",

@@ -233,7 +233,7 @@ export default function Dashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Subcontractors</p>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Contractors</p>
                     <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-2">
                       {stats?.availableSubcontractors || 0}
                     </p>

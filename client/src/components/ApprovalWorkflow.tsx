@@ -456,7 +456,7 @@ export default function ApprovalWorkflow() {
                                   </FormControl>
                                   <SelectContent>
                                     <SelectItem value="client">Client</SelectItem>
-                                    <SelectItem value="subcontractor">Subcontractor</SelectItem>
+                                    <SelectItem value="subcontractor">Contractor</SelectItem>
                                     <SelectItem value="company_rep">Company Representative</SelectItem>
                                   </SelectContent>
                                 </Select>

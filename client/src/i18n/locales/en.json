@@ -2,7 +2,7 @@
   "navigation": {
     "dashboard": "Dashboard",
     "jobs": "Jobs",
-    "subcontractors": "Subcontractors",
+    "subcontractors": "Contractors",
     "clients": "Clients",
     "invoicing": "Invoicing",
     "aiScheduling": "AI Scheduling",
@@ -75,7 +75,7 @@
     "quickActions": "Quick Actions",
     "createJob": "Create Job",
     "addClient": "Add Client",
-    "addSubcontractor": "Add Subcontractor",
+    "addSubcontractor": "Add Contractor",
     "generateInvoice": "Generate Invoice"
   },
   "jobs": {
@@ -132,10 +132,10 @@
     "deleteConfirmation": "Are you sure you want to delete this client?"
   },
   "subcontractors": {
-    "title": "Subcontractors",
-    "subtitle": "Manage your subcontractor network",
-    "addSubcontractor": "Add Subcontractor",
-    "editSubcontractor": "Edit Subcontractor",
+    "title": "Contractors",
+    "subtitle": "Manage your contractor network",
+    "addSubcontractor": "Add Contractor",
+    "editSubcontractor": "Edit Contractor",
     "name": "Name",
     "email": "Email",
     "phone": "Phone",
@@ -143,12 +143,12 @@
     "hourlyRate": "Hourly Rate",
     "availability": "Availability",
     "rating": "Rating",
-    "noSubcontractors": "No subcontractors found",
-    "createFirstSubcontractor": "Add your first subcontractor",
-    "subcontractorCreated": "Subcontractor created successfully",
-    "subcontractorUpdated": "Subcontractor updated successfully",
-    "subcontractorDeleted": "Subcontractor deleted successfully",
-    "deleteConfirmation": "Are you sure you want to delete this subcontractor?"
+    "noSubcontractors": "No contractors found",
+    "createFirstSubcontractor": "Add your first contractor",
+    "subcontractorCreated": "Contractor created successfully",
+    "subcontractorUpdated": "Contractor updated successfully",
+    "subcontractorDeleted": "Contractor deleted successfully",
+    "deleteConfirmation": "Are you sure you want to delete this contractor?"
   },
   "invoicing": {
     "title": "Invoicing",
@@ -208,7 +208,7 @@
     },
     "signerTypes": {
       "client": "Client",
-      "subcontractor": "Subcontractor",
+      "subcontractor": "Contractor",
       "companyRep": "Company Representative"
     },
     "statuses": {
@@ -242,7 +242,7 @@
   },
   "messages": {
     "title": "Messages",
-    "subtitle": "Communicate with clients and subcontractors",
+    "subtitle": "Communicate with clients and contractors",
     "compose": "Compose",
     "reply": "Reply",
     "forward": "Forward",

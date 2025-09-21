@@ -14,7 +14,7 @@ import AuthPage from "@/pages/auth-page";
 import Auth from "@/pages/Auth";
 import Home from "@/pages/Home";
 import Jobs from "@/pages/Jobs";
-import Subcontractors from "@/pages/Subcontractors";
+import Contractors from "@/pages/Contractors";
 import Clients from "@/pages/Clients";
 import Invoicing from "@/pages/Invoicing";
 import Documents from "@/pages/Documents";
@@ -33,7 +33,7 @@ import { withSubscriptionGuard } from "@/hooks/useSubscription";
 // Wrap protected components with subscription guard
 const ProtectedHome = withSubscriptionGuard(Home);
 const ProtectedJobs = withSubscriptionGuard(Jobs);
-const ProtectedSubcontractors = withSubscriptionGuard(Subcontractors);
+const ProtectedContractors = withSubscriptionGuard(Contractors);
 const ProtectedClients = withSubscriptionGuard(Clients);
 const ProtectedInvoicing = withSubscriptionGuard(Invoicing);
 const ProtectedPayments = withSubscriptionGuard(PaymentsPage);
@@ -76,7 +76,7 @@ function Router() {
         <Route path="/choose-plan" component={ChoosePlan} />
         <Route path="/" component={ProtectedHome} />
         <Route path="/jobs" component={ProtectedJobs} />
-        <Route path="/subcontractors" component={ProtectedSubcontractors} />
+        <Route path="/subcontractors" component={ProtectedContractors} />
         <Route path="/clients" component={ProtectedClients} />
         <Route path="/invoicing" component={ProtectedInvoicing} />
         <Route path="/payments" component={ProtectedPayments} />
