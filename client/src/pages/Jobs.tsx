@@ -410,19 +410,61 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-3 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              <div className="flex flex-col">
-                <span>{selectedJob?.title}</span>
-                {(selectedJob?.clientName || selectedJob?.client?.name) && (
-                  <span className="text-sm font-normal text-slate-600 dark:text-slate-400" data-testid="text-job-client-header">
-                    Client: {selectedJob.clientName || selectedJob.client?.name}
-                  </span>
-                )}
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-2 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+          <DialogHeader className="p-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <Building2 className="h-4 w-4 text-slate-600 dark:text-slate-400 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DialogTitle className="text-lg font-bold truncate">{selectedJob?.title}</DialogTitle>
+                    {selectedJob && (
+                      <Badge 
+                        variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
+                        className="text-xs px-2 py-0 h-5"
+                      >
+                        {selectedJob.status}
+                      </Badge>
+                    )}
+                  </div>
+                  {(selectedJob?.clientName || selectedJob?.client?.name) && (
+                    <p className="text-sm text-slate-600 dark:text-slate-400" data-testid="text-job-client-header">
+                      Client: {selectedJob.clientName || selectedJob.client?.name}
+                    </p>
+                  )}
+                </div>
               </div>
-            </DialogTitle>
+              
+              {/* Action Icons */}
+              {selectedJob && (
+                <div className="flex items-center gap-1 ml-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingJob(selectedJob);
+                      setSelectedJob(null);
+                    }}
+                    className="h-8 w-8 p-0"
+                    aria-label="Edit job"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
+                      setSelectedJob(null);
+                    }}
+                    className="h-8 w-8 p-0"
+                    aria-label="Delete job"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </DialogHeader>
           {selectedJob && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
