@@ -40,6 +40,7 @@ function JobForm({
     resolver: zodResolver(insertJobSchema),
     defaultValues: {
       title: initialData?.title || "",
+      clientName: initialData?.clientName || "",
       description: initialData?.description || "",
       location: initialData?.location || "",
       city: initialData?.city || "",
@@ -67,6 +68,20 @@ function JobForm({
               <FormLabel>Job Title</FormLabel>
               <FormControl>
                 <Input {...field} data-testid="input-job-title" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="clientName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Client Name *</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="Enter client name..." data-testid="input-client-name" />
               </FormControl>
               <FormMessage />
             </FormItem>
