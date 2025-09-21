@@ -110,7 +110,6 @@
     "createFirstJob": "Crea tu primer trabajo",
     "jobCreated": "Trabajo creado exitosamente",
     "jobUpdated": "Trabajo actualizado exitosamente",
-    "jobDeleted": "Trabajo eliminado exitosamente",
     "deleteConfirmation": "¿Estás seguro de que quieres eliminar este trabajo?"
   },
   "clients": {

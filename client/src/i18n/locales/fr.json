@@ -110,7 +110,6 @@
     "createFirstJob": "Créez votre premier travail",
     "jobCreated": "Travail créé avec succès",
     "jobUpdated": "Travail mis à jour avec succès",
-    "jobDeleted": "Travail supprimé avec succès",
     "deleteConfirmation": "Êtes-vous sûr de vouloir supprimer ce travail ?"
   },
   "clients": {
