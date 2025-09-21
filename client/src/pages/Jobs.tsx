@@ -227,6 +227,12 @@ export default function Jobs() {
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+  // Reset description expansion when job changes
+  useEffect(() => {
+    setIsDescriptionExpanded(false);
+  }, [selectedJob?.id]);
 
   // Utility function for Google Places dropdown detection using composedPath
   const isInPacContainer = (event: Event): boolean => {
@@ -564,9 +570,31 @@ export default function Jobs() {
                       {selectedJob.description && (
                         <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
                           <span className="text-sm font-medium">Description:</span>
-                          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                            {selectedJob.description}
-                          </p>
+                          <div className="mt-1">
+                            <p 
+                              className={`text-sm text-slate-600 dark:text-slate-300 ${
+                                !isDescriptionExpanded 
+                                  ? 'line-clamp-2 overflow-hidden' 
+                                  : ''
+                              }`}
+                              style={!isDescriptionExpanded ? {
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden'
+                              } : undefined}
+                            >
+                              {selectedJob.description}
+                            </p>
+                            {selectedJob.description.length > 100 && (
+                              <button 
+                                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                                className="text-sm text-blue-600 hover:text-blue-800 mt-1 underline"
+                              >
+                                {isDescriptionExpanded ? 'Show less' : 'Read more'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
