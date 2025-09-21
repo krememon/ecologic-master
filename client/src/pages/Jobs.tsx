@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search } from "lucide-react";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -16,6 +17,20 @@ import JobPhotoFeed from "@/components/JobPhotoFeed";
 
 interface JobWithClient extends Job {
   client?: Client | null;
+}
+
+interface JobPhoto {
+  id: number;
+  jobId: number;
+  uploadedBy: string;
+  title: string | null;
+  description: string | null;
+  photoUrl: string;
+  location: string | null;
+  phase: string | null;
+  weather: string | null;
+  isPublic: boolean;
+  createdAt: string;
 }
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -275,6 +290,12 @@ export default function Jobs() {
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
+  });
+
+  // Fetch photos count for selected job
+  const { data: jobPhotos = [] } = useQuery<JobPhoto[]>({
+    queryKey: [`/api/jobs/${selectedJob?.id}/photos`],
+    enabled: !!selectedJob?.id,
   });
 
   // Filter jobs based on search query
@@ -603,8 +624,23 @@ export default function Jobs() {
               </div>
 
               {/* Right Column - Photos and Activity */}
-              <div className="space-y-4">
-                <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
+              <div className="space-y-2">
+                <Accordion type="multiple" defaultValue={[]} className="w-full">
+                  <AccordionItem value="photos" className="border rounded-lg">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <Camera className="h-4 w-4" />
+                        <span className="font-medium">Job Site Photos</span>
+                        <Badge variant="secondary" className="ml-2 text-xs">
+                          {jobPhotos.length}
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
             </div>
           )}
