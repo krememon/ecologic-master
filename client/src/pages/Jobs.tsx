@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
@@ -211,6 +211,7 @@ export default function Jobs() {
   const [editingJob, setEditingJob] = useState<any>(null);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Utility function for Google Places dropdown detection using composedPath
   const isInPacContainer = (event: Event): boolean => {
@@ -253,6 +254,19 @@ export default function Jobs() {
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
+  });
+
+  // Filter jobs based on search query
+  const filteredJobs = jobs.filter(job => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.trim().toLowerCase();
+    const matchesTitle = job.title.toLowerCase().includes(query);
+    const matchesLocation = job.location ? job.location.toLowerCase().includes(query) : false;
+    const matchesStatus = job.status.toLowerCase().includes(query);
+    const matchesClient = job.client?.name ? job.client.name.toLowerCase().includes(query) : false;
+    
+    return matchesTitle || matchesLocation || matchesStatus || matchesClient;
   });
 
   const createJobMutation = useMutation({
@@ -483,6 +497,18 @@ export default function Jobs() {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Input
+          placeholder="Search jobs by name, location, status, or client..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+          data-testid="input-search-jobs"
+        />
+      </div>
+
       {jobs.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -497,9 +523,19 @@ export default function Jobs() {
             </Button>
           </CardContent>
         </Card>
+      ) : filteredJobs.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-slate-400 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No jobs found</h3>
+            <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
+              Try adjusting your search criteria or create a new job.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job: JobWithClient) => (
+          {filteredJobs.map((job: JobWithClient) => (
             <Card 
               key={job.id} 
               className="hover:shadow-md transition-shadow cursor-pointer"
