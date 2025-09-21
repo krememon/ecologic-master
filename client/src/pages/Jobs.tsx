@@ -637,7 +637,48 @@ export default function Jobs() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4">
-                      <JobPhotoFeed jobId={selectedJob.id} canUpload={true} />
+                      {jobPhotos.length === 0 ? (
+                        <div className="flex flex-col items-center py-6">
+                          <Button size="sm" className="mb-2">
+                            <Camera className="h-4 w-4 mr-2" />
+                            Upload Photo
+                          </Button>
+                          <p className="text-xs text-slate-500">Add the first job site photo</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-2">
+                            {jobPhotos.slice(0, 6).map((photo) => (
+                              <div key={photo.id} className="relative group">
+                                <img
+                                  src={photo.photoUrl}
+                                  alt={photo.title || "Job site photo"}
+                                  className="w-full h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => {
+                                    // TODO: Open full JobPhotoFeed modal
+                                  }}
+                                />
+                                {photo.location && (
+                                  <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1 rounded">
+                                    {photo.location}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Button size="sm" variant="outline">
+                              <Camera className="h-4 w-4 mr-2" />
+                              Upload Photo
+                            </Button>
+                            {jobPhotos.length > 6 && (
+                              <button className="text-sm text-blue-600 hover:text-blue-800">
+                                View all {jobPhotos.length} photos
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
