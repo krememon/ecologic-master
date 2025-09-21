@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search } from "lucide-react";
+import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
@@ -432,6 +433,35 @@ export default function Jobs() {
                       Client: {selectedJob.clientName || selectedJob.client?.name}
                     </p>
                   )}
+                  
+                  {/* Metadata Row */}
+                  <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-2">
+                    {selectedJob?.location && (
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 truncate max-w-[200px]"
+                        title={selectedJob.location}
+                        data-testid="link-job-location-meta"
+                      >
+                        <MapPin className="h-3 w-3 flex-shrink-0" />
+                        {selectedJob.location}
+                      </a>
+                    )}
+                    {selectedJob?.location && (selectedJob?.city || selectedJob?.postalCode) && <span>•</span>}
+                    {(selectedJob?.city || selectedJob?.postalCode) && (
+                      <span className="hidden md:inline truncate" title={`${selectedJob.city || ''}, ${selectedJob.postalCode || ''}`}>
+                        {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
+                      </span>
+                    )}
+                    {((selectedJob?.city || selectedJob?.postalCode) || selectedJob?.location) && selectedJob?.createdAt && <span>•</span>}
+                    {selectedJob?.createdAt && (
+                      <span className="text-xs" title={format(new Date(selectedJob.createdAt), 'PPpp')}>
+                        {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               
