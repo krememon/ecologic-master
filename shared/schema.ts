@@ -108,6 +108,7 @@ export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   clientId: integer("client_id").references(() => clients.id),
+  clientName: varchar("client_name", { length: 255 }),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   status: varchar("status").notNull().default("pending"), // pending, active, completed, cancelled
@@ -515,6 +516,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
 }).extend({
   // Enhanced validation for required fields
   title: z.string().min(1, "Job title is required"),
+  clientName: z.string().min(1, "Client name is required"),
   description: z.string().optional().transform(val => val || ""), // Ensure description is always a string
   // Location validation rules
   location: z.string().min(1, "Location is required"),
