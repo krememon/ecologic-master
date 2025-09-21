@@ -279,7 +279,8 @@ export default function Jobs() {
     const matchesTitle = job.title.toLowerCase().includes(query);
     const matchesLocation = job.location ? job.location.toLowerCase().includes(query) : false;
     const matchesStatus = job.status.toLowerCase().includes(query);
-    const matchesClient = job.client?.name ? job.client.name.toLowerCase().includes(query) : false;
+    const matchesClient = (job.clientName ? job.clientName.toLowerCase().includes(query) : false) || 
+                         (job.client?.name ? job.client.name.toLowerCase().includes(query) : false);
     
     return matchesTitle || matchesLocation || matchesStatus || matchesClient;
   });
@@ -414,7 +415,14 @@ export default function Jobs() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              {selectedJob?.title}
+              <div className="flex flex-col">
+                <span>{selectedJob?.title}</span>
+                {(selectedJob?.clientName || selectedJob?.client?.name) && (
+                  <span className="text-sm font-normal text-slate-600 dark:text-slate-400" data-testid="text-job-client-header">
+                    Client: {selectedJob.clientName || selectedJob.client?.name}
+                  </span>
+                )}
+              </div>
             </DialogTitle>
           </DialogHeader>
           {selectedJob && (
@@ -432,10 +440,10 @@ export default function Jobs() {
                         {selectedJob.status}
                       </Badge>
                     </div>
-                    {selectedJob.client && (
+                    {(selectedJob.clientName || selectedJob.client?.name) && (
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Client:</span>
-                        <span className="text-sm truncate ml-2">{selectedJob.client.name}</span>
+                        <span className="text-sm truncate ml-2" data-testid="text-job-client-detail">{selectedJob.clientName || selectedJob.client?.name}</span>
                       </div>
                     )}
                     {selectedJob.location && (
@@ -576,10 +584,10 @@ export default function Jobs() {
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-2">
-                {job.client && (
+                {(job.clientName || job.client?.name) && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <Building2 className="h-4 w-4" />
-                    {job.client.name}
+                    <span data-testid="text-job-client-name">{job.clientName || job.client?.name}</span>
                   </div>
                 )}
                 {job.location && (
