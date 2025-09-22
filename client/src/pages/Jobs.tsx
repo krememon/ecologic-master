@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User } from "lucide-react";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
@@ -691,7 +691,7 @@ export default function Jobs() {
 
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Active Jobs
+          All Jobs
         </h3>
         <Button onClick={() => setIsDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
@@ -703,7 +703,7 @@ export default function Jobs() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
         <Input
-          placeholder="Search jobs by name, location, status, or client..."
+          placeholder="Search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
@@ -753,22 +753,31 @@ export default function Jobs() {
                 setSelectedJob(job);
               }}
             >
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                  {job.title}
-                </CardTitle>
-                <Badge variant={job.status === 'active' ? 'default' : 'secondary'}>
-                  {job.status}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {(job.clientName || job.client?.name) && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <Building2 className="h-4 w-4" />
-                    <span data-testid="text-job-client-name">{job.clientName || job.client?.name}</span>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                      {job.title}
+                    </CardTitle>
+                    {(job.clientName || job.client?.name) ? (
+                      <div className="flex items-center gap-1 mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        <User className="h-3 w-3" />
+                        <span data-testid="text-job-client-name">{job.clientName || job.client?.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 mt-1 text-sm text-slate-400">
+                        <User className="h-3 w-3" />
+                        <span>—</span>
+                      </div>
+                    )}
                   </div>
-                )}
+                  <Badge variant={job.status === 'active' ? 'default' : 'secondary'} className="ml-2">
+                    {job.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-3">
                 {job.location && (
                   <a 
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
