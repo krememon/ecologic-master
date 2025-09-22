@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
+import { ClientAutocomplete } from "@/components/ClientAutocomplete";
 
 function JobForm({ 
   onSubmit, 
@@ -98,7 +99,11 @@ function JobForm({
             <FormItem>
               <FormLabel>Client Name *</FormLabel>
               <FormControl>
-                <Input {...field} placeholder="Enter client name..." data-testid="input-client-name" />
+                <ClientAutocomplete 
+                  value={field.value} 
+                  onChange={field.onChange}
+                  placeholder="Enter client name..."
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
