@@ -47,13 +47,13 @@ export interface IStorage {
   getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
   createUser(user: UpsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
-  updateUser(id: number, user: Partial<UpsertUser>): Promise<User>;
+  updateUser(id: string, user: Partial<UpsertUser>): Promise<User>;
   verifyEmail(token: string): Promise<User | undefined>;
   setResetPasswordToken(email: string, token: string, expires: Date): Promise<void>;
   resetPassword(token: string, newPassword: string): Promise<User | undefined>;
   
   // Company operations
-  getUserCompany(userId: number): Promise<Company | undefined>;
+  getUserCompany(userId: string): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company>;
   
@@ -168,7 +168,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUser(id: number, userData: Partial<UpsertUser>): Promise<User> {
+  async updateUser(id: string, userData: Partial<UpsertUser>): Promise<User> {
     const [user] = await db
       .update(users)
       .set({ ...userData, updatedAt: new Date() })
@@ -220,7 +220,7 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserCompany(userId: number): Promise<Company | undefined> {
+  async getUserCompany(userId: string): Promise<Company | undefined> {
     const [membership] = await db
       .select({ company: companies })
       .from(companyMembers)
