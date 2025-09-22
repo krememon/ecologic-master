@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -27,27 +27,20 @@ export function ClientAutocomplete({
   className 
 }: ClientAutocompleteProps) {
   const [open, setOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch clients from the API
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ['/api/clients'],
-    enabled: open || searchTerm.length > 0, // Only fetch when needed
+    enabled: open || value.length > 0, // Only fetch when needed
   });
 
-  // Filter clients based on search term
+  // Filter clients based on current value
   const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase())
+    client.name.toLowerCase().includes(value.toLowerCase())
   );
 
-  // Update search term when value changes externally
-  useEffect(() => {
-    setSearchTerm(value);
-  }, [value]);
-
   const handleInputChange = (newValue: string) => {
-    setSearchTerm(newValue);
     onChange(newValue);
     if (!open && newValue.length > 0) {
       setOpen(true);
@@ -55,7 +48,6 @@ export function ClientAutocomplete({
   };
 
   const handleSelectClient = (clientName: string) => {
-    setSearchTerm(clientName);
     onChange(clientName);
     setOpen(false);
     inputRef.current?.blur();
@@ -75,7 +67,7 @@ export function ClientAutocomplete({
     setTimeout(() => setOpen(false), 200);
   };
 
-  const showDropdown = open && searchTerm.length > 0 && (filteredClients.length > 0 || searchTerm.length >= 2);
+  const showDropdown = open && value.length > 0 && (filteredClients.length > 0 || value.length >= 2);
 
   return (
     <Popover open={showDropdown} onOpenChange={setOpen}>
@@ -83,11 +75,11 @@ export function ClientAutocomplete({
         <div className="relative">
           <Input
             ref={inputRef}
-            value={searchTerm}
+            value={value}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={handleInputKeyDown}
             onBlur={handleInputBlur}
-            onFocus={() => searchTerm.length > 0 && setOpen(true)}
+            onFocus={() => value.length > 0 && setOpen(true)}
             placeholder={placeholder}
             className={cn("pr-8", className)}
             data-testid="input-client-autocomplete"
@@ -118,9 +110,9 @@ export function ClientAutocomplete({
                   </CommandItem>
                 ))}
               </CommandGroup>
-            ) : searchTerm.length >= 2 ? (
+            ) : value.length >= 2 ? (
               <CommandEmpty className="py-3 text-center text-sm text-slate-500">
-                No existing clients found. Type to create "{searchTerm}" as a new client.
+                No existing clients found. Type to create "{value}" as a new client.
               </CommandEmpty>
             ) : (
               <CommandEmpty className="py-3 text-center text-sm text-slate-500">
