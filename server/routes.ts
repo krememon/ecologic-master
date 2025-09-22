@@ -430,6 +430,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/clients/:clientId/jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Verify the client belongs to the user's company
+      const client = await storage.getClient(clientId);
+      if (!client || client.companyId !== company.id) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+      
+      const jobs = await storage.getJobsByClient(clientId);
+      res.json(jobs);
+    } catch (error) {
+      console.error("Error fetching client jobs:", error);
+      res.status(500).json({ message: "Failed to fetch client jobs" });
+    }
+  });
+
   app.post('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

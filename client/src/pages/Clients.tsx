@@ -12,14 +12,69 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertClientSchema, type Client } from "@shared/schema";
+import { insertClientSchema, type Client, type Job } from "@shared/schema";
 import { z } from "zod";
-import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
 
 type ClientFormData = z.infer<typeof insertClientSchema>;
+
+// Component to display job history for a client
+function ClientJobsHistory({ clientId }: { clientId: number }) {
+  const { data: clientJobs = [], isLoading } = useQuery<Job[]>({
+    queryKey: [`/api/clients/${clientId}/jobs`],
+    enabled: !!clientId,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="mt-3 animate-pulse">
+        <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+      </div>
+    );
+  }
+
+  if (clientJobs.length === 0) {
+    return (
+      <div className="mt-3 py-2">
+        <p className="text-xs text-slate-500 italic">No jobs yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      {clientJobs.slice(0, 3).map((job: any) => (
+        <div key={job.id} className="flex items-center justify-between py-1">
+          <div className="flex-1">
+            <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+              {job.title}
+            </p>
+            <p className="text-xs text-slate-500">
+              {job.status} • {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
+            </p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full ${
+            job.status === 'active' 
+              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+              : job.status === 'completed'
+              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+              : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+          }`}>
+            {job.status}
+          </span>
+        </div>
+      ))}
+      {clientJobs.length > 3 && (
+        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+          +{clientJobs.length - 3} more job{clientJobs.length - 3 !== 1 ? 's' : ''}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function Clients() {
   const { t } = useTranslation();
@@ -28,6 +83,7 @@ export default function Clients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [expandedClientJobs, setExpandedClientJobs] = useState<Set<number>>(new Set());
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -48,6 +104,17 @@ export default function Clients() {
     queryKey: ["/api/clients"],
     enabled: isAuthenticated,
   });
+
+  // Function to toggle job history expansion
+  const toggleClientJobs = (clientId: number) => {
+    const newExpanded = new Set(expandedClientJobs);
+    if (newExpanded.has(clientId)) {
+      newExpanded.delete(clientId);
+    } else {
+      newExpanded.add(clientId);
+    }
+    setExpandedClientJobs(newExpanded);
+  };
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(insertClientSchema),
@@ -506,6 +573,26 @@ export default function Clients() {
                     {client.notes}
                   </p>
                 )}
+                
+                {/* Jobs History Section */}
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => toggleClientJobs(client.id)}
+                    className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 w-full text-left"
+                  >
+                    {expandedClientJobs.has(client.id) ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <Briefcase className="h-4 w-4" />
+                    <span className="font-medium">Jobs History</span>
+                  </button>
+                  
+                  {expandedClientJobs.has(client.id) && (
+                    <ClientJobsHistory clientId={client.id} />
+                  )}
+                </div>
                 
                 <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
                   <p className="text-xs text-slate-500">

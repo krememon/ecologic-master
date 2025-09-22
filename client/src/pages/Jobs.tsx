@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User } from "lucide-react";
+import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
@@ -238,6 +239,7 @@ function JobForm({
 export default function Jobs() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
@@ -763,7 +765,20 @@ export default function Jobs() {
                     {(job.clientName || job.client?.name) ? (
                       <div className="flex items-center gap-1 mt-1 text-sm text-slate-600 dark:text-slate-400">
                         <User className="h-3 w-3" />
-                        <span data-testid="text-job-client-name">{job.clientName || job.client?.name}</span>
+                        {job.client?.id ? (
+                          <button
+                            className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocation('/clients');
+                            }}
+                            data-testid="button-job-client-name"
+                          >
+                            {job.clientName || job.client?.name}
+                          </button>
+                        ) : (
+                          <span data-testid="text-job-client-name">{job.clientName}</span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 mt-1 text-sm text-slate-400">

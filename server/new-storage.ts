@@ -68,6 +68,7 @@ export interface IStorage {
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
   getClient(id: number): Promise<Client | undefined>;
+  getClientByName(companyId: number, name: string): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: number, client: Partial<InsertClient>): Promise<Client>;
   deleteClient(id: number): Promise<void>;
@@ -81,6 +82,7 @@ export interface IStorage {
   
   // Job operations
   getJobs(companyId: number): Promise<any[]>;
+  getJobsByClient(clientId: number): Promise<any[]>;
   getJob(id: number): Promise<any>;
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, job: Partial<InsertJob>): Promise<Job>;
@@ -252,6 +254,19 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
+  async getClientByName(companyId: number, name: string): Promise<Client | undefined> {
+    const [client] = await db
+      .select()
+      .from(clients)
+      .where(
+        and(
+          eq(clients.companyId, companyId),
+          eq(clients.name, name)
+        )
+      );
+    return client;
+  }
+
   async createClient(clientData: InsertClient): Promise<Client> {
     const [client] = await db.insert(clients).values(clientData).returning();
     return client;
@@ -333,6 +348,42 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(jobs.createdAt));
   }
 
+  async getJobsByClient(clientId: number): Promise<any[]> {
+    return await db
+      .select({
+        id: jobs.id,
+        title: jobs.title,
+        status: jobs.status,
+        priority: jobs.priority,
+        startDate: jobs.startDate,
+        endDate: jobs.endDate,
+        estimatedCost: jobs.estimatedCost,
+        actualCost: jobs.actualCost,
+        location: jobs.location,
+        city: jobs.city,
+        postalCode: jobs.postalCode,
+        locationLat: jobs.locationLat,
+        locationLng: jobs.locationLng,
+        locationPlaceId: jobs.locationPlaceId,
+        description: jobs.description,
+        notes: jobs.notes,
+        clientId: jobs.clientId,
+        companyId: jobs.companyId,
+        createdAt: jobs.createdAt,
+        updatedAt: jobs.updatedAt,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          phone: clients.phone,
+        },
+      })
+      .from(jobs)
+      .leftJoin(clients, eq(jobs.clientId, clients.id))
+      .where(eq(jobs.clientId, clientId))
+      .orderBy(desc(jobs.createdAt));
+  }
+
   async getJob(id: number): Promise<any> {
     const [job] = await db
       .select({
@@ -370,7 +421,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJob(jobData: InsertJob): Promise<Job> {
-    const [job] = await db.insert(jobs).values(jobData).returning();
+    let clientId = jobData.clientId;
+    
+    // If clientName is provided but no clientId, auto-create or link to existing client
+    if (jobData.clientName && !jobData.clientId && jobData.companyId) {
+      // First, check if a client with this name already exists
+      const existingClient = await this.getClientByName(jobData.companyId, jobData.clientName);
+      
+      if (existingClient) {
+        // Link to existing client
+        clientId = existingClient.id;
+      } else {
+        // Create new client
+        const newClient = await this.createClient({
+          companyId: jobData.companyId,
+          name: jobData.clientName
+        });
+        clientId = newClient.id;
+      }
+    }
+    
+    // Create the job with the linked clientId
+    const [job] = await db.insert(jobs).values({
+      ...jobData,
+      clientId
+    }).returning();
     return job;
   }
 
