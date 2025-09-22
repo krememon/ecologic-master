@@ -44,7 +44,7 @@ export interface IStorage {
   // User operations for email/password and social authentication
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
+  // getUserByProvider(provider: string, providerId: string): Promise<User | undefined>; // TODO: Add provider fields to schema
   createUser(user: UpsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUser(id: string, user: Partial<UpsertUser>): Promise<User>;
@@ -84,7 +84,7 @@ export interface IStorage {
   getJobs(companyId: number): Promise<any[]>;
   getJobsByClient(clientId: number): Promise<any[]>;
   getJob(id: number): Promise<any>;
-  createJob(job: InsertJob): Promise<Job>;
+  createJob(job: InsertJob & { companyId: number }): Promise<Job>;
   updateJob(id: number, job: Partial<InsertJob>): Promise<Job>;
   deleteJob(id: number): Promise<void>;
   
@@ -141,12 +141,13 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async getUserByProvider(provider: string, providerId: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(
-      and(eq(users.provider, provider), eq(users.providerId, providerId))
-    );
-    return user || undefined;
-  }
+  // TODO: Implement getUserByProvider when provider fields are added to schema
+  // async getUserByProvider(provider: string, providerId: string): Promise<User | undefined> {
+  //   const [user] = await db.select().from(users).where(
+  //     and(eq(users.provider, provider), eq(users.providerId, providerId))
+  //   );
+  //   return user || undefined;
+  // }
 
   async createUser(userData: UpsertUser): Promise<User> {
     const [user] = await db.insert(users).values(userData).returning();
@@ -420,11 +421,11 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
-  async createJob(jobData: InsertJob): Promise<Job> {
+  async createJob(jobData: InsertJob & { companyId: number }): Promise<Job> {
     let clientId = jobData.clientId;
     
     // If clientName is provided but no clientId, auto-create or link to existing client
-    if (jobData.clientName && !jobData.clientId && jobData.companyId) {
+    if (jobData.clientName && !jobData.clientId) {
       // First, check if a client with this name already exists
       const existingClient = await this.getClientByName(jobData.companyId, jobData.clientName);
       
@@ -441,18 +442,67 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Create the job with the linked clientId
-    const [job] = await db.insert(jobs).values({
+    // Convert lat/lng to strings for database decimal fields
+    const dbJobData = {
       ...jobData,
+      locationLat: jobData.locationLat !== null && jobData.locationLat !== undefined 
+        ? String(jobData.locationLat) 
+        : jobData.locationLat,
+      locationLng: jobData.locationLng !== null && jobData.locationLng !== undefined 
+        ? String(jobData.locationLng) 
+        : jobData.locationLng,
       clientId
-    }).returning();
+    };
+    
+    // Create the job with the linked clientId
+    const [job] = await db.insert(jobs).values(dbJobData).returning();
     return job;
   }
 
   async updateJob(id: number, jobData: Partial<InsertJob>): Promise<Job> {
+    // Get the current job to access its companyId for client linking
+    const currentJob = await this.getJob(id);
+    if (!currentJob) {
+      throw new Error("Job not found");
+    }
+    
+    let updateData = { ...jobData };
+    
+    // Handle client name updates - create/link clients like in createJob
+    if (jobData.clientName && !jobData.clientId) {
+      const companyId = currentJob.companyId;
+      
+      // First, check if a client with this name already exists
+      const existingClient = await this.getClientByName(companyId, jobData.clientName);
+      
+      if (existingClient) {
+        // Link to existing client
+        updateData.clientId = existingClient.id;
+      } else {
+        // Create new client
+        const newClient = await this.createClient({
+          companyId: companyId,
+          name: jobData.clientName
+        });
+        updateData.clientId = newClient.id;
+      }
+    }
+    
+    // Convert lat/lng to strings for database decimal fields
+    const dbUpdateData = {
+      ...updateData,
+      locationLat: updateData.locationLat !== null && updateData.locationLat !== undefined 
+        ? String(updateData.locationLat) 
+        : updateData.locationLat,
+      locationLng: updateData.locationLng !== null && updateData.locationLng !== undefined 
+        ? String(updateData.locationLng) 
+        : updateData.locationLng,
+      updatedAt: new Date()
+    };
+    
     const [job] = await db
       .update(jobs)
-      .set({ ...jobData, updatedAt: new Date() })
+      .set(dbUpdateData)
       .where(eq(jobs.id, id))
       .returning();
     return job;

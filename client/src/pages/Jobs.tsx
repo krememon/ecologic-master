@@ -441,72 +441,45 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-2 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
-          <DialogHeader className="p-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <Building2 className="h-4 w-4 text-slate-600 dark:text-slate-400 flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <DialogTitle className="text-lg font-bold truncate">{selectedJob?.title}</DialogTitle>
-                    {selectedJob && (
-                      <Badge 
-                        variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
-                        className="text-xs px-2 py-0 h-5"
-                      >
-                        {selectedJob.status}
-                      </Badge>
-                    )}
-                  </div>
-                  {(selectedJob?.clientName || selectedJob?.client?.name) && (
-                    <p className="text-sm text-slate-600 dark:text-slate-400" data-testid="text-job-client-header">
-                      Client: {selectedJob.clientName || selectedJob.client?.name}
-                    </p>
-                  )}
-                  
-                  {/* Metadata Row */}
-                  <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-2">
-                    {selectedJob?.location && (
-                      <a 
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 truncate max-w-[200px]"
-                        title={selectedJob.location}
-                        data-testid="link-job-location-meta"
-                      >
-                        <MapPin className="h-3 w-3 flex-shrink-0" />
-                        {selectedJob.location}
-                      </a>
-                    )}
-                    {selectedJob?.location && (selectedJob?.city || selectedJob?.postalCode) && <span>•</span>}
-                    {(selectedJob?.city || selectedJob?.postalCode) && (
-                      <span className="hidden md:inline truncate" title={`${selectedJob.city || ''}, ${selectedJob.postalCode || ''}`}>
-                        {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
-                      </span>
-                    )}
-                    {((selectedJob?.city || selectedJob?.postalCode) || selectedJob?.location) && selectedJob?.createdAt && <span>•</span>}
-                    {selectedJob?.createdAt && (
-                      <span className="text-xs" title={format(new Date(selectedJob.createdAt), 'PPpp')}>
-                        {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
-                      </span>
-                    )}
-                  </div>
-                </div>
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+          <DialogHeader className="pb-4">
+            {/* Header with Title Left, Status Right */}
+            <div className="flex items-start justify-between">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-xl font-bold text-left truncate">{selectedJob?.title}</DialogTitle>
+                {/* Client Name just below title */}
+                {(selectedJob?.clientName || selectedJob?.client?.name) && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1" data-testid="text-job-client-header">
+                    Client: {selectedJob.clientName || selectedJob.client?.name}
+                  </p>
+                )}
               </div>
               
-              {/* Action Icons */}
-              {selectedJob && (
-                <div className="flex items-center gap-1 ml-4">
+              {/* Status Badge Top-Right */}
+              <div className="flex items-center gap-2 ml-4">
+                {selectedJob && (
+                  <Badge 
+                    variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
+                    className="text-sm px-3 py-1"
+                  >
+                    {selectedJob.status}
+                  </Badge>
+                )}
+                
+                {/* Action Buttons */}
+                <div className="flex items-center gap-1">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      setEditingJob(selectedJob);
-                      setSelectedJob(null);
+                      if (selectedJob) {
+                        setEditingJob(selectedJob);
+                        setSelectedJob(null);
+                      }
                     }}
                     className="h-8 w-8 p-0"
                     aria-label="Edit job"
+                    data-testid="button-edit-job"
                   >
                     <Edit className="h-4 w-4" />
                   </Button>
@@ -514,177 +487,208 @@ export default function Jobs() {
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
-                      setSelectedJob(null);
+                      if (selectedJob) {
+                        setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
+                        setSelectedJob(null);
+                      }
                     }}
                     className="h-8 w-8 p-0"
                     aria-label="Delete job"
+                    data-testid="button-delete-job"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Clean Meta Info Row: Address • Created Date */}
+            <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-3">
+              {selectedJob?.location && (
+                <a 
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800 truncate"
+                  title={selectedJob.location}
+                  data-testid="link-job-location-meta"
+                >
+                  <MapPin className="h-4 w-4 flex-shrink-0" />
+                  {selectedJob.location}
+                </a>
+              )}
+              {selectedJob?.location && selectedJob?.createdAt && <span>•</span>}
+              {selectedJob?.createdAt && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4 flex-shrink-0" />
+                  <span title={format(new Date(selectedJob.createdAt), 'PPpp')}>
+                    Created {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
+                  </span>
                 </div>
               )}
             </div>
           </DialogHeader>
           {selectedJob && (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 h-full">
-              {/* Left Column - Key Information (60%) */}
-              <div className="col-span-1 lg:col-span-3 space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full">
+              {/* Left Column - Job Information (60%) */}
+              <div className="col-span-1 lg:col-span-3">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Job Information</CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Status:</span>
-                        <Badge variant={selectedJob.status === 'active' ? 'default' : 'secondary'}>
-                          {selectedJob.status}
-                        </Badge>
-                      </div>
-                      {(selectedJob.clientName || selectedJob.client?.name) && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Client:</span>
-                          <span className="text-sm truncate ml-2" data-testid="text-job-client-detail">{selectedJob.clientName || selectedJob.client?.name}</span>
-                        </div>
+                  <CardContent className="pt-0">
+                    {/* Two-column layout: labels left, values right */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                      {/* Priority */}
+                      {selectedJob.priority && (
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Priority:</span>
+                          <span className="text-slate-600 dark:text-slate-400 capitalize">{selectedJob.priority}</span>
+                        </>
                       )}
-                      {selectedJob.location && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">Location:</span>
-                            <a 
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-600 hover:text-blue-800 underline truncate ml-2 flex items-center gap-1"
-                              data-testid="link-job-location"
-                            >
-                              <MapPin className="h-3 w-3" />
-                              {selectedJob.location}
-                            </a>
-                          </div>
-                          {(selectedJob.city || selectedJob.postalCode) && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">City/ZIP:</span>
-                              <span className="text-sm text-slate-600 dark:text-slate-300 ml-2" data-testid="text-job-city-zip-detail">
-                                {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                      
+                      {/* City/ZIP */}
+                      {(selectedJob.city || selectedJob.postalCode) && (
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">City/ZIP:</span>
+                          <span className="text-slate-600 dark:text-slate-400" data-testid="text-job-city-zip-detail">
+                            {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
+                          </span>
+                        </>
                       )}
+                      
+                      {/* Estimated Cost */}
                       {selectedJob.estimatedCost && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Estimated Cost:</span>
-                          <span className="text-sm">${Number(selectedJob.estimatedCost).toLocaleString()}</span>
-                        </div>
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Estimated Cost:</span>
+                          <span className="text-slate-600 dark:text-slate-400">${Number(selectedJob.estimatedCost).toLocaleString()}</span>
+                        </>
                       )}
+                      
+                      {/* Start Date */}
                       {selectedJob.startDate && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">Start Date:</span>
-                          <span className="text-sm">{new Date(selectedJob.startDate).toLocaleDateString()}</span>
-                        </div>
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Start Date:</span>
+                          <span className="text-slate-600 dark:text-slate-400">{new Date(selectedJob.startDate).toLocaleDateString()}</span>
+                        </>
                       )}
+                      
+                      {/* End Date */}
                       {selectedJob.endDate && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">End Date:</span>
-                          <span className="text-sm">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      {selectedJob.description && (
-                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                          <span className="text-sm font-medium">Description:</span>
-                          <div className="mt-1">
-                            <p 
-                              className={`text-sm text-slate-600 dark:text-slate-300 ${
-                                !isDescriptionExpanded 
-                                  ? 'line-clamp-2 overflow-hidden' 
-                                  : ''
-                              }`}
-                              style={!isDescriptionExpanded ? {
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden'
-                              } : undefined}
-                            >
-                              {selectedJob.description}
-                            </p>
-                            {selectedJob.description.length > 100 && (
-                              <button 
-                                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                                className="text-sm text-blue-600 hover:text-blue-800 mt-1 underline"
-                              >
-                                {isDescriptionExpanded ? 'Show less' : 'Read more'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">End Date:</span>
+                          <span className="text-slate-600 dark:text-slate-400">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
+                        </>
                       )}
                     </div>
+                    
+                    {/* Description Section */}
+                    {selectedJob.description && (
+                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Description</h4>
+                        <div>
+                          <p 
+                            className={`text-sm text-slate-600 dark:text-slate-400 leading-relaxed ${
+                              !isDescriptionExpanded 
+                                ? 'line-clamp-3 overflow-hidden' 
+                                : ''
+                            }`}
+                            style={!isDescriptionExpanded ? {
+                              display: '-webkit-box',
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden'
+                            } : undefined}
+                          >
+                            {selectedJob.description}
+                          </p>
+                          {selectedJob.description.length > 100 && (
+                            <button 
+                              onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                              className="text-sm text-blue-600 hover:text-blue-800 mt-2 underline"
+                              data-testid="button-toggle-description"
+                            >
+                              {isDescriptionExpanded ? 'Show less' : 'Read more'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Right Column - Photos and Activity (40%) */}
-              <div className="col-span-1 lg:col-span-2 space-y-1">
-                <Accordion type="multiple" defaultValue={[]} className="w-full">
-                  <AccordionItem value="photos" className="border rounded-lg">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                      <div className="flex items-center gap-2">
-                        <Camera className="h-4 w-4" />
-                        <span className="font-medium">Job Site Photos</span>
-                        <Badge variant="secondary" className="ml-2 text-xs">
+              {/* Right Column - Photos (40%) */}
+              <div className="col-span-1 lg:col-span-2">
+                {jobPhotos.length === 0 ? (
+                  <Card>
+                    <CardContent className="flex flex-col items-center py-8 text-center">
+                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                        <Camera className="h-5 w-5 text-slate-400" />
+                      </div>
+                      <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No Photos Yet</h4>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Document job progress with photos</p>
+                      <Button size="sm" data-testid="button-upload-photo">
+                        <Camera className="h-4 w-4 mr-2" />
+                        Upload First Photo
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Camera className="h-5 w-5" />
+                          Job Site Photos
+                        </CardTitle>
+                        <Badge variant="secondary" className="text-sm px-2 py-1">
                           {jobPhotos.length}
                         </Badge>
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      {jobPhotos.length === 0 ? (
-                        <div className="flex flex-col items-center py-6">
-                          <Button size="sm" className="mb-2">
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-4">
+                        {/* Photo Grid */}
+                        <div className="grid grid-cols-3 gap-3">
+                          {jobPhotos.slice(0, 6).map((photo) => (
+                            <div key={photo.id} className="relative group">
+                              <img
+                                src={photo.photoUrl}
+                                alt={photo.title || "Job site photo"}
+                                className="w-full h-20 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={() => {
+                                  // TODO: Open full JobPhotoFeed modal
+                                }}
+                              />
+                              {photo.location && (
+                                <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
+                                  {photo.location}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-between pt-2">
+                          <Button size="sm" variant="outline" data-testid="button-upload-photo">
                             <Camera className="h-4 w-4 mr-2" />
                             Upload Photo
                           </Button>
-                          <p className="text-xs text-slate-500">Add the first job site photo</p>
+                          {jobPhotos.length > 6 && (
+                            <button 
+                              className="text-sm text-blue-600 hover:text-blue-800 underline"
+                              data-testid="button-view-all-photos"
+                            >
+                              View all {jobPhotos.length} photos
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-3 gap-2">
-                            {jobPhotos.slice(0, 6).map((photo) => (
-                              <div key={photo.id} className="relative group">
-                                <img
-                                  src={photo.photoUrl}
-                                  alt={photo.title || "Job site photo"}
-                                  className="w-full h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
-                                  onClick={() => {
-                                    // TODO: Open full JobPhotoFeed modal
-                                  }}
-                                />
-                                {photo.location && (
-                                  <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1 rounded">
-                                    {photo.location}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Button size="sm" variant="outline">
-                              <Camera className="h-4 w-4 mr-2" />
-                              Upload Photo
-                            </Button>
-                            {jobPhotos.length > 6 && (
-                              <button className="text-sm text-blue-600 hover:text-blue-800">
-                                View all {jobPhotos.length} photos
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           )}
