@@ -592,6 +592,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Schedule routes
+  app.get('/api/schedule-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const scheduleItems = await storage.getScheduleItems(company.id);
+      res.json(scheduleItems);
+    } catch (error) {
+      console.error("Error fetching schedule items:", error);
+      res.status(500).json({ message: "Failed to fetch schedule items" });
+    }
+  });
+
+  app.get('/api/schedule-items/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const scheduleItemId = parseInt(req.params.id);
+      const scheduleItem = await storage.getScheduleItem(scheduleItemId);
+      
+      if (!scheduleItem) {
+        return res.status(404).json({ message: "Schedule item not found" });
+      }
+      
+      res.json(scheduleItem);
+    } catch (error) {
+      console.error("Error fetching schedule item:", error);
+      res.status(500).json({ message: "Failed to fetch schedule item" });
+    }
+  });
+
+  app.get('/api/jobs/:jobId/schedule', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const scheduleItems = await storage.getScheduleItemsByJob(jobId);
+      res.json(scheduleItems);
+    } catch (error) {
+      console.error("Error fetching job schedule items:", error);
+      res.status(500).json({ message: "Failed to fetch job schedule items" });
+    }
+  });
+
+  app.post('/api/schedule-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const scheduleItem = await storage.createScheduleItem({
+        ...req.body,
+        companyId: company.id
+      });
+      
+      res.status(201).json(scheduleItem);
+    } catch (error) {
+      console.error("Error creating schedule item:", error);
+      res.status(500).json({ message: "Failed to create schedule item" });
+    }
+  });
+
+  app.patch('/api/schedule-items/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const scheduleItemId = parseInt(req.params.id);
+      const scheduleItem = await storage.updateScheduleItem(scheduleItemId, req.body);
+      res.json(scheduleItem);
+    } catch (error) {
+      console.error("Error updating schedule item:", error);
+      res.status(500).json({ message: "Failed to update schedule item" });
+    }
+  });
+
+  app.delete('/api/schedule-items/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const scheduleItemId = parseInt(req.params.id);
+      await storage.deleteScheduleItem(scheduleItemId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting schedule item:", error);
+      res.status(500).json({ message: "Failed to delete schedule item" });
+    }
+  });
+
   // Payments routes
   app.get('/api/payments', isAuthenticated, async (req: any, res) => {
     try {

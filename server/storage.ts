@@ -10,6 +10,7 @@ import {
   documents,
   messages,
   jobPhotos,
+  scheduleItems,
   type User,
   type UpsertUser,
   type Company,
@@ -28,6 +29,8 @@ import {
   type InsertMessage,
   type JobPhoto,
   type InsertJobPhoto,
+  type ScheduleItem,
+  type InsertScheduleItem,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -115,6 +118,14 @@ export interface IStorage {
   getJobPhotos(jobId: number): Promise<JobPhoto[]>;
   createJobPhoto(photo: InsertJobPhoto): Promise<JobPhoto>;
   deleteJobPhoto(id: number): Promise<void>;
+  
+  // Schedule operations
+  getScheduleItems(companyId: number): Promise<ScheduleItem[]>;
+  getScheduleItem(id: number): Promise<ScheduleItem | undefined>;
+  getScheduleItemsByJob(jobId: number): Promise<ScheduleItem[]>;
+  createScheduleItem(scheduleItem: InsertScheduleItem): Promise<ScheduleItem>;
+  updateScheduleItem(id: number, scheduleItem: Partial<InsertScheduleItem>): Promise<ScheduleItem>;
+  deleteScheduleItem(id: number): Promise<void>;
   
   // Approval Workflow operations
   getApprovalWorkflows(companyId: number): Promise<ApprovalWorkflow[]>;
@@ -632,6 +643,52 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJobPhoto(id: number): Promise<void> {
     await db.delete(jobPhotos).where(eq(jobPhotos.id, id));
+  }
+
+  // Schedule operations
+  async getScheduleItems(companyId: number): Promise<ScheduleItem[]> {
+    return await db
+      .select()
+      .from(scheduleItems)
+      .where(eq(scheduleItems.companyId, companyId))
+      .orderBy(desc(scheduleItems.startDateTime));
+  }
+
+  async getScheduleItem(id: number): Promise<ScheduleItem | undefined> {
+    const [scheduleItem] = await db
+      .select()
+      .from(scheduleItems)
+      .where(eq(scheduleItems.id, id));
+    return scheduleItem;
+  }
+
+  async getScheduleItemsByJob(jobId: number): Promise<ScheduleItem[]> {
+    return await db
+      .select()
+      .from(scheduleItems)
+      .where(eq(scheduleItems.jobId, jobId))
+      .orderBy(desc(scheduleItems.startDateTime));
+  }
+
+  async createScheduleItem(scheduleItemData: InsertScheduleItem): Promise<ScheduleItem> {
+    const [scheduleItem] = await db
+      .insert(scheduleItems)
+      .values(scheduleItemData)
+      .returning();
+    return scheduleItem;
+  }
+
+  async updateScheduleItem(id: number, scheduleItemData: Partial<InsertScheduleItem>): Promise<ScheduleItem> {
+    const [scheduleItem] = await db
+      .update(scheduleItems)
+      .set({ ...scheduleItemData, updatedAt: new Date() })
+      .where(eq(scheduleItems.id, id))
+      .returning();
+    return scheduleItem;
+  }
+
+  async deleteScheduleItem(id: number): Promise<void> {
+    await db.delete(scheduleItems).where(eq(scheduleItems.id, id));
   }
 
   // Approval Workflow operations
