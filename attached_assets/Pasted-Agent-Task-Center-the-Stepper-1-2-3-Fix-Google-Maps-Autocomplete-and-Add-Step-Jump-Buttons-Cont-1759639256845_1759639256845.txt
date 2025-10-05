@@ -1,0 +1,167 @@
+Agent Task: Center the Stepper (1-2-3), Fix Google Maps Autocomplete, and Add Step Jump Buttons
+Context
+
+EcoLogic uses a new 3-step “Create Job” wizard: 1) Job Details → 2) Client → 3) Schedule.
+We need three improvements:
+
+Center the stepper bubbles (1-2-3) at the top of the modal.
+
+Fix Google Maps / Places Autocomplete so the Location field works.
+
+Add UI buttons so PJ can directly jump to Step 2 or Step 3 for testing.
+
+Objectives
+
+Visually center the stepper (1-2-3) within the modal header.
+
+Ensure the Location input uses Google Places Autocomplete and is functional.
+
+Provide jump buttons (to Step 2 and Step 3) that bypass validation for QA, while Next still enforces validation.
+
+Files to edit (adjust if paths differ)
+
+/src/components/jobs/JobWizard.tsx (the wizard component)
+
+/src/lib/env.ts or wherever env is read
+
+.env (local) / Replit secrets
+
+Implementation Requirements (high level—no inline code)
+A) Center the Stepper
+
+In the wizard header container:
+
+Use a flex column layout.
+
+First line: title “Create New Job”.
+
+Second line: the stepper centered (use a single flex row with equal gaps).
+
+Third line: a small caption that displays the current step label (“Job Details”, “Client”, “Schedule”).
+
+The three bubbles must visually indicate state:
+
+Active (filled), Done (muted fill), Upcoming (outline).
+
+Keep Back / Next / Finish buttons in the footer; they remain functional.
+
+B) Add Step Jump Buttons (QA shortcuts)
+
+Add two small text buttons visible on Step 1 only:
+
+“Go to Client (Step 2)”
+
+“Go to Schedule (Step 3)”
+
+These set the current step directly without changing validation state.
+
+Keep normal Next behavior gated by validation (title/location, etc.).
+
+Add an inline note: “Dev shortcuts (for testing)”.
+
+C) Fix Google Maps / Places Autocomplete
+
+Libraries & Loader
+
+Use @react-google-maps/api loader with libraries=['places'].
+
+Ensure a single loader instance ID (e.g., id: 'ecologic-places-loader') to avoid duplicate script loads.
+
+Environment Key
+
+Read VITE_GOOGLE_MAPS_KEY from env. Document this in the README snippet below.
+
+Enable APIs & Billing
+
+In Google Cloud console, enable Maps JavaScript API and Places API for the same project as the key.
+
+Billing must be enabled.
+
+HTTP Referrer Restrictions (common failure point)
+
+Add these referrers:
+
+http://localhost:*/* (for Vite dev)
+
+https://*.replit.dev/* (Replit preview)
+
+(Optional) Your production domain(s) if deployed.
+
+Wire Autocomplete to Location input
+
+Replace the raw text input for Location with a Places Autocomplete wrapper.
+
+On place_changed read formatted_address and update the location state.
+
+Do not block typing while Google loads; show a “Loading Google Places…” placeholder if needed.
+
+Graceful Fallback
+
+If the loader errors or the API key is missing, fall back to a normal text input so the user can still proceed.
+
+City/ZIP Extraction (optional for now)
+
+If easy, parse address_components to auto-fill City and ZIP. Otherwise leave for a follow-up task.
+
+Acceptance Criteria
+
+ Stepper row (1-2-3) is perfectly centered under the modal title, with clear active/done/upcoming states.
+
+ Dev shortcuts on Step 1 allow jumping directly to Step 2 and Step 3.
+
+ Normal Next remains validation-gated; shortcuts bypass validation for testing only.
+
+ Location field supports Google Places Autocomplete; selecting a suggestion populates the field.
+
+ If the key is misconfigured, the input still works as a plain text field (no crashes).
+
+ No duplicate script warnings in console; no errors when reopening the modal multiple times.
+
+Test Plan
+
+Open “Create Job” → confirm the stepper is visually centered and caption displays the current step label.
+
+Click “Go to Client (Step 2)” and “Go to Schedule (Step 3)” and verify step changes without validation.
+
+Enter a partial address in Location → suggestions should appear → select one → field populates with formatted address.
+
+Temporarily unset VITE_GOOGLE_MAPS_KEY → verify a normal text input appears and the modal still works.
+
+Navigate back and forth; ensure previously entered data persists.
+
+Confirm no InvalidKeyMapError, RefererNotAllowedMapError, or ApiNotActivatedMapError in console.
+
+Common Google Maps Errors & How to Resolve
+
+InvalidKeyMapError: Key typo or wrong project. Verify key string and project.
+
+RefererNotAllowedMapError: Add correct referrers (localhost, *.replit.dev) to the key restrictions.
+
+ApiNotActivatedMapError: Enable Maps JavaScript API and Places API for the key’s project.
+
+BillingNotEnabledMapError: Attach a billing account in Google Cloud.
+
+Env & Setup Notes (document for the team)
+
+Add to .env (and Replit Secrets):
+VITE_GOOGLE_MAPS_KEY=YOUR_KEY_HERE
+
+Google Cloud Console:
+
+Enable Maps JavaScript API + Places API.
+
+Restrict key → HTTP referrers:
+
+http://localhost:*/*
+
+https://*.replit.dev/*
+
+After changing env, restart Vite / Replit preview.
+
+Deliverables
+
+Updated wizard component with centered stepper and QA jump buttons.
+
+Working Google Places Autocomplete for the Location field with graceful fallback.
+
+Short README snippet summarizing the env requirements and troubleshooting steps.

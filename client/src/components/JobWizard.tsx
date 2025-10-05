@@ -190,42 +190,52 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
     setCurrentStep(step);
   };
 
+  const stepLabels = ["Job Details", "Client", "Schedule"];
+  
   return (
     <div className="space-y-6">
-      {/* Progress Indicator */}
-      <div className="flex items-center justify-between">
-        {[1, 2, 3].map((step) => (
-          <div key={step} className="flex items-center flex-1">
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors ${
-              currentStep > step 
-                ? "bg-blue-600 border-blue-600 text-white" 
-                : currentStep === step 
-                  ? "border-blue-600 text-blue-600" 
-                  : "border-slate-300 text-slate-400"
-            }`}>
-              {currentStep > step ? <Check className="w-4 h-4" /> : step}
-            </div>
-            {step < 3 && (
-              <div className={`flex-1 h-0.5 mx-2 transition-colors ${
-                currentStep > step ? "bg-blue-600" : "bg-slate-300"
-              }`} />
-            )}
-          </div>
-        ))}
-      </div>
+      {/* Modal Header with Centered Stepper */}
+      <div className="flex flex-col items-center space-y-4">
+        {/* Title */}
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+          Create New Job
+        </h2>
 
-      {/* Step Titles */}
-      <div className="text-center">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          {currentStep === 1 && "Job Details"}
-          {currentStep === 2 && "Client Selection"}
-          {currentStep === 3 && "Schedule"}
-        </h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-          {currentStep === 1 && "Enter the job information"}
-          {currentStep === 2 && "Choose or create a client"}
-          {currentStep === 3 && "Set the schedule"}
-        </p>
+        {/* Centered Stepper (1-2-3) */}
+        <div className="flex items-center justify-center gap-2">
+          {[1, 2, 3].map((step) => (
+            <div key={step} className="flex items-center">
+              <div 
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all font-medium ${
+                  currentStep > step 
+                    ? "bg-blue-600 border-blue-600 text-white" 
+                    : currentStep === step 
+                      ? "border-blue-600 text-blue-600 bg-blue-50 dark:bg-blue-950" 
+                      : "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500"
+                }`}
+              >
+                {currentStep > step ? <Check className="w-5 h-5" /> : step}
+              </div>
+              {step < 3 && (
+                <div className={`w-16 h-0.5 mx-1 transition-colors ${
+                  currentStep > step ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"
+                }`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Current Step Label */}
+        <div className="text-center">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {stepLabels[currentStep - 1]}
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            {currentStep === 1 && "Enter the job information"}
+            {currentStep === 2 && "Choose or create a client"}
+            {currentStep === 3 && "Set the schedule"}
+          </p>
+        </div>
       </div>
 
       {/* Step Content */}
@@ -379,7 +389,36 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                     />
                   </div>
 
-                  <div className="flex justify-end pt-4">
+                  {/* Dev Shortcuts (QA/Testing) */}
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                      Dev shortcuts (for testing):
+                    </p>
+                    <div className="flex gap-2 mb-3">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => goToStep(2)}
+                        className="text-xs"
+                        data-testid="button-dev-jump-step2"
+                      >
+                        Go to Client (Step 2)
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => goToStep(3)}
+                        className="text-xs"
+                        data-testid="button-dev-jump-step3"
+                      >
+                        Go to Schedule (Step 3)
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
                     <Button type="submit" data-testid="button-wizard-step1-next">
                       Next <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
