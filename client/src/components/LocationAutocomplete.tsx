@@ -121,9 +121,8 @@ export function LocationAutocomplete({
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Loading Google Places..."
+        placeholder="Loading Google Places... (you can still type)"
         className={className}
-        disabled
         data-testid="input-location-autocomplete-loading"
       />
     );

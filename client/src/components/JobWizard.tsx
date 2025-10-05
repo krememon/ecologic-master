@@ -28,6 +28,9 @@ const step1Schema = insertJobSchema.pick({
   locationPlaceId: true,
   status: true,
   priority: true,
+}).refine((data) => data.city || data.postalCode, {
+  message: "Either city or ZIP/postal code is required",
+  path: ["city"],
 });
 
 // Step 2: Client Selection Schema
