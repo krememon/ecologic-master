@@ -207,6 +207,21 @@ export const payments = pgTable("payments", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Schedule items table for job scheduling
+export const scheduleItems = pgTable("schedule_items", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  jobId: integer("job_id").notNull().references(() => jobs.id),
+  subcontractorId: integer("subcontractor_id").references(() => subcontractors.id),
+  startDateTime: timestamp("start_date_time").notNull(),
+  endDateTime: timestamp("end_date_time").notNull(),
+  status: varchar("status").notNull().default("scheduled"), // scheduled, in-progress, completed, cancelled
+  location: text("location"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   ownedCompanies: many(companies),
@@ -343,6 +358,21 @@ export const jobPhotosRelations = relations(jobPhotos, ({ one }) => ({
   uploader: one(users, {
     fields: [jobPhotos.uploadedBy],
     references: [users.id],
+  }),
+}));
+
+export const scheduleItemsRelations = relations(scheduleItems, ({ one }) => ({
+  company: one(companies, {
+    fields: [scheduleItems.companyId],
+    references: [companies.id],
+  }),
+  job: one(jobs, {
+    fields: [scheduleItems.jobId],
+    references: [jobs.id],
+  }),
+  subcontractor: one(subcontractors, {
+    fields: [scheduleItems.subcontractorId],
+    references: [subcontractors.id],
   }),
 }));
 
@@ -551,6 +581,12 @@ export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({
   createdAt: true,
 });
 
+export const insertScheduleItemSchema = createInsertSchema(scheduleItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertApprovalWorkflowSchema = createInsertSchema(approvalWorkflows).omit({
   id: true,
   createdAt: true,
@@ -596,3 +632,5 @@ export type ApprovalSignature = typeof approvalSignatures.$inferSelect;
 export type InsertApprovalSignature = z.infer<typeof insertApprovalSignatureSchema>;
 export type ApprovalHistory = typeof approvalHistory.$inferSelect;
 export type InsertApprovalHistory = z.infer<typeof insertApprovalHistorySchema>;
+export type ScheduleItem = typeof scheduleItems.$inferSelect;
+export type InsertScheduleItem = z.infer<typeof insertScheduleItemSchema>;
