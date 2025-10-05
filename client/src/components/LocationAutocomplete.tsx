@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useLoadScript, Autocomplete } from "@react-google-maps/api";
 import { Input } from "@/components/ui/input";
 
@@ -63,6 +63,13 @@ export function LocationAutocomplete({
     id: 'ecologic-places-loader',
   });
 
+  useEffect(() => {
+    if (loadError) {
+      console.warn("Google Maps API failed to load:", loadError);
+      setIsFallback(true);
+    }
+  }, [loadError]);
+
   const onLoad = (autocomplete: google.maps.places.Autocomplete) => {
     autocompleteRef.current = autocomplete;
 
@@ -92,54 +99,47 @@ export function LocationAutocomplete({
     }
   };
 
-  if (loadError) {
-    console.warn("Google Maps API failed to load:", loadError);
-    setIsFallback(true);
+  // Determine helper text
+  let helperText = null;
+  if (!apiKey) {
+    helperText = "Google Places not configured. Using manual entry.";
+  } else if (loadError || isFallback) {
+    helperText = "Autocomplete unavailable. Using manual entry.";
+  } else if (!isLoaded) {
+    helperText = "Loading autocomplete...";
   }
 
-  if (!apiKey || loadError || isFallback) {
-    return (
-      <div>
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={className}
-          data-testid="input-location-autocomplete"
-        />
-        {!apiKey && (
-          <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-            Google Places not configured. Using manual entry.
-          </p>
-        )}
-      </div>
-    );
-  }
+  // Single persistent input element
+  const inputElement = (
+    <Input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+      data-testid="input-location-autocomplete"
+    />
+  );
 
-  if (!isLoaded) {
-    return (
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Loading Google Places... (you can still type)"
-        className={className}
-        data-testid="input-location-autocomplete-loading"
-      />
-    );
-  }
+  // Wrap with Autocomplete only when fully loaded and API is available
+  const shouldUseAutocomplete = apiKey && isLoaded && !loadError && !isFallback;
 
   return (
-    <Autocomplete
-      onLoad={onLoad}
-      onPlaceChanged={onPlaceChanged}
-    >
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={className}
-        data-testid="input-location-autocomplete"
-      />
-    </Autocomplete>
+    <div>
+      {shouldUseAutocomplete ? (
+        <Autocomplete
+          onLoad={onLoad}
+          onPlaceChanged={onPlaceChanged}
+        >
+          {inputElement}
+        </Autocomplete>
+      ) : (
+        inputElement
+      )}
+      {helperText && (
+        <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+          {helperText}
+        </p>
+      )}
+    </div>
   );
 }

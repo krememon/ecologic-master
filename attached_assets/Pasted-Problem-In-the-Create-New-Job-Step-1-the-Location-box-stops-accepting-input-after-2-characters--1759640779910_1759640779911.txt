@@ -1,0 +1,65 @@
+Problem
+
+In the Create New Job → Step 1, the Location box stops accepting input after ~2 characters and shows a gray warning icon. Google Places/Autocomplete is hijacking or remounting the input.
+
+Goal
+
+User can type freely in Location (no gray-out, no lock).
+
+Places suggestions appear and selecting one fills the field.
+
+If Places fails/misconfigured, input remains a normal text box (no blocking).
+
+Do Exactly This (no code dump—change behavior)
+
+Never disable or readOnly the Location input.
+
+Remove any disabled/readOnly on the field, including conditions like disabled={!isLoaded} or temporary “loading” states.
+
+The same <input> element must stay mounted the whole time.
+
+Keep the input React-controlled at all times.
+
+value = locationState, onChange = setLocationState(e.target.value) must fire on every keystroke, regardless of Places load status.
+
+Load Google Places once; don’t remount the input.
+
+Ensure a single Maps loader with a stable id (e.g., id: 'ecologic-places-loader').
+
+Do not swap between two different inputs (e.g., “plain input” → “autocomplete input”) based on isLoaded. That remount causes lockups.
+
+Attach Autocomplete once to the existing input when the loader is ready; do not set readOnly afterwards.
+
+Do not modify the input value except via React state.
+
+In the place_changed handler, update locationState with formatted_address.
+
+Don’t directly assign input.value = ... after setting state.
+
+Dropdown visibility (z-index)
+
+Ensure the suggestions list isn’t hidden by the modal. Raise modal content z-index or render suggestions in a portal so the list is clickable—but this must not disable the input.
+
+Graceful fallback
+
+If the API key is missing/misconfigured, keep the input entirely usable as plain text. No disabling. Show a small helper text (“Autocomplete unavailable”) instead.
+
+Acceptance Criteria
+
+ Typing into Location never stops; no gray/disabled state appears.
+
+ Autocomplete suggestions appear; selecting one fills the field.
+
+ No duplicate Maps loader warnings in console.
+
+ If Places fails, field still works as a normal text input with a helper note.
+
+Quick Console Checks (fix if present)
+
+RefererNotAllowedMapError → add http://localhost:*/* and https://*.replit.dev/* as allowed referrers on the key.
+
+ApiNotActivatedMapError → enable Maps JavaScript API + Places API for that key.
+
+InvalidKeyMapError → wrong key/project; replace with the correct one.
+
+Multiple API loader instances → ensure only one loader id; don’t mount/unmount on step changes.
