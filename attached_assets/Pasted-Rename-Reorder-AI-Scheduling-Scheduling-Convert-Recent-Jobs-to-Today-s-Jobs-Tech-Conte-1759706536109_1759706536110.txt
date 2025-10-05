@@ -1,0 +1,200 @@
+Rename & Reorder “AI Scheduling” → “Scheduling” + Convert “Recent Jobs” to “Today’s Jobs”
+Tech Context
+
+App: EcoLogic
+
+Stack: React + Vite + Tailwind (shadcn/ui + lucide-react icons)
+
+Router: React Router (assume src/routes or src/App.tsx with route config)
+
+Sidebar: menu is likely driven by a config array (e.g., src/components/Sidebar.tsx or src/config/nav.ts)
+
+Part 1 — Navigation: “AI Scheduling” → “Scheduling” and move under Home
+
+Goals
+
+Rename label from “AI Scheduling” to “Scheduling” everywhere (sidebar label, page title, breadcrumbs, document.title).
+
+Route path should be /scheduling (add redirect from old /ai-scheduling to preserve links).
+
+In the sidebar, place Scheduling directly under Home (i.e., order: Home → Scheduling → Jobs → Subcontractors → Clients → …).
+
+Keep the same icon. Ensure active/hover styles still work.
+
+Required Changes
+
+Update the nav items config (wherever it lives):
+
+Change item label: "AI Scheduling" → "Scheduling".
+
+Change to: "/ai-scheduling" → "/scheduling".
+
+Move its array position to index after Home.
+
+Update routing:
+
+Replace the route component path to "/scheduling".
+
+Add a <Navigate from="/ai-scheduling" to="/scheduling" replace /> redirect.
+
+Update any page-level title logic:
+
+If there’s a <PageHeader title="AI Scheduling" />, change to "Scheduling".
+
+Update document.title if set.
+
+Acceptance Tests
+
+Sidebar shows Scheduling directly under Home.
+
+Visiting /ai-scheduling lands on /scheduling.
+
+Active highlight works when on /scheduling.
+
+No occurrences of “AI Scheduling” remain in UI strings.
+
+Part 2 — Home Card: “Recent Jobs” → “Today’s Jobs” (show scheduled jobs for a date)
+
+Goals
+
+Replace the Home widget labeled “Recent Jobs” with “Today’s Jobs”.
+
+Default date = today (user’s local timezone).
+
+Show all jobs scheduled for that date. If none, show an empty state.
+
+Include a compact date picker to jump dates (inline or popover).
+
+Data Assumptions (adjust to actual schema)
+
+Each job has one of:
+
+job.schedule.start and job.schedule.end as ISO strings, or
+
+job.scheduledAt as ISO string.
+
+Status is at job.status (e.g., "Active"). Title at job.title. Optional: job.clientName, job.address.
+
+Filtering
+
+Convert selected date to a day range in the user’s timezone:
+
+startOfDay(localDate) → endOfDay(localDate)
+
+Include jobs where any of:
+
+schedule.start is within range, or
+
+scheduledAt is within range, or
+
+job spans the day (start < startOfDay && end > endOfDay).
+
+Exclude canceled jobs by default unless product says otherwise.
+
+UI/UX
+
+Card header: Today’s Jobs + small date picker control (e.g., button that opens a calendar).
+
+Each row: icon, Job Title, optional time window (e.g., 9:00–11:00), status pill, and (if room) a single-line address or client.
+
+Click row → navigate to job detail: /jobs/:id.
+
+Empty state: “No jobs scheduled for this date.”
+
+Loading skeletons for 3–5 rows.
+
+Implementation Steps
+
+Component rename: RecentJobs.tsx → TodaysJobs.tsx (or create new and swap import in Home).
+
+Hook: useTodaysJobs(date) that:
+
+Accepts a Date (default new Date()).
+
+Computes day start/end in local tz.
+
+Calls existing data layer (e.g., /api/jobs?date=YYYY-MM-DD) or filters client-side if jobs already cached.
+
+Returns { jobs, isLoading, error }.
+
+Date picker:
+
+Use shadcn Popover + Calendar if available; else a minimal input type="date".
+
+Badge:
+
+Reuse existing status badge styles.
+
+Routing:
+
+Ensure clicking a job opens job detail without breaking back navigation.
+
+Pseudocode (condensed)
+
+// src/components/home/TodaysJobs.tsx
+export default function TodaysJobs() {
+  const [date, setDate] = useState(new Date());
+  const { start, end } = dayBoundsLocal(date); // startOfDay/endOfDay using local tz
+  const { jobs, isLoading, error } = useJobsByRange(start, end); // implement or call API
+
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <div className="text-xl font-semibold">Today’s Jobs</div>
+        <DatePicker value={date} onChange={setDate} />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? <SkeletonRows count={4} /> :
+         error ? <ErrorState /> :
+         jobs.length === 0 ? <EmptyState text="No jobs scheduled for this date." /> :
+         <ul className="space-y-2">
+           {jobs.map(j => (
+             <li key={j.id}>
+               <Link to={`/jobs/${j.id}`} className="flex items-center justify-between rounded-xl p-3 hover:bg-muted/60">
+                 <div className="flex items-center gap-3">
+                   <Building2 className="h-8 w-8 opacity-80" />
+                   <div>
+                     <div className="font-medium">{j.title}</div>
+                     <div className="text-sm text-muted-foreground">
+                       {formatWindow(j.schedule)}{j.clientName ? ` • ${j.clientName}` : ""}
+                     </div>
+                   </div>
+                 </div>
+                 <StatusBadge status={j.status} />
+               </Link>
+             </li>
+           ))}
+         </ul>}
+      </CardContent>
+    </Card>
+  );
+}
+
+
+Edge Cases
+
+Jobs crossing midnight: show on both days if any overlap with the selected date range.
+
+Timezone correctness (use the browser’s locale).
+
+No schedule fields present: don’t show them; still list if business rules require.
+
+Acceptance Tests
+
+Home shows Today’s Jobs instead of Recent Jobs.
+
+Default date = today; jobs listed match today’s schedule.
+
+Changing date updates the list.
+
+Empty/Loading/Error states render correctly.
+
+Clicking a job opens its detail page.
+
+Code Quality / Verification
+
+Search the codebase for "AI Scheduling" and replace with "Scheduling".
+
+Add unit tests for dayBoundsLocal() and useJobsByRange() if applicable.
+
+Run npm run lint && npm run build to ensure no type or build errors.

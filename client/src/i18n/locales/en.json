@@ -1,11 +1,13 @@
 {
   "navigation": {
     "dashboard": "Dashboard",
+    "home": "Home",
     "jobs": "Jobs",
     "subcontractors": "Contractors",
     "clients": "Clients",
     "invoicing": "Invoicing",
-    "aiScheduling": "AI Scheduling",
+    "scheduling": "Scheduling",
+    "aiScheduling": "Scheduling",
     "documents": "Documents",
     "messages": "Messages",
     "settings": "Settings",

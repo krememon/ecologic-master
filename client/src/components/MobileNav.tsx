@@ -47,12 +47,12 @@ export default function MobileNav({ user, company }: MobileNavProps) {
 
   const navigationItems = [
     { href: "/", icon: LayoutDashboard, label: t('navigation.home') },
+    { href: "/scheduling", icon: Brain, label: t('navigation.scheduling') },
     { href: "/jobs", icon: Building2, label: t('navigation.jobs') },
     { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors') },
     { href: "/clients", icon: Users, label: t('navigation.clients') },
     { href: "/invoicing", icon: FileText, label: t('navigation.invoicing') },
     { href: "/payments", icon: DollarSign, label: "Payments" },
-    { href: "/ai-scheduling", icon: Brain, label: t('navigation.aiScheduling') },
     { href: "/documents", icon: FolderOpen, label: t('navigation.documents') },
     { href: "/messages", icon: MessageSquare, label: t('navigation.messages') },
     { href: "/settings", icon: Settings, label: t('navigation.settings') },

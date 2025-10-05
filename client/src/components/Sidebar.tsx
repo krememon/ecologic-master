@@ -22,12 +22,12 @@ import { useTranslation } from "react-i18next";
 
 const getNavigation = (t: any) => [
   { name: t('navigation.home'), href: "/", icon: LayoutDashboard },
+  { name: t('navigation.scheduling'), href: "/scheduling", icon: Brain },
   { name: t('navigation.jobs'), href: "/jobs", icon: Building2 },
   { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users },
   { name: t('navigation.clients'), href: "/clients", icon: UserCheck },
   { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText },
   { name: "Payments", href: "/payments", icon: DollarSign },
-  { name: t('navigation.aiScheduling'), href: "/ai-scheduling", icon: Brain },
   { name: t('navigation.documents'), href: "/documents", icon: FolderOpen },
   { name: t('navigation.messages'), href: "/messages", icon: MessageSquare },
 ];
