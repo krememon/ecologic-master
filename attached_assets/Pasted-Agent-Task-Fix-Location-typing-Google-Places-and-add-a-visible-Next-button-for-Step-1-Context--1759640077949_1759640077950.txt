@@ -1,0 +1,125 @@
+Agent Task: Fix “Location” typing (Google Places) and add a visible Next button for Step 1
+Context
+
+In the Create New Job wizard (Step 1: Job Details):
+
+The Location field (Google Maps/Places) currently won’t let the user type.
+
+There is no Next button to move to Step 2 (Client).
+
+We need both fixed.
+
+Objectives
+
+Users must be able to type freely in the Location input while Places suggestions appear.
+
+Show a Next button at the bottom of Step 1 (and Back/Cancel as appropriate).
+
+Next is disabled until required fields are valid (title, location, status, priority, and city or ZIP).
+
+Add small Dev shortcuts on Step 1 to jump directly to Step 2/3 for QA.
+
+Changes to Make (high-level, no inline code)
+A) Fix the Location input (typing blocked)
+
+Ensure the input is not readOnly or disabled at any point.
+
+If using a loader check like if (!isLoaded) { disable input }, remove the disabled—instead show a gentle placeholder (“Loading Google Places…”) but allow typing.
+
+Confirm the input is fully controlled:
+
+value is bound to local state (e.g., location)
+
+onChange updates that state on every keystroke
+
+Do not set the input to readOnly when the Autocomplete attaches. Some examples online do this—we should not.
+
+Keep using @react-google-maps/api Autocomplete wrapper:
+
+Make sure libraries=['places'] is passed to the loader.
+
+In place_changed, read formatted_address and update location state.
+
+Z-index & overflow:
+
+If the dropdown is hidden behind the modal, ensure the suggestions list renders above (add a high z-index on the modal content or a portal container).
+
+Ensure the modal body doesn’t have overflow: hidden that clips the dropdown.
+
+Graceful fallback:
+
+If Places fails (bad key, offline), keep the input as a normal free-typing field (no crashes, no blocking).
+
+Typical root causes to check and fix:
+
+A wrapper component or prop sets readOnly to true.
+
+Input temporarily disabled while isLoaded === false.
+
+Two Autocomplete loaders injected (duplicate script) causing odd behavior—ensure a single loader id is used.
+
+Referrer restriction errors in console; still keep input usable even if suggestions fail.
+
+B) Add the Next button (and Back/Cancel)
+
+Footer of the wizard should show:
+
+Cancel (closes wizard)
+
+Back (hidden/disabled on Step 1)
+
+Next (Step 1 & 2) / Finish (Step 3)
+
+Validation gating for Step 1:
+
+Required: title, location, status, priority, and at least one of city or postal.
+
+If invalid, Next stays disabled; show small inline hints under empty required fields.
+
+Keyboard: Pressing Enter in Step 1 should trigger Next if the form is valid.
+
+C) Dev shortcuts (QA)
+
+On Step 1 only, add small text links under the form:
+
+“Go to Client (Step 2)”
+
+“Go to Schedule (Step 3)”
+
+These bypass validation (for testing only). Keep normal Next behavior unchanged.
+
+Acceptance Criteria
+
+ User can type into Location freely; suggestions appear and selecting one fills the field.
+
+ No readOnly/disabled state blocks typing at any time.
+
+ No duplicate Google script/loader warnings in console.
+
+ Next button is visible on Step 1 and becomes enabled only when required fields are valid.
+
+ Back/Cancel behave correctly; Enter triggers Next when valid.
+
+ Dev shortcuts on Step 1 instantly jump to Step 2/3.
+
+ If Places key misconfigured, input still works as plain text (no crashes).
+
+Quick Troubleshooting (Agent verify)
+
+If console shows RefererNotAllowedMapError → add http://localhost:*/* and https://*.replit.dev/* to key referrers.
+
+ApiNotActivatedMapError → enable Maps JavaScript API + Places API.
+
+InvalidKeyMapError → wrong key or wrong project.
+
+Reopen the wizard multiple times to confirm no duplicate loader or memory leaks.
+
+Deliverables
+
+Updated wizard with working, typeable Location field (Places-enabled).
+
+Visible Next button on Step 1 with proper validation gating.
+
+Dev shortcuts to Step 2/3.
+
+No regressions or console errors.
