@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
+import { JobWizard } from "@/components/JobWizard";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -325,14 +326,44 @@ export default function Jobs() {
   });
 
   const createJobMutation = useMutation({
-    mutationFn: async (jobData: InsertJob) => {
-      const res = await apiRequest("POST", "/api/jobs", jobData);
-      return await res.json();
+    mutationFn: async (wizardData: {
+      job: any;
+      client?: any;
+      schedule: any;
+    }) => {
+      let clientId: number | undefined;
+
+      // Step 1: Create client if new
+      if (wizardData.client) {
+        const clientRes = await apiRequest("POST", "/api/clients", wizardData.client);
+        const newClient = await clientRes.json();
+        clientId = newClient.id;
+      }
+
+      // Step 2: Create job
+      const jobRes = await apiRequest("POST", "/api/jobs", wizardData.job);
+      const newJob = await jobRes.json();
+
+      // Step 3: Create schedule event
+      const scheduleData = {
+        ...wizardData.schedule,
+        jobId: newJob.id,
+        status: "scheduled",
+      };
+      await apiRequest("POST", "/api/schedule-items", scheduleData);
+
+      return newJob;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-items"] });
       setIsDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Job created successfully with schedule",
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -425,11 +456,11 @@ export default function Jobs() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl" onInteractOutside={handleInteractOutside}>
+        <DialogContent className="sm:max-w-[600px] rounded-2xl max-h-[90vh] overflow-y-auto" onInteractOutside={handleInteractOutside}>
           <DialogHeader>
             <DialogTitle>Create New Job</DialogTitle>
           </DialogHeader>
-          <JobForm onSubmit={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
+          <JobWizard onComplete={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
         </DialogContent>
       </Dialog>
 
