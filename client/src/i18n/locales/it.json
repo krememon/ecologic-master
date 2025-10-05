@@ -1,11 +1,13 @@
 {
   "navigation": {
     "dashboard": "Cruscotto",
+    "home": "Home",
     "jobs": "Lavori",
     "subcontractors": "Appaltatori",
     "clients": "Clienti",
     "invoicing": "Fatturazione",
-    "aiScheduling": "Pianificazione IA",
+    "scheduling": "Pianificazione",
+    "aiScheduling": "Pianificazione",
     "documents": "Documenti",
     "messages": "Messaggi",
     "settings": "Impostazioni",

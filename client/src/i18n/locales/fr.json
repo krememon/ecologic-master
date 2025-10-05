@@ -1,11 +1,13 @@
 {
   "navigation": {
     "dashboard": "Tableau de bord",
+    "home": "Accueil",
     "jobs": "Travaux",
     "subcontractors": "Entrepreneurs",
     "clients": "Clients",
     "invoicing": "Facturation",
-    "aiScheduling": "Planification IA",
+    "scheduling": "Planification",
+    "aiScheduling": "Planification",
     "documents": "Documents",
     "messages": "Messages",
     "settings": "Paramètres",

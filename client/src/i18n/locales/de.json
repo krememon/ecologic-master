@@ -1,11 +1,13 @@
 {
   "navigation": {
     "dashboard": "Dashboard",
+    "home": "Startseite",
     "jobs": "Aufträge",
     "subcontractors": "Auftragnehmer",
     "clients": "Kunden",
     "invoicing": "Rechnungswesen",
-    "aiScheduling": "KI-Planung",
+    "scheduling": "Planung",
+    "aiScheduling": "Planung",
     "documents": "Dokumente",
     "messages": "Nachrichten",
     "settings": "Einstellungen",

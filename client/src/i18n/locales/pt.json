@@ -1,11 +1,13 @@
 {
   "navigation": {
     "dashboard": "Painel",
+    "home": "Início",
     "jobs": "Trabalhos",
     "subcontractors": "Contratados",
     "clients": "Clientes",
     "invoicing": "Faturamento",
-    "aiScheduling": "Agendamento IA",
+    "scheduling": "Agendamento",
+    "aiScheduling": "Agendamento",
     "documents": "Documentos",
     "messages": "Mensagens",
     "settings": "Configurações",
