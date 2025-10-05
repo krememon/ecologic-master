@@ -1,0 +1,185 @@
+EcoLogic is a contractor management app (React + Vite + Tailwind + shadcn/ui + Framer Motion). The current “Create Job” modal is a single long form. We want a guided 3-step wizard:
+
+Job Details → 2) Client (pick or add) → 3) Schedule → Finish
+On Finish, create the Job, link to the Client, then create a Schedule event in the global Scheduling tab.
+
+Objectives
+
+Replace the existing one-page “Create Job” form with a modal wizard.
+
+Persist state between steps; allow Back/Next navigation.
+
+Validate required fields before advancing.
+
+Link selected/created client to the new job.
+
+Create a schedule event tied to the job and visible in Scheduling tab.
+
+Non-Goals
+
+No payment/tier changes.
+
+No crew assignment logic beyond a simple text/notes field for now.
+
+No external calendar integrations in this task.
+
+Tech Requirements
+
+React + Tailwind + shadcn/ui components.
+
+Framer Motion for step transitions.
+
+Clean, modern UI consistent with the existing app (rounded corners, soft shadows, spacing).
+
+TypeScript preferred if the project already uses it; otherwise JS with JSDoc types.
+
+Data Model (assume or adapt to current project)
+type Client = {
+  id: string
+  name: string
+  phone?: string
+  email?: string
+  addressLine1?: string
+  city?: string
+  postalCode?: string
+  notes?: string
+}
+
+type Job = {
+  id: string
+  title: string
+  description?: string
+  location?: string
+  city?: string
+  postalCode?: string
+  status: "Pending" | "Scheduled" | "In Progress" | "Completed" | "Canceled"
+  priority: "Low" | "Medium" | "High" | "Urgent"
+  clientId: string
+}
+
+type ScheduleEvent = {
+  startISO: string   // e.g. 2025-10-05T17:00
+  endISO: string
+  notes?: string
+  jobId?: string     // backlink (if your schema supports it)
+}
+
+Required App Functions / API hooks
+
+Implement or wire up these (use real APIs if available; otherwise add stubs and TODOs):
+
+fetchClients(): Promise<Client[]>
+
+createClient(partial: Partial<Client>): Promise<Client>
+
+createJob(payload: Omit<Job,"id">): Promise<Job>
+
+createSchedule(jobId: string, event: ScheduleEvent): Promise<void>
+
+If no backend yet, place these in /src/lib/api.ts with localStorage mocks so the UI is fully testable.
+
+Component to Create
+
+/src/components/jobs/JobWizard.tsx
+
+Features:
+
+Step header with 3 dots/labels: Job Details • Client • Schedule
+
+Step 1 – Job Details
+
+Inputs: title*, description, location*, city or postal*, status* (default Pending), priority* (default Medium)
+
+Next disabled until required fields are valid.
+
+Step 2 – Client
+
+Search input to filter clients as the user types.
+
+List of matching clients (name + phone/email + city/postal).
+
+“Add New Client” toggle reveals mini-form: name*, phone or email*, optional address.
+
+Next disabled until an existing client is selected OR a valid new client form is filled.
+
+Step 3 – Schedule
+
+Start and End datetime inputs (use your existing date/time picker if present).
+
+Optional Notes.
+
+Finish button creates (1) client if “new”, (2) job with clientId, then (3) schedule event linked to the job.
+
+On success: close modal, reset wizard, toast success, and refresh jobs/schedule views.
+
+Navigation:
+
+Back (disabled on step 1), Next/Finish, X close icon.
+
+Persist fields if the user goes back and forth.
+
+Validation:
+
+Step 1: title, location, and at least one of city or postal, plus selected status and priority.
+
+Step 2: either selectedClientId OR new client with name and (phone OR email).
+
+Step 3: startISO < endISO, both required.
+
+Error Handling:
+
+Show inline error messages under invalid fields.
+
+If API errors occur (client create / job create / schedule create), show toast and keep user on current step.
+
+Accessibility:
+
+Label every input, ensure keyboard nav works, focus first invalid field on failed validation.
+
+File Changes
+
+Create /src/components/jobs/JobWizard.tsx (new).
+
+Update /src/pages/Jobs.tsx (or wherever the “Create Job” button lives):
+
+Replace old modal with <JobWizard open={open} onClose={...} fetchClients={...} createClient={...} createJob={...} createSchedule={...} />
+
+Acceptance Criteria
+
+ Clicking “Create Job” opens the wizard with 3 steps.
+
+ Can’t proceed from Step 1/2 until required fields are filled.
+
+ Selecting an existing client or adding a new one works and persists to Step 3.
+
+ On Finish: a Job is created and linked to the chosen client; a Schedule event is created and visible on the Scheduling tab.
+
+ Closing and reopening the wizard resets prior state.
+
+ UI matches app aesthetic (rounded, soft shadows, clean spacing, readable).
+
+ No console errors; TypeScript passes if used.
+
+QA Checklist
+
+Create job with existing client → verify job card shows client name; event shows on Scheduling tab.
+
+Create job with new client → verify new client appears on Clients page and is linked.
+
+Step validation blocks progression when fields are missing.
+
+Back/Next preserves entered data.
+
+Time validation prevents end < start.
+
+Network/API failure shows user-friendly error and allows retry.
+
+Deliverables
+
+JobWizard.tsx component with Framer Motion transitions, shadcn/ui controls, and complete state/validation.
+
+Wiring into Jobs page and Scheduling tab.
+
+Minimal API stubs if real backend not present.
+
+Short README section in /docs/JobWizard.md explaining props, API expectations, and how to test.
