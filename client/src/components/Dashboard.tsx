@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { 
@@ -25,10 +24,7 @@ import {
   Calendar,
   BarChart3,
   Brain,
-  Target,
-  CalendarIcon,
-  ChevronLeft,
-  ChevronRight
+  Target
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AdvancedAnalytics } from "./AdvancedAnalytics";
@@ -140,7 +136,6 @@ function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) 
 export default function Dashboard() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Data queries
   const { data: jobs = [] } = useQuery({ queryKey: ["/api/jobs"] });
@@ -178,33 +173,17 @@ export default function Dashboard() {
     }
   };
 
-  // Filter jobs for today's date (or selected date)
+  // Filter jobs for today's date
+  const today = new Date();
   const todaysJobs = jobs?.filter((job: any) => {
     if (!job.startDate) return false;
     const jobDate = new Date(job.startDate);
-    const selected = new Date(selectedDate);
     return (
-      jobDate.getFullYear() === selected.getFullYear() &&
-      jobDate.getMonth() === selected.getMonth() &&
-      jobDate.getDate() === selected.getDate()
+      jobDate.getFullYear() === today.getFullYear() &&
+      jobDate.getMonth() === today.getMonth() &&
+      jobDate.getDate() === today.getDate()
     );
   }) || [];
-
-  const handlePreviousDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() - 1);
-    setSelectedDate(newDate);
-  };
-
-  const handleNextDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + 1);
-    setSelectedDate(newDate);
-  };
-
-  const handleToday = () => {
-    setSelectedDate(new Date());
-  };
 
   return (
     <div className="p-6 space-y-6">
@@ -310,61 +289,10 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="border-slate-200 dark:border-slate-800">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Today's Jobs</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handlePreviousDay}
-                      className="h-8 w-8"
-                      data-testid="button-previous-day"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="h-8 text-xs font-normal"
-                          data-testid="button-date-picker"
-                        >
-                          <CalendarIcon className="mr-2 h-3 w-3" />
-                          {format(selectedDate, "MMM d, yyyy")}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="end">
-                        <div className="p-3 space-y-2">
-                          <Input
-                            type="date"
-                            value={format(selectedDate, "yyyy-MM-dd")}
-                            onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                            className="w-full"
-                            data-testid="input-date-select"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleToday}
-                            className="w-full"
-                            data-testid="button-today"
-                          >
-                            Today
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleNextDay}
-                      className="h-8 w-8"
-                      data-testid="button-next-day"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                <CardTitle>Today's Jobs</CardTitle>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Showing jobs for {format(today, "MMMM d, yyyy")}
+                </p>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -372,7 +300,7 @@ export default function Dashboard() {
                     <div className="text-center py-8">
                       <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-4" />
                       <p className="text-slate-600 dark:text-slate-400">
-                        No jobs scheduled for {format(selectedDate, "MMMM d, yyyy")}
+                        No jobs scheduled for {format(today, "MMMM d, yyyy")}
                       </p>
                     </div>
                   ) : (
