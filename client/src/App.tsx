@@ -82,8 +82,9 @@ function Router() {
         <Route path="/payments" component={ProtectedPayments} />
         <Route path="/documents" component={ProtectedDocuments} />
         <Route path="/messages" component={ProtectedMessages} />
-        <Route path="/scheduling" component={ProtectedAIScheduling} />
-        <Route path="/ai-scheduling">{() => <Redirect to="/scheduling" />}</Route>
+        <Route path="/schedule" component={ProtectedAIScheduling} />
+        <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
+        <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
         <Route path="/approvals" component={ProtectedApprovals} />
         <Route path="/settings" component={Settings} />
         <Route path="/profile" component={Profile} />

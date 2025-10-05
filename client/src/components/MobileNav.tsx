@@ -47,7 +47,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
 
   const navigationItems = [
     { href: "/", icon: LayoutDashboard, label: t('navigation.home') },
-    { href: "/scheduling", icon: Brain, label: t('navigation.scheduling') },
+    { href: "/schedule", icon: Brain, label: t('navigation.schedule') },
     { href: "/jobs", icon: Building2, label: t('navigation.jobs') },
     { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors') },
     { href: "/clients", icon: Users, label: t('navigation.clients') },

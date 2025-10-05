@@ -22,7 +22,7 @@ import { useTranslation } from "react-i18next";
 
 const getNavigation = (t: any) => [
   { name: t('navigation.home'), href: "/", icon: LayoutDashboard },
-  { name: t('navigation.scheduling'), href: "/scheduling", icon: Brain },
+  { name: t('navigation.schedule'), href: "/schedule", icon: Brain },
   { name: t('navigation.jobs'), href: "/jobs", icon: Building2 },
   { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users },
   { name: t('navigation.clients'), href: "/clients", icon: UserCheck },
