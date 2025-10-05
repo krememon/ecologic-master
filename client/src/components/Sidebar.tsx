@@ -1,21 +1,7 @@
 import { Link, useLocation } from "wouter";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
-import { 
-  Building2, 
-  LayoutDashboard, 
-  Users, 
-  UserCheck, 
-  FileText, 
-  DollarSign,
-  FolderOpen, 
-  MessageSquare,
-  Brain,
-  PenTool,
-  Settings,
-  LogOut,
-  X
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
@@ -51,7 +37,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
 
   // Close sidebar on route change (mobile only, not on initial mount)
   const [hasMounted, setHasMounted] = useState(false);
-  
+
   useEffect(() => {
     if (hasMounted) {
       onClose();
@@ -70,7 +56,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
         )}
         onClick={onClose}
       />
-      
+
       {/* Sidebar */}
       <aside className={cn(
         "flex w-64 bg-white dark:bg-slate-900 shadow-lg border-r border-slate-200 dark:border-slate-800 flex-col transition-transform duration-300 ease-in-out",
@@ -93,7 +79,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
         {navigation.map((item) => {
           const isActive = location === item.href;
           const Icon = item.icon;
-          
+
           return (
             <Link key={item.name} href={item.href}>
               <div className={cn(
@@ -127,7 +113,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             <p className="text-xs text-slate-600 dark:text-slate-400">Project Manager</p>
           </div>
         </div>
-        
+
         {/* Profile Button */}
         <Link href="/profile">
           <button className={cn(
@@ -140,7 +126,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             <span>Profile</span>
           </button>
         </Link>
-        
+
         {/* Settings Button */}
         <Link href="/settings">
           <button className={cn(
@@ -153,7 +139,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             <span>{t('navigation.settings')}</span>
           </button>
         </Link>
-        
+
         {/* Logout Button */}
         <button 
           onClick={() => window.location.href = '/api/logout'}

@@ -2,11 +2,11 @@
   "navigation": {
     "dashboard": "Dashboard",
     "home": "Home",
+    "schedule": "Schedule",
     "jobs": "Jobs",
     "subcontractors": "Contractors",
     "clients": "Clients",
     "invoicing": "Invoicing",
-    "schedule": "Schedule",
     "documents": "Documents",
     "messages": "Messages",
     "settings": "Settings",
