@@ -141,14 +141,14 @@ EcoLogic is a professional construction management platform designed for trade c
   - Added team size limits based on subscription plans
   - Created subscription hooks for frontend access control
 - October 5, 2025. UI Improvements and Navigation Reorganization:
-  - Renamed "AI Scheduling" to "Scheduling" across all navigation components
-  - Moved "Scheduling" to second position in navigation (after Home, before Jobs)
-  - Updated routing from /ai-scheduling to /scheduling with redirect for backward compatibility
-  - Converted "Recent Jobs" to "Today's Jobs" with date filtering functionality
-  - Added interactive date picker with previous/next day navigation
-  - Implemented job filtering by selected date (defaults to today)
-  - Added empty state for days with no scheduled jobs
-  - Updated all translation files (en, es, fr, de, it, pt) with new navigation structure
+  - Renamed "AI Scheduling" to "Schedule" across all navigation components
+  - Moved "Schedule" to second position in navigation (after Home, before Jobs)
+  - Updated routing: /schedule is primary route, /scheduling and /ai-scheduling redirect for backward compatibility
+  - Simplified "Today's Jobs" card to show only current day's jobs automatically
+  - Removed date picker and navigation controls from "Today's Jobs" for streamlined UX
+  - Today's Jobs displays formatted current date with empty state handling
+  - Updated all translation files (en, es, fr, de, it, pt) with "schedule" navigation key
+  - Spanish: "Horario", French: "Calendrier", German: "Zeitplan", Italian: "Programma", Portuguese: "Agenda"
 
 ## User Preferences
 
