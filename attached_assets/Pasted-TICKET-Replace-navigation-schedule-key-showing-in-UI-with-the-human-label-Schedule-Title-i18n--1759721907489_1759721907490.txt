@@ -1,0 +1,119 @@
+TICKET — Replace navigation.schedule key showing in UI with the human label “Schedule”
+
+Title: i18n label fix: render “Schedule” (not navigation.schedule) everywhere in the sidebar & app chrome
+
+Context
+
+App: EcoLogic (React + Vite), uses i18n for UI text.
+
+Current bug: In the sidebar/tab chip, the literal string navigation.schedule renders instead of the translated label “Schedule”.
+
+Likely causes (fix whichever applies):
+
+Missing navigation.schedule key in the loaded locale file(s).
+
+Component calls t('navigation.schedule') but the navigation namespace isn’t loaded.
+
+Key exists in a different namespace (e.g., common) but the code points to navigation.
+
+i18n fallback/returnNull settings causing raw keys to render.
+
+Repro Steps
+
+Open the app to any page.
+
+Look at the sidebar tab for scheduling (or its chip/badge).
+
+Observe it shows navigation.schedule instead of “Schedule”.
+
+Acceptance Criteria (all must pass)
+
+The sidebar/tab chip shows “Schedule” (exact text, title-case) everywhere it appears (sidebar, header breadcrumb, any pills/badges).
+
+No literal navigation.schedule strings appear anywhere in the UI.
+
+No console warnings/errors from i18next (missing key, namespace not loaded).
+
+Works in dev and production builds.
+
+Constraints
+
+Do not rename routes, files, or component names. Only fix i18n wiring/keys/usages.
+
+Do not alter styles except what’s necessary if a component depends on text width.
+
+Keep existing tab order as-is (no reordering in this ticket).
+
+Implementation Plan (pick what matches the codebase and apply)
+
+Ensure key exists and is loaded
+
+Add or confirm this key in the active English locale:
+
+If using namespaced files: locales/en/navigation.json
+
+{
+  "schedule": "Schedule"
+}
+
+
+If using a single file: add under a navigation object:
+
+{
+  "navigation": {
+    "schedule": "Schedule"
+  }
+}
+
+
+Ensure i18n init loads the navigation namespace at startup (or where the sidebar mounts). Example:
+
+i18n.init({
+  // ...
+  ns: ['common', 'navigation'],
+  defaultNS: 'common',
+  fallbackLng: 'en',
+  returnNull: false,
+  returnEmptyString: false
+})
+
+
+If lazy-loading namespaces, ensure useTranslation(['navigation']) is used in the sidebar component (or call i18n.loadNamespaces(['navigation']) before render).
+
+Fix component usage
+
+Replace any hardcoded key strings rendered directly with t() calls that specify the correct namespace:
+
+t('schedule', { ns: 'navigation' }) or t('navigation.schedule') (if your setup supports dotted paths without ns option).
+
+If the component currently renders label || 'navigation.schedule', change fallback to the actual label:
+
+label || t('schedule', { ns: 'navigation' }).
+
+Guardrails
+
+Add a one-time sanity check: if t('schedule', { ns: 'navigation' }) returns the key (string contains a dot or equals 'schedule' when it shouldn’t), log a console.error('i18n missing navigation.schedule') so this never ships silently.
+
+Deliverables
+
+List of files edited (e.g., locales/en/navigation.json, src/components/Sidebar/Sidebar.tsx, src/i18n.ts).
+
+Before/after diffs for each file (only the relevant hunks).
+
+A short note of which cause (1–4) applied and how you fixed it.
+
+Test Plan (paste results)
+
+Build dev and load app → confirm “Schedule” renders in the sidebar and any schedule chip/badge.
+
+Navigate through pages that include the schedule tab → confirm still “Schedule”.
+
+Check console for missing-key warnings → none.
+
+vite build (or prod build) → serve → confirm “Schedule” renders in prod.
+
+Safety
+
+Branch: fix/i18n-schedule-label.
+
+No secrets in logs. Do not modify unrelated i18n keys.
