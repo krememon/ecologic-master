@@ -281,7 +281,7 @@ export default function Clients() {
             {/* Body */}
             <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))} className="space-y-3 md:space-y-4">
+                <form id="add-client-form" onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))} className="space-y-3 md:space-y-4">
                   <FormField
                     control={form.control}
                     name="name"
@@ -372,7 +372,7 @@ export default function Clients() {
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel-client">
                   {t('common.cancel')}
                 </Button>
-                <Button type="submit" disabled={createClientMutation.isPending} onClick={form.handleSubmit((data) => createClientMutation.mutate(data))} data-testid="button-submit-client">
+                <Button type="submit" form="add-client-form" disabled={createClientMutation.isPending} data-testid="button-submit-client">
                   {createClientMutation.isPending ? t('common.loading') : t('clients.addClient')}
                 </Button>
               </div>
@@ -396,7 +396,7 @@ export default function Clients() {
             {/* Body */}
             <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
               <Form {...editForm}>
-                <form onSubmit={editForm.handleSubmit((data) => editingClient && updateClientMutation.mutate({ id: editingClient.id, data }))} className="space-y-3 md:space-y-4">
+                <form id="edit-client-form" onSubmit={editForm.handleSubmit((data) => editingClient && updateClientMutation.mutate({ id: editingClient.id, data }))} className="space-y-3 md:space-y-4">
                   <FormField
                     control={editForm.control}
                     name="name"
@@ -487,7 +487,7 @@ export default function Clients() {
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit-client">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={updateClientMutation.isPending} onClick={editForm.handleSubmit((data) => editingClient && updateClientMutation.mutate({ id: editingClient.id, data }))} data-testid="button-submit-edit-client">
+                <Button type="submit" form="edit-client-form" disabled={updateClientMutation.isPending} data-testid="button-submit-edit-client">
                   {updateClientMutation.isPending ? "Updating..." : "Update Client"}
                 </Button>
               </div>
