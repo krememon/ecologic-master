@@ -199,11 +199,6 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
     <div className="space-y-6">
       {/* Modal Header with Centered Stepper */}
       <div className="flex flex-col items-center space-y-4">
-        {/* Title */}
-        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-          Create New Job
-        </h2>
-
         {/* Centered Stepper (1-2-3) */}
         <div className="flex items-center justify-center gap-2">
           {[1, 2, 3].map((step) => (

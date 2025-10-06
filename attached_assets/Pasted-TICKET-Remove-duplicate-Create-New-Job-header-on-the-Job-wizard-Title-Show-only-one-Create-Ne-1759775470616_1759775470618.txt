@@ -1,0 +1,94 @@
+TICKET — Remove duplicate “Create New Job” header on the Job wizard
+
+Title: Show only one “Create New Job” heading on the Job Create page (fix duplicate H1)
+
+Branch: fix/jobs-create-one-header
+
+Context
+
+Jobs → Create page shows two “Create New Job” titles stacked.
+
+Cause is almost always: a page-level <PageHeader title="Create New Job" /> and a wizard-level <h1>Create New Job</h1> inside the form.
+
+Goal
+
+Render exactly one H1 (“Create New Job”) at the page level.
+Inside the wizard, use section headings (H2/H3) like “Job Details”, “Step 1”, etc.
+
+Constraints
+
+Do not change copy (“Create New Job” must stay exactly).
+
+Do not alter routing/URLs.
+
+Keep all stepper visuals and spacing; only fix the duplicate title/heading levels.
+
+Maintain a11y heading order (one H1 per page).
+
+Implementation (do this)
+
+Find the page + wizard sources
+
+Likely files (adjust to repo):
+
+src/pages/jobs/CreateJob.tsx (or JobsCreatePage.tsx)
+
+src/features/jobs/CreateJobWizard.tsx (or JobWizard.tsx)
+
+src/components/PageHeader.tsx (or AppLayout title prop)
+
+Keep the page-level H1; remove/rename the wizard H1
+
+Ensure the page renders a single H1 via PageHeader or layout:
+
+<PageHeader title="Create New Job" />
+
+
+In the wizard component, remove any <h1>Create New Job</h1>.
+
+If the wizard needs a title above the stepper, change it to an H2:
+
+<h2 className="text-xl font-semibold">Job Details</h2>
+
+
+If the stepper auto-renders a title prop, pass title={null} or showTitle={false} to suppress internal H1s.
+
+Spacing tidy-up
+
+After removing the inner H1, preserve spacing:
+
+Keep mt-6/mb-4 (or equivalent) on the stepper container so layout looks identical.
+
+i18n sanity (if used)
+
+If the wizard used t('jobs.create.title'), remove that instance from the wizard and ensure the page header uses it:
+
+<PageHeader title={t('jobs.create.title', 'Create New Job')} />
+
+Acceptance Criteria (all must pass)
+
+Only one instance of the text “Create New Job” appears in the DOM.
+
+That instance is the H1 (page-level).
+
+The wizard shows “Job Details” (H2) above step 1; steps 2–3 maintain their labels.
+
+No visual regressions to the stepper (numbers, circles, progress line remain).
+
+Lighthouse/axe: heading order valid (single H1, then H2/H3).
+
+Dev and production builds both show a single H1.
+
+Deliverables
+
+Files edited list with concise before/after diffs.
+
+Screenshot of the page (mobile and desktop) showing one H1.
+
+Note confirming DOM contains exactly one “Create New Job”.
+
+Safety
+
+No unrelated refactors.
+
+No copy changes besides heading level.
