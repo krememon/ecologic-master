@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import LocationInput from "@/components/LocationInput";
 import { ClientSuggestions } from "@/components/ClientSuggestions";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -292,18 +291,10 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       <FormItem>
                         <FormLabel>Location *</FormLabel>
                         <FormControl>
-                          <LocationInput
-                            value={field.value}
-                            onChange={(value) => {
-                              field.onChange(value);
-                            }}
-                            onAddressSelected={(addr) => {
-                              step1Form.setValue("city", addr.city);
-                              step1Form.setValue("postalCode", addr.postalCode);
-                              step1Form.setValue("locationPlaceId", addr.place_id);
-                              step1Form.setValue("location", addr.formatted_address || addr.street);
-                            }}
-                            placeholder="Start typing an address..."
+                          <Input 
+                            {...field} 
+                            placeholder="Enter job address"
+                            data-testid="input-wizard-location"
                           />
                         </FormControl>
                         <FormMessage />

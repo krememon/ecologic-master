@@ -41,7 +41,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import LocationInput from "@/components/LocationInput";
 import { ClientSuggestions } from "@/components/ClientSuggestions";
 
 function JobForm({ 
@@ -136,18 +135,10 @@ function JobForm({
             <FormItem>
               <FormLabel>Location *</FormLabel>
               <FormControl>
-                <LocationInput
-                  value={field.value}
-                  onChange={(value) => {
-                    field.onChange(value);
-                  }}
-                  onAddressSelected={(addr) => {
-                    form.setValue("city", addr.city);
-                    form.setValue("postalCode", addr.postalCode);
-                    form.setValue("locationPlaceId", addr.place_id);
-                    form.setValue("location", addr.formatted_address || addr.street);
-                  }}
-                  placeholder="Start typing an address..."
+                <Input 
+                  {...field} 
+                  placeholder="Enter job address"
+                  data-testid="input-job-location"
                 />
               </FormControl>
               <FormMessage />
