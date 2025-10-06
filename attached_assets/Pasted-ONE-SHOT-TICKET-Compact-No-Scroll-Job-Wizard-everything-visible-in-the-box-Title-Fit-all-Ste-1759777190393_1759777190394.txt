@@ -1,0 +1,155 @@
+ONE-SHOT TICKET — Compact “No-Scroll” Job Wizard (everything visible in the box)
+
+Title: Fit all Step 1 fields inside the modal without any scrolling; nothing overflows the box
+
+Branch: fix/wizard-no-scroll
+
+Goals
+
+No vertical scroll inside the modal.
+
+No page scroll while the modal is open.
+
+All Step-1 fields + buttons visible at once, fully inside the rounded box.
+
+Works on mobile (375×740) and desktop (1280×800).
+
+Approach
+
+Enable a Compact mode: smaller paddings, compact inputs, 2-column grid where possible, tighter line spacing, and limit multi-line fields. If needed, move the long Description to Step 2 so Step 1 always fits.
+
+Changes (do exactly this)
+1) Modal shell (fixed height; no internal scroll)
+
+File: page that renders the dialog, e.g. src/pages/jobs/CreateJob.tsx (or the component with <DialogContent>).
+
+Replace your content wrapper with:
+
+<DialogContent
+  className="
+    job-wizard
+    w-[min(92vw,900px)]
+    h-[min(92vh,680px)]   /* fixed visual box */
+    p-0 rounded-2xl overflow-hidden shadow-xl
+  "
+>
+  {/* Header (fixed) */}
+  <div className="px-5 md:px-6 pt-4 pb-2 border-b bg-background">
+    <h1 className="text-center text-xl md:text-2xl font-semibold leading-tight">Create New Job</h1>
+    <p className="text-center text-xs md:text-sm text-muted-foreground mt-1">Enter the job information</p>
+
+    {/* Stepper kept tight and centered */}
+    <div className="mx-auto mt-2 w-full max-w-[520px] scale-[0.95] md:scale-100">{/* Stepper */}</div>
+  </div>
+
+  {/* BODY — NO SCROLL; must fit */}
+  <div className="px-5 md:px-6 py-4 grow">
+    {/* Place Step 1 form here (see Section 2 for compact grid) */}
+    {formContent}
+  </div>
+
+  {/* Footer (fixed) */}
+  <div className="px-5 md:px-6 py-3 border-t bg-background">
+    <div className="flex flex-col md:flex-row gap-2 justify-end">
+      <Button variant="outline" size="sm">Back</Button>
+      <Button size="sm">Next</Button>
+    </div>
+  </div>
+</DialogContent>
+
+2) Compact grid & inputs (fit all fields)
+
+In the Step-1 form component (e.g., JobForm.tsx):
+
+Wrap fields with a compact grid:
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+  {/* Job Title - full width */}
+  <div className="md:col-span-2 min-w-0">{/* Title input className='w-full h-9 text-sm' */}</div>
+
+  {/* Location */}
+  <div className="md:col-span-2 min-w-0">{/* Location input className='w-full h-9 text-sm' */}</div>
+
+  {/* City + ZIP in one row */}
+  <div className="min-w-0">{/* City input className='w-full h-9 text-sm' */}</div>
+  <div className="min-w-0">{/* ZIP input className='w-full h-9 text-sm' */}</div>
+
+  {/* Status + Priority in one row */}
+  <div className="min-w-0">{/* Status select className='w-full h-9 text-sm' */}</div>
+  <div className="min-w-0">{/* Priority select className='w-full h-9 text-sm' */}</div>
+
+  {/* Description — compact or moved to Step 2 */}
+  <div className="md:col-span-2 min-w-0">
+    <Textarea className="w-full text-sm leading-snug resize-none" rows={3} />
+    {/* If still too tall, hide here and show it in Step 2 instead */}
+  </div>
+</div>
+
+
+Ensure every input/select/textarea has className="w-full h-9 text-sm" (for Shadcn inputs, pass className).
+
+Reduce label spacing:
+
+Labels: className="text-xs font-medium mb-1"
+
+Help text: remove unless error.
+
+3) Move long fields to Step 2 (if needed)
+
+If Step-1 still doesn’t fit without scroll on 375×740:
+
+Move Description to Step 2 (and mark it there as optional or required).
+
+Keep Step-1 to: Title, Location, City, ZIP, Status, Priority.
+
+4) Global “no overflow” guard
+
+File: global CSS (e.g., src/index.css or globals.css), add:
+
+/* Keep children from forcing horizontal overflow in the wizard */
+.job-wizard * { min-width: 0; }
+
+/* Tighten default form controls in compact mode if variants allow */
+.job-wizard input,
+.job-wizard select,
+.job-wizard textarea {
+  font-size: 0.875rem;   /* text-sm */
+  line-height: 1.25rem;  /* leading-tight */
+}
+
+5) Prevent page scroll while modal is open
+
+If not already handled by your Dialog component, add:
+
+useEffect(() => {
+  if (open) { document.body.style.overflow = 'hidden' }
+  return () => { document.body.style.overflow = '' }
+}, [open])
+
+Acceptance Criteria (must all pass)
+
+At 375×740 and 1280×800:
+
+No vertical or horizontal scrollbar inside the modal.
+
+The page behind does not scroll.
+
+All Step-1 fields plus the buttons are fully visible inside the rounded box.
+
+Text doesn’t clip; inputs keep their borders; stepper stays inside the box.
+
+Dev & prod builds look identical.
+
+Deliverables
+
+Files edited + concise diffs.
+
+Two screenshots (375×740 and 1280×800) showing all fields/buttons visible, zero scrollbars.
+
+Safety
+
+No route or data logic changes.
+
+Only layout and className/style changes; i18n text unchanged.
+
+This enforces a compact, no-scroll layout by design. If content ever grows again, the “move Description to Step 2” rule guarantees it still fits the frame.

@@ -196,49 +196,46 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
   const stepLabels = ["Job Details", "Client", "Schedule"];
   
   return (
-    <div className="max-h-[80vh] overflow-y-auto">
-      <div className="space-y-6">
-        {/* Modal Header with Centered Stepper */}
-        <div className="flex flex-col items-center space-y-4">
-          {/* Centered Stepper (1-2-3) */}
-          <div className="mx-auto w-full max-w-[520px] flex items-center justify-center gap-2">
-          {[1, 2, 3].map((step) => (
-            <div key={step} className="flex items-center">
-              <div 
-                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all font-medium ${
-                  currentStep > step 
-                    ? "bg-blue-600 border-blue-600 text-white" 
-                    : currentStep === step 
-                      ? "border-blue-600 text-blue-600 bg-blue-50 dark:bg-blue-950" 
-                      : "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500"
-                }`}
-              >
-                {currentStep > step ? <Check className="w-5 h-5" /> : step}
+    <div className="flex flex-col h-full">
+      {/* Fixed Header */}
+      <div className="px-5 md:px-6 pt-4 pb-2 border-b bg-background">
+        <h1 className="text-center text-xl md:text-2xl font-semibold leading-tight">Create New Job</h1>
+        <p className="text-center text-xs md:text-sm text-muted-foreground mt-1">
+          {currentStep === 1 && "Enter the job information"}
+          {currentStep === 2 && "Choose or create a client"}
+          {currentStep === 3 && "Set the schedule"}
+        </p>
+        
+        {/* Stepper */}
+        <div className="mx-auto mt-2 w-full max-w-[520px] scale-[0.95] md:scale-100">
+          <div className="flex items-center justify-center gap-2">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center">
+                <div 
+                  className={`flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full border-2 transition-all font-medium text-sm md:text-base ${
+                    currentStep > step 
+                      ? "bg-blue-600 border-blue-600 text-white" 
+                      : currentStep === step 
+                        ? "border-blue-600 text-blue-600 bg-blue-50 dark:bg-blue-950" 
+                        : "border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500"
+                  }`}
+                >
+                  {currentStep > step ? <Check className="w-4 h-4 md:w-5 md:h-5" /> : step}
+                </div>
+                {step < 3 && (
+                  <div className={`w-12 md:w-16 h-0.5 mx-1 transition-colors ${
+                    currentStep > step ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"
+                  }`} />
+                )}
               </div>
-              {step < 3 && (
-                <div className={`w-16 h-0.5 mx-1 transition-colors ${
-                  currentStep > step ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600"
-                }`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Current Step Label */}
-        <div className="text-center">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            {stepLabels[currentStep - 1]}
-          </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {currentStep === 1 && "Enter the job information"}
-            {currentStep === 2 && "Choose or create a client"}
-            {currentStep === 3 && "Set the schedule"}
-          </p>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Step Content */}
-      <div className="relative overflow-hidden min-h-[400px]">
+      {/* Body - NO SCROLL, must fit */}
+      <div className="px-5 md:px-6 py-4 flex-1 overflow-hidden">
+        <div className="relative h-full">
         <AnimatePresence mode="wait" custom={direction}>
           {currentStep === 1 && (
             <motion.div
@@ -252,70 +249,59 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
               className="absolute inset-0"
             >
               <Form {...step1Form}>
-                <form onSubmit={step1Form.handleSubmit(handleStep1Next)} className="space-y-4">
-                  <FormField
-                    control={step1Form.control}
-                    name="title"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Job Title *</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="e.g., Kitchen Renovation" className="w-full" data-testid="input-wizard-job-title" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <form onSubmit={step1Form.handleSubmit(handleStep1Next)} className="h-full flex flex-col">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 flex-1">
+                    {/* Job Title - full width */}
+                    <FormField
+                      control={step1Form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2 min-w-0">
+                          <FormLabel className="text-xs font-medium mb-1">Job Title *</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g., Kitchen Renovation" className="w-full h-9 text-sm" data-testid="input-wizard-job-title" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={step1Form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} placeholder="Describe the job..." className="w-full" data-testid="input-wizard-description" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    {/* Location - full width */}
+                    <FormField
+                      control={step1Form.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2 min-w-0">
+                          <FormLabel className="text-xs font-medium mb-1">Location *</FormLabel>
+                          <FormControl>
+                            <LocationInput
+                              value={field.value}
+                              onChange={(value) => {
+                                field.onChange(value);
+                              }}
+                              onAddressSelected={(addr) => {
+                                step1Form.setValue("city", addr.city);
+                                step1Form.setValue("postalCode", addr.postalCode);
+                                step1Form.setValue("locationPlaceId", addr.place_id);
+                                step1Form.setValue("location", addr.formatted_address || addr.street);
+                              }}
+                              placeholder="Start typing an address..."
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={step1Form.control}
-                    name="location"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Location *</FormLabel>
-                        <FormControl>
-                          <LocationInput
-                            value={field.value}
-                            onChange={(value) => {
-                              field.onChange(value);
-                            }}
-                            onAddressSelected={(addr) => {
-                              step1Form.setValue("city", addr.city);
-                              step1Form.setValue("postalCode", addr.postalCode);
-                              step1Form.setValue("locationPlaceId", addr.place_id);
-                              step1Form.setValue("location", addr.formatted_address || addr.street);
-                            }}
-                            placeholder="Start typing an address..."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                    {/* City + ZIP in one row */}
                     <FormField
                       control={step1Form.control}
                       name="city"
                       render={({ field }) => (
                         <FormItem className="min-w-0">
-                          <FormLabel>City</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">City</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="City" className="w-full" data-testid="input-wizard-city" />
+                            <Input {...field} placeholder="City" className="w-full h-9 text-sm" data-testid="input-wizard-city" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -327,26 +313,25 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       name="postalCode"
                       render={({ field }) => (
                         <FormItem className="min-w-0">
-                          <FormLabel>ZIP / Postal Code</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">ZIP / Postal Code</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="ZIP" className="w-full" data-testid="input-wizard-postal-code" />
+                            <Input {...field} placeholder="ZIP" className="w-full h-9 text-sm" data-testid="input-wizard-postal-code" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                    {/* Status + Priority in one row */}
                     <FormField
                       control={step1Form.control}
                       name="status"
                       render={({ field }) => (
                         <FormItem className="min-w-0">
-                          <FormLabel>Status</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">Status</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger className="w-full" data-testid="select-wizard-status">
+                              <SelectTrigger className="w-full h-9 text-sm" data-testid="select-wizard-status">
                                 <SelectValue placeholder="Select status" />
                               </SelectTrigger>
                             </FormControl>
@@ -367,10 +352,10 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       name="priority"
                       render={({ field }) => (
                         <FormItem className="min-w-0">
-                          <FormLabel>Priority</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">Priority</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger className="w-full" data-testid="select-wizard-priority">
+                              <SelectTrigger className="w-full h-9 text-sm" data-testid="select-wizard-priority">
                                 <SelectValue placeholder="Select priority" />
                               </SelectTrigger>
                             </FormControl>
@@ -385,41 +370,6 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                         </FormItem>
                       )}
                     />
-                  </div>
-
-                  {/* Dev Shortcuts (QA/Testing) */}
-                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                      Dev shortcuts (for testing):
-                    </p>
-                    <div className="flex gap-2 mb-3">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => goToStep(2)}
-                        className="text-xs"
-                        data-testid="button-dev-jump-step2"
-                      >
-                        Go to Client (Step 2)
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => goToStep(3)}
-                        className="text-xs"
-                        data-testid="button-dev-jump-step3"
-                      >
-                        Go to Schedule (Step 3)
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <Button type="submit" data-testid="button-wizard-step1-next">
-                      Next <ChevronRight className="ml-2 h-4 w-4" />
-                    </Button>
                   </div>
                 </form>
               </Form>
@@ -549,15 +499,6 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       />
                     </>
                   )}
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" variant="outline" onClick={() => goToStep(1)} data-testid="button-wizard-step2-back">
-                      <ChevronLeft className="mr-2 h-4 w-4" /> Back
-                    </Button>
-                    <Button type="submit" data-testid="button-wizard-step2-next">
-                      Next <ChevronRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
                 </form>
               </Form>
             </motion.div>
@@ -662,21 +603,52 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       </FormItem>
                     )}
                   />
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" variant="outline" onClick={() => goToStep(2)} data-testid="button-wizard-step3-back">
-                      <ChevronLeft className="mr-2 h-4 w-4" /> Back
-                    </Button>
-                    <Button type="submit" disabled={isLoading} data-testid="button-wizard-complete">
-                      {isLoading ? "Creating..." : "Complete"} <Check className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
                 </form>
               </Form>
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </div>
+
+      {/* Fixed Footer */}
+      <div className="px-5 md:px-6 py-3 border-t bg-background">
+        <div className="flex flex-col md:flex-row gap-2 justify-end">
+          {currentStep > 1 && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={() => goToStep(currentStep - 1)}
+              data-testid={`button-wizard-step${currentStep}-back`}
+            >
+              <ChevronLeft className="mr-2 h-3 w-3" /> Back
+            </Button>
+          )}
+          {currentStep < 3 ? (
+            <Button 
+              type="submit" 
+              size="sm"
+              onClick={() => {
+                if (currentStep === 1) step1Form.handleSubmit(handleStep1Next)();
+                if (currentStep === 2) step2Form.handleSubmit(handleStep2Next)();
+              }}
+              data-testid={`button-wizard-step${currentStep}-next`}
+            >
+              Next <ChevronRight className="ml-2 h-3 w-3" />
+            </Button>
+          ) : (
+            <Button 
+              type="submit" 
+              size="sm" 
+              disabled={isLoading}
+              onClick={() => step3Form.handleSubmit(handleStep3Complete)()}
+              data-testid="button-wizard-complete"
+            >
+              {isLoading ? "Creating..." : "Complete"} <Check className="ml-2 h-3 w-3" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

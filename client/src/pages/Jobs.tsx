@@ -453,10 +453,7 @@ export default function Jobs() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="job-wizard w-full max-w-[720px] md:max-w-[820px] lg:max-w-[900px] p-6 md:p-8 rounded-2xl overflow-hidden" onInteractOutside={handleInteractOutside}>
-          <DialogHeader>
-            <DialogTitle>Create New Job</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="job-wizard w-[min(92vw,900px)] h-[min(92vh,680px)] p-0 rounded-2xl overflow-hidden shadow-xl" onInteractOutside={handleInteractOutside}>
           <JobWizard onComplete={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
         </DialogContent>
       </Dialog>
