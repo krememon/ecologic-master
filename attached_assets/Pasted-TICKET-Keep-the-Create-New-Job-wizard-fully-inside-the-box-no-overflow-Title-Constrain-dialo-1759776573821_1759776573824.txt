@@ -1,0 +1,117 @@
+TICKET — Keep the “Create New Job” wizard fully inside the box (no overflow)
+
+Title: Constrain dialog width/height and make form content scroll inside, not outside
+
+Branch: fix/job-wizard-layout
+
+Context
+
+The Job Create wizard (dialog) shows inputs and stepper that extend beyond the card/box.
+
+We need solid width constraints, internal scrolling, and responsive spacing so everything stays inside the frame on mobile and desktop.
+
+Requirements (do all)
+
+Dialog container constraints
+
+In the page that opens the wizard (likely src/pages/jobs/CreateJob.tsx or CreateJobDialog.tsx), update the dialog content component (e.g., ShadCN DialogContent) to:
+
+className="w-full max-w-[720px] md:max-w-[820px] lg:max-w-[900px] p-6 md:p-8 rounded-2xl overflow-hidden"
+
+Add an inner wrapper for scroll:
+
+<div className="max-h-[80vh] overflow-y-auto">
+  {/* header + stepper + form go here */}
+</div>
+
+
+Ensure the outer dialog does not scroll the whole page; only the inner wrapper scrolls.
+
+Header & stepper sizing
+
+Header block:
+
+<header className="text-center mb-4 md:mb-6">
+  <h1 className="text-2xl md:text-3xl font-semibold">Create New Job</h1>
+  <p className="text-sm text-muted-foreground mt-1">Enter the job information</p>
+</header>
+
+
+Stepper container must not push outside width:
+
+<div className="mx-auto w-full max-w-[520px] mb-4 md:mb-6">
+  {/* stepper */}
+</div>
+
+
+Form grid that never overflows
+
+Wrap fields with:
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+  {/* Each field wrapper: */} 
+  <div className="min-w-0">
+    {/* label + input/select (w-full) */}
+  </div>
+</div>
+
+
+Every input/select/textarea must have className="w-full" (or component prop className="w-full").
+
+For wide components (e.g., Description), set className="md:col-span-2".
+
+Buttons row pinned inside
+
+Place actions inside the scroll wrapper but after the form:
+
+<div className="mt-6 flex flex-col md:flex-row gap-3 justify-end">
+  <Button variant="outline">Back</Button>
+  <Button>Next</Button>
+</div>
+
+
+If the page uses a footer slot, ensure it’s inside the max-h-[80vh] overflow-y-auto wrapper.
+
+Mobile spacing & safe fonts
+
+Add outer padding on very small screens:
+
+Dialog overlay/content should include px-3 at <sm: className="sm:px-0" on the container and p-6 internally as above.
+
+Avoid fixed pixel widths on any child element.
+
+CSS guard (global, if needed)
+
+In a global stylesheet or Tailwind layer, add:
+
+/* Prevent any element from overflowing dialog horizontally */
+.job-wizard * { min-width: 0; }
+
+
+Add className="job-wizard" to the dialog content root.
+
+Acceptance Criteria
+
+The wizard never overflows its box on mobile or desktop.
+
+Vertical content scrolls inside the dialog (max height ≈ 80vh); the page behind does not scroll.
+
+Inputs, selects, and the stepper fit within the box at all breakpoints.
+
+Buttons stay inside the frame and visible.
+
+Lighthouse/axe: no contrast or accessible-name regressions.
+
+Deliverables
+
+Files edited list with concise diffs (dialog file, wizard component, any small CSS/Tailwind tweak).
+
+Before/after screenshots (mobile width ~375px and desktop ~1280px) showing all content contained.
+
+Note confirming there is exactly one <h1> and layout uses internal scroll.
+
+Safety
+
+No route or copy changes.
+
+Do not change business logic; styling/layout only.
