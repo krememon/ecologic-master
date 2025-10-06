@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>Places Check</title>
+<input id="addr" placeholder="Type an address..." style="width:360px;padding:8px;font-size:16px">
+<pre id="out"></pre>
+<script>
+  (async () => {
+    const key = (window.location.search.match(/[?&]key=([^&]+)/)||[])[1] || '';
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
+    s.onload = () => {
+      const ac = new google.maps.places.Autocomplete(document.getElementById('addr'), {
+        fields: ['address_components','formatted_address','place_id'], types:['address']
+      });
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace();
+        document.getElementById('out').textContent =
+          JSON.stringify({ ok:true, place_id:p.place_id, addr:p.formatted_address }, null, 2);
+      });
+    };
+    document.body.appendChild(s);
+  })();
+</script>

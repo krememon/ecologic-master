@@ -18,6 +18,7 @@ import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVert
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
+import LocationInput from "@/components/LocationInput";
 
 type ClientFormData = z.infer<typeof insertClientSchema>;
 
@@ -324,11 +325,15 @@ export default function Clients() {
                   <FormItem>
                     <FormLabel>{t('clients.fields.address')}</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
+                      <LocationInput
                         value={field.value || ""}
+                        onChange={(value) => {
+                          field.onChange(value);
+                        }}
+                        onAddressSelected={(addr) => {
+                          form.setValue("address", addr.formatted_address || addr.street);
+                        }}
                         placeholder={t('clients.fields.address')}
-                        data-testid="input-client-address"
                       />
                     </FormControl>
                     <FormMessage />
@@ -422,11 +427,15 @@ export default function Clients() {
                   <FormItem>
                     <FormLabel>Address</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
+                      <LocationInput
                         value={field.value || ""}
+                        onChange={(value) => {
+                          field.onChange(value);
+                        }}
+                        onAddressSelected={(addr) => {
+                          editForm.setValue("address", addr.formatted_address || addr.street);
+                        }}
                         placeholder="Enter client address"
-                        data-testid="input-edit-client-address"
                       />
                     </FormControl>
                     <FormMessage />
