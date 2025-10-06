@@ -260,7 +260,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       <FormItem>
                         <FormLabel>Job Title *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="e.g., Kitchen Renovation" data-testid="input-wizard-job-title" />
+                          <Input {...field} placeholder="e.g., Kitchen Renovation" className="w-full" data-testid="input-wizard-job-title" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -274,7 +274,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       <FormItem>
                         <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Textarea {...field} placeholder="Describe the job..." data-testid="input-wizard-description" />
+                          <Textarea {...field} placeholder="Describe the job..." className="w-full" data-testid="input-wizard-description" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -307,15 +307,15 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                     <FormField
                       control={step1Form.control}
                       name="city"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <FormLabel>City</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="City" data-testid="input-wizard-city" />
+                            <Input {...field} placeholder="City" className="w-full" data-testid="input-wizard-city" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -326,10 +326,10 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       control={step1Form.control}
                       name="postalCode"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <FormLabel>ZIP / Postal Code</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="ZIP" data-testid="input-wizard-postal-code" />
+                            <Input {...field} placeholder="ZIP" className="w-full" data-testid="input-wizard-postal-code" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -337,16 +337,16 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                     <FormField
                       control={step1Form.control}
                       name="status"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <FormLabel>Status</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger data-testid="select-wizard-status">
+                              <SelectTrigger className="w-full" data-testid="select-wizard-status">
                                 <SelectValue placeholder="Select status" />
                               </SelectTrigger>
                             </FormControl>
@@ -366,11 +366,11 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       control={step1Form.control}
                       name="priority"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <FormLabel>Priority</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger data-testid="select-wizard-priority">
+                              <SelectTrigger className="w-full" data-testid="select-wizard-priority">
                                 <SelectValue placeholder="Select priority" />
                               </SelectTrigger>
                             </FormControl>
@@ -474,7 +474,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                         <FormLabel>Client Name *</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Input {...field} placeholder="Enter client name..." data-testid="input-wizard-client-name" />
+                            <Input {...field} placeholder="Enter client name..." className="w-full" data-testid="input-wizard-client-name" />
                             {clientMode === "existing" && (
                               <ClientSuggestions
                                 searchTerm={field.value}
@@ -499,7 +499,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Email</FormLabel>
                             <FormControl>
-                              <Input {...field} type="email" placeholder="client@example.com" data-testid="input-wizard-client-email" />
+                              <Input {...field} type="email" placeholder="client@example.com" className="w-full" data-testid="input-wizard-client-email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -513,7 +513,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Phone</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="(555) 123-4567" data-testid="input-wizard-client-phone" />
+                              <Input {...field} placeholder="(555) 123-4567" className="w-full" data-testid="input-wizard-client-phone" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -527,7 +527,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Address</FormLabel>
                             <FormControl>
-                              <Textarea {...field} placeholder="Client address..." data-testid="input-wizard-client-address" />
+                              <Textarea {...field} placeholder="Client address..." className="w-full" data-testid="input-wizard-client-address" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -541,7 +541,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Notes</FormLabel>
                             <FormControl>
-                              <Textarea {...field} placeholder="Additional notes..." data-testid="input-wizard-client-notes" />
+                              <Textarea {...field} placeholder="Additional notes..." className="w-full" data-testid="input-wizard-client-notes" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -576,15 +576,15 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
             >
               <Form {...step3Form}>
                 <form onSubmit={step3Form.handleSubmit(handleStep3Complete)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                     <FormField
                       control={step3Form.control}
                       name="startDateTime"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <FormLabel>Start Date & Time *</FormLabel>
                           <FormControl>
-                            <Input {...field} type="datetime-local" data-testid="input-wizard-start-datetime" />
+                            <Input {...field} type="datetime-local" className="w-full" data-testid="input-wizard-start-datetime" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -595,10 +595,10 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       control={step3Form.control}
                       name="endDateTime"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="min-w-0">
                           <FormLabel>End Date & Time *</FormLabel>
                           <FormControl>
-                            <Input {...field} type="datetime-local" data-testid="input-wizard-end-datetime" />
+                            <Input {...field} type="datetime-local" className="w-full" data-testid="input-wizard-end-datetime" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -613,7 +613,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       <FormItem>
                         <FormLabel>Schedule Location</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Optional location details..." data-testid="input-wizard-schedule-location" />
+                          <Input {...field} placeholder="Optional location details..." className="w-full" data-testid="input-wizard-schedule-location" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -656,7 +656,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                       <FormItem>
                         <FormLabel>Notes</FormLabel>
                         <FormControl>
-                          <Textarea {...field} placeholder="Additional schedule notes..." data-testid="input-wizard-schedule-notes" />
+                          <Textarea {...field} placeholder="Additional schedule notes..." className="w-full" data-testid="input-wizard-schedule-notes" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
