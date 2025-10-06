@@ -145,6 +145,8 @@ function JobForm({
                     form.setValue("city", addr.city);
                     form.setValue("postalCode", addr.postalCode);
                     form.setValue("locationPlaceId", addr.place_id);
+                    form.setValue("locationLat", addr.lat);
+                    form.setValue("locationLng", addr.lng);
                     form.setValue("location", addr.formatted_address || addr.street);
                   }}
                   placeholder="Start typing an address..."

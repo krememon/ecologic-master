@@ -10,6 +10,8 @@ type Address = {
   country: string
   place_id: string
   formatted_address: string
+  lat: number | null
+  lng: number | null
 }
 
 export default function LocationInput({
@@ -42,7 +44,7 @@ export default function LocationInput({
       // Use session token to reduce costs & improve relevance
       const sessionToken = new google.maps.places.AutocompleteSessionToken()
       const ac = new google.maps.places.Autocomplete(inputRef.current!, {
-        fields: ['address_components', 'formatted_address', 'place_id'],
+        fields: ['address_components', 'formatted_address', 'place_id', 'geometry'],
         types: ['address'],
       })
       ;(ac as any).setOptions?.({ sessionToken })
@@ -65,6 +67,8 @@ export default function LocationInput({
           country,
           place_id: p.place_id || '',
           formatted_address: p.formatted_address || '',
+          lat: p.geometry?.location?.lat() ?? null,
+          lng: p.geometry?.location?.lng() ?? null,
         })
       })
       acRef.current = ac
