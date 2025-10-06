@@ -85,6 +85,7 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [expandedClientJobs, setExpandedClientJobs] = useState<Set<number>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -251,6 +252,73 @@ export default function Clients() {
     setIsEditDialogOpen(true);
   };
 
+  const handleClientCreateSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    console.info('client:submit:start');
+    
+    if (isSubmitting) {
+      console.info('client:submit:already-submitting');
+      return;
+    }
+
+    const formData = form.getValues();
+    
+    // Validate required fields
+    if (!formData.name || formData.name.trim() === '') {
+      toast({
+        title: "Validation Error",
+        description: "Company Name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate email format if provided
+    if (formData.email && formData.email.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast({
+          title: "Validation Error",
+          description: "Please enter a valid email address",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await apiRequest("POST", "/api/clients", {
+        name: formData.name,
+        email: formData.email || "",
+        phone: formData.phone || "",
+        address: formData.address || "",
+        notes: formData.notes || "",
+      });
+      
+      await res.json();
+      console.info('client:create:ok');
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      form.reset();
+      setIsDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Client created successfully",
+      });
+    } catch (error: any) {
+      console.error('client:create:error', error);
+      toast({
+        title: "Error",
+        description: "Couldn't add client. Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading || !isAuthenticated || clientsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -281,7 +349,9 @@ export default function Clients() {
             {/* Body and Footer combined in form */}
             <Form {...form}>
               <form 
-                onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))}
+                id="client-create-form"
+                onSubmit={handleClientCreateSubmit}
+                noValidate
                 className="flex flex-col flex-1 overflow-hidden"
               >
                 <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
@@ -377,10 +447,11 @@ export default function Clients() {
                     </Button>
                     <Button 
                       type="submit" 
-                      disabled={createClientMutation.isPending}
+                      form="client-create-form"
+                      disabled={isSubmitting}
                       data-testid="button-submit-client"
                     >
-                      {createClientMutation.isPending ? t('common.loading') : t('clients.addClient')}
+                      {isSubmitting ? "Adding..." : t('clients.addClient')}
                     </Button>
                   </div>
                 </div>

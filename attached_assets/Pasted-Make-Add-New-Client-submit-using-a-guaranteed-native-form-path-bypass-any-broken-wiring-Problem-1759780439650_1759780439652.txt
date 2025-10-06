@@ -1,0 +1,75 @@
+Make “Add New Client” submit using a guaranteed native form path (bypass any broken wiring)
+
+Problem: The Add New Client button still does nothing. Prior fixes didn’t take. We need a different approach that does not rely on any existing wiring that might be broken.
+
+Do this (single pass, no visual changes):
+
+Standardize on ONE native form element
+
+Wrap the entire modal body (all inputs) in a single <form id="client-create-form" noValidate>.
+
+Ensure there are no nested forms.
+
+Put the footer buttons inside the same form if possible. If they must stay outside, give the primary button form="client-create-form" and type="submit".
+
+Guarantee submission path
+
+Create one submit handler handleClientCreateSubmit(e) bound to the form’s onSubmit.
+
+In that handler: e.preventDefault(); read current field values; call the existing create-client service; await it.
+
+Required: Company Name; Email format if provided. All other fields optional for now (do not block submit).
+
+Bypass any brittle library wiring
+
+If the page uses React Hook Form or another library, do not rely on its submit for this fix. Call the data service directly with values read from state/refs.
+
+Keep the current state model, but the submit must work even if the form library’s resolver is misconfigured.
+
+Loading + duplicate protection
+
+Add an isSubmitting flag:
+
+While true: disable the “Add New Client” button and change its label to “Adding…” (or show spinner).
+
+Ignore additional clicks while submitting.
+
+Success behavior
+
+On success: close the modal, clear the fields, and append the new client to the list (or refetch list). The new client must be visible immediately without full reload.
+
+Error behavior
+
+On failure: show a toast or inline message at the top of the modal: “Couldn’t add client. Try again.”
+
+Re-enable the button.
+
+Blockers to explicitly check and fix
+
+Any element overlaying the footer (z-index/pointer-events) that might intercept clicks.
+
+Button accidentally has type="button" or no form attribute when outside the form.
+
+Multiple onSubmit handlers or early returns preventing the create call.
+
+Stale handler due to closure — ensure the handler is defined in the component and bound once.
+
+Temporary instrumentation (remove before closing)
+
+console.info('client:submit:start') in the submit handler.
+
+console.info('client:create:ok') on success and console.error('client:create:error', err) on fail.
+
+Confirm a Network request is sent on click.
+
+Acceptance Criteria
+
+Clicking Add New Client with valid data sends a network request, closes the modal, and the new client appears in the list immediately.
+
+Button shows a loading/disabled state; fast double-clicks do not create duplicates.
+
+Invalid data (missing Company Name or bad Email) shows a clear message and does not submit.
+
+No console errors or unhandled promise rejections.
+
+Do not change: any styling, copy, or layout — functionality only.
