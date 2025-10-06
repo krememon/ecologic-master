@@ -278,33 +278,75 @@ export default function Clients() {
               </p>
             </div>
 
-            {/* Body */}
-            <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
-              <Form {...form}>
-                <form id="add-client-form" onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))} className="space-y-3 md:space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.name')}</FormLabel>
-                        <FormControl>
-                          <Input placeholder={t('clients.fields.name')} {...field} className="h-9 text-sm" data-testid="input-client-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+            {/* Body and Footer combined in form */}
+            <Form {...form}>
+              <form 
+                onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))} 
+                className="flex flex-col flex-1 overflow-hidden"
+              >
+                <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
+                  <div className="space-y-3 md:space-y-4">
                     <FormField
                       control={form.control}
-                      name="email"
+                      name="name"
                       render={({ field }) => (
-                        <FormItem className="min-w-0">
-                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.email')}</FormLabel>
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.name')}</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder={t('clients.fields.email')} {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-email" />
+                            <Input placeholder={t('clients.fields.name')} {...field} className="h-9 text-sm" data-testid="input-client-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem className="min-w-0">
+                            <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.email')}</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder={t('clients.fields.email')} {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-email" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem className="min-w-0">
+                            <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.phone')}</FormLabel>
+                            <FormControl>
+                              <Input placeholder={t('clients.fields.phone')} {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-phone" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
+                    <FormField
+                      control={form.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.address')}</FormLabel>
+                          <FormControl>
+                            <LocationInput
+                              value={field.value || ""}
+                              onChange={(value) => {
+                                field.onChange(value);
+                              }}
+                              onAddressSelected={(addr) => {
+                                form.setValue("address", addr.formatted_address || addr.street);
+                              }}
+                              placeholder={t('clients.fields.address')}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -313,70 +355,37 @@ export default function Clients() {
                     
                     <FormField
                       control={form.control}
-                      name="phone"
+                      name="notes"
                       render={({ field }) => (
-                        <FormItem className="min-w-0">
-                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.phone')}</FormLabel>
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.notes')}</FormLabel>
                           <FormControl>
-                            <Input placeholder={t('clients.fields.phone')} {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-phone" />
+                            <Textarea placeholder={t('clients.fields.notes')} {...field} value={field.value || ""} className="text-sm" data-testid="input-client-notes" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                  
-                  <FormField
-                    control={form.control}
-                    name="address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.address')}</FormLabel>
-                        <FormControl>
-                          <LocationInput
-                            value={field.value || ""}
-                            onChange={(value) => {
-                              field.onChange(value);
-                            }}
-                            onAddressSelected={(addr) => {
-                              form.setValue("address", addr.formatted_address || addr.street);
-                            }}
-                            placeholder={t('clients.fields.address')}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.notes')}</FormLabel>
-                        <FormControl>
-                          <Textarea placeholder={t('clients.fields.notes')} {...field} value={field.value || ""} className="text-sm" data-testid="input-client-notes" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </form>
-              </Form>
-            </div>
+                </div>
 
-            {/* Fixed Footer */}
-            <div className="px-5 md:px-6 py-3 border-t bg-background">
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel-client">
-                  {t('common.cancel')}
-                </Button>
-                <Button type="submit" form="add-client-form" disabled={createClientMutation.isPending} data-testid="button-submit-client">
-                  {createClientMutation.isPending ? t('common.loading') : t('clients.addClient')}
-                </Button>
-              </div>
-            </div>
+                {/* Fixed Footer */}
+                <div className="px-5 md:px-6 py-3 border-t bg-background">
+                  <div className="flex justify-end space-x-2">
+                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel-client">
+                      {t('common.cancel')}
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={createClientMutation.isPending} 
+                      data-testid="button-submit-client"
+                    >
+                      {createClientMutation.isPending ? t('common.loading') : t('clients.addClient')}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </Form>
           </div>
         </DialogContent>
       </Dialog>
@@ -393,33 +402,75 @@ export default function Clients() {
               </p>
             </div>
 
-            {/* Body */}
-            <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
-              <Form {...editForm}>
-                <form id="edit-client-form" onSubmit={editForm.handleSubmit((data) => editingClient && updateClientMutation.mutate({ id: editingClient.id, data }))} className="space-y-3 md:space-y-4">
-                  <FormField
-                    control={editForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium mb-1">Client Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter client name or company" {...field} className="h-9 text-sm" data-testid="input-edit-client-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+            {/* Body and Footer combined in form */}
+            <Form {...editForm}>
+              <form 
+                onSubmit={editForm.handleSubmit((data) => editingClient && updateClientMutation.mutate({ id: editingClient.id, data }))} 
+                className="flex flex-col flex-1 overflow-hidden"
+              >
+                <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
+                  <div className="space-y-3 md:space-y-4">
                     <FormField
                       control={editForm.control}
-                      name="email"
+                      name="name"
                       render={({ field }) => (
-                        <FormItem className="min-w-0">
-                          <FormLabel className="text-xs font-medium mb-1">Email</FormLabel>
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium mb-1">Client Name</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder="client@example.com" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-email" />
+                            <Input placeholder="Enter client name or company" {...field} className="h-9 text-sm" data-testid="input-edit-client-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                      <FormField
+                        control={editForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem className="min-w-0">
+                            <FormLabel className="text-xs font-medium mb-1">Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="client@example.com" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-email" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={editForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem className="min-w-0">
+                            <FormLabel className="text-xs font-medium mb-1">Phone</FormLabel>
+                            <FormControl>
+                              <Input placeholder="(555) 123-4567" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-phone" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
+                    <FormField
+                      control={editForm.control}
+                      name="address"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium mb-1">Address</FormLabel>
+                          <FormControl>
+                            <LocationInput
+                              value={field.value || ""}
+                              onChange={(value) => {
+                                field.onChange(value);
+                              }}
+                              onAddressSelected={(addr) => {
+                                editForm.setValue("address", addr.formatted_address || addr.street);
+                              }}
+                              placeholder="Enter client address"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -428,70 +479,33 @@ export default function Clients() {
                     
                     <FormField
                       control={editForm.control}
-                      name="phone"
+                      name="notes"
                       render={({ field }) => (
-                        <FormItem className="min-w-0">
-                          <FormLabel className="text-xs font-medium mb-1">Phone</FormLabel>
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium mb-1">Notes</FormLabel>
                           <FormControl>
-                            <Input placeholder="(555) 123-4567" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-phone" />
+                            <Textarea placeholder="Any additional notes about this client" {...field} value={field.value || ""} className="text-sm" data-testid="input-edit-client-notes" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                  
-                  <FormField
-                    control={editForm.control}
-                    name="address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium mb-1">Address</FormLabel>
-                        <FormControl>
-                          <LocationInput
-                            value={field.value || ""}
-                            onChange={(value) => {
-                              field.onChange(value);
-                            }}
-                            onAddressSelected={(addr) => {
-                              editForm.setValue("address", addr.formatted_address || addr.street);
-                            }}
-                            placeholder="Enter client address"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={editForm.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium mb-1">Notes</FormLabel>
-                        <FormControl>
-                          <Textarea placeholder="Any additional notes about this client" {...field} value={field.value || ""} className="text-sm" data-testid="input-edit-client-notes" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </form>
-              </Form>
-            </div>
+                </div>
 
-            {/* Fixed Footer */}
-            <div className="px-5 md:px-6 py-3 border-t bg-background">
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit-client">
-                  Cancel
-                </Button>
-                <Button type="submit" form="edit-client-form" disabled={updateClientMutation.isPending} data-testid="button-submit-edit-client">
-                  {updateClientMutation.isPending ? "Updating..." : "Update Client"}
-                </Button>
-              </div>
-            </div>
+                {/* Fixed Footer */}
+                <div className="px-5 md:px-6 py-3 border-t bg-background">
+                  <div className="flex justify-end space-x-2">
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit-client">
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={updateClientMutation.isPending} data-testid="button-submit-edit-client">
+                      {updateClientMutation.isPending ? "Updating..." : "Update Client"}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </Form>
           </div>
         </DialogContent>
       </Dialog>

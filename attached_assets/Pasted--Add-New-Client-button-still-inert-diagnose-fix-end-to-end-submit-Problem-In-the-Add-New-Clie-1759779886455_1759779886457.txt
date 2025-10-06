@@ -1,0 +1,73 @@
+“Add New Client” button still inert — diagnose & fix end-to-end submit
+
+Problem: In the Add New Client modal, clicking Add New Client does nothing (no client created, no close, no errors shown).
+
+Do this in one pass (no UI changes):
+
+Wire the button to the form
+
+Ensure the button triggers the same submit as pressing Enter.
+
+If the button is outside the <form>, give it the form target and make sure the form has an id.
+
+Effective button type must be submit for that form.
+
+Single submit path
+
+There must be ONE handler (e.g., onSubmitCreateClient) that:
+
+reads current field values,
+
+validates required fields (Company Name at minimum; Email format if present),
+
+sets isSubmitting=true → disables the button to prevent double-clicks,
+
+calls the existing create client service/API,
+
+on success: closes the modal, clears the form, and updates the list immediately (append or refetch),
+
+on failure: shows a clear error message and re-enables the button.
+
+Instrument and verify
+
+Add temporary logs around click and submit: “client:click”, “client:submit:start/ok/error”.
+
+Confirm a Network request is actually sent on click; if not, fix wiring first.
+
+Remove logs before closing the task.
+
+Common blockers to fix if present
+
+Button has type="button" (change to submit).
+
+Footer is outside the form and not linked via form attribute → wire it.
+
+onSubmit missing preventDefault or not awaited → promise exits early.
+
+Form library (React Hook Form/Zod) blocking submit due to silent validation errors → surface inline errors under each field.
+
+Create call succeeds but list never refreshes → trigger list refetch or optimistic insert.
+
+Modal closes before promise resolves → close after success only.
+
+No visual edits
+
+Keep current styles, text (“Add New Client”), and layout exactly the same.
+
+Acceptance criteria:
+
+Clicking Add New Client with valid data creates a client, closes the modal, and the new client appears immediately in the list.
+
+The button shows a loading/disabled state while submitting; double-clicking cannot create duplicates.
+
+Invalid inputs block submit with visible inline errors.
+
+No console errors or unhandled promise rejections.
+
+Touch points to check (names may vary):
+
+Clients list page (modal open/close + refresh)
+
+Client form component (form + submit)
+
+Client data/service module (create call)
