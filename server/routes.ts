@@ -268,8 +268,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/clients', async (req: any, res) => {
+    console.log('server:POST /api/clients:entered', req.body);
     try {
       if (!req.isAuthenticated()) {
+        console.log('server:POST /api/clients:unauthorized');
         return res.status(401).json({ message: "Unauthorized" });
       }
       
@@ -277,6 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const company = await storage.getUserCompany(user.claims.sub);
       
       if (!company) {
+        console.log('server:POST /api/clients:company-not-found');
         return res.status(404).json({ message: "Company not found" });
       }
       
@@ -285,9 +288,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId: company.id
       });
       
+      console.log('server:POST /api/clients:ok', client);
       res.status(201).json(client);
     } catch (error) {
-      console.error("Error creating client:", error);
+      console.error("server:POST /api/clients:error", error);
       res.status(500).json({ message: "Failed to create client" });
     }
   });

@@ -1,0 +1,103 @@
+Title: Make “Add New Client” work end-to-end by fixing the API route and payload (not just the form)
+
+Problem recap: Button wiring claims to be fixed, but no client appears. This is almost certainly an API mismatch (missing/incorrect route, payload, or server error).
+
+Do this exactly (single pass)
+1) Verify the network first
+
+In DevTools Network, click the button and confirm a request is sent.
+
+If no request → stop and fix the button (but you already said it logs as working).
+
+If there is a request, record:
+
+URL (e.g., /api/clients)
+
+Method (POST)
+
+Status (e.g., 404/405/422/500)
+
+Request body (JSON)
+
+Response body (JSON/error)
+
+2) Fix the server route to match the client
+
+Ensure we have POST /api/clients registered in the server (e.g., server/index.ts or server/routes.ts).
+
+If the app uses a different path (e.g., /clients or /api/v1/clients), standardize on /api/clients and update the client to call that.
+
+Add a handler that:
+
+Validates minimal fields: companyName (required). email (optional but validate format if present).
+
+Writes to the existing storage/DB (use the same persistence layer used elsewhere).
+
+Returns 201 Created with { id, companyName, email, phone, address, notes, createdAt }.
+
+If CORS/auth middleware blocks POST, configure server so same-origin POST works in dev.
+
+3) Fix the payload shape
+
+Map the form fields to the API exactly as the server expects:
+
+{
+  "companyName": "<string>",
+  "email": "<string|''>",
+  "phone": "<string|''>",
+  "address": "<string|''>",
+  "notes": "<string|''>"
+}
+
+
+Ensure Content-Type: application/json and JSON.stringify(body) are used.
+
+4) Handle errors clearly
+
+If the server returns 4xx/5xx:
+
+Surface a toast / inline error with the server message.
+
+Do not close the modal.
+
+Re-enable the button.
+
+5) Success path (must be visible)
+
+On 201:
+
+Close the modal.
+
+Clear the form.
+
+Update the list immediately:
+
+If using React Query: invalidateQueries(['clients']).
+
+If using local state: append the returned client object to the list state.
+
+Show toast: “Client added”.
+
+6) Instrument + prove it
+
+Temporarily log:
+
+client:req:url/status with URL and HTTP status.
+
+Server logs for the route (entered/ok/error).
+
+Remove logs before closing the task.
+
+Acceptance Criteria
+
+Clicking Add New Client sends POST /api/clients and returns 201.
+
+The new client appears in the list immediately (without page reload).
+
+Button shows loading and prevents double-click duplicates.
+
+Invalid input shows visible inline errors; server errors show a readable message.
+
+No console errors / unhandled promise rejections.
+
+Do not change: any styles, text, or layout—functionality only.

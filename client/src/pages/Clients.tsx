@@ -289,16 +289,28 @@ export default function Clients() {
     setIsSubmitting(true);
 
     try {
-      const res = await apiRequest("POST", "/api/clients", {
+      const payload = {
         name: formData.name,
         email: formData.email || "",
         phone: formData.phone || "",
         address: formData.address || "",
         notes: formData.notes || "",
-      });
+      };
       
-      await res.json();
-      console.info('client:create:ok');
+      console.info('client:req:url/status', 'POST /api/clients', payload);
+      
+      const res = await apiRequest("POST", "/api/clients", payload);
+      
+      console.info('client:req:url/status', res.status, res.statusText);
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: res.statusText }));
+        console.error('client:create:error', res.status, errorData);
+        throw new Error(errorData.message || `Server error: ${res.status}`);
+      }
+      
+      const newClient = await res.json();
+      console.info('client:create:ok', newClient);
       
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       form.reset();
@@ -311,7 +323,7 @@ export default function Clients() {
       console.error('client:create:error', error);
       toast({
         title: "Error",
-        description: "Couldn't add client. Try again.",
+        description: error.message || "Couldn't add client. Try again.",
         variant: "destructive",
       });
     } finally {
