@@ -56,7 +56,7 @@ export default function LocationInput({
       disabled={disabled}
       autoComplete="off"
       inputMode="text"
-      className="w-full"
+      className="w-full h-9 text-sm"
     />
   );
 }
