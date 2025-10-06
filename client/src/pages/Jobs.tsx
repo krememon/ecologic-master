@@ -41,7 +41,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LocationAutocomplete } from "@/components/LocationAutocomplete";
+import LocationInput from "@/components/LocationInput";
 import { ClientSuggestions } from "@/components/ClientSuggestions";
 
 function JobForm({ 
@@ -136,19 +136,16 @@ function JobForm({
             <FormItem>
               <FormLabel>Location *</FormLabel>
               <FormControl>
-                <LocationAutocomplete
+                <LocationInput
                   value={field.value}
-                  onChange={(value, addressComponents) => {
+                  onChange={(value) => {
                     field.onChange(value);
-                    // Auto-populate city and postal code if address components are provided
-                    if (addressComponents) {
-                      form.setValue("city", addressComponents.city);
-                      form.setValue("postalCode", addressComponents.postalCode);
-                      // Store hidden location data for backend
-                      form.setValue("locationLat", addressComponents.lat);
-                      form.setValue("locationLng", addressComponents.lng);
-                      form.setValue("locationPlaceId", addressComponents.placeId);
-                    }
+                  }}
+                  onAddressSelected={(addr) => {
+                    form.setValue("city", addr.city);
+                    form.setValue("postalCode", addr.postalCode);
+                    form.setValue("locationPlaceId", addr.place_id);
+                    form.setValue("location", addr.formatted_address || addr.street);
                   }}
                   placeholder="Start typing an address..."
                 />
