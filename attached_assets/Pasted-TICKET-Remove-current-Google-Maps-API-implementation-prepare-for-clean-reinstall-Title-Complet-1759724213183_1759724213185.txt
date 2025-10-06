@@ -1,0 +1,93 @@
+TICKET — Remove current Google Maps API implementation (prepare for clean reinstall)
+
+Title: Completely remove all existing Google Maps API code and configuration from EcoLogic
+
+Context:
+
+We’ve confirmed the current Google Maps integration (Places/Autocomplete) is bugged — input freezes after typing.
+
+API key is working and verified in browser.
+
+We need to strip all code, scripts, and loader calls so we can reimplement cleanly afterward.
+
+Goal:
+Remove every trace of the current Google Maps API integration, including script tags, loaders, imports, and autocomplete logic — without breaking unrelated parts of the app.
+
+✅ Implementation Tasks (do all)
+
+Search entire project for:
+
+maps.googleapis.com
+
+@googlemaps/js-api-loader
+
+google.maps
+
+Autocomplete
+
+usePlacesAutocomplete
+
+googleMapApi
+
+placesService
+
+Remove or comment out all of the above.
+
+Delete any script tags in index.html that reference maps.googleapis.com.
+
+Delete all imports or loader instances for Google Maps.
+
+Delete components named like LocationInput, GoogleMap, AutocompleteInput, or similar that depend on Maps.
+
+Remove associated event handlers, props, and state variables that reference Google Maps or autocomplete.
+
+Clean up any useEffect that calls google.maps.*.
+
+Clean up dependencies:
+
+In package.json, remove "@googlemaps/js-api-loader" and any other Google Maps–related packages.
+
+Run:
+
+npm uninstall @googlemaps/js-api-loader
+
+
+Confirm no googlemaps or places imports remain.
+
+Clean .env usage:
+
+Keep VITE_GOOGLE_MAPS_API_KEY for now, but remove any in-code references.
+
+Do not delete the key from Replit secrets.
+
+Verify app still builds
+
+App runs without errors in console.
+
+No missing-module errors for @googlemaps/js-api-loader.
+
+Forms/pages that used to rely on Maps still render normally (just without autocomplete).
+
+Console shows no Google-related errors.
+
+✅ Acceptance Criteria
+
+✅ No more Google Maps JS or Places scripts load in the Network tab.
+
+✅ No references to google.maps in the codebase.
+
+✅ App runs and builds successfully in dev and production.
+
+✅ No new warnings or missing-import errors.
+
+✅ Ready for a clean reinstall of Maps API next.
+
+Deliverables
+
+List of files edited/deleted.
+
+Before/after diff summary.
+
+Confirmation message: “All Google Maps code removed — app builds cleanly.”
+
+Branch: cleanup/remove-google-maps.
