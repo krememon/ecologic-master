@@ -492,6 +492,7 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
 
 export const insertClientSchema = createInsertSchema(clients).omit({
   id: true,
+  companyId: true,
   createdAt: true,
   updatedAt: true,
 });

@@ -281,7 +281,7 @@ export default function Clients() {
             {/* Body and Footer combined in form */}
             <Form {...form}>
               <form 
-                onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))} 
+                onSubmit={form.handleSubmit((data) => createClientMutation.mutate(data))}
                 className="flex flex-col flex-1 overflow-hidden"
               >
                 <div className="px-5 md:px-6 py-4 flex-1 overflow-auto">
@@ -377,7 +377,7 @@ export default function Clients() {
                     </Button>
                     <Button 
                       type="submit" 
-                      disabled={createClientMutation.isPending} 
+                      disabled={createClientMutation.isPending}
                       data-testid="button-submit-client"
                     >
                       {createClientMutation.isPending ? t('common.loading') : t('clients.addClient')}
