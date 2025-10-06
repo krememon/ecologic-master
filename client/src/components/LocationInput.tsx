@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { loadMapsOnce } from '@/lib/mapsLoader';
+import { Input } from '@/components/ui/input';
 
 export type Address = {
   street: string; city: string; state: string; postalCode: string;
@@ -47,7 +48,7 @@ export default function LocationInput({
   }, []);
 
   return (
-    <input
+    <Input
       ref={inputRef}
       value={value}
       onChange={e => onChange(e.target.value)}
@@ -55,6 +56,7 @@ export default function LocationInput({
       disabled={disabled}
       autoComplete="off"
       inputMode="text"
+      className="w-full"
     />
   );
 }
