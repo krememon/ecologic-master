@@ -14,7 +14,7 @@ const resources = {
         invoicing: "Invoicing",
         documents: "Documents",
         messages: "Messages",
-        aiScheduling: "AI Scheduling",
+        schedule: "Schedule",
         approvals: "Approvals",
         settings: "Settings"
       },
@@ -222,7 +222,7 @@ const resources = {
         invoicing: "Facturación",
         documents: "Documentos",
         messages: "Mensajes",
-        aiScheduling: "Programación IA",
+        schedule: "Horario",
         approvals: "Aprobaciones",
         settings: "Configuración"
       },
