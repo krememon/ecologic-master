@@ -1,0 +1,247 @@
+ONE-SHOT TICKET — Make Google Places Autocomplete work in Jobs & Clients (Replit, Vite, React)
+
+Title: One-shot restoration of Google Places Autocomplete (non-freezing) for Jobs & Clients with built-in diagnostics and rollback
+
+Branch: fix/places-one-shot
+
+Context
+
+Host: Replit (domain example already verified).
+
+Env var is present and valid: VITE_GOOGLE_MAPS_API_KEY.
+
+Prior attempts caused freezes and/or no suggestions.
+
+We must (1) prove Maps+Places load from our Replit domain, (2) ensure a single loader path, (3) wire a stable input for both Jobs and Clients, (4) pass explicit tests, or rollback.
+
+DO THIS IN ORDER (no deviations)
+0) Hard prechecks (fail fast)
+
+Abort if import.meta.env.VITE_GOOGLE_MAPS_API_KEY is falsy.
+
+Abort if index.html contains any <script src="https://maps.googleapis.com/maps/api/js (we will load via loader only).
+
+1) Add loader (single source of truth)
+
+File: src/lib/mapsLoader.ts
+
+import { Loader } from '@googlemaps/js-api-loader';
+
+let loader: Loader | null = null;
+let loaded = false;
+
+export async function loadMapsOnce() {
+  if (loaded && (window as any).google?.maps?.places) return (window as any).google;
+
+  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  if (!key) throw new Error('Missing VITE_GOOGLE_MAPS_API_KEY');
+
+  if (!loader) loader = new Loader({ apiKey: key, libraries: ['places'] });
+
+  await loader.load();
+  if (!(window as any).google?.maps?.places) {
+    throw new Error('Places library failed to load');
+  }
+  loaded = true;
+  return (window as any).google;
+}
+
+2) Known-good Autocomplete component (no freeze)
+
+File: src/components/LocationInput.tsx
+
+import { useEffect, useRef } from 'react';
+import { loadMapsOnce } from '@/lib/mapsLoader';
+
+export type Address = {
+  street: string; city: string; state: string; postalCode: string;
+  country: string; place_id: string; formatted_address: string;
+};
+
+export default function LocationInput({
+  value, onChange, onAddressSelected, placeholder = 'Enter address', disabled = false,
+}: {
+  value: string; onChange: (v: string) => void;
+  onAddressSelected: (a: Address) => void;
+  placeholder?: string; disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadMapsOnce().then(() => {
+      if (!active || !inputRef.current) return;
+
+      const ac = new google.maps.places.Autocomplete(inputRef.current!, {
+        fields: ['address_components', 'formatted_address', 'place_id'],
+        types: ['address'],
+      });
+
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace();
+        if (!p?.address_components) return;
+        const get = (t: string) => p.address_components!.find(c => c.types.includes(t))?.long_name || '';
+        const street = [get('street_number'), get('route')].filter(Boolean).join(' ').trim();
+        const city = get('locality') || get('sublocality') || get('postal_town');
+        const state = get('administrative_area_level_1');
+        const postalCode = get('postal_code');
+        const country = get('country');
+
+        onAddressSelected({
+          street, city, state, postalCode, country,
+          place_id: p.place_id || '',
+          formatted_address: p.formatted_address || '',
+        });
+      });
+    });
+
+    return () => { active = false; };
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      onChange={e => onChange(e.target.value)}   // never toggle readOnly/disabled here
+      placeholder={placeholder}
+      disabled={disabled}
+      autoComplete="off"
+      inputMode="text"
+    />
+  );
+}
+
+3) Remove any duplicate loaders/scripts
+
+Search the repo for:
+
+maps.googleapis.com/maps/api/js
+
+@react-google-maps/api
+
+new Loader( from any other file
+
+Delete script tags in index.html. Keep only src/lib/mapsLoader.ts as the loader.
+
+4) Wire into Jobs form
+
+File: src/features/jobs/JobForm.tsx (adjust path if different)
+
+Replace the existing location input with:
+
+import LocationInput, { Address } from '@/components/LocationInput';
+// within component:
+const [location, setLocation] = useState(formValues?.formatted_address || formValues?.street || '');
+
+<LocationInput
+  value={location}
+  onChange={setLocation}
+  onAddressSelected={(a: Address) => {
+    setValue('street', a.street);
+    setValue('city', a.city);
+    setValue('state', a.state);
+    setValue('postalCode', a.postalCode);
+    setValue('country', a.country);
+    setValue('placeId', a.place_id);
+    setLocation(a.formatted_address || a.street);
+  }}
+/>
+
+5) Wire into Clients form
+
+File: src/features/clients/ClientForm.tsx
+
+Same block (map to your client field names if different, e.g. clientStreet, etc.).
+
+6) Replit StrictMode guard (dev only)
+
+File: src/main.tsx
+
+If present, temporarily remove <React.StrictMode> wrapper to avoid dev double-mount side effects. Leave a comment:
+
+// StrictMode removed in dev to avoid double-initialization of Google Autocomplete. Re-enable after verification.
+
+7) One-page diagnostic (ships with app, not visible in UI)
+
+File: public/places-check.html
+
+<!doctype html><meta charset="utf-8"><title>Places Check</title>
+<input id="addr" placeholder="Type an address..." style="width:360px;padding:8px;font-size:16px">
+<pre id="out"></pre>
+<script>
+  (async () => {
+    const key = (window.location.search.match(/[?&]key=([^&]+)/)||[])[1] || '';
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
+    s.onload = () => {
+      const ac = new google.maps.places.Autocomplete(document.getElementById('addr'), {
+        fields: ['address_components','formatted_address','place_id'], types:['address']
+      });
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace();
+        document.getElementById('out').textContent =
+          JSON.stringify({ ok:true, place_id:p.place_id, addr:p.formatted_address }, null, 2);
+      });
+    };
+    document.body.appendChild(s);
+  })();
+</script>
+
+
+This lets us open /places-check.html?key=ACTUAL_KEY to confirm Places works from the same Replit origin.
+
+8) Tests (must all pass or rollback)
+
+Run these and paste results in the PR:
+
+A. Diagnostics
+
+Open /places-check.html?key=VITE_GOOGLE_MAPS_API_KEY_VALUE.
+
+Type “1600 Pennsylvania Ave” → select a suggestion → you should see JSON with place_id and address.
+
+B. App UI
+
+Jobs form: type 10 characters quickly → no freeze, see suggestions, select one → fields populate, placeId set.
+
+Clients form: same behavior.
+
+C. Network
+
+Browser Network tab: only one maps/api/js?...libraries=places request per page load.
+
+D. Console
+
+No React warnings/errors or Google errors.
+
+If ANY check fails: do not close the PR. Fix the cause in the same branch and re-run tests. If unresolved within this run, rollback file changes and leave a clear note of the failing step + console error.
+
+9) Deliverables
+
+List of files changed with concise diffs.
+
+Screenshot of Jobs & Clients working (autocomplete open and fields filled).
+
+Screenshot of /places-check.html after selection (JSON with place_id).
+
+Note confirming StrictMode status.
+
+Acceptance Criteria (all required)
+
+Typing in Jobs/Clients location fields never disables or freezes.
+
+Suggestions appear; selecting fills street, city, state, postalCode, country, place_id and keeps input editable.
+
+No duplicate Maps loads (single loader path).
+
+Works on Replit preview and in a new tab.
+
+All tests in §8 pass.
+
+Safety
+
+No secrets logged. Key only read from import.meta.env.VITE_GOOGLE_MAPS_API_KEY.
+
+No unrelated refactors.
+
+Close this ticket only when all Acceptance Criteria pass. If not, rollback and report the exact failing step + console/network error.
