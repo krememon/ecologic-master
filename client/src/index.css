@@ -115,6 +115,14 @@ html, body {
   min-width: 0;
 }
 
+/* Tighten default form controls in compact mode */
+.job-wizard input,
+.job-wizard select,
+.job-wizard textarea {
+  font-size: 0.875rem;   /* text-sm */
+  line-height: 1.25rem;  /* leading-tight */
+}
+
 .dark {
   --background: 222 84% 5%; /* #0F172A */
   --foreground: 210 40% 98%; /* #F8FAFC */
