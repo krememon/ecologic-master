@@ -301,8 +301,6 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                               step1Form.setValue("city", addr.city);
                               step1Form.setValue("postalCode", addr.postalCode);
                               step1Form.setValue("locationPlaceId", addr.place_id);
-                              step1Form.setValue("locationLat", addr.lat);
-                              step1Form.setValue("locationLng", addr.lng);
                               step1Form.setValue("location", addr.formatted_address || addr.street);
                             }}
                             placeholder="Start typing an address..."
