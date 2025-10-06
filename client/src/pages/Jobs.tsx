@@ -453,7 +453,7 @@ export default function Jobs() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] rounded-2xl max-h-[90vh] overflow-y-auto" onInteractOutside={handleInteractOutside}>
+        <DialogContent className="job-wizard w-full max-w-[720px] md:max-w-[820px] lg:max-w-[900px] p-6 md:p-8 rounded-2xl overflow-hidden" onInteractOutside={handleInteractOutside}>
           <DialogHeader>
             <DialogTitle>Create New Job</DialogTitle>
           </DialogHeader>

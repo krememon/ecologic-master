@@ -196,11 +196,12 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
   const stepLabels = ["Job Details", "Client", "Schedule"];
   
   return (
-    <div className="space-y-6">
-      {/* Modal Header with Centered Stepper */}
-      <div className="flex flex-col items-center space-y-4">
-        {/* Centered Stepper (1-2-3) */}
-        <div className="flex items-center justify-center gap-2">
+    <div className="max-h-[80vh] overflow-y-auto">
+      <div className="space-y-6">
+        {/* Modal Header with Centered Stepper */}
+        <div className="flex flex-col items-center space-y-4">
+          {/* Centered Stepper (1-2-3) */}
+          <div className="mx-auto w-full max-w-[520px] flex items-center justify-center gap-2">
           {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center">
               <div 
@@ -675,6 +676,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
       </div>
     </div>
   );
