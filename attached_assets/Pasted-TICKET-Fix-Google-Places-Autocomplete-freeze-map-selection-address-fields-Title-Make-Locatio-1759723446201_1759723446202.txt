@@ -1,0 +1,196 @@
+TICKET — Fix Google Places Autocomplete freeze & map selection → address fields
+
+Title: Make Location input use Google Places Autocomplete without freezing; fill address fields + place_id on selection
+
+Context
+
+App: EcoLogic (React + Vite) on Replit.
+
+Env var is confirmed and working: VITE_GOOGLE_MAPS_API_KEY.
+
+Current bug: Location input freezes/greys after ~2 characters; suggestions unreliable.
+
+We must load Maps JS only once (via @googlemaps/js-api-loader) and wire a controlled input to Places Autocomplete.
+
+Do this in ONE PR/branch.
+
+Implementation (exact)
+
+Ensure single loading method
+
+Remove any <script src="https://maps.googleapis.com/maps/api/js?..."> tags from HTML.
+
+Use only @googlemaps/js-api-loader with libraries: ['places'].
+
+Create/replace the Location input with this component
+
+File: src/components/LocationInput.tsx (create if missing)
+
+import { useEffect, useRef } from 'react'
+import { Loader } from '@googlemaps/js-api-loader'
+
+type Address = {
+  street: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  place_id: string
+  formatted_address: string
+}
+
+export default function LocationInput({
+  value,
+  onChange,
+  onAddressSelected,
+  placeholder = 'Start typing an address…',
+  disabled = false,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onAddressSelected: (a: Address) => void
+  placeholder?: string
+  disabled?: boolean
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const acRef = useRef<google.maps.places.Autocomplete | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    const loader = new Loader({
+      apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY!,
+      libraries: ['places'],
+    })
+
+    loader.load().then(() => {
+      if (!mounted || !inputRef.current) return
+      // Use session token to reduce costs & improve relevance
+      const sessionToken = new google.maps.places.AutocompleteSessionToken()
+      const ac = new google.maps.places.Autocomplete(inputRef.current!, {
+        fields: ['address_components', 'formatted_address', 'place_id'],
+        types: ['address'],
+      })
+      ;(ac as any).setOptions?.({ sessionToken })
+      ac.addListener('place_changed', () => {
+        const p = ac.getPlace()
+        if (!p || !p.address_components) return
+        const get = (t: string) =>
+          p.address_components!.find(c => c.types.includes(t))?.long_name || ''
+        const streetNumber = get('street_number')
+        const route = get('route')
+        const city = get('locality') || get('sublocality') || get('postal_town')
+        const state = get('administrative_area_level_1')
+        const postalCode = get('postal_code')
+        const country = get('country')
+        onAddressSelected({
+          street: [streetNumber, route].filter(Boolean).join(' ').trim(),
+          city,
+          state,
+          postalCode,
+          country,
+          place_id: p.place_id || '',
+          formatted_address: p.formatted_address || '',
+        })
+      })
+      acRef.current = ac
+    })
+
+    return () => {
+      mounted = false
+      acRef.current = null
+    }
+  }, [])
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      onChange={e => onChange(e.target.value)} // never set readOnly/disabled here
+      placeholder={placeholder}
+      disabled={disabled}
+      autoComplete="off"
+      inputMode="text"
+    />
+  )
+}
+
+
+Use the component in the Job form
+
+File: src/features/jobs/JobForm.tsx (or wherever the form lives)
+
+Replace the old location input with:
+
+import LocationInput from '@/components/LocationInput'
+
+const [location, setLocation] = useState('')
+
+<LocationInput
+  value={location}
+  onChange={setLocation}
+  onAddressSelected={(addr) => {
+    // map to your form state fields
+    setValue('street', addr.street)
+    setValue('city', addr.city)
+    setValue('state', addr.state)
+    setValue('postalCode', addr.postalCode)
+    setValue('country', addr.country)
+    setValue('placeId', addr.place_id)
+    setLocation(addr.formatted_address || addr.street)
+  }}
+/>
+
+
+Guardrails
+
+Do not toggle disabled or readOnly during onChange.
+
+Do not switch between value and defaultValue.
+
+Ensure there is no second loader/script anywhere.
+
+Keep debounce off (the native Autocomplete handles it). If you previously added custom debouncing or a predictions service, remove it.
+
+Dependencies
+
+Ensure we have the loader: npm i @googlemaps/js-api-loader.
+
+Acceptance Criteria (all must pass)
+
+You can type more than 2 characters continuously; input never greys out or locks.
+
+Suggestions appear while typing; selecting one fills: street, city, state, postalCode, country, place_id; location field shows formatted address.
+
+No console errors/warnings from React state or i18n or Google Maps.
+
+Works on desktop and mobile (tap selection OK).
+
+Only one Google Maps script is loaded (verified via Network tab: a single maps/api/js request).
+
+Dev (Replit preview) and production both work.
+
+Deliverables
+
+Files edited list with before/after diffs.
+
+Short note of root cause (e.g., double-loading script; readOnly toggled onChange; controlled/uncontrolled mismatch) and how you fixed it.
+
+Screenshot or console log of “Google Maps loaded!” once.
+
+Test Plan (paste results)
+
+Type 10 fast characters into Location (e.g., “123 main st”) — no freeze.
+
+Select a suggestion → verify all fields populated, including place_id.
+
+Blur/focus the input, type again — still fine.
+
+Mobile check (DevTools device mode) — select suggestion works.
+
+Network tab shows one maps/api/js?key=...&libraries=places load.
+
+Safety
+
+Branch name: fix/places-autocomplete.
+
+Do not expose the API key in logs or code; it must come from import.meta.env.VITE_GOOGLE_MAPS_API_KEY.
