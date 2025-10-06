@@ -1,0 +1,146 @@
+TICKET — Add Google Places Autocomplete to Jobs and Clients forms (clean reinstall version)
+
+Title: Implement working Google Places Autocomplete (non-freezing) for Job and Client location fields
+
+Context
+
+Previous cleanup and reinstall of Google Maps API are complete.
+
+Env key: VITE_GOOGLE_MAPS_API_KEY verified working.
+
+We now need to use the new stable LocationInput component for both Jobs and Clients forms.
+
+Goal: When adding or editing a Job or Client, typing into the location field should show suggestions and fill address info on selection.
+
+✅ Implementation
+1. Dependency
+
+Ensure package exists:
+
+npm i @googlemaps/js-api-loader
+
+2. Loader helper
+
+File: src/lib/mapsLoader.ts
+(Keep this if already added; otherwise, create)
+
+import { Loader } from '@googlemaps/js-api-loader';
+
+let loader: Loader | null = null;
+
+export function getMapsLoader() {
+  if (!loader) {
+    const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    loader = new Loader({
+      apiKey: key!,
+      libraries: ['places'],
+    });
+  }
+  return loader;
+}
+
+export async function loadMapsOnce() {
+  const l = getMapsLoader();
+  await l.load();
+  return window.google;
+}
+
+3. LocationInput component
+
+File: src/components/LocationInput.tsx
+
+import { useEffect, useRef } from 'react';
+import { loadMapsOnce } from '@/lib/mapsLoader';
+
+export default function LocationInput({ value, onChange, onAddressSelected, placeholder }: any) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadMapsOnce().then(() => {
+      if (!active || !inputRef.current) return;
+      const autocomplete = new google.maps.places.Autocomplete(inputRef.current!, {
+        fields: ['address_components', 'formatted_address', 'place_id'],
+        types: ['address'],
+      });
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+        const get = (t: string) =>
+          place.address_components.find(c => c.types.includes(t))?.long_name || '';
+        onAddressSelected({
+          street: [get('street_number'), get('route')].filter(Boolean).join(' '),
+          city: get('locality') || get('sublocality') || get('postal_town'),
+          state: get('administrative_area_level_1'),
+          postalCode: get('postal_code'),
+          country: get('country'),
+          formatted_address: place.formatted_address,
+          place_id: place.place_id,
+        });
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder || 'Enter address'}
+      autoComplete="off"
+    />
+  );
+}
+
+4. Add to Jobs Form
+
+File: src/features/jobs/JobForm.tsx
+
+Replace the old location field with:
+
+<LocationInput
+  value={location}
+  onChange={setLocation}
+  onAddressSelected={(addr) => {
+    setValue('street', addr.street);
+    setValue('city', addr.city);
+    setValue('state', addr.state);
+    setValue('postalCode', addr.postalCode);
+    setValue('country', addr.country);
+    setValue('placeId', addr.place_id);
+    setLocation(addr.formatted_address || addr.street);
+  }}
+/>
+
+5. Add to Clients Form
+
+File: src/features/clients/ClientForm.tsx
+
+Add the same component (copy-paste block above), mapping to the appropriate client fields (like clientAddress, clientCity, etc.).
+
+✅ Acceptance Criteria
+
+Typing in either Jobs or Clients Location field shows live address suggestions (no freeze).
+
+Selecting an address fills the proper fields (street, city, state, postalCode, country, place_id).
+
+No console errors or double script loads.
+
+Works in both Replit dev preview and production.
+
+Input remains editable at all times (no grey-out/disabled bug).
+
+Verified by agent with test logs: “Google Places loaded successfully” in console.
+
+Deliverables
+
+Files edited: mapsLoader.ts, LocationInput.tsx, JobForm.tsx, ClientForm.tsx.
+
+Before/after diffs.
+
+Screenshot of working autocomplete on both forms.
+
+Branch: feat/add-places-jobs-clients.

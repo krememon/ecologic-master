@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Loader } from '@googlemaps/js-api-loader'
+import { loadMapsOnce } from '@/lib/mapsLoader'
 import { Input } from "@/components/ui/input";
 
 type Address = {
@@ -34,12 +34,8 @@ export default function LocationInput({
 
   useEffect(() => {
     let mounted = true
-    const loader = new Loader({
-      apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY!,
-      libraries: ['places'],
-    })
 
-    loader.load().then(() => {
+    loadMapsOnce().then(() => {
       if (!mounted || !inputRef.current) return
       // Use session token to reduce costs & improve relevance
       const sessionToken = new google.maps.places.AutocompleteSessionToken()
