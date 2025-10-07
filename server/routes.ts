@@ -145,8 +145,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Get user's role in the company
+      let role: UserRole = "TECHNICIAN"; // Default role
+      if (company) {
+        const userRole = await storage.getUserRole(user.id, company.id);
+        if (userRole) {
+          role = userRole.role;
+        }
+      }
+
       const responseData = {
         ...user,
+        role,
         company: company ? {
           id: company.id,
           name: company.name,
