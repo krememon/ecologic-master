@@ -17,6 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { JobWizard } from "@/components/JobWizard";
+import { useCan } from "@/hooks/useCan";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -246,6 +247,7 @@ function JobForm({
 export default function Jobs() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { role } = useCan();
   const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
@@ -311,8 +313,14 @@ export default function Jobs() {
     enabled: !!selectedJob?.id,
   });
 
-  // Filter jobs based on search query
+  // Filter jobs based on role and search query
   const filteredJobs = jobs.filter(job => {
+    // For TECHNICIAN role, only show jobs assigned to them
+    if (role === 'TECHNICIAN' && job.assignedTo !== user?.id) {
+      return false;
+    }
+    
+    // Then apply search filter
     if (!searchQuery.trim()) return true;
     
     const query = searchQuery.trim().toLowerCase();

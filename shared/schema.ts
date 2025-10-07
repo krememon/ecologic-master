@@ -128,6 +128,7 @@ export const jobs = pgTable("jobs", {
   locationLng: decimal("location_lng", { precision: 11, scale: 8 }),
   locationPlaceId: varchar("location_place_id"),
   notes: text("notes"),
+  assignedTo: varchar("assigned_to").references(() => users.id), // Assigned user/technician
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
