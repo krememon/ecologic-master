@@ -1,0 +1,88 @@
+Context / Bug
+The top “header” area of the Job Insights view is visually cramped (“smooshed”) against the top edge of the card. Elements there include: Job Title, status pill (e.g., active), action icons (edit/duplicate/delete), address link, and created date. On mobile it’s especially tight; on desktop the vertical rhythm doesn’t match the “Job Information” section.
+
+Goal
+Re-layout the header so it has proper breathing room, wraps gracefully, and matches our spacing scale—without redesigning the rest of the screen.
+
+Where to look (likely)
+
+apps/web/src/pages/jobs/[id]/** or JobDetails*.tsx
+
+components/job/JobInsightsHeader.tsx (or similarly named)
+
+Any CSS module or Tailwind classes applied to the header/card container
+
+Implementation requirements
+
+Card padding
+
+Ensure the outer card/container for Job Insights has pt-5 pb-4 px-5 on mobile and sm:pt-6 sm:pb-5 sm:px-6 on ≥sm.
+
+Keep existing border radius and shadow.
+
+Header layout
+
+Wrap the header in a container with flex, flex-wrap, items-start, gap-x-3, gap-y-2.
+
+Put Title + Status pill in a group that can wrap. The status pill should align to the baseline of the first title line on desktop and drop beneath on mobile if space is tight.
+
+Action icons should sit in the header but be allowed to wrap to the next line; don’t force a single line.
+
+Title typography & truncation
+
+Use a comfortable line-height (e.g., leading-tight or equivalent).
+
+Clamp to 2 lines with ellipsis for long titles (no overflow pushing layout).
+
+Ensure at least mt-1 below the top of the card before the title text (combined with card padding this must visually breathe).
+
+Meta row (address + created date)
+
+Place these in a row below the title group with flex, flex-wrap, gap-2, and text-sm.
+
+Ensure there is mt-1.5–mt-2 above this row so it doesn’t collide with the title/status.
+
+Address link should wrap normally; don’t let it push the badge or icons offscreen.
+
+Visual separation
+
+Add a subtle divider below the header: a container with border-t and mt-3 (mobile) / sm:mt-4 (desktop) and pt-3 / sm:pt-4 before “Job Information.”
+
+Do nots
+
+Don’t change copy or iconography.
+
+Don’t use !important.
+
+Don’t hardcode pixel values; use our spacing scale (4/6/8/12/16 etc.).
+
+Don’t increase the overall card max-width.
+
+Acceptance criteria (must all pass)
+
+There is at least 16px (mobile) / 24px (desktop) of apparent breathing room from the top card edge to the title.
+
+Title + status never collide; long titles wrap to 2 lines with ellipsis; badge stays readable.
+
+Address + created date render on a separate row with consistent spacing and wrap on small screens.
+
+Action icons remain accessible; they can wrap but keep 8–12px gap from title/badge.
+
+A subtle divider separates header from “Job Information,” and vertical rhythm matches other cards.
+
+Works at 375px, 768px, 1024px, and 1440px widths.
+
+No layout regressions on other job detail screens.
+
+QA checklist
+
+Test with:
+a) very long job title (50–80 chars),
+b) very long address,
+c) different status labels (short “new”, long “awaiting approval”).
+
+Validate Lighthouse/axe: no new accessibility violations; interactive elements maintain focus ring.
+
+Provide before/after screenshots for mobile (375px) and desktop (1440px).
+
+If the header is composed inside a nested subcomponent, apply the changes there rather than at the page root. Keep the diff minimal and self-contained.

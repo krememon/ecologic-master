@@ -475,92 +475,95 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
-          <DialogHeader className="pt-2 pb-6">
-            {/* Header with Title Left, Status Right */}
-            <div className="flex items-start justify-between">
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-xl font-bold text-left truncate">{selectedJob?.title}</DialogTitle>
-                {/* Client Name just below title */}
-                {(selectedJob?.clientName || selectedJob?.client?.name) && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2" data-testid="text-job-client-header">
-                    Client: {selectedJob.clientName || selectedJob.client?.name}
-                  </p>
-                )}
-              </div>
-              
-              {/* Status Badge Top-Right */}
-              <div className="flex items-center gap-2 ml-4">
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden pt-5 pb-4 px-5 sm:pt-6 sm:pb-5 sm:px-6 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+          <DialogHeader className="space-y-0">
+            {/* Header Container with flex-wrap */}
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+              {/* Title + Status Badge Group */}
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 flex-1 min-w-0">
+                <DialogTitle className="text-xl font-bold leading-tight line-clamp-2 flex-shrink-0 min-w-0 max-w-full">
+                  {selectedJob?.title}
+                </DialogTitle>
                 {selectedJob && (
                   <Badge 
                     variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
-                    className="text-sm px-3 py-1"
+                    className="text-sm px-3 py-1 flex-shrink-0"
                   >
                     {selectedJob.status}
                   </Badge>
                 )}
-                
-                {/* Action Buttons */}
-                <div className="flex items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (selectedJob) {
-                        setEditingJob(selectedJob);
-                        setSelectedJob(null);
-                      }
-                    }}
-                    className="h-8 w-8 p-0"
-                    aria-label="Edit job"
-                    data-testid="button-edit-job"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (selectedJob) {
-                        setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
-                        setSelectedJob(null);
-                      }
-                    }}
-                    className="h-8 w-8 p-0"
-                    aria-label="Delete job"
-                    data-testid="button-delete-job"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+              </div>
+              
+              {/* Action Buttons - can wrap to next line */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedJob) {
+                      setEditingJob(selectedJob);
+                      setSelectedJob(null);
+                    }
+                  }}
+                  className="h-8 w-8 p-0"
+                  aria-label="Edit job"
+                  data-testid="button-edit-job"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedJob) {
+                      setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
+                      setSelectedJob(null);
+                    }
+                  }}
+                  className="h-8 w-8 p-0"
+                  aria-label="Delete job"
+                  data-testid="button-delete-job"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
             
-            {/* Clean Meta Info Row: Address • Created Date */}
-            <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-5">
+            {/* Client Name */}
+            {(selectedJob?.clientName || selectedJob?.client?.name) && (
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1" data-testid="text-job-client-header">
+                Client: {selectedJob.clientName || selectedJob.client?.name}
+              </p>
+            )}
+            
+            {/* Meta Info Row: Address + Created Date */}
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-2">
               {selectedJob?.location && (
                 <a 
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800 truncate"
+                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800 break-words"
                   title={selectedJob.location}
                   data-testid="link-job-location-meta"
                 >
                   <MapPin className="h-4 w-4 flex-shrink-0" />
-                  {selectedJob.location}
+                  <span className="break-all">{selectedJob.location}</span>
                 </a>
               )}
-              {selectedJob?.location && selectedJob?.createdAt && <span>•</span>}
+              {selectedJob?.location && selectedJob?.createdAt && <span className="flex-shrink-0">•</span>}
               {selectedJob?.createdAt && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4 flex-shrink-0" />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Calendar className="h-4 w-4" />
                   <span title={format(new Date(selectedJob.createdAt), 'PPpp')}>
                     Created {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
                   </span>
                 </div>
               )}
             </div>
+            
+            {/* Visual Divider */}
+            <div className="border-t border-slate-200 dark:border-slate-700 mt-3 sm:mt-4 pt-3 sm:pt-4" />
           </DialogHeader>
           {selectedJob && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full">
