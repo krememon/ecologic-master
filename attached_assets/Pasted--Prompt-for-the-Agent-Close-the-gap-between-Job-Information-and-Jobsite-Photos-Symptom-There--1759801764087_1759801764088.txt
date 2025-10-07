@@ -1,0 +1,83 @@
+📌 Prompt for the Agent — “Close the gap between Job Information and Jobsite Photos”
+
+Symptom
+There’s a large empty space between the Job Information card and the Jobsite Photos card in the Job Insights modal.
+
+Root causes to eliminate (any one of these will create that gap):
+
+mt-auto applied to the photos card (pushes it to the bottom in a flex column).
+
+Parent stack using justify-between, h-full, or min-h-* with a child using flex-1.
+
+Double spacing from both a container space-y-* and per-card mt/mb-*.
+
+Hidden spacer elements (<div class="h-8">, py-* wrappers) between the two cards.
+
+Do exactly this
+
+Add test ids (for measurement)
+
+On the Job Info card root: data-testid="job-info-card"
+
+On the Jobsite Photos card root: data-testid="job-photos-card"
+
+On their immediate parent stack: data-testid="job-sections-stack"
+
+Fix the stack container (the column that holds both cards)
+
+Ensure it is not distributing space:
+
+Remove justify-between, content-between, h-full, min-h-*.
+
+Use simple vertical rhythm only:
+
+class="flex flex-col gap-y-3 sm:gap-y-4" or class="space-y-3 sm:space-y-4" (pick one approach and use only one).
+
+Normalize card margins
+
+JobInfoCard: remove any bottom margin (mb-*). Set mb-0.
+
+JobPhotosCard: remove any top margin (mt-*, especially mt-6/8/10) and remove mt-auto if present. Set mt-0.
+
+Delete any spacer <div> between these two cards.
+
+Keep cards compact internally
+
+Inside the Photos card, heading/top padding should be compact: py-4 sm:py-5, heading mb-2 max.
+
+If a grid wrapper is used instead of flex
+
+Ensure there’s no large row-gap (gap-y-8/10/12). Use gap-y-3 sm:gap-y-4.
+
+Acceptance criteria (binary)
+
+The measured vertical distance between the bottom of job-info-card and the top of job-photos-card is 8–16px on mobile and 12–16px on desktop.
+
+No mt-auto, no justify-between, no spacer divs remain between these two sections.
+
+No layout regressions at 375 / 768 / 1440 widths.
+
+QA (must provide)
+
+Computed gap script (run in console and paste value):
+
+const a = document.querySelector('[data-testid="job-info-card"]').getBoundingClientRect().bottom;
+const b = document.querySelector('[data-testid="job-photos-card"]').getBoundingClientRect().top;
+console.log('gap(px)=', Math.round(b - a));
+
+
+Final class lists for:
+
+[data-testid="job-sections-stack"]
+
+[data-testid="job-info-card"]
+
+[data-testid="job-photos-card"]
+
+Before/after screenshots at 375px and 1440px.
+
+Do nots
+
+Don’t re-expand global paddings.
+
+Don’t use negative margins or !important.

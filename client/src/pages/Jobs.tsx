@@ -567,10 +567,10 @@ export default function Jobs() {
             <div className="border-t border-slate-200 dark:border-slate-700 mt-2 pt-2 sm:mt-3 sm:pt-3" />
           </DialogHeader>
           {selectedJob && (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 h-full">
+            <div data-testid="job-sections-stack" className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
               {/* Left Column - Job Information (60%) */}
               <div className="col-span-1 lg:col-span-3">
-                <Card>
+                <Card data-testid="job-info-card" className="mb-0">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Job Information</CardTitle>
                   </CardHeader>
@@ -659,7 +659,7 @@ export default function Jobs() {
               {/* Right Column - Photos (40%) */}
               <div className="col-span-1 lg:col-span-2">
                 {jobPhotos.length === 0 ? (
-                  <Card>
+                  <Card data-testid="job-photos-card" className="mt-0">
                     <CardContent className="flex flex-col items-center py-4 sm:py-5 text-center">
                       <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                         <Camera className="h-5 w-5 text-slate-400" />
@@ -673,7 +673,7 @@ export default function Jobs() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <Card>
+                  <Card data-testid="job-photos-card" className="mt-0">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-lg flex items-center gap-2">
