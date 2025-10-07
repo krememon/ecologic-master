@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
@@ -253,6 +253,9 @@ export default function Jobs() {
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset description expansion when job changes
   useEffect(() => {
@@ -436,6 +439,100 @@ export default function Jobs() {
       });
     },
   });
+
+  // Photo upload mutation
+  const uploadPhotoMutation = useMutation({
+    mutationFn: async ({ jobId, formData }: { jobId: number; formData: FormData }) => {
+      const res = await fetch(`/api/jobs/${jobId}/photos`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Upload failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${selectedJob?.id}/photos`] });
+      setIsUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      toast({
+        title: "Success",
+        description: "Photo uploaded successfully",
+      });
+    },
+    onError: (error: Error) => {
+      console.error('jobphoto:upload:error', { jobId: selectedJob?.id, error });
+      setIsUploading(false);
+      setUploadProgress(0);
+      toast({
+        title: "Error",
+        description: "Upload failed — try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Validate file before upload
+  const validateFile = (file: File): string | null => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/webp'];
+    const maxSize = 15 * 1024 * 1024; // 15 MB
+
+    if (!allowedTypes.includes(file.type)) {
+      return 'Invalid file type. Please upload JPEG, PNG, HEIC, or WebP images.';
+    }
+
+    if (file.size > maxSize) {
+      return 'File too large. Maximum size is 15 MB.';
+    }
+
+    return null;
+  };
+
+  // Handle photo upload
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedJob) return;
+
+    const validationError = validateFile(file);
+    if (validationError) {
+      toast({
+        title: "Error",
+        description: validationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const formData = new FormData();
+    formData.append('photo', file);
+    formData.append('location', '');
+
+    // Simulate progress (since fetch doesn't provide upload progress easily)
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return prev;
+        }
+        return prev + 10;
+      });
+    }, 100);
+
+    uploadPhotoMutation.mutate({ jobId: selectedJob.id, formData }, {
+      onSettled: () => {
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+      }
+    });
+  };
 
   if (isLoading || !isAuthenticated || jobsLoading) {
     return (
@@ -666,9 +763,28 @@ export default function Jobs() {
                       </div>
                       <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No Photos Yet</h4>
                       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Document job progress with photos</p>
-                      <Button size="sm" data-testid="button-upload-photo">
+                      {isUploading && uploadProgress > 0 && (
+                        <div className="w-full mb-3">
+                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                            <span>Uploading photo...</span>
+                            <span>{uploadProgress}%</span>
+                          </div>
+                          <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-600 transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <Button 
+                        size="sm" 
+                        data-testid="button-upload-photo"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                      >
                         <Camera className="h-4 w-4 mr-2" />
-                        Upload First Photo
+                        {isUploading ? 'Uploading...' : 'Upload First Photo'}
                       </Button>
                     </CardContent>
                   </Card>
@@ -710,9 +826,15 @@ export default function Jobs() {
                         
                         {/* Action Buttons */}
                         <div className="flex items-center justify-between pt-2">
-                          <Button size="sm" variant="outline" data-testid="button-upload-photo">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            data-testid="button-upload-photo"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                          >
                             <Camera className="h-4 w-4 mr-2" />
-                            Upload Photo
+                            {isUploading ? 'Uploading...' : 'Upload Photo'}
                           </Button>
                           {jobPhotos.length > 6 && (
                             <button 
@@ -731,6 +853,16 @@ export default function Jobs() {
             </div>
           )}
           </div>
+          {/* Hidden file input for photo upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoUpload}
+            className="hidden"
+            aria-label="Upload photo"
+          />
         </DialogContent>
       </Dialog>
 

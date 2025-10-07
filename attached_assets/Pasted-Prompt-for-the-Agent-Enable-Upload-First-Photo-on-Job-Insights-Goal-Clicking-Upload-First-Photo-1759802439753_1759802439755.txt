@@ -1,0 +1,113 @@
+Prompt for the Agent — Enable “Upload First Photo” on Job Insights
+
+Goal
+Clicking Upload First Photo should open a file picker (or camera on mobile), upload the image to our existing storage, create a DB record tied to the current job, and render the photo immediately in the Jobsite Photos card.
+
+Discovery (do this first)
+
+Search the repo for any existing photo/image upload utilities:
+
+uploadToS3, uploadToSupabase, storageClient, useUpload, ImageUploader, MediaUpload.
+
+Confirm which storage we use (pick the first that exists):
+
+If Supabase: use supabase.storage.from('job-photos').
+
+If S3: use our existing signed-URL flow (usually POST /api/upload-url then PUT).
+
+If both exist, use the one already used elsewhere in the app (keep it consistent).
+
+Data model
+
+Ensure/confirm we have a JobPhoto (or similar) table/model with:
+id, jobId, url, createdAt, createdBy (optional), caption (optional), width, height
+
+If a photos relation already exists on Job, use it; do not invent a new table if one is already present.
+
+UI/UX behavior
+
+Button: Upload First Photo (in Jobsite Photos card)
+
+Opens a hidden <input type="file"> with:
+
+accept="image/*"
+
+capture="environment" for mobile camera support
+
+multiple false for now (we’ll add multi later)
+
+Validate before upload:
+
+Allowed types: image/jpeg, image/png, image/heic, image/webp
+
+Max file size: 15 MB
+
+If invalid → toast error + no request.
+
+Upload flow:
+
+Show inline progress indicator (0–100%) above the button.
+
+Optimistic UI: render a temporary thumbnail “Uploading…” state.
+
+On success: create DB row for JobPhoto with jobId and url.
+
+Invalidate/refetch the job photos query so the new photo appears.
+
+Error handling:
+
+If upload fails, remove optimistic thumbnail and show toast “Upload failed — try again.”
+
+Log with console.error('jobphoto:upload:error', { jobId, error }).
+
+Implementation specifics
+
+Wire the button in the photos card (likely JobPhotosCard.tsx):
+
+Add onClick → trigger hidden input.
+
+Implement a single hook or helper: useJobPhotoUpload(jobId) that:
+
+Accepts a File, validates, uploads, returns { url }.
+
+Handles the storage provider discovered above.
+
+File naming:
+
+jobs/{jobId}/{timestamp}-{random7}.{ext}
+
+Image prep (client):
+
+If the file is > 3000px on the longest edge, downscale client-side to 3000px max to save bandwidth (use existing helper if present; otherwise skip downscale).
+
+Accessibility:
+
+Button remains focusable; show ARIA live region message “Uploading photo…done.”
+
+Security
+
+Only allow users with permission to edit the job to upload.
+
+Strip EXIF GPS data if the existing pipeline does so; otherwise leave as is (don’t add new server deps).
+
+Acceptance criteria (binary)
+
+Clicking Upload First Photo lets me choose/take a photo and I see a progress bar.
+
+After completion, the photo appears in the Jobsite Photos card without page refresh.
+
+A DB record is created tied to the correct jobId.
+
+Large files (e.g., 12 MB JPEG) succeed; invalid type or >15 MB shows a friendly error.
+
+Works on mobile (camera opens) and desktop (file picker opens).
+
+No regressions to header/layout spacing.
+
+QA (paste back)
+
+Storage used (Supabase or S3) and the exact path key for the uploaded file.
+
+The React component file(s) changed and the hook/helper added.
+
+A short Loom or screenshots of: pick → progress → success (photo visible).
