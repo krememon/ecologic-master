@@ -1,0 +1,140 @@
+Goal: Ensure the Schedule renders Mon → Sun with the correct calendar dates, and “Week of …” always shows that week’s Monday. Remove any UTC conversions that cause off-by-one errors (e.g., showing “Thu 7” when Oct 7, 2025 is Tuesday).
+
+Scope / Files (adjust if names differ)
+
+src/pages/schedule/* (e.g., Schedule.tsx or app/schedule/page.tsx)
+
+Any date utilities used by Schedule: src/lib/date.ts / src/utils/date.ts
+
+Component that renders week header + day chips (e.g., ScheduleWeekHeader.tsx)
+
+Changes
+1) Centralize local-time helpers (no UTC)
+
+Create or update a small date util used only by Schedule:
+
+// src/utils/scheduleDate.ts
+export type WeekStart = 0|1|2|3|4|5|6; // 0=Sun, 1=Mon
+
+// Always create dates in LOCAL time (never parse ISO strings directly).
+export function makeLocalDate(y: number, m1: number, d: number) {
+  // m1 is 1-based month
+  const dt = new Date(y, m1 - 1, d);
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+// Given any Date, return Monday-start week anchor in LOCAL time.
+export function startOfWeekLocal(d: Date, weekStartsOn: WeekStart = 1) {
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  const day = x.getDay(); // 0..6 (Sun..Sat) in LOCAL time
+  // shift so week starts on `weekStartsOn` (default Monday=1)
+  const diff = (day - weekStartsOn + 7) % 7;
+  x.setDate(x.getDate() - diff);
+  return x; // local midnight Monday
+}
+
+// Add days (LOCAL)
+export function addDaysLocal(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  x.setHours(0,0,0,0);
+  return x;
+}
+
+// Format helpers using toLocaleDateString (LOCAL)
+export function fmtWeekOf(d: Date) {
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'numeric', day: 'numeric' });
+}
+export function fmtDowShort(d: Date) {
+  return d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(); // MON,TUE...
+}
+export function fmtDayNumber(d: Date) {
+  return d.getDate().toString();
+}
+
+
+Do not use toISOString(), getUTC*, or parsing bare 'YYYY-MM-DD' anywhere in the Schedule. Those coerce to UTC and cause drift.
+
+2) Compute header + chips from one source of truth
+
+In the Schedule header component:
+
+Replace any prebuilt weekday labels (e.g., ["MON","TUE",...]) with values derived from each cell’s actual date.
+
+Derive week like this:
+
+const weekStart = startOfWeekLocal(visibleDate, 1); // Monday
+const days: Date[] = Array.from({ length: 7 }, (_, i) => addDaysLocal(weekStart, i));
+
+
+Render:
+
+Title: Week of {fmtWeekOf(weekStart)}
+
+For each d in days:
+
+Top label: fmtDowShort(d) // MON, TUE, ...
+
+Big number: fmtDayNumber(d) // 4, 5, 6 …
+
+Important: The label and number must both come from the same Date d for that cell.
+
+3) Keep navigation logic, adjust anchor
+
+Previous Week → visibleDate = addDaysLocal(weekStart, -7)
+
+Next Week → visibleDate = addDaysLocal(weekStart, 7)
+
+After updating visibleDate, recompute weekStart with startOfWeekLocal(visibleDate, 1).
+
+4) Day selection behavior (no UTC)
+
+When a user clicks a day chip, use the local Date d for filtering.
+
+If you store dates as strings, generate them from local components:
+const key = \${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getDate().toString().padStart(2,'0')}`;`
+
+Never convert d with toISOString() when building keys.
+
+5) Remove/replace any UTC usage
+
+Search and remove within Schedule code:
+
+getUTCDay, getUTCDate, getUTCMonth, toISOString, parsing 'YYYY-MM-DD' with new Date(str)
+
+If job dates arrive as 'YYYY-MM-DD', re-parse locally:
+
+// safe local parse for 'YYYY-MM-DD'
+function parseYmdLocal(ymd: string) {
+  const [y,m,d] = ymd.split('-').map(Number);
+  return makeLocalDate(y, m, d);
+}
+
+Acceptance Criteria
+
+For the week containing Oct 7, 2025, the chips read:
+
+Mon 6, Tue 7, Wed 8, Thu 9, Fri 10, Sat 11, Sun 12.
+
+“Week of …” shows that Monday’s date (e.g., 10/6/2025 for that week).
+
+Clicking Previous/Next Week keeps labels and numbers aligned.
+
+No off-by-one errors around midnight; refresh does not change alignment.
+
+No usage of UTC conversions remains in Schedule components.
+
+QA Checklist
+
+Verify Oct 7, 2025 renders as Tue 7.
+
+Navigate several weeks backward/forward — days and numbers stay correct.
+
+Click each day chip — daily jobs filter to the correct calendar date.
+
+Hard refresh — same results, no console warnings.
+
+Commit message:
+“Schedule: fix Mon-start, local-time week math; derive labels from cell dates; remove UTC conversions to prevent off-by-one.”

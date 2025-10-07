@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, Brain, Zap, TrendingUp, Edit3, Plus, Trash2, Clock, User, MapPin, AlertTriangle, X, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { startOfWeekLocal, addDaysLocal, fmtWeekOf, fmtDowShort, fmtDayNumber, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
 
 interface ScheduleItem {
   id: string;
@@ -48,7 +49,7 @@ function EditScheduleDialog({ item, isOpen, onClose, onSave, onDelete, isLoading
         subcontractorName: '',
         startTime: '09:00',
         endTime: '17:00',
-        date: new Date().toISOString().split('T')[0],
+        date: dateToYmdLocal(new Date()),
         status: 'scheduled',
         location: '',
         notes: ''
@@ -194,10 +195,8 @@ export default function AIScheduling() {
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [selectedWeek, setSelectedWeek] = useState<string>(() => {
-    const today = new Date();
-    const monday = new Date(today.setDate(today.getDate() - today.getDay() + 1));
-    return monday.toISOString().split('T')[0];
+  const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
+    return startOfWeekLocal(new Date(), 1); // Monday-start week
   });
 
   // Query for actual jobs and subcontractors data
@@ -225,20 +224,8 @@ export default function AIScheduling() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const getWeekDates = (startDate: string) => {
-    const dates = [];
-    const start = new Date(startDate);
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      dates.push(date);
-    }
-    return dates;
-  };
-
-  const weekDates = getWeekDates(selectedWeek);
-  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // Generate week dates from Monday (local time only)
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i));
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -320,14 +307,12 @@ export default function AIScheduling() {
       <Card className="overflow-visible">
         <CardHeader className="p-4 sm:p-5">
           <div className="flex items-center justify-between gap-3 flex-wrap gap-y-2">
-            <CardTitle className="text-base sm:text-lg">Week of {new Date(selectedWeek).toLocaleDateString()}</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Week of {fmtWeekOf(selectedWeek)}</CardTitle>
             <div className="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => {
-                  const prevWeek = new Date(selectedWeek);
-                  prevWeek.setDate(prevWeek.getDate() - 7);
-                  setSelectedWeek(prevWeek.toISOString().split('T')[0]);
+                  setSelectedWeek(addDaysLocal(selectedWeek, -7));
                 }}
                 className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600 active:translate-y-[0.5px] border-0 border-r border-slate-200 dark:border-slate-700 rounded-l-xl text-slate-700 dark:text-slate-300"
                 aria-label="Go to previous week"
@@ -337,9 +322,7 @@ export default function AIScheduling() {
               <button
                 type="button"
                 onClick={() => {
-                  const nextWeek = new Date(selectedWeek);
-                  nextWeek.setDate(nextWeek.getDate() + 7);
-                  setSelectedWeek(nextWeek.toISOString().split('T')[0]);
+                  setSelectedWeek(addDaysLocal(selectedWeek, 7));
                 }}
                 className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600 active:translate-y-[0.5px] border-0 rounded-r-xl text-slate-700 dark:text-slate-300"
                 aria-label="Go to next week"
@@ -351,12 +334,12 @@ export default function AIScheduling() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-7 gap-2">
-            {weekDates.map((date, index) => {
-              const dateStr = date.toISOString().split('T')[0];
+            {weekDates.map((date) => {
+              const dateStr = dateToYmdLocal(date);
               const dayJobs = (jobs as any[])?.filter((job: any) => {
                 if (!job.startDate) return false;
-                const jobDate = new Date(job.startDate).toISOString().split('T')[0];
-                return jobDate === dateStr;
+                const jobDate = parseYmdLocal(job.startDate);
+                return dateToYmdLocal(jobDate) === dateStr;
               }) || [];
               
               return (
@@ -369,10 +352,10 @@ export default function AIScheduling() {
                 >
                   <div className="flex flex-col items-center h-full">
                     <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-2">
-                      {dayNames[index]}
+                      {fmtDowShort(date)}
                     </div>
                     <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
-                      {date.getDate()}
+                      {fmtDayNumber(date)}
                     </div>
                     
                     <div className="flex-1 flex items-center justify-center">
@@ -398,11 +381,11 @@ export default function AIScheduling() {
           <CardContent>
             <div className="text-2xl font-bold">
               {weekDates.reduce((total, date) => {
-                const dateStr = date.toISOString().split('T')[0];
+                const dateStr = dateToYmdLocal(date);
                 const dayJobs = Array.isArray(jobs) ? jobs.filter((job: any) => {
                   if (!job.startDate) return false;
-                  const jobDate = new Date(job.startDate).toISOString().split('T')[0];
-                  return jobDate === dateStr;
+                  const jobDate = parseYmdLocal(job.startDate);
+                  return dateToYmdLocal(jobDate) === dateStr;
                 }) : [];
                 return total + dayJobs.length;
               }, 0)}
