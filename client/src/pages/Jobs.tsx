@@ -475,13 +475,13 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden pt-5 pb-4 px-5 sm:pt-6 sm:pb-5 sm:px-6 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden px-6 pt-6 pb-4 sm:px-7 sm:pt-7 sm:pb-5 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
           <DialogHeader className="space-y-0">
             {/* Header Container with flex-wrap */}
-            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+            <div data-testid="job-header" className="flex flex-wrap items-start gap-x-3 gap-y-2 mb-3 sm:mb-4">
               {/* Title + Status Badge Group */}
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 flex-1 min-w-0">
-                <DialogTitle className="text-xl font-bold leading-tight line-clamp-2 flex-shrink-0 min-w-0 max-w-full">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <DialogTitle className="text-xl font-semibold leading-tight truncate [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
                   {selectedJob?.title}
                 </DialogTitle>
                 {selectedJob && (
@@ -494,8 +494,8 @@ export default function Jobs() {
                 )}
               </div>
               
-              {/* Action Buttons - can wrap to next line */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Action Buttons - safe spacing from corner */}
+              <div className="ml-auto flex items-center gap-2 shrink-0 pr-1 sm:pr-2 pt-0.5">
                 <Button
                   size="sm"
                   variant="outline"
@@ -531,13 +531,13 @@ export default function Jobs() {
             
             {/* Client Name */}
             {(selectedJob?.clientName || selectedJob?.client?.name) && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1" data-testid="text-job-client-header">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1.5" data-testid="text-job-client-header">
                 Client: {selectedJob.clientName || selectedJob.client?.name}
               </p>
             )}
             
             {/* Meta Info Row: Address + Created Date */}
-            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400 mt-1.5">
               {selectedJob?.location && (
                 <a 
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
@@ -551,9 +551,9 @@ export default function Jobs() {
                   <span className="break-all">{selectedJob.location}</span>
                 </a>
               )}
-              {selectedJob?.location && selectedJob?.createdAt && <span className="flex-shrink-0">•</span>}
+              {selectedJob?.location && selectedJob?.createdAt && <span className="opacity-60">•</span>}
               {selectedJob?.createdAt && (
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
                   <span title={format(new Date(selectedJob.createdAt), 'PPpp')}>
                     Created {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}

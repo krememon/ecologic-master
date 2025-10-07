@@ -1,0 +1,102 @@
+Copy–paste to your Agent
+
+Problem (with evidence)
+In Job Insights header, the content is pressed against the top-right corner of the rounded card. The title/badge row and the meta row (address + created date) do not have enough top padding and the action icon cluster is sitting inside the corner radius. See screenshot.
+
+Target files (likely)
+
+components/job/JobInsightsHeader*.tsx (or JobDetailsHeader*.tsx)
+
+The parent card wrapper in apps/web/src/pages/jobs/[id]/*.tsx
+
+Any CSS module / Tailwind classes attached to the header
+
+Concrete changes (do exactly this)
+
+Card inner padding
+
+Ensure the card content wrapper (the div inside the rounded card) has:
+
+class="px-6 pt-6 pb-4 sm:px-7 sm:pt-7 sm:pb-5"
+
+If another padding is applied elsewhere, remove duplicates so these are the effective paddings.
+
+Header container (add data-testid for QA)
+
+Wrap the title/badge/icons in a container:
+
+data-testid="job-header"
+
+class="flex flex-wrap items-start gap-x-3 gap-y-2"
+
+This header container must have margin-bottom to separate from the meta row:
+
+class="mb-3 sm:mb-4"
+
+Title group
+
+Put title + status pill into a group:
+
+class="flex flex-wrap items-center gap-2 min-w-0"
+
+Title should have:
+
+class="text-xl font-semibold leading-tight truncate [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]"
+
+This guarantees 2-line clamp and prevents collision with the badge.
+
+Actions cluster (edit/duplicate/delete) not in the corner
+
+Place actions in their own group:
+
+class="ml-auto flex items-center gap-2 shrink-0"
+
+Remove any absolute positioning or negative margins on these icons.
+
+Add a safe spacing buffer from the rounded corner:
+
+class="pr-1 sm:pr-2 pt-0.5"
+
+Meta row (address + created date)
+
+Render below the header container, not inline with title.
+
+class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground"
+
+Add mt-1.5 if needed to avoid collision with the header.
+
+Keep the separator dot as a small • or use a before pseudo with mx-1 opacity-60.
+
+Visual separator before “Job Information”
+
+Add a divider after the meta row:
+
+Wrapper class="border-t mt-3 sm:mt-4 pt-3 sm:pt-4"
+
+Remove the cause
+
+Search the header and actions for any of the following and delete/replace:
+
+absolute, -mt-*, -mr-*, top-0, right-0, p-0, pt-0, or custom CSS that pins icons to the card corner.
+
+Ensure there isn’t another wrapper applying pt-0 that cancels the new pt-6/pt-7.
+
+Acceptance criteria (binary)
+
+Distance from top card border to top of the title is ≥ 24px on sm+ and ≥ 16px on mobile.
+
+Action icons sit on the same baseline as the title but not in the rounded corner and have ≥ 8px padding from the right edge.
+
+Meta row is on its own line with ≥ 6px vertical gap from the title/badge row.
+
+Header area followed by a subtle divider before “Job Information”.
+
+Works at 375 / 768 / 1024 / 1440 widths with long title/address; no overlap or clipping.
+
+QA / Proof required
+
+Paste the git diff touching the header/card wrapper.
+
+Provide before/after screenshots at 375px and 1440px.
+
+Confirm no absolute-positioning remains in the header/actions and report the final computed padding values for the card content element.
