@@ -262,9 +262,11 @@ export default function Clients() {
     }
 
     const formData = form.getValues();
+    console.info('client:form-data', formData);
     
     // Validate required fields
     if (!formData.name || formData.name.trim() === '') {
+      console.error('client:validation:name-required');
       toast({
         title: "Validation Error",
         description: "Company Name is required",
@@ -277,6 +279,7 @@ export default function Clients() {
     if (formData.email && formData.email.trim() !== '') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
+        console.error('client:validation:email-invalid', formData.email);
         toast({
           title: "Validation Error",
           description: "Please enter a valid email address",

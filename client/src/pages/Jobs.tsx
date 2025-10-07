@@ -476,14 +476,14 @@ export default function Jobs() {
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
         <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
-          <DialogHeader className="pb-4">
+          <DialogHeader className="pt-2 pb-6">
             {/* Header with Title Left, Status Right */}
             <div className="flex items-start justify-between">
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-xl font-bold text-left truncate">{selectedJob?.title}</DialogTitle>
                 {/* Client Name just below title */}
                 {(selectedJob?.clientName || selectedJob?.client?.name) && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1" data-testid="text-job-client-header">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2" data-testid="text-job-client-header">
                     Client: {selectedJob.clientName || selectedJob.client?.name}
                   </p>
                 )}
@@ -537,7 +537,7 @@ export default function Jobs() {
             </div>
             
             {/* Clean Meta Info Row: Address • Created Date */}
-            <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-3">
+            <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-5">
               {selectedJob?.location && (
                 <a 
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
