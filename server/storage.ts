@@ -62,6 +62,8 @@ export interface IStorage {
   
   // Role-based operations
   isBusinessOwner(userId: string, companyId: number): Promise<boolean>;
+  getUserRole(userId: string, companyId: number): Promise<{ role: UserRole } | undefined>;
+  createUserRole(data: { userId: string; companyId: number; role: UserRole }): Promise<void>;
   
   // Payment operations
   getPayments(companyId: number): Promise<any[]>;
@@ -271,6 +273,27 @@ export class DatabaseStorage implements IStorage {
       ));
     
     return membership?.role === 'OWNER' || membership?.role === 'SUPERVISOR';
+  }
+
+  async getUserRole(userId: string, companyId: number): Promise<{ role: UserRole } | undefined> {
+    const [membership] = await db
+      .select({ role: companyMembers.role })
+      .from(companyMembers)
+      .where(and(
+        eq(companyMembers.userId, userId),
+        eq(companyMembers.companyId, companyId)
+      ));
+    
+    return membership ? { role: membership.role } : undefined;
+  }
+
+  async createUserRole(data: { userId: string; companyId: number; role: UserRole }): Promise<void> {
+    await db.insert(companyMembers).values({
+      userId: data.userId,
+      companyId: data.companyId,
+      role: data.role,
+      permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
+    });
   }
   
   async getPayments(companyId: number): Promise<any[]> {

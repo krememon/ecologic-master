@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest } from "@/lib/queryClient";
+import type { UserRole } from "@shared/schema";
 
 export default function Auth() {
   const [formData, setFormData] = useState({
@@ -13,7 +15,8 @@ export default function Auth() {
     password: "",
     confirmPassword: "",
     firstName: "",
-    lastName: ""
+    lastName: "",
+    role: "TECHNICIAN" as UserRole
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -93,7 +96,8 @@ export default function Auth() {
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
-        lastName: formData.lastName
+        lastName: formData.lastName,
+        role: formData.role
       });
 
       if (response.ok) {
@@ -281,6 +285,28 @@ export default function Auth() {
                 <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
               )}
             </div>
+          </div>
+          
+          <div>
+            <Label htmlFor="role">Role</Label>
+            <Select 
+              value={formData.role} 
+              onValueChange={(value: UserRole) => setFormData(prev => ({ ...prev, role: value }))}
+            >
+              <SelectTrigger data-testid="select-role">
+                <SelectValue placeholder="Select your role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="OWNER" data-testid="option-owner">Owner</SelectItem>
+                <SelectItem value="SUPERVISOR" data-testid="option-supervisor">Supervisor</SelectItem>
+                <SelectItem value="TECHNICIAN" data-testid="option-technician">Technician</SelectItem>
+                <SelectItem value="DISPATCHER" data-testid="option-dispatcher">Dispatcher</SelectItem>
+                <SelectItem value="ESTIMATOR" data-testid="option-estimator">Estimator</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.role && (
+              <p className="text-red-500 text-xs mt-1">{errors.role}</p>
+            )}
           </div>
           
           <div>

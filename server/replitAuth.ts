@@ -486,7 +486,7 @@ export async function setupAuth(app: Express) {
   // Email/Password Registration
   app.post("/api/register", async (req, res) => {
     try {
-      const { email, password, firstName, lastName } = req.body;
+      const { email, password, firstName, lastName, role } = req.body;
       
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
@@ -522,6 +522,26 @@ export async function setupAuth(app: Express) {
       };
 
       const user = await storage.createUser(userData);
+      
+      // Create a default company for the user (or join existing if role is not OWNER)
+      let company = await storage.getUserCompany(user.id);
+      if (!company) {
+        company = await storage.createCompany({
+          name: "Your Company",
+          logo: null,
+          primaryColor: "#3B82F6",
+          secondaryColor: "#1E40AF",
+          ownerId: user.id
+        });
+      }
+
+      // Create user role in the company
+      const userRole = role || "TECHNICIAN";
+      await storage.createUserRole({
+        userId: user.id,
+        companyId: company.id,
+        role: userRole
+      });
       
       // Create session
       const sessionUser = {
