@@ -475,10 +475,10 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden px-6 pt-6 pb-4 sm:px-7 sm:pt-7 sm:pb-5 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
           <DialogHeader className="space-y-0">
             {/* Header Container with flex-wrap */}
-            <div data-testid="job-header" className="flex flex-wrap items-start gap-x-3 gap-y-2 mb-3 sm:mb-4">
+            <div data-testid="job-header" className="flex flex-wrap items-start gap-x-2 gap-y-1 mb-2 sm:mb-2">
               {/* Title + Status Badge Group */}
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <DialogTitle className="text-xl font-semibold leading-tight truncate [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
@@ -487,15 +487,15 @@ export default function Jobs() {
                 {selectedJob && (
                   <Badge 
                     variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
-                    className="text-sm px-3 py-1 flex-shrink-0"
+                    className="text-sm px-2.5 py-0.5 flex-shrink-0"
                   >
                     {selectedJob.status}
                   </Badge>
                 )}
               </div>
               
-              {/* Action Buttons - safe spacing from corner */}
-              <div className="ml-auto flex items-center gap-2 shrink-0 pr-1 sm:pr-2 pt-0.5">
+              {/* Action Buttons - compact */}
+              <div className="ml-auto flex items-center gap-1.5 shrink-0 pr-1 sm:pr-2">
                 <Button
                   size="sm"
                   variant="outline"
@@ -505,11 +505,11 @@ export default function Jobs() {
                       setSelectedJob(null);
                     }
                   }}
-                  className="h-8 w-8 p-0"
+                  className="h-6 w-6 p-0.5"
                   aria-label="Edit job"
                   data-testid="button-edit-job"
                 >
-                  <Edit className="h-4 w-4" />
+                  <Edit className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   size="sm"
@@ -520,24 +520,24 @@ export default function Jobs() {
                       setSelectedJob(null);
                     }
                   }}
-                  className="h-8 w-8 p-0"
+                  className="h-6 w-6 p-0.5"
                   aria-label="Delete job"
                   data-testid="button-delete-job"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
             
             {/* Client Name */}
             {(selectedJob?.clientName || selectedJob?.client?.name) && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1.5" data-testid="text-job-client-header">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1" data-testid="text-job-client-header">
                 Client: {selectedJob.clientName || selectedJob.client?.name}
               </p>
             )}
             
             {/* Meta Info Row: Address + Created Date */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500 dark:text-slate-400 mt-1.5">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
               {selectedJob?.location && (
                 <a 
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
@@ -547,14 +547,14 @@ export default function Jobs() {
                   title={selectedJob.location}
                   data-testid="link-job-location-meta"
                 >
-                  <MapPin className="h-4 w-4 flex-shrink-0" />
+                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
                   <span className="break-all">{selectedJob.location}</span>
                 </a>
               )}
               {selectedJob?.location && selectedJob?.createdAt && <span className="opacity-60">•</span>}
               {selectedJob?.createdAt && (
                 <div className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
+                  <Calendar className="h-3.5 w-3.5" />
                   <span title={format(new Date(selectedJob.createdAt), 'PPpp')}>
                     Created {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
                   </span>
@@ -563,7 +563,7 @@ export default function Jobs() {
             </div>
             
             {/* Visual Divider */}
-            <div className="border-t border-slate-200 dark:border-slate-700 mt-3 sm:mt-4 pt-3 sm:pt-4" />
+            <div className="border-t border-slate-200 dark:border-slate-700 mt-2 pt-2 sm:mt-3 sm:pt-3" />
           </DialogHeader>
           {selectedJob && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full">

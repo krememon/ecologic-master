@@ -1,0 +1,72 @@
+Prompt: Make Job Insights header compact and aligned to card spacing
+
+Goal
+Reduce vertical spacing in the Job Insights header so it visually hugs the card and sits closer to Job Information. Use our spacing scale—no pixels. Target a “compact” density.
+
+Exact changes
+
+Card padding (compact)
+
+Change inner padding to:
+px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4
+(was more generous before; this pulls the content in tighter.)
+
+Header row (title + status + actions)
+
+Container classes:
+flex flex-wrap items-start gap-x-2 gap-y-1 mb-2 sm:mb-2
+
+Title: keep leading-tight but reduce size one step if it’s currently text-2xl; use text-xl.
+
+Status pill: use the pill’s sm/compact variant (reduce paddings by 1 step: e.g., from px-3 py-1 → px-2.5 py-0.5, text text-sm).
+
+Actions cluster
+
+Buttons: switch to compact icon buttons (e.g., size 28 → 24).
+Classes example: h-6 w-6 p-0.5 and gap-1.5 between them.
+Keep ml-auto and ensure pr-1 sm:pr-2.
+
+Meta row (address + created date)
+
+Place directly under header with minimal spacing:
+mt-1 text-[13px] sm:text-sm flex flex-wrap items-center gap-x-1.5 gap-y-1
+
+Keep the separator dot but use opacity-60.
+
+Divider before “Job Information”
+
+Tighten divider spacing:
+border-t mt-2 pt-2 sm:mt-3 sm:pt-3
+(This closes the gap to the next card.)
+
+Consistency with lower cards
+
+Ensure the Job Information card uses mt-3 sm:mt-4 from the header block. If it’s larger, reduce to match.
+
+Do nots
+
+No negative margins or absolute positioning.
+
+Don’t exceed the app’s default radius/shadow.
+
+No !important.
+
+Acceptance criteria (binary)
+
+Top-of-card to title spacing is ~16px (mobile) / ~20–24px (sm+).
+
+Space between header row and meta row is ≤ 8px.
+
+Space between meta row and divider is ≤ 8–12px.
+
+Space from divider to “Job Information” heading is ≤ 12–16px and visually matches other job cards.
+
+Icon buttons are visibly smaller but still accessible (focus ring intact).
+
+No wrapping regressions at 375 / 768 / 1440 widths with long titles/addresses.
+
+QA
+
+Post the computed paddings/margins for: card (top/bottom), header mb, meta mt, divider mt/pt.
+
+Before/after screenshots at 375px and 1440px.
