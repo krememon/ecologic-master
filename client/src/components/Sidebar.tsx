@@ -5,17 +5,19 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
+import { useCan } from "@/hooks/useCan";
+import type { Permission } from "@shared/permissions";
 
 const getNavigation = (t: any) => [
-  { name: t('navigation.home'), href: "/", icon: LayoutDashboard },
-  { name: t('navigation.schedule'), href: "/schedule", icon: Brain },
-  { name: t('navigation.jobs'), href: "/jobs", icon: Building2 },
-  { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users },
-  { name: t('navigation.clients'), href: "/clients", icon: UserCheck },
-  { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText },
-  { name: "Payments", href: "/payments", icon: DollarSign },
-  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen },
-  { name: t('navigation.messages'), href: "/messages", icon: MessageSquare },
+  { name: t('navigation.home'), href: "/", icon: LayoutDashboard, permission: null },
+  { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "canViewSchedule" as Permission },
+  { name: t('navigation.jobs'), href: "/jobs", icon: Building2, permission: "canViewJobs" as Permission },
+  { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users, permission: "canManageClients" as Permission },
+  { name: t('navigation.clients'), href: "/clients", icon: UserCheck, permission: "canManageClients" as Permission },
+  { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText, permission: "canManageInvoices" as Permission },
+  { name: "Payments", href: "/payments", icon: DollarSign, permission: "canManageInvoices" as Permission },
+  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "canViewDocuments" as Permission },
+  { name: t('navigation.messages'), href: "/messages", icon: MessageSquare, permission: null },
 ];
 
 interface SidebarProps {
@@ -28,7 +30,13 @@ interface SidebarProps {
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const { t } = useTranslation();
+  const { can } = useCan();
   const navigation = getNavigation(t);
+
+  // Filter navigation items based on permissions
+  const filteredNavigation = navigation.filter(item => 
+    !item.permission || can(item.permission)
+  );
 
   // Debug logging
   useEffect(() => {
@@ -76,7 +84,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-1">
-        {navigation.map((item) => {
+        {filteredNavigation.map((item) => {
           const isActive = location === item.href;
           const Icon = item.icon;
 
@@ -110,7 +118,9 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {user?.firstName} {user?.lastName}
             </p>
-            <p className="text-xs text-slate-600 dark:text-slate-400">Project Manager</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              {user?.role ? user.role.charAt(0) + user.role.slice(1).toLowerCase() : 'User'}
+            </p>
           </div>
         </div>
 
