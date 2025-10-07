@@ -14,10 +14,12 @@ import {
   Calendar, 
   Settings,
   LogOut,
-  Brain
+  Brain,
+  UsersIcon
 } from "lucide-react";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
+import { useCan } from "@/hooks/useCan";
 
 interface MobileNavProps {
   user: any;
@@ -28,6 +30,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
   const { t } = useTranslation();
+  const can = useCan();
 
   const handleToggle = () => {
     console.log('Mobile nav toggle clicked, current state:', isOpen);
@@ -55,6 +58,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
     { href: "/payments", icon: DollarSign, label: "Payments" },
     { href: "/documents", icon: FolderOpen, label: t('navigation.documents') },
     { href: "/messages", icon: MessageSquare, label: t('navigation.messages') },
+    ...(can('users.view') ? [{ href: "/employees", icon: UsersIcon, label: "Employees" }] : []),
     { href: "/settings", icon: Settings, label: t('navigation.settings') },
   ];
 

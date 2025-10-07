@@ -28,6 +28,7 @@ import Approvals from "@/pages/Approvals";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import ChoosePlan from "@/pages/ChoosePlan";
+import Employees from "@/pages/Employees";
 import { withSubscriptionGuard } from "@/hooks/useSubscription";
 
 // Wrap protected components with subscription guard
@@ -41,6 +42,7 @@ const ProtectedDocuments = withSubscriptionGuard(Documents);
 const ProtectedMessages = withSubscriptionGuard(Messages);
 const ProtectedAIScheduling = withSubscriptionGuard(AIScheduling);
 const ProtectedApprovals = withSubscriptionGuard(Approvals);
+const ProtectedEmployees = withSubscriptionGuard(Employees);
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -86,6 +88,7 @@ function Router() {
         <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
         <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
         <Route path="/approvals" component={ProtectedApprovals} />
+        <Route path="/employees" component={ProtectedEmployees} />
         <Route path="/settings" component={Settings} />
         <Route path="/profile" component={Profile} />
         <Route component={NotFound} />

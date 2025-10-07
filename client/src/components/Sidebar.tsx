@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X } from "lucide-react";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ const getNavigation = (t: any) => [
   { name: "Payments", href: "/payments", icon: DollarSign, permission: "invoicing.manage" as Permission },
   { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "documents.manage" as Permission },
   { name: t('navigation.messages'), href: "/messages", icon: MessageSquare, permission: null },
+  { name: "Employees", href: "/employees", icon: UsersIcon, permission: "users.view" as Permission },
 ];
 
 interface SidebarProps {
