@@ -567,7 +567,7 @@ export default function Jobs() {
             <div className="border-t border-slate-200 dark:border-slate-700 mt-2 pt-2 sm:mt-3 sm:pt-3" />
           </DialogHeader>
           {selectedJob && (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4 h-full">
               {/* Left Column - Job Information (60%) */}
               <div className="col-span-1 lg:col-span-3">
                 <Card>
@@ -660,7 +660,7 @@ export default function Jobs() {
               <div className="col-span-1 lg:col-span-2">
                 {jobPhotos.length === 0 ? (
                   <Card>
-                    <CardContent className="flex flex-col items-center py-8 text-center">
+                    <CardContent className="flex flex-col items-center py-4 sm:py-5 text-center">
                       <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                         <Camera className="h-5 w-5 text-slate-400" />
                       </div>
