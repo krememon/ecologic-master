@@ -30,7 +30,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
   const { t } = useTranslation();
-  const can = useCan();
+  const { can } = useCan();
 
   const handleToggle = () => {
     console.log('Mobile nav toggle clicked, current state:', isOpen);
