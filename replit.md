@@ -158,7 +158,15 @@ EcoLogic is a professional construction management platform designed for trade c
   - Updated permissions: org.view (Owner/Supervisor), org.manage (Owner only)
   - Built multi-step registration UI: user info → company setup (Owner) or join with code (Member)
   - SUPERVISOR has org.view (read-only company access), OWNER has org.manage (can rotate code)
-  - Next: Build Settings page with Company section (visible to Owner/Supervisor only)
+- October 7, 2025. Built Employees roster management system:
+  - Added users.view and users.manage permissions (Owner/Supervisor only)
+  - Extended users table with status (active/inactive) and lastLoginAt fields
+  - Created employee management API: GET /api/org/users (list), PATCH /api/org/users/:userId (update)
+  - Built Employees page with search, role/status filters, inline role editing, status toggling
+  - Implemented safety rails: Supervisor cannot modify Owner roles; cannot remove last Owner
+  - Added Employees navigation link (visible only with users.view permission)
+  - All queries scoped to organizationId for multi-tenant isolation
+  - Auto-inclusion: new users joining via invite code automatically appear in roster
 
 ## User Preferences
 
