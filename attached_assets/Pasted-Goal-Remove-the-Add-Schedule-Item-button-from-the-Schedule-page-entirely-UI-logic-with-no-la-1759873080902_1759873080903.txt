@@ -1,0 +1,68 @@
+Goal: Remove the “Add Schedule Item” button from the Schedule page entirely (UI + logic), with no layout gaps and no dead code.
+
+Where to work (typical paths—adjust if different):
+
+src/pages/Schedule.tsx or src/app/schedule/page.tsx
+
+Header components like ScheduleHeader.tsx (if extracted)
+
+Any shared header bar that conditionally renders actions for the Schedule route
+
+Requirements:
+
+Remove the button UI that reads “Add Schedule Item” (and the “+” icon).
+
+Remove any onClick handlers, imports, and unused state related to that button.
+
+Ensure the header text (“Weekly Schedule” + subtitle) reflows left with proper spacing.
+
+No empty space/padding where the button used to be.
+
+Align with other page headers for consistency (match Dashboard header spacing).
+
+No regressions: day/week navigation and stats cards must remain unchanged.
+
+No dangling routes: if the button opened a modal or route (e.g., /jobs/new), do not render or reference it from this page anymore. (We’ll surface job creation elsewhere later.)
+
+Cleanup: remove unused imports (icons, hooks, helpers) and dead CSS/Tailwind classes.
+
+Responsive: verify at 375, 768, 1024, 1440px — header should not have an odd gap on the right.
+
+Accessibility: verify heading structure remains h1 → subtext paragraph; no orphaned aria labels.
+
+Acceptance Criteria:
+
+The “Add Schedule Item” button is not present on the Schedule page on any viewport.
+
+No console warnings/errors about missing handlers or unused vars.
+
+Header block has tight, consistent spacing (matches other pages’ top headers).
+
+Snapshot/visual diff shows only the removal and spacing collapse—nothing else moved.
+
+Tests / QA checklist (manual OK):
+
+Visit /schedule → confirm button is gone.
+
+Click Previous Week / Next Week → still works; counts update.
+
+Toggle through dates → daily list still renders.
+
+Hard refresh → no errors.
+
+Run build → no TypeScript or ESLint errors.
+
+If the header is shared across pages:
+
+Make rendering of the button conditional by route and set it to false for /schedule.
+
+Prefer a clear prop showAction=false or route check so other pages can still use actions.
+
+Deliverables:
+
+Updated component(s) with the button removed.
+
+Any related styles/utilities cleaned up.
+
+Brief summary in the PR/commit message:
+“Remove ‘Add Schedule Item’ from Schedule page; collapse header spacing; clean unused imports; no functional changes to week/day logic.”

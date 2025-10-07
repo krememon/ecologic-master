@@ -296,11 +296,6 @@ export default function AIScheduling() {
     });
   };
 
-  const openEditDialog = (item: ScheduleItem | null = null) => {
-    setSelectedItem(item);
-    setIsDialogOpen(true);
-  };
-
   const closeDialog = () => {
     setIsDialogOpen(false);
     setSelectedItem(null);
@@ -316,15 +311,9 @@ export default function AIScheduling() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Weekly Schedule</h1>
-          <p className="text-slate-600 dark:text-slate-400">Manage your team's weekly schedule</p>
-        </div>
-        <Button onClick={() => openEditDialog()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Schedule Item
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Weekly Schedule</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage your team's weekly schedule</p>
       </div>
 
       {/* Week Navigator */}
