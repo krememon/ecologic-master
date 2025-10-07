@@ -12,8 +12,9 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema } from "../shared/schema";
+import { insertJobSchema, type UserRole } from "../shared/schema";
 import { z } from "zod";
+import { can, type Permission } from "../shared/permissions";
 // Stripe removed
 
 // Subscription plans removed
@@ -62,6 +63,40 @@ async function requireAuthentication(req: any, res: any, next: any) {
     return res.status(401).json({ message: "Unauthorized" });
   }
   next();
+}
+
+// Permission middleware for RBAC
+function requirePerm(permissions: Permission | Permission[]) {
+  return async (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const userId = getUserId(req.user);
+    const company = await storage.getUserCompany(userId);
+    
+    if (!company) {
+      return res.status(403).json({ message: "No company access" });
+    }
+
+    const userRole = await storage.getUserRole(userId, company.id);
+    
+    if (!userRole) {
+      return res.status(403).json({ message: "No role assigned" });
+    }
+
+    const permsToCheck = Array.isArray(permissions) ? permissions : [permissions];
+    const hasPermission = permsToCheck.some(perm => can(userRole.role, perm));
+
+    if (!hasPermission) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
+
+    // Attach role and company to request for use in route handlers
+    req.userRole = userRole.role;
+    req.companyId = company.id;
+    next();
+  };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {

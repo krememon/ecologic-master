@@ -270,7 +270,7 @@ export class DatabaseStorage implements IStorage {
         eq(companyMembers.companyId, companyId)
       ));
     
-    return membership?.role === 'owner';
+    return membership?.role === 'OWNER' || membership?.role === 'SUPERVISOR';
   }
   
   async getPayments(companyId: number): Promise<any[]> {
@@ -291,11 +291,12 @@ export class DatabaseStorage implements IStorage {
   async createCompany(companyData: InsertCompany): Promise<Company> {
     const [company] = await db.insert(companies).values(companyData).returning();
     
-    // Create company membership for the owner
+    // Create company membership for the owner with OWNER role
     await db.insert(companyMembers).values({
       companyId: company.id,
       userId: companyData.ownerId,
-      role: "owner"
+      role: "OWNER",
+      permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
     });
     
     return company;

@@ -33,8 +33,6 @@ import {
   type InsertJobPhoto,
   type UserRole,
   type UserPermissions,
-  defaultOwnerPermissions,
-  defaultWorkerPermissions,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -834,7 +832,8 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Add user as company member
-    const permissions = role === 'owner' ? defaultOwnerPermissions : defaultWorkerPermissions;
+    // Permissions are now determined by role via ROLE_PERMISSIONS map
+    const permissions = { canCreateJobs: false, canManageInvoices: false, canViewSchedule: true };
     await db.insert(companyMembers).values({
       companyId,
       userId: user.id,
@@ -881,13 +880,13 @@ export class DatabaseStorage implements IStorage {
     // Check if user is the company owner
     if (company.ownerId === userId) return true;
     
-    // Check if user has owner role in company members
+    // Check if user has OWNER or SUPERVISOR role in company members
     const [member] = await db
       .select()
       .from(companyMembers)
       .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
     
-    return member?.role === 'owner';
+    return member?.role === 'OWNER' || member?.role === 'SUPERVISOR';
   }
 
   // Job Photos operations
