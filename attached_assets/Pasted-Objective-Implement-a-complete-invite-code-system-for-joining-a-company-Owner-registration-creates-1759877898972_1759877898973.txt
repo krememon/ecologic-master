@@ -1,0 +1,209 @@
+Objective
+Implement a complete invite-code system for joining a company:
+
+Owner registration creates an Organization and a globally unique company code.
+
+Non-owner registration requires entering a valid company code to join.
+
+Settings → Company shows the code to Owner & Supervisor only; Owner can rotate the code.
+
+Non-authorized roles never see the Company section or code in the UI (no “403” page), but backend still guards APIs.
+
+1) Data Model (Prisma/ORM)
+
+Add/verify:
+
+model Organization {
+  id           String   @id @default(cuid())
+  name         String
+  email        String?
+  phone        String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?  @default("US")
+  inviteCode   String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  users        User[]
+}
+
+enum Role {
+  OWNER
+  SUPERVISOR
+  TECHNICIAN
+  DISPATCHER
+  ESTIMATOR
+}
+
+model User {
+  id              String   @id @default(cuid())
+  firstName       String
+  lastName        String
+  email           String   @unique
+  passwordHash    String
+  role            Role
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+
+Migration note: For any existing OWNER without an org, create an Organization and generate a code.
+
+2) Unique Invite Code Utility
+
+src/lib/inviteCode.ts
+
+import { nanoid } from "nanoid";
+
+export function normalizeCode(code: string) {
+  return code.trim().toUpperCase();
+}
+
+export async function generateUniqueInviteCode(db: any) {
+  const make = () => nanoid(10).replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  let code = make();
+  // Ensure global uniqueness
+  while (await db.organization.findUnique({ where: { inviteCode: code } })) {
+    code = make();
+  }
+  return code;
+}
+
+3) API Endpoints
+3.1 Owner Registration (creates org + code)
+
+POST /api/auth/register/owner
+
+Body: { firstName, lastName, email, password, company: { name (required), phone?, email?, addressLine1?, addressLine2?, city?, state?, postalCode?, country? } }
+
+Flow:
+
+Create Organization with provided company info.
+
+Generate unique inviteCode via generateUniqueInviteCode.
+
+Create User role=OWNER linked to org.
+
+Start session; return { orgId }.
+
+Response UX: After redirect, show a banner:
+
+“Company created. Your Company Code is available under Settings → Company Info.”
+
+3.2 Member Registration (join by code)
+
+POST /api/auth/register/member
+
+Body: { firstName, lastName, email, password, role, inviteCode } (role ∈ SUPERVISOR|TECHNICIAN|DISPATCHER|ESTIMATOR)
+
+Normalize inviteCode using normalizeCode.
+
+Look up org by code; if not found → 400 { error: "Invalid or expired company code" }.
+
+Create user with selected role linked to that org.
+
+Start session; return { orgId }.
+
+3.3 Rotate Company Code (Owner-only)
+
+POST /api/org/rotate-invite
+
+Guard: org.manage (OWNER).
+
+Generate a new unique code; update Organization.inviteCode.
+
+Return { inviteCode }.
+
+3.4 Get Company Info (Owner/Supervisor)
+
+GET /api/org/info
+
+Guard: org.view (OWNER or SUPERVISOR).
+
+Return company profile + current inviteCode.
+
+Keep server guards even though UI hides these from other roles.
+
+4) Settings UI (Role-Filtered)
+
+Global rule: All roles keep Settings in the sidebar.
+Inside Settings:
+
+Profile → visible/editable for all roles.
+
+Company → visible only if useCan('org.view') (Owner/Supervisor).
+
+Owner: can edit company info + Rotate Code.
+
+Supervisor: read-only; no rotate.
+
+4.1 Settings Layout / Nav
+
+Build nav from allowed sections only. If user visits /settings, redirect to first allowed link (/settings/profile for non-authorized roles).
+
+Do not render Company tab at all for Tech/Dispatcher/Estimator (no 403 screen).
+
+4.2 Company Page
+
+Read company fields; show Invite Code in a readonly input + Copy button.
+
+Show Rotate Code button if useCan('org.manage') (Owner).
+
+5) Registration UI Flow
+
+Step 1 (Register): choose role + user info.
+
+If role=OWNER → redirect to Company Setup step (company form) → call /api/auth/register/owner.
+
+Else → redirect to Join Company step (invite code field) → call /api/auth/register/member.
+
+Join Company step: inline validation message for invalid code.
+
+6) Security / Hardening
+
+Normalize codes to uppercase on input and compare.
+
+Rate-limit /api/auth/register/member to prevent brute-force.
+
+Optional: Add “Rotate code” confirmation modal.
+
+Optional: Audit events: code viewed/rotated; user joined via code.
+
+7) Acceptance Criteria
+
+Owner registration creates an Organization and a unique invite code.
+
+Non-owner registration requires a valid code and joins correct org.
+
+Settings is visible to all; Company subsection visible only to Owner/Supervisor.
+
+Owner can rotate the code; Supervisor cannot.
+
+Company code never appears in UI for Tech/Dispatcher/Estimator; direct URL to /settings/company results in silent redirect to /settings/profile (no 403 view).
+
+Backend guards return 403 for unauthorized API hits.
+
+Build passes; no TS/ESLint errors.
+
+8) QA Checklist
+
+Register Owner → dashboard banner; Settings → Company shows code; rotate works; old code invalid.
+
+Register Supervisor via code → sees Company (readonly); cannot rotate.
+
+Register Technician/Dispatcher/Estimator via code → Settings shows only Profile; cannot access Company.
+
+Try invalid code → proper inline error on Join step.
+
+Direct API calls by non-authorized roles to org endpoints → 403.
+
+Commit message:
+
+Invite Codes: Owner org creation with unique company code; member join via code;
+Settings—Company visible to Owner/Supervisor (Owner can rotate); 
+UI hides company/code for other roles; backend guards enforced.

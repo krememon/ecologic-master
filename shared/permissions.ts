@@ -1,7 +1,8 @@
 import { UserRole } from "./schema";
 
 export type Permission =
-  | "org.manage"            // company settings, billing, users
+  | "org.view"              // view company info and invite code
+  | "org.manage"            // company settings, billing, users, rotate code
   | "schedule.view"
   | "schedule.manage"       // create/edit/delete calendar items, assign
   | "jobs.view.all"
@@ -21,6 +22,7 @@ export type Permission =
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   OWNER: [
+    "org.view",
     "org.manage",
     "schedule.view",
     "schedule.manage",
@@ -39,7 +41,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "documents.manage",
   ],
   SUPERVISOR: [
-    "org.manage",
+    "org.view",
     "schedule.view",
     "schedule.manage",
     "jobs.view.all",

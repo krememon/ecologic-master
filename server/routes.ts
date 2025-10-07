@@ -135,8 +135,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isBusinessOwner = true; // Default to business owner for new users
         
         if (isBusinessOwner) {
+          const { generateUniqueInviteCode } = await import("@shared/inviteCode");
+          const inviteCode = await generateUniqueInviteCode(async (code) => {
+            const existing = await storage.getCompanyByInviteCode(code);
+            return !!existing;
+          });
+          
           company = await storage.createCompany({
             name: "Your Company",
+            inviteCode,
             logo: null,
             primaryColor: "#3B82F6",
             secondaryColor: "#1E40AF",
@@ -250,20 +257,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user;
       let company = await storage.getUserCompany(user.claims.sub);
       
-      // Add invite code for business owners
       if (company) {
-        const isOwner = await storage.isBusinessOwner(user.claims.sub, company.id);
-        const responseData = {
-          ...company,
-          inviteCode: isOwner ? company.id.toString() : undefined
-        };
-        res.json(responseData);
+        res.json(company);
       } else {
         res.status(404).json({ message: "No company found" });
       }
     } catch (error) {
       console.error("Error fetching company:", error);
       res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  // Get company info with invite code (Owner/Supervisor only)
+  app.get('/api/company/info', requirePerm('org.view'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "No company found" });
+      }
+
+      res.json(company);
+    } catch (error) {
+      console.error("Error fetching company info:", error);
+      res.status(500).json({ message: "Failed to fetch company info" });
+    }
+  });
+
+  // Rotate company invite code (Owner only)
+  app.post('/api/company/rotate-code', requirePerm('org.manage'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "No company found" });
+      }
+
+      // Generate new unique invite code
+      const { generateUniqueInviteCode } = await import("@shared/inviteCode");
+      const newCode = await generateUniqueInviteCode(async (code) => {
+        const existing = await storage.getCompanyByInviteCode(code);
+        return !!existing;
+      });
+
+      // Update company with new code
+      const updatedCompany = await storage.rotateInviteCode(company.id, newCode);
+      
+      res.json({ inviteCode: updatedCompany.inviteCode });
+    } catch (error) {
+      console.error("Error rotating invite code:", error);
+      res.status(500).json({ message: "Failed to rotate invite code" });
     }
   });
 
@@ -276,8 +321,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = req.user;
       const { name, logo, primaryColor, secondaryColor } = req.body;
       
+      const { generateUniqueInviteCode } = await import("@shared/inviteCode");
+      const inviteCode = await generateUniqueInviteCode(async (code) => {
+        const existing = await storage.getCompanyByInviteCode(code);
+        return !!existing;
+      });
+      
       const company = await storage.createCompany({
         name,
+        inviteCode,
         logo,
         primaryColor,
         secondaryColor,

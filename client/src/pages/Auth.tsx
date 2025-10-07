@@ -10,13 +10,26 @@ import { apiRequest } from "@/lib/queryClient";
 import type { UserRole } from "@shared/schema";
 
 export default function Auth() {
+  const [step, setStep] = useState<'user-info' | 'company-setup' | 'join-company'>('user-info');
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     firstName: "",
     lastName: "",
-    role: "TECHNICIAN" as UserRole
+    role: "TECHNICIAN" as UserRole,
+    inviteCode: "",
+    company: {
+      name: "",
+      email: "",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "US"
+    }
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -81,10 +94,31 @@ export default function Auth() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleUserInfoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
+      return;
+    }
+
+    // Proceed to next step based on role
+    if (formData.role === "OWNER") {
+      setStep('company-setup');
+    } else {
+      setStep('join-company');
+    }
+  };
+
+  const handleOwnerRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const newErrors: Record<string, string> = {};
+    if (!formData.company.name.trim()) {
+      newErrors.companyName = "Company name is required";
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
@@ -92,18 +126,18 @@ export default function Auth() {
     setErrors({});
 
     try {
-      const response = await apiRequest("POST", "/api/register", {
+      const response = await apiRequest("POST", "/api/register/owner", {
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        role: formData.role
+        company: formData.company
       });
 
       if (response.ok) {
         toast({
-          title: "Account created successfully!",
-          description: "Welcome to EcoLogic. You're now logged in.",
+          title: "Company created successfully!",
+          description: "Your Company Code is available under Settings → Company Info.",
         });
         window.location.href = "/";
       } else {
@@ -112,7 +146,67 @@ export default function Auth() {
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
         } catch {
-          // If response is not JSON, try to get text
+          try {
+            errorMessage = await response.text();
+          } catch {
+            // Keep default message
+          }
+        }
+
+        if (errorMessage.includes("already exists") || errorMessage.includes("already in use")) {
+          setErrors({ 
+            general: "An account with this email already exists. Try logging in instead.",
+          });
+        } else {
+          setErrors({ general: errorMessage });
+        }
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      setErrors({ general: "An error occurred during registration" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMemberRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const newErrors: Record<string, string> = {};
+    if (!formData.inviteCode.trim()) {
+      newErrors.inviteCode = "Company code is required";
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const response = await apiRequest("POST", "/api/register/member", {
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
+        inviteCode: formData.inviteCode
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Joined company successfully!",
+          description: "Welcome to EcoLogic. You're now logged in.",
+        });
+        window.location.href = "/";
+      } else {
+        let errorMessage = "Failed to join company";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
           try {
             errorMessage = await response.text();
           } catch {
@@ -203,7 +297,11 @@ export default function Auth() {
         </div>
 
         {/* Registration Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={
+          step === 'user-info' ? handleUserInfoSubmit :
+          step === 'company-setup' ? handleOwnerRegistration :
+          handleMemberRegistration
+        } className="space-y-4">
           {/* Duplicate Email Error Message */}
           {errors.general && errors.general.includes("already exists") && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -254,6 +352,9 @@ export default function Auth() {
               </div>
             </div>
           )}
+          {/* Step: User Info */}
+          {step === 'user-info' && (
+            <>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="firstName">First Name</Label>
@@ -402,8 +503,81 @@ export default function Auth() {
             className="w-full bg-blue-500 hover:bg-blue-600 text-white"
             disabled={isLoading}
           >
-            {isLoading ? "Creating Account..." : "Create Account"}
+            {isLoading ? "Creating Account..." : step === 'user-info' ? "Continue" : "Create Account"}
           </Button>
+            </>
+          )}
+
+          {/* Step: Company Setup (Owner) */}
+          {step === 'company-setup' && (
+            <>
+              <div>
+                <Label htmlFor="companyName">Company Name *</Label>
+                <Input
+                  id="companyName"
+                  value={formData.company.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, company: { ...prev.company, name: e.target.value } }))}
+                  className={errors.companyName ? "border-red-500" : ""}
+                  required
+                />
+                {errors.companyName && <p className="text-red-500 text-xs mt-1">{errors.companyName}</p>}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="companyEmail">Email</Label>
+                  <Input
+                    id="companyEmail"
+                    type="email"
+                    value={formData.company.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, company: { ...prev.company, email: e.target.value } }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="companyPhone">Phone</Label>
+                  <Input
+                    id="companyPhone"
+                    value={formData.company.phone}
+                    onChange={(e) => setFormData(prev => ({ ...prev, company: { ...prev.company, phone: e.target.value } }))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <Button type="button" variant="outline" onClick={() => setStep('user-info')}>Back</Button>
+                <Button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" disabled={isLoading}>
+                  {isLoading ? "Creating Company..." : "Create Company"}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Step: Join Company (Member) */}
+          {step === 'join-company' && (
+            <>
+              <div>
+                <Label htmlFor="inviteCode">Company Code *</Label>
+                <Input
+                  id="inviteCode"
+                  name="inviteCode"
+                  value={formData.inviteCode}
+                  onChange={handleInputChange}
+                  className={errors.inviteCode ? "border-red-500" : ""}
+                  placeholder="Enter company invite code"
+                  required
+                />
+                {errors.inviteCode && <p className="text-red-500 text-xs mt-1">{errors.inviteCode}</p>}
+                <p className="text-sm text-gray-500 mt-1">Ask your company owner for the invite code</p>
+              </div>
+
+              <div className="flex gap-4">
+                <Button type="button" variant="outline" onClick={() => setStep('user-info')}>Back</Button>
+                <Button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" disabled={isLoading}>
+                  {isLoading ? "Joining Company..." : "Join Company"}
+                </Button>
+              </div>
+            </>
+          )}
         </form>
 
         {/* Back to Sign In */}

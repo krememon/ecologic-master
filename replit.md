@@ -149,6 +149,16 @@ EcoLogic is a professional construction management platform designed for trade c
   - Today's Jobs displays formatted current date with empty state handling
   - Updated all translation files (en, es, fr, de, it, pt) with "schedule" navigation key
   - Spanish: "Horario", French: "Calendrier", German: "Zeitplan", Italian: "Programma", Portuguese: "Agenda"
+- October 7, 2025. Implemented complete invite code system for company onboarding:
+  - Added inviteCode field (unique, non-null) to companies table with organization fields
+  - Created invite code utilities (generate with nanoid, normalize to uppercase)
+  - Split registration into two flows: Owner (creates company) and Member (joins via code)
+  - New endpoints: POST /api/register/owner, POST /api/register/member
+  - New company endpoints: GET /api/company/info, POST /api/company/rotate-code
+  - Updated permissions: org.view (Owner/Supervisor), org.manage (Owner only)
+  - Built multi-step registration UI: user info → company setup (Owner) or join with code (Member)
+  - SUPERVISOR has org.view (read-only company access), OWNER has org.manage (can rotate code)
+  - Next: Build Settings page with Company section (visible to Owner/Supervisor only)
 
 ## User Preferences
 

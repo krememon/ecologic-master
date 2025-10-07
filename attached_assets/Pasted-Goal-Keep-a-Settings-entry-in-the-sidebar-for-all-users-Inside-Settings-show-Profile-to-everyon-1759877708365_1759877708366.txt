@@ -1,0 +1,133 @@
+Goal:
+
+Keep a Settings entry in the sidebar for all users.
+
+Inside Settings, show Profile to everyone.
+
+Show Company (company info + invite code) only to roles with org.view (Owner, Supervisor).
+
+Non-authorized roles must not see or access the Company section or code.
+
+Server still enforces permissions.
+
+Files (adjust as needed)
+
+src/components/SettingsLayout.tsx (or app/settings/layout.tsx)
+
+src/pages/settings/profile.tsx
+
+src/pages/settings/company.tsx
+
+src/hooks/useCan.ts
+
+API routes used by Company settings (e.g., /api/org/info, /api/org/rotate-invite)
+
+Changes
+1) Build a role-aware Settings nav
+// SettingsLayout.tsx
+import { useCan } from "@/hooks/useCan";
+
+const SettingsLayout = ({ children }) => {
+  const { user } = useSession(); // however you fetch session
+  const canViewCompany = useCan("org.view"); // Owner/Supervisor only
+
+  const links = [
+    { label: "Profile", href: "/settings/profile", key: "profile", always: true },
+    canViewCompany && { label: "Company", href: "/settings/company", key: "company" },
+  ].filter(Boolean);
+
+  // If user lands on /settings, redirect to first accessible tab
+  useEffect(() => {
+    if (router.pathname === "/settings") {
+      router.replace(links[0].href);
+    }
+  }, [router.pathname, links]);
+
+  return (
+    <div className="grid gap-6 md:grid-cols-[220px_1fr]">
+      <aside className="rounded-xl border p-2">
+        <nav className="flex md:flex-col gap-2">
+          {links.map((l) => (
+            <Link key={l.key} href={l.href} className={linkStyles(l.href)}>
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      </aside>
+      <main>{children}</main>
+    </div>
+  );
+};
+export default SettingsLayout;
+
+2) Guard the Company page (render nothing if unauthorized)
+// /settings/company.tsx
+import { useCan } from "@/hooks/useCan";
+export default function CompanySettings() {
+  const canViewCompany = useCan("org.view");
+  if (!canViewCompany) return null; // no 403; completely hidden
+
+  // Owner-only controls:
+  const canManageOrg = useCan("org.manage");
+
+  return (
+    <CompanyCard
+      canEdit={canManageOrg}
+      canRotateCode={canManageOrg}
+      // shows Invite Code readonly field and Copy button
+    />
+  );
+}
+
+3) Profile page remains available to all
+
+Keep /settings/profile editable for every role (name, email, avatar, password).
+
+No organization fields on this page.
+
+4) Sidebar “Settings” entry (global)
+
+Keep Settings in the main app sidebar for all roles; it now routes to /settings/profile by default if Company is not allowed.
+
+5) Backend protection (unchanged, required)
+
+/api/org/info, /api/org/rotate-invite, etc. continue to require:
+
+org.view (GET/info) and
+
+org.manage (PATCH/edit, rotate invite code).
+
+Non-authorized roles get 403 at the API layer (UI never calls these).
+
+Acceptance Criteria
+
+All roles see Settings in sidebar.
+
+Profile tab visible and editable for all roles.
+
+Company tab appears only for Owner/Supervisor.
+
+Visiting /settings:
+
+Owner/Supervisor → lands on Company or last-visited tab.
+
+Others → automatically redirected to /settings/profile.
+
+Company invite code and fields are never rendered for unauthorized roles.
+
+API still rejects unauthorized access.
+
+No console/TS errors.
+
+QA Checklist
+
+Login as TECHNICIAN → Settings shows Profile only; direct URL /settings/company renders nothing (redirects to Profile via layout).
+
+Login as SUPERVISOR → sees Company tab (readonly) and Profile; invite code visible; no rotate button.
+
+Login as OWNER → sees Company (editable + rotate code) and Profile.
+
+Try calling rotate endpoint as Supervisor/Tech → 403 at API.
+
+Commit message:
+“Settings: role-filtered subsections — Profile for all, Company visible to Owner/Supervisor only; default redirect to first allowed tab; backend guards unchanged.”

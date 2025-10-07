@@ -12,6 +12,7 @@ import { db } from "./db";
 import { companies, companyMembers } from "@shared/schema";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { generateUniqueInviteCode, normalizeCode } from "@shared/inviteCode";
 
 const scryptAsync = promisify(scrypt);
 
@@ -485,13 +486,17 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Email/Password Registration
-  app.post("/api/register", async (req, res) => {
+  // Owner Registration (creates company with invite code)
+  app.post("/api/register/owner", async (req, res) => {
     try {
-      const { email, password, firstName, lastName, role } = req.body;
+      const { email, password, firstName, lastName, company: companyData } = req.body;
       
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      if (!companyData?.name) {
+        return res.status(400).json({ message: "Company name is required" });
       }
 
       // Check if user already exists
@@ -500,7 +505,7 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "User with this email already exists" });
       }
 
-      // Hash password using crypto imports
+      // Hash password
       const crypto = await import('crypto');
       const util = await import('util');
       const scryptAsync = util.promisify(crypto.scrypt);
@@ -525,28 +530,37 @@ export async function setupAuth(app: Express) {
 
       const user = await storage.createUser(userData);
       
-      // Create a default company for the user
-      let company = await storage.getUserCompany(user.id);
-      if (!company) {
-        // Create company WITHOUT auto-creating OWNER role
-        const [newCompany] = await db.insert(companies).values({
-          name: "Your Company",
-          logo: null,
-          primaryColor: "#3B82F6",
-          secondaryColor: "#1E40AF",
-          ownerId: user.id
-        }).returning();
-        company = newCompany;
-        
-        // Create user role with the selected role from registration
-        const userRole = role || "TECHNICIAN";
-        await db.insert(companyMembers).values({
-          userId: user.id,
-          companyId: company.id,
-          role: userRole,
-          permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
-        });
-      }
+      // Generate unique invite code
+      const inviteCode = await generateUniqueInviteCode(async (code) => {
+        const existing = await storage.getCompanyByInviteCode(code);
+        return !!existing;
+      });
+
+      // Create company with invite code
+      const [newCompany] = await db.insert(companies).values({
+        name: companyData.name,
+        email: companyData.email || null,
+        phone: companyData.phone || null,
+        addressLine1: companyData.addressLine1 || null,
+        addressLine2: companyData.addressLine2 || null,
+        city: companyData.city || null,
+        state: companyData.state || null,
+        postalCode: companyData.postalCode || null,
+        country: companyData.country || "US",
+        inviteCode,
+        logo: null,
+        primaryColor: "#3B82F6",
+        secondaryColor: "#1E40AF",
+        ownerId: user.id
+      }).returning();
+      
+      // Create OWNER role for user
+      await db.insert(companyMembers).values({
+        userId: user.id,
+        companyId: newCompany.id,
+        role: "OWNER",
+        permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
+      });
       
       // Create session
       const sessionUser = {
@@ -566,18 +580,121 @@ export async function setupAuth(app: Express) {
           return res.status(500).json({ message: "Registration successful but login failed" });
         }
         
-        // Save session explicitly
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("Session save error:", saveErr);
             return res.status(500).json({ message: "Registration successful but session failed" });
           }
-          res.status(201).json({ message: "User registered successfully", user: sessionUser });
+          res.status(201).json({ 
+            message: "Company created successfully", 
+            user: sessionUser,
+            orgId: newCompany.id 
+          });
         });
       });
 
     } catch (error) {
-      console.error("Registration error:", error);
+      console.error("Owner registration error:", error);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // Member Registration (join company with invite code)
+  app.post("/api/register/member", async (req, res) => {
+    try {
+      const { email, password, firstName, lastName, role, inviteCode } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      if (!inviteCode) {
+        return res.status(400).json({ message: "Company code is required" });
+      }
+
+      if (!role || !["SUPERVISOR", "TECHNICIAN", "DISPATCHER", "ESTIMATOR"].includes(role)) {
+        return res.status(400).json({ message: "Valid role is required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User with this email already exists" });
+      }
+
+      // Validate invite code
+      const normalizedCode = normalizeCode(inviteCode);
+      const company = await storage.getCompanyByInviteCode(normalizedCode);
+      if (!company) {
+        return res.status(400).json({ message: "Invalid or expired company code" });
+      }
+
+      // Hash password
+      const crypto = await import('crypto');
+      const util = await import('util');
+      const scryptAsync = util.promisify(crypto.scrypt);
+      
+      const salt = crypto.randomBytes(16).toString("hex");
+      const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+      const hashedPassword = `${buf.toString("hex")}.${salt}`;
+
+      // Create user
+      const userData = {
+        id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        email,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        profileImageUrl: null,
+        password: hashedPassword,
+        emailVerified: false,
+        verificationToken: null,
+        resetPasswordToken: null,
+        resetPasswordExpires: null
+      };
+
+      const user = await storage.createUser(userData);
+      
+      // Create role for user in company
+      await db.insert(companyMembers).values({
+        userId: user.id,
+        companyId: company.id,
+        role: role,
+        permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
+      });
+      
+      // Create session
+      const sessionUser = {
+        claims: {
+          sub: user.id,
+          email: user.email,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          profile_image_url: user.profileImageUrl
+        },
+        provider: 'email'
+      };
+
+      req.login(sessionUser as any, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).json({ message: "Registration successful but login failed" });
+        }
+        
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error:", saveErr);
+            return res.status(500).json({ message: "Registration successful but session failed" });
+          }
+          res.status(201).json({ 
+            message: "Joined company successfully", 
+            user: sessionUser,
+            orgId: company.id 
+          });
+        });
+      });
+
+    } catch (error) {
+      console.error("Member registration error:", error);
       res.status(500).json({ message: "Registration failed" });
     }
   });

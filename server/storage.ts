@@ -31,6 +31,7 @@ import {
   type InsertJobPhoto,
   type ScheduleItem,
   type InsertScheduleItem,
+  type UserRole,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -74,6 +75,8 @@ export interface IStorage {
   getUserCompany(userId: string): Promise<Company | undefined>;
   createCompany(company: InsertCompany): Promise<Company>;
   updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company>;
+  getCompanyByInviteCode(inviteCode: string): Promise<Company | undefined>;
+  rotateInviteCode(companyId: number, newCode: string): Promise<Company>;
   
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
@@ -330,6 +333,23 @@ export class DatabaseStorage implements IStorage {
       .update(companies)
       .set({ ...companyData, updatedAt: new Date() })
       .where(eq(companies.id, id))
+      .returning();
+    return company;
+  }
+
+  async getCompanyByInviteCode(inviteCode: string): Promise<Company | undefined> {
+    const [company] = await db
+      .select()
+      .from(companies)
+      .where(eq(companies.inviteCode, inviteCode));
+    return company;
+  }
+
+  async rotateInviteCode(companyId: number, newCode: string): Promise<Company> {
+    const [company] = await db
+      .update(companies)
+      .set({ inviteCode: newCode, updatedAt: new Date() })
+      .where(eq(companies.id, companyId))
       .returning();
     return company;
   }
