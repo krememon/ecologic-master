@@ -8,6 +8,8 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { db } from "./db";
+import { companies, companyMembers } from "@shared/schema";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 
@@ -523,25 +525,28 @@ export async function setupAuth(app: Express) {
 
       const user = await storage.createUser(userData);
       
-      // Create a default company for the user (or join existing if role is not OWNER)
+      // Create a default company for the user
       let company = await storage.getUserCompany(user.id);
       if (!company) {
-        company = await storage.createCompany({
+        // Create company WITHOUT auto-creating OWNER role
+        const [newCompany] = await db.insert(companies).values({
           name: "Your Company",
           logo: null,
           primaryColor: "#3B82F6",
           secondaryColor: "#1E40AF",
           ownerId: user.id
+        }).returning();
+        company = newCompany;
+        
+        // Create user role with the selected role from registration
+        const userRole = role || "TECHNICIAN";
+        await db.insert(companyMembers).values({
+          userId: user.id,
+          companyId: company.id,
+          role: userRole,
+          permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
         });
       }
-
-      // Create user role in the company
-      const userRole = role || "TECHNICIAN";
-      await storage.createUserRole({
-        userId: user.id,
-        companyId: company.id,
-        role: userRole
-      });
       
       // Create session
       const sessionUser = {

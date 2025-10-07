@@ -10,13 +10,13 @@ import type { Permission } from "@shared/permissions";
 
 const getNavigation = (t: any) => [
   { name: t('navigation.home'), href: "/", icon: LayoutDashboard, permission: null },
-  { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "canViewSchedule" as Permission },
-  { name: t('navigation.jobs'), href: "/jobs", icon: Building2, permission: "canViewJobs" as Permission },
-  { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users, permission: "canManageClients" as Permission },
-  { name: t('navigation.clients'), href: "/clients", icon: UserCheck, permission: "canManageClients" as Permission },
-  { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText, permission: "canManageInvoices" as Permission },
-  { name: "Payments", href: "/payments", icon: DollarSign, permission: "canManageInvoices" as Permission },
-  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "canViewDocuments" as Permission },
+  { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
+  { name: t('navigation.jobs'), href: "/jobs", icon: Building2, permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
+  { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users, permission: "clients.manage" as Permission },
+  { name: t('navigation.clients'), href: "/clients", icon: UserCheck, permission: "clients.manage" as Permission },
+  { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText, permission: "invoicing.manage" as Permission },
+  { name: "Payments", href: "/payments", icon: DollarSign, permission: "invoicing.manage" as Permission },
+  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "documents.manage" as Permission },
   { name: t('navigation.messages'), href: "/messages", icon: MessageSquare, permission: null },
 ];
 
@@ -30,13 +30,18 @@ interface SidebarProps {
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const { t } = useTranslation();
-  const { can } = useCan();
+  const { can, canAny } = useCan();
   const navigation = getNavigation(t);
 
   // Filter navigation items based on permissions
-  const filteredNavigation = navigation.filter(item => 
-    !item.permission || can(item.permission)
-  );
+  const filteredNavigation = navigation.filter(item => {
+    // If item has permissionAny, check if user has any of those permissions
+    if ((item as any).permissionAny) {
+      return canAny((item as any).permissionAny);
+    }
+    // Otherwise, check the single permission (or allow if no permission required)
+    return !item.permission || can(item.permission);
+  });
 
   // Debug logging
   useEffect(() => {
