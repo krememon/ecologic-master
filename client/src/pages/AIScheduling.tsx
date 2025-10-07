@@ -317,33 +317,35 @@ export default function AIScheduling() {
       </div>
 
       {/* Week Navigator */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Week of {new Date(selectedWeek).toLocaleDateString()}</CardTitle>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
+      <Card className="overflow-visible">
+        <CardHeader className="p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap gap-y-2">
+            <CardTitle className="text-base sm:text-lg">Week of {new Date(selectedWeek).toLocaleDateString()}</CardTitle>
+            <div className="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
                 onClick={() => {
                   const prevWeek = new Date(selectedWeek);
                   prevWeek.setDate(prevWeek.getDate() - 7);
                   setSelectedWeek(prevWeek.toISOString().split('T')[0]);
                 }}
+                className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600 active:translate-y-[0.5px] border-0 border-r border-slate-200 dark:border-slate-700 rounded-l-xl text-slate-700 dark:text-slate-300"
+                aria-label="Go to previous week"
               >
                 Previous Week
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   const nextWeek = new Date(selectedWeek);
                   nextWeek.setDate(nextWeek.getDate() + 7);
                   setSelectedWeek(nextWeek.toISOString().split('T')[0]);
                 }}
+                className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600 active:translate-y-[0.5px] border-0 rounded-r-xl text-slate-700 dark:text-slate-300"
+                aria-label="Go to next week"
               >
                 Next Week
-              </Button>
+              </button>
             </div>
           </div>
         </CardHeader>

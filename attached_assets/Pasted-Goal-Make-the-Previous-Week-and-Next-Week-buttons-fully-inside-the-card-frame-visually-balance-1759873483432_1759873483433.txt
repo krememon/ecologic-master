@@ -1,0 +1,74 @@
+Goal: Make the “Previous Week” and “Next Week” buttons fully inside the card frame, visually balanced, and responsive, while preserving their existing click handlers.
+
+Where (adjust names if different):
+
+src/pages/schedule/* (e.g., Schedule.tsx or app/schedule/page.tsx)
+
+Header/card component that renders: Week of {date} and the two buttons (often ScheduleWeekHeader.tsx)
+
+Changes:
+
+Wrap controls in a proper header bar
+
+Container: div with flex items-center justify-between gap-3 flex-wrap
+
+Left block: “Week of {formattedWeekStart}”
+
+Right block: a ButtonGroup: div with inline-flex rounded-xl overflow-hidden border border-slate-200
+
+This ensures the buttons appear as a single, tight group fully within the card.
+
+Button styles (keep handlers as-is)
+
+Both buttons: button type="button" className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 active:translate-y-[0.5px] border-0 first:border-r first:border-slate-200"
+
+First button gets rounded-l-xl, second gets rounded-r-xl.
+
+Keep the existing onClick={goToPrevWeek} / onClick={goToNextWeek} (or equivalent).
+
+Card container hygiene
+
+Ensure the parent card uses p-4 sm:p-5 and does not clip content: overflow-visible.
+
+Remove any negative margins or absolute positioning that previously pushed the buttons outside the frame.
+
+Responsive rules
+
+On narrow widths, allow the group to wrap under the title:
+
+Add flex-wrap on the header container and gap-y-2 so it stacks cleanly.
+
+Optional micro-adjust: on mobile, use text-base for the “Week of” heading and keep buttons at h-9.
+
+Accessibility
+
+Add aria-label="Go to previous week" and aria-label="Go to next week" to the buttons.
+
+Preserve existing keyboard behavior (Enter/Space triggers).
+
+Acceptance Criteria:
+
+Buttons are fully inside the card with even padding on all sides (no clipping).
+
+Buttons are grouped with a shared border and no extra outer gap; look “tight/clean.”
+
+Week navigation still works (handlers unchanged).
+
+Mobile (≤375px): title and button group wrap without overlap; tap targets remain ≥36px height.
+
+No console warnings; no unused imports.
+
+QA Checklist:
+
+Desktop 1440/1024: header shows title left, button group right, aligned vertically.
+
+Tablet 768: spacing remains balanced; no clipping.
+
+Mobile 375: buttons wrap below title; tap triggers correct week changes.
+
+Click both buttons multiple times: date chips + Weekly Jobs counts update correctly.
+
+Hard refresh: layout persists; no style regressions on other cards.
+
+Commit message:
+“Schedule: group ‘Previous/Next Week’ into inline ButtonGroup, fix clipping, tighten spacing, preserve handlers.”
