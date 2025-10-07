@@ -1,0 +1,56 @@
+Prompt: Shift Job Insights modal content down (keep X fixed)
+
+Problem
+In the Job Insights dialog, the header/title/badge/meta and the first divider are too close to the rounded top edge. The close (X) should remain in the top-right corner, but all other content needs more top offset.
+
+Where to look
+
+Modal/dialog component that wraps Job Insights (e.g., DialogContent, SheetContent, or JobDetailsModal.tsx)
+
+The scroll/content area inside the dialog (often DialogContent > div[role="document"] > .content or a ScrollArea)
+
+Do exactly this
+
+Anchor the close button (X)
+
+Ensure the X is absolutely positioned relative to the dialog container and removed from normal flow:
+absolute top-3 right-3 sm:top-4 sm:right-4 z-10
+
+Keep its hit area at least h-8 w-8 for accessibility.
+
+Add top padding to the dialog’s content area
+
+Apply padding only to the content/scroll area, not the whole dialog, so the X stays put.
+Use: pt-6 sm:pt-8 on the content wrapper that contains the Job Insights header.
+
+If there is already padding on the inner card, keep it, but this new content-level padding must be the first offset from the rounded top of the modal.
+
+Remove hacks that fight the padding
+
+Search for and remove on the header or card: -mt-*, mt-0, pt-0, absolute top-0, or any style that pulls the header up into the corner.
+
+Keep the rest compact
+
+Retain the compact spacing we just set for the header (don’t re-expand). We’re only adding top breathing room relative to the modal.
+
+Acceptance criteria (binary)
+
+On 375/768/1440 widths, the distance from the modal’s top rounded edge to the job title baseline increases by ~8–16px (target visually ~24–28px total breathing room).
+
+The X remains at the same location: top-right corner with top-3/4 offsets; it does not move down with the content.
+
+No overlap between the X and any header element at any width.
+
+No new horizontal scrollbars; focus trap and scroll behavior unchanged.
+
+QA / Proof
+
+Report which element received pt-6 sm:pt-8 (give selector/JSX path).
+
+Confirm computed styles:
+
+dialog content padding-top value at 375px and 1440px,
+
+close button top/right values.
+
+Attach before/after screenshots (375px & 1440px).

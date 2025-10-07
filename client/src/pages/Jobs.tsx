@@ -475,7 +475,8 @@ export default function Jobs() {
 
       {/* Job Detail Modal with Photo Feed */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden px-5 pt-5 pb-3 sm:px-6 sm:pt-6 sm:pb-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden px-5 pb-3 sm:px-6 sm:pb-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+          <div className="pt-6 sm:pt-8">
           <DialogHeader className="space-y-0">
             {/* Header Container with flex-wrap */}
             <div data-testid="job-header" className="flex flex-wrap items-start gap-x-2 gap-y-1 mb-2 sm:mb-2">
@@ -729,6 +730,7 @@ export default function Jobs() {
               </div>
             </div>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 
