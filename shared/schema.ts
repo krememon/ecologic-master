@@ -10,10 +10,14 @@ import {
   decimal,
   boolean,
   date,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Role enum for RBAC
+export const roleEnum = pgEnum("role", ["OWNER", "SUPERVISOR", "TECHNICIAN", "DISPATCHER", "ESTIMATOR"]);
 
 // Session storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
@@ -68,7 +72,7 @@ export const companyMembers = pgTable("company_members", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   userId: varchar("user_id").notNull().references(() => users.id),
-  role: varchar("role").notNull().default("worker"), // owner, worker
+  role: roleEnum("role").notNull().default("TECHNICIAN"),
   permissions: jsonb("permissions").default('{"canCreateJobs": false, "canManageInvoices": false, "canViewSchedule": true}'),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -504,7 +508,7 @@ export const insertCompanyMemberSchema = createInsertSchema(companyMembers).omit
 });
 
 // Type definitions for role-based system
-export type UserRole = 'owner' | 'worker';
+export type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
 
 export interface UserPermissions {
   canCreateJobs: boolean;
@@ -514,24 +518,6 @@ export interface UserPermissions {
   canManageSubcontractors: boolean;
   canViewReports: boolean;
 }
-
-export const defaultOwnerPermissions: UserPermissions = {
-  canCreateJobs: true,
-  canManageInvoices: true,
-  canViewSchedule: true,
-  canManageClients: true,
-  canManageSubcontractors: true,
-  canViewReports: true,
-};
-
-export const defaultWorkerPermissions: UserPermissions = {
-  canCreateJobs: false,
-  canManageInvoices: false,
-  canViewSchedule: true,
-  canManageClients: false,
-  canManageSubcontractors: false,
-  canViewReports: false,
-};
 
 export const insertSubcontractorSchema = createInsertSchema(subcontractors).omit({
   id: true,

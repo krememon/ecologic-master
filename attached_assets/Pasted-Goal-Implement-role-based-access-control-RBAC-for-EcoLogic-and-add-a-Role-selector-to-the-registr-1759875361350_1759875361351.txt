@@ -1,0 +1,231 @@
+Goal: Implement role-based access control (RBAC) for EcoLogic and add a Role selector to the registration page. Enforce permissions in the API and UI (hide/disable where needed). Keep existing auth/session intact.
+
+Roles (exact)
+
+OWNER — full access to everything.
+
+SUPERVISOR — same permissions as OWNER (title difference only).
+
+TECHNICIAN (Field Worker) — can view assigned jobs, update job status, upload photos, mark tasks complete.
+
+DISPATCHER (Scheduler) — manages calendar, routes, appointment assignments.
+
+ESTIMATOR (Sales Rep) — creates estimates, sends quotes, converts leads into jobs.
+
+Note: OWNER and SUPERVISOR are equivalent in capability.
+
+1) Data model & migration
+
+Files: prisma/schema (or your ORM), server migrations.
+
+Add Role enum:
+
+OWNER | SUPERVISOR | TECHNICIAN | DISPATCHER | ESTIMATOR
+
+
+Add role field on User (enum, required, default TECHNICIAN if not provided).
+
+If multi-tenant: ensure user.organizationId exists (no change in this task).
+
+Migration: backfill existing users → OWNER (or keep current admins as OWNER).
+
+Acceptance: DB has enum + column; existing users mapped; app compiles.
+
+2) Permissions map (single source of truth)
+
+File: src/permissions/roles.ts
+
+Create a permission list and role → permissions map:
+
+export type Perm =
+  | 'org.manage'            // company settings, billing, users
+  | 'schedule.view'
+  | 'schedule.manage'       // create/edit/delete calendar items, assign
+  | 'jobs.view.all'
+  | 'jobs.view.assigned'
+  | 'jobs.create'
+  | 'jobs.edit'
+  | 'jobs.status.update'
+  | 'jobs.photos.upload'
+  | 'jobs.tasks.complete'
+  | 'routes.manage'
+  | 'estimates.create'
+  | 'estimates.send'
+  | 'leads.convert'
+  | 'clients.manage'
+  | 'invoicing.manage'
+  | 'documents.manage';
+
+export const ROLE_PERMS: Record<'OWNER'|'SUPERVISOR'|'TECHNICIAN'|'DISPATCHER'|'ESTIMATOR', Perm[]> = {
+  OWNER: ['org.manage','schedule.view','schedule.manage','jobs.view.all','jobs.create','jobs.edit','jobs.status.update','jobs.photos.upload','jobs.tasks.complete','routes.manage','estimates.create','estimates.send','leads.convert','clients.manage','invoicing.manage','documents.manage'],
+  SUPERVISOR: /* identical to OWNER */ ['org.manage','schedule.view','schedule.manage','jobs.view.all','jobs.create','jobs.edit','jobs.status.update','jobs.photos.upload','jobs.tasks.complete','routes.manage','estimates.create','estimates.send','leads.convert','clients.manage','invoicing.manage','documents.manage'],
+  TECHNICIAN: ['jobs.view.assigned','jobs.status.update','jobs.photos.upload','jobs.tasks.complete','schedule.view'],
+  DISPATCHER: ['schedule.view','schedule.manage','routes.manage','jobs.view.all','jobs.edit','jobs.create'],
+  ESTIMATOR: ['estimates.create','estimates.send','leads.convert','clients.manage','jobs.view.all','schedule.view'],
+};
+
+
+Utility:
+
+export function can(userRole: keyof typeof ROLE_PERMS, p: Perm) {
+  return ROLE_PERMS[userRole]?.includes(p);
+}
+
+3) API guards (server)
+
+Files: API route handlers (jobs, schedule, estimates, org/users).
+
+Create middleware requirePerm(perms: Perm | Perm[]) that:
+
+reads session user,
+
+checks can(user.role, perm),
+
+returns 403 if unauthorized.
+
+Apply guards:
+
+Jobs
+
+GET /jobs → if user has jobs.view.all return all; else if jobs.view.assigned return only jobs assigned to user.id.
+
+POST /jobs → jobs.create
+
+PATCH /jobs/:id → jobs.edit (but allow TECHNICIAN to PATCH limited fields if jobs.status.update or jobs.tasks.complete).
+
+POST /jobs/:id/photos → jobs.photos.upload.
+
+Schedule
+
+GET /schedule → schedule.view
+
+POST/PATCH/DELETE schedule items → schedule.manage.
+
+Routes → routes.manage
+
+Estimates/Leads
+
+POST /estimates → estimates.create
+
+POST /estimates/:id/send → estimates.send
+
+POST /leads/:id/convert → leads.convert
+
+Org/Settings/Users → org.manage
+
+Acceptance: Unauthorized calls return 403; authorized paths work.
+
+4) UI gates (client)
+
+Files: layout/sidebar, pages, components.
+
+Add useCan(perm) hook that reads user.role from session and mirrors the server can logic.
+
+Sidebar visibility:
+
+Hide menu items the role can’t access (e.g., TECHNICIAN sees Home, Schedule(view), Jobs(Assigned), Documents(upload if allowed), Messages; no Settings, Invoicing, Clients unless permitted).
+
+Action controls:
+
+Hide/disable buttons the role can’t use (e.g., no “New Job” for TECHNICIAN; dispatch tools visible for DISPATCHER; estimate buttons for ESTIMATOR).
+
+Safety: even if hidden in UI, server still enforces via middleware.
+
+5) Registration: add “Role” selector
+
+Files: src/pages/auth/Register.tsx (or equivalent).
+
+Add Role dropdown (required). Options:
+
+Owner
+
+Supervisor
+
+Technician / Field Worker
+
+Dispatcher / Scheduler
+
+Estimator / Sales Rep
+
+Submit payload includes role.
+
+On success, persist in session/JWT.
+
+Validation rules:
+
+Role is required.
+
+(Optional safeguard) If first user in an organization → force OWNER and hide selector; otherwise show selector. For now, follow business requirement: user must select a role.
+
+Copy/help text: “Choose how you’ll use EcoLogic. You can change this later if permitted.”
+
+6) Jobs page behavior for TECHNICIAN
+
+Default scope = Assigned to me.
+
+Can:
+
+update status (e.g., Scheduled → In Progress → Complete),
+
+upload photos (job gallery),
+
+mark checklist/tasks complete.
+
+Cannot:
+
+create new jobs,
+
+edit core job details,
+
+change schedule assignments.
+
+7) Dispatcher behavior (Schedule page)
+
+Full schedule.manage: create/update/delete schedule items, assign crews, adjust routes, drag-drop reschedule.
+
+Access to jobs.view.all for planning.
+
+8) Estimator behavior
+
+Estimates module unlocked: create estimate, send quote (email/PDF), convert lead → job.
+
+Read-only jobs list OK for context (no edit).
+
+9) QA checklist
+
+Register each role; confirm redirected session shows correct sidebar and allowed actions.
+
+API:
+
+TECHNICIAN cannot POST /jobs (403); can PATCH /jobs/:id status (200).
+
+DISPATCHER can POST/PATCH schedule (200).
+
+ESTIMATOR can POST /estimates and send; cannot /org settings (403).
+
+SUPERVISOR behaves like OWNER everywhere.
+
+UI:
+
+Hidden items truly disappear; no dead links.
+
+Attempt deep link to forbidden page → see “Not authorized” page (and 403 on API).
+
+Existing users retain OWNER access after migration.
+
+Acceptance Criteria:
+
+Role column exists and is set on user records.
+
+Registration form includes required Role dropdown; value persists.
+
+Sidebar and pages reflect role permissions.
+
+Server enforces permissions for all protected routes.
+
+Technician sees only assigned jobs and allowed actions.
+
+No TypeScript/ESLint errors; build passes.
+
+Commit message:
+“RBAC: add roles (Owner/Supervisor/Technician/Dispatcher/Estimator), server permission guards, UI gating, and Role selection on registration; migrate existing users to OWNER.”
