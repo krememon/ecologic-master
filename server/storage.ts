@@ -150,6 +150,11 @@ export interface IStorage {
   // Approval History operations
   createApprovalHistory(history: InsertApprovalHistory): Promise<ApprovalHistory>;
   getApprovalHistory(workflowId: number): Promise<ApprovalHistory[]>;
+  
+  // Employee management operations
+  getOrgUsers(companyId: number, params?: { search?: string; role?: UserRole; status?: string; limit?: number; offset?: number }): Promise<{ users: User[]; total: number }>;
+  updateUserRole(userId: string, companyId: number, newRole: UserRole, currentUserRole: UserRole): Promise<User>;
+  updateUserStatus(userId: string, companyId: number, status: 'active' | 'inactive', currentUserRole: UserRole): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -834,6 +839,166 @@ export class DatabaseStorage implements IStorage {
       .from(approvalHistory)
       .where(eq(approvalHistory.workflowId, workflowId))
       .orderBy(desc(approvalHistory.timestamp));
+  }
+
+  // Employee management operations
+  async getOrgUsers(
+    companyId: number,
+    params?: { search?: string; role?: UserRole; status?: string; limit?: number; offset?: number }
+  ): Promise<{ users: User[]; total: number }> {
+    const { search, role, status, limit = 50, offset = 0 } = params || {};
+
+    // Build query conditions
+    const conditions = [eq(companyMembers.companyId, companyId)];
+
+    if (role) {
+      conditions.push(eq(companyMembers.role, role));
+    }
+
+    if (status) {
+      conditions.push(eq(users.status, status));
+    }
+
+    // Get users with their roles in the company
+    let query = db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profileImageUrl: users.profileImageUrl,
+        status: users.status,
+        lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
+        role: companyMembers.role,
+      })
+      .from(users)
+      .innerJoin(companyMembers, eq(users.id, companyMembers.userId))
+      .where(and(...conditions))
+      .orderBy(desc(users.createdAt));
+
+    // Apply search filter if provided
+    if (search) {
+      const searchPattern = `%${search.toLowerCase()}%`;
+      query = query.where(
+        sql`LOWER(${users.firstName}) LIKE ${searchPattern} OR LOWER(${users.lastName}) LIKE ${searchPattern} OR LOWER(${users.email}) LIKE ${searchPattern}`
+      );
+    }
+
+    // Get total count
+    const countQuery = db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .innerJoin(companyMembers, eq(users.id, companyMembers.userId))
+      .where(and(...conditions));
+
+    const [{ count: total }] = await countQuery;
+
+    // Get paginated results
+    const userResults = await query.limit(limit).offset(offset);
+
+    return {
+      users: userResults as any,
+      total: Number(total),
+    };
+  }
+
+  async updateUserRole(
+    userId: string,
+    companyId: number,
+    newRole: UserRole,
+    currentUserRole: UserRole
+  ): Promise<User> {
+    // Get target user's current role
+    const [membership] = await db
+      .select()
+      .from(companyMembers)
+      .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
+
+    if (!membership) {
+      throw new Error("User not found in this organization");
+    }
+
+    // Safety: Supervisor cannot modify Owner roles
+    if (currentUserRole === "SUPERVISOR" && membership.role === "OWNER") {
+      throw new Error("Supervisors cannot modify Owner roles");
+    }
+
+    // Safety: If demoting an Owner, ensure at least one Owner remains
+    if (membership.role === "OWNER" && newRole !== "OWNER") {
+      if (currentUserRole !== "OWNER") {
+        throw new Error("Only Owners can change other Owners' roles");
+      }
+
+      const [{ count: ownerCount }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(companyMembers)
+        .where(and(eq(companyMembers.companyId, companyId), eq(companyMembers.role, "OWNER")));
+
+      if (Number(ownerCount) <= 1) {
+        throw new Error("Cannot remove the last Owner from the organization");
+      }
+    }
+
+    // Update the role
+    await db
+      .update(companyMembers)
+      .set({ role: newRole, updatedAt: new Date() })
+      .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
+
+    // Return updated user
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user;
+  }
+
+  async updateUserStatus(
+    userId: string,
+    companyId: number,
+    status: 'active' | 'inactive',
+    currentUserRole: UserRole
+  ): Promise<User> {
+    // Get target user's current role
+    const [membership] = await db
+      .select()
+      .from(companyMembers)
+      .where(and(eq(companyMembers.userId, userId), eq(companyMembers.companyId, companyId)));
+
+    if (!membership) {
+      throw new Error("User not found in this organization");
+    }
+
+    // Safety: Supervisor cannot deactivate Owners
+    if (currentUserRole === "SUPERVISOR" && membership.role === "OWNER") {
+      throw new Error("Supervisors cannot deactivate Owners");
+    }
+
+    // Safety: Cannot deactivate the last Owner
+    if (membership.role === "OWNER" && status === "inactive") {
+      const [{ count: activeOwnerCount }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(companyMembers)
+        .innerJoin(users, eq(companyMembers.userId, users.id))
+        .where(
+          and(
+            eq(companyMembers.companyId, companyId),
+            eq(companyMembers.role, "OWNER"),
+            eq(users.status, "active")
+          )
+        );
+
+      if (Number(activeOwnerCount) <= 1) {
+        throw new Error("Cannot deactivate the last active Owner");
+      }
+    }
+
+    // Update the status
+    const [user] = await db
+      .update(users)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+
+    return user;
   }
 }
 

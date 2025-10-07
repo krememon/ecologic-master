@@ -46,6 +46,8 @@ export const users = pgTable("users", {
   resetPasswordExpires: timestamp("reset_password_expires"),
   googleLinked: boolean("google_linked").default(false), // Track Google account linking
   stripeCustomerId: varchar("stripe_customer_id"),
+  status: varchar("status").default("active").notNull(), // 'active' | 'inactive'
+  lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

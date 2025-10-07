@@ -1,0 +1,184 @@
+One-Shot Agent Prompt — Employees Tab (Roster + Role Management)
+
+Objective
+Add an Employees tab visible only to Owner and Supervisor where they can:
+
+View all users in their organization (auto-populated on signup via invite code).
+
+Change an employee’s role (Owner, Supervisor, Technician, Dispatcher, Estimator).
+
+(Optional but recommended) Deactivate/reactivate a user and resend invite.
+
+This must respect RBAC and organization scoping.
+
+1) Permissions
+
+Extend the shared permissions map:
+
+// shared/permissions.ts
+export type Perm =
+  | 'org.view' | 'org.manage'
+  | 'users.view' | 'users.manage'   // NEW
+  // ...existing perms
+
+ROLE_PERMS.OWNER.push('users.view','users.manage');
+ROLE_PERMS.SUPERVISOR.push('users.view','users.manage');
+
+// Other roles: no users.* perms
+
+
+Rules
+
+Owner/Supervisor: can view roster and change roles.
+
+Safety rails:
+
+A Supervisor cannot change an Owner’s role or delete/deactivate an Owner.
+
+Never allow removal of the last Owner in an org.
+
+2) Data & Auto-inclusion
+
+Already satisfied by registration: non-owners join with organizationId via invite code.
+Employees list should query User where organizationId = session.user.organizationId.
+
+Add optional fields:
+
+model User {
+  // existing…
+  status        String   @default("active") // 'active' | 'inactive'
+  lastLoginAt   DateTime?
+}
+
+3) API Endpoints
+
+Create organization-scoped endpoints with guards.
+
+3.1 List employees
+
+GET /api/org/users
+
+Guard: users.view
+
+Returns paginated users for current organizationId:
+{ id, firstName, lastName, email, role, status, lastLoginAt, createdAt }
+
+Support query search, role, status, cursor/limit.
+
+3.2 Update role / status
+
+PATCH /api/org/users/:userId
+
+Guard: users.manage
+
+Body: { role?: Role, status?: 'active'|'inactive' }
+
+Server validations:
+
+Target user must belong to same organizationId.
+
+If caller is Supervisor:
+
+Cannot modify a user with role OWNER.
+
+If changing role from OWNER:
+
+Require caller Owner, and ensure at least one Owner remains.
+
+3.3 (Optional) Remove user
+
+DELETE /api/org/users/:userId
+
+Guard: users.manage
+
+Soft delete or set status='inactive'.
+
+Same safety rails as above.
+
+Return updated user object for optimistic UI.
+
+4) UI — Employees Tab
+4.1 Navigation visibility
+
+Add Employees to the main sidebar only if useCan('users.view') (Owner/Supervisor).
+
+Route: /employees
+
+4.2 Page layout
+
+Header: “Employees”
+
+Right actions: (Owner/Supervisor) “Invite via Code” button that deep-links to Settings → Company (no code shown here).
+
+Controls row: Search (name/email), Filters (Role, Status).
+
+Table (or list on mobile):
+
+Columns: Name, Email, Role (editable dropdown), Status (badge), Last Active, Actions (Deactivate/Activate).
+
+Row actions obey permissions (disable role dropdown if target is Owner and current user is Supervisor).
+
+Role change UX
+
+Inline dropdown with roles: OWNER, SUPERVISOR, TECHNICIAN, DISPATCHER, ESTIMATOR.
+
+On change → PATCH /api/org/users/:id.
+
+Confirm modal when demoting an Owner (Owner-only), with “You must have at least one Owner” check.
+
+Status toggle
+
+Button: “Deactivate” / “Activate”
+
+PATCH with { status: 'inactive' } or { status: 'active' }.
+
+Empty state
+
+“No employees yet. Share your company code from Settings → Company to add your team.”
+
+5) Security / Multi-tenant Safeguards
+
+All queries and mutations must use organizationId from session to scope records.
+
+Never accept organizationId from client payloads.
+
+Enforce rails server-side (cannot rely only on UI).
+
+6) Acceptance Criteria
+
+Visibility: Only Owner/Supervisor see Employees in sidebar; others don’t.
+
+Auto-inclusion: A user who registers with a valid company code immediately appears in the roster.
+
+Edit roles: Owner/Supervisor can change roles for users in their org; Supervisor cannot modify any Owner; cannot remove last Owner.
+
+Status: Owner/Supervisor can deactivate/reactivate users (except last Owner).
+
+Filtering & search work.
+
+Multi-tenant: Users from other orgs are never visible or modifiable.
+
+No TS/ESLint errors; build passes.
+
+7) QA Checklist
+
+Register Technician via invite code → appears in Employees list.
+
+As Supervisor:
+
+Can change Technician → Dispatcher.
+
+Cannot change an Owner’s role (controls disabled).
+
+As Owner:
+
+Can change roles, including promoting a Technician to Supervisor.
+
+Cannot demote the only Owner (server returns 400 with clear message).
+
+Can deactivate/reactivate a user; deactivated users cannot sign in (if you enforce at auth) or are flagged as inactive in app.
+
+Cross-org isolation verified (different org users never appear).
+
+Commit message:
+“Employees: owner/supervisor-only roster with role & status management; org-scoped APIs; safety rails for Owner role; auto-population via invite code.”

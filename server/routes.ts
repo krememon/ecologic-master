@@ -312,6 +312,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Employee management routes
+  // List employees in organization (Owner/Supervisor only)
+  app.get('/api/org/users', requirePerm('users.view'), async (req: any, res) => {
+    try {
+      const { search, role, status, limit, offset } = req.query;
+      
+      const result = await storage.getOrgUsers(req.companyId, {
+        search,
+        role,
+        status,
+        limit: limit ? parseInt(limit) : undefined,
+        offset: offset ? parseInt(offset) : undefined,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
+  });
+
+  // Update user role or status (Owner/Supervisor only)
+  app.patch('/api/org/users/:userId', requirePerm('users.manage'), async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const { role, status } = req.body;
+      
+      let updatedUser;
+      
+      if (role) {
+        updatedUser = await storage.updateUserRole(userId, req.companyId, role, req.userRole);
+      } else if (status !== undefined) {
+        updatedUser = await storage.updateUserStatus(userId, req.companyId, status, req.userRole);
+      } else {
+        return res.status(400).json({ message: "Must provide role or status to update" });
+      }
+      
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      res.status(error.message.includes("cannot") || error.message.includes("Cannot") ? 400 : 500)
+        .json({ message: error.message || "Failed to update user" });
+    }
+  });
+
   app.post('/api/companies', async (req: any, res) => {
     try {
       if (!req.isAuthenticated()) {
