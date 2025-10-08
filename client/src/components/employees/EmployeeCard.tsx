@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useCan } from "@/hooks/useCan";
 import JobsHistory from "./JobsHistory.tsx";
+import { formatPhone } from "@shared/phoneUtils";
 
 type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
 
@@ -222,7 +223,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
             data-testid={`link-phone-${employee.id}`}
           >
             <Phone className="h-4 w-4" />
-            {employee.phone}
+            {formatPhone(employee.phone)}
           </a>
         )}
         
