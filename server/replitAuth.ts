@@ -125,6 +125,10 @@ export async function setupAuth(app: Express) {
           return done(new Error("No email found in Google profile"), null);
         }
 
+        // Normalize email for consistency
+        const { normalizeEmail } = await import("@shared/emailUtils");
+        const normalizedEmail = normalizeEmail(email);
+
         // Check if this is an account linking request
         const isLinking = req.session.linkingAccount?.action === 'link';
         console.log("Is account linking request:", isLinking);
@@ -134,8 +138,8 @@ export async function setupAuth(app: Express) {
           // Account linking flow
           const linkingData = req.session.linkingAccount;
           
-          // Verify email matches the current user's email
-          if (email.toLowerCase() !== linkingData.userEmail.toLowerCase()) {
+          // Verify email matches the current user's email (normalized comparison)
+          if (normalizedEmail !== normalizeEmail(linkingData.userEmail)) {
             console.error("Email mismatch during linking:", {
               googleEmail: email,
               userEmail: linkingData.userEmail
@@ -195,8 +199,8 @@ export async function setupAuth(app: Express) {
         }
 
         // Regular login flow (not linking)
-        // Check if user already exists with this email
-        let user = await storage.getUserByEmail(email);
+        // Check if user already exists with this email (using normalized email)
+        let user = await storage.getUserByEmail(normalizedEmail);
         console.log("Existing user found:", !!user);
         
         if (user) {
@@ -277,7 +281,7 @@ export async function setupAuth(app: Express) {
           try {
             user = await storage.createUser({
               id: `google_${profile.id}`,
-              email: email,
+              email: normalizedEmail,
               firstName: profile.name?.givenName || '',
               lastName: profile.name?.familyName || '',
               profileImageUrl: profile.photos?.[0]?.value || null,
@@ -285,8 +289,15 @@ export async function setupAuth(app: Express) {
               googleLinked: true
             });
             console.log("Successfully created new Google user:", user.id);
-          } catch (createError) {
+          } catch (createError: any) {
             console.error("Error creating new Google user:", createError);
+            // Handle unique constraint violation
+            if (createError.code === '23505' || createError.message?.includes('unique constraint')) {
+              return done(null, null, {
+                error: 'email_in_use',
+                message: 'This email is currently in use'
+              });
+            }
             return done(new Error("Failed to create user account"), null);
           }
         }
