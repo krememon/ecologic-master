@@ -46,6 +46,12 @@ export function useWebSocket() {
             console.log('Session revoked - redirecting to login');
             disconnect();
             window.location.href = '/?error=' + (message.data?.code || 'session_revoked') + '&message=' + encodeURIComponent(message.data?.message || 'Your session has ended. Please sign in again.');
+          } else if (message.type === 'invite_code_rotated') {
+            // Dispatch custom event for invite code rotation
+            const event = new CustomEvent('invite_code_rotated', { 
+              detail: message.data 
+            });
+            window.dispatchEvent(event);
           } else if (message.type === 'new_message') {
             // Show notification for new message
             toast({

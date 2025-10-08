@@ -1,19 +1,18 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Copy, Check, Users, Shield } from "lucide-react";
+import { Copy, Check, Users, Shield, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useCompanyInviteCode } from "@/hooks/useCompanyInviteCode";
+import { formatDistanceToNow } from "date-fns";
 
 export default function CompanyInviteCode() {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
-  const { data: company, isLoading } = useQuery({
-    queryKey: ["/api/company"],
-  });
+  const { data: company, isLoading } = useCompanyInviteCode();
 
   const copyToClipboard = async () => {
     if (!company?.inviteCode) return;
@@ -105,11 +104,17 @@ export default function CompanyInviteCode() {
           </div>
         </div>
         
-        <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+        <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg space-y-2">
           <p className="text-sm text-blue-800 dark:text-blue-200">
             <strong>How it works:</strong> Employees use this code during registration to join your company. 
             They'll have access to view assigned tasks but cannot create jobs, invoices, or manage company settings.
           </p>
+          {company.inviteCodeRotatedAt && (
+            <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1">
+              <RotateCw className="h-3 w-3" />
+              Auto-rotates after each employee joins • Last rotated {formatDistanceToNow(new Date(company.inviteCodeRotatedAt), { addSuffix: true })}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
