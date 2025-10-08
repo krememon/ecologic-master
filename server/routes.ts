@@ -247,15 +247,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Company routes
-  app.get('/api/company', async (req: any, res) => {
+  // Company routes (Owner/Supervisor only)
+  app.get('/api/company', requirePerm('org.view'), async (req: any, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const user = req.user;
-      let company = await storage.getUserCompany(user.claims.sub);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
       
       if (company) {
         res.json(company);
