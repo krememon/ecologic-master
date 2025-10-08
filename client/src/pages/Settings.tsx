@@ -19,6 +19,7 @@ import LanguageSelector from "@/components/LanguageSelector";
 import CompanyInviteCode from "@/components/CompanyInviteCode";
 import { BillingSection } from "@/components/BillingSection";
 import { useCan } from "@/hooks/useCan";
+import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -29,9 +30,27 @@ export default function Settings() {
   const [notifications, setNotifications] = useState(true);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [profileData, setProfileData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: ""
+  });
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
+
+  // Initialize profile data when user loads
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        phone: formatPhoneInput(user.phone || "")
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -140,6 +159,34 @@ export default function Settings() {
       toast({
         title: "Error",
         description: "Failed to update profile picture",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Profile update mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: typeof profileData) => {
+      const res = await apiRequest("PATCH", "/api/auth/user", {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        phone: getRawPhoneValue(data.phone)
+      });
+      if (!res.ok) throw new Error("Failed to update profile");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update profile",
         variant: "destructive",
       });
     },
@@ -270,19 +317,48 @@ export default function Settings() {
             <div className="space-y-3">
               <div>
                 <Label htmlFor="firstName">First Name</Label>
-                <Input id="firstName" defaultValue={user?.firstName || ""} />
+                <Input 
+                  id="firstName" 
+                  value={profileData.firstName}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
+                />
               </div>
               <div>
                 <Label htmlFor="lastName">Last Name</Label>
-                <Input id="lastName" defaultValue={user?.lastName || ""} />
+                <Input 
+                  id="lastName" 
+                  value={profileData.lastName}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
+                />
               </div>
               <div>
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" defaultValue={user?.email || ""} />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={profileData.email}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input 
+                  id="phone" 
+                  type="tel"
+                  placeholder="(555) 555-1234"
+                  value={profileData.phone}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, phone: formatPhoneInput(e.target.value) }))}
+                />
               </div>
             </div>
             
-            <Button className="w-full">Update Profile</Button>
+            <Button 
+              className="w-full"
+              onClick={() => updateProfileMutation.mutate(profileData)}
+              disabled={updateProfileMutation.isPending}
+            >
+              {updateProfileMutation.isPending ? "Updating..." : "Update Profile"}
+            </Button>
           </CardContent>
         </Card>
 
