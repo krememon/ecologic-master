@@ -216,6 +216,8 @@ EcoLogic is a professional construction management platform designed for trade c
   - Updated frontend to handle 401 responses with error codes (ACCOUNT_INACTIVE, SESSION_REVOKED)
   - WebSocket listener for user:session-revoked events forces client-side logout
   - All sessions include tokenVersion claim for multi-device revocation verification
+  - Fixed UI case mismatch: EmployeeCard now correctly uses uppercase ACTIVE/INACTIVE for badge and menu display
+  - React Query cache invalidation ensures UI updates without page refresh after status changes
   - Security pattern: Deactivated users instantly signed out on all devices and blocked from re-authentication
 
 ## User Preferences

@@ -85,7 +85,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
   };
 
   const handleStatusToggle = () => {
-    const newStatus = employee.status === 'active' ? 'inactive' : 'active';
+    const newStatus = employee.status === 'ACTIVE' ? 'inactive' : 'active';
     onStatusToggle(employee.id, newStatus);
     setIsStatusDialogOpen(false);
   };
@@ -102,14 +102,14 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
                 {getRoleLabel(employee.role)}
               </Badge>
               <Badge 
-                variant={employee.status === 'active' ? 'default' : 'secondary'}
-                className={employee.status === 'active' 
+                variant={employee.status === 'ACTIVE' ? 'default' : 'secondary'}
+                className={employee.status === 'ACTIVE' 
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
                   : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
                 }
                 data-testid={`badge-status-${employee.id}`}
               >
-                {employee.status === 'active' ? 'Active' : 'Inactive'}
+                {employee.status === 'ACTIVE' ? 'Active' : 'Inactive'}
               </Badge>
             </div>
             <CardTitle className="text-xl" data-testid={`text-employee-name-${employee.id}`}>
@@ -167,7 +167,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
                   <AlertDialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
                     <AlertDialogTrigger asChild>
                       <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid={`menu-toggle-status-${employee.id}`}>
-                        {employee.status === 'active' ? (
+                        {employee.status === 'ACTIVE' ? (
                           <>
                             <UserX className="h-4 w-4 mr-2" />
                             Deactivate
@@ -183,10 +183,10 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
-                          {employee.status === 'active' ? 'Deactivate' : 'Activate'} Employee
+                          {employee.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} Employee
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to {employee.status === 'active' ? 'deactivate' : 'activate'} {fullName}?
+                          Are you sure you want to {employee.status === 'ACTIVE' ? 'deactivate' : 'activate'} {fullName}?
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
