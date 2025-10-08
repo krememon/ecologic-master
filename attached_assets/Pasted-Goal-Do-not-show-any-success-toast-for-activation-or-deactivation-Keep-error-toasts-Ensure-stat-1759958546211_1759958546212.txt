@@ -1,0 +1,99 @@
+Goal
+
+Do not show any success toast for activation or deactivation.
+
+Keep error toasts.
+
+Ensure status chips/badges and menus update immediately.
+
+1) Mutations: remove success toasts
+
+Search and edit the mutations/hooks that toggle status for employees and customers (e.g., useActivateEmployee, useDeactivateEmployee, useActivateCustomer, useDeactivateCustomer).
+
+// BEFORE
+const m = useMutation(toggleStatus, {
+  onSuccess: (data) => {
+    queryClient.invalidateQueries({ queryKey: ['employees'] }); // or ['customers']
+    queryClient.invalidateQueries({ queryKey: ['employee', id] });
+    toast.success('Employee was activated successfully'); // REMOVE
+  },
+  onError: (err) => toast.error(parseError(err)),
+});
+
+// AFTER
+const m = useMutation(toggleStatus, {
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['employees'] }); // or ['customers']
+    queryClient.invalidateQueries({ queryKey: ['employee', id] }); // or ['customer', id]
+  },
+  onError: (err) => toast.error(parseError(err)),
+});
+
+
+If you use optimistic updates, keep them—just omit the toast.
+
+2) Confirm dialogs / inline handlers
+
+Remove any direct success toasts fired from menus or modals:
+
+toast.success('Employee was deactivated successfully'
+
+toast.success('Status Updated'
+
+showToast({ type: 'success', ... })
+
+enqueueSnackbar(...
+
+Make sure these handlers only close the modal and let cache invalidation/optimistic update handle the UI.
+
+3) Global interceptor exception (if you auto-toast on any 2xx)
+
+If there’s a response interceptor that toasts when res.data.message exists, suppress for these endpoints:
+
+// api/interceptor.ts (or equivalent)
+const url = (res.config.url ?? '').toLowerCase();
+const method = (res.config.method ?? '').toLowerCase();
+
+const isStatusToggle =
+  (url.startsWith('/api/employees/') && url.endsWith('/status')) ||
+  (url.startsWith('/api/customers/') && url.endsWith('/status'));
+
+if (res.status >= 200 && res.status < 300) {
+  if (isStatusToggle) {
+    return res; // suppress success toast
+  }
+  if (res.data?.message) {
+    toast.success(res.data.message);
+  }
+}
+
+
+Adjust paths to match your routing.
+
+4) UI still updates (no toast)
+
+Ensure chip/badge derives from status ('ACTIVE' | 'INACTIVE') coming from the server or optimistic state.
+
+After mutation success:
+
+invalidateQueries(['employees']) / invalidateQueries(['customers'])
+
+invalidateQueries(['employee', id]) / ['customer', id]
+
+Menu item label flips between Activate / Deactivate based on the updated status (no reload).
+
+5) QA / Acceptance
+
+Activate/deactivate employee → no popup, badge/menu update immediately, errors still toast.
+
+Activate/deactivate customer → same behavior.
+
+Other success toasts (jobs, invoices, etc.) are unaffected.
+
+Likely files
+
+hooks/useToggleEmployeeStatus.ts, hooks/useToggleCustomerStatus.ts
+
+components/*/ActionsMenu.tsx or confirm modals
+
+lib/api/interceptor.ts (only if you globally toast success)

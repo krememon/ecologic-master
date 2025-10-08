@@ -98,13 +98,8 @@ export default function Employees() {
       const res = await apiRequest("PATCH", `/api/org/users/${userId}`, { status });
       return res.json();
     },
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
-      const action = variables.status === 'INACTIVE' ? 'deactivated and signed out' : 'activated';
-      toast({
-        title: "Status Updated",
-        description: `Employee was ${action} successfully`,
-      });
     },
     onError: (error: any) => {
       toast({
