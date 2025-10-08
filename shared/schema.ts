@@ -53,7 +53,8 @@ export const users = pgTable("users", {
   state: varchar("state"),
   postalCode: varchar("postal_code"),
   country: varchar("country").default("US"),
-  status: varchar("status").default("active").notNull(), // 'active' | 'inactive'
+  status: varchar("status").default("ACTIVE").notNull(), // 'ACTIVE' | 'INACTIVE'
+  tokenVersion: integer("token_version").default(0).notNull(), // For session invalidation
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

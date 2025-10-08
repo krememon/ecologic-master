@@ -49,8 +49,19 @@ function getUserId(user: any): string {
   return user.id || user.sub;
 }
 
+// Track connected WebSocket clients
+const wsClients = new Map<string, Set<WebSocket>>();
+
 function broadcastToUser(userId: string, message: any) {
-  // WebSocket broadcasting implementation
+  const userSockets = wsClients.get(userId);
+  if (userSockets) {
+    const messageStr = JSON.stringify(message);
+    userSockets.forEach(ws => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(messageStr);
+      }
+    });
+  }
 }
 
 async function sendPushNotification(userId: string, notification: any) {
@@ -375,6 +386,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updatedUser = await storage.updateUserRole(userId, req.companyId, role, req.userRole);
       } else if (status !== undefined) {
         updatedUser = await storage.updateUserStatus(userId, req.companyId, status, req.userRole);
+        
+        // If deactivating, broadcast session revocation to all user's devices
+        if (status === 'INACTIVE') {
+          broadcastToUser(userId, {
+            type: 'session_revoked',
+            data: {
+              code: 'ACCOUNT_INACTIVE',
+              message: 'Your account has been deactivated. Contact your administrator.'
+            }
+          });
+        }
       } else {
         return res.status(400).json({ message: "Must provide role or status to update" });
       }
@@ -1017,14 +1039,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   wss.on('connection', (ws: WebSocket, req) => {
     console.log('New WebSocket connection');
+    let userId: string | null = null;
 
     ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
         console.log('Received message:', message);
         
-        // Echo the message back for now
-        ws.send(JSON.stringify({ type: 'echo', data: message }));
+        // Handle auth message to track this connection
+        if (message.type === 'auth' && message.userId) {
+          userId = message.userId;
+          
+          // Add this socket to the user's set
+          if (!wsClients.has(userId)) {
+            wsClients.set(userId, new Set());
+          }
+          wsClients.get(userId)!.add(ws);
+          
+          ws.send(JSON.stringify({ type: 'auth_success' }));
+        }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
       }
@@ -1032,6 +1065,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     ws.on('close', () => {
       console.log('WebSocket connection closed');
+      
+      // Remove this socket from the user's set
+      if (userId && wsClients.has(userId)) {
+        wsClients.get(userId)!.delete(ws);
+        if (wsClients.get(userId)!.size === 0) {
+          wsClients.delete(userId);
+        }
+      }
     });
     
     ws.on('error', (error) => {

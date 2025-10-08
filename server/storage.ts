@@ -1,5 +1,6 @@
 import {
   users,
+  sessions,
   companies,
   companyMembers,
   clients,
@@ -154,7 +155,7 @@ export interface IStorage {
   // Employee management operations
   getOrgUsers(companyId: number, params?: { search?: string; role?: UserRole; status?: string; limit?: number; offset?: number }): Promise<{ users: User[]; total: number }>;
   updateUserRole(userId: string, companyId: number, newRole: UserRole, currentUserRole: UserRole): Promise<User>;
-  updateUserStatus(userId: string, companyId: number, status: 'active' | 'inactive', currentUserRole: UserRole): Promise<User>;
+  updateUserStatus(userId: string, companyId: number, status: 'ACTIVE' | 'INACTIVE', currentUserRole: UserRole): Promise<User>;
   getUserJobsSummary(userId: string, companyId: number): Promise<{ total: number; scheduled: number; inProgress: number; completed: number }>;
 }
 
@@ -962,7 +963,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserStatus(
     userId: string,
     companyId: number,
-    status: 'active' | 'inactive',
+    status: 'ACTIVE' | 'INACTIVE',
     currentUserRole: UserRole
   ): Promise<User> {
     // Get target user's current role
@@ -981,7 +982,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Safety: Cannot deactivate the last Owner
-    if (membership.role === "OWNER" && status === "inactive") {
+    if (membership.role === "OWNER" && status === "INACTIVE") {
       const [{ count: activeOwnerCount }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(companyMembers)
@@ -990,7 +991,7 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(companyMembers.companyId, companyId),
             eq(companyMembers.role, "OWNER"),
-            eq(users.status, "active")
+            eq(users.status, "ACTIVE")
           )
         );
 
@@ -999,10 +1000,21 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    // Update the status
+    // If deactivating, increment tokenVersion and delete all sessions
+    const updateData: any = { status, updatedAt: new Date() };
+    if (status === "INACTIVE") {
+      // Get current user to increment tokenVersion
+      const [currentUser] = await db.select().from(users).where(eq(users.id, userId));
+      updateData.tokenVersion = (currentUser?.tokenVersion || 0) + 1;
+      
+      // Delete all sessions for this user
+      await db.delete(sessions).where(sql`sess->>'userId' = ${userId}`);
+    }
+
+    // Update the status (and tokenVersion if deactivating)
     const [user] = await db
       .update(users)
-      .set({ status, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(users.id, userId))
       .returning();
 

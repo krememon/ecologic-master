@@ -41,6 +41,11 @@ export function useWebSocket() {
           
           if (message.type === 'auth_success') {
             console.log('WebSocket authenticated successfully');
+          } else if (message.type === 'session_revoked') {
+            // User was deactivated - force sign out and redirect
+            console.log('Session revoked - redirecting to login');
+            disconnect();
+            window.location.href = '/?error=' + (message.data?.code || 'session_revoked') + '&message=' + encodeURIComponent(message.data?.message || 'Your session has ended. Please sign in again.');
           } else if (message.type === 'new_message') {
             // Show notification for new message
             toast({

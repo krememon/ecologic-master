@@ -299,6 +299,15 @@ export async function setupAuth(app: Express) {
         
         console.log("User for session:", { id: user.id, email: user.email });
         
+        // Check if user is deactivated
+        if (user.status === 'INACTIVE') {
+          console.log("Google OAuth: User is deactivated");
+          return done(null, null, {
+            error: 'account_inactive',
+            message: 'Your account is deactivated. Please contact your company Owner or Supervisor.'
+          });
+        }
+        
         // Create consistent session user object
         const sessionUser = {
           id: user.id,
@@ -311,6 +320,7 @@ export async function setupAuth(app: Express) {
             sub: user.id,
             email: user.email,
             first_name: user.firstName,
+            token_version: user.tokenVersion || 0,
             last_name: user.lastName,
             profile_image_url: user.profileImageUrl
           }
@@ -371,6 +381,11 @@ export async function setupAuth(app: Express) {
       // Handle account linking responses
       if (info) {
         console.log("Google OAuth callback with info:", info);
+        
+        if (info.error === 'account_inactive') {
+          console.log("Google OAuth: User is deactivated, blocking login");
+          return res.redirect(`/?error=account_inactive&message=${encodeURIComponent(info.message || 'Your account is deactivated. Please contact your company Owner or Supervisor.')}`);
+        }
         
         if (info.error === 'email_mismatch') {
           return res.redirect(`/settings?error=email_mismatch&message=${encodeURIComponent(info.message)}`);
@@ -461,6 +476,14 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Invalid or expired reset token" });
       }
 
+      // Check if user is deactivated
+      if (user.status === 'INACTIVE') {
+        return res.status(401).json({ 
+          code: 'ACCOUNT_INACTIVE',
+          message: "Your account is deactivated. Please contact your company Owner or Supervisor."
+        });
+      }
+
       // Auto-login after password reset
       const sessionUser = {
         claims: {
@@ -468,7 +491,8 @@ export async function setupAuth(app: Express) {
           email: user.email,
           first_name: user.firstName,
           last_name: user.lastName,
-          profile_image_url: user.profileImageUrl
+          profile_image_url: user.profileImageUrl,
+          token_version: user.tokenVersion || 0
         },
         provider: 'email'
       };
@@ -574,7 +598,8 @@ export async function setupAuth(app: Express) {
           email: user.email,
           first_name: user.firstName,
           last_name: user.lastName,
-          profile_image_url: user.profileImageUrl
+          profile_image_url: user.profileImageUrl,
+          token_version: user.tokenVersion || 0
         },
         provider: 'email'
       };
@@ -679,7 +704,8 @@ export async function setupAuth(app: Express) {
           email: user.email,
           first_name: user.firstName,
           last_name: user.lastName,
-          profile_image_url: user.profileImageUrl
+          profile_image_url: user.profileImageUrl,
+          token_version: user.tokenVersion || 0
         },
         provider: 'email'
       };
@@ -736,14 +762,23 @@ export async function setupAuth(app: Express) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
-      // Create session
+      // Check if user is deactivated
+      if (user.status === 'INACTIVE') {
+        return res.status(401).json({ 
+          code: 'ACCOUNT_INACTIVE',
+          message: "Your account is deactivated. Please contact your company Owner or Supervisor."
+        });
+      }
+
+      // Create session with tokenVersion
       const sessionUser = {
         claims: {
           sub: user.id,
           email: user.email,
           first_name: user.firstName,
           last_name: user.lastName,
-          profile_image_url: user.profileImageUrl
+          profile_image_url: user.profileImageUrl,
+          token_version: user.tokenVersion || 0
         },
         provider: 'email'
       };
@@ -821,6 +856,37 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     provider: user.provider,
     hasExpiresAt: !!user.expires_at 
   });
+
+  // Check user status and tokenVersion from database
+  const userId = user.claims?.sub || user.id;
+  const { storage } = await import('./storage');
+  const dbUser = await storage.getUser(userId);
+  
+  if (!dbUser) {
+    console.log("User not found in database");
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  // Check if user is deactivated
+  if (dbUser.status === 'INACTIVE') {
+    console.log("User is deactivated");
+    return res.status(401).json({ 
+      code: 'ACCOUNT_INACTIVE',
+      message: 'Your account has been deactivated. Contact your administrator.'
+    });
+  }
+
+  // Check tokenVersion (for session invalidation)
+  const sessionTokenVersion = user.claims?.token_version || 0;
+  const dbTokenVersion = dbUser.tokenVersion || 0;
+  
+  if (sessionTokenVersion !== dbTokenVersion) {
+    console.log("Token version mismatch - session revoked");
+    return res.status(401).json({ 
+      code: 'SESSION_REVOKED',
+      message: 'Your session has ended. Please sign in again.'
+    });
+  }
 
   // For Google OAuth users (no expires_at) or email/password users
   if (!user.expires_at || user.provider === 'email') {

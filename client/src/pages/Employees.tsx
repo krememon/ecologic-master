@@ -94,15 +94,16 @@ export default function Employees() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ userId, status }: { userId: string; status: 'active' | 'inactive' }) => {
+    mutationFn: async ({ userId, status }: { userId: string; status: 'ACTIVE' | 'INACTIVE' }) => {
       const res = await apiRequest("PATCH", `/api/org/users/${userId}`, { status });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
+      const action = variables.status === 'INACTIVE' ? 'deactivated and signed out' : 'activated';
       toast({
         title: "Status Updated",
-        description: "Employee status has been updated successfully",
+        description: `Employee was ${action} successfully`,
       });
     },
     onError: (error: any) => {
@@ -119,7 +120,8 @@ export default function Employees() {
   };
 
   const handleStatusToggle = (userId: string, newStatus: 'active' | 'inactive') => {
-    updateStatusMutation.mutate({ userId, status: newStatus });
+    const uppercaseStatus = newStatus === 'active' ? 'ACTIVE' : 'INACTIVE';
+    updateStatusMutation.mutate({ userId, status: uppercaseStatus });
   };
 
   // Sort employees

@@ -3,6 +3,28 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    
+    // Check for specific deactivation/session revocation errors
+    if (res.status === 401) {
+      try {
+        const errorData = JSON.parse(text);
+        
+        if (errorData.code === 'ACCOUNT_INACTIVE') {
+          // Clear auth state and redirect
+          window.location.href = '/?error=account_inactive&message=' + encodeURIComponent(errorData.message || 'Your account was deactivated. Contact your administrator.');
+          throw new Error(errorData.message || 'Account deactivated');
+        }
+        
+        if (errorData.code === 'SESSION_REVOKED') {
+          // Clear auth state and redirect
+          window.location.href = '/?error=session_revoked&message=' + encodeURIComponent(errorData.message || 'Your session has ended. Please sign in again.');
+          throw new Error(errorData.message || 'Session revoked');
+        }
+      } catch (e) {
+        // If parsing fails, continue with default error handling
+      }
+    }
+    
     throw new Error(`${res.status}: ${text}`);
   }
 }

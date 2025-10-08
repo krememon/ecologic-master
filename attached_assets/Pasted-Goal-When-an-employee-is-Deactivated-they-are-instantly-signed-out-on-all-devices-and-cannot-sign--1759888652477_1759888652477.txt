@@ -1,0 +1,126 @@
+Goal
+
+When an employee is Deactivated, they are instantly signed out on all devices and cannot sign in until Reactivated.
+
+When Reactivated, normal login is allowed again.
+
+Data
+
+We already have a status chip (Active/Inactive). Treat canonical user status as:
+
+type UserStatus = 'ACTIVE' | 'INACTIVE'
+
+
+Add (or confirm) a server-side integer tokenVersion (default 0) on the user record for session invalidation.
+
+Backend Enforcement (crucial)
+
+Middleware on every authenticated request
+
+After session/user lookup, block if user.status !== 'ACTIVE':
+
+Return 401 with { code: 'ACCOUNT_INACTIVE', message: 'Your account has been deactivated. Contact your administrator.' }.
+
+Also compare a tokenVersion claim stored in the session/JWT against the current DB tokenVersion. If mismatch, 401 with { code: 'SESSION_REVOKED' }.
+
+Login / OAuth callback guard
+
+After credentials or OAuth profile is validated but before issuing a session/JWT:
+
+If user.status === 'INACTIVE', deny sign-in with the same inactive message.
+
+Deactivate action (admin UI -> server)
+
+Transaction:
+
+Set status = 'INACTIVE'
+
+Increment tokenVersion by 1 (forces all existing JWTs/sessions invalid).
+
+If a session table exists (e.g., NextAuth/Prisma): DELETE all sessions for that user.
+
+Emit a lightweight server event (e.g., SSE/WebSocket) user:session-revoked to prompt live clients to redirect to /signin.
+
+Reactivate action
+
+Set status = 'ACTIVE'. Do not auto-login; user must sign in again.
+
+Do not change tokenVersion here (no sessions exist anyway). Normal login will succeed because status is ACTIVE.
+
+Frontend Behavior
+
+When calling any API and receiving:
+
+ACCOUNT_INACTIVE or SESSION_REVOKED → clear local auth state and redirect to /signin with a banner:
+
+“Your account was deactivated. Contact your administrator.” (for ACCOUNT_INACTIVE)
+
+“Your session has ended. Please sign in again.” (for SESSION_REVOKED)
+
+Hook up a listener for user:session-revoked channel (if we have WS/SSE); on event, do the same sign-out+redirect.
+
+In Employees list menu (3-dot), keep Activate/Deactivate. After success, optimistically update the status chip.
+
+API Surfaces to Touch (names may vary)
+
+PATCH /api/employees/:id/status { status: 'ACTIVE' | 'INACTIVE' }
+
+RBAC: Only Owner/Supervisor can change status.
+
+Auth:
+
+Credentials login endpoint / auth callback
+
+OAuth callback(s) (Google/Replit), insert the inactive guard
+
+Middleware:
+
+withAuth() / authMiddleware that checks status and tokenVersion
+
+Session store:
+
+If JWT-only: add tokenVersion to JWT on issue; compare on each request.
+
+If DB sessions: delete all Session rows on deactivate.
+
+RBAC (unchanged but explicit)
+
+Only Owner and Supervisor can Activate/Deactivate employees.
+
+A user cannot deactivate themselves if they are the last Owner (guard with 400 + helpful error).
+
+Copy / UX
+
+On failed login due to inactive:
+
+“Your account is deactivated. Please contact your company Owner or Supervisor.”
+
+On inline employee action:
+
+Success toast: “Dispatcher Test was deactivated and signed out.”
+
+Reactivate toast: “Dispatcher Test is active again.”
+
+Tests / Acceptance
+
+API
+
+Deactivate → user.status becomes INACTIVE, tokenVersion increments, sessions deleted.
+
+Auth guard denies login for INACTIVE with correct error and 401.
+
+Middleware returns 401 for requests from tokens issued before deactivation (tokenVersion mismatch).
+
+UI
+
+Active session receives 401/WS event → redirected to /signin.
+
+After reactivation, login succeeds normally.
+
+Edge Cases
+
+Multiple devices/browsers: all are forced out.
+
+OAuth sign-in attempt while INACTIVE: blocked with same message.
+
+Last Owner cannot deactivate themselves.
