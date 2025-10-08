@@ -1,0 +1,85 @@
+Goal
+
+When a client is created, do not show any success toast (“Client created successfully”).
+
+Keep error toasts and all other success toasts elsewhere unchanged.
+
+Where to change
+
+Search for these patterns and update only the client create flow:
+
+toast.success('Client created successfully'
+
+showToast({ type: 'success', ... })
+
+enqueueSnackbar('Client created successfully'
+
+Any wrapper like notifySuccess('Client created successfully'
+
+React Query mutation useCreateClient → onSuccess
+
+Required changes
+
+Client create hook / mutation
+
+In useCreateClient (or wherever the POST /api/clients mutation is defined), remove the success toast from onSuccess.
+
+Keep cache invalidation + navigation.
+
+// before
+const mutation = useMutation(createClient, {
+  onSuccess: (data) => {
+    queryClient.invalidateQueries(['clients']);
+    toast.success('Client created successfully'); // REMOVE THIS
+    router.push(`/clients/${data.id}`);           // keep or adjust if needed
+  },
+  onError: (err) => toast.error(parseError(err)),
+});
+
+// after
+const mutation = useMutation(createClient, {
+  onSuccess: (data) => {
+    queryClient.invalidateQueries(['clients']);
+    router.push(`/clients/${data.id}`);
+  },
+  onError: (err) => toast.error(parseError(err)),
+});
+
+
+Global interceptor (if any)
+
+If you have a response interceptor that auto-toasts on any 2xx with message, add an exception for the clients create route.
+
+// api/interceptor.ts
+if (res.config.url?.startsWith('/api/clients') && res.config.method === 'post') {
+  // suppress auto success toast for client creation
+} else if (res.data?.message && res.status >= 200 && res.status < 300) {
+  toast.success(res.data.message);
+}
+
+
+Form submit handler
+
+Remove any local toast.success calls after await mutateAsync().
+
+(Optional) Inline confirmation
+
+If you still want UX feedback, rely on navigation to the new Client detail as the confirmation.
+
+Or render a subtle inline checkmark inside the submit button (no toast). If you do this, it must be local-only to the Client form and disappear on route change.
+
+QA / Acceptance
+
+Create a client → no success toast, you navigate to the Client page (or the form resets if you stay).
+
+Error cases (validation/server) → still show error toast.
+
+Success toasts for other features (jobs, invoices, etc.) remain unchanged.
+
+Files likely touched (names may vary)
+
+hooks/useCreateClient.ts or mutations/clients.ts
+
+pages/clients/new.tsx (submit handler)
+
+lib/api/interceptor.ts (only if you auto-toast globally)

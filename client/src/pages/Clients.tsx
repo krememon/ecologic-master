@@ -149,10 +149,6 @@ export default function Clients() {
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       form.reset();
       setIsDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Client created successfully",
-      });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -318,10 +314,6 @@ export default function Clients() {
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       form.reset();
       setIsDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Client created successfully",
-      });
     } catch (error: any) {
       console.error('client:create:error', error);
       toast({
