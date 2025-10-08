@@ -1,0 +1,192 @@
+Goal
+On /employees, replace the roster table with a responsive grid of Employee cards that visually match the Client cards:
+
+Show Name, Email, Phone, Address, Role badge, Status badge, kebab menu.
+
+Include a collapsible “Jobs History” section per card (assigned jobs summary + link to view all).
+
+Keep Owner/Supervisor edit capabilities (change role / deactivate) via the kebab menu.
+
+Keep org scoping and RBAC.
+
+0) Data (add if missing)
+
+In User model, add optional contact fields used by the card (fallback gracefully if null):
+
+model User {
+  // existing fields...
+  phone          String?
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  postalCode     String?
+  country        String? @default("US")
+  status         String  @default("active") // 'active' | 'inactive'
+  lastLoginAt    DateTime?
+}
+
+
+Run migration. Backfill status='active'.
+
+1) API – enrich responses
+GET /api/org/users
+
+Guard: users.view
+
+Return per user:
+
+{
+  "id","firstName","lastName","email","role","status",
+  "phone","addressLine1","addressLine2","city","state","postalCode","country",
+  "lastLoginAt","createdAt"
+}
+
+
+Support search, role, status, cursor/limit.
+
+GET /api/users/:id/jobs/summary
+
+Guard: caller must share organizationId with target user.
+
+Returns summary of assigned jobs grouped by status:
+
+{ "total": 12, "scheduled": 5, "inProgress": 3, "completed": 4 }
+
+
+(If this endpoint already exists, adapt; otherwise implement lightweight aggregation.)
+
+PATCH /api/org/users/:id
+
+Keep previous safety rails (org-scoped, Supervisor can’t modify Owner, cannot remove last Owner).
+
+Accept { role?, status? }.
+
+2) UI — EmployeesCard grid
+
+New components
+
+src/components/employees/EmployeeCard.tsx
+
+src/components/employees/JobsHistory.tsx (collapsible)
+
+Reuse ConfirmDialog, RoleSelect, StatusBadge, KebabMenu
+
+Card layout (match Client card styling)
+
+Outer: div with same shadow, radius, padding as ClientCard
+
+Header row:
+
+Left: Role badge + Name (text-xl font-semibold)
+
+Right: kebab menu (3 dots)
+
+Details list (icons like on Client cards):
+
+Email (mailto)
+
+Phone (tel)
+
+Address (concatenate available parts; if none, show “—”)
+
+Divider
+
+Jobs History collapsible:
+
+Closed summary: “Jobs History”
+
+On open: show 3 chips: Scheduled, In Progress, Completed with counts from /users/:id/jobs/summary (lazy-load per card on expand)
+
+“View all jobs →” button links to /jobs?assignedTo={userId}
+
+Role/Status badges
+
+Role pill colors (Owner=slate/black, Supervisor=indigo, Dispatcher=sky, Estimator=amber, Technician=green)
+
+Status pill: Active (green), Inactive (gray)
+
+Kebab actions (respect permissions)
+
+Change Role → opens inline RoleSelect (Owner/Supervisor only; Supervisor cannot alter Owner)
+
+Deactivate / Activate (Owner/Supervisor; rails apply)
+
+(Optional) “Message” (future), “View profile”
+
+Grid
+
+Replace table with:
+
+grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4
+
+Keep existing Search / Filters above; they now filter the cards.
+
+Empty state
+
+“No employees match your filters.”
+
+Hint: “Invite your team from Settings → Company.”
+
+Loading skeletons
+
+Card skeletons (3–6 placeholders) while fetching.
+
+3) Page wiring
+
+Update /employees page:
+
+Fetch users via GET /api/org/users with current filters/search.
+
+Render EmployeeCard per user.
+
+Keep the search, role filter, status filter row.
+
+Add Sort (Name A–Z, Role weight, Joined newest).
+
+Keep “Invite team” button → links to /settings/company (do NOT display code here).
+
+4) Accessibility
+
+All interactive elements have aria-label.
+
+Kebab menu: ESC closes; focus trapped when open.
+
+Collapsible has aria-expanded and aria-controls.
+
+5) Acceptance Criteria
+
+Employees page shows a card grid visually matching Client cards.
+
+Each card displays: Name, Email (clickable), Phone (clickable), Address (if present), Role badge, Status badge, kebab menu.
+
+Jobs History expands per card and shows accurate counts; “View all jobs” opens filtered Jobs page.
+
+Search/filters work with the new grid.
+
+Owner/Supervisor can change roles and (de)activate users with all safety rails.
+
+Non-authorized roles cannot access /employees (menu hidden).
+
+No console/TS errors; build passes.
+
+6) QA Checklist
+
+As Owner:
+
+Change Technician → Dispatcher from card; toast success; badge updates.
+
+Deactivate user; status pill updates; user hidden if filtering by Active.
+
+Expand Jobs History; counts match Jobs page filter.
+
+As Supervisor:
+
+Role edit works on non-Owners; Owner row shows disabled actions.
+
+Filters: Role=Technician + Status=Active + Search by email → correct subset.
+
+Responsive: cards stack 1/2/3/4 per breakpoint like Clients.
+
+Commit message:
+“Employees: replace table with Client-style card grid; contact fields, role/status badges, kebab actions; Jobs History collapsible; filters preserved; RBAC rails intact.”
