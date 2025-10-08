@@ -205,6 +205,18 @@ EcoLogic is a professional construction management platform designed for trade c
   - Phone validation on all endpoints (400 error for invalid format)
   - Supports clearing phone number (null/empty value)
   - End-to-end flow maintains phone normalization from registration through profile updates
+- October 8, 2025. Built comprehensive employee deactivation/reactivation system with instant session revocation:
+  - Added tokenVersion field (integer, default 0) to users table for session revocation tracking
+  - Migrated user status values from lowercase to uppercase (ACTIVE/INACTIVE) across all systems
+  - Built PATCH /api/org/users/:userId endpoint with last-Owner protection and RBAC enforcement
+  - Enhanced authentication middleware to verify user status and tokenVersion on every request
+  - Fixed OAuth security: All login paths (email/password, Google OAuth, password reset) now check INACTIVE status
+  - Implemented atomic deactivation: sets status=INACTIVE, increments tokenVersion, deletes all sessions
+  - Added WebSocket session revocation broadcasting - deactivated users receive instant logout events
+  - Updated frontend to handle 401 responses with error codes (ACCOUNT_INACTIVE, SESSION_REVOKED)
+  - WebSocket listener for user:session-revoked events forces client-side logout
+  - All sessions include tokenVersion claim for multi-device revocation verification
+  - Security pattern: Deactivated users instantly signed out on all devices and blocked from re-authentication
 
 ## User Preferences
 
