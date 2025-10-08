@@ -247,6 +247,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user profile
+  app.patch('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { firstName, lastName, email, phone } = req.body;
+
+      const updateData: any = {};
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (email !== undefined) updateData.email = email;
+      
+      // Validate and normalize phone if provided
+      if (phone !== undefined) {
+        if (phone === "" || phone === null) {
+          // Allow clearing phone
+          updateData.phone = null;
+        } else {
+          const { validatePhone, normalizePhone } = await import("@shared/phoneUtils");
+          if (!validatePhone(phone)) {
+            return res.status(400).json({ message: "Invalid phone number format" });
+          }
+          updateData.phone = normalizePhone(phone);
+        }
+      }
+
+      const updatedUser = await storage.updateUser(userId, updateData);
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
   // Company routes (Owner/Supervisor only)
   app.get('/api/company', requirePerm('org.view'), async (req: any, res) => {
     try {

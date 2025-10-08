@@ -489,7 +489,7 @@ export async function setupAuth(app: Express) {
   // Owner Registration (creates company with invite code)
   app.post("/api/register/owner", async (req, res) => {
     try {
-      const { email, password, firstName, lastName, company: companyData } = req.body;
+      const { email, password, firstName, lastName, phone, company: companyData } = req.body;
       
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
@@ -514,12 +514,17 @@ export async function setupAuth(app: Express) {
       const buf = (await scryptAsync(password, salt, 64)) as Buffer;
       const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
+      // Normalize phone if provided
+      const { normalizePhone } = await import("@shared/phoneUtils");
+      const normalizedPhone = phone ? normalizePhone(phone) : null;
+
       // Create user
       const userData = {
         id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         email,
         firstName: firstName || null,
         lastName: lastName || null,
+        phone: normalizedPhone,
         profileImageUrl: null,
         password: hashedPassword,
         emailVerified: false,
@@ -602,7 +607,7 @@ export async function setupAuth(app: Express) {
   // Member Registration (join company with invite code)
   app.post("/api/register/member", async (req, res) => {
     try {
-      const { email, password, firstName, lastName, role, inviteCode } = req.body;
+      const { email, password, firstName, lastName, phone, role, inviteCode } = req.body;
       
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
@@ -638,12 +643,17 @@ export async function setupAuth(app: Express) {
       const buf = (await scryptAsync(password, salt, 64)) as Buffer;
       const hashedPassword = `${buf.toString("hex")}.${salt}`;
 
+      // Normalize phone if provided
+      const { normalizePhone } = await import("@shared/phoneUtils");
+      const normalizedPhone = phone ? normalizePhone(phone) : null;
+
       // Create user
       const userData = {
         id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         email,
         firstName: firstName || null,
         lastName: lastName || null,
+        phone: normalizedPhone,
         profileImageUrl: null,
         password: hashedPassword,
         emailVerified: false,
