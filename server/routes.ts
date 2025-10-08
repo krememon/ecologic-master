@@ -298,7 +298,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: any = {};
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
-      if (email !== undefined) updateData.email = email;
+      
+      // Validate and normalize email if provided
+      if (email !== undefined) {
+        const { normalizeEmail } = await import("@shared/emailUtils");
+        const normalizedEmail = normalizeEmail(email);
+        
+        // Check if email is changing and if new email already exists
+        const currentUser = await storage.getUser(userId);
+        if (currentUser && currentUser.email !== normalizedEmail) {
+          const existingUser = await storage.getUserByEmail(normalizedEmail);
+          if (existingUser && existingUser.id !== userId) {
+            return res.status(409).json({ 
+              code: 'EMAIL_IN_USE',
+              message: 'This email is currently in use' 
+            });
+          }
+        }
+        
+        updateData.email = normalizedEmail;
+      }
       
       // Validate and normalize phone if provided
       if (phone !== undefined) {
@@ -317,8 +336,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUser(userId, updateData);
       
       res.json(updatedUser);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user profile:", error);
+      
+      // Handle database unique constraint violation
+      if (error.code === '23505' || error.message?.includes('unique constraint')) {
+        return res.status(409).json({ 
+          code: 'EMAIL_IN_USE',
+          message: 'This email is currently in use' 
+        });
+      }
+      
       res.status(500).json({ message: "Failed to update profile" });
     }
   });
