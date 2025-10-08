@@ -357,6 +357,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user's jobs summary (requires same organization)
+  app.get('/api/users/:userId/jobs/summary', isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Verify both users are in the same organization
+      const targetUserCompany = await storage.getUserCompany(userId);
+      const currentUserCompany = await storage.getUserCompany(req.user.claims.sub);
+      
+      if (!targetUserCompany || !currentUserCompany || targetUserCompany.id !== currentUserCompany.id) {
+        return res.status(403).json({ message: "Cannot access jobs summary for users outside your organization" });
+      }
+      
+      const summary = await storage.getUserJobsSummary(userId, targetUserCompany.id);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching jobs summary:", error);
+      res.status(500).json({ message: "Failed to fetch jobs summary" });
+    }
+  });
+
   app.post('/api/companies', async (req: any, res) => {
     try {
       if (!req.isAuthenticated()) {

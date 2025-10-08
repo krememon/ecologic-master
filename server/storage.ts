@@ -155,6 +155,7 @@ export interface IStorage {
   getOrgUsers(companyId: number, params?: { search?: string; role?: UserRole; status?: string; limit?: number; offset?: number }): Promise<{ users: User[]; total: number }>;
   updateUserRole(userId: string, companyId: number, newRole: UserRole, currentUserRole: UserRole): Promise<User>;
   updateUserStatus(userId: string, companyId: number, status: 'active' | 'inactive', currentUserRole: UserRole): Promise<User>;
+  getUserJobsSummary(userId: string, companyId: number): Promise<{ total: number; scheduled: number; inProgress: number; completed: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1006,6 +1007,29 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return user;
+  }
+
+  async getUserJobsSummary(
+    userId: string,
+    companyId: number
+  ): Promise<{ total: number; scheduled: number; inProgress: number; completed: number }> {
+    // Get all jobs assigned to this user in the company
+    const userJobs = await db
+      .select({
+        status: jobs.status,
+      })
+      .from(jobs)
+      .where(and(eq(jobs.assignedTo, userId), eq(jobs.companyId, companyId)));
+
+    // Count jobs by status
+    const summary = {
+      total: userJobs.length,
+      scheduled: userJobs.filter(j => j.status === 'scheduled').length,
+      inProgress: userJobs.filter(j => j.status === 'in-progress').length,
+      completed: userJobs.filter(j => j.status === 'completed').length,
+    };
+
+    return summary;
   }
 }
 
