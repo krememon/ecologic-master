@@ -178,6 +178,16 @@ EcoLogic is a professional construction management platform designed for trade c
   - Cards display email, phone, address when available with icon-based layout
   - Jobs history section lazy-loads and links to filtered job list per employee
   - Design matches Client cards styling with hover effects and smooth transitions
+- October 8, 2025. Implemented secure Invite Team clipboard button:
+  - Created InviteTeamButton component with one-click invite code copying
+  - Fetches invite code from GET /api/company/info (org.view permission required)
+  - Uses navigator.clipboard API with textarea fallback for older browsers
+  - Button label changes to "Copied" for 2000ms, then reverts to "Invite Team"
+  - Button disabled during copy operation to prevent double clicks
+  - Toast notification confirms "Company code copied to clipboard"
+  - Code never exposed in DOM or logs - kept only in memory
+  - Re-fetches fresh code on every click (supports rotation workflow)
+  - Owner/Supervisor only - returns null for other roles
 
 ## User Preferences
 
