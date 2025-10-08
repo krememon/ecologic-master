@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +38,52 @@ export default function Auth() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailAvailability, setEmailAvailability] = useState<'checking' | 'available' | 'taken' | null>(null);
   const { toast } = useToast();
+
+  // Debounced email availability check
+  useEffect(() => {
+    const checkEmailAvailability = async () => {
+      if (!formData.email || formData.email.length < 3) {
+        setEmailAvailability(null);
+        return;
+      }
+
+      // Basic email format validation
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        setEmailAvailability(null);
+        return;
+      }
+
+      setEmailAvailability('checking');
+
+      try {
+        const response = await fetch(`/api/auth/email-available?email=${encodeURIComponent(formData.email)}`);
+        const data = await response.json();
+        
+        if (data.available) {
+          setEmailAvailability('available');
+          // Clear email error if it was about availability
+          if (errors.email === "This email is currently in use") {
+            setErrors(prev => {
+              const newErrors = { ...prev };
+              delete newErrors.email;
+              return newErrors;
+            });
+          }
+        } else {
+          setEmailAvailability('taken');
+          setErrors(prev => ({ ...prev, email: "This email is currently in use" }));
+        }
+      } catch (error) {
+        console.error("Email availability check failed:", error);
+        setEmailAvailability(null);
+      }
+    };
+
+    const timeoutId = setTimeout(checkEmailAvailability, 500); // 500ms debounce
+    return () => clearTimeout(timeoutId);
+  }, [formData.email]);
 
   // Password strength calculation
   const getPasswordStrength = (password: string) => {
@@ -148,9 +193,11 @@ export default function Auth() {
         });
         window.location.href = "/";
       } else {
+        let errorData: any = null;
         let errorMessage = "Failed to create account";
+        
         try {
-          const errorData = await response.json();
+          errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
         } catch {
           try {
@@ -160,10 +207,13 @@ export default function Auth() {
           }
         }
 
-        if (errorMessage.includes("already exists") || errorMessage.includes("already in use")) {
+        // Handle 409 EMAIL_IN_USE error with inline error message
+        if (response.status === 409 && (errorData?.code === 'EMAIL_IN_USE' || errorMessage.includes("already in use") || errorMessage.includes("currently in use"))) {
           setErrors({ 
-            general: "An account with this email already exists. Try logging in instead.",
+            email: "This email is currently in use"
           });
+          // Go back to user info step to show the error
+          setStep('user-info');
         } else {
           setErrors({ general: errorMessage });
         }
@@ -210,9 +260,11 @@ export default function Auth() {
         });
         window.location.href = "/";
       } else {
+        let errorData: any = null;
         let errorMessage = "Failed to join company";
+        
         try {
-          const errorData = await response.json();
+          errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
         } catch {
           try {
@@ -222,12 +274,13 @@ export default function Auth() {
           }
         }
 
-        if (errorMessage.includes("already exists") || errorMessage.includes("already in use")) {
+        // Handle 409 EMAIL_IN_USE error with inline error message
+        if (response.status === 409 && (errorData?.code === 'EMAIL_IN_USE' || errorMessage.includes("already in use") || errorMessage.includes("currently in use"))) {
           setErrors({ 
-            general: "An account with this email already exists. Try logging in instead.",
-            email: "This email is already registered"
+            email: "This email is currently in use"
           });
-          // No toast for duplicate email - we show the inline error instead
+          // Go back to user info step to show the error
+          setStep('user-info');
         } else {
           setErrors({ general: errorMessage });
           toast({
