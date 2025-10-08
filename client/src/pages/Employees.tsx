@@ -15,6 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import EmployeeCard from "@/components/employees/EmployeeCard";
+import InviteTeamButton from "@/components/employees/InviteTeamButton";
 
 type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
 
@@ -158,12 +159,7 @@ export default function Employees() {
           <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
           <p className="text-muted-foreground mt-1">Manage your team members and their roles</p>
         </div>
-        <Link href="/settings">
-          <Button variant="outline">
-            <Users className="h-4 w-4 mr-2" />
-            Invite Team
-          </Button>
-        </Link>
+        <InviteTeamButton />
       </div>
 
       {/* Filters and Sort */}
