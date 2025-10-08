@@ -167,6 +167,17 @@ EcoLogic is a professional construction management platform designed for trade c
   - Added Employees navigation link (visible only with users.view permission)
   - All queries scoped to organizationId for multi-tenant isolation
   - Auto-inclusion: new users joining via invite code automatically appear in roster
+- October 8, 2025. Transformed Employees page to visual card grid interface:
+  - Extended users table with contact fields: phone, addressLine1, addressLine2, city, state, postalCode, country
+  - Enhanced GET /api/org/users to return full contact information
+  - Created GET /api/users/:id/jobs/summary endpoint for employee job statistics
+  - Built EmployeeCard component with role/status badges, contact info, and collapsible jobs history
+  - Built JobsHistory component showing job counts by status (scheduled, in progress, completed)
+  - Replaced table layout with responsive card grid (1 col mobile → 2 sm → 3 xl → 4 2xl)
+  - Added sort functionality: Name A-Z, Role hierarchy, Joined date (newest first)
+  - Cards display email, phone, address when available with icon-based layout
+  - Jobs history section lazy-loads and links to filtered job list per employee
+  - Design matches Client cards styling with hover effects and smooth transitions
 
 ## User Preferences
 
