@@ -196,6 +196,15 @@ EcoLogic is a professional construction management platform designed for trade c
   - Updated CompanyInviteCode messaging: "Owners and Supervisors can share this code"
   - Fallback message updated to include Supervisors: "Only Owners and Supervisors can view and share invite codes"
   - Full RBAC alignment between frontend conditional rendering and backend permission checks
+- October 8, 2025. Implemented comprehensive phone number feature:
+  - Created phone utilities: validatePhone, normalizePhone (E.164), formatPhone (US display), getRawPhoneValue
+  - Added phone field to registration flow (both owner and member paths) with auto-formatting
+  - Enhanced Profile card in Settings with phone input and update functionality
+  - Updated Employee cards to display formatted phone with click-to-call (tel:) links
+  - Backend endpoints normalize phone to E.164 format for data integrity
+  - Phone validation on all endpoints (400 error for invalid format)
+  - Supports clearing phone number (null/empty value)
+  - End-to-end flow maintains phone normalization from registration through profile updates
 
 ## User Preferences
 
