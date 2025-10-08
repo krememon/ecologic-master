@@ -18,15 +18,20 @@ import { useTranslation } from "react-i18next";
 import LanguageSelector from "@/components/LanguageSelector";
 import CompanyInviteCode from "@/components/CompanyInviteCode";
 import { BillingSection } from "@/components/BillingSection";
+import { useCan } from "@/hooks/useCan";
 
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { can } = useCan();
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Check if user can manage company (Owner/Supervisor only)
+  const canManageCompany = can("org.view");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -283,31 +288,33 @@ export default function Settings() {
 
 
 
-        {/* Company Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5" />
-              Company
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="companyName">Company Name</Label>
-              <Input id="companyName" defaultValue={company?.name || ""} />
-            </div>
-            <div>
-              <Label htmlFor="companyEmail">Company Email</Label>
-              <Input id="companyEmail" type="email" defaultValue={company?.email || ""} />
-            </div>
-            <div>
-              <Label htmlFor="companyPhone">Phone Number</Label>
-              <Input id="companyPhone" defaultValue={company?.phone || ""} />
-            </div>
-            
-            <Button className="w-full">Update Company</Button>
-          </CardContent>
-        </Card>
+        {/* Company Settings - Owner/Supervisor Only */}
+        {canManageCompany && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <SettingsIcon className="h-5 w-5" />
+                Company
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="companyName">Company Name</Label>
+                <Input id="companyName" defaultValue={company?.name || ""} />
+              </div>
+              <div>
+                <Label htmlFor="companyEmail">Company Email</Label>
+                <Input id="companyEmail" type="email" defaultValue={company?.email || ""} />
+              </div>
+              <div>
+                <Label htmlFor="companyPhone">Phone Number</Label>
+                <Input id="companyPhone" defaultValue={company?.phone || ""} />
+              </div>
+              
+              <Button className="w-full">Update Company</Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Appearance & Language Settings */}
         <Card>
@@ -366,8 +373,8 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Company Management */}
-        <CompanyInviteCode />
+        {/* Company Management - Owner/Supervisor Only */}
+        {canManageCompany && <CompanyInviteCode />}
 
         {/* Authentication Methods */}
         <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 border-0 rounded-2xl overflow-hidden">
