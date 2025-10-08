@@ -123,6 +123,8 @@ export default function Auth() {
       newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Please enter a valid email";
+    } else if (emailAvailability === 'taken') {
+      newErrors.email = "This email is currently in use";
     }
 
     if (formData.phone && !validatePhone(formData.phone)) {
@@ -148,6 +150,21 @@ export default function Auth() {
   const handleUserInfoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Block submit if email is being checked or is taken
+    if (emailAvailability === 'checking') {
+      toast({
+        title: "Please wait",
+        description: "Checking email availability...",
+        variant: "default"
+      });
+      return;
+    }
+
+    if (emailAvailability === 'taken') {
+      setErrors(prev => ({ ...prev, email: "This email is currently in use" }));
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -596,9 +613,10 @@ export default function Auth() {
           <Button 
             type="submit" 
             className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-            disabled={isLoading}
+            disabled={isLoading || emailAvailability === 'checking' || emailAvailability === 'taken'}
+            data-testid="button-continue"
           >
-            {isLoading ? "Creating Account..." : step === 'user-info' ? "Continue" : "Create Account"}
+            {isLoading ? "Creating Account..." : emailAvailability === 'checking' ? "Checking..." : step === 'user-info' ? "Continue" : "Create Account"}
           </Button>
             </>
           )}

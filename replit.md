@@ -39,3 +39,25 @@ Key architectural decisions include:
 - **WebSockets**: `ws` library
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
+
+## Recent Changes
+
+### October 8, 2025: Platform-wide Email Uniqueness Enforcement
+- Created normalizeEmail utility (trim + lowercase) for consistent email handling
+- Added case-insensitive unique database index on users.email using LOWER(TRIM(email))
+- Built GET /api/auth/email-available endpoint for real-time email availability checking
+- Updated all auth endpoints (registration, login, Google OAuth, profile update) to normalize emails
+- All endpoints return 409 with EMAIL_IN_USE code when duplicate email detected
+- Registration forms show inline error "This email is currently in use" with 500ms debounced check
+- Settings page email change shows same inline error with debounced availability check
+- Email input fields get red border when duplicate detected; no success toasts for duplicates
+- Google OAuth auto-links to existing accounts when email matches (normalized comparison)
+- PATCH /api/auth/user normalizes email, checks for duplicates, returns 409 before attempting update
+
+### October 8, 2025: Enhanced Registration Flow Protection
+- Continue button disabled when email availability is 'checking' or 'taken'
+- Button text changes to "Checking..." during email validation
+- Form validation includes emailAvailability state check
+- handleUserInfoSubmit blocks navigation when email is taken or being checked
+- Users cannot proceed to Company Setup or Join Company steps with duplicate email
+- Clear visual feedback: disabled button + inline error + red border on email input

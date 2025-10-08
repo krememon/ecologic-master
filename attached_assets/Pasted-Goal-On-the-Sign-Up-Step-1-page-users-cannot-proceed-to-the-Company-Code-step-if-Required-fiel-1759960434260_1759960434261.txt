@@ -1,0 +1,143 @@
+Goal
+
+On the Sign Up (Step 1) page, users cannot proceed to the Company Code step if:
+
+Required fields are invalid, or
+
+The email is already in use.
+
+Prevent manual URL hopping to the Company Code page.
+
+Keep clear inline red error: “This email is currently in use.”
+
+1) Backend: precheck + step guard
+A) Add email precheck endpoint (idempotent)
+// POST /api/auth/precheck-email
+// body: { email: string }
+import { normalizeEmail, isUniqueViolation } from '@/lib/auth';
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
+  const email = normalizeEmail(req.body.email ?? '');
+
+  // Quick existence check
+  const exists = await db.user.findUnique({ where: { email }, select: { id: true } });
+  if (exists) {
+    return res.status(409).json({ code: 'EMAIL_IN_USE', message: 'This email is currently in use' });
+  }
+
+  // Mark step1 as passed: set a short-lived httpOnly cookie
+  // 5-min TTL is enough for the next step
+  res.setHeader('Set-Cookie', serialize('signup_step1_ok', '1', {
+    httpOnly: true, sameSite: 'lax', secure: true, path: '/', maxAge: 60*5
+  }));
+  return res.status(204).end();
+}
+
+B) Protect the Company Code page
+// pages/signup/company.tsx (or route loader/middleware)
+export const getServerSideProps = async ({ req }) => {
+  const ok = parse(req.headers.cookie || '').signup_step1_ok === '1';
+  if (!ok) {
+    return { redirect: { destination: '/signup', permanent: false } };
+  }
+  return { props: {} };
+};
+
+
+This ensures no one can open Step 2 URL unless Step 1 passed server checks.
+
+2) Frontend: Step 1 form logic
+
+You’re likely using React Hook Form + Zod/Yup. Add async email availability to block submit.
+
+A) Email availability hook
+function useEmailAvailability() {
+  const [state, setState] = useState<'idle'|'checking'|'available'|'taken'>('idle');
+
+  const check = useCallback(async (email: string) => {
+    if (!email) return setState('idle');
+    setState('checking');
+    try {
+      const r = await fetch(`/api/auth/email-available?email=${encodeURIComponent(email)}`);
+      const { available } = await r.json();
+      setState(available ? 'available' : 'taken');
+    } catch {
+      setState('idle'); // fail open to let server decide
+    }
+  }, []);
+
+  return { state, check };
+}
+
+B) Block submit + disable “Continue”
+// SignUpStep1.tsx
+const { register, handleSubmit, formState, watch } = useForm({ mode: 'onChange' });
+const { state: emailState, check } = useEmailAvailability();
+const email = watch('email');
+
+useEffect(() => {
+  const id = setTimeout(() => check(email), 350); // debounce
+  return () => clearTimeout(id);
+}, [email, check]);
+
+const onSubmit = async (values) => {
+  // Hard gate: if email taken, do not proceed
+  if (emailState === 'taken') {
+    setError('email', { type: 'manual', message: 'This email is currently in use' });
+    return;
+  }
+  // Server precheck: sets cookie signup_step1_ok
+  const r = await fetch('/api/auth/precheck-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: values.email }),
+  });
+
+  if (r.status === 409) {
+    setError('email', { type: 'manual', message: 'This email is currently in use' });
+    return;
+  }
+  if (!r.ok) {
+    toast.error('Could not verify email. Please try again.');
+    return;
+  }
+
+  // proceed to Step 2 only after server ok
+  router.push('/signup/company');
+};
+
+<Button
+  type="submit"
+  disabled={
+    !formState.isValid ||
+    formState.isSubmitting ||
+    emailState === 'taken' ||
+    emailState === 'checking'
+  }
+>
+  {formState.isSubmitting ? 'Checking…' : 'Continue'}
+</Button>
+
+{emailState === 'taken' && (
+  <p className="mt-1 text-sm text-red-600">This email is currently in use</p>
+)}
+
+
+Key: Disable the button while checking or when taken. On submit, recheck server (source of truth) and only then navigate.
+
+3) Extra: clear the cookie after Step 2 starts
+
+In Step 2 getServerSideProps, after allowing entry, clear the signup_step1_ok cookie to avoid reuse:
+
+res.setHeader('Set-Cookie', serialize('signup_step1_ok', '', { path: '/', maxAge: 0 }));
+
+4) Acceptance Criteria
+
+Typing an already-registered email → red inline “This email is currently in use”, Continue is disabled.
+
+Hitting Continue with that email → stays on Step 1, inline error persists (no navigation).
+
+Manually visiting /signup/company without passing Step 1 → redirected back to /signup.
+
+Valid new email → server precheck succeeds → navigates to Company Code step.
