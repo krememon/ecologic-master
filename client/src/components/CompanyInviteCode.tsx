@@ -82,7 +82,7 @@ export default function CompanyInviteCode() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="inviteCode">Share this code with employees to join your company:</Label>
+          <Label htmlFor="inviteCode">Owners and Supervisors can share this code with employees to join your company:</Label>
           <div className="flex gap-2">
             <Input
               id="inviteCode"
