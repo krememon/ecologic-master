@@ -1,0 +1,100 @@
+Goal
+
+Remove the extra “Profile” item from the sidebar for all roles so only “Settings” remains.
+
+In Settings, only Owner and Supervisor can see Company + Employee Invite Code panels.
+
+Enforce the same restriction on the API (not just the UI).
+
+Context (current UI)
+
+Sidebar shows: [User badge] → Profile, Settings.
+
+Settings page has cards: Profile, Company, Appearance & Language, Notifications, Employee Invite Code, Authentication Methods.
+
+Required Changes
+1) Navigation
+
+Remove “Profile” from the left nav for all users.
+
+Ensure /profile route (if it exists) redirects to /settings (302 client-side or Next/React Router equivalent).
+
+Sidebar should show only Settings under the user badge.
+
+2) Frontend RBAC on Settings page
+
+Add a reusable guard:
+
+canManageCompany = role => role === 'OWNER' || role === 'SUPERVISOR';
+
+
+In the Settings page, render cards conditionally:
+
+Visible to ALL roles:
+
+Profile (personal fields: first/last name, email, avatar)
+
+Appearance & Language
+
+Notifications
+
+Authentication Methods
+
+Visible ONLY to Owner/Supervisor:
+
+Company (Company Name, Company Email, Phone)
+
+Employee Invite Code (and the copy button)
+
+Remove any leftover “Profile” page component; keep “Profile” card inside Settings for everyone.
+
+3) Backend / API enforcement
+
+Protect endpoints that read/update company data or invite codes:
+
+GET/PUT /api/company
+
+GET/POST /api/company/invite-code (or whichever endpoints exist)
+
+Middleware/handler check:
+
+if (!['OWNER','SUPERVISOR'].includes(session.role)) return res.status(403).json({ error: 'Forbidden' });
+
+
+Add unit tests for:
+
+Estimator/Technician hitting these endpoints → 403.
+
+Owner/Supervisor → 200 with correct behavior.
+
+4) Copy & UX tweaks
+
+Update the hint text on the Employee Invite Code card to remove any implication that others can access it. Example:
+
+“Owners and Supervisors can share this code with employees to join your company.”
+
+If a non-privileged user somehow navigates directly to a blocked section (e.g., via URL param), show a small inline 403 notice inside Settings (not a hard route error) and omit the restricted cards.
+
+5) QA / Acceptance Criteria
+
+✅ Sidebar shows only “Settings” (no “Profile”) for every role.
+
+✅ Owners/Supervisors see Company + Invite Code cards; other roles do not see them in the DOM.
+
+✅ API endpoints for company + invite code return 403 for non-Owner/Supervisor.
+
+✅ /profile redirects to /settings.
+
+✅ Existing actions (update profile, toggle notifications, change language, auth methods) still work for all roles.
+
+6) Files likely to touch (names may vary)
+
+components/Sidebar.tsx (remove “Profile” nav item)
+
+pages/settings.tsx or routes/settings/* (conditional render)
+
+lib/rbac.ts (add canManageCompany)
+
+pages/api/company/*.ts or server routes (RBAC checks)
+
+tests/api/company.rbac.test.ts and tests/ui/settings.rbac.test.ts
