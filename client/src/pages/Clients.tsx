@@ -211,10 +211,6 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      toast({
-        title: "Success",
-        description: "Client deleted successfully",
-      });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {

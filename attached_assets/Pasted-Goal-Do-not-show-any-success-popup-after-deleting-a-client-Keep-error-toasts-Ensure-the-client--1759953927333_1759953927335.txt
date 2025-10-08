@@ -1,0 +1,98 @@
+Goal
+
+Do not show any success popup after deleting a client.
+
+Keep error toasts.
+
+Ensure the client list/detail updates correctly (no stale items).
+
+1) Delete mutation: remove success toast
+
+Find the client delete mutation/hook (e.g., useDeleteClient, deleteClient, or in the confirm modal submit).
+
+// BEFORE
+const mutation = useMutation(deleteClient, {
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['clients'] });
+    toast.success('Client deleted successfully'); // REMOVE
+    router.push('/clients');                      // if on detail page
+  },
+  onError: (err) => toast.error(parseError(err)),
+});
+
+// AFTER
+const mutation = useMutation(deleteClient, {
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['clients'] });
+    router.push('/clients'); // keep navigation if applicable
+  },
+  onError: (err) => toast.error(parseError(err)),
+});
+
+
+If you optimistically update the list, keep the optimistic update but don’t toast.
+
+2) Confirm dialog / inline handlers
+
+Search and remove any direct success toasts triggered by the confirm action:
+
+toast.success('Client deleted successfully'
+
+showToast({ type: 'success', message: 'Client deleted successfully' })
+
+enqueueSnackbar('Client deleted successfully'
+
+If the delete is wired directly from a confirm modal:
+
+// handleConfirmDelete()
+await mutateAsync(clientId);
+// remove any success toast here (keep error catch)
+
+3) Global interceptor exception (if you auto-toast on any 2xx)
+
+If you have an API interceptor that shows success toasts when the server returns { message }, suppress for this route:
+
+// api/interceptor.ts
+if (res.status >= 200 && res.status < 300) {
+  const url = res.config.url ?? '';
+  const method = (res.config.method ?? '').toLowerCase();
+
+  // Suppress success toast for client DELETE
+  if (method === 'delete' && url.startsWith('/api/clients')) {
+    return res;
+  }
+
+  // Otherwise, if you normally toast success:
+  if (res.data?.message) {
+    toast.success(res.data.message);
+  }
+}
+
+
+(Adjust path prefixes to match your API.)
+
+4) UI polish (no toast needed)
+
+After delete from detail page: redirect to /clients and the list is refreshed (invalidated).
+
+After delete from list row menu: remove the row optimistically, and also call invalidateQueries(['clients']) on settle to stay consistent.
+
+Empty state: ensure the clients page shows the existing empty-state card (no toast).
+
+5) QA / Acceptance
+
+Deleting from client detail → no success toast, navigates to Clients list.
+
+Deleting from clients list (row action) → row disappears, no toast.
+
+Server or validation error → error toast still appears.
+
+Other success toasts (jobs, invoices, etc.) remain unaffected.
+
+Likely files
+
+hooks/useDeleteClient.ts or mutations/clients.ts
+
+components/clients/ClientActionsMenu.tsx or delete confirm modal
+
+lib/api/interceptor.ts (only if you globally toast 2xx)
