@@ -7,16 +7,16 @@ import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, ChevronDown,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useCan } from "@/hooks/useCan";
-import JobsHistory from "./JobsHistory";
+import JobsHistory from "./JobsHistory.tsx";
 
 type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
 
 interface EmployeeCardProps {
   employee: {
     id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
     phone?: string | null;
     addressLine1?: string | null;
     addressLine2?: string | null;
