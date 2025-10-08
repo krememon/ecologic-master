@@ -36,6 +36,8 @@ export default function Settings() {
     email: "",
     phone: ""
   });
+  const [emailAvailability, setEmailAvailability] = useState<'checking' | 'available' | 'taken' | null>(null);
+  const [emailError, setEmailError] = useState<string>("");
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
@@ -51,6 +53,46 @@ export default function Settings() {
       });
     }
   }, [user]);
+
+  // Debounced email availability check (only when email changes from original)
+  useEffect(() => {
+    const checkEmailAvailability = async () => {
+      // Don't check if email is the same as original
+      if (!profileData.email || profileData.email === user?.email) {
+        setEmailAvailability(null);
+        setEmailError("");
+        return;
+      }
+
+      // Basic email format validation
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileData.email)) {
+        setEmailAvailability(null);
+        return;
+      }
+
+      setEmailAvailability('checking');
+
+      try {
+        const response = await fetch(`/api/auth/email-available?email=${encodeURIComponent(profileData.email)}`);
+        const data = await response.json();
+        
+        if (data.available) {
+          setEmailAvailability('available');
+          setEmailError("");
+        } else {
+          setEmailAvailability('taken');
+          setEmailError("This email is currently in use");
+        }
+      } catch (error) {
+        console.error("Email availability check failed:", error);
+        setEmailAvailability(null);
+        setEmailError("");
+      }
+    };
+
+    const timeoutId = setTimeout(checkEmailAvailability, 500); // 500ms debounce
+    return () => clearTimeout(timeoutId);
+  }, [profileData.email, user?.email]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -173,7 +215,18 @@ export default function Settings() {
         email: data.email,
         phone: getRawPhoneValue(data.phone)
       });
-      if (!res.ok) throw new Error("Failed to update profile");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        
+        // Handle 409 EMAIL_IN_USE error
+        if (res.status === 409 && errorData.code === 'EMAIL_IN_USE') {
+          setEmailError("This email is currently in use");
+          throw new Error("EMAIL_IN_USE");
+        }
+        
+        throw new Error(errorData.message || "Failed to update profile");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -182,11 +235,17 @@ export default function Settings() {
         title: "Success",
         description: "Profile updated successfully",
       });
+      setEmailError("");
     },
-    onError: () => {
+    onError: (error: Error) => {
+      // Don't show toast for email in use - we show inline error instead
+      if (error.message === "EMAIL_IN_USE") {
+        return;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: error.message || "Failed to update profile",
         variant: "destructive",
       });
     },
@@ -338,7 +397,15 @@ export default function Settings() {
                   type="email" 
                   value={profileData.email}
                   onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+                  className={emailError ? "border-red-500" : ""}
+                  data-testid="input-email"
                 />
+                {emailError && (
+                  <p className="text-sm text-red-500 mt-1">{emailError}</p>
+                )}
+                {emailAvailability === 'checking' && (
+                  <p className="text-sm text-slate-500 mt-1">Checking availability...</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="phone">Phone Number</Label>
