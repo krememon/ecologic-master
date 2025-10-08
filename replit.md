@@ -219,6 +219,19 @@ EcoLogic is a professional construction management platform designed for trade c
   - Fixed UI case mismatch: EmployeeCard now correctly uses uppercase ACTIVE/INACTIVE for badge and menu display
   - React Query cache invalidation ensures UI updates without page refresh after status changes
   - Security pattern: Deactivated users instantly signed out on all devices and blocked from re-authentication
+- October 8, 2025. Implemented platform-wide email uniqueness enforcement:
+  - Created normalizeEmail utility (trim + lowercase) in shared/emailUtils.ts for consistent email handling
+  - Added case-insensitive unique database index on users.email using LOWER(TRIM(email)) SQL function
+  - Built GET /api/auth/email-available endpoint for real-time email availability checking
+  - Updated all auth endpoints (owner/member registration, login, Google OAuth, profile update) to normalize emails
+  - All endpoints return 409 with EMAIL_IN_USE code when duplicate email detected
+  - Registration forms (Auth.tsx) show inline error "This email is currently in use" with 500ms debounced check
+  - Settings page email change shows same inline error with debounced availability check
+  - Email input fields get red border when duplicate detected; no success toasts shown for duplicates
+  - Google OAuth auto-links to existing accounts when email matches (normalized comparison)
+  - PATCH /api/auth/user normalizes email, checks for duplicates, returns 409 before attempting update
+  - Complete flow: Database constraint → Backend validation → Frontend inline errors (no toasts)
+  - Email uniqueness enforced at both database and application levels for security
 
 ## User Preferences
 
