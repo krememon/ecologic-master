@@ -1,0 +1,82 @@
+On /employees (Owner/Supervisor only), make the Invite Team button:
+
+Copy the company’s invite code to the clipboard.
+
+Change its label to “Copied” for 2000ms and then revert to “Invite Team.”
+
+Never reveal the code in the DOM; fetch securely from the API.
+
+Where to work
+
+app/employees/page.tsx (or src/pages/employees/index.tsx)
+
+New component: src/components/employees/InviteTeamButton.tsx
+
+API already present: GET /api/org/info (guarded by org.view) returns { inviteCode }
+
+Requirements
+Component behavior
+
+On first click, lazily fetch the code from GET /api/org/info (Owner/Supervisor only). Cache it in component state.
+
+Copy using navigator.clipboard.writeText(code).
+
+Fallback: hidden <textarea> selection for older browsers.
+
+While the copy succeeds:
+
+Set label = "Copied" for exactly 2000ms (setTimeout(…, 2000)), then revert to “Invite Team”.
+
+Optionally show a subtle toast “Company code copied”.
+
+While copying, disable the button to avoid rapid double clicks (re-enable after state reverts).
+
+Do not render or log the code anywhere. Keep it only in memory state.
+
+Security / RBAC
+
+Button should only render if useCan('org.view') is true (Owner/Supervisor).
+
+Backend already enforces org.view for /api/org/info. If the fetch fails with 403, hide/disable the button silently.
+
+UI/UX
+
+Keep current styling; add pressed/disabled states and aria-live="polite" so screen readers announce “Copied”.
+
+Text must be exactly:
+
+Default: Invite Team
+
+Copied state: Copied
+
+Keep the existing icon if you have one; do not append the code to the label.
+
+Resilience
+
+If the Owner rotates the code in Settings during the session, the next click should fetch fresh data (i.e., re-fetch if cached value is older than 5 minutes or after a rotation event if you emit one). Simple approach: re-fetch on every click until performance is a concern.
+
+Acceptance Criteria
+
+Clicking Invite Team copies the code; pasting (⌘V/Ctrl+V) shows the correct code.
+
+The label switches to “Copied” for 2,000 ms and reliably reverts to “Invite Team.”
+
+Button disables during the 2-second window to prevent repeated clicks.
+
+Code is never visible in the DOM, markup, logs, or network responses to unauthorized roles.
+
+If the user lacks permission, the button is not rendered.
+
+Works on Chrome, Safari, Firefox; falls back gracefully if navigator.clipboard is unavailable.
+
+QA Checklist
+
+Owner & Supervisor: click → paste into a text field → code appears; label timing verified (2s).
+
+Rotate code in Settings → Company, return to Employees, click button → new code copies.
+
+Try as Technician/Dispatcher/Estimator → button not rendered.
+
+Disable JS clipboard permissions → fallback path still copies (textarea technique).
+
+No console errors; no TS/ESLint warnings.
