@@ -1,0 +1,115 @@
+Add a Phone Number field to the Sign Up flow.
+
+Persist phone to the user record and surface it on the Employees → Employee Information panel.
+
+Show + edit phone on the Profile card inside Settings for all roles.
+
+Keep RBAC as-is (no new permissions).
+
+Data & API
+
+Schema
+
+Add phone (string, nullable) to the user/employee table (whatever backs employees).
+
+Create an index for faster lookups if you already index email; phone is not unique.
+
+Validation / Normalization
+
+Accept digits, spaces, dashes, parentheses, plus sign, and x for extensions.
+
+Normalize to E.164 on save when possible (e.g., +16315551234).
+
+Store raw input if E.164 parse fails but still allow saving.
+
+Client-side format-as-you-type (mask) for US numbers; don’t hardcode US—allow international.
+
+API
+
+Include phone in:
+
+Auth/registration endpoint (create path).
+
+User update endpoint used by Profile.
+
+Employee read endpoints (list + detail).
+
+Add server-side validation mirror (length 7–20 chars after stripping non-digits except leading + and x).
+
+Sign Up UI
+
+On Create your account page, insert a Phone Number input under Email and above Password.
+
+Label: “Phone Number”
+
+Placeholder: “(555) 555-1234”
+
+Help text (small): “Used for scheduling and notifications.”
+
+Not required for initial MVP (optional), but if empty show a subtle “Add later in Profile” hint after sign up.
+
+If signup is via OAuth (Replit/Google), present a one-time “Complete your profile” modal right after first login to collect missing phone; make it skippable.
+
+Employees → Employee Information
+
+In the employee card / details panel, add a Phone row:
+
+Show formatted value (e.g., (631) 555-1234).
+
+If empty and viewer has permission to edit that employee, show “Add phone” inline action.
+
+Make the phone clickable tel: link on desktop & mobile.
+
+Settings → Profile (all roles)
+
+Add a Phone Number input to the Profile card (same field rules + formatting as Sign Up).
+
+The Update Profile action must include phone in the payload.
+
+Show current phone at the top block under email (to match your screenshot layout).
+
+Frontend Details
+
+Create a utility formatPhone(value: string): string that:
+
+Tries E.164 → display in national format (e.g., US (###) ###-####), else return raw sanitized string.
+
+Use a light input mask while typing; do not block paste with country code +.
+
+For the employee list (grid/cards): optional small subline with phone under email (truncate in narrow widths).
+
+Tests / QA
+
+Unit: validation helpers (E.164 parse, strip/mask).
+
+API: create user with phone, update phone, fetch employees includes phone.
+
+UI: sign up with phone → appears in Employee Information & Profile; edit in Profile → persists & re-renders; OAuth signup → sees “Complete your profile” modal when phone missing.
+
+Acceptance Criteria
+
+✅ New users can enter a Phone Number at Sign Up; saved to DB.
+
+✅ Existing users can view/edit phone in Settings → Profile.
+
+✅ Employees → Employee Information shows the phone (click-to-call).
+
+✅ Formatting looks clean; masking doesn’t block international.
+
+✅ No role changes; Owner/Supervisor restrictions remain unchanged elsewhere.
+
+Files likely touched (names may vary)
+
+pages/auth/register.* (add field, pass to API)
+
+components/forms/PhoneInput.tsx (new reusable input + mask)
+
+pages/settings/index.* (Profile card update)
+
+components/employees/EmployeeCard.* + EmployeeDetails.* (display phone)
+
+lib/formatters/phone.ts (format/normalize)
+
+pages/api/auth/register.*, pages/api/users/[id].*, pages/api/employees/* (phone plumbed through)
+
+DB migration: add_phone_to_users.sql/ts
