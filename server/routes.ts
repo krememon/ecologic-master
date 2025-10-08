@@ -12,9 +12,11 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, type UserRole } from "../shared/schema";
+import { insertJobSchema, type UserRole, companyMembers } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 // Stripe removed
 
 // Subscription plans removed
