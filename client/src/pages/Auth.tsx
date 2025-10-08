@@ -8,6 +8,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest } from "@/lib/queryClient";
 import type { UserRole } from "@shared/schema";
+import { formatPhoneInput, getRawPhoneValue, validatePhone } from "@shared/phoneUtils";
 
 export default function Auth() {
   const [step, setStep] = useState<'user-info' | 'company-setup' | 'join-company'>('user-info');
@@ -18,6 +19,7 @@ export default function Auth() {
     firstName: "",
     lastName: "",
     role: "TECHNICIAN" as UserRole,
+    phone: "",
     inviteCode: "",
     company: {
       name: "",
@@ -78,6 +80,10 @@ export default function Auth() {
       newErrors.email = "Please enter a valid email";
     }
 
+    if (formData.phone && !validatePhone(formData.phone)) {
+      newErrors.phone = "Please enter a valid phone number";
+    }
+
     if (!formData.password) {
       newErrors.password = "Password is required";
     } else if (formData.password.length < 6) {
@@ -131,6 +137,7 @@ export default function Auth() {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
+        phone: getRawPhoneValue(formData.phone),
         company: formData.company
       });
 
@@ -191,6 +198,7 @@ export default function Auth() {
         password: formData.password,
         firstName: formData.firstName,
         lastName: formData.lastName,
+        phone: getRawPhoneValue(formData.phone),
         role: formData.role,
         inviteCode: formData.inviteCode
       });
@@ -255,6 +263,21 @@ export default function Auth() {
       setErrors(prev => ({
         ...prev,
         [e.target.name]: ""
+      }));
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneInput(e.target.value);
+    setFormData(prev => ({
+      ...prev,
+      phone: formatted
+    }));
+    // Clear error when user starts typing
+    if (errors.phone) {
+      setErrors(prev => ({
+        ...prev,
+        phone: ""
       }));
     }
   };
@@ -423,6 +446,25 @@ export default function Auth() {
             />
             {errors.email && (
               <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="phone">Phone Number</Label>
+            <Input
+              id="phone"
+              name="phone"
+              type="tel"
+              placeholder="(555) 555-1234"
+              value={formData.phone}
+              onChange={handlePhoneChange}
+              className={errors.phone ? "border-red-500" : ""}
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Used for scheduling and notifications
+            </p>
+            {errors.phone && (
+              <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
             )}
           </div>
           
