@@ -65,7 +65,7 @@ export default function CompanyInviteCode() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-slate-600 dark:text-slate-400">
-            Only business owners can view and share invite codes.
+            Only Owners and Supervisors can view and share invite codes.
           </p>
         </CardContent>
       </Card>
