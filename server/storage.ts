@@ -355,7 +355,12 @@ export class DatabaseStorage implements IStorage {
   async rotateInviteCode(companyId: number, newCode: string): Promise<Company> {
     const [company] = await db
       .update(companies)
-      .set({ inviteCode: newCode, updatedAt: new Date() })
+      .set({ 
+        inviteCode: newCode, 
+        inviteCodeVersion: sql`${companies.inviteCodeVersion} + 1`,
+        inviteCodeRotatedAt: new Date(),
+        updatedAt: new Date() 
+      })
       .where(eq(companies.id, companyId))
       .returning();
     return company;

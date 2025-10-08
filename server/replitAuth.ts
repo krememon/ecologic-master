@@ -697,6 +697,21 @@ export async function setupAuth(app: Express) {
         permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
       });
       
+      // Rotate invite code after successful registration (security best practice)
+      const { generateInviteCode } = await import("@shared/inviteCode");
+      const newInviteCode = generateInviteCode();
+      const updatedCompany = await storage.rotateInviteCode(company.id, newInviteCode);
+      
+      // Broadcast invite code rotation to company members
+      const { broadcastToCompany } = await import("./routes");
+      await broadcastToCompany(company.id, {
+        type: 'invite_code_rotated',
+        data: {
+          companyId: company.id,
+          version: updatedCompany.inviteCodeVersion
+        }
+      }, user.id); // Exclude the new user
+      
       // Create session
       const sessionUser = {
         claims: {

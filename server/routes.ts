@@ -64,6 +64,32 @@ function broadcastToUser(userId: string, message: any) {
   }
 }
 
+async function broadcastToCompany(companyId: number, message: any, excludeUserId?: string) {
+  // Get all company members
+  const members = await db
+    .select({ userId: companyMembers.userId })
+    .from(companyMembers)
+    .where(eq(companyMembers.companyId, companyId));
+  
+  const messageStr = JSON.stringify(message);
+  
+  // Broadcast to all members
+  for (const member of members) {
+    if (excludeUserId && member.userId === excludeUserId) {
+      continue; // Skip the user who triggered the action
+    }
+    
+    const userSockets = wsClients.get(member.userId);
+    if (userSockets) {
+      userSockets.forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(messageStr);
+        }
+      });
+    }
+  }
+}
+
 async function sendPushNotification(userId: string, notification: any) {
   // Push notification implementation
 }
@@ -109,6 +135,9 @@ function requirePerm(permissions: Permission | Permission[]) {
     next();
   };
 }
+
+// Export for use in other modules
+export { broadcastToCompany };
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Ensure uploads directory exists
@@ -346,7 +375,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update company with new code
       const updatedCompany = await storage.rotateInviteCode(company.id, newCode);
       
-      res.json({ inviteCode: updatedCompany.inviteCode });
+      // Broadcast invite code rotation to company members
+      await broadcastToCompany(company.id, {
+        type: 'invite_code_rotated',
+        data: {
+          companyId: company.id,
+          version: updatedCompany.inviteCodeVersion
+        }
+      });
+      
+      res.json({ 
+        inviteCode: updatedCompany.inviteCode,
+        inviteCodeVersion: updatedCompany.inviteCodeVersion,
+        inviteCodeRotatedAt: updatedCompany.inviteCodeRotatedAt
+      });
     } catch (error) {
       console.error("Error rotating invite code:", error);
       res.status(500).json({ message: "Failed to rotate invite code" });
