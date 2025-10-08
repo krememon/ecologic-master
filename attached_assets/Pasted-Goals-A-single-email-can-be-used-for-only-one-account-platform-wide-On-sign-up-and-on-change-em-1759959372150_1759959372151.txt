@@ -1,0 +1,178 @@
+Goals
+
+A single email can be used for only one account platform-wide.
+
+On sign-up (and on “change email” in Profile), show inline red error text:
+This email is currently in use
+
+Works for credentials and OAuth (Google/Replit) paths.
+
+Case-insensitive, trimmed, normalized emails.
+
+1) Database (source of truth)
+
+Add/ensure a unique index on normalized email.
+
+Postgres (case-insensitive)
+
+-- 1) Add a functional column or computed index
+CREATE EXTENSION IF NOT EXISTS citext;
+
+ALTER TABLE "User"
+  ALTER COLUMN email TYPE CITEXT;
+
+-- If you can’t change type, do computed index:
+-- CREATE UNIQUE INDEX users_email_unique ON "User" (lower(trim(email)));
+
+
+Prisma example
+
+model User {
+  id       String @id @default(cuid())
+  email    String @db.Citext @unique
+  // ...
+}
+
+
+If you support soft-delete, the unique index still blocks reuse. Decide whether soft-deleted accounts should free the email; if yes, use a partial unique index on deleted_at IS NULL.
+
+2) Normalization helper (server & client)
+export function normalizeEmail(raw: string) {
+  return raw.trim().toLowerCase();
+}
+
+
+Always store normalizeEmail(email).
+
+3) Sign-up API (credentials)
+
+Before create, do a fast existence check; still rely on DB unique to prevent races.
+
+// POST /api/auth/register
+const email = normalizeEmail(req.body.email);
+
+// quick check for UX
+const exists = await db.user.findUnique({ where: { email } });
+if (exists) {
+  return res.status(409).json({ code: 'EMAIL_IN_USE', message: 'This email is currently in use' });
+}
+
+// create (wrap in try/catch to catch unique violation)
+try {
+  const user = await db.user.create({ data: { ...payload, email } });
+  return res.status(201).json(user);
+} catch (e) {
+  if (isUniqueViolation(e)) {
+    return res.status(409).json({ code: 'EMAIL_IN_USE', message: 'This email is currently in use' });
+  }
+  throw e;
+}
+
+
+isUniqueViolation should check DB error code (e.g., Postgres 23505).
+
+4) OAuth / SSO (Google, Replit)
+
+After provider returns profile email:
+
+const email = normalizeEmail(profile.email)
+
+If a user with that email exists → sign them into that same account (link provider if needed).
+
+If not exists → create new user with that email.
+
+Block creating multiple users with the same email by letting the DB unique index enforce it and catching 23505.
+
+If you support multiple tenants/companies, still keep global uniqueness per your spec.
+
+5) Client-side UX (Sign-up form)
+
+Add debounced availability check (e.g., 300ms after stop typing / on blur):
+
+GET /api/auth/email-available?email=... → { available: boolean }
+
+Show inline red helper text under the email input when not available.
+
+Example:
+
+// EmailInput.tsx (React Hook Form)
+<FormField
+  name="email"
+  render={({ field, fieldState }) => (
+    <div>
+      <Input type="email" placeholder="you@example.com" {...field} onBlur={checkAvailability} />
+      {availability === 'taken' && (
+        <p className="mt-1 text-sm text-red-600">This email is currently in use</p>
+      )}
+      {fieldState.error && (
+        <p className="mt-1 text-sm text-red-600">{fieldState.error.message}</p>
+      )}
+    </div>
+  )}
+/>
+
+
+Do not rely solely on this—server check remains authoritative.
+
+Endpoint
+
+// GET /api/auth/email-available
+const email = normalizeEmail(req.query.email as string);
+const exists = await db.user.findUnique({ where: { email }, select: { id: true } });
+res.json({ available: !exists });
+
+6) Profile → Change Email
+
+Same server logic:
+
+Reject with 409 EMAIL_IN_USE and message “This email is currently in use”.
+
+Same inline red helper text in the Profile form.
+
+7) Interceptor / Toasts
+
+If you have a global success-toast on 2xx, leave as-is.
+
+For 409 EMAIL_IN_USE, surface the message inline on the field, not as a success toast.
+
+In submit handler, map 409 to form error:
+
+if (err.code === 'EMAIL_IN_USE' || err.status === 409) {
+  setError('email', { type: 'manual', message: 'This email is currently in use' });
+  return;
+}
+toast.error(parseError(err)); // other errors
+
+8) Tests / Acceptance
+
+DB: attempting to insert two users with same email → second fails (23505).
+
+API: register with existing email → 409 JSON { code:'EMAIL_IN_USE' }.
+
+UI:
+
+Typing an existing email shows red inline text.
+
+Submitting with that email keeps the message and blocks submit.
+
+Changing email in Profile to a taken email shows the same inline message.
+
+OAuth: same email reuses the existing account; no duplicates created.
+
+Files to touch (names may vary)
+
+DB migration for unique index (users_email_unique or CITEXT).
+
+lib/normalizeEmail.ts
+
+pages/api/auth/register.ts
+
+pages/api/auth/email-available.ts
+
+Auth provider callback(s) (Google/Replit).
+
+Sign-up form component (debounced check + inline error).
+
+Profile email change handler.
+
+Error mapper / interceptor.
