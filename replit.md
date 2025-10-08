@@ -188,6 +188,14 @@ EcoLogic is a professional construction management platform designed for trade c
   - Code never exposed in DOM or logs - kept only in memory
   - Re-fetches fresh code on every click (supports rotation workflow)
   - Owner/Supervisor only - returns null for other roles
+- October 8, 2025. Settings page consolidation and RBAC enforcement:
+  - Removed duplicate Profile navigation item, kept only Settings in sidebar
+  - Added /profile to /settings redirect for backward compatibility
+  - Enforced org.view permission on Settings page: Company card visible only to Owner/Supervisor
+  - Added org.view permission to GET /api/company backend endpoint for API-level protection
+  - Updated CompanyInviteCode messaging: "Owners and Supervisors can share this code"
+  - Fallback message updated to include Supervisors: "Only Owners and Supervisors can view and share invite codes"
+  - Full RBAC alignment between frontend conditional rendering and backend permission checks
 
 ## User Preferences
 
