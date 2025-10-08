@@ -73,6 +73,8 @@ export const companies = pgTable("companies", {
   postalCode: varchar("postal_code"),
   country: varchar("country").default("US"),
   inviteCode: varchar("invite_code", { length: 20 }).notNull().unique(),
+  inviteCodeVersion: integer("invite_code_version").default(0).notNull(),
+  inviteCodeRotatedAt: timestamp("invite_code_rotated_at").defaultNow(),
   logo: varchar("logo"),
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),

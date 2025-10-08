@@ -1,0 +1,159 @@
+Goal
+
+Whenever a new user successfully registers with a company, the company’s invite code is immediately regenerated (old code becomes invalid).
+
+Both UI entry points:
+
+Settings → Employee Invite Code card
+
+Invite Team button/modal
+always show the current, valid code and refresh after a join.
+
+Backend
+1) Data
+
+company.inviteCode: string (8–12 chars, uppercase, no confusing chars like O/0, I/1).
+
+company.inviteCodeVersion: number (default 0).
+
+company.inviteCodeRotatedAt: Date.
+
+2) Secure generator
+function genInviteCode(len = 8) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0, I/1
+  const bytes = crypto.getRandomValues(new Uint8Array(len));
+  let s = '';
+  for (const b of bytes) s += alphabet[b % alphabet.length];
+  return s;
+}
+
+
+Use crypto-secure RNG (Node crypto.randomBytes or WebCrypto).
+
+3) Registration flow (critical)
+
+When a user signs up using a valid company code:
+
+Validate the code against company.inviteCode.
+
+On successful user creation, rotate the code atomically:
+
+await db.$transaction(async (tx) => {
+  // 1. create user (already validated against current inviteCode)
+  const user = await tx.user.create({ data: {...} });
+
+  // 2. rotate company code
+  await tx.company.update({
+    where: { id: companyId },
+    data: {
+      inviteCode: genInviteCode(8),
+      inviteCodeVersion: { increment: 1 },
+      inviteCodeRotatedAt: new Date(),
+    },
+  });
+
+  return user;
+});
+
+
+Important: rotate after successful creation so racing users don’t break each other. If two signups hit at once, the second will fail validation and must retry using the new code surfaced in UI.
+
+4) Manual rotation endpoint (optional)
+
+POST /api/company/invite/rotate (RBAC: Owner/Supervisor).
+
+Returns { inviteCode, inviteCodeRotatedAt }.
+
+5) Rate-limit and brute-force protection
+
+Limit attempts per IP/email (e.g., 20/hour) on the join endpoint.
+
+Consider a short TTL token alternative in the future, but keep current scope to rotating code.
+
+Frontend
+6) Single source of truth fetcher
+
+Create useCompanyInviteCode() that fetches GET /api/company/invite returning:
+
+{ "inviteCode":"3063F9848C", "rotatedAt":"2025-10-07T...", "version": 7 }
+
+
+Use this hook in both:
+
+Settings → Employee Invite Code card
+
+Invite Team button/modal (copy pill, QR, etc.)
+
+7) Live refresh triggers
+
+After any successful registration:
+
+Server already rotated. Have the registration success response include companyId and emit a server event company:invite-rotated:{companyId} with the new version.
+
+In the app shell (for Owner/Supervisor):
+
+Subscribe to that channel (SSE/WebSocket). On message or when navigating back from the sign-up flow, call queryClient.invalidateQueries(['companyInvite']) so both the card and the button/modal fetch the new code.
+
+Also refresh after manual rotation or when opening the Invite modal.
+
+8) UI details
+
+Employee Invite Code card
+
+Read-only input bound to inviteCode.
+
+Copy button copies the current value.
+
+Subtext: “Auto-rotates after each employee joins.”
+
+Show Last rotated Xm ago.
+
+Invite Team button/modal
+
+Always calls useCompanyInviteCode() on open.
+
+Disable/gray the code while loading; show the fresh code on settle.
+
+Copy action uses the same value from the hook.
+
+Validation & Errors
+
+If a user posts an old code (race condition), respond 400 { code:'INVITE_CODE_EXPIRED' }.
+
+Frontend: show a small banner “That invite code just changed. Ask your supervisor for the new one.”
+
+Tests / Acceptance
+
+Unit
+
+genInviteCode() length, alphabet, randomness (no visually ambiguous chars).
+
+Integration
+
+Sign-up with valid code → user created → code rotated → next sign-up with old code fails.
+
+Manual rotate endpoint updates code and bumps version.
+
+E2E
+
+Open Settings card and Invite modal → both show the same fresh code.
+
+After a successful new join, both views refresh to the new code without page reload.
+
+RBAC (unchanged)
+
+Only Owner/Supervisor can view the invite code and use manual rotate.
+
+Others never receive the code from the API.
+
+Files to touch (names may vary)
+
+DB migration: add_invite_fields_to_company (inviteCodeVersion, inviteCodeRotatedAt).
+
+API: POST /api/auth/register, GET /api/company/invite, POST /api/company/invite/rotate.
+
+Frontend hooks: useCompanyInviteCode.ts.
+
+UI: Settings/EmployeeInviteCard.tsx, InviteTeamModal.tsx.
+
+Realtime: event publish on rotate; client subscription to company:invite-rotated.
