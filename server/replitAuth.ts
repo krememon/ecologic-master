@@ -523,10 +523,17 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Company name is required" });
       }
 
+      // Normalize email for consistency
+      const { normalizeEmail } = await import("@shared/emailUtils");
+      const normalizedEmail = normalizeEmail(email);
+
       // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email);
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
       if (existingUser) {
-        return res.status(400).json({ message: "User with this email already exists" });
+        return res.status(409).json({ 
+          code: 'EMAIL_IN_USE',
+          message: "This email is currently in use" 
+        });
       }
 
       // Hash password
@@ -542,10 +549,10 @@ export async function setupAuth(app: Express) {
       const { normalizePhone } = await import("@shared/phoneUtils");
       const normalizedPhone = phone ? normalizePhone(phone) : null;
 
-      // Create user
+      // Create user with normalized email
       const userData = {
         id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        email,
+        email: normalizedEmail,
         firstName: firstName || null,
         lastName: lastName || null,
         phone: normalizedPhone,
@@ -557,7 +564,19 @@ export async function setupAuth(app: Express) {
         resetPasswordExpires: null
       };
 
-      const user = await storage.createUser(userData);
+      let user;
+      try {
+        user = await storage.createUser(userData);
+      } catch (createError: any) {
+        // Handle unique constraint violation (23505 is Postgres unique violation code)
+        if (createError.code === '23505' || createError.message?.includes('unique constraint')) {
+          return res.status(409).json({ 
+            code: 'EMAIL_IN_USE',
+            message: "This email is currently in use" 
+          });
+        }
+        throw createError;
+      }
       
       // Generate unique invite code
       const inviteCode = await generateUniqueInviteCode(async (code) => {
@@ -646,10 +665,17 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Valid role is required" });
       }
 
+      // Normalize email for consistency
+      const { normalizeEmail } = await import("@shared/emailUtils");
+      const normalizedEmail = normalizeEmail(email);
+
       // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email);
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
       if (existingUser) {
-        return res.status(400).json({ message: "User with this email already exists" });
+        return res.status(409).json({ 
+          code: 'EMAIL_IN_USE',
+          message: "This email is currently in use" 
+        });
       }
 
       // Validate invite code
@@ -672,10 +698,10 @@ export async function setupAuth(app: Express) {
       const { normalizePhone } = await import("@shared/phoneUtils");
       const normalizedPhone = phone ? normalizePhone(phone) : null;
 
-      // Create user
+      // Create user with normalized email
       const userData = {
         id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        email,
+        email: normalizedEmail,
         firstName: firstName || null,
         lastName: lastName || null,
         phone: normalizedPhone,
@@ -687,7 +713,19 @@ export async function setupAuth(app: Express) {
         resetPasswordExpires: null
       };
 
-      const user = await storage.createUser(userData);
+      let user;
+      try {
+        user = await storage.createUser(userData);
+      } catch (createError: any) {
+        // Handle unique constraint violation (23505 is Postgres unique violation code)
+        if (createError.code === '23505' || createError.message?.includes('unique constraint')) {
+          return res.status(409).json({ 
+            code: 'EMAIL_IN_USE',
+            message: "This email is currently in use" 
+          });
+        }
+        throw createError;
+      }
       
       // Create role for user in company
       await db.insert(companyMembers).values({
@@ -817,6 +855,27 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Email availability check for registration validation
+  app.get("/api/auth/email-available", async (req, res) => {
+    try {
+      const { email } = req.query;
+      
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ available: false, message: "Email is required" });
+      }
+
+      const { normalizeEmail } = await import("@shared/emailUtils");
+      const normalizedEmail = normalizeEmail(email);
+      
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
+      
+      res.json({ available: !existingUser });
+    } catch (error) {
+      console.error("Email availability check error:", error);
+      res.status(500).json({ available: false, message: "Check failed" });
     }
   });
 
