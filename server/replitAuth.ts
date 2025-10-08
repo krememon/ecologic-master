@@ -808,7 +808,11 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Email and password are required" });
       }
 
-      const user = await storage.getUserByEmail(email);
+      // Normalize email for lookup
+      const { normalizeEmail } = await import("@shared/emailUtils");
+      const normalizedEmail = normalizeEmail(email);
+
+      const user = await storage.getUserByEmail(normalizedEmail);
       if (!user || !user.password) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
