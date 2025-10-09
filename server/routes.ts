@@ -916,16 +916,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete job
-  app.delete('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/jobs/:id', isAuthenticated, requirePerm("jobs.delete"), async (req: any, res) => {
     try {
-      const userId = getUserId(req.user);
-      const company = await storage.getUserCompany(userId);
+      const jobId = parseInt(req.params.id);
+      const companyId = req.companyId; // Set by requirePerm middleware
       
-      if (!company) {
-        return res.status(404).json({ message: "Company not found" });
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ 
+          message: "Job not found",
+          code: "JOB_NOT_FOUND" 
+        });
       }
       
-      const jobId = parseInt(req.params.id);
+      if (job.companyId !== companyId) {
+        return res.status(403).json({ 
+          message: "Forbidden",
+          code: "FORBIDDEN" 
+        });
+      }
+      
+      // Delete job (CASCADE will remove related schedule items, photos, etc.)
       await storage.deleteJob(jobId);
       
       res.status(204).send(); // No content response

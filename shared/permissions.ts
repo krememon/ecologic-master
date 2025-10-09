@@ -11,6 +11,7 @@ export type Permission =
   | "jobs.view.assigned"
   | "jobs.create"
   | "jobs.edit"
+  | "jobs.delete"
   | "jobs.status.update"
   | "jobs.photos.upload"
   | "jobs.tasks.complete"
@@ -33,6 +34,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "jobs.view.all",
     "jobs.create",
     "jobs.edit",
+    "jobs.delete",
     "jobs.status.update",
     "jobs.photos.upload",
     "jobs.tasks.complete",
@@ -53,6 +55,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "jobs.view.all",
     "jobs.create",
     "jobs.edit",
+    "jobs.delete",
     "jobs.status.update",
     "jobs.photos.upload",
     "jobs.tasks.complete",
@@ -77,6 +80,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "routes.manage",
     "jobs.view.all",
     "jobs.edit",
+    "jobs.delete",
     "jobs.create",
   ],
   ESTIMATOR: [
