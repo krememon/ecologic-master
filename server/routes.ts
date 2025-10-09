@@ -12,11 +12,11 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, lt, gt } from "drizzle-orm";
 // Stripe removed
 
 // Subscription plans removed
@@ -1003,8 +1003,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      const scheduleItems = await storage.getScheduleItems(company.id);
-      res.json(scheduleItems);
+      const { start, end } = req.query;
+      
+      // If start and end are provided, filter by date range with overlap logic
+      if (start && end) {
+        const startUtc = new Date(start as string);
+        const endUtc = new Date(end as string);
+        
+        if (isNaN(startUtc.getTime()) || isNaN(endUtc.getTime())) {
+          return res.status(400).json({ message: "Invalid start or end date" });
+        }
+        
+        // Overlap condition: (schedule.startDateTime < endUtc) AND (schedule.endDateTime > startUtc)
+        const filteredSchedule = await db
+          .select({
+            id: scheduleItems.id,
+            companyId: scheduleItems.companyId,
+            jobId: scheduleItems.jobId,
+            subcontractorId: scheduleItems.subcontractorId,
+            startDateTime: scheduleItems.startDateTime,
+            endDateTime: scheduleItems.endDateTime,
+            status: scheduleItems.status,
+            location: scheduleItems.location,
+            notes: scheduleItems.notes,
+            createdAt: scheduleItems.createdAt,
+            updatedAt: scheduleItems.updatedAt,
+            jobTitle: jobs.title,
+            jobStatus: jobs.status,
+            clientName: clients.name,
+            clientId: jobs.clientId,
+            subcontractorName: subcontractors.name,
+          })
+          .from(scheduleItems)
+          .leftJoin(jobs, eq(scheduleItems.jobId, jobs.id))
+          .leftJoin(clients, eq(jobs.clientId, clients.id))
+          .leftJoin(subcontractors, eq(scheduleItems.subcontractorId, subcontractors.id))
+          .where(
+            and(
+              eq(scheduleItems.companyId, company.id),
+              lt(scheduleItems.startDateTime, endUtc),
+              gt(scheduleItems.endDateTime, startUtc)
+            )
+          );
+        
+        return res.json(filteredSchedule);
+      }
+      
+      // Otherwise, return all schedule items (legacy behavior)
+      const allScheduleItems = await storage.getScheduleItems(company.id);
+      res.json(allScheduleItems);
     } catch (error) {
       console.error("Error fetching schedule items:", error);
       res.status(500).json({ message: "Failed to fetch schedule items" });
