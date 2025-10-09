@@ -413,6 +413,12 @@ export default function Jobs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      // Invalidate all schedule queries (with any date range) to remove ghost events
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/schedule-items')
+      });
       setJobToDelete(null); // Reset modal state
     },
     onError: (error: Error) => {
