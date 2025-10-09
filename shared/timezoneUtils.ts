@@ -1,7 +1,5 @@
-/**
- * Timezone and date range utilities for schedule filtering
- * Used by both frontend and backend for consistent date handling
- */
+import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+import { startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns';
 
 /**
  * Check if two date ranges overlap
@@ -29,27 +27,12 @@ export function overlaps(
  * @returns Start of day in UTC
  */
 export function getStartOfDayUTC(date: Date, timezone: string = 'UTC'): Date {
-  // Create a date string in the user's timezone
-  const dateStr = date.toLocaleString('en-US', { 
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-  
-  // Parse to get YYYY-MM-DD
-  const [month, day, year] = dateStr.split('/');
-  const localDateStr = `${year}-${month}-${day}T00:00:00`;
-  
-  // Create a date in the user's timezone
-  const localDate = new Date(localDateStr);
-  const utcDate = new Date(localDate.toLocaleString('en-US', { timeZone: 'UTC' }));
-  
-  // Adjust for timezone offset
-  const userDate = new Date(localDate.toLocaleString('en-US', { timeZone: timezone }));
-  const offset = localDate.getTime() - userDate.getTime();
-  
-  return new Date(localDate.getTime() - offset);
+  // Convert UTC date to the target timezone
+  const zonedDate = utcToZonedTime(date, timezone);
+  // Get start of day in the target timezone
+  const startOfDayInZone = startOfDay(zonedDate);
+  // Convert back to UTC
+  return zonedTimeToUtc(startOfDayInZone, timezone);
 }
 
 /**
@@ -59,22 +42,46 @@ export function getStartOfDayUTC(date: Date, timezone: string = 'UTC'): Date {
  * @returns End of day (23:59:59.999) in UTC
  */
 export function getEndOfDayUTC(date: Date, timezone: string = 'UTC'): Date {
-  const startOfDay = getStartOfDayUTC(date, timezone);
-  return new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
+  // Convert UTC date to the target timezone
+  const zonedDate = utcToZonedTime(date, timezone);
+  // Get end of day in the target timezone
+  const endOfDayInZone = endOfDay(zonedDate);
+  // Convert back to UTC
+  return zonedTimeToUtc(endOfDayInZone, timezone);
 }
 
 /**
- * Get start of week (Monday) in user's timezone, converted to UTC
+ * Get start of week (Sunday) in user's timezone, converted to UTC
  * @param date - Date in any timezone
  * @param timezone - IANA timezone string
- * @returns Start of week (Monday 00:00:00) in UTC
+ * @returns Start of week (Sunday 00:00:00) in UTC
  */
 export function getStartOfWeekUTC(date: Date, timezone: string = 'UTC'): Date {
-  const dayOfWeek = date.getDay();
-  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to Monday
-  const monday = new Date(date);
-  monday.setDate(date.getDate() + diff);
-  return getStartOfDayUTC(monday, timezone);
+  // Convert UTC date to the target timezone
+  const zonedDate = utcToZonedTime(date, timezone);
+  // Get start of week (Sunday) in the target timezone
+  const startOfWeekInZone = startOfWeek(zonedDate, { weekStartsOn: 0 });
+  // Get start of that day
+  const startOfDayInZone = startOfDay(startOfWeekInZone);
+  // Convert back to UTC
+  return zonedTimeToUtc(startOfDayInZone, timezone);
+}
+
+/**
+ * Get end of week (Saturday) in user's timezone, converted to UTC
+ * @param date - Date in any timezone
+ * @param timezone - IANA timezone string
+ * @returns End of week (Saturday 23:59:59.999) in UTC
+ */
+export function getEndOfWeekUTC(date: Date, timezone: string = 'UTC'): Date {
+  // Convert UTC date to the target timezone
+  const zonedDate = utcToZonedTime(date, timezone);
+  // Get end of week (Saturday) in the target timezone
+  const endOfWeekInZone = endOfWeek(zonedDate, { weekStartsOn: 0 });
+  // Get end of that day
+  const endOfDayInZone = endOfDay(endOfWeekInZone);
+  // Convert back to UTC
+  return zonedTimeToUtc(endOfDayInZone, timezone);
 }
 
 /**
@@ -98,8 +105,7 @@ export function getViewRange(
   } else {
     // week
     startUtc = getStartOfWeekUTC(anchorDate, timezone);
-    // End is start + 7 days
-    endUtc = new Date(startUtc.getTime() + 7 * 24 * 60 * 60 * 1000);
+    endUtc = getEndOfWeekUTC(anchorDate, timezone);
   }
 
   return {

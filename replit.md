@@ -73,3 +73,14 @@ Key architectural decisions include:
 - On success, navigates to job detail page (no success toast)
 - Frontend and backend validate end > start times with inline error messages
 - Eliminated separate API calls for client/job/schedule creation
+
+### October 9, 2025: Schedule Date-Range Filtering
+- Enhanced GET /api/schedule-items to accept optional start/end query params for date range filtering
+- Implemented SQL overlap logic: `WHERE startDateTime < :end AND endDateTime > :start` for efficient filtering
+- Created shared/timezoneUtils.ts with overlap checking utilities and date boundary conversion functions
+- Updated AIScheduling.tsx to compute viewport range based on selected day/week and pass as query parameters
+- Modal title dynamically shows "Week of [date]" or specific date based on selection
+- Added client-side filtering as safety net to ensure only overlapping jobs display when day is selected
+- Query keys include date range for proper cache management: `/api/schedule-items?start=${start}&end=${end}`
+- Jobs.tsx invalidates all schedule queries using predicate matching to handle queries with different date ranges
+- "All Planned Jobs" modal now shows only jobs overlapping current calendar viewport (day or week view)
