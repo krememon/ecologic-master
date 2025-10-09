@@ -1,0 +1,104 @@
+Problem
+
+“All Planned Jobs → Active Jobs” list is not scoped to the calendar’s current viewport; it’s showing all scheduled jobs.
+
+Goal
+
+In the Schedule modal/page, render only jobs whose schedule overlaps the selected date or week.
+
+Handle timezones correctly.
+
+1) API: add proper date-range filter (overlap logic)
+
+For the schedule fetch used by this view, require start and end query params (ISO UTC). Return only items that overlap the range:
+
+-- Overlap condition (UTC)
+(schedule.startAt < :end) AND (schedule.endAt > :start)
+
+
+(Do not use BETWEEN; use strict overlap logic above.)
+
+If the view is Day:
+
+start = startOfDay(selectedDate, userTZ) → toUTC
+
+end = endOfDay(selectedDate, userTZ) → toUTC
+
+If the view is Week:
+
+start = startOfWeek(viewDate, userTZ)
+
+end = start + 7 days (toUTC)
+
+Return { jobId, title, client, address, startAt, endAt, technician/subcontractor }.
+
+Caching: Key by ['schedule', companyId, startISO, endISO].
+
+2) Frontend: pass the viewport range and filter locally as a safety net
+
+When opening “All Planned Jobs”, compute the date window from the header (e.g., “Viewing from Sunday, Oct 5”):
+
+const { tz } = useUserTimeZone();
+const range = getViewRange(viewMode, anchorDate, tz); // returns { startUtcISO, endUtcISO }
+useQuery(['schedule', companyId, range.startUtcISO, range.endUtcISO], fetcher);
+
+
+If for any reason the API returns extra items, do a final client-side overlap filter using the same rule:
+
+const visible = items.filter(i => new Date(i.startAt) < range.end && new Date(i.endAt) > range.start);
+
+3) Rendering rules
+
+Day view: show only jobs with any time slice inside that day (based on user TZ day boundaries).
+
+Week view: group by day; each job appears only on days it overlaps.
+
+The “Active Jobs (N)” badge should count visible.length, not total active jobs.
+
+4) Timezone handling (critical)
+
+Store startAt/endAt in UTC.
+
+To compute day/week boundaries:
+
+Convert the user’s local boundary → UTC for queries.
+
+For display, convert each item’s UTC back to user TZ.
+
+Add a small util used everywhere:
+
+overlaps(rangeStartUtc, rangeEndUtc, itemStartUtc, itemEndUtc) {
+  return itemStartUtc < rangeEndUtc && itemEndUtc > rangeStartUtc;
+}
+
+5) Query keys & invalidation
+
+Include startISO and endISO in the query key:
+
+['schedule', companyId, startISO, endISO]
+
+When navigating weeks/days, the key changes → fresh fetch.
+
+After creating or editing a job/schedule, invalidate the current range key.
+
+6) Acceptance criteria
+
+Create two jobs: Oct 10 and Oct 11.
+
+Day = Oct 10 → shows only the Oct 10 job.
+
+Day = Oct 11 → shows only the Oct 11 job.
+
+Week including 10–11 → shows both, each only on their respective day tiles.
+
+Switching the header date updates the list immediately (no stale carryover).
+
+Counts (e.g., “Active Jobs (2)”) reflect the filtered set.
+
+7) Common pitfalls to fix if seen
+
+Using BETWEEN start AND end with inclusive ends (causes edge-day leakage).
+
+Comparing local times to UTC without converting (everything appears every day).
+
+Query key not including date range (stale results reused for new week)
