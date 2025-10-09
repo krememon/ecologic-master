@@ -158,7 +158,7 @@ export const jobs = pgTable("jobs", {
 // Job assignments table (many-to-many relationship between jobs and subcontractors)
 export const jobAssignments = pgTable("job_assignments", {
   id: serial("id").primaryKey(),
-  jobId: integer("job_id").notNull().references(() => jobs.id),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractors.id),
   assignedAt: timestamp("assigned_at").defaultNow(),
 });
@@ -167,7 +167,7 @@ export const jobAssignments = pgTable("job_assignments", {
 export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
-  jobId: integer("job_id").references(() => jobs.id),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   clientId: integer("client_id").references(() => clients.id),
   invoiceNumber: varchar("invoice_number").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
@@ -184,7 +184,7 @@ export const invoices = pgTable("invoices", {
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
-  jobId: integer("job_id").references(() => jobs.id),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type"), // contract, permit, blueprint, receipt, photo
   fileUrl: varchar("file_url").notNull(),
@@ -197,7 +197,7 @@ export const documents = pgTable("documents", {
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
-  jobId: integer("job_id").references(() => jobs.id),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   senderId: varchar("sender_id").notNull().references(() => users.id),
   recipientId: varchar("recipient_id").references(() => users.id),
   subject: varchar("subject"),
@@ -209,7 +209,7 @@ export const messages = pgTable("messages", {
 // Job Photos table for real-time progress tracking
 export const jobPhotos = pgTable("job_photos", {
   id: serial("id").primaryKey(),
-  jobId: integer("job_id").notNull().references(() => jobs.id),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   uploadedBy: varchar("uploaded_by").notNull().references(() => users.id),
   title: varchar("title", { length: 255 }),
   description: text("description"),
@@ -224,7 +224,7 @@ export const jobPhotos = pgTable("job_photos", {
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").references(() => companies.id).notNull(),
-  jobId: integer("job_id").references(() => jobs.id).notNull(),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: varchar("payment_method").notNull(), // cash, check, credit_card, bank_transfer, other
   status: varchar("status").notNull().default("pending"), // pending, completed, failed, refunded
@@ -238,7 +238,7 @@ export const payments = pgTable("payments", {
 export const scheduleItems = pgTable("schedule_items", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
-  jobId: integer("job_id").notNull().references(() => jobs.id),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   subcontractorId: integer("subcontractor_id").references(() => subcontractors.id),
   startDateTime: timestamp("start_date_time").notNull(),
   endDateTime: timestamp("end_date_time").notNull(),
