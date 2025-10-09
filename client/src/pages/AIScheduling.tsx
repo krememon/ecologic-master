@@ -236,7 +236,7 @@ export default function AIScheduling() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // Generate week dates from Monday (local time only)
+  // Generate week dates from Sunday (local time only)
   const weekDates = Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i));
 
   const getStatusColor = (status: string) => {
