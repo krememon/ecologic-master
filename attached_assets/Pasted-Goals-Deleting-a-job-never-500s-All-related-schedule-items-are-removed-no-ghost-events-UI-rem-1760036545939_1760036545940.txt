@@ -1,0 +1,108 @@
+Goals
+
+Deleting a job never 500s.
+
+All related schedule items are removed (no ghost events).
+
+UI removes the job from Jobs list and Schedule view immediately (no success toast needed).
+
+Backend (source of truth)
+1) Route
+
+Use DELETE /api/jobs/:id
+
+RBAC: OWNER, SUPERVISOR, DISPATCHER can delete; others forbidden.
+
+Scope by companyId from session.
+
+2) Fix foreign-key failures (likely cause of your error)
+
+Choose one approach:
+
+Preferred: ON DELETE CASCADE
+
+DB: set schedule_items.job_id → ON DELETE CASCADE.
+
+Do the same for other hard dependents (job_assignments, job_photos, job_notes, etc.).
+
+Then the handler can delete the job directly.
+
+If you can’t change FKs: manual cascade in a transaction
+
+BEGIN TRANSACTION
+  delete schedule_items where job_id = :jobId and company_id = :companyId
+  delete job_assignments where job_id = :jobId and company_id = :companyId
+  ... (other dependents)
+  delete jobs where id = :jobId and company_id = :companyId
+COMMIT
+
+
+Always return 204 No Content on success.
+
+Map known errors to readable 4xx (not a generic 500):
+
+JOB_NOT_FOUND (404)
+
+FORBIDDEN (403)
+
+HAS_INVOICES_OR_PAYMENTS (409) — only if you enforce a business rule; otherwise allow delete.
+
+3) Soft delete? (optional)
+
+If using soft delete, mark deleted_at and also delete schedule_items; or add WHERE deleted_at IS NULL to all schedule queries so they vanish.
+
+Frontend
+4) Mutation behavior (no success popup)
+
+On delete success:
+
+Invalidate: ['jobs'], ['job', jobId]
+
+Also invalidate schedule caches for the current viewport key(s):
+
+['schedule', companyId, startISO, endISO]
+
+If you show week/day in multiple tabs, invalidate the last used range keys too, if stored.
+
+If you optimistically remove from the list, still do the invalidations on settle.
+
+5) Error handling
+
+If API returns 404/403/409, show a small inline/modal message (not a generic red bar).
+
+Keep a generic toast only for true 500s: “Could not delete job.”
+
+6) Confirm dialog copy (no success toast)
+
+“Delete this job? This will remove all related schedule items.”
+
+Primary button: Delete (danger).
+
+Schedule view (ghost cleanup)
+7) Fetch uses date-range keys
+
+Schedule queries must be keyed by ['schedule', companyId, startISO, endISO].
+
+After delete, invalidate the active range so ghost items disappear without reload.
+
+8) Client-side safety filter
+
+When rendering, filter by overlap with the current range:
+
+item.startAt < rangeEnd && item.endAt > rangeStart
+
+This prevents items from showing on wrong days and avoids stale leakage.
+
+Acceptance criteria
+
+Deleting a job:
+
+✅ Removes it from All Jobs.
+
+✅ Removes all of its events from current Schedule view(s) immediately.
+
+✅ No “Failed to delete job” popup; only an error if truly blocked (e.g., 403 or a protected business rule).
+
+Re-create a job with same time:
+
+✅ New event appears only on its correct date.
