@@ -1,0 +1,162 @@
+Goals
+
+Validate schedule payload on the client and server.
+
+Ensure we pass required IDs (jobId, companyId, createdBy) and valid UTC timestamps.
+
+Create schedule inside a transaction; return readable errors instead of a 500.
+
+1) Frontend (Step 3) — validate + send clean ISO UTC
+
+Disallow submit when:
+
+start or end missing
+
+start >= end
+
+Convert picker values to ISO UTC strings.
+
+Pass jobId from prior steps (or include schedule in the single job-create payload).
+
+// step3/handleComplete.ts
+const startLocal = form.getValues('start'); // Date from picker
+const endLocal   = form.getValues('end');
+
+if (!startLocal || !endLocal) {
+  setError('start', { type:'manual', message:'Start and End are required' });
+  return;
+}
+if (+endLocal <= +startLocal) {
+  setError('end', { type:'manual', message:'End time must be after start time' });
+  return;
+}
+
+const payload = {
+  jobId,                                   // ensure this is present
+  schedule: {
+    startAt: new Date(startLocal).toISOString(), // UTC ISO
+    endAt:   new Date(endLocal).toISOString(),
+    location: form.getValues('location') || null,
+    subcontractorId: form.getValues('subcontractorId') || null,
+    notes: form.getValues('notes') || null,
+  }
+};
+
+await mutateAsync(payload);
+
+
+Disable the Complete button while submitting; show inline field errors instead of generic toast.
+
+2) API — validate, coerce, and fail with 4xx (not 500)
+// POST /api/jobs/:id/schedule  OR within /api/jobs (wizard submit)
+import { z } from 'zod';
+
+const ScheduleSchema = z.object({
+  jobId: z.string().cuid(),
+  schedule: z.object({
+    startAt: z.string().datetime(),
+    endAt: z.string().datetime(),
+    location: z.string().trim().max(255).nullable().optional(),
+    subcontractorId: z.string().cuid().nullable().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  }),
+});
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
+  try {
+    const session = await requireAuth(req);                       // includes companyId, userId
+    const { jobId, schedule } = ScheduleSchema.parse(req.body);
+
+    // Ensure job exists & belongs to company
+    const job = await db.job.findFirst({ where: { id: jobId, companyId: session.companyId }});
+    if (!job) return res.status(404).json({ code:'JOB_NOT_FOUND', message:'Job not found' });
+
+    const start = new Date(schedule.startAt);
+    const end   = new Date(schedule.endAt);
+    if (!isFinite(+start) || !isFinite(+end))
+      return res.status(400).json({ code:'BAD_TIME', message:'Invalid start/end time' });
+    if (end <= start)
+      return res.status(400).json({ code:'RANGE', message:'End time must be after start time' });
+
+    // Optional: overlap rule (same tech or same job)
+    // const overlaps = await db.schedule.count({ where:{ jobId, NOT:{ endAt:{ lte:start }}, startAt:{ lt:end } }});
+    // if (overlaps) return res.status(409).json({ code:'OVERLAP', message:'This overlaps an existing schedule' });
+
+    const created = await db.$transaction(async (tx) => {
+      return tx.scheduleItem.create({
+        data: {
+          jobId,
+          companyId: session.companyId,
+          startAt: start,            // stored in UTC
+          endAt: end,
+          location: schedule.location ?? null,
+          subcontractorId: schedule.subcontractorId ?? null,
+          notes: schedule.notes ?? null,
+          createdById: session.userId,
+        },
+      });
+    });
+
+    return res.status(201).json({ schedule: created });
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      return res.status(400).json({ code:'VALIDATION', message: err.errors[0]?.message ?? 'Invalid input' });
+
+    // Known DB unique/foreign key issues -> map to 4xx
+    if (isForeignKeyError(err)) return res.status(400).json({ code:'BAD_REF', message:'Invalid related ID' });
+
+    // Log full error for debugging
+    console.error('create schedule error', err);
+    return res.status(500).json({ message: 'Failed to create schedule item' });
+  }
+}
+
+
+Also verify DB columns: jobId, companyId, startAt, endAt, createdById are NOT NULL and types match.
+
+3) Wizard transaction (optional but safer)
+
+If your wizard creates the job and schedule at the end in one call, do it atomically:
+
+await db.$transaction(async (tx) => {
+  const job = await tx.job.create({ data: { ...jobData, companyId: session.companyId, createdById: session.userId }});
+  await tx.scheduleItem.create({ data: { jobId: job.id, companyId: session.companyId, startAt, endAt, ... }});
+  return job.id;
+});
+
+
+This avoids a missing jobId causing 500s.
+
+4) Client error mapping
+
+If server returns 400/409 codes above, show inline messages:
+
+RANGE → “End time must be after start time” (under end field)
+
+BAD_TIME → “Enter a valid date & time”
+
+OVERLAP (if enabled) → “This overlaps an existing schedule”
+
+JOB_NOT_FOUND → modal error & go back one step
+
+Keep the big red toast only for true 500s.
+
+5) Quick checks (why yours failed)
+
+Start and End were identical (10:00 PM to 10:00 PM).
+Many schemas reject zero-length events; add the end > start guard above.
+
+Or jobId wasn’t included in the payload when hitting /schedule.
+
+Or date strings weren’t valid ISO (timezone parse failed), producing Invalid Date.
+
+6) Acceptance
+
+Identical times → button disabled + inline error; no API call.
+
+Valid window → schedule saves, wizard completes.
+
+Any missing IDs → 4xx with readable message, no generic 500.
+
+Logs show full error only on unexpected conditions.

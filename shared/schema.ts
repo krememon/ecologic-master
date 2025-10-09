@@ -644,3 +644,34 @@ export type ApprovalHistory = typeof approvalHistory.$inferSelect;
 export type InsertApprovalHistory = z.infer<typeof insertApprovalHistorySchema>;
 export type ScheduleItem = typeof scheduleItems.$inferSelect;
 export type InsertScheduleItem = z.infer<typeof insertScheduleItemSchema>;
+
+// Finalize Job Schema - for wizard completion (job + client + schedule)
+export const finalizeJobSchema = z.object({
+  job: insertJobSchema, // companyId already omitted
+  client: z.union([
+    z.object({
+      mode: z.literal("existing"),
+      id: z.number().positive("Client is required"),
+    }),
+    z.object({
+      mode: z.literal("new"),
+      data: insertClientSchema, // companyId already omitted
+    }),
+  ]),
+  schedule: z.object({
+    startDateTime: z.string().min(1, "Start date/time is required"),
+    endDateTime: z.string().min(1, "End date/time is required"),
+    location: z.string().optional(),
+    notes: z.string().optional(),
+    subcontractorId: z.number().optional().nullable(),
+  }).refine((data) => {
+    const start = new Date(data.startDateTime);
+    const end = new Date(data.endDateTime);
+    return end > start;
+  }, {
+    message: "End time must be after start time",
+    path: ["endDateTime"],
+  }),
+});
+
+export type FinalizeJobPayload = z.infer<typeof finalizeJobSchema>;

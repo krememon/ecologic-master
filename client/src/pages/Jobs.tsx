@@ -105,8 +105,8 @@ function JobForm({
                   <Input {...field} placeholder="Enter client name..." data-testid="input-client-name" />
                   <ClientSuggestions
                     searchTerm={field.value}
-                    onSelect={(clientName) => {
-                      field.onChange(clientName);
+                    onSelect={(client) => {
+                      field.onChange(client.name);
                     }}
                   />
                 </div>
@@ -336,47 +336,59 @@ export default function Jobs() {
   const createJobMutation = useMutation({
     mutationFn: async (wizardData: {
       job: any;
-      client?: any;
+      client: 
+        | { mode: "existing"; id: number }
+        | { mode: "new"; data: any };
       schedule: any;
     }) => {
-      let clientId: number | undefined;
-
-      // Step 1: Create client if new
-      if (wizardData.client) {
-        const clientRes = await apiRequest("POST", "/api/clients", wizardData.client);
-        const newClient = await clientRes.json();
-        clientId = newClient.id;
-      }
-
-      // Step 2: Create job
-      const jobRes = await apiRequest("POST", "/api/jobs", wizardData.job);
-      const newJob = await jobRes.json();
-
-      // Step 3: Create schedule event
-      const scheduleData = {
-        ...wizardData.schedule,
-        jobId: newJob.id,
-        status: "scheduled",
-      };
-      await apiRequest("POST", "/api/schedule-items", scheduleData);
-
-      return newJob;
+      const res = await apiRequest("POST", "/api/jobs/finalize", wizardData);
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (newJob) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-items"] });
       setIsDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Job created successfully with schedule",
-      });
+      // Navigate to job detail page (no success toast)
+      setSelectedJob(newJob);
     },
     onError: (error: Error) => {
+      // Try to parse error message for field-specific errors
+      let errorMessage = error.message;
+      let errorTitle = "Error";
+      
+      // Error format is "STATUS: {json}" from apiRequest
+      const match = error.message.match(/^\d+:\s*({.*})/);
+      if (match) {
+        try {
+          const errorData = JSON.parse(match[1]);
+          if (errorData.code === 'INVALID_TIME_RANGE') {
+            errorTitle = "Invalid Schedule";
+            errorMessage = "End time must be after start time";
+          } else if (errorData.code === 'INVALID_DATETIME') {
+            errorTitle = "Invalid Date/Time";
+            errorMessage = "Please enter valid start and end times";
+          } else if (errorData.code === 'MISSING_DATETIME') {
+            errorTitle = "Missing Date/Time";
+            errorMessage = "Start and end date/time are required";
+          } else if (errorData.code === 'MISSING_CLIENT' || errorData.code === 'CLIENT_NOT_FOUND') {
+            errorTitle = "Client Required";
+            errorMessage = "Please select a client";
+          } else if (errorData.code === 'VALIDATION_ERROR') {
+            errorTitle = "Validation Error";
+            errorMessage = errorData.message || "Please check your inputs";
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (e) {
+          // If parsing fails, use original message
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: error.message,
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive",
       });
     },

@@ -36,11 +36,21 @@ const step1Schema = insertJobSchema.pick({
 // Step 2: Client Selection Schema
 const step2Schema = z.object({
   clientMode: z.enum(["existing", "new"]),
+  clientId: z.number().optional(), // For existing clients
   clientName: z.string().min(1, "Client name is required"),
   newClientEmail: z.string().email().optional().or(z.literal("")),
   newClientPhone: z.string().optional(),
   newClientAddress: z.string().optional(),
   newClientNotes: z.string().optional(),
+}).refine((data) => {
+  // If existing mode, clientId must be set
+  if (data.clientMode === "existing" && !data.clientId) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Please select a client from the list",
+  path: ["clientName"],
 });
 
 // Step 3: Schedule Schema
@@ -50,6 +60,14 @@ const step3Schema = z.object({
   scheduleLocation: z.string().optional(),
   scheduleNotes: z.string().optional(),
   subcontractorId: z.number().optional().nullable(),
+}).refine((data) => {
+  if (!data.startDateTime || !data.endDateTime) return true;
+  const start = new Date(data.startDateTime);
+  const end = new Date(data.endDateTime);
+  return end > start;
+}, {
+  message: "End time must be after start time",
+  path: ["endDateTime"],
 });
 
 type Step1Data = z.infer<typeof step1Schema>;
@@ -59,7 +77,9 @@ type Step3Data = z.infer<typeof step3Schema>;
 interface JobWizardProps {
   onComplete: (data: {
     job: Step1Data & { clientName: string };
-    client?: Omit<z.infer<typeof insertClientSchema>, 'companyId'>;
+    client: 
+      | { mode: "existing"; id: number }
+      | { mode: "new"; data: Omit<z.infer<typeof insertClientSchema>, 'companyId'> };
     schedule: {
       startDateTime: string;
       endDateTime: string;
@@ -108,6 +128,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
     resolver: zodResolver(step2Schema),
     defaultValues: {
       clientMode: "existing",
+      clientId: undefined,
       clientName: "",
       newClientEmail: "",
       newClientPhone: "",
@@ -148,13 +169,22 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
       clientName: step2Data.clientName,
     };
 
-    const clientData = step2Data.clientMode === "new" ? {
-      name: step2Data.clientName,
-      email: step2Data.newClientEmail || undefined,
-      phone: step2Data.newClientPhone || undefined,
-      address: step2Data.newClientAddress || undefined,
-      notes: step2Data.newClientNotes || undefined,
-    } : undefined;
+    // Prepare client data in discriminated union format
+    const clientData = step2Data.clientMode === "new" 
+      ? {
+          mode: "new" as const,
+          data: {
+            name: step2Data.clientName,
+            email: step2Data.newClientEmail || undefined,
+            phone: step2Data.newClientPhone || undefined,
+            address: step2Data.newClientAddress || undefined,
+            notes: step2Data.newClientNotes || undefined,
+          }
+        }
+      : {
+          mode: "existing" as const,
+          id: step2Data.clientId!,
+        };
 
     const scheduleData = {
       startDateTime: data.startDateTime,
@@ -428,8 +458,9 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                             {clientMode === "existing" && (
                               <ClientSuggestions
                                 searchTerm={field.value}
-                                onSelect={(clientName) => {
-                                  field.onChange(clientName);
+                                onSelect={(client) => {
+                                  field.onChange(client.name);
+                                  step2Form.setValue("clientId", client.id);
                                 }}
                               />
                             )}

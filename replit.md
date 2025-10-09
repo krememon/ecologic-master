@@ -61,3 +61,15 @@ Key architectural decisions include:
 - handleUserInfoSubmit blocks navigation when email is taken or being checked
 - Users cannot proceed to Company Setup or Join Company steps with duplicate email
 - Clear visual feedback: disabled button + inline error + red border on email input
+
+### October 9, 2025: Atomic Job Creation with Schedule Validation
+- Refactored job creation wizard to use single atomic endpoint POST /api/jobs/finalize
+- Created finalizeJobSchema in shared/schema.ts with discriminated union for client handling
+- Updated ClientSuggestions to return {id, name} for proper client ID tracking
+- Step 2 validation ensures clientId is captured for existing clients
+- Backend creates job and schedule in Drizzle transaction for atomicity
+- Proper 400 error responses with field-specific error codes (INVALID_TIME_RANGE, MISSING_CLIENT, etc.)
+- Frontend shows user-friendly error messages based on error codes
+- On success, navigates to job detail page (no success toast)
+- Frontend and backend validate end > start times with inline error messages
+- Eliminated separate API calls for client/job/schedule creation

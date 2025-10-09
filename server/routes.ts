@@ -12,7 +12,7 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, type UserRole, companyMembers } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { db } from "./db";
@@ -745,6 +745,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Finalize job creation (wizard) - atomic job + schedule creation
+  app.post('/api/jobs/finalize', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ code: 'COMPANY_NOT_FOUND', message: "Company not found" });
+      }
+      
+      // Validate request body with finalize schema
+      const validationResult = finalizeJobSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        return res.status(400).json({ 
+          code: 'VALIDATION_ERROR',
+          message: firstError.message,
+          field: firstError.path.join('.'),
+        });
+      }
+      
+      const { job: jobData, client: clientData, schedule: scheduleData } = validationResult.data;
+      
+      let clientId: number;
+      
+      // Handle client creation or selection
+      if (clientData) {
+        if (clientData.mode === "existing") {
+          // Verify client exists and belongs to company
+          const existingClient = await storage.getClient(clientData.id);
+          if (!existingClient || existingClient.companyId !== company.id) {
+            return res.status(404).json({ 
+              code: 'CLIENT_NOT_FOUND', 
+              message: "Client not found",
+              field: 'client.id'
+            });
+          }
+          clientId = clientData.id;
+        } else {
+          // Create new client
+          const newClient = await storage.createClient({
+            ...clientData.data,
+            companyId: company.id
+          });
+          clientId = newClient.id;
+        }
+      } else {
+        return res.status(400).json({ 
+          code: 'MISSING_CLIENT', 
+          message: "Client is required",
+          field: 'client'
+        });
+      }
+      
+      // Parse and validate schedule dates
+      const startDate = new Date(scheduleData.startDateTime);
+      const endDate = new Date(scheduleData.endDateTime);
+      
+      if (!isFinite(+startDate) || !isFinite(+endDate)) {
+        return res.status(400).json({ 
+          code: 'INVALID_DATETIME', 
+          message: "Invalid start or end date/time",
+          field: 'schedule.startDateTime'
+        });
+      }
+      
+      if (endDate <= startDate) {
+        return res.status(400).json({ 
+          code: 'INVALID_TIME_RANGE', 
+          message: "End time must be after start time",
+          field: 'schedule.endDateTime'
+        });
+      }
+      
+      // Create job and schedule in atomic transaction
+      const job = await db.transaction(async (tx) => {
+        // Create the job
+        const [createdJob] = await tx
+          .insert(jobs)
+          .values({
+            ...jobData,
+            companyId: company.id,
+            clientId,
+          } as any)
+          .returning();
+        
+        // Create the schedule item
+        await tx
+          .insert(scheduleItems)
+          .values({
+            jobId: createdJob.id,
+            companyId: company.id,
+            startDateTime: startDate,
+            endDateTime: endDate,
+            location: scheduleData.location || null,
+            notes: scheduleData.notes || null,
+            subcontractorId: scheduleData.subcontractorId || null,
+            status: "scheduled",
+          });
+        
+        return createdJob;
+      });
+      
+      res.status(201).json(job);
+    } catch (error) {
+      console.error("Error finalizing job creation:", error);
+      res.status(500).json({ message: "Failed to create job" });
+    }
+  });
+
   app.post('/api/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
@@ -935,6 +1045,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Validate required fields
+      if (!req.body.jobId) {
+        return res.status(400).json({ 
+          code: 'MISSING_JOB_ID', 
+          message: "Job ID is required" 
+        });
+      }
+
+      if (!req.body.startDateTime || !req.body.endDateTime) {
+        return res.status(400).json({ 
+          code: 'MISSING_DATETIME', 
+          message: "Start and end date/time are required" 
+        });
+      }
+
+      // Parse and validate dates
+      const startDate = new Date(req.body.startDateTime);
+      const endDate = new Date(req.body.endDateTime);
+
+      if (!isFinite(+startDate) || !isFinite(+endDate)) {
+        return res.status(400).json({ 
+          code: 'INVALID_DATETIME', 
+          message: "Invalid start or end date/time" 
+        });
+      }
+
+      if (endDate <= startDate) {
+        return res.status(400).json({ 
+          code: 'INVALID_TIME_RANGE', 
+          message: "End time must be after start time",
+          field: 'endDateTime'
+        });
+      }
+
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(req.body.jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ 
+          code: 'JOB_NOT_FOUND', 
+          message: "Job not found" 
+        });
       }
       
       const scheduleItem = await storage.createScheduleItem({

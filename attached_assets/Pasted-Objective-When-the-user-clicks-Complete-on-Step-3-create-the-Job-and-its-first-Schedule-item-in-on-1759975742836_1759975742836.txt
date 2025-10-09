@@ -1,0 +1,87 @@
+Objective
+
+When the user clicks Complete on Step 3, create the Job and its first Schedule item in one atomic operation.
+
+No generic error popups; show clear, inline field errors.
+
+If inputs are valid, navigate to the new Job page.
+
+What to change (high level)
+
+Replace the current Step-3 API call with a single “Finalize Job” endpoint that:
+
+Accepts the full wizard payload (job info from steps 1–2 + schedule info from step 3).
+
+Writes Job and Schedule inside one DB transaction.
+
+If either write fails, nothing is saved and a clear error is returned.
+
+Client validation before calling the API:
+
+Required: Job Title, Client, and valid Start/End if scheduling is provided.
+
+Time rule: End must be strictly after Start (no equal times).
+
+If invalid, block submit and show inline field messages (no toast).
+
+Server error mapping:
+
+Return 400 for validation or bad references (e.g., missing client/job/company), with a short, human message and the field name (e.g., end time must be after start time).
+
+Use 500 only for unexpected errors; these may show a small generic toast.
+
+On success:
+
+Invalidate jobs cache and navigate to /jobs/{newJobId}.
+
+Do not show a success popup.
+
+Remove/disable any old step-3 call that tries to create a schedule separately.
+
+The wizard should hit only the new “Finalize Job” endpoint on Complete.
+
+Payload (no code, just structure)
+
+Job: title, description, priority, clientId, location (addr/lat/lng), createdBy/ company inferred from session.
+
+Schedule (optional): startAt (UTC), endAt (UTC), subcontractorId (optional), notes.
+
+If Start/End are empty, either: (a) block submit until set, or (b) allow job creation without a schedule — choose your current product rule and implement consistently.
+
+UX rules
+
+Disable the “Complete” button while validating/submitting.
+
+Inline errors under fields:
+
+“Enter a valid date & time”
+
+“End time must be after start time”
+
+“Client is required”
+
+“Title is required”
+
+Keep a toast only for true server errors (500) with a short message (“Could not create job”). All input issues should be inline, not a red global bar.
+
+Acceptance criteria
+
+Enter identical Start/End → cannot submit, inline error under End.
+
+Enter valid times + required fields → job and schedule are created together, redirected to Job Details.
+
+If DB rejects a bad reference (e.g., client deleted during flow) → 400 with readable message; user stays on Step 3 with inline notice.
+
+No separate “create schedule” call is fired during the wizard finalize.
+
+The previous red “Failed to create schedule item” popup no longer appears for user-fixable errors.
+
+Test checklist (run after changes)
+
+ Complete with Start=10:00 PM, End=10:00 PM → blocked; inline error only.
+
+ Complete with Start=10:00 PM, End=11:00 PM → succeeds; lands on new Job page.
+
+ Simulate missing clientId → stays on step with “Client is required.”
+
+ Network/DB failure → small generic toast; nothing created in DB.
