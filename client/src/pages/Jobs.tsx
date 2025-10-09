@@ -657,42 +657,7 @@ export default function Jobs() {
                 </Button>
               </div>
             </div>
-            
-            {/* Client Name */}
-            {(selectedJob?.clientName || selectedJob?.client?.name) && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1" data-testid="text-job-client-header">
-                Client: {selectedJob.clientName || selectedJob.client?.name}
-              </p>
-            )}
-            
-            {/* Meta Info Row: Address + Created Date */}
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {selectedJob?.location && (
-                <a 
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800 break-words"
-                  title={selectedJob.location}
-                  data-testid="link-job-location-meta"
-                >
-                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="break-all">{selectedJob.location}</span>
-                </a>
-              )}
-              {selectedJob?.location && selectedJob?.createdAt && <span className="opacity-60">•</span>}
-              {selectedJob?.createdAt && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span title={format(new Date(selectedJob.createdAt), 'PPpp')}>
-                    Created {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            {/* Visual Divider */}
-            <div className="border-t border-slate-200 dark:border-slate-700 mt-2 pt-2 sm:mt-3 sm:pt-3" />
+          
           </DialogHeader>
           {selectedJob && (
             <div data-testid="job-sections-stack" className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
@@ -705,6 +670,33 @@ export default function Jobs() {
                   <CardContent className="pt-0">
                     {/* Two-column layout: labels left, values right */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                      {/* Client */}
+                      {(selectedJob.clientName || selectedJob.client?.name) && (
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Client:</span>
+                          <span className="text-slate-600 dark:text-slate-400" data-testid="text-job-client-detail">
+                            {selectedJob.clientName || selectedJob.client?.name}
+                          </span>
+                        </>
+                      )}
+                      
+                      {/* Address */}
+                      {selectedJob.location && (
+                        <>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Address:</span>
+                          <a 
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 truncate"
+                            title={`View ${selectedJob.location} on map`}
+                            data-testid="link-job-location-detail"
+                          >
+                            {selectedJob.location}
+                          </a>
+                        </>
+                      )}
+                      
                       {/* Priority */}
                       {selectedJob.priority && (
                         <>
@@ -713,12 +705,12 @@ export default function Jobs() {
                         </>
                       )}
                       
-                      {/* City/ZIP */}
-                      {(selectedJob.city || selectedJob.postalCode) && (
+                      {/* Created */}
+                      {selectedJob.createdAt && (
                         <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">City/ZIP:</span>
-                          <span className="text-slate-600 dark:text-slate-400" data-testid="text-job-city-zip-detail">
-                            {[selectedJob.city, selectedJob.postalCode].filter(Boolean).join(', ')}
+                          <span className="font-medium text-slate-700 dark:text-slate-300">Created:</span>
+                          <span className="text-slate-600 dark:text-slate-400" title={format(new Date(selectedJob.createdAt), 'PPpp')}>
+                            {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
                           </span>
                         </>
                       )}

@@ -1,0 +1,98 @@
+Objective
+
+Move Address, Client, and Created Date from the header strip into the Job Information card.
+
+In the card, render each field on one row as Label: Value (no line breaks between label and value).
+
+Keep the title, status pill, and action icons (edit/delete) in the header. Everything else goes inside the card.
+
+UI changes
+
+Header (top of panel)
+
+Keep: Job title, status chip, Edit and Delete icons, Close (X).
+
+Remove from header: address link, client name, created date dot-separator row.
+
+Job Information card
+
+Add rows in this exact order:
+
+Client: <Client Name> (clickable to open client profile if that exists)
+
+Address: <Street, City ZIP> (entire value is a link to the map/details, same as current)
+
+Priority: <Low/Medium/High>
+
+Created: <MMM d, yyyy> (respect user locale/timezone)
+
+(Keep existing rows like City/ZIP only if not redundant; if you use the combined “Address”, remove separate City/ZIP row.)
+
+Row layout
+
+Use a two-column label/value layout that never wraps the label away from the value:
+
+Desktop: CSS grid with grid-cols-[auto_1fr] (or flex).
+
+Mobile: labels and values stay on one line; if value overflows, truncate with ellipsis, show full on tooltip/title.
+
+Typography:
+
+Label: medium weight, muted color (e.g., text-gray-600)
+
+Value: regular weight, normal color
+
+Spacing: py-2 per row; divider lines optional (divide-y).
+
+Example structure (pseudocode, not code to paste):
+
+Job Information
+├─ Client:        Linda Graziano
+├─ Address:       321 Astor Dr, Sayville, NY 11782
+├─ Priority:      Medium
+└─ Created:       Oct 9, 2025
+
+
+Icons inside rows
+
+Optional: reuse the small location/calendar icons before the value (not the label), with aria-hidden.
+
+Make the Address value a link (tel:/maps URL as you already have).
+
+Data & formatting
+
+Created: format using existing date util; use user timezone and short month: Oct 9, 2025.
+
+Address: if you have separate fields, compose: street, city, state ZIP. If any piece is missing, omit the trailing comma/space cleanly.
+
+Client: if unavailable, render —.
+
+Accessibility
+
+Each row is a dl with dt (label) and dd (value), or a single dl with multiple pairs (preferred).
+
+Labels should be real text (not placeholders).
+
+Links have descriptive title attributes (e.g., View 321 Astor Dr on map).
+
+Implementation notes (where to touch)
+
+Component likely: JobInsightsPanel / JobDetailsDrawer.
+
+Move the meta row JSX (address/client/created) from header into the Job Information card component.
+
+Create a tiny InfoRow utility (label, value, optional icon, isLink) to keep rows consistent across the app (Jobs, Clients, etc.).
+
+Remove old “City/ZIP” row if replaced by consolidated Address.
+
+QA / Acceptance
+
+✅ Header now shows only: Title, Status chip, Edit, Delete, Close.
+
+✅ Job Information card contains Client, Address, Priority, Created in that order.
+
+✅ Each row renders as Label: Value on a single line (label and value aligned).
+
+✅ Address is clickable, client optionally clickable, dates correct for timezone.
+
+✅ Mobile view keeps label + value on one line; long values truncate gracefully with tooltip.
