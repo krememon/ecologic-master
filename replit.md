@@ -92,3 +92,9 @@ Key architectural decisions include:
 - Route now validates job exists, belongs to company, and returns proper error codes (404 for JOB_NOT_FOUND, 403 for FORBIDDEN)
 - Frontend deleteJobMutation invalidates all schedule queries using predicate to remove ghost events from Schedule view
 - Job deletion now works without 500 errors and automatically removes all related schedule items, photos, and other dependencies
+
+### October 9, 2025: Schedule Overlay Header Cleanup
+- Removed "Viewing from [date]" text from schedule overlay modal header
+- Header now displays only "All Planned Jobs" title with calendar icon
+- Close (X) button remains functional and properly aligned
+- Cleaner, simpler UI without redundant date information

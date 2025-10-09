@@ -442,15 +442,6 @@ export default function AIScheduling() {
             <DialogTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
               All Planned Jobs
-              {selectedDay && (
-                <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
-                  - Viewing from {new Date(selectedDay).toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  })}
-                </span>
-              )}
             </DialogTitle>
           </DialogHeader>
           
