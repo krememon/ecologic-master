@@ -196,7 +196,7 @@ export default function AIScheduling() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
-    return startOfWeekLocal(new Date(), 1); // Monday-start week
+    return startOfWeekLocal(new Date(), 0); // Sunday-start week
   });
 
   // Compute date range for the current week view
