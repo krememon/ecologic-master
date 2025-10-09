@@ -105,7 +105,9 @@ Key architectural decisions include:
 - Job Information card now displays fields in order: Client, Address, Priority, Created
 - Address field is clickable link to Google Maps with proper title attribute for accessibility
 - Removed redundant City/ZIP row (consolidated into Address field)
-- All fields use consistent label: value format on single row
-- Grid layout: two columns on desktop (label left, value right), single column on mobile
-- Address values truncate with ellipsis on overflow, show full address in tooltip
+- Implemented accessible definition list (`<dl>`) structure with `<dt>` for labels and `<dd>` for values
+- Each row uses `grid-cols-[auto_1fr]` layout: label takes minimal space, value takes remaining width
+- Labels have `whitespace-nowrap` to prevent wrapping; values truncate with ellipsis when too long
+- Row dividers using `divide-y` for visual separation between fields
+- All values show full text on hover via `title` attributes
 - Created date displays in "MMM d, yyyy" format with full datetime in tooltip

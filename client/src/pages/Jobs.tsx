@@ -668,77 +668,87 @@ export default function Jobs() {
                     <CardTitle className="text-lg">Job Information</CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    {/* Two-column layout: labels left, values right */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                    {/* Definition list with label:value rows */}
+                    <dl className="divide-y divide-slate-200 dark:divide-slate-700">
                       {/* Client */}
                       {(selectedJob.clientName || selectedJob.client?.name) && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Client:</span>
-                          <span className="text-slate-600 dark:text-slate-400" data-testid="text-job-client-detail">
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Client:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={selectedJob.clientName || selectedJob.client?.name || ''} data-testid="text-job-client-detail">
                             {selectedJob.clientName || selectedJob.client?.name}
-                          </span>
-                        </>
+                          </dd>
+                        </div>
                       )}
                       
                       {/* Address */}
                       {selectedJob.location && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Address:</span>
-                          <a 
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 truncate"
-                            title={`View ${selectedJob.location} on map`}
-                            data-testid="link-job-location-detail"
-                          >
-                            {selectedJob.location}
-                          </a>
-                        </>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Address:</dt>
+                          <dd className="truncate">
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              title={`View ${selectedJob.location} on map`}
+                              data-testid="link-job-location-detail"
+                            >
+                              {selectedJob.location}
+                            </a>
+                          </dd>
+                        </div>
                       )}
                       
                       {/* Priority */}
                       {selectedJob.priority && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Priority:</span>
-                          <span className="text-slate-600 dark:text-slate-400 capitalize">{selectedJob.priority}</span>
-                        </>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Priority:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 capitalize truncate" title={selectedJob.priority}>
+                            {selectedJob.priority}
+                          </dd>
+                        </div>
                       )}
                       
                       {/* Created */}
                       {selectedJob.createdAt && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Created:</span>
-                          <span className="text-slate-600 dark:text-slate-400" title={format(new Date(selectedJob.createdAt), 'PPpp')}>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Created:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={format(new Date(selectedJob.createdAt), 'PPpp')}>
                             {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
-                          </span>
-                        </>
+                          </dd>
+                        </div>
                       )}
                       
                       {/* Estimated Cost */}
                       {selectedJob.estimatedCost && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Estimated Cost:</span>
-                          <span className="text-slate-600 dark:text-slate-400">${Number(selectedJob.estimatedCost).toLocaleString()}</span>
-                        </>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Estimated Cost:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={`$${Number(selectedJob.estimatedCost).toLocaleString()}`}>
+                            ${Number(selectedJob.estimatedCost).toLocaleString()}
+                          </dd>
+                        </div>
                       )}
                       
                       {/* Start Date */}
                       {selectedJob.startDate && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">Start Date:</span>
-                          <span className="text-slate-600 dark:text-slate-400">{new Date(selectedJob.startDate).toLocaleDateString()}</span>
-                        </>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Start Date:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={new Date(selectedJob.startDate).toLocaleDateString()}>
+                            {new Date(selectedJob.startDate).toLocaleDateString()}
+                          </dd>
+                        </div>
                       )}
                       
                       {/* End Date */}
                       {selectedJob.endDate && (
-                        <>
-                          <span className="font-medium text-slate-700 dark:text-slate-300">End Date:</span>
-                          <span className="text-slate-600 dark:text-slate-400">{new Date(selectedJob.endDate).toLocaleDateString()}</span>
-                        </>
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">End Date:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={new Date(selectedJob.endDate).toLocaleDateString()}>
+                            {new Date(selectedJob.endDate).toLocaleDateString()}
+                          </dd>
+                        </div>
                       )}
-                    </div>
+                    </dl>
                     
                     {/* Description Section */}
                     {selectedJob.description && (
