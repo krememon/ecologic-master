@@ -348,7 +348,12 @@ export default function Jobs() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/schedule-items"] });
+      // Invalidate all schedule queries (with any date range)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/schedule-items')
+      });
       setIsDialogOpen(false);
       // Navigate to job detail page (no success toast)
       setSelectedJob(newJob);

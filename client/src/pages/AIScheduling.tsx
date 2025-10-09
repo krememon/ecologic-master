@@ -479,8 +479,23 @@ export default function AIScheduling() {
             </div>
 
             {(() => {
-              // Filter schedule items based on selected day or show all for the week
-              const filteredItems = Array.isArray(scheduledItems) ? scheduledItems : [];
+              // Filter schedule items based on selected day
+              let filteredItems = Array.isArray(scheduledItems) ? scheduledItems : [];
+              
+              // If a specific day is selected, filter to only show jobs for that day
+              if (selectedDay && filteredItems.length > 0) {
+                const selectedDayStart = new Date(selectedDay);
+                selectedDayStart.setHours(0, 0, 0, 0);
+                const selectedDayEnd = new Date(selectedDay);
+                selectedDayEnd.setHours(23, 59, 59, 999);
+                
+                filteredItems = filteredItems.filter((item: any) => {
+                  const itemStart = new Date(item.startDateTime);
+                  const itemEnd = new Date(item.endDateTime);
+                  // Overlap check: item overlaps with selected day
+                  return itemStart < selectedDayEnd && itemEnd > selectedDayStart;
+                });
+              }
 
               if (filteredItems.length === 0) {
                 return (
