@@ -199,7 +199,19 @@ export default function AIScheduling() {
     return startOfWeekLocal(new Date(), 1); // Monday-start week
   });
 
-  // Query for actual jobs and subcontractors data
+  // Compute date range for the current week view
+  const weekStartUtc = selectedWeek.toISOString();
+  const weekEndDate = new Date(selectedWeek);
+  weekEndDate.setDate(weekEndDate.getDate() + 7);
+  const weekEndUtc = weekEndDate.toISOString();
+
+  // Query for schedule items filtered by week range
+  const { data: scheduledItems } = useQuery({
+    queryKey: [`/api/schedule-items?start=${weekStartUtc}&end=${weekEndUtc}`],
+    enabled: isAuthenticated,
+  });
+
+  // Query for actual jobs and subcontractors data (legacy - keeping for other parts)
   const { data: jobs } = useQuery({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
@@ -467,29 +479,29 @@ export default function AIScheduling() {
             </div>
 
             {(() => {
-              // Show all jobs, not just ones for the selected day
-              const allJobs = Array.isArray(jobs) ? jobs : [];
+              // Filter schedule items based on selected day or show all for the week
+              const filteredItems = Array.isArray(scheduledItems) ? scheduledItems : [];
 
-              if (allJobs.length === 0) {
+              if (filteredItems.length === 0) {
                 return (
                   <div className="text-center py-12">
                     <Calendar className="h-16 w-16 text-slate-400 mx-auto mb-4" />
                     <h3 className="text-xl font-medium text-slate-900 dark:text-slate-100 mb-2">
-                      No jobs planned
+                      No jobs scheduled
                     </h3>
                     <p className="text-slate-600 dark:text-slate-400 mb-6">
-                      Click "Add New Job" to start planning work.
+                      No jobs are scheduled for this time period.
                     </p>
                   </div>
                 );
               }
 
-              // Group jobs by status for better organization
+              // Group schedule items by job status for better organization
               const jobsByStatus = {
-                planning: allJobs.filter((job: any) => job.status === 'planning'),
-                active: allJobs.filter((job: any) => job.status === 'active' || job.status === 'in_progress'),
-                completed: allJobs.filter((job: any) => job.status === 'completed'),
-                other: allJobs.filter((job: any) => !['planning', 'active', 'in_progress', 'completed'].includes(job.status))
+                planning: filteredItems.filter((item: any) => item.jobStatus === 'planning'),
+                active: filteredItems.filter((item: any) => item.jobStatus === 'active' || item.status === 'in-progress'),
+                completed: filteredItems.filter((item: any) => item.jobStatus === 'completed'),
+                other: filteredItems.filter((item: any) => !['planning', 'active', 'in_progress', 'completed'].includes(item.jobStatus || item.status))
               };
 
               return (
@@ -502,55 +514,52 @@ export default function AIScheduling() {
                         Planning Phase ({jobsByStatus.planning.length})
                       </h3>
                       <div className="grid gap-4">
-                        {jobsByStatus.planning.map((job: any) => (
+                        {jobsByStatus.planning.map((item: any) => (
                           <div
-                            key={job.id}
+                            key={item.id}
                             className="p-6 border rounded-lg hover:shadow-lg transition-shadow bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800"
                           >
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                  {job.title}
+                                  {item.jobTitle}
                                 </h4>
-                                <p className="text-slate-600 dark:text-slate-400 mt-1">
-                                  {job.description}
-                                </p>
+                                {item.subcontractorName && (
+                                  <p className="text-slate-600 dark:text-slate-400 mt-1">
+                                    Assigned to: {item.subcontractorName}
+                                  </p>
+                                )}
                               </div>
                               <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 text-sm">
-                                {job.status}
+                                {item.jobStatus || item.status}
                               </Badge>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{job.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || 'No location specified'}</span>
                               </div>
-                              
-                              {job.startDate && (
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">Scheduled: {new Date(job.startDate).toLocaleDateString()}</span>
-                                </div>
-                              )}
                               
                               <div className="flex items-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm capitalize">{job.priority} priority</span>
+                                <Calendar className="h-5 w-5 text-slate-500" />
+                                <span className="text-sm">
+                                  {new Date(item.startDateTime).toLocaleDateString()} {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
                               </div>
                               
-                              {job.client && (
+                              {item.clientName && (
                                 <div className="flex items-center gap-2">
                                   <User className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">{job.client.name}</span>
+                                  <span className="text-sm">{item.clientName}</span>
                                 </div>
                               )}
                             </div>
 
-                            {job.notes && (
+                            {item.notes && (
                               <div className="mt-4 p-3 bg-orange-100 dark:bg-orange-900 rounded">
                                 <strong className="text-sm">Notes:</strong> 
-                                <span className="text-sm ml-2">{job.notes}</span>
+                                <span className="text-sm ml-2">{item.notes}</span>
                               </div>
                             )}
                           </div>
@@ -567,55 +576,52 @@ export default function AIScheduling() {
                         Active Jobs ({jobsByStatus.active.length})
                       </h3>
                       <div className="grid gap-4">
-                        {jobsByStatus.active.map((job: any) => (
+                        {jobsByStatus.active.map((item: any) => (
                           <div
-                            key={job.id}
+                            key={item.id}
                             className="p-6 border rounded-lg hover:shadow-lg transition-shadow bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800"
                           >
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                  {job.title}
+                                  {item.jobTitle}
                                 </h4>
-                                <p className="text-slate-600 dark:text-slate-400 mt-1">
-                                  {job.description}
-                                </p>
+                                {item.subcontractorName && (
+                                  <p className="text-slate-600 dark:text-slate-400 mt-1">
+                                    Assigned to: {item.subcontractorName}
+                                  </p>
+                                )}
                               </div>
                               <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 text-sm">
-                                {job.status}
+                                {item.jobStatus || item.status}
                               </Badge>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{job.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || 'No location specified'}</span>
                               </div>
-                              
-                              {job.startDate && (
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">Started: {new Date(job.startDate).toLocaleDateString()}</span>
-                                </div>
-                              )}
                               
                               <div className="flex items-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm capitalize">{job.priority} priority</span>
+                                <Calendar className="h-5 w-5 text-slate-500" />
+                                <span className="text-sm">
+                                  {new Date(item.startDateTime).toLocaleDateString()} {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
                               </div>
                               
-                              {job.client && (
+                              {item.clientName && (
                                 <div className="flex items-center gap-2">
                                   <User className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">{job.client.name}</span>
+                                  <span className="text-sm">{item.clientName}</span>
                                 </div>
                               )}
                             </div>
 
-                            {job.notes && (
+                            {item.notes && (
                               <div className="mt-4 p-3 bg-green-100 dark:bg-green-900 rounded">
                                 <strong className="text-sm">Notes:</strong> 
-                                <span className="text-sm ml-2">{job.notes}</span>
+                                <span className="text-sm ml-2">{item.notes}</span>
                               </div>
                             )}
                           </div>
@@ -632,55 +638,52 @@ export default function AIScheduling() {
                         Completed Jobs ({jobsByStatus.completed.length})
                       </h3>
                       <div className="grid gap-4">
-                        {jobsByStatus.completed.map((job: any) => (
+                        {jobsByStatus.completed.map((item: any) => (
                           <div
-                            key={job.id}
+                            key={item.id}
                             className="p-6 border rounded-lg hover:shadow-lg transition-shadow bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800"
                           >
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                  {job.title}
+                                  {item.jobTitle}
                                 </h4>
-                                <p className="text-slate-600 dark:text-slate-400 mt-1">
-                                  {job.description}
-                                </p>
+                                {item.subcontractorName && (
+                                  <p className="text-slate-600 dark:text-slate-400 mt-1">
+                                    Assigned to: {item.subcontractorName}
+                                  </p>
+                                )}
                               </div>
                               <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-sm">
-                                {job.status}
+                                {item.jobStatus || item.status}
                               </Badge>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{job.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || 'No location specified'}</span>
                               </div>
-                              
-                              {job.endDate && (
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">Completed: {new Date(job.endDate).toLocaleDateString()}</span>
-                                </div>
-                              )}
                               
                               <div className="flex items-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm capitalize">{job.priority} priority</span>
+                                <Calendar className="h-5 w-5 text-slate-500" />
+                                <span className="text-sm">
+                                  Completed: {new Date(item.endDateTime).toLocaleDateString()}
+                                </span>
                               </div>
                               
-                              {job.client && (
+                              {item.clientName && (
                                 <div className="flex items-center gap-2">
                                   <User className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">{job.client.name}</span>
+                                  <span className="text-sm">{item.clientName}</span>
                                 </div>
                               )}
                             </div>
 
-                            {job.notes && (
+                            {item.notes && (
                               <div className="mt-4 p-3 bg-blue-100 dark:bg-blue-900 rounded">
                                 <strong className="text-sm">Notes:</strong> 
-                                <span className="text-sm ml-2">{job.notes}</span>
+                                <span className="text-sm ml-2">{item.notes}</span>
                               </div>
                             )}
                           </div>
@@ -697,55 +700,52 @@ export default function AIScheduling() {
                         Other Jobs ({jobsByStatus.other.length})
                       </h3>
                       <div className="grid gap-4">
-                        {jobsByStatus.other.map((job: any) => (
+                        {jobsByStatus.other.map((item: any) => (
                           <div
-                            key={job.id}
+                            key={item.id}
                             className="p-6 border rounded-lg hover:shadow-lg transition-shadow bg-slate-50 dark:bg-slate-800"
                           >
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                                  {job.title}
+                                  {item.jobTitle}
                                 </h4>
-                                <p className="text-slate-600 dark:text-slate-400 mt-1">
-                                  {job.description}
-                                </p>
+                                {item.subcontractorName && (
+                                  <p className="text-slate-600 dark:text-slate-400 mt-1">
+                                    Assigned to: {item.subcontractorName}
+                                  </p>
+                                )}
                               </div>
-                              <Badge className={getStatusColor(job.status)}>
-                                {job.status}
+                              <Badge className={getStatusColor(item.jobStatus || item.status)}>
+                                {item.jobStatus || item.status}
                               </Badge>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{job.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || 'No location specified'}</span>
                               </div>
-                              
-                              {job.startDate && (
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">Date: {new Date(job.startDate).toLocaleDateString()}</span>
-                                </div>
-                              )}
                               
                               <div className="flex items-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm capitalize">{job.priority} priority</span>
+                                <Calendar className="h-5 w-5 text-slate-500" />
+                                <span className="text-sm">
+                                  {new Date(item.startDateTime).toLocaleDateString()} {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
                               </div>
                               
-                              {job.client && (
+                              {item.clientName && (
                                 <div className="flex items-center gap-2">
                                   <User className="h-5 w-5 text-slate-500" />
-                                  <span className="text-sm">{job.client.name}</span>
+                                  <span className="text-sm">{item.clientName}</span>
                                 </div>
                               )}
                             </div>
 
-                            {job.notes && (
+                            {item.notes && (
                               <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-700 rounded">
                                 <strong className="text-sm">Notes:</strong> 
-                                <span className="text-sm ml-2">{job.notes}</span>
+                                <span className="text-sm ml-2">{item.notes}</span>
                               </div>
                             )}
                           </div>
