@@ -84,3 +84,11 @@ Key architectural decisions include:
 - Query keys include date range for proper cache management: `/api/schedule-items?start=${start}&end=${end}`
 - Jobs.tsx invalidates all schedule queries using predicate matching to handle queries with different date ranges
 - "All Planned Jobs" modal now shows only jobs overlapping current calendar viewport (day or week view)
+
+### October 9, 2025: Job Deletion with CASCADE and RBAC
+- Added CASCADE delete to all foreign keys referencing jobs.id in database schema (scheduleItems, jobAssignments, jobPhotos, invoices, payments, documents, messages)
+- Added "jobs.delete" permission to OWNER, SUPERVISOR, and DISPATCHER roles
+- Enhanced DELETE /api/jobs/:id route with RBAC using requirePerm("jobs.delete") middleware
+- Route now validates job exists, belongs to company, and returns proper error codes (404 for JOB_NOT_FOUND, 403 for FORBIDDEN)
+- Frontend deleteJobMutation invalidates all schedule queries using predicate to remove ghost events from Schedule view
+- Job deletion now works without 500 errors and automatically removes all related schedule items, photos, and other dependencies
