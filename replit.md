@@ -98,3 +98,14 @@ Key architectural decisions include:
 - Header now displays only "All Planned Jobs" title with calendar icon
 - Close (X) button remains functional and properly aligned
 - Cleaner, simpler UI without redundant date information
+
+### October 9, 2025: Job Details Panel Reorganization
+- Simplified Job Details header to show only: Title, Status badge, Edit/Delete icons, and Close button
+- Moved Client Name, Address, and Created Date from header into Job Information card
+- Job Information card now displays fields in order: Client, Address, Priority, Created
+- Address field is clickable link to Google Maps with proper title attribute for accessibility
+- Removed redundant City/ZIP row (consolidated into Address field)
+- All fields use consistent label: value format on single row
+- Grid layout: two columns on desktop (label left, value right), single column on mobile
+- Address values truncate with ellipsis on overflow, show full address in tooltip
+- Created date displays in "MMM d, yyyy" format with full datetime in tooltip
