@@ -49,6 +49,16 @@ Key architectural decisions and features include:
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
 ## Recent Changes
 
+### October 10, 2025: Join Company Flow Fixed
+- **Problem**: Users couldn't enter their full 10-character invite codes due to hardcoded 6-character limit
+- **Root Cause**: JoinCompany page had maxLength={6} and placeholder mentioned "6-character code"
+- **Solution**:
+  - Removed maxLength restriction from invite code input field
+  - Updated placeholder text from "Enter 6-character code" to "Enter your company's invite code"
+  - Added sign-out button for users who logged in with wrong account
+  - Fixed LSP type errors in App.tsx by removing unnecessary subscription guard wrappers
+- **Result**: Users can now properly enter their full 10-character invite codes and rejoin companies
+
 ### October 10, 2025: Auto-Company Creation Fixed
 - **Problem**: Removed employees were automatically assigned a new "Your Company" when logging back in
 - **Root Cause**: GET /api/auth/user endpoint had logic that auto-created companies for users without one
