@@ -1,0 +1,157 @@
+Goal
+
+Add a trash icon to each employee card (left of the 3-dot menu).
+
+When clicked:
+
+Confirm removal → remove employee’s membership from the current company.
+
+Immediately sign the user out on all devices (no access to old company).
+
+On their next sign-in, they are routed to Join Company screen where they must enter a new company invite code to continue.
+
+Keep the user account (email/password/OAuth) intact.
+
+UI
+Employee Card
+
+Add a trash icon button to the header, left of the kebab.
+
+Tooltip: Remove from company.
+
+Click → open confirm dialog:
+
+Dialog copy
+
+Title: Remove from company?
+
+Body: “This will immediately revoke access to your company. The user’s account remains but they’ll need a new company invite code to continue.”
+
+Primary button: Remove (danger)
+
+Secondary: Cancel
+
+No success toast on completion.
+
+After success
+
+Optimistically remove the card from the list.
+
+invalidateQueries(['employees']) so counts update.
+
+If that employee is viewing the app, they should be forced to sign out (see backend).
+
+API / Backend
+Data model assumption
+
+You have either:
+
+user.companyId (single membership), or
+
+a join table CompanyUser(userId, companyId, role, status).
+
+We’ll implement removal of the membership, not account deletion.
+
+Endpoint
+
+DELETE /api/companies/:companyId/employees/:userId
+
+RBAC: only OWNER or SUPERVISOR of :companyId.
+
+Safety guard: prevent removing the last OWNER of the company; return 409 LAST_OWNER.
+
+Operation (transaction)
+
+Remove membership:
+
+If user.companyId: set to NULL, clear role, set status='INACTIVE' or 'PENDING' (your choice), and reset company-scoped fields.
+
+If join table: DELETE FROM CompanyUser WHERE userId=:id AND companyId=:companyId.
+
+Revoke sessions for that user:
+
+Increment tokenVersion on User.
+
+Delete DB sessions for that user (if you store sessions).
+
+Return 204 No Content.
+
+Middleware / Auth
+
+On every authed request and on sign-in:
+
+If user has no current company (i.e., companyId = NULL or no record in CompanyUser):
+
+Block access to app routes and redirect to /join-company.
+
+Provide a small banner: “Enter a company invite code to join a team.”
+
+If user is INACTIVE because of removal, still allow /join-company and auth pages.
+
+Join Company screen (reuse existing code)
+
+Path: /join-company
+
+Form: Company Invite Code
+
+POST → verifies code → adds membership (sets companyId or inserts CompanyUser) and default role (e.g., TECHNICIAN unless Owner/Supervisor adds them).
+
+On success: route to /schedule (or dashboard).
+
+If code rotated/expired: show inline red “Invite code expired—ask your supervisor for a new one.”
+
+Immediate sign-out (for the removed user)
+
+After API removal, publish an event user:session-revoked:{userId} (SSE/WebSocket).
+
+Frontend listener: upon event → clear auth and redirect to /signin with message:
+
+“Your access to this company has been removed.”
+
+Even without WS, tokenVersion mismatch + middleware will force sign-out on next request.
+
+Edge Cases / Rules
+
+Cannot remove last Owner. Return 409 LAST_OWNER with friendly error.
+
+Self-removal for last Owner blocked with the same error.
+
+Existing jobs/notes/photos authored by the user remain (keep history); their membership removal must not violate FKs.
+
+Prefer company-scoped FKs on content (e.g., companyId on jobs), not userId cascades.
+
+If you soft-delete membership, ensure all employee lists filter to active members only.
+
+Client updates (after removal)
+
+Remove the employee card from list (optimistic).
+
+Invalidate:
+
+['employees']
+
+Any team counts (['stats','employees'])
+
+No success toast; silent success is fine.
+
+Acceptance Criteria
+
+Clicking the trash icon opens confirm. Confirming:
+
+✅ Employee disappears from the list.
+
+✅ That user is immediately signed out if online.
+
+✅ On next sign-in, that user lands on Join Company (invite code) and cannot access any company screens until they join one.
+
+✅ Last Owner cannot be removed (clear error).
+
+✅ No ghost access via cached pages (middleware guard works).
+
+Visual / placement
+
+Icon size: same as edit/delete icons you use elsewhere (e.g., 18–20px).
+
+Left of the kebab, spaced with gap-x-2.
+
+Danger color on hover; neutral base color at rest.
