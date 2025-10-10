@@ -44,7 +44,7 @@ const ProtectedApprovals = withSubscriptionGuard(Approvals);
 const ProtectedEmployees = withSubscriptionGuard(Employees);
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   
   // Initialize WebSocket and push notifications for authenticated users
   useWebSocket();
@@ -71,11 +71,18 @@ function Router() {
     );
   }
 
+  // Authenticated but no company - redirect to join company
+  if (!user?.company) {
+    return (
+      <Switch>
+        <Route path="/join-company" component={JoinCompany} />
+        <Route>{() => <Redirect to="/join-company" />}</Route>
+      </Switch>
+    );
+  }
+
   return (
     <Switch>
-      {/* Standalone pages for authenticated users (no Layout wrapper) */}
-      <Route path="/join-company" component={JoinCompany} />
-      
       {/* Protected pages with Layout */}
       <Route>
         {() => (

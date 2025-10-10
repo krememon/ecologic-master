@@ -172,33 +172,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user's company
-      let company = await storage.getUserCompany(user.id);
+      const company = await storage.getUserCompany(user.id);
       
-      // If no company exists, create a default one for business owners
-      if (!company) {
-        // Check if this is a business owner registration
-        const isBusinessOwner = true; // Default to business owner for new users
-        
-        if (isBusinessOwner) {
-          const { generateUniqueInviteCode } = await import("@shared/inviteCode");
-          const inviteCode = await generateUniqueInviteCode(async (code) => {
-            const existing = await storage.getCompanyByInviteCode(code);
-            return !!existing;
-          });
-          
-          company = await storage.createCompany({
-            name: "Your Company",
-            inviteCode,
-            logo: null,
-            primaryColor: "#3B82F6",
-            secondaryColor: "#1E40AF",
-            ownerId: user.id
-          });
-        }
-      }
-
-      // Get user's role in the company
-      let role: UserRole = "TECHNICIAN"; // Default role
+      // Get user's role in the company (if they have one)
+      let role: UserRole | null = null;
       if (company) {
         const userRole = await storage.getUserRole(user.id, company.id);
         if (userRole) {

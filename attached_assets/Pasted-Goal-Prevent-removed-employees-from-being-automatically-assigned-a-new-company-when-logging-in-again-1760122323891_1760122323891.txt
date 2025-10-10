@@ -1,0 +1,93 @@
+Goal
+Prevent removed employees from being automatically assigned a new company when logging in again.
+
+1. Modify the auth login flow
+
+In the sign-in handler (/api/auth/login, /auth/session, or equivalent):
+
+After verifying credentials, check if user.companyId (or company membership) exists.
+
+If NULL or NOT FOUND:
+
+Do NOT create a new company record.
+
+Instead, set a session flag:
+
+user.needsCompany = true
+
+
+Return this in the session response:
+
+{ "status": "ok", "needsCompany": true }
+
+2. Update the frontend auth middleware / layout guard
+
+In your global AuthLayout or ProtectedRoute logic:
+
+If session.needsCompany === true → immediately redirect to /join-company.
+
+Example pseudo-code:
+
+if (user && user.needsCompany) {
+  router.push("/join-company");
+  return null;
+}
+
+3. Disable auto-company creation logic
+
+Search your backend for code that looks like this:
+
+if (!user.companyId) {
+  const company = await prisma.company.create({
+    data: { name: "Your Company", ownerId: user.id },
+  });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { companyId: company.id, role: "OWNER" },
+  });
+}
+
+
+🔴 REMOVE this block entirely.
+That’s what’s accidentally giving deleted users their own “fake business.”
+
+4. Add redirect protection on backend routes
+
+Middleware for company routes (/api/jobs, /api/clients, /api/employees, etc.):
+
+Before executing the handler:
+
+if (!req.user?.companyId) {
+  return res.status(403).json({ message: "Join a company to access this feature" });
+}
+
+
+That prevents any orphaned users from performing company actions.
+
+5. Join Company screen logic
+
+Ensure /join-company page:
+
+Has a single input for Company Invite Code.
+
+On submit → calls:
+
+POST /api/companies/join
+body: { inviteCode }
+
+
+Server validates code → assigns companyId and role.
+
+Then returns status: ok, companyId.
+
+Finally, redirect user to /home or /schedule.
+
+✅ Acceptance Criteria
+
+Deleted employees can log back in, but only see the “Join Company” screen.
+
+They cannot create jobs, view dashboards, or access company data.
+
+No new “Your Company” auto-generated.
+
+Once they enter a valid invite code, they regain access as normal.
