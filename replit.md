@@ -47,3 +47,15 @@ Key architectural decisions and features include:
 - **WebSockets**: `ws` library
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
+## Recent Changes
+
+### October 10, 2025: Auto-Company Creation Fixed
+- **Problem**: Removed employees were automatically assigned a new "Your Company" when logging back in
+- **Root Cause**: GET /api/auth/user endpoint had logic that auto-created companies for users without one
+- **Solution**:
+  - Removed auto-company creation logic from /api/auth/user endpoint
+  - Endpoint now returns user with company: null and role: null when user has no company
+  - Updated frontend Router to check user.company before rendering protected routes
+  - If authenticated but no company → renders /join-company page exclusively
+  - All protected routes only accessible after user has company membership
+- **Result**: Removed employees must now use an invite code to join a company - no auto-creation
