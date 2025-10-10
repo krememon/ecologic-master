@@ -545,7 +545,7 @@ export default function AIScheduling() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{item.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || item.jobAddress || 'No location specified'}</span>
                               </div>
                               
                               <div className="flex items-center gap-2">
@@ -607,7 +607,7 @@ export default function AIScheduling() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{item.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || item.jobAddress || 'No location specified'}</span>
                               </div>
                               
                               <div className="flex items-center gap-2">
@@ -669,7 +669,7 @@ export default function AIScheduling() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{item.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || item.jobAddress || 'No location specified'}</span>
                               </div>
                               
                               <div className="flex items-center gap-2">
@@ -731,7 +731,7 @@ export default function AIScheduling() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                               <div className="flex items-center gap-2">
                                 <MapPin className="h-5 w-5 text-slate-500" />
-                                <span className="text-sm">{item.location || 'No location specified'}</span>
+                                <span className="text-sm">{item.location || item.jobAddress || 'No location specified'}</span>
                               </div>
                               
                               <div className="flex items-center gap-2">

@@ -1043,6 +1043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             updatedAt: scheduleItems.updatedAt,
             jobTitle: jobs.title,
             jobStatus: jobs.status,
+            jobAddress: jobs.address,
             clientName: clients.name,
             clientId: jobs.clientId,
             subcontractorName: subcontractors.name,
