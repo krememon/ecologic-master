@@ -12,11 +12,11 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { db } from "./db";
-import { eq, and, lt, gt } from "drizzle-orm";
+import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 // Stripe removed
 
 // Subscription plans removed
@@ -478,6 +478,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error updating user:", error);
       res.status(error.message.includes("cannot") || error.message.includes("Cannot") ? 400 : 500)
         .json({ message: error.message || "Failed to update user" });
+    }
+  });
+
+  // Remove employee from company (Owner/Supervisor only)
+  app.delete('/api/org/users/:userId', requirePerm('users.manage'), async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Verify the user being removed belongs to this company
+      const membership = await db
+        .select()
+        .from(companyMembers)
+        .where(and(
+          eq(companyMembers.userId, userId),
+          eq(companyMembers.companyId, req.companyId)
+        ))
+        .limit(1);
+      
+      if (!membership || membership.length === 0) {
+        return res.status(404).json({ 
+          code: 'USER_NOT_FOUND',
+          message: "Employee not found in this company" 
+        });
+      }
+      
+      const employeeRole = membership[0].role;
+      
+      // Prevent removing the last OWNER
+      if (employeeRole === 'OWNER') {
+        const ownerCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(companyMembers)
+          .where(and(
+            eq(companyMembers.companyId, req.companyId),
+            eq(companyMembers.role, 'OWNER')
+          ));
+        
+        if (ownerCount[0].count <= 1) {
+          return res.status(409).json({ 
+            code: 'LAST_OWNER',
+            message: "Cannot remove the last owner of the company" 
+          });
+        }
+      }
+      
+      // Remove membership (in transaction)
+      await db.transaction(async (tx) => {
+        // Delete company membership
+        await tx
+          .delete(companyMembers)
+          .where(and(
+            eq(companyMembers.userId, userId),
+            eq(companyMembers.companyId, req.companyId)
+          ));
+        
+        // Increment tokenVersion to invalidate all sessions
+        await tx
+          .update(users)
+          .set({ 
+            tokenVersion: sql`${users.tokenVersion} + 1`,
+            updatedAt: new Date()
+          })
+          .where(eq(users.id, userId));
+        
+        // Delete all sessions for this user
+        await tx
+          .delete(sessions)
+          .where(sql`(sess->>'userId')::text = ${userId}`);
+      });
+      
+      // Broadcast session revocation to all user's devices
+      broadcastToUser(userId, {
+        type: 'session_revoked',
+        data: {
+          code: 'REMOVED_FROM_COMPANY',
+          message: 'Your access to this company has been removed.'
+        }
+      });
+      
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error removing employee:", error);
+      res.status(500).json({ message: "Failed to remove employee" });
     }
   });
 
