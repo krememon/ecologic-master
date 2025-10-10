@@ -79,8 +79,7 @@ export default function JoinCompany() {
                 id="inviteCode"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="Enter 6-character code"
-                maxLength={6}
+                placeholder="Enter your company's invite code"
                 className="uppercase"
                 data-testid="input-invite-code"
                 required
