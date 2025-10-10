@@ -129,6 +129,22 @@ Key architectural decisions include:
 - **Technical Details**: In development mode, Vite looks for public files in client/public/ (relative to its configured root)
 - App now loads correctly without service worker registration errors
 
+### October 10, 2025: White Screen Fix - Timezone API Corrections
+- **Problem**: App showed white screen after timezone conversion implementation
+- **Root Cause**: Used incorrect date-fns-tz v3 API function names in timezone utilities
+- **Errors**: 
+  - Used `zonedTimeToUtc` (doesn't exist in v3) instead of `fromZonedTime`
+  - Used `utcToZonedTime` (doesn't exist in v3) instead of `toZonedTime`
+  - Missing error handling caused crashes on invalid dates
+- **Solution**: 
+  - Updated to correct date-fns-tz v3 API: `fromZonedTime`, `formatInTimeZone`, `toZonedTime`
+  - Added comprehensive try-catch error handling in all timezone functions
+  - Functions now return empty string instead of throwing on invalid input
+  - Added fallback to `toLocaleString()` if formatting fails
+  - Made `getUserTimezone()` fall back to 'UTC' if determination fails
+  - All date parsing validates with `isValid()` from date-fns
+- **Result**: App loads successfully without white screen, robust date handling prevents future crashes
+
 ### October 10, 2025: Timezone Conversion and Location Display Fixes
 - **Timezone Utilities**: Created client/src/utils/timezone.ts with utilities for timezone handling:
   - `getUserTimezone()`: Gets user's IANA timezone from browser (e.g., "America/New_York")
