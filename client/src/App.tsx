@@ -27,6 +27,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import ChoosePlan from "@/pages/ChoosePlan";
 import Employees from "@/pages/Employees";
+import JoinCompany from "@/pages/JoinCompany";
 import { withSubscriptionGuard } from "@/hooks/useSubscription";
 
 // Wrap protected components with subscription guard
@@ -71,27 +72,37 @@ function Router() {
   }
 
   return (
-    <Layout>
-      <Switch>
-        <Route path="/choose-plan" component={ChoosePlan} />
-        <Route path="/" component={ProtectedHome} />
-        <Route path="/jobs" component={ProtectedJobs} />
-        <Route path="/subcontractors" component={ProtectedContractors} />
-        <Route path="/clients" component={ProtectedClients} />
-        <Route path="/invoicing" component={ProtectedInvoicing} />
-        <Route path="/payments" component={ProtectedPayments} />
-        <Route path="/documents" component={ProtectedDocuments} />
-        <Route path="/messages" component={ProtectedMessages} />
-        <Route path="/schedule" component={ProtectedAIScheduling} />
-        <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
-        <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
-        <Route path="/approvals" component={ProtectedApprovals} />
-        <Route path="/employees" component={ProtectedEmployees} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      {/* Standalone pages for authenticated users (no Layout wrapper) */}
+      <Route path="/join-company" component={JoinCompany} />
+      
+      {/* Protected pages with Layout */}
+      <Route>
+        {() => (
+          <Layout>
+            <Switch>
+              <Route path="/choose-plan" component={ChoosePlan} />
+              <Route path="/" component={ProtectedHome} />
+              <Route path="/jobs" component={ProtectedJobs} />
+              <Route path="/subcontractors" component={ProtectedContractors} />
+              <Route path="/clients" component={ProtectedClients} />
+              <Route path="/invoicing" component={ProtectedInvoicing} />
+              <Route path="/payments" component={ProtectedPayments} />
+              <Route path="/documents" component={ProtectedDocuments} />
+              <Route path="/messages" component={ProtectedMessages} />
+              <Route path="/schedule" component={ProtectedAIScheduling} />
+              <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
+              <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
+              <Route path="/approvals" component={ProtectedApprovals} />
+              <Route path="/employees" component={ProtectedEmployees} />
+              <Route path="/settings" component={Settings} />
+              <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        )}
+      </Route>
+    </Switch>
   );
 }
 

@@ -115,7 +115,10 @@ function requirePerm(permissions: Permission | Permission[]) {
     const company = await storage.getUserCompany(userId);
     
     if (!company) {
-      return res.status(403).json({ message: "No company access" });
+      return res.status(403).json({ 
+        code: 'NO_COMPANY',
+        message: "No company access" 
+      });
     }
 
     const userRole = await storage.getUserRole(userId, company.id);
@@ -613,6 +616,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating company:", error);
       res.status(500).json({ message: "Failed to create company" });
+    }
+  });
+
+  // Join company with invite code (for existing users)
+  app.post('/api/join-company', isAuthenticated, async (req: any, res) => {
+    try {
+      const { inviteCode } = req.body;
+      const userId = getUserId(req.user);
+      
+      if (!inviteCode) {
+        return res.status(400).json({ message: "Invite code is required" });
+      }
+
+      // Check if user already belongs to a company
+      const existingCompany = await storage.getUserCompany(userId);
+      if (existingCompany) {
+        return res.status(400).json({ 
+          code: 'ALREADY_IN_COMPANY',
+          message: "You already belong to a company" 
+        });
+      }
+
+      // Normalize and validate invite code
+      const { normalizeCode } = await import("@shared/inviteCode");
+      const normalizedCode = normalizeCode(inviteCode);
+      const company = await storage.getCompanyByInviteCode(normalizedCode);
+      
+      if (!company) {
+        return res.status(400).json({ 
+          code: 'INVALID_CODE',
+          message: "Invalid or expired invite code" 
+        });
+      }
+
+      // Add user to company with TECHNICIAN role (default for joining members)
+      await db.insert(companyMembers).values({
+        userId: userId,
+        companyId: company.id,
+        role: 'TECHNICIAN',
+        permissions: { canCreateJobs: true, canManageInvoices: true, canViewSchedule: true }
+      });
+      
+      // Rotate invite code after successful join (security best practice)
+      const { generateInviteCode } = await import("@shared/inviteCode");
+      const newInviteCode = generateInviteCode();
+      const updatedCompany = await storage.rotateInviteCode(company.id, newInviteCode);
+      
+      // Broadcast invite code rotation to company members
+      await broadcastToCompany(company.id, {
+        type: 'invite_code_rotated',
+        data: {
+          companyId: company.id,
+          version: updatedCompany.inviteCodeVersion
+        }
+      }, userId); // Exclude the joining user
+      
+      res.json({ 
+        message: "Successfully joined company",
+        company: {
+          id: company.id,
+          name: company.name
+        }
+      });
+    } catch (error: any) {
+      console.error("Error joining company:", error);
+      res.status(500).json({ message: "Failed to join company" });
     }
   });
 

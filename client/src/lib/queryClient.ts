@@ -25,6 +25,21 @@ async function throwIfResNotOk(res: Response) {
       }
     }
     
+    // Check for no company access error
+    if (res.status === 403) {
+      try {
+        const errorData = JSON.parse(text);
+        
+        if (errorData.code === 'NO_COMPANY') {
+          // Redirect to join company page
+          window.location.href = '/join-company';
+          throw new Error(errorData.message || 'No company access');
+        }
+      } catch (e) {
+        // If parsing fails, continue with default error handling
+      }
+    }
+    
     throw new Error(`${res.status}: ${text}`);
   }
 }
