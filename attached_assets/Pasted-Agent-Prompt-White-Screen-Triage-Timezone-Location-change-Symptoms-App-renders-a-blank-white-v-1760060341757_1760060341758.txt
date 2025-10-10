@@ -1,0 +1,99 @@
+Agent Prompt — White Screen Triage (Timezone/Location change)
+
+Symptoms
+
+App renders a blank white view after recent date/time refactor.
+
+Likely root cause
+
+Formatter throws at render:
+
+RangeError: Invalid time zone specified: undefined (formatInTimeZone/zonedTimeToUtc)
+
+Invalid Date used in toISOString() / formatter
+
+Missing import for date-fns-tz/luxon
+
+Service worker serving old JS bundle
+
+1) Get the exact error (1 minute)
+
+Open DevTools → Console. Copy the first red error + stack.
+
+In the network tab, confirm JS bundle loaded (no 404).
+
+(If a service worker is used)
+
+DevTools → Application → Service Workers → Unregister.
+
+Hard reload (Cmd+Shift+R / Ctrl+F5).
+
+2) Immediate HOTFIX (stop the crash)
+
+Temporarily sandbox all date formatting behind a safe helper and a default TZ. If anything is missing/invalid, fall back instead of throwing.
+
+Instructions
+
+Create a safe formatter and use it everywhere dates are rendered (job cards, schedule list, insights):
+
+If userTz is falsy/invalid → use 'UTC'.
+
+If date is invalid/missing → return '' (empty string) instead of throwing.
+
+Replace calls to formatInTimeZone/zonedTimeToUtc with the safe wrapper.
+
+Do not call toISOString() on invalid dates.
+
+Safe behavior (no code, just rules)
+
+resolveTz(userTz): returns userTz if valid IANA; else 'UTC'.
+
+formatUtcForUser(utcString, userTz):
+
+If !utcString → ''
+
+Try format with resolveTz; catch errors and return a simple toLocaleString() fallback.
+
+3) Guard every card/row that shows time/location
+
+If startAt/endAt is missing or invalid, render — (em dash) rather than calling a formatter.
+
+If displayAddress is empty, render “No location specified” only after trying Schedule.address → Job.address fallbacks.
+
+4) Verify imports / deps
+
+Ensure the library you’re using actually exists in the bundle:
+
+If you referenced date-fns-tz or Luxon, confirm it’s installed/imported.
+
+If you switched names (formatInTimeZone vs zonedTimeToUtc) make sure they match the lib you chose.
+
+5) Service Worker cache bust
+
+Bump app version or add a cache-busting query param on the main JS bundle (if SW still interferes).
+
+After deploy, Unregister SW again and hard reload.
+
+6) Acceptance after fix
+
+App renders (no white screen).
+
+Job cards show correct local time; if TZ missing, they still render with a simple local time (no crash).
+
+Cards show the right address (Schedule → Job fallback).
+
+No error in console.
+
+7) Hardening (keep)
+
+Centralize useUserTimeZone() to always return a valid IANA tz or 'UTC'.
+
+Add an Error Boundary around the schedule panel so a bad row can’t blank the whole app.
+
+Add a unit test:
+
+formatUtcForUser('2025-10-10T14:00:00Z', 'America/New_York') → "10/10/2025 10:00 AM" (DST aware)
+
+formatUtcForUser('bad', 'America/New_York') → '' (no throw)
+
+formatUtcForUser('2025-10-10T14:00:00Z', undefined) → renders without exception
