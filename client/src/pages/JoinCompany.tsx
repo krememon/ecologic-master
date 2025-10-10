@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Building2 } from "lucide-react";
+import { Users, Building2, LogOut } from "lucide-react";
 
 export default function JoinCompany() {
   const [, setLocation] = useLocation();
@@ -98,6 +98,18 @@ export default function JoinCompany() {
               <Users className="h-4 w-4 mr-2" />
               {isJoining ? "Joining..." : "Join Company"}
             </Button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => window.location.href = '/api/logout'}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+                data-testid="button-sign-out"
+              >
+                <LogOut className="h-3 w-3" />
+                Sign out (wrong account?)
+              </button>
+            </div>
           </form>
         </CardContent>
       </Card>
