@@ -111,3 +111,12 @@ Key architectural decisions include:
 - Row dividers using `divide-y` for visual separation between fields
 - All values show full text on hover via `title` attributes
 - Created date displays in "MMM d, yyyy" format with full datetime in tooltip
+
+### October 9, 2025: Photo Upload Success Toast Removed
+- Removed "Photo uploaded successfully" success toast notification from job photo uploads
+- Visual feedback now provided through inline indicators: button shows "Uploading..." text when active
+- Upload button is disabled during upload process
+- Progress bar displays for uploads when job has no photos yet
+- Thumbnail and photo counter update immediately upon successful upload
+- Error toasts remain functional for upload failures
+- Cleaner, less intrusive upload experience with visual state changes instead of popup notifications
