@@ -121,6 +121,14 @@ Key architectural decisions include:
 - Error toasts remain functional for upload failures
 - Cleaner, less intrusive upload experience with visual state changes instead of popup notifications
 
+### October 10, 2025: Service Worker Fix - App Loading Issue Resolved
+- **Problem**: App not loading due to service worker MIME type error
+- **Root Cause**: Service worker file (sw.js) was in wrong location - Vite's root is configured to "client" directory
+- **Solution**: Moved sw.js from root public/ to client/public/ directory
+- **Result**: Vite now correctly serves sw.js with Content-Type: application/javascript
+- **Technical Details**: In development mode, Vite looks for public files in client/public/ (relative to its configured root)
+- App now loads correctly without service worker registration errors
+
 ### October 10, 2025: Timezone Conversion and Location Display Fixes
 - **Timezone Utilities**: Created client/src/utils/timezone.ts with utilities for timezone handling:
   - `getUserTimezone()`: Gets user's IANA timezone from browser (e.g., "America/New_York")
