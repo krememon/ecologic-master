@@ -1,0 +1,109 @@
+Goals
+
+Times on job cards reflect the exact local time the user picked.
+
+Location shows the address you saved (from Job or Schedule).
+
+No “No location specified” when an address exists.
+
+1) Timezone: save UTC, render in user TZ (no double shifts)
+
+Input (when user picks date/time)
+
+Treat picker value as user’s local time in their IANA timezone.
+
+Convert once to UTC ISO with Z before sending to server.
+
+Implementation note: Use a TZ-aware lib (Day.js + timezone, Luxon, or date-fns-tz). Avoid new Date(localString) which guesses TZ and causes the 5:00 AM shift.
+
+Pseudologic:
+
+startUtc = zonedTimeToUtc(startLocal, userTz)
+
+endUtc = zonedTimeToUtc(endLocal, userTz)
+
+send startUtc.toISOString(), endUtc.toISOString() (with Z)
+
+Persist (server)
+
+Store startAt / endAt as UTC (timestamp / ISO with Z).
+
+Do not re-interpret or add offsets on save.
+
+Output (when rendering cards)
+
+Convert stored UTC → user TZ for display only.
+
+formatInTimeZone(startAtUtc, userTz, 'M/d/yyyy hh:mm a')
+
+Never call new Date(utcString).toString() and then format; always format with TZ.
+
+Safeguards
+
+If an incoming ISO string lacks Z, assume it’s local and convert to UTC with userTz before save.
+
+Add unit tests:
+
+Pick 10:00 AM America/New_York → save UTC 14:00Z (DST aware).
+
+Render back for that TZ → 10:00 AM.
+
+2) Location: choose a single source & fallback chain
+
+Decide data source order for the card (one line under the title):
+
+If Schedule has location.address, use that.
+
+Else if Job has address (street/city/zip), use that.
+
+Else show “No location specified”.
+
+API
+
+Ensure the schedule fetch returns:
+
+schedule.location.address (if set)
+
+and job.address fields as fallback (street, city, state, zip)
+
+Build a single displayAddress on the server or client:
+
+Prefer schedule; otherwise join job fields into "{street}, {city}, {state} {zip}" (skip missing parts cleanly).
+
+Create / Edit flows
+
+When the user enters an address during the wizard:
+
+Save to Job address in Step 2.
+
+If they also set a Schedule-specific location in Step 3, save that to Schedule location.
+
+The card should then show the schedule-specific address; if none, the job address.
+
+Tests
+
+Job has address only → card shows job address, never “No location specified”.
+
+Schedule has address → card shows schedule address.
+
+Neither has address → “No location specified”.
+
+3) Caching & rendering
+
+Query key must include date range: ['schedule', companyId, startISO, endISO, userTz].
+
+After creating/editing a job or schedule, invalidate that key so the card re-renders with correct time/address.
+
+4) Acceptance criteria
+
+Create job on Oct 10 @ 9:00 AM in your TZ → card shows 9:00 AM (no 5:00 AM).
+
+Create another on Oct 11 → appears with the correct time only on that date/week.
+
+If you provided an address anywhere (schedule or job), card shows it (linked), no “No location specified”.
+
+Switching user timezone shows correct local times accordingly.
+
+Prompt to apply verbatim:
+
+“Treat date/time picker values as local in the user’s IANA timezone, convert to UTC once on save, and always format from UTC back into the user’s timezone on read. Ensure the schedule cards display address from schedule.location first, falling back to job.address; only show ‘No location specified’ if both are missing. Update the schedule API to return both fields, include date-range + timezone in the cache key, and invalidate after create/edit.”

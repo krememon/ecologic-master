@@ -161,7 +161,7 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
     setCurrentStep(3);
   };
 
-  const handleStep3Complete = (data: Step3Data) => {
+  const handleStep3Complete = async (data: Step3Data) => {
     if (!step1Data || !step2Data) return;
 
     const jobData = {
@@ -186,9 +186,12 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
           id: step2Data.clientId!,
         };
 
+    // Convert local datetime to UTC before sending to backend
+    const { datetimeLocalToUTC } = await import('@/utils/timezone');
+    
     const scheduleData = {
-      startDateTime: data.startDateTime,
-      endDateTime: data.endDateTime,
+      startDateTime: datetimeLocalToUTC(data.startDateTime),
+      endDateTime: datetimeLocalToUTC(data.endDateTime),
       location: data.scheduleLocation,
       notes: data.scheduleNotes,
       subcontractorId: data.subcontractorId,
