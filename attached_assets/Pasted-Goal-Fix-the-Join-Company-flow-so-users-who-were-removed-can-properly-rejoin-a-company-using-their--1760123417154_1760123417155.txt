@@ -1,0 +1,84 @@
+Goal:
+Fix the Join Company flow so users who were removed can properly rejoin a company using their real invite code, and restore normal sign-in UI before the join step.
+
+1. ✅ Restore Login Before Join Flow
+
+If a user is not signed in (session missing), redirect them first to /login.
+Only after logging in should they be taken to /join-company.
+
+Example:
+
+if (!session?.user) {
+  return redirect("/login");
+}
+
+2. ✅ Fix Invite Code Validation Logic
+
+In your POST /api/companies/join route:
+
+Replace the validation block with this:
+
+const { inviteCode } = req.body;
+
+const company = await prisma.company.findFirst({
+  where: { inviteCode: inviteCode.trim() },
+});
+
+if (!company) {
+  return res.status(400).json({ message: "Invalid invite code." });
+}
+
+
+⚠️ Remove any logic that assumes a 6-character code — your app uses longer generated codes (UUID or custom string).
+Do not slice or shorten them when checking.
+
+3. ✅ Update Invite Code Generator (if you want shorter codes)
+
+If you do want short codes (like FHU8G8), replace your company creation logic with:
+
+import { customAlphabet } from "nanoid";
+const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 6);
+
+const inviteCode = nanoid();
+
+
+Then store inviteCode in your company table when a new company is created.
+
+4. ✅ Ensure the Join Route Links the User
+
+Once the code is valid:
+
+await prisma.user.update({
+  where: { id: user.id },
+  data: { companyId: company.id, role: "EMPLOYEE" },
+});
+
+
+Then return success:
+
+{ "status": "ok", "companyId": company.id }
+
+
+Frontend should redirect to /home after that.
+
+5. ✅ Fix the UI
+
+On the /join-company page:
+
+Add a small “Sign out” button in case the wrong account is logged in.
+
+Keep the heading and button styles identical to your login/register pages.
+
+Make sure it doesn’t show blank white background — inherit your global layout (dark sidebar / logo).
+
+✅ Acceptance Test
+
+ Deleted users see /join-company after login.
+
+ Real invite codes (from Settings → Company Code) work correctly.
+
+ Invalid codes show proper “Invalid code” toast.
+
+ Users get linked to company and redirected to dashboard.
+
+ No blank white screens appear.
