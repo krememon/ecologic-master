@@ -491,10 +491,7 @@ export default function Jobs() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      toast({
-        title: "Success",
-        description: "Photo uploaded successfully",
-      });
+      // No success toast - visual feedback via thumbnail update and counter
     },
     onError: (error: Error) => {
       console.error('jobphoto:upload:error', { jobId: selectedJob?.id, error });

@@ -1,0 +1,85 @@
+Goal
+
+No success toast after uploading a job-site photo.
+
+Keep error toasts.
+
+Thumbnails and the counter update immediately (optimistic), with a subtle inline progress state (no popup).
+
+1) Upload mutation: remove success toast
+
+Find the upload mutation/hook for job photos (e.g., useUploadJobPhoto, uploadJobPhoto).
+
+Change
+
+Delete any toast.success(...) in onSuccess.
+
+Keep cache updates and error toasts.
+
+onSuccess: (photo) => {
+  // update cache / optimistic reconcile
+  queryClient.setQueryData(['jobPhotos', jobId], (prev = []) => [photo, ...prev]);
+  queryClient.setQueryData(['jobPhotoCount', jobId], (n = 0) => n + 1);
+  // NO success toast
+},
+onError: (err) => toast.error(parseError(err)),
+
+
+If you’re using invalidation instead of setQueryData:
+
+await queryClient.invalidateQueries({ queryKey: ['jobPhotos', jobId] });
+await queryClient.invalidateQueries({ queryKey: ['jobPhotoCount', jobId] });
+
+2) Suppress interceptor auto-success (if present)
+
+If an API interceptor pops success toasts on any 2xx with message, skip for uploads:
+
+const url = (res.config.url ?? '').toLowerCase();
+const method = (res.config.method ?? '').toLowerCase();
+const isPhotoUpload = method === 'post' && url.startsWith('/api/jobs/') && url.includes('/photos');
+
+if (isPhotoUpload) return res; // do not toast success
+
+3) Inline feedback instead of toast
+
+Disable the Upload Photo button while uploading and show inline state:
+
+Button label: Uploading… (spinner optional)
+
+Re-enable when done/error
+
+For drag/drop, show a tiny progress bar under the button or on the tile being added.
+
+4) Optimistic tile + reconcile
+
+When upload starts, insert a temporary thumbnail with a local preview and a small “syncing” indicator.
+
+On success, replace it with the server photo (id/url).
+
+On error, remove the temp tile and show error toast.
+
+5) Counter badge
+
+Bind the badge (2 in your screenshot) to ['jobPhotoCount', jobId] or to photos.length from ['jobPhotos', jobId].
+
+Ensure it updates when the optimistic item is added/removed.
+
+6) QA / Acceptance
+
+Upload a photo → no success popup appears.
+
+Button shows Uploading… then returns to normal.
+
+New thumbnail appears immediately; counter increments.
+
+On failure, no ghost tile remains and an error toast is shown.
+
+Other success toasts in the app remain unaffected.
+
+Likely touch points
+
+hooks/useUploadJobPhoto.ts (or equivalent)
+
+components/jobs/JobPhotos.tsx (gallery + count)
+
+lib/api/interceptor.ts (if auto-success toasts are used)
