@@ -1,5 +1,5 @@
-import { zonedTimeToUtc } from 'date-fns-tz';
-import { parse } from 'date-fns';
+import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
+import { parse, format as dateFnsFormat } from 'date-fns';
 
 /**
  * Get the user's IANA timezone (e.g., "America/New_York")
@@ -28,4 +28,26 @@ export function datetimeLocalToUTC(datetimeLocalValue: string): string {
   
   // Return ISO string
   return utcDate.toISOString();
+}
+
+/**
+ * Convert UTC ISO string to user's local time and format it
+ * 
+ * @param utcIsoString - ISO 8601 UTC string from database (e.g., "2025-10-09T14:00:00.000Z")
+ * @param formatString - Format string for date-fns (e.g., "h:mm a" for "10:00 AM")
+ * @returns Formatted time in user's timezone (e.g., "10:00 AM")
+ */
+export function formatInLocalTimezone(utcIsoString: string, formatString: string): string {
+  if (!utcIsoString) return '';
+  
+  const userTz = getUserTimezone();
+  
+  // Parse UTC string to Date object
+  const utcDate = new Date(utcIsoString);
+  
+  // Convert to user's timezone
+  const localDate = utcToZonedTime(utcDate, userTz);
+  
+  // Format and return
+  return dateFnsFormat(localDate, formatString);
 }

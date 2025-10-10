@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar, Brain, Zap, TrendingUp, Edit3, Plus, Trash2, Clock, User, MapPin, AlertTriangle, X, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { startOfWeekLocal, addDaysLocal, fmtWeekOf, fmtDowShort, fmtDayNumber, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
+import { formatInLocalTimezone } from "@/utils/timezone";
 
 interface ScheduleItem {
   id: string;
@@ -550,7 +551,7 @@ export default function AIScheduling() {
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5 text-slate-500" />
                                 <span className="text-sm">
-                                  {new Date(item.startDateTime).toLocaleDateString()} {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {formatInLocalTimezone(item.startDateTime, 'MMM d, yyyy h:mm a')}
                                 </span>
                               </div>
                               
@@ -612,7 +613,7 @@ export default function AIScheduling() {
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5 text-slate-500" />
                                 <span className="text-sm">
-                                  {new Date(item.startDateTime).toLocaleDateString()} {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {formatInLocalTimezone(item.startDateTime, 'MMM d, yyyy h:mm a')}
                                 </span>
                               </div>
                               
@@ -674,7 +675,7 @@ export default function AIScheduling() {
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5 text-slate-500" />
                                 <span className="text-sm">
-                                  Completed: {new Date(item.endDateTime).toLocaleDateString()}
+                                  Completed: {formatInLocalTimezone(item.endDateTime, 'MMM d, yyyy')}
                                 </span>
                               </div>
                               
@@ -736,7 +737,7 @@ export default function AIScheduling() {
                               <div className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5 text-slate-500" />
                                 <span className="text-sm">
-                                  {new Date(item.startDateTime).toLocaleDateString()} {new Date(item.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {formatInLocalTimezone(item.startDateTime, 'MMM d, yyyy h:mm a')}
                                 </span>
                               </div>
                               
