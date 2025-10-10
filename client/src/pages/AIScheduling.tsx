@@ -16,185 +16,29 @@ import { startOfWeekLocal, addDaysLocal, fmtWeekOf, fmtDowShort, fmtDayNumber, d
 import { formatInLocalTimezone } from "@/utils/timezone";
 
 interface ScheduleItem {
-  id: string;
+  id: number;
   jobId: number;
   jobTitle: string;
-  subcontractorId: number;
-  subcontractorName: string;
-  startTime: string;
-  endTime: string;
-  date: string;
+  jobStatus: string;
+  jobAddress?: string;
+  clientName?: string;
+  clientId?: number;
+  subcontractorId: number | null;
+  subcontractorName?: string;
+  startDateTime: string; // UTC ISO string
+  endDateTime: string; // UTC ISO string
   status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-  location?: string;
-  notes?: string;
-}
-
-interface EditScheduleDialogProps {
-  item: ScheduleItem | null;
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (item: ScheduleItem) => void;
-  onDelete?: (id: string) => void;
-  isLoading?: boolean;
-}
-
-function EditScheduleDialog({ item, isOpen, onClose, onSave, onDelete, isLoading }: EditScheduleDialogProps) {
-  const [formData, setFormData] = useState<Partial<ScheduleItem>>({});
-
-  useEffect(() => {
-    if (item) {
-      setFormData(item);
-    } else {
-      setFormData({
-        jobTitle: '',
-        subcontractorName: '',
-        startTime: '09:00',
-        endTime: '17:00',
-        date: dateToYmdLocal(new Date()),
-        status: 'scheduled',
-        location: '',
-        notes: ''
-      });
-    }
-  }, [item]);
-
-  const handleSave = () => {
-    if (formData.jobTitle && formData.subcontractorName && formData.date) {
-      onSave({
-        ...formData,
-        id: item?.id || Math.random().toString(36).substr(2, 9),
-        jobId: item?.jobId || Math.floor(Math.random() * 1000),
-        subcontractorId: item?.subcontractorId || Math.floor(Math.random() * 1000),
-      } as ScheduleItem);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>{item ? 'Edit Schedule Item' : 'Add New Schedule Item'}</DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="jobTitle">Job Title</Label>
-            <Input
-              id="jobTitle"
-              value={formData.jobTitle || ''}
-              onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-              placeholder="Enter job title"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="subcontractorName">Subcontractor</Label>
-            <Input
-              id="subcontractorName"
-              value={formData.subcontractorName || ''}
-              onChange={(e) => setFormData({ ...formData, subcontractorName: e.target.value })}
-              placeholder="Enter subcontractor name"
-            />
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="startTime">Start Time</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={formData.startTime || '09:00'}
-                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="endTime">End Time</Label>
-              <Input
-                id="endTime"
-                type="time"
-                value={formData.endTime || '17:00'}
-                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-              />
-            </div>
-          </div>
-          
-          <div>
-            <Label htmlFor="date">Date</Label>
-            <Input
-              id="date"
-              type="date"
-              value={formData.date || ''}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="status">Status</Label>
-            <Select
-              value={formData.status || 'scheduled'}
-              onValueChange={(value) => setFormData({ ...formData, status: value as ScheduleItem['status'] })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div>
-            <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              value={formData.location || ''}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="Job site location"
-            />
-          </div>
-          
-          <div>
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes || ''}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Additional notes"
-              rows={3}
-            />
-          </div>
-        </div>
-        
-        <div className="flex justify-between pt-4">
-          <div>
-            {item && onDelete && (
-              <Button variant="destructive" size="sm" onClick={() => onDelete(item.id)}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
-            )}
-          </div>
-          <div className="space-x-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isLoading}>
-              {isLoading ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+  location?: string | null;
+  notes?: string | null;
+  companyId: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export default function AIScheduling() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
-  const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
     return startOfWeekLocal(new Date(), 0); // Sunday-start week
@@ -248,57 +92,6 @@ export default function AIScheduling() {
       case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300';
       default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300';
     }
-  };
-
-  // Mutation to create actual jobs
-  const createJobMutation = useMutation({
-    mutationFn: async (scheduleItem: ScheduleItem) => {
-      const jobData = {
-        title: scheduleItem.jobTitle,
-        description: `Scheduled with ${scheduleItem.subcontractorName}`,
-        location: scheduleItem.location || '',
-        status: 'planning',
-        priority: 'medium',
-        startDate: scheduleItem.date,
-        notes: `${scheduleItem.startTime} - ${scheduleItem.endTime}${scheduleItem.notes ? '\n' + scheduleItem.notes : ''}`
-      };
-      
-      const res = await apiRequest("POST", "/api/jobs", jobData);
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      setIsDialogOpen(false);
-      setSelectedItem(null);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: "Failed to save schedule item",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleSaveItem = (item: ScheduleItem) => {
-    createJobMutation.mutate(item);
-  };
-
-  const handleDeleteItem = (id: string) => {
-    setScheduleItems(prev => prev.filter(item => item.id !== id));
-    setIsDialogOpen(false);
-    setSelectedItem(null);
-    
-    toast({
-      title: "Schedule Item Deleted",
-      description: "The schedule item has been removed.",
-    });
-  };
-
-  const closeDialog = () => {
-    setIsDialogOpen(false);
-    setSelectedItem(null);
   };
 
   if (isLoading || !isAuthenticated) {
@@ -447,29 +240,6 @@ export default function AIScheduling() {
           </DialogHeader>
           
           <div className="mt-4">
-            <div className="flex items-center justify-between mb-6">
-              <Button
-                onClick={() => {
-                  setSelectedItem({
-                    id: '',
-                    jobId: 0,
-                    jobTitle: '',
-                    subcontractorId: 0,
-                    subcontractorName: '',
-                    startTime: '09:00',
-                    endTime: '17:00',
-                    date: selectedDay || '',
-                    status: 'scheduled'
-                  });
-                  setIsDialogOpen(true);
-                }}
-                size="sm"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add New Job
-              </Button>
-            </div>
-
             {(() => {
               // Filter schedule items based on selected day
               let filteredItems = Array.isArray(scheduledItems) ? scheduledItems : [];
@@ -766,15 +536,6 @@ export default function AIScheduling() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <EditScheduleDialog
-        item={selectedItem}
-        isOpen={isDialogOpen}
-        onClose={closeDialog}
-        onSave={handleSaveItem}
-        onDelete={handleDeleteItem}
-        isLoading={createJobMutation.isPending}
-      />
     </div>
   );
 }

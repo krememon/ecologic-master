@@ -1063,8 +1063,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(filteredSchedule);
       }
       
-      // Otherwise, return all schedule items (legacy behavior)
-      const allScheduleItems = await storage.getScheduleItems(company.id);
+      // Otherwise, return all schedule items with enriched data (legacy behavior)
+      const allScheduleItems = await db
+        .select({
+          id: scheduleItems.id,
+          companyId: scheduleItems.companyId,
+          jobId: scheduleItems.jobId,
+          subcontractorId: scheduleItems.subcontractorId,
+          startDateTime: scheduleItems.startDateTime,
+          endDateTime: scheduleItems.endDateTime,
+          status: scheduleItems.status,
+          location: scheduleItems.location,
+          notes: scheduleItems.notes,
+          createdAt: scheduleItems.createdAt,
+          updatedAt: scheduleItems.updatedAt,
+          jobTitle: jobs.title,
+          jobStatus: jobs.status,
+          jobAddress: jobs.address,
+          clientName: clients.name,
+          clientId: jobs.clientId,
+          subcontractorName: subcontractors.name,
+        })
+        .from(scheduleItems)
+        .leftJoin(jobs, eq(scheduleItems.jobId, jobs.id))
+        .leftJoin(clients, eq(jobs.clientId, clients.id))
+        .leftJoin(subcontractors, eq(scheduleItems.subcontractorId, subcontractors.id))
+        .where(eq(scheduleItems.companyId, company.id))
+        .orderBy(desc(scheduleItems.startDateTime));
+      
       res.json(allScheduleItems);
     } catch (error) {
       console.error("Error fetching schedule items:", error);

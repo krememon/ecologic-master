@@ -120,3 +120,25 @@ Key architectural decisions include:
 - Thumbnail and photo counter update immediately upon successful upload
 - Error toasts remain functional for upload failures
 - Cleaner, less intrusive upload experience with visual state changes instead of popup notifications
+
+### October 10, 2025: Timezone Conversion and Location Display Fixes
+- **Timezone Utilities**: Created client/src/utils/timezone.ts with utilities for timezone handling:
+  - `getUserTimezone()`: Gets user's IANA timezone from browser (e.g., "America/New_York")
+  - `datetimeLocalToUTC()`: Converts datetime-local input values to UTC ISO strings using date-fns-tz
+  - `formatInLocalTimezone()`: Converts UTC timestamps back to user's local timezone for display
+- **Job Creation**: Updated JobWizard to convert datetime-local picker values to UTC before API submission
+  - Picker values treated as local time in user's timezone
+  - Converted to UTC using zonedTimeToUtc before sending to backend
+  - Backend receives and stores proper UTC timestamps
+- **Schedule Display**: Updated AIScheduling.tsx to display times in user's local timezone
+  - All schedule times formatted using `formatInLocalTimezone()` with "MMM d, yyyy h:mm a" format
+  - Times correctly display in user's timezone (e.g., 10:00 AM shows as 10:00 AM, not shifted)
+  - ScheduleItem interface updated to match actual API response fields (startDateTime/endDateTime)
+- **Location Fallback**: Implemented proper location display priority
+  - Added jobAddress field to GET /api/schedule-items API response (from jobs.address)
+  - Frontend displays: schedule.location → job.address → "No location specified"
+  - Both date-filtered and legacy API paths return enriched data with jobAddress
+- **Cleanup**: Removed broken EditScheduleDialog component and legacy schedule editing functionality
+  - Removed outdated ScheduleItem interface fields (startTime, endTime, date)
+  - Cleaned up unused mutation and handler functions
+  - Schedule management now exclusively through Job Wizard workflow
