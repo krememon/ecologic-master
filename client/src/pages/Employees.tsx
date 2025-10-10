@@ -110,6 +110,26 @@ export default function Employees() {
     },
   });
 
+  const removeEmployeeMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("DELETE", `/api/org/users/${userId}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to remove employee");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove employee",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     updateRoleMutation.mutate({ userId, role: newRole });
   };
@@ -117,6 +137,10 @@ export default function Employees() {
   const handleStatusToggle = (userId: string, newStatus: 'active' | 'inactive') => {
     const uppercaseStatus = newStatus === 'active' ? 'ACTIVE' : 'INACTIVE';
     updateStatusMutation.mutate({ userId, status: uppercaseStatus });
+  };
+
+  const handleRemoveEmployee = (userId: string) => {
+    removeEmployeeMutation.mutate(userId);
   };
 
   // Sort employees
@@ -148,6 +172,7 @@ export default function Employees() {
 
   const employees = sortEmployees(data?.users || []);
   const isUpdating = updateRoleMutation.isPending || updateStatusMutation.isPending;
+  const isRemoving = removeEmployeeMutation.isPending;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -261,7 +286,9 @@ export default function Employees() {
               employee={employee}
               onRoleChange={handleRoleChange}
               onStatusToggle={handleStatusToggle}
+              onRemove={handleRemoveEmployee}
               isUpdating={isUpdating}
+              isRemoving={isRemoving}
             />
           ))}
         </div>

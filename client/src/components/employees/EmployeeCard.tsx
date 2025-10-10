@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, ChevronDown, ChevronRight, Briefcase } from "lucide-react";
+import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, ChevronDown, ChevronRight, Briefcase, Trash2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCan } from "@/hooks/useCan";
 import JobsHistory from "./JobsHistory.tsx";
 import { formatPhone } from "@shared/phoneUtils";
@@ -31,15 +32,18 @@ interface EmployeeCardProps {
   };
   onRoleChange: (userId: string, newRole: UserRole) => void;
   onStatusToggle: (userId: string, newStatus: 'active' | 'inactive') => void;
+  onRemove: (userId: string) => void;
   isUpdating: boolean;
+  isRemoving: boolean;
 }
 
-export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, isUpdating }: EmployeeCardProps) {
+export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, onRemove, isUpdating, isRemoving }: EmployeeCardProps) {
   const { can } = useCan();
   const [isJobsExpanded, setIsJobsExpanded] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole>(employee.role);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
 
   const fullName = `${employee.firstName} ${employee.lastName}`.trim();
   
@@ -117,8 +121,54 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
             </CardTitle>
           </div>
           
-          {can('users.view') && (
-            <DropdownMenu>
+          <div className="flex items-center gap-2">
+            {canModify && (
+              <TooltipProvider>
+                <Tooltip>
+                  <AlertDialog open={isRemoveDialogOpen} onOpenChange={setIsRemoveDialogOpen}>
+                    <TooltipTrigger asChild>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-slate-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                          data-testid={`button-remove-${employee.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Remove from company</p>
+                    </TooltipContent>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove from company?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will immediately revoke access to your company. The user's account remains but they'll need a new company invite code to continue.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => {
+                            onRemove(employee.id);
+                            setIsRemoveDialogOpen(false);
+                          }}
+                          disabled={isRemoving}
+                          className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                        >
+                          {isRemoving ? 'Removing...' : 'Remove'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
+            {can('users.view') && (
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" data-testid={`button-kebab-${employee.id}`}>
                   <MoreVertical className="h-4 w-4" />
@@ -201,6 +251,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, i
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </div>
         </div>
       </CardHeader>
       
