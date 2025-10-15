@@ -50,19 +50,22 @@ Key architectural decisions and features include:
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
 ## Recent Changes
 
-### October 15, 2025: Messaging System Implementation
-- **Feature**: Implemented comprehensive two-pane messaging system for direct 1:1 conversations between company members
+### October 15, 2025: Mobile-First Messaging System Implementation
+- **Feature**: Implemented mobile-first messaging system with iOS Messages-style UX for direct 1:1 conversations
 - **Architecture**:
-  - Database: Created conversations, conversation_participants, and restructured messages tables with serial IDs
-  - Backend: 7 new API endpoints (/api/messaging/users, /api/conversations, /api/conversations/:id/messages, etc.)
+  - Database: Created conversations, conversation_participants, and messages tables with serial IDs
+  - Backend: 8 API endpoints including /api/messaging/users, /api/conversations, /api/conversations/:id, /api/conversations/:id/messages, /api/conversations/:id/read
   - Storage: 9 new storage methods (getUserConversations, getOrCreateConversation, createConversationMessage, etc.)
   - WebSocket: Real-time message delivery notifications integrated with existing WebSocket server
-- **Frontend**:
-  - Two-pane UI: Left sidebar with searchable people list, right pane with chat thread
-  - Features: Real-time updates, unread counts, read receipts, auto-scroll, proper empty states
-  - UX: WhatsApp/Slack-style interface with avatar, timestamps, and message bubbles
-- **Security**: Enforces company-scoped messaging (users can only message within their company)
-- **Result**: Company members can now communicate directly through real-time 1:1 conversations
+- **Mobile-First UX Pattern**:
+  - Route structure: /messages (directory) → /messages/:userId (redirect) → /messages/c/:conversationId (full-screen thread)
+  - Directory view: Shows all active company members with search, excludes inactive users
+  - Thread view: Full-screen iOS Messages-style chat with back button, message bubbles, multiline composer
+  - Composer: Enter sends message, Shift+Enter adds newline
+  - Features: Real-time updates, unread counts, read receipts, auto-scroll, inactive user banner
+- **Critical Fix**: Added date parsing transformation in TanStack Query `select` to convert API timestamp strings to Date objects before passing to date-fns utilities (formatDistanceToNow, format, isToday, etc.)
+- **Security**: Enforces company-scoped messaging with participant verification on all endpoints
+- **Result**: Company members can communicate through real-time 1:1 conversations with mobile-optimized UX
 
 ### October 15, 2025: Email Login Flow for Users Without Company Fixed
 - **Problem**: Users with correct credentials but no company saw "Something went wrong" error during login
