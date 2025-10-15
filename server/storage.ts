@@ -793,7 +793,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCompanyUsersForMessaging(companyId: number, currentUserId: string): Promise<any[]> {
-    return await db
+    const companyUsers = await db
       .select({
         id: users.id,
         firstName: users.firstName,
@@ -813,6 +813,44 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(users.firstName);
+    
+    // For each user, find their existing 1:1 conversation with current user
+    const usersWithConversations = await Promise.all(
+      companyUsers.map(async (user) => {
+        // Find conversation where both users are participants and it's not a group
+        const existingConversation = await db
+          .select({ id: conversations.id })
+          .from(conversations)
+          .innerJoin(
+            conversationParticipants,
+            eq(conversationParticipants.conversationId, conversations.id)
+          )
+          .where(
+            and(
+              eq(conversations.companyId, companyId),
+              eq(conversations.isGroup, false),
+              sql`EXISTS (
+                SELECT 1 FROM ${conversationParticipants} cp1
+                WHERE cp1.conversation_id = ${conversations.id}
+                AND cp1.user_id = ${currentUserId}
+              )`,
+              sql`EXISTS (
+                SELECT 1 FROM ${conversationParticipants} cp2
+                WHERE cp2.conversation_id = ${conversations.id}
+                AND cp2.user_id = ${user.id}
+              )`
+            )
+          )
+          .limit(1);
+        
+        return {
+          ...user,
+          conversationId: existingConversation[0]?.id || null,
+        };
+      })
+    );
+    
+    return usersWithConversations;
   }
 
   async getDashboardStats(companyId: number): Promise<any> {
