@@ -48,6 +48,10 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
 ### October 15, 2025: Server-Side "Get or Create Then Redirect" Messaging Architecture
 - **Feature**: Refactored messaging navigation to use server-side conversation creation with 302 redirects, eliminating all client-side conversation creation logic
 - **Problem Solved**: Eliminated "Loading conversation..." freeze bugs, race conditions, NaN URL errors, and complex client-side state management
+- **Database Migration**: Added `pair_key` column (NOT NULL, UNIQUE) to conversations table with backfill script that:
+  - Generated SHA-256 pairKey for all existing 1:1 conversations
+  - Detected and removed 3 duplicate conversations (kept oldest ones)
+  - Ensured data integrity by making pair_key NOT NULL after backfill
 - **Architecture Changes**:
   - **New Server Route**: Added GET `/messages/u/:userId` that validates user, deterministically creates/finds conversation, and redirects to canonical route
   - **Instant Client Navigation**: MessagesDirectory now navigates directly to `/messages/u/${userId}` via `window.location.href` (browser navigation, not SPA routing) with zero preliminary API calls
