@@ -18,7 +18,9 @@ import Contractors from "@/pages/Contractors";
 import Clients from "@/pages/Clients";
 import Invoicing from "@/pages/Invoicing";
 import Documents from "@/pages/Documents";
-import Messages from "@/pages/Messages";
+import MessagesDirectory from "@/pages/MessagesDirectory";
+import MessageRedirect from "@/pages/MessageRedirect";
+import MessageThread from "@/pages/MessageThread";
 import PaymentsPage from "@/pages/payments-page";
 import AIScheduling from "@/pages/AIScheduling";
 import Settings from "@/pages/Settings";
@@ -82,7 +84,13 @@ function Router() {
               <Route path="/invoicing" component={Invoicing} />
               <Route path="/payments" component={PaymentsPage} />
               <Route path="/documents" component={Documents} />
-              <Route path="/messages" component={Messages} />
+              <Route path="/messages" component={MessagesDirectory} />
+              <Route path="/messages/c/:conversationId">
+                {(params) => <MessageThread conversationId={params.conversationId} />}
+              </Route>
+              <Route path="/messages/:userId">
+                {(params) => <MessageRedirect userId={params.userId} />}
+              </Route>
               <Route path="/schedule" component={AIScheduling} />
               <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
               <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>

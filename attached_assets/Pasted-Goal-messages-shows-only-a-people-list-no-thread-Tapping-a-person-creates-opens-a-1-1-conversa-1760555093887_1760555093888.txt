@@ -1,0 +1,136 @@
+Goal
+
+/messages shows only a people list (no thread).
+
+Tapping a person creates/opens a 1:1 conversation and navigates to a full-screen DM.
+
+Back button returns to the directory list.
+
+1) Routes
+
+Directory: GET /messages
+
+Renders company employees (active only, excluding self).
+
+DM: GET /messages/:userId
+
+On load, server finds/creates the 1:1 conversation with :userId (same company).
+
+Redirects internally to canonical conversation URL: /messages/c/:conversationId
+
+Conversation: GET /messages/c/:conversationId
+
+Renders the full chat thread.
+
+If you prefer, skip the redirect and resolve conversation on the client, but the above keeps URLs clean.
+
+2) Data model (if not added yet)
+
+Conversation(id, companyId, isGroup=false, createdById, createdAt, updatedAt)
+
+ConversationParticipant(conversationId, userId, lastReadAt, muted=false) — PK (conversationId,userId)
+
+Message(id, conversationId, senderId, body, createdAt, editedAt?, deletedAt?)
+
+All company-scoped; enforce same-company checks.
+
+3) APIs
+
+People list: GET /api/company/users?status=active
+
+Returns id, name, role, avatar, presence, lastSeen.
+
+Ensure/find DM: POST /api/messages/conversations
+
+Body: { userId } → validates same company, finds existing 1:1 or creates; returns { conversationId }.
+
+Messages:
+
+GET /api/messages/conversations/:id/messages?cursor=<ts>&limit=50
+
+POST /api/messages/conversations/:id/messages { body }
+
+POST /api/messages/conversations/:id/read { at?: ISO }
+
+POST /api/messages/typing { conversationId, isTyping } (ephemeral)
+
+RBAC: user must be active & in the company; block deactivated/removed targets.
+
+4) UI
+A) Directory (/messages)
+
+Header: “Messages”
+
+Search input: “Search people”
+
+List items:
+
+Avatar, Name, Role (small), presence dot (optional)
+
+(Optional) unread badge for existing DM with that person
+
+Row tap:
+
+Call POST /api/messages/conversations with the selected userId
+
+router.push('/messages/c/' + conversationId)
+
+B) DM screen (/messages/c/:conversationId)
+
+Header: Back chevron → /messages, avatar + name, presence dot.
+
+Scrollable thread with bubbles (self right, other left), group by day, timestamps.
+
+Composer:
+
+Multiline; Enter=send, Shift+Enter=newline
+
+Disabled on sending or if recipient inactive
+
+Show “Typing…” when typing events arrive.
+
+Realtime
+
+Subscribe to conversation:{conversationId} for message:new, typing, read.
+
+Optimistic send; replace on ack; unread clears when focused (POST /read).
+
+5) State & caching
+
+People list: ['companyUsers']
+
+Conversation: ['conversation', conversationId]
+
+Messages: ['messages', conversationId]
+
+On message:new while on directory, update the per-person unread badge (optional).
+
+6) Edge cases
+
+Deactivated/removed target: hide from directory; in a DM show banner “User is inactive” and disable composer.
+
+Self: exclude from directory.
+
+Removed current user: middleware redirects any /messages* to /join-company.
+
+7) Styling notes
+
+Directory rows: 56–64px height, rounded hover, tight spacing (iOS Messages vibe).
+
+DM header: large name, subtle role; back chevron left.
+
+Bubbles: 12–14px text, 8–12px radius, readable contrast; timestamps 11–12px muted.
+
+8) Acceptance criteria
+
+Visiting /messages shows only employees (no thread visible).
+
+Tapping a person opens a full-screen DM; back returns to the list.
+
+Messages send/receive in realtime; typing indicator works.
+
+Unread badges clear when viewing the DM.
+
+Deactivated users don’t appear in the list; existing DM shows inactive banner.
+
+Direct nav to /messages/c/:id works; 404 if not a participant.
