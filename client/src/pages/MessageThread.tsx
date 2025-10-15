@@ -93,9 +93,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Mark as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest(`/api/conversations/${convId}/read`, {
-        method: "POST",
-      });
+      await apiRequest("POST", `/api/conversations/${convId}/read`);
     },
   });
 

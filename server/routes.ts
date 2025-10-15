@@ -1621,6 +1621,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single conversation details
+  app.get('/api/conversations/:conversationId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const conversationId = parseInt(req.params.conversationId);
+
+      // Verify user is a participant
+      const participant = await storage.getConversationParticipant(conversationId, userId);
+      if (!participant) {
+        return res.status(403).json({ message: 'Not a participant in this conversation' });
+      }
+
+      const conversation = await storage.getConversation(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation not found' });
+      }
+
+      // Get all participants to find the other user
+      const participants = await db
+        .select({
+          userId: conversationParticipants.userId,
+          user: {
+            id: users.id,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            email: users.email,
+            profileImageUrl: users.profileImageUrl,
+            status: users.status,
+          }
+        })
+        .from(conversationParticipants)
+        .innerJoin(users, eq(conversationParticipants.userId, users.id))
+        .where(eq(conversationParticipants.conversationId, conversationId));
+
+      const otherParticipant = participants.find((p: any) => p.userId !== userId);
+
+      res.json({
+        id: conversation.id,
+        isGroup: conversation.isGroup,
+        otherUser: otherParticipant?.user,
+      });
+    } catch (error) {
+      console.error('Error fetching conversation:', error);
+      res.status(500).json({ message: 'Failed to fetch conversation' });
+    }
+  });
+
   // Get conversation messages
   app.get('/api/conversations/:conversationId/messages', isAuthenticated, async (req: any, res) => {
     try {
