@@ -12,7 +12,7 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { db } from "./db";
@@ -1471,6 +1471,254 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error scanning invoice:", error);
       res.status(500).json({ message: "Failed to analyze invoice image" });
+    }
+  });
+
+  // ============= Messaging API Routes =============
+  
+  // Get company users for messaging (exclude current user, only active)
+  app.get('/api/messaging/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      const users = await storage.getCompanyUsersForMessaging(company.id, userId);
+      res.json(users);
+    } catch (error) {
+      console.error('Error fetching messaging users:', error);
+      res.status(500).json({ message: 'Failed to fetch users' });
+    }
+  });
+
+  // Get user's conversations
+  app.get('/api/conversations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      const conversations = await storage.getUserConversations(userId, company.id);
+      
+      // Enrich conversations with other participant info and unread count
+      const enriched = await Promise.all(conversations.map(async (conv: any) => {
+        // Get all participants
+        const participants = await db
+          .select({
+            id: conversationParticipants.id,
+            userId: conversationParticipants.userId,
+            lastReadAt: conversationParticipants.lastReadAt,
+            user: {
+              id: users.id,
+              firstName: users.firstName,
+              lastName: users.lastName,
+              email: users.email,
+              profileImageUrl: users.profileImageUrl,
+              status: users.status,
+            }
+          })
+          .from(conversationParticipants)
+          .innerJoin(users, eq(conversationParticipants.userId, users.id))
+          .where(eq(conversationParticipants.conversationId, conv.id));
+
+        // Find the other participant (not current user)
+        const otherParticipant = participants.find((p: any) => p.userId !== userId);
+        const currentUserParticipant = participants.find((p: any) => p.userId === userId);
+
+        // Get last message
+        const [lastMessage] = await db
+          .select()
+          .from(messages)
+          .where(
+            and(
+              eq(messages.conversationId, conv.id),
+              sql`${messages.deletedAt} IS NULL`
+            )
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+
+        // Calculate unread count
+        let unreadCount = 0;
+        if (currentUserParticipant?.lastReadAt) {
+          const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conv.id),
+                sql`${messages.createdAt} > ${currentUserParticipant.lastReadAt}`,
+                sql`${messages.senderId} != ${userId}`,
+                sql`${messages.deletedAt} IS NULL`
+              )
+            );
+          unreadCount = result?.count || 0;
+        } else {
+          // Never read, count all messages from other user
+          const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conv.id),
+                sql`${messages.senderId} != ${userId}`,
+                sql`${messages.deletedAt} IS NULL`
+              )
+            );
+          unreadCount = result?.count || 0;
+        }
+
+        return {
+          id: conv.id,
+          isGroup: conv.isGroup,
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt,
+          otherUser: otherParticipant?.user,
+          lastMessage: lastMessage || null,
+          unreadCount,
+        };
+      }));
+
+      res.json(enriched);
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      res.status(500).json({ message: 'Failed to fetch conversations' });
+    }
+  });
+
+  // Create or get conversation with a user
+  app.post('/api/conversations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { otherUserId } = req.body;
+
+      if (!otherUserId) {
+        return res.status(400).json({ message: 'otherUserId is required' });
+      }
+
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      // Verify other user is in the same company
+      const otherUserCompany = await storage.getUserCompany(otherUserId);
+      if (!otherUserCompany || otherUserCompany.id !== company.id) {
+        return res.status(403).json({ message: 'Cannot message users outside your company' });
+      }
+
+      const conversation = await storage.getOrCreateConversation(userId, otherUserId, company.id);
+      res.json(conversation);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      res.status(500).json({ message: 'Failed to create conversation' });
+    }
+  });
+
+  // Get conversation messages
+  app.get('/api/conversations/:conversationId/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const conversationId = parseInt(req.params.conversationId);
+      const limit = parseInt(req.query.limit || '50');
+      const cursor = req.query.cursor;
+
+      // Verify user is a participant
+      const participant = await storage.getConversationParticipant(conversationId, userId);
+      if (!participant) {
+        return res.status(403).json({ message: 'Not a participant in this conversation' });
+      }
+
+      const msgs = await storage.getConversationMessages(conversationId, limit, cursor);
+      
+      // Reverse to get chronological order (oldest first)
+      res.json(msgs.reverse());
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      res.status(500).json({ message: 'Failed to fetch messages' });
+    }
+  });
+
+  // Send a message
+  app.post('/api/conversations/:conversationId/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const conversationId = parseInt(req.params.conversationId);
+      const { body } = req.body;
+
+      if (!body || !body.trim()) {
+        return res.status(400).json({ message: 'Message body is required' });
+      }
+
+      // Verify user is a participant
+      const participant = await storage.getConversationParticipant(conversationId, userId);
+      if (!participant) {
+        return res.status(403).json({ message: 'Not a participant in this conversation' });
+      }
+
+      const message = await storage.createConversationMessage({
+        conversationId,
+        senderId: userId,
+        body: body.trim(),
+      });
+
+      // Get other participants to notify via WebSocket
+      const participants = await db
+        .select({ userId: conversationParticipants.userId })
+        .from(conversationParticipants)
+        .where(
+          and(
+            eq(conversationParticipants.conversationId, conversationId),
+            sql`${conversationParticipants.userId} != ${userId}`
+          )
+        );
+
+      // Send WebSocket notification to other participants
+      participants.forEach(({ userId: recipientId }) => {
+        const recipientSockets = wsClients.get(recipientId);
+        if (recipientSockets) {
+          recipientSockets.forEach((socket) => {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({
+                type: 'new_message',
+                conversationId,
+                message,
+              }));
+            }
+          });
+        }
+      });
+
+      res.json(message);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      res.status(500).json({ message: 'Failed to send message' });
+    }
+  });
+
+  // Mark conversation as read
+  app.post('/api/conversations/:conversationId/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const conversationId = parseInt(req.params.conversationId);
+
+      // Verify user is a participant
+      const participant = await storage.getConversationParticipant(conversationId, userId);
+      if (!participant) {
+        return res.status(403).json({ message: 'Not a participant in this conversation' });
+      }
+
+      await storage.markConversationAsRead(conversationId, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+      res.status(500).json({ message: 'Failed to mark as read' });
     }
   });
 
