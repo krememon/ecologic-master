@@ -1,224 +1,368 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { MessageSquare, Send, Plus } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertMessageSchema, type InsertMessage, type Message } from "@shared/schema";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { MessageSquare, Send, Search, User } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 
-function CreateMessageForm({ onSubmit, isLoading }: { onSubmit: (data: InsertMessage) => void; isLoading: boolean }) {
-  const form = useForm<InsertMessage>({
-    resolver: zodResolver(insertMessageSchema),
-    defaultValues: {
-      subject: "",
-      content: "",
-      recipientId: "",
-      isRead: false,
-    },
-  });
+interface CompanyUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  profileImageUrl: string | null;
+  status: string;
+  role: string;
+}
 
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="recipientId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Recipient ID</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="recipient-user-id" 
-                  value={field.value || ""}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  ref={field.ref}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="subject"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Subject</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="Project Update" 
-                  value={field.value || ""}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  ref={field.ref}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Message</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Enter your message here..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Sending..." : "Send Message"}
-        </Button>
-      </form>
-    </Form>
-  );
+interface Conversation {
+  id: number;
+  isGroup: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  otherUser: CompanyUser;
+  lastMessage: {
+    id: number;
+    body: string;
+    senderId: string;
+    createdAt: Date;
+  } | null;
+  unreadCount: number;
+}
+
+interface MessageType {
+  id: number;
+  conversationId: number;
+  senderId: string;
+  body: string;
+  createdAt: Date;
+  editedAt?: Date | null;
+  deletedAt?: Date | null;
 }
 
 export default function Messages() {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const { user, isAuthenticated, isLoading } = useAuth();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
+  const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
+  const [messageBody, setMessageBody] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const ws = useRef<WebSocket | null>(null);
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
-
-  const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
-    queryKey: ["/api/messages"],
-    enabled: isAuthenticated,
+  // Fetch all company users for messaging
+  const { data: companyUsers = [] } = useQuery<CompanyUser[]>({
+    queryKey: ["/api/messaging/users"],
+    enabled: !!user,
   });
 
-  const createMessageMutation = useMutation({
-    mutationFn: async (messageData: InsertMessage) => {
-      const res = await apiRequest("POST", "/api/messages", messageData);
-      return await res.json();
+  // Fetch conversations
+  const { data: conversations = [] } = useQuery<Conversation[]>({
+    queryKey: ["/api/conversations"],
+    enabled: !!user,
+    refetchInterval: 5000, // Poll for new conversations
+  });
+
+  // Fetch messages for selected conversation
+  const { data: messages = [] } = useQuery<MessageType[]>({
+    queryKey: ["/api/conversations", selectedConversationId, "messages"],
+    enabled: !!selectedConversationId,
+  });
+
+  // Create or get conversation
+  const createConversationMutation = useMutation({
+    mutationFn: async (otherUserId: string) => {
+      return await apiRequest<{ id: number }>(`/api/conversations`, {
+        method: "POST",
+        body: JSON.stringify({ otherUserId }),
+      });
+    },
+    onSuccess: (data) => {
+      setSelectedConversationId(data.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+    },
+  });
+
+  // Send message
+  const sendMessageMutation = useMutation({
+    mutationFn: async (body: string) => {
+      if (!selectedConversationId) return;
+      return await apiRequest<MessageType>(
+        `/api/conversations/${selectedConversationId}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        }
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
-      toast({
-        title: "Success",
-        description: "Message sent successfully",
+      queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", selectedConversationId, "messages"],
       });
-      setIsDialogOpen(false);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      setMessageBody("");
     },
   });
 
-  if (isLoading || !isAuthenticated || messagesLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
+  // Mark conversation as read
+  const markAsReadMutation = useMutation({
+    mutationFn: async (conversationId: number) => {
+      return await apiRequest(`/api/conversations/${conversationId}/read`, {
+        method: "POST",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+    },
+  });
+
+  // WebSocket connection
+  useEffect(() => {
+    if (!user) return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    ws.current = new WebSocket(wsUrl);
+
+    ws.current.onopen = () => {
+      ws.current?.send(JSON.stringify({ type: "auth", userId: user.id }));
+    };
+
+    ws.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === "new_message") {
+        // Invalidate conversations and messages
+        queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+        if (data.conversationId === selectedConversationId) {
+          queryClient.invalidateQueries({
+            queryKey: ["/api/conversations", selectedConversationId, "messages"],
+          });
+        }
+      }
+    };
+
+    return () => {
+      ws.current?.close();
+    };
+  }, [user, selectedConversationId]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Mark conversation as read when selected
+  useEffect(() => {
+    if (selectedConversationId) {
+      markAsReadMutation.mutate(selectedConversationId);
+    }
+  }, [selectedConversationId]);
+
+  const handleUserSelect = (selectedUser: CompanyUser) => {
+    setSelectedUser(selectedUser);
+    
+    // Check if conversation already exists
+    const existingConv = conversations.find(
+      (c) => c.otherUser?.id === selectedUser.id
     );
-  }
+
+    if (existingConv) {
+      setSelectedConversationId(existingConv.id);
+    } else {
+      // Create new conversation
+      createConversationMutation.mutate(selectedUser.id);
+    }
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageBody.trim() || !selectedConversationId) return;
+    sendMessageMutation.mutate(messageBody);
+  };
+
+  const filteredUsers = companyUsers.filter((u) =>
+    `${u.firstName} ${u.lastName} ${u.email}`
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
+  );
+
+  const getInitials = (user: CompanyUser) => {
+    return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || user.email[0].toUpperCase();
+  };
+
+  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+  const displayUser = selectedUser || selectedConversation?.otherUser;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Messages</h1>
-        <p className="text-slate-600 dark:text-slate-400">Communicate with clients and contractors</p>
-      </div>
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Send New Message</DialogTitle>
-          </DialogHeader>
-          <CreateMessageForm onSubmit={createMessageMutation.mutate} isLoading={createMessageMutation.isPending} />
-        </DialogContent>
-      </Dialog>
-
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Messages ({messages.length})
-        </h3>
-      </div>
-
-      {messages.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <MessageSquare className="h-12 w-12 text-slate-400 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No messages yet</h3>
-            <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
-              Start communicating with your team and clients.
-            </p>
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Send Your First Message
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {messages.map((message: any) => (
-            <Card key={message.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                  {message.subject || 'Message'}
-                </CardTitle>
-                <Badge variant={message.isRead ? 'secondary' : 'default'}>
-                  {message.isRead ? 'Read' : 'Unread'}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {message.sender && (
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    From: {message.sender}
-                  </p>
-                )}
-                {message.content && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {message.content.substring(0, 150)}...
-                  </p>
-                )}
-                
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-xs text-slate-500">
-                    {new Date(message.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+    <div className="flex h-[calc(100vh-4rem)] bg-background">
+      {/* Left Sidebar - People List */}
+      <div className="w-80 border-r border-border flex flex-col">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-lg font-semibold mb-3">Messages</h2>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              data-testid="input-search-users"
+              placeholder="Search people..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
-      )}
+
+        <ScrollArea className="flex-1">
+          <div className="p-2">
+            {filteredUsers.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                <User className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">No users found</p>
+              </div>
+            ) : (
+              filteredUsers.map((u) => {
+                const conv = conversations.find((c) => c.otherUser?.id === u.id);
+                const isSelected = selectedUser?.id === u.id || selectedConversation?.otherUser?.id === u.id;
+                
+                return (
+                  <button
+                    key={u.id}
+                    data-testid={`button-select-user-${u.id}`}
+                    onClick={() => handleUserSelect(u)}
+                    className={cn(
+                      "w-full p-3 rounded-lg hover:bg-accent transition-colors text-left flex items-start gap-3",
+                      isSelected && "bg-accent"
+                    )}
+                  >
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={u.profileImageUrl || undefined} />
+                      <AvatarFallback>{getInitials(u)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-medium text-sm truncate">
+                          {u.firstName} {u.lastName}
+                        </p>
+                        {conv?.unreadCount ? (
+                          <Badge 
+                            data-testid={`badge-unread-count-${u.id}`}
+                            variant="default" 
+                            className="ml-2 h-5 min-w-[20px] flex items-center justify-center text-xs"
+                          >
+                            {conv.unreadCount}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {conv?.lastMessage?.body || u.email}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Right Pane - Chat Thread */}
+      <div className="flex-1 flex flex-col">
+        {displayUser ? (
+          <>
+            {/* Chat Header */}
+            <div className="p-4 border-b border-border flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={displayUser.profileImageUrl || undefined} />
+                <AvatarFallback>{getInitials(displayUser)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold" data-testid={`text-chat-header-${displayUser.id}`}>
+                  {displayUser.firstName} {displayUser.lastName}
+                </p>
+                <p className="text-xs text-muted-foreground">{displayUser.email}</p>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-4">
+                {messages.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No messages yet. Start the conversation!</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => {
+                    const isOwn = msg.senderId === user?.id;
+                    return (
+                      <div
+                        key={msg.id}
+                        data-testid={`message-${msg.id}`}
+                        className={cn(
+                          "flex",
+                          isOwn ? "justify-end" : "justify-start"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "max-w-[70%] rounded-lg px-4 py-2",
+                            isOwn
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          )}
+                        >
+                          <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                          <p className="text-xs mt-1 opacity-70">
+                            {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+
+            {/* Message Input */}
+            <div className="p-4 border-t border-border">
+              <form onSubmit={handleSendMessage} className="flex gap-2">
+                <Input
+                  data-testid="input-message-body"
+                  placeholder="Type a message..."
+                  value={messageBody}
+                  onChange={(e) => setMessageBody(e.target.value)}
+                  disabled={sendMessageMutation.isPending}
+                  className="flex-1"
+                />
+                <Button 
+                  data-testid="button-send-message"
+                  type="submit" 
+                  disabled={!messageBody.trim() || sendMessageMutation.isPending}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <div className="text-center">
+              <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-medium mb-1">Select a conversation</p>
+              <p className="text-sm">Choose a person from the list to start messaging</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
