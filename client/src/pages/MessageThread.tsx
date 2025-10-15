@@ -58,9 +58,17 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   }) as { data: ConversationDetails | undefined };
 
   // Fetch messages
-  const { data: messages = [] } = useQuery({
+  const { data: messages = [] } = useQuery<MessageType[]>({
     queryKey: ["/api/conversations", convId, "messages"],
     enabled: !!convId,
+    select: (data: any) => {
+      return data.map((msg: any) => ({
+        ...msg,
+        createdAt: new Date(msg.createdAt),
+        editedAt: msg.editedAt ? new Date(msg.editedAt) : null,
+        deletedAt: msg.deletedAt ? new Date(msg.deletedAt) : null,
+      }));
+    },
   });
 
   // Send message mutation

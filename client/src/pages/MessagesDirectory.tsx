@@ -50,6 +50,17 @@ export default function MessagesDirectory() {
     queryKey: ["/api/conversations"],
     enabled: !!user,
     refetchInterval: 5000,
+    select: (data: any) => {
+      return data.map((conv: any) => ({
+        ...conv,
+        createdAt: new Date(conv.createdAt),
+        updatedAt: new Date(conv.updatedAt),
+        lastMessage: conv.lastMessage ? {
+          ...conv.lastMessage,
+          createdAt: new Date(conv.lastMessage.createdAt),
+        } : null,
+      }));
+    },
   });
 
   const filteredUsers = companyUsers.filter((u) =>
