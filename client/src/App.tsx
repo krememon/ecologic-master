@@ -84,6 +84,9 @@ function Router() {
               <Route path="/payments" component={PaymentsPage} />
               <Route path="/documents" component={Documents} />
               <Route path="/messages" component={MessagesDirectory} />
+              <Route path="/messages/u/:userId">
+                {(params) => <MessageThread conversationId={params.userId} />}
+              </Route>
               <Route path="/messages/c/:conversationId">
                 {(params) => <MessageThread conversationId={params.conversationId} />}
               </Route>

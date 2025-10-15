@@ -1494,24 +1494,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Server-side "get or create then redirect" route
-  // Handles /messages/u/:userId → redirects to /messages/c/:conversationId
-  app.get('/messages/u/:userId', isAuthenticated, async (req: any, res) => {
+  // Single endpoint to open a DM: find-or-create + fetch messages in one call
+  app.post('/api/dm/open', isAuthenticated, async (req: any, res) => {
     try {
       const currentUserId = getUserId(req.user);
-      const targetUserId = req.params.userId;
-      
+      const { userId: targetUserId, limit = 50 } = req.body;
+
+      if (!targetUserId) {
+        return res.status(400).json({ message: 'userId is required' });
+      }
+
       // Get current user's company
       const company = await storage.getUserCompany(currentUserId);
       if (!company) {
-        return res.redirect('/messages?err=no_company');
+        return res.status(403).json({ message: 'No company found for user' });
       }
 
-      // Validate target user exists and is in same company
-      const targetUser = await db
+      // Validate target user exists, is ACTIVE, and in same company
+      const [targetUser] = await db
         .select({
           id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          profileImageUrl: users.profileImageUrl,
           status: users.status,
+          role: companyMembers.role,
         })
         .from(users)
         .innerJoin(companyMembers, eq(users.id, companyMembers.userId))
@@ -1524,8 +1532,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
         .limit(1);
 
-      if (!targetUser || targetUser.length === 0) {
-        return res.redirect('/messages?err=user_not_found');
+      if (!targetUser) {
+        return res.status(403).json({ message: 'Target user not found or not accessible' });
       }
 
       // Deterministically get or create the 1:1 conversation
@@ -1535,11 +1543,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         company.id
       );
 
-      // 302 redirect to the canonical DM route
-      res.redirect(`/messages/c/${conversation.id}`);
+      // Fetch messages
+      const messages = await storage.getConversationMessages(conversation.id, limit);
+
+      // Format response
+      res.json({
+        conversation: { id: conversation.id },
+        otherUser: {
+          id: targetUser.id,
+          name: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
+          avatar: targetUser.profileImageUrl,
+          role: targetUser.role,
+          status: targetUser.status,
+        },
+        messages: messages.map((msg: any) => ({
+          id: msg.id,
+          senderId: msg.senderId,
+          body: msg.body,
+          createdAt: msg.createdAt,
+        })),
+      });
     } catch (error) {
-      console.error('Error in /messages/u/:userId redirect:', error);
-      res.redirect('/messages?err=server_error');
+      console.error('Error opening DM:', error);
+      res.status(500).json({ message: 'Failed to open DM' });
     }
   });
 

@@ -1,0 +1,106 @@
+Goal
+Clicking an employee opens a working DM screen instantly. No spinners or “unable to load”.
+
+1) Use a single Open-DM endpoint (find-or-create + fetch)
+
+Create POST /api/dm/open (one call, no redirects).
+
+Request
+
+{ "userId": "<targetEmployeeId>", "limit": 50 }
+
+
+Server behavior
+
+Auth user = me. Validate me.companyId exists.
+
+Validate target exists, is ACTIVE, and target.companyId === me.companyId. If not, return 403.
+
+Deterministic upsert 1:1 conversation:
+
+pairKey = sha256(companyId + ':' + sort([me.id, target.id]).join(':'))
+
+upsert Conversation by pairKey (no race conditions).
+
+Ensure ConversationParticipant rows exist for both users.
+
+Fetch last limit messages ordered ascending.
+
+Return:
+
+{
+  "conversation": { "id": "<convoId>" },
+  "otherUser": { "id": "<id>", "name": "<name>", "avatar": "<url>", "role": "<role>" },
+  "messages": [
+    { "id":"...", "senderId":"...", "body":"...", "createdAt":"2025-10-15T21:03:00Z" }
+  ]
+}
+
+
+Never 404 on empty history; return "messages": [].
+
+Add indexes:
+
+Conversation(pairKey UNIQUE)
+
+Message(conversationId, createdAt DESC)
+
+2) Directory → DM navigation (by userId)
+
+On employee row click:
+
+Navigate immediately to /messages/u/<userId> (no waiting).
+
+DM page component mounts and calls POST /api/dm/open with that userId.
+
+(If you already have /messages/c/:id, keep it, but still call /api/dm/open and then router.replace('/messages/c/'+conversation.id) after the response. The key is: don’t fetch multiple endpoints—just one.)
+
+3) DM page data flow (never block)
+
+Render header + composer immediately.
+
+Call POST /api/dm/open and hydrate:
+
+If response OK → set conversationId, messages, otherUser; subscribe to conversation:{id}.
+
+If response 403 → show inline: “You don’t have access to message this user. Back to Messages.”
+
+Any error → show inline retry button that re-calls /api/dm/open.
+
+Important guards
+
+If userId route param is missing/invalid → router.replace('/messages').
+
+If response missing conversation.id → show inline error and do not keep spinning.
+
+4) Send message (simple + optimistic)
+
+POST /api/messages/:conversationId/messages with { body }.
+
+Optimistically append a pending bubble; replace on success.
+
+On error, mark “Failed to send. Retry”.
+
+Also add POST /api/messages/:conversationId/read on view to update unread counts.
+
+5) What likely broke (and is now avoided)
+
+Navigating by conversationId before it exists → NaN/undefined → permanent “unable to load”.
+
+API returned 404 for brand-new thread → page shows error.
+
+Multiple steps (create → redirect → fetch) racing each other. The single /api/dm/open removes that.
+
+6) Quick test script
+
+Go to Messages list, click any employee you’ve never messaged:
+
+DM page appears instantly; header/composer visible.
+
+Within ~500–800ms, messages (empty or history) load.
+
+Type and send → shows immediately, then confirms.
+
+Click another employee rapidly → each DM loads ≤1s, no “unable to load” ever.
+
+Try a deactivated/other-company user → see clean 403 message.
