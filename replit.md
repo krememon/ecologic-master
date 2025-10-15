@@ -83,3 +83,22 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
   - Optimistic updates with pending/failed states for instant feedback
   - Composer disabled for inactive users with clear messaging
 - **Result**: Messaging is instant, reliable, and dramatically simpler with single-endpoint architecture
+
+### October 15, 2025: DM Inactive User Handling & UX Improvements
+- **Feature**: Enhanced DM view with proper inactive user handling and improved header display
+- **Problem Solved**: Banner flickering during load, incorrect composer enable logic, missing user name in header
+- **UI/UX Improvements**:
+  - **Header Enhancement**: Always displays other user's name and role next to back chevron with skeleton loader during data fetch
+  - **No Flicker**: Inactive banner never shows during data loading (only when `dataLoaded` is true)
+  - **Smart Composer**: Automatically enables/disables based on recipient status with clear visual feedback
+  - **Status Normalization**: Client-side `toUpperCase()` handles any status case variations
+- **Implementation Details**:
+  - **dataLoaded Check**: `(dmData !== null && !dmLoading) || (!isUserId && !conversationLoading)` - tracks when data is actually loaded
+  - **Inactive Detection**: `isRecipientInactive = dataLoaded && otherUser?.status?.toUpperCase() !== 'ACTIVE'` - only evaluates after load
+  - **Composer Rules**: `canSend = dataLoaded && !isRecipientInactive && !!currentConvId` - comprehensive enable logic
+  - **Auto-focus**: Only focuses composer when `canSend` is true, respecting user status
+- **User Experience**:
+  - Active users: Composer enabled immediately, no banner, can type and send
+  - Inactive users (DEACTIVATED/REMOVED): Banner shows "user is inactive", composer disabled
+  - During load: Skeleton header, no banner flicker, smooth transition to loaded state
+- **Result**: Professional DM experience with proper status handling, zero flicker, and clear user feedback
