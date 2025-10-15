@@ -45,6 +45,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const [, setLocation] = useLocation();
   const [messageBody, setMessageBody] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [showLoadingTimeout, setShowLoadingTimeout] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ws = useRef<WebSocket | null>(null);
@@ -202,6 +203,19 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     textareaRef.current?.focus();
   }, []);
 
+  // 200ms timeout for message loading
+  useEffect(() => {
+    if (messagesLoading) {
+      setShowLoadingTimeout(false);
+      const timeout = setTimeout(() => {
+        setShowLoadingTimeout(true);
+      }, 200);
+      return () => clearTimeout(timeout);
+    } else {
+      setShowLoadingTimeout(false);
+    }
+  }, [messagesLoading]);
+
   const handleSendMessage = () => {
     if (!messageBody.trim() || sendMessageMutation.isPending) return;
     sendMessageMutation.mutate(messageBody);
@@ -331,19 +345,29 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       <ScrollArea className="flex-1 px-4 py-4">
         <div className="space-y-6">
           {messagesLoading ? (
-            // Skeleton loaders while loading
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex",
-                    i % 2 === 0 ? "justify-end" : "justify-start"
-                  )}
-                >
-                  <div className="bg-muted rounded-2xl px-4 py-2 w-48 h-12 animate-pulse" />
+            <div className="space-y-4">
+              {/* Skeleton loaders while loading */}
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex",
+                      i % 2 === 0 ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    <div className="bg-muted rounded-2xl px-4 py-2 w-48 h-12 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+              {/* Show retry indicator after 200ms */}
+              {showLoadingTimeout && (
+                <div className="text-center py-2">
+                  <p className="text-sm text-muted-foreground">
+                    Connection retrying...
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           ) : messages.length === 0 ? (
             // Empty state for new conversations
