@@ -51,6 +51,36 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   const convId = parseInt(conversationId);
   const isNewConversation = conversationId.startsWith("new-");
+  const otherUserId = isNewConversation ? conversationId.replace("new-", "") : null;
+
+  // Create conversation mutation for new conversations
+  const createConversationMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiRequest("POST", "/api/conversations", {
+        otherUserId: userId,
+      });
+      return await response.json();
+    },
+    onSuccess: (data: { id: number }) => {
+      // Navigate to the real conversation
+      setLocation(`/messages/c/${data.id}`, { replace: true });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create conversation",
+        variant: "destructive",
+      });
+      setLocation("/messages");
+    },
+  });
+
+  // Auto-create conversation on mount if new
+  useEffect(() => {
+    if (isNewConversation && otherUserId && !createConversationMutation.isPending) {
+      createConversationMutation.mutate(otherUserId);
+    }
+  }, [isNewConversation, otherUserId]);
 
   // Fetch conversation details
   const { data: conversation } = useQuery({
@@ -348,18 +378,35 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
           <Textarea
             ref={textareaRef}
             data-testid="input-message-body"
-            placeholder={isOtherUserInactive ? "User is inactive" : "Message..."}
+            placeholder={
+              isNewConversation || createConversationMutation.isPending
+                ? "Creating conversation..."
+                : isOtherUserInactive
+                ? "User is inactive"
+                : "Message..."
+            }
             value={messageBody}
             onChange={(e) => setMessageBody(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={sendMessageMutation.isPending || isOtherUserInactive}
+            disabled={
+              sendMessageMutation.isPending ||
+              isOtherUserInactive ||
+              isNewConversation ||
+              createConversationMutation.isPending
+            }
             className="min-h-[44px] max-h-[120px] resize-none"
             rows={1}
           />
           <Button
             data-testid="button-send-message"
             onClick={handleSendMessage}
-            disabled={!messageBody.trim() || sendMessageMutation.isPending || isOtherUserInactive}
+            disabled={
+              !messageBody.trim() ||
+              sendMessageMutation.isPending ||
+              isOtherUserInactive ||
+              isNewConversation ||
+              createConversationMutation.isPending
+            }
             size="icon"
             className="shrink-0 h-11 w-11"
           >
