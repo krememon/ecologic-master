@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 
 interface CompanyUser {
   id: string;
@@ -17,6 +18,7 @@ interface CompanyUser {
   profileImageUrl: string | null;
   status: string;
   role: string;
+  conversationId: number | null;
 }
 
 interface Conversation {
@@ -38,8 +40,9 @@ export default function MessagesDirectory() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const queryClient = useQueryClient();
 
-  // Fetch all company users for messaging
+  // Fetch all company users for messaging (now includes conversationId)
   const { data: companyUsers = [] } = useQuery<CompanyUser[]>({
     queryKey: ["/api/messaging/users"],
     enabled: !!user,
@@ -63,6 +66,19 @@ export default function MessagesDirectory() {
     },
   });
 
+  // Create conversation mutation (for new conversations)
+  const createConversationMutation = useMutation({
+    mutationFn: async (otherUserId: string) => {
+      const response = await apiRequest("POST", "/api/conversations", {
+        otherUserId,
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messaging/users"] });
+    },
+  });
+
   const filteredUsers = companyUsers.filter((u) =>
     `${u.firstName} ${u.lastName} ${u.email}`
       .toLowerCase()
@@ -73,8 +89,36 @@ export default function MessagesDirectory() {
     return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || user.email[0].toUpperCase();
   };
 
-  const handleUserTap = (userId: string) => {
-    setLocation(`/messages/${userId}`);
+  const handleUserTap = async (clickedUser: CompanyUser) => {
+    // If conversation exists, navigate instantly
+    if (clickedUser.conversationId) {
+      setLocation(`/messages/c/${clickedUser.conversationId}`);
+      return;
+    }
+
+    // Otherwise, create conversation in background and navigate immediately
+    // Navigate to temp route first (instant feedback)
+    setLocation(`/messages/c/new-${clickedUser.id}`);
+    
+    // Create conversation in background
+    try {
+      const result = await createConversationMutation.mutateAsync(clickedUser.id);
+      // Replace with real conversation ID
+      setLocation(`/messages/c/${result.id}`, { replace: true });
+    } catch (error) {
+      // On error, go back to directory
+      console.error("Failed to create conversation:", error);
+      setLocation("/messages", { replace: true });
+    }
+  };
+
+  // Prefetch conversation messages on hover
+  const handleUserHover = (clickedUser: CompanyUser) => {
+    if (clickedUser.conversationId) {
+      queryClient.prefetchQuery({
+        queryKey: ["/api/conversations", clickedUser.conversationId, "messages"],
+      });
+    }
   };
 
   return (
@@ -110,7 +154,9 @@ export default function MessagesDirectory() {
                 <button
                   key={u.id}
                   data-testid={`button-user-${u.id}`}
-                  onClick={() => handleUserTap(u.id)}
+                  onClick={() => handleUserTap(u)}
+                  onMouseEnter={() => handleUserHover(u)}
+                  onTouchStart={() => handleUserHover(u)}
                   className="w-full px-4 py-3 hover:bg-accent transition-colors text-left flex items-center gap-3 min-h-[60px]"
                 >
                   <Avatar className="h-12 w-12 flex-shrink-0">
