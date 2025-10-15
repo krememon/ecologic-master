@@ -65,30 +65,55 @@ export default function Landing() {
     setErrors({});
 
     try {
-      const response = await apiRequest("POST", "/api/login/email", formData);
+      // Login request - this will throw if credentials are invalid
+      await apiRequest("POST", "/api/login/email", formData);
       
-      if (response.ok) {
-        toast({
-          title: "Welcome back!",
-          description: "You're now logged in.",
+      // Login successful - now check if user has a company
+      try {
+        const userResponse = await fetch("/api/auth/user", {
+          credentials: "include",
         });
-        window.location.href = "/";
-      } else {
-        const errorData = await response.json();
-        if (errorData.message?.includes("Invalid")) {
-          setErrors({ 
-            general: "Invalid email or password. Please check your credentials and try again." 
+        
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          
+          // Show success toast
+          toast({
+            title: "Welcome back!",
+            description: "You're now logged in.",
           });
+          
+          // Redirect based on company status
+          if (userData.company) {
+            window.location.href = "/";
+          } else {
+            window.location.href = "/join-company";
+          }
         } else {
-          setErrors({ 
-            general: errorData.message || "Login failed. Please try again." 
-          });
+          // Fallback to home if we can't fetch user data
+          window.location.href = "/";
         }
+      } catch (error) {
+        // Fallback to home if there's an error fetching user data
+        window.location.href = "/";
       }
-    } catch (error) {
-      setErrors({ 
-        general: "Something went wrong. Please try again." 
-      });
+    } catch (error: any) {
+      // Parse error message to show appropriate feedback
+      const errorMessage = error?.message || "";
+      
+      if (errorMessage.includes("401") || errorMessage.includes("Invalid") || errorMessage.includes("password")) {
+        setErrors({ 
+          general: "Invalid email or password. Please check your credentials and try again." 
+        });
+      } else if (errorMessage.includes("ACCOUNT_INACTIVE") || errorMessage.includes("deactivated")) {
+        setErrors({
+          general: "Your account is deactivated. Please contact your company Owner or Supervisor."
+        });
+      } else {
+        setErrors({ 
+          general: "Login failed. Please try again." 
+        });
+      }
     } finally {
       setIsLoading(false);
     }
