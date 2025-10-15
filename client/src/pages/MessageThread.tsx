@@ -133,7 +133,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     : [...fetchedMessages, ...optimisticMessages];
 
   // Get other user info
-  const otherUser = dmData?.otherUser || conversation?.otherUser;
+  const otherUser = dmData?.otherUser || (conversation as any)?.otherUser;
 
   // Send message mutation with optimistic updates
   const sendMessageMutation = useMutation({
@@ -382,8 +382,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
                         isCurrentUser
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted",
-                        msg.isPending && "opacity-60",
-                        msg.isFailed && "opacity-40 border-2 border-destructive"
+                        (msg as MessageType).isPending && "opacity-60",
+                        (msg as MessageType).isFailed && "opacity-40 border-2 border-destructive"
                       )}
                     >
                       <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
@@ -391,7 +391,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
                         "text-xs mt-1",
                         isCurrentUser ? "text-primary-foreground/70" : "text-muted-foreground"
                       )}>
-                        {msg.isPending ? "Sending..." : msg.isFailed ? "Failed" : formatMessageTime(msg.createdAt)}
+                        {(msg as MessageType).isPending ? "Sending..." : (msg as MessageType).isFailed ? "Failed" : formatMessageTime(msg.createdAt)}
                       </p>
                     </div>
                   </div>
