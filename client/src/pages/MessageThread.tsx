@@ -62,6 +62,16 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       return await response.json();
     },
     onSuccess: (data: { id: number }) => {
+      // Validate conversation ID
+      if (!data?.id || isNaN(data.id) || data.id <= 0) {
+        toast({
+          title: "Error",
+          description: "Invalid conversation ID received",
+          variant: "destructive",
+        });
+        setLocation("/messages");
+        return;
+      }
       // Navigate to the real conversation
       setLocation(`/messages/c/${data.id}`, { replace: true });
     },
@@ -82,11 +92,18 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     }
   }, [isNewConversation, otherUserId]);
 
+  // Fetch all company users to get other user info for new conversations
+  const { data: companyUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/messaging/users"],
+    enabled: isNewConversation && !!otherUserId,
+    staleTime: 30000, // Cache for 30 seconds
+  });
+
   // Fetch conversation details
-  const { data: conversation } = useQuery({
+  const { data: conversation, isLoading: conversationLoading } = useQuery({
     queryKey: ["/api/conversations", convId],
     enabled: !!convId && !isNaN(convId) && !isNewConversation,
-  }) as { data: ConversationDetails | undefined };
+  }) as { data: ConversationDetails | undefined; isLoading: boolean };
 
   // Fetch messages with cache-first rendering
   const { data: messages = [], isLoading: messagesLoading } = useQuery<MessageType[]>({
@@ -233,13 +250,39 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   };
 
   const messageGroups = groupMessagesByDay(messages);
-  const otherUser = conversation?.otherUser;
+  
+  // Get other user info from conversation or companyUsers (for new conversations)
+  let otherUser = conversation?.otherUser;
+  if (isNewConversation && otherUserId && companyUsers) {
+    const foundUser = companyUsers.find((u: any) => u.id === otherUserId);
+    if (foundUser) {
+      otherUser = {
+        id: foundUser.id,
+        firstName: foundUser.firstName,
+        lastName: foundUser.lastName,
+        email: foundUser.email,
+        profileImageUrl: foundUser.profileImageUrl,
+        status: foundUser.status,
+      };
+    }
+  }
+  
   const isOtherUserInactive = otherUser?.status !== "ACTIVE";
 
-  if (!conversation || !otherUser) {
+  // Show loading only if we're not in a new conversation flow and still loading conversation
+  if (!isNewConversation && conversationLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <p className="text-muted-foreground">Loading conversation...</p>
+      </div>
+    );
+  }
+
+  // If we still don't have other user info, show error state
+  if (!otherUser) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <p className="text-muted-foreground">Unable to load conversation</p>
       </div>
     );
   }

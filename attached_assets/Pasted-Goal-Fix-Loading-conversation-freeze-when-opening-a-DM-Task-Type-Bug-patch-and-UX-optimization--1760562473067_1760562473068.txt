@@ -1,0 +1,53 @@
+Goal: Fix “Loading conversation…” freeze when opening a DM
+Task Type: Bug patch and UX optimization
+
+Prompt:
+
+The messages view is getting stuck on “Loading conversation…” when clicking a DM.
+Please debug and fix this so the user is brought into the chat instantly.
+
+Key requirements:
+
+Validate conversation creation response
+
+The mutation POST /api/messages/conversations should always return a valid conversationId.
+
+If it’s missing or invalid (undefined, NaN, or null), show a fallback error and prevent navigation until fixed.
+
+Route handling
+
+Make sure the router pushes immediately to /messages/c/:conversationId once the valid ID is available.
+
+If a temp route like /messages/c/new-${userId} is being used, replace it only after the conversation creation resolves.
+
+Remove any stale NaN path values from router.push or router.replace.
+
+Loading logic
+
+The DM screen should render instantly with a skeleton or empty list, and not wait for messages to finish fetching.
+
+Add a short 200 ms fallback timeout: if messages don’t load, show an inline “Connection retrying…” instead of being stuck forever.
+
+Backend guard
+
+Ensure /api/messages/conversations/:id/messages handles an empty result set and returns [] (not 500) if there are no messages yet.
+
+Confirm conversationId is numeric/string and belongs to the user’s company.
+
+After the fix
+
+Test clicking multiple DMs in a row; each should load within ≤ 1 second.
+
+The “Loading conversation…” state should never persist more than ~0.5 s.
+
+Bonus (optional)
+
+Log the event dm_open_latency_ms from click → composer focus for performance tracking.
+
+When you run that, the Agent will usually find that either:
+
+The conversation creation mutation is returning an invalid ID (NaN or undefined).
+
+The useQuery hook for messages never refetches because the route param changes before it resolves.
+
+After this patch, clicking an employee should instantly transition into the DM screen, even if messages take a moment to stream in — just like Apple’s Messages app.
