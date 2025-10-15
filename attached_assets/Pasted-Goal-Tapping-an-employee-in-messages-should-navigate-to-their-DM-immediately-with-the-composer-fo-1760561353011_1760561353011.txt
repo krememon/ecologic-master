@@ -1,0 +1,111 @@
+Goal
+
+Tapping an employee in /messages should navigate to their DM immediately, with the composer focused, and messages streaming in without blocking the transition.
+
+A) Client: Navigate first, fetch in parallel
+
+Include conversationId in the people list
+API GET /api/company/users should return { id, name, role, avatar, conversationId|null } for each coworker (if a 1:1 exists).
+
+On row click:
+
+If conversationId exists → router.push('/messages/c/' + id) immediately (no awaits).
+
+If not:
+
+Optimistically create:
+
+Call POST /api/messages/conversations in the background.
+
+Push immediately to /messages/c/temp-${userId} (temporary local route state).
+
+Render the DM shell (header, composer) right away; show a tiny “Loading messages…” in the list.
+
+When the POST resolves, router.replace('/messages/c/' + realId) and resubscribe.
+
+Prefetch while finger is down (optional)
+
+On row onMouseEnter / onTouchStart, queryClient.prefetchQuery(['messages', conversationId]).
+
+Render the thread from cache-first
+
+In /messages/c/:id, call useQuery with staleTime: 5_000 and placeholderData (empty array) so the screen appears instantly, then hydrates.
+
+Composer first
+
+Auto-focus the composer on mount (regardless of message fetch).
+
+Typing indicators and WS subscribe start immediately; don’t wait for history.
+
+B) Server: 1-query “getOrCreate” conversation
+
+Deterministic pair key
+Add column pairKey to Conversation:
+
+pairKey = sha256(companyId + ':' + sort(userA,userB).join(':'))
+
+Unique index on pairKey.
+
+New endpoint POST /api/messages/conversations
+
+Body: { userId }
+
+Single upsert by pairKey (no multi-step find-then-create).
+
+Return { conversationId } only (keep response tiny).
+
+Indexes for speed
+
+Message (conversationId, createdAt DESC) covering index.
+
+ConversationParticipant (userId, conversationId).
+
+C) API & payload slimming
+
+GET /messages/conversations/:id/messages?limit=50 returns only:
+
+{ id, senderId, body, createdAt } (no heavy joins; enrich client-side).
+
+Defer avatars/names—thread header already has target user.
+
+D) Realtime subscribe without blocking
+
+On mount of DM screen:
+
+Subscribe to conversation:{id} before message history arrives.
+
+Append message:new events to the list even if the first page is still loading.
+
+E) UX micro-polish
+
+Show 1-line skeletons for the first 6 messages while fetching; never a blank screen.
+
+If the conversation is brand new, show a soft hint: “Say hi to <Name>”.
+
+Error path (create failed): show inline error and back to list; don’t leave user on a dead temp route.
+
+F) Target timings (measure)
+
+Click → new route painted: < 150 ms on warm cache, < 300 ms cold.
+
+First page of messages: < 600–800 ms (parallel fetch).
+
+Overall perceived “in” time: ≤ 1 second.
+
+Add a simple metric:
+
+Log dm_open_latency_ms from click to DMReady event (first paint + composer focused).
+
+G) Acceptance checklist
+
+Tapping a person opens their DM immediately (route changes without delay).
+
+Composer is focused; user can start typing while history loads.
+
+Existing DM: instant open (uses conversationId from list).
+
+New DM: temp route shows instantly; swaps to real ID transparently once created.
+
+No spinners that block navigation; only lightweight list skeletons.
+
+Realtime messages arrive even if history is still loading.

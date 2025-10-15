@@ -5,6 +5,7 @@ import {
   timestamp,
   jsonb,
   index,
+  uniqueIndex,
   serial,
   integer,
   decimal,
@@ -198,11 +199,13 @@ export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   isGroup: boolean("is_group").default(false).notNull(),
+  pairKey: varchar("pair_key").unique(),
   createdById: varchar("created_by_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   companyIdx: index("conversations_company_idx").on(table.companyId),
+  pairKeyIdx: uniqueIndex("conversations_pair_key_idx").on(table.pairKey),
 }));
 
 // Conversation participants table  
