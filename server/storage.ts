@@ -10,6 +10,8 @@ import {
   invoices,
   documents,
   messages,
+  conversations,
+  conversationParticipants,
   jobPhotos,
   scheduleItems,
   type User,
@@ -28,6 +30,10 @@ import {
   type InsertDocument,
   type Message,
   type InsertMessage,
+  type Conversation,
+  type InsertConversation,
+  type ConversationParticipant,
+  type InsertConversationParticipant,
   type JobPhoto,
   type InsertJobPhoto,
   type ScheduleItem,
@@ -112,10 +118,22 @@ export interface IStorage {
   createDocument(document: InsertDocument): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
   
-  // Message operations
-  getMessages(companyId: number): Promise<any[]>;
-  createMessage(message: InsertMessage): Promise<Message>;
-  markMessageAsRead(id: number): Promise<void>;
+  // Messaging operations
+  // Conversations
+  getUserConversations(userId: string, companyId: number): Promise<any[]>;
+  getOrCreateConversation(userId1: string, userId2: string, companyId: number): Promise<Conversation>;
+  getConversation(conversationId: number): Promise<any>;
+  
+  // Messages
+  getConversationMessages(conversationId: number, limit?: number, cursor?: string): Promise<Message[]>;
+  createConversationMessage(message: InsertMessage): Promise<Message>;
+  
+  // Participants
+  markConversationAsRead(conversationId: number, userId: string): Promise<void>;
+  getConversationParticipant(conversationId: number, userId: string): Promise<ConversationParticipant | undefined>;
+  
+  // Company users for messaging
+  getCompanyUsersForMessaging(companyId: number, currentUserId: string): Promise<any[]>;
   
   // Dashboard statistics
   getDashboardStats(companyId: number): Promise<any>;
@@ -620,32 +638,181 @@ export class DatabaseStorage implements IStorage {
     await db.delete(documents).where(eq(documents.id, id));
   }
 
-  async getMessages(companyId: number): Promise<any[]> {
-    return await db
+  // Messaging operations
+  async getUserConversations(userId: string, companyId: number): Promise<any[]> {
+    const convs = await db
       .select({
-        id: messages.id,
-        subject: messages.subject,
-        content: messages.content,
-        isRead: messages.isRead,
-        senderId: messages.senderId,
-        companyId: messages.companyId,
-        createdAt: messages.createdAt,
+        id: conversations.id,
+        isGroup: conversations.isGroup,
+        createdById: conversations.createdById,
+        createdAt: conversations.createdAt,
+        updatedAt: conversations.updatedAt,
+        participant: conversationParticipants,
       })
-      .from(messages)
-      .where(eq(messages.companyId, companyId))
-      .orderBy(desc(messages.createdAt));
+      .from(conversationParticipants)
+      .innerJoin(conversations, eq(conversationParticipants.conversationId, conversations.id))
+      .where(
+        and(
+          eq(conversationParticipants.userId, userId),
+          eq(conversations.companyId, companyId)
+        )
+      )
+      .orderBy(desc(conversations.updatedAt));
+    
+    return convs;
   }
 
-  async createMessage(messageData: InsertMessage): Promise<Message> {
+  async getOrCreateConversation(userId1: string, userId2: string, companyId: number): Promise<Conversation> {
+    // Find existing 1:1 conversation between these two users
+    const existing = await db
+      .select({
+        conv: conversations,
+      })
+      .from(conversations)
+      .innerJoin(conversationParticipants, eq(conversations.id, conversationParticipants.conversationId))
+      .where(
+        and(
+          eq(conversations.companyId, companyId),
+          eq(conversations.isGroup, false),
+          eq(conversationParticipants.userId, userId1)
+        )
+      );
+
+    for (const row of existing) {
+      // Check if userId2 is also a participant
+      const hasOtherUser = await db
+        .select()
+        .from(conversationParticipants)
+        .where(
+          and(
+            eq(conversationParticipants.conversationId, row.conv.id),
+            eq(conversationParticipants.userId, userId2)
+          )
+        )
+        .limit(1);
+
+      if (hasOtherUser.length > 0) {
+        // Check that it's only these two users
+        const participantCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(conversationParticipants)
+          .where(eq(conversationParticipants.conversationId, row.conv.id));
+
+        if (participantCount[0]?.count === 2) {
+          return row.conv;
+        }
+      }
+    }
+
+    // Create new conversation
+    const [newConv] = await db
+      .insert(conversations)
+      .values({
+        companyId,
+        isGroup: false,
+        createdById: userId1,
+      })
+      .returning();
+
+    // Add both participants
+    await db.insert(conversationParticipants).values([
+      { conversationId: newConv.id, userId: userId1 },
+      { conversationId: newConv.id, userId: userId2 },
+    ]);
+
+    return newConv;
+  }
+
+  async getConversation(conversationId: number): Promise<any> {
+    const [conv] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    
+    return conv;
+  }
+
+  async getConversationMessages(conversationId: number, limit: number = 50, cursor?: string): Promise<Message[]> {
+    let query = db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.conversationId, conversationId),
+          sql`${messages.deletedAt} IS NULL`
+        )
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
+
+    if (cursor) {
+      query = query.where(sql`${messages.createdAt} < ${cursor}`);
+    }
+
+    return await query;
+  }
+
+  async createConversationMessage(messageData: InsertMessage): Promise<Message> {
     const [message] = await db.insert(messages).values(messageData).returning();
+    
+    // Update conversation's updatedAt
+    await db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, messageData.conversationId));
+    
     return message;
   }
 
-  async markMessageAsRead(id: number): Promise<void> {
+  async markConversationAsRead(conversationId: number, userId: string): Promise<void> {
     await db
-      .update(messages)
-      .set({ isRead: true })
-      .where(eq(messages.id, id));
+      .update(conversationParticipants)
+      .set({ lastReadAt: new Date() })
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      );
+  }
+
+  async getConversationParticipant(conversationId: number, userId: string): Promise<ConversationParticipant | undefined> {
+    const [participant] = await db
+      .select()
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.userId, userId)
+        )
+      )
+      .limit(1);
+    
+    return participant;
+  }
+
+  async getCompanyUsersForMessaging(companyId: number, currentUserId: string): Promise<any[]> {
+    return await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        profileImageUrl: users.profileImageUrl,
+        status: users.status,
+        role: companyMembers.role,
+      })
+      .from(companyMembers)
+      .innerJoin(users, eq(companyMembers.userId, users.id))
+      .where(
+        and(
+          eq(companyMembers.companyId, companyId),
+          sql`${users.id} != ${currentUserId}`,
+          eq(users.status, "ACTIVE")
+        )
+      )
+      .orderBy(users.firstName);
   }
 
   async getDashboardStats(companyId: number): Promise<any> {
