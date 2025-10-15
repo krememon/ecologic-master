@@ -137,6 +137,15 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Get other user info
   const otherUser = dmData?.otherUser || (conversation as any)?.otherUser;
 
+  // Determine if data is loaded (either from DM or query)
+  const dataLoaded = (dmData !== null && !dmLoading) || (!isUserId && !conversationLoading);
+
+  // Check if recipient is inactive (only when data is loaded)
+  const isRecipientInactive = dataLoaded && otherUser?.status?.toUpperCase() !== 'ACTIVE';
+
+  // Composer enable rules
+  const canSend = dataLoaded && !isRecipientInactive && !!currentConvId;
+
   // Send message mutation with optimistic updates
   const sendMessageMutation = useMutation({
     mutationFn: async (body: string) => {
@@ -236,12 +245,12 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     }
   }, [currentConvId]);
 
-  // Auto-focus composer on mount
+  // Auto-focus composer on mount (only if can send)
   useEffect(() => {
-    if (!dmLoading && !dmError) {
+    if (canSend && !dmError) {
       textareaRef.current?.focus();
     }
-  }, [dmLoading, dmError]);
+  }, [canSend, dmError]);
 
   const handleSend = () => {
     if (!messageBody.trim() || !currentConvId) return;
@@ -428,20 +437,20 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             onKeyDown={handleKeyDown}
             className="min-h-[44px] max-h-32 resize-none"
             rows={1}
-            disabled={!currentConvId || otherUser?.status !== 'ACTIVE'}
+            disabled={!canSend}
           />
           <Button
             data-testid="button-send-message"
             onClick={handleSend}
-            disabled={!messageBody.trim() || sendMessageMutation.isPending || !currentConvId}
+            disabled={!messageBody.trim() || sendMessageMutation.isPending || !canSend}
             size="icon"
             className="shrink-0"
           >
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        {otherUser?.status !== 'ACTIVE' && (
-          <p className="text-xs text-muted-foreground mt-2">
+        {isRecipientInactive && (
+          <p className="text-xs text-muted-foreground mt-2" data-testid="text-inactive-banner">
             This user is inactive and cannot receive messages
           </p>
         )}

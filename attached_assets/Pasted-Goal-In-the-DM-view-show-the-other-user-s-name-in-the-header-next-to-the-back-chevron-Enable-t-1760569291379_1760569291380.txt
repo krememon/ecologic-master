@@ -1,0 +1,97 @@
+Goal
+
+In the DM view, show the other user’s name in the header (next to the back chevron).
+
+Enable the composer (and remove the banner) when the other user is actually active.
+
+No flicker: don’t show “inactive” while data is loading.
+
+1) Use the /api/dm/open payload for UI state
+
+Ensure /api/dm/open returns:
+
+{
+  "conversation": { "id": "..." },
+  "otherUser": {
+    "id": "...",
+    "name": "Tina B",
+    "role": "Dispatcher",
+    "status": "ACTIVE"        // exact value; not lowercase
+  },
+  "messages": [...]
+}
+
+
+If backend currently returns status: 'active' (lowercase), normalize to uppercase before sending, or normalize on the client (status.toUpperCase()).
+
+2) Header: show the name
+
+In the DM screen component (/messages/c/[conversationId] or the page after /messages/u/:userId):
+
+After /api/dm/open resolves, set otherUser in state.
+
+Render header as:
+
+[ ‹ ]  {otherUser.name}   (small role under name optional)
+
+
+Do not render a placeholder string; if otherUser isn’t loaded yet, show a 1-line skeleton instead (no “Unable to …”).
+
+3) Fix the inactive gating logic (bug source)
+
+Current banner shows because the “inactive” check is firing with stale/empty data (or comparing to the wrong value). Replace it with a single, correct predicate:
+
+const isRecipientInactive =
+  dataLoaded && (otherUser?.status?.toUpperCase() !== 'ACTIVE');
+
+
+dataLoaded = /api/dm/open has resolved (avoids showing the banner during load).
+
+If isRecipientInactive is false, enable the composer and hide the banner.
+
+Only show the banner when the recipient is truly not ACTIVE (DEACTIVATED / REMOVED).
+
+Also ensure you’re not accidentally checking my status or a companyUser cache from the directory list. Use otherUser returned by /api/dm/open.
+
+4) Composer enable rules (final)
+
+Set:
+
+const canSend =
+  dataLoaded &&
+  !isRecipientInactive &&
+  !!conversationId &&
+  !isCreatingConversation;
+
+
+Bind textarea.disabled = !canSend.
+
+If isCreatingConversation flips from true → false after the upsert, re-check and enable.
+
+Remove any leftover default like disabled={true} that never flips.
+
+5) Regression hardening
+
+Only render the “This user is inactive…” banner when dataLoaded && isRecipientInactive.
+
+Don’t render any error states when conversationId, otherUser, or messages are still loading.
+
+Normalize status casing on the client (toUpperCase()).
+
+Add a quick unit guard: if otherUser is defined and otherUser.status === 'ACTIVE', canSend must be true.
+
+6) Quick test
+
+Click an employee (known ACTIVE).
+
+Header shows their name next to the back arrow.
+
+Composer is enabled; you can type and send. No banner.
+
+Deactivate that employee, open DM.
+
+Banner shows; composer disabled.
+
+Reactivate, reopen → banner gone; composer enabled.
+
+Brand-new DM (no messages yet) → header name shows, composer enabled.
