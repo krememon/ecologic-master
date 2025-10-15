@@ -77,8 +77,8 @@ export default function MessagesDirectory() {
   };
 
   const handleUserTap = (clickedUser: CompanyUser) => {
-    // Navigate instantly to user route - server will handle get-or-create and redirect
-    setLocation(`/messages/u/${clickedUser.id}`);
+    // Navigate instantly to user route via browser navigation - server will handle get-or-create and 302 redirect
+    window.location.href = `/messages/u/${clickedUser.id}`;
   };
 
   // Prefetch conversation messages on hover
