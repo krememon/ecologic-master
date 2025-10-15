@@ -54,6 +54,19 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const isNewConversation = conversationId.startsWith("new-");
   const otherUserId = isNewConversation ? conversationId.replace("new-", "") : null;
 
+  // Validate conversationId - if it's not a new conversation and not a valid number, redirect
+  useEffect(() => {
+    if (!isNewConversation && (isNaN(convId) || convId <= 0)) {
+      console.error('[MessageThread] Invalid conversationId:', conversationId);
+      toast({
+        title: "Error",
+        description: "Invalid conversation ID",
+        variant: "destructive",
+      });
+      setLocation("/messages");
+    }
+  }, [conversationId, convId, isNewConversation]);
+
   // Create conversation mutation for new conversations
   const createConversationMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -101,10 +114,24 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   });
 
   // Fetch conversation details
-  const { data: conversation, isLoading: conversationLoading } = useQuery({
+  const { data: conversation, isLoading: conversationLoading, error: conversationError } = useQuery({
     queryKey: ["/api/conversations", convId],
     enabled: !!convId && !isNaN(convId) && !isNewConversation,
-  }) as { data: ConversationDetails | undefined; isLoading: boolean };
+  }) as { data: ConversationDetails | undefined; isLoading: boolean; error: any };
+
+  // Log conversation loading for debugging
+  useEffect(() => {
+    console.log('[MessageThread] Debug:', {
+      conversationId,
+      convId,
+      isNewConversation,
+      otherUserId,
+      conversationLoading,
+      hasConversation: !!conversation,
+      hasOtherUser: !!conversation?.otherUser,
+      conversationError: conversationError?.message,
+    });
+  }, [conversationId, convId, isNewConversation, otherUserId, conversationLoading, conversation, conversationError]);
 
   // Fetch messages with cache-first rendering
   const { data: messages = [], isLoading: messagesLoading } = useQuery<MessageType[]>({
@@ -292,15 +319,37 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
-  // If we still don't have other user info, show error state
-  if (!otherUser) {
+  // Handle conversation error (403 forbidden, 404 not found, etc.)
+  if (conversationError) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <p className="text-muted-foreground">Unable to load conversation</p>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
+        <p className="text-muted-foreground">
+          {conversationError.message === 'Not a participant in this conversation' 
+            ? "You don't have access to this conversation"
+            : "Unable to load conversation"
+          }
+        </p>
+        <Button onClick={() => setLocation("/messages")} variant="outline">
+          Back to Messages
+        </Button>
       </div>
     );
   }
 
+  // If we still don't have other user info after loading completes, show error state
+  if (!otherUser) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
+        <p className="text-muted-foreground">Unable to load conversation</p>
+        <p className="text-xs text-muted-foreground">Debug: conversationId={conversationId}, convId={convId}, isNew={isNewConversation}</p>
+        <Button onClick={() => setLocation("/messages")} variant="outline">
+          Back to Messages
+        </Button>
+      </div>
+    );
+  }
+
+  // At this point, otherUser is guaranteed to be defined
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
       {/* Header */}

@@ -1,0 +1,106 @@
+Goal
+
+Clicking a person on /messages opens /messages/c/:conversationId with a working chat (history + composer).
+
+No more “Unable to load conversation”.
+
+1) Wire the route and param
+
+Ensure a concrete route exists: /messages/c/[conversationId] (or the router’s equivalent).
+
+Read conversationId from the URL and validate it’s a string/cuid before queries:
+
+If invalid → router.replace('/messages') with a small inline error.
+
+2) Ensure conversation creation returns a valid ID
+
+POST /api/messages/conversations must:
+
+Validate same-company users.
+
+Upsert a deterministic 1:1 by pairKey (companyId + sorted user IDs).
+
+Return { conversationId } (non-empty string).
+
+On the list row click:
+
+If the row already has conversationId → router.push('/messages/c/' + conversationId) immediately.
+
+Else call the POST in background; push to temp shell (optional), then router.replace('/messages/c/' + realId) once resolved.
+
+3) Implement messages fetch (must not 500/403)
+
+Endpoint: GET /api/messages/conversations/:id/messages?cursor=&limit=50
+Requirements:
+
+Verify the caller is a participant in that conversation; if not → 403.
+
+If the conversation exists but has no messages → return [], not an error.
+
+Response shape (lean): [{ id, senderId, body, createdAt }].
+
+Add index: Message(conversationId, createdAt DESC).
+
+4) DM screen data flow
+
+React Query keys:
+
+Conversation meta: ['conversation', id] (participants, other user name/avatar)
+
+Messages: ['messages', id]
+
+useQuery for messages with:
+
+staleTime: 5_000, placeholderData: [] (renders instantly)
+
+Error handling: show small inline “Couldn’t load messages. Retry” button that refetches.
+
+Auto-mark read on mount/visibility:
+
+POST /api/messages/conversations/:id/read with now.
+
+Subscribe to conversation:{id} WS channel on mount (before history finishes).
+
+5) Composer behavior
+
+Always render the composer; disable only when:
+
+creating a brand-new conversation (show “Creating conversation…”)
+
+the other user is inactive/removed or caller lacks permission
+
+On send:
+
+Optimistically append pending bubble.
+
+POST /api/messages/conversations/:id/messages { body }
+
+Replace pending on success; error → show retry icon.
+
+6) Fix the current “Unable to load conversation”
+
+Add instrumentation logs around DM mount:
+
+Log route param (conversationId), creation response (conversationId), and first messages fetch status.
+
+Typical failure sources to patch:
+
+conversationId is undefined/NaN → fix step (2).
+
+403 from API because user isn’t a participant → add participant rows on creation; verify same-company guard.
+
+API throws when messages = empty → return [].
+
+Client expects messages but API returns {data:{messages:...}} → align schema.
+
+7) Acceptance tests
+
+Existing DM: click → chat appears ≤ 1s; history shows; composer focused.
+
+New DM: click a user you’ve never messaged → shell appears instantly; within ~1s composer enables and you can type.
+
+No messages yet: page renders (no error), shows “Say hi to <Name>”.
+
+Non-participant URL: visiting someone else’s convo → redirects to /messages with small “You don’t have access to that conversation.”
+
+Rapid switching: open 3 different DMs quickly—no freezes, no “Unable to load conversation”.
