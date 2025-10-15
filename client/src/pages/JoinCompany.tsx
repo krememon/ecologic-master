@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 import { Users, Building2, LogOut } from "lucide-react";
 
 export default function JoinCompany() {
@@ -13,6 +14,28 @@ export default function JoinCompany() {
   const [inviteCode, setInviteCode] = useState("");
   const [isJoining, setIsJoining] = useState(false);
   const { toast } = useToast();
+  const { user, isLoading } = useAuth();
+
+  // Guard: redirect users who already have a company
+  useEffect(() => {
+    if (!isLoading && user?.company) {
+      setLocation("/", { replace: true });
+    }
+  }, [user, isLoading, setLocation]);
+
+  // Show loading spinner while checking auth or redirecting users with company
+  if (isLoading || user?.company) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-sm text-muted-foreground">
+            {user?.company ? "Redirecting to dashboard..." : "Loading..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleJoinCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,15 +62,15 @@ export default function JoinCompany() {
       }
 
       // Invalidate all queries to refresh data with new company
-      queryClient.invalidateQueries();
+      await queryClient.invalidateQueries();
       
       toast({
         title: "Success",
         description: "You've joined the company successfully!",
       });
 
-      // Redirect to dashboard
-      setLocation("/");
+      // Redirect to dashboard using replace to prevent back-button issues
+      setLocation("/", { replace: true });
     } catch (error: any) {
       toast({
         title: "Error",
