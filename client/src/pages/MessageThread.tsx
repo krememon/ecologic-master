@@ -107,7 +107,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   }, [isNewConversation, otherUserId]);
 
   // Fetch all company users to get other user info for new conversations
-  const { data: companyUsers = [] } = useQuery<any[]>({
+  const { data: companyUsers = [], isLoading: companyUsersLoading } = useQuery<any[]>({
     queryKey: ["/api/messaging/users"],
     enabled: isNewConversation && !!otherUserId,
     staleTime: 30000, // Cache for 30 seconds
