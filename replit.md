@@ -29,6 +29,7 @@ Key architectural decisions and features include:
 - **Data Management**: PostgreSQL database with Drizzle ORM for type-safe operations. Implements multi-tenancy with company-based organization and role-based access control (RBAC).
 - **AI Integration**: Leverages OpenAI API (GPT-4o) for project scoping, material estimation, smart scheduling, and OCR-based invoice scanning. Integrates OpenWeather API for job planning.
 - **Real-time Capabilities**: Utilizes a WebSocket server for live messaging, notifications, and instant job status updates, complemented by service worker-based push notifications.
+- **Messaging System**: Comprehensive two-pane messaging interface (Slack/WhatsApp-style) for direct 1:1 conversations between company members. Features real-time message delivery via WebSocket, conversation-based architecture with read receipts, unread counts, and searchable user lists. Built on a robust conversation-participant model with proper foreign key relationships.
 - **File Management**: Handles job photos and documents, with provisions for cloud storage integration.
 - **Employee Management**: Comprehensive system for managing employees, including active/inactive status with instant session revocation, and detailed contact information.
 - **Onboarding**: Features an invite code system for seamless company onboarding, supporting both owner registration and new member joining, including a company rejoin flow for removed employees.
@@ -48,6 +49,20 @@ Key architectural decisions and features include:
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
 ## Recent Changes
+
+### October 15, 2025: Messaging System Implementation
+- **Feature**: Implemented comprehensive two-pane messaging system for direct 1:1 conversations between company members
+- **Architecture**:
+  - Database: Created conversations, conversation_participants, and restructured messages tables with serial IDs
+  - Backend: 7 new API endpoints (/api/messaging/users, /api/conversations, /api/conversations/:id/messages, etc.)
+  - Storage: 9 new storage methods (getUserConversations, getOrCreateConversation, createConversationMessage, etc.)
+  - WebSocket: Real-time message delivery notifications integrated with existing WebSocket server
+- **Frontend**:
+  - Two-pane UI: Left sidebar with searchable people list, right pane with chat thread
+  - Features: Real-time updates, unread counts, read receipts, auto-scroll, proper empty states
+  - UX: WhatsApp/Slack-style interface with avatar, timestamps, and message bubbles
+- **Security**: Enforces company-scoped messaging (users can only message within their company)
+- **Result**: Company members can now communicate directly through real-time 1:1 conversations
 
 ### October 15, 2025: Email Login Flow for Users Without Company Fixed
 - **Problem**: Users with correct credentials but no company saw "Something went wrong" error during login
