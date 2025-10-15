@@ -49,6 +49,16 @@ Key architectural decisions and features include:
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
 ## Recent Changes
 
+### October 15, 2025: Join Company Redirect Logic Fixed
+- **Problem**: Users with a company could visit /join-company and get stuck on a 404 page; back button after joining returned to join page
+- **Root Cause**: No client-side guard to prevent users with company from accessing /join-company; navigation used push instead of replace
+- **Solution**:
+  - Added useAuth-based guard in JoinCompany page that auto-redirects users with company to home using `replace`
+  - Updated success handler to use `setLocation("/", { replace: true })` instead of regular navigation
+  - Added contextual loading states: "Redirecting to dashboard..." when user has company, "Loading..." during auth check
+  - All redirects now use replace to prevent back-button from returning to join page
+- **Result**: Users with company are immediately redirected from /join-company; after joining, back button cannot return to join page
+
 ### October 10, 2025: Join Company Flow Fixed
 - **Problem**: Users couldn't enter their full 10-character invite codes due to hardcoded 6-character limit
 - **Root Cause**: JoinCompany page had maxLength={6} and placeholder mentioned "6-character code"
