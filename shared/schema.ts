@@ -199,7 +199,7 @@ export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   isGroup: boolean("is_group").default(false).notNull(),
-  pairKey: varchar("pair_key").unique(),
+  pairKey: varchar("pair_key").notNull().unique(), // Deterministic key for 1:1 DMs (SHA-256 hash)
   createdById: varchar("created_by_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
