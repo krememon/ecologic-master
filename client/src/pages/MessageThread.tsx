@@ -51,12 +51,10 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const ws = useRef<WebSocket | null>(null);
 
   const convId = parseInt(conversationId);
-  const isNewConversation = conversationId.startsWith("new-");
-  const otherUserId = isNewConversation ? conversationId.replace("new-", "") : null;
 
-  // Validate conversationId - if it's not a new conversation and not a valid number, redirect
+  // Validate conversationId - redirect if invalid
   useEffect(() => {
-    if (!isNewConversation && (isNaN(convId) || convId <= 0)) {
+    if (isNaN(convId) || convId <= 0) {
       console.error('[MessageThread] Invalid conversationId:', conversationId);
       toast({
         title: "Error",
@@ -65,78 +63,18 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       });
       setLocation("/messages");
     }
-  }, [conversationId, convId, isNewConversation]);
-
-  // Create conversation mutation for new conversations
-  const createConversationMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const response = await apiRequest("POST", "/api/conversations", {
-        otherUserId: userId,
-      });
-      return await response.json();
-    },
-    onSuccess: (data: { id: number }) => {
-      // Validate conversation ID
-      if (!data?.id || isNaN(data.id) || data.id <= 0) {
-        toast({
-          title: "Error",
-          description: "Invalid conversation ID received",
-          variant: "destructive",
-        });
-        setLocation("/messages");
-        return;
-      }
-      // Navigate to the real conversation
-      setLocation(`/messages/c/${data.id}`, { replace: true });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to create conversation",
-        variant: "destructive",
-      });
-      setLocation("/messages");
-    },
-  });
-
-  // Auto-create conversation on mount if new
-  useEffect(() => {
-    if (isNewConversation && otherUserId && !createConversationMutation.isPending) {
-      createConversationMutation.mutate(otherUserId);
-    }
-  }, [isNewConversation, otherUserId]);
-
-  // Fetch all company users to get other user info for new conversations
-  const { data: companyUsers = [], isLoading: companyUsersLoading } = useQuery<any[]>({
-    queryKey: ["/api/messaging/users"],
-    enabled: isNewConversation && !!otherUserId,
-    staleTime: 30000, // Cache for 30 seconds
-  });
+  }, [conversationId, convId]);
 
   // Fetch conversation details
   const { data: conversation, isLoading: conversationLoading, error: conversationError } = useQuery({
     queryKey: ["/api/conversations", convId],
-    enabled: !!convId && !isNaN(convId) && !isNewConversation,
+    enabled: !!convId && !isNaN(convId),
   }) as { data: ConversationDetails | undefined; isLoading: boolean; error: any };
-
-  // Log conversation loading for debugging
-  useEffect(() => {
-    console.log('[MessageThread] Debug:', {
-      conversationId,
-      convId,
-      isNewConversation,
-      otherUserId,
-      conversationLoading,
-      hasConversation: !!conversation,
-      hasOtherUser: !!conversation?.otherUser,
-      conversationError: conversationError?.message,
-    });
-  }, [conversationId, convId, isNewConversation, otherUserId, conversationLoading, conversation, conversationError]);
 
   // Fetch messages with cache-first rendering
   const { data: messages = [], isLoading: messagesLoading } = useQuery<MessageType[]>({
     queryKey: ["/api/conversations", convId, "messages"],
-    enabled: !!convId && !isNaN(convId) && !isNewConversation,
+    enabled: !!convId && !isNaN(convId),
     staleTime: 5000, // Consider data fresh for 5 seconds
     placeholderData: [], // Show empty array immediately while loading
     select: (data: any) => {
@@ -220,10 +158,10 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   // Mark as read when opened
   useEffect(() => {
-    if (convId && !isNewConversation) {
+    if (convId) {
       markAsReadMutation.mutate();
     }
-  }, [convId, isNewConversation]);
+  }, [convId]);
 
   // Auto-focus composer on mount
   useEffect(() => {
@@ -292,26 +230,12 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   const messageGroups = groupMessagesByDay(messages);
   
-  // Get other user info from conversation or companyUsers (for new conversations)
-  let otherUser = conversation?.otherUser;
-  if (isNewConversation && otherUserId && companyUsers) {
-    const foundUser = companyUsers.find((u: any) => u.id === otherUserId);
-    if (foundUser) {
-      otherUser = {
-        id: foundUser.id,
-        firstName: foundUser.firstName,
-        lastName: foundUser.lastName,
-        email: foundUser.email,
-        profileImageUrl: foundUser.profileImageUrl,
-        status: foundUser.status,
-      };
-    }
-  }
-  
+  // Get other user info from conversation
+  const otherUser = conversation?.otherUser;
   const isOtherUserInactive = otherUser?.status !== "ACTIVE";
 
-  // Show loading only if we're not in a new conversation flow and still loading conversation
-  if (!isNewConversation && conversationLoading) {
+  // Show loading while fetching conversation
+  if (conversationLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <p className="text-muted-foreground">Loading conversation...</p>
@@ -319,19 +243,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
-  // For new conversations, show loading while we fetch company users or create conversation
-  if (isNewConversation && (companyUsersLoading || createConversationMutation.isPending)) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <p className="text-muted-foreground">
-          {createConversationMutation.isPending ? "Creating conversation..." : "Loading..."}
-        </p>
-      </div>
-    );
-  }
-
   // Handle conversation error (403 forbidden, 404 not found, etc.)
-  if (!isNewConversation && conversationError) {
+  if (conversationError) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
         <p className="text-muted-foreground">
@@ -347,36 +260,11 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
-  // If we still don't have other user info after loading completes (for existing conversations), show error state
-  if (!otherUser && !isNewConversation && !conversationLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
-        <p className="text-muted-foreground">Unable to load conversation</p>
-        <p className="text-xs text-muted-foreground">Debug: conversationId={conversationId}, convId={convId}</p>
-        <Button onClick={() => setLocation("/messages")} variant="outline">
-          Back to Messages
-        </Button>
-      </div>
-    );
-  }
-
-  // For new conversations, show error if we can't find the user
-  if (!otherUser && isNewConversation && !companyUsersLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
-        <p className="text-muted-foreground">User not found</p>
-        <Button onClick={() => setLocation("/messages")} variant="outline">
-          Back to Messages
-        </Button>
-      </div>
-    );
-  }
-
-  // Final safety check - if we somehow don't have otherUser at this point, show error
+  // If conversation loaded but no otherUser, show error
   if (!otherUser) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
-        <p className="text-muted-foreground">Unable to load user information</p>
+        <p className="text-muted-foreground">Unable to load conversation</p>
         <Button onClick={() => setLocation("/messages")} variant="outline">
           Back to Messages
         </Button>
@@ -530,9 +418,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             ref={textareaRef}
             data-testid="input-message-body"
             placeholder={
-              isNewConversation || createConversationMutation.isPending
-                ? "Creating conversation..."
-                : isOtherUserInactive
+              isOtherUserInactive
                 ? "User is inactive"
                 : "Message..."
             }
@@ -541,9 +427,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             onKeyDown={handleKeyDown}
             disabled={
               sendMessageMutation.isPending ||
-              isOtherUserInactive ||
-              isNewConversation ||
-              createConversationMutation.isPending
+              isOtherUserInactive
             }
             className="min-h-[44px] max-h-[120px] resize-none"
             rows={1}
@@ -554,9 +438,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             disabled={
               !messageBody.trim() ||
               sendMessageMutation.isPending ||
-              isOtherUserInactive ||
-              isNewConversation ||
-              createConversationMutation.isPending
+              isOtherUserInactive
             }
             size="icon"
             className="shrink-0 h-11 w-11"
