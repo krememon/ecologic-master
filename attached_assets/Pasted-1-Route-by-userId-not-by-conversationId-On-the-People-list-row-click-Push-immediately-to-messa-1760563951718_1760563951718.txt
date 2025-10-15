@@ -1,0 +1,73 @@
+1) Route by userId, not by conversationId
+
+On the People list row click:
+
+Push immediately to /messages/u/:userId (no API call, no waiting).
+
+// PeopleList row click
+router.push(`/messages/u/${user.id}`)
+
+2) Server “get or create then redirect”
+
+Create a server route GET /messages/u/:userId that does ONLY this:
+
+Validate the target user exists and is in the same company.
+
+Deterministically upsert the 1:1 conversation (no race, no NaN):
+
+pairKey = sha256(companyId + ':' + sort([me.id, userId]).join(':'))
+
+conversation = upsert where pairKey
+
+302 redirect to the canonical DM: /messages/c/:conversationId.
+
+This guarantees you always land on a valid conversation page, even for first-time DMs.
+
+Pseudocode (adapt to your stack):
+
+// GET /messages/u/:userId
+const me = authUser(req);
+const other = await prisma.user.findFirst({ where: { id: req.params.userId, companyId: me.companyId, status: 'ACTIVE' }});
+if (!other) return redirect('/messages?err=user');
+
+const [a,b] = [me.id, other.id].sort();
+const pairKey = sha256(`${me.companyId}:${a}:${b}`);
+
+const convo = await prisma.conversation.upsert({
+  where: { pairKey },
+  update: {},              // nothing to update
+  create: {
+    companyId: me.companyId,
+    pairKey,
+    isGroup: false,
+    createdById: me.id,
+    participants: { createMany: { data: [{ userId: me.id }, { userId: other.id }] } }
+  },
+  select: { id: true }
+});
+
+return redirect(`/messages/c/${convo.id}`);  // 302
+
+3) DM page that never blocks
+
+At /messages/c/:conversationId:
+
+Render the shell instantly (header + composer focused).
+
+Fetch messages in parallel; if none yet, return [] (not an error).
+
+Subscribe to conversation:{id} immediately; user can start typing right away.
+
+API guarantees:
+
+GET /api/messages/conversations/:id/messages → [] on brand-new threads (no 404/500).
+
+POST /api/messages/conversations/:id/messages → creates and broadcasts; optimistic send on client.
+
+Acceptance (what you’ll feel)
+
+Click any employee → instant screen change (no spinners), URL like /messages/u/abc → server immediately 302s to /messages/c/xyz.
+
+DM view shows header + composer within a fraction of a second; history hydrates right after.
+
+New conversations work first try; no “loading forever” or “unable to load conversation” ever again.

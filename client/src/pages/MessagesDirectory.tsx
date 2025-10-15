@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,7 +8,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
 
 interface CompanyUser {
   id: string;
@@ -66,18 +65,6 @@ export default function MessagesDirectory() {
     },
   });
 
-  // Create conversation mutation (for new conversations)
-  const createConversationMutation = useMutation({
-    mutationFn: async (otherUserId: string) => {
-      const response = await apiRequest("POST", "/api/conversations", {
-        otherUserId,
-      });
-      return await response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messaging/users"] });
-    },
-  });
 
   const filteredUsers = companyUsers.filter((u) =>
     `${u.firstName} ${u.lastName} ${u.email}`
@@ -89,27 +76,9 @@ export default function MessagesDirectory() {
     return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || user.email[0].toUpperCase();
   };
 
-  const handleUserTap = async (clickedUser: CompanyUser) => {
-    // If conversation exists, navigate instantly
-    if (clickedUser.conversationId) {
-      setLocation(`/messages/c/${clickedUser.conversationId}`);
-      return;
-    }
-
-    // Otherwise, create conversation in background and navigate immediately
-    // Navigate to temp route first (instant feedback)
-    setLocation(`/messages/c/new-${clickedUser.id}`);
-    
-    // Create conversation in background
-    try {
-      const result = await createConversationMutation.mutateAsync(clickedUser.id);
-      // Replace with real conversation ID
-      setLocation(`/messages/c/${result.id}`, { replace: true });
-    } catch (error) {
-      // On error, go back to directory
-      console.error("Failed to create conversation:", error);
-      setLocation("/messages", { replace: true });
-    }
+  const handleUserTap = (clickedUser: CompanyUser) => {
+    // Navigate instantly to user route - server will handle get-or-create and redirect
+    setLocation(`/messages/u/${clickedUser.id}`);
   };
 
   // Prefetch conversation messages on hover

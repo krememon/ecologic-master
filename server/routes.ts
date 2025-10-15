@@ -1494,6 +1494,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Server-side "get or create then redirect" route
+  // Handles /messages/u/:userId → redirects to /messages/c/:conversationId
+  app.get('/messages/u/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = getUserId(req.user);
+      const targetUserId = req.params.userId;
+      
+      // Get current user's company
+      const company = await storage.getUserCompany(currentUserId);
+      if (!company) {
+        return res.redirect('/messages?err=no_company');
+      }
+
+      // Validate target user exists and is in same company
+      const targetUser = await db
+        .select({
+          id: users.id,
+          status: users.status,
+        })
+        .from(users)
+        .innerJoin(companyMembers, eq(users.id, companyMembers.userId))
+        .where(
+          and(
+            eq(users.id, targetUserId),
+            eq(companyMembers.companyId, company.id),
+            eq(users.status, 'ACTIVE')
+          )
+        )
+        .limit(1);
+
+      if (!targetUser || targetUser.length === 0) {
+        return res.redirect('/messages?err=user_not_found');
+      }
+
+      // Deterministically get or create the 1:1 conversation
+      const conversation = await storage.getOrCreateConversation(
+        currentUserId,
+        targetUserId,
+        company.id
+      );
+
+      // 302 redirect to the canonical DM route
+      res.redirect(`/messages/c/${conversation.id}`);
+    } catch (error) {
+      console.error('Error in /messages/u/:userId redirect:', error);
+      res.redirect('/messages?err=server_error');
+    }
+  });
+
   // Get user's conversations
   app.get('/api/conversations', isAuthenticated, async (req: any, res) => {
     try {
