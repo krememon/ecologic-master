@@ -51,6 +51,14 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
+import crypto from "crypto";
+
+// Helper function to generate deterministic pairKey for 1:1 conversations
+function generatePairKey(companyId: number, userId1: string, userId2: string): string {
+  const sorted = [userId1, userId2].sort();
+  const str = `${companyId}:${sorted[0]}:${sorted[1]}`;
+  return crypto.createHash('sha256').update(str).digest('hex');
+}
 
 // Interface for storage operations
 export interface IStorage {
@@ -663,64 +671,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrCreateConversation(userId1: string, userId2: string, companyId: number): Promise<Conversation> {
-    // Find existing 1:1 conversation between these two users
-    const existing = await db
-      .select({
-        conv: conversations,
-      })
-      .from(conversations)
-      .innerJoin(conversationParticipants, eq(conversations.id, conversationParticipants.conversationId))
-      .where(
-        and(
-          eq(conversations.companyId, companyId),
-          eq(conversations.isGroup, false),
-          eq(conversationParticipants.userId, userId1)
-        )
-      );
-
-    for (const row of existing) {
-      // Check if userId2 is also a participant
-      const hasOtherUser = await db
-        .select()
-        .from(conversationParticipants)
-        .where(
-          and(
-            eq(conversationParticipants.conversationId, row.conv.id),
-            eq(conversationParticipants.userId, userId2)
-          )
-        )
-        .limit(1);
-
-      if (hasOtherUser.length > 0) {
-        // Check that it's only these two users
-        const participantCount = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(conversationParticipants)
-          .where(eq(conversationParticipants.conversationId, row.conv.id));
-
-        if (participantCount[0]?.count === 2) {
-          return row.conv;
-        }
-      }
-    }
-
-    // Create new conversation
-    const [newConv] = await db
+    const pairKey = generatePairKey(companyId, userId1, userId2);
+    
+    // Try to insert new conversation with pairKey
+    // If it already exists (ON CONFLICT), do nothing and return the existing one
+    const result = await db
       .insert(conversations)
       .values({
         companyId,
         isGroup: false,
+        pairKey,
         createdById: userId1,
       })
+      .onConflictDoNothing({ target: conversations.pairKey })
       .returning();
-
-    // Add both participants
-    await db.insert(conversationParticipants).values([
-      { conversationId: newConv.id, userId: userId1 },
-      { conversationId: newConv.id, userId: userId2 },
-    ]);
-
-    return newConv;
+    
+    // If insert succeeded, add participants
+    if (result.length > 0) {
+      await db.insert(conversationParticipants).values([
+        { conversationId: result[0].id, userId: userId1 },
+        { conversationId: result[0].id, userId: userId2 },
+      ]);
+      return result[0];
+    }
+    
+    // If insert conflicted, fetch the existing conversation
+    const [existing] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.pairKey, pairKey))
+      .limit(1);
+    
+    return existing;
   }
 
   async getConversation(conversationId: number): Promise<any> {
