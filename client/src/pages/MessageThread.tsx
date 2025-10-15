@@ -319,8 +319,19 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
+  // For new conversations, show loading while we fetch company users or create conversation
+  if (isNewConversation && (companyUsersLoading || createConversationMutation.isPending)) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <p className="text-muted-foreground">
+          {createConversationMutation.isPending ? "Creating conversation..." : "Loading..."}
+        </p>
+      </div>
+    );
+  }
+
   // Handle conversation error (403 forbidden, 404 not found, etc.)
-  if (conversationError) {
+  if (!isNewConversation && conversationError) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
         <p className="text-muted-foreground">
@@ -336,12 +347,36 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
-  // If we still don't have other user info after loading completes, show error state
-  if (!otherUser) {
+  // If we still don't have other user info after loading completes (for existing conversations), show error state
+  if (!otherUser && !isNewConversation && !conversationLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
         <p className="text-muted-foreground">Unable to load conversation</p>
-        <p className="text-xs text-muted-foreground">Debug: conversationId={conversationId}, convId={convId}, isNew={isNewConversation}</p>
+        <p className="text-xs text-muted-foreground">Debug: conversationId={conversationId}, convId={convId}</p>
+        <Button onClick={() => setLocation("/messages")} variant="outline">
+          Back to Messages
+        </Button>
+      </div>
+    );
+  }
+
+  // For new conversations, show error if we can't find the user
+  if (!otherUser && isNewConversation && !companyUsersLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
+        <p className="text-muted-foreground">User not found</p>
+        <Button onClick={() => setLocation("/messages")} variant="outline">
+          Back to Messages
+        </Button>
+      </div>
+    );
+  }
+
+  // Final safety check - if we somehow don't have otherUser at this point, show error
+  if (!otherUser) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
+        <p className="text-muted-foreground">Unable to load user information</p>
         <Button onClick={() => setLocation("/messages")} variant="outline">
           Back to Messages
         </Button>
