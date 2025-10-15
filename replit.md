@@ -49,6 +49,18 @@ Key architectural decisions and features include:
 - **Development Tools**: Vite, TypeScript, Zod, React Hook Form
 ## Recent Changes
 
+### October 15, 2025: Email Login Flow for Users Without Company Fixed
+- **Problem**: Users with correct credentials but no company saw "Something went wrong" error during login
+- **Root Cause**: Login handler didn't check company status after successful authentication; apiRequest error handling caught all errors generically
+- **Solution**:
+  - Updated handleEmailLogin to fetch user data after successful login
+  - Added nested try/catch to distinguish between login errors and profile fetch errors
+  - Validate user data structure before redirecting
+  - Redirect to /join-company if user has no company, otherwise to home
+  - Show specific error messages for different failure scenarios (invalid credentials, profile fetch failure, invalid data)
+  - Keep user on login page with clear error message if profile fetch fails after successful login
+- **Result**: Users without company can now login successfully and are automatically redirected to /join-company
+
 ### October 15, 2025: Join Company Redirect Logic Fixed
 - **Problem**: Users with a company could visit /join-company and get stuck on a 404 page; back button after joining returned to join page
 - **Root Cause**: No client-side guard to prevent users with company from accessing /join-company; navigation used push instead of replace

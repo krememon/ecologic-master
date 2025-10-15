@@ -68,34 +68,38 @@ export default function Landing() {
       // Login request - this will throw if credentials are invalid
       await apiRequest("POST", "/api/login/email", formData);
       
-      // Login successful - now check if user has a company
+      // Login successful - now fetch user data to check company status
+      let userData;
       try {
-        const userResponse = await fetch("/api/auth/user", {
-          credentials: "include",
+        const userResponse = await apiRequest("GET", "/api/auth/user");
+        userData = await userResponse.json();
+      } catch (fetchError: any) {
+        // If we can't fetch user data after successful login, show error and return
+        setErrors({
+          general: "Login successful but unable to load your profile. Please try refreshing the page."
         });
-        
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          
-          // Show success toast
-          toast({
-            title: "Welcome back!",
-            description: "You're now logged in.",
-          });
-          
-          // Redirect based on company status
-          if (userData.company) {
-            window.location.href = "/";
-          } else {
-            window.location.href = "/join-company";
-          }
-        } else {
-          // Fallback to home if we can't fetch user data
-          window.location.href = "/";
-        }
-      } catch (error) {
-        // Fallback to home if there's an error fetching user data
+        return;
+      }
+      
+      // Validate user data has expected structure
+      if (!userData || typeof userData !== 'object' || !('id' in userData)) {
+        setErrors({
+          general: "Received invalid profile data. Please try refreshing the page."
+        });
+        return;
+      }
+      
+      // Show success toast
+      toast({
+        title: "Welcome back!",
+        description: "You're now logged in.",
+      });
+      
+      // Redirect based on company status (company can be null or an object)
+      if (userData.company) {
         window.location.href = "/";
+      } else {
+        window.location.href = "/join-company";
       }
     } catch (error: any) {
       // Parse error message to show appropriate feedback
