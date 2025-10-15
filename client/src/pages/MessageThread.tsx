@@ -50,17 +50,20 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const ws = useRef<WebSocket | null>(null);
 
   const convId = parseInt(conversationId);
+  const isNewConversation = conversationId.startsWith("new-");
 
   // Fetch conversation details
   const { data: conversation } = useQuery({
     queryKey: ["/api/conversations", convId],
-    enabled: !!convId,
+    enabled: !!convId && !isNaN(convId) && !isNewConversation,
   }) as { data: ConversationDetails | undefined };
 
-  // Fetch messages
-  const { data: messages = [] } = useQuery<MessageType[]>({
+  // Fetch messages with cache-first rendering
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<MessageType[]>({
     queryKey: ["/api/conversations", convId, "messages"],
-    enabled: !!convId,
+    enabled: !!convId && !isNaN(convId) && !isNewConversation,
+    staleTime: 5000, // Consider data fresh for 5 seconds
+    placeholderData: [], // Show empty array immediately while loading
     select: (data: any) => {
       return data.map((msg: any) => ({
         ...msg,
@@ -142,10 +145,15 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   // Mark as read when opened
   useEffect(() => {
-    if (convId) {
+    if (convId && !isNewConversation) {
       markAsReadMutation.mutate();
     }
-  }, [convId]);
+  }, [convId, isNewConversation]);
+
+  // Auto-focus composer on mount
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   const handleSendMessage = () => {
     if (!messageBody.trim() || sendMessageMutation.isPending) return;
@@ -249,54 +257,78 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       {/* Messages */}
       <ScrollArea className="flex-1 px-4 py-4">
         <div className="space-y-6">
-          {messageGroups.map((group, groupIndex) => (
-            <div key={groupIndex}>
-              {/* Date Separator */}
-              <div className="flex items-center justify-center mb-4">
-                <div className="bg-muted px-3 py-1 rounded-full">
-                  <p className="text-xs text-muted-foreground font-medium">
-                    {group.date}
-                  </p>
+          {messagesLoading ? (
+            // Skeleton loaders while loading
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex",
+                    i % 2 === 0 ? "justify-end" : "justify-start"
+                  )}
+                >
+                  <div className="bg-muted rounded-2xl px-4 py-2 w-48 h-12 animate-pulse" />
                 </div>
-              </div>
+              ))}
+            </div>
+          ) : messages.length === 0 ? (
+            // Empty state for new conversations
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                Say hi to {otherUser?.firstName} {otherUser?.lastName}
+              </p>
+            </div>
+          ) : (
+            messageGroups.map((group, groupIndex) => (
+              <div key={groupIndex}>
+                {/* Date Separator */}
+                <div className="flex items-center justify-center mb-4">
+                  <div className="bg-muted px-3 py-1 rounded-full">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      {group.date}
+                    </p>
+                  </div>
+                </div>
 
-              {/* Messages for this day */}
-              <div className="space-y-2">
-                {group.messages.map((msg) => {
-                  const isOwn = msg.senderId === user?.id;
-                  return (
-                    <div
-                      key={msg.id}
-                      data-testid={`message-${msg.id}`}
-                      className={cn(
-                        "flex",
-                        isOwn ? "justify-end" : "justify-start"
-                      )}
-                    >
+                {/* Messages for this day */}
+                <div className="space-y-2">
+                  {group.messages.map((msg) => {
+                    const isOwn = msg.senderId === user?.id;
+                    return (
                       <div
+                        key={msg.id}
+                        data-testid={`message-${msg.id}`}
                         className={cn(
-                          "max-w-[75%] rounded-2xl px-4 py-2",
-                          isOwn
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
+                          "flex",
+                          isOwn ? "justify-end" : "justify-start"
                         )}
                       >
-                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                          {msg.body}
-                        </p>
-                        <p className={cn(
-                          "text-xs mt-1",
-                          isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
-                        )}>
-                          {format(new Date(msg.createdAt), "h:mm a")}
-                        </p>
+                        <div
+                          className={cn(
+                            "max-w-[75%] rounded-2xl px-4 py-2",
+                            isOwn
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          )}
+                        >
+                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                            {msg.body}
+                          </p>
+                          <p className={cn(
+                            "text-xs mt-1",
+                            isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                          )}>
+                            {format(new Date(msg.createdAt), "h:mm a")}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
           
           {isTyping && (
             <div className="flex justify-start">
