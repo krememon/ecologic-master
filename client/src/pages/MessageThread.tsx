@@ -50,7 +50,7 @@ interface MessageThreadProps {
 export default function MessageThread({ conversationId }: MessageThreadProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [messageBody, setMessageBody] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<MessageType[]>([]);
@@ -58,8 +58,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ws = useRef<WebSocket | null>(null);
 
-  // Detect if this is a userId or conversationId
-  const isUserId = conversationId && isNaN(parseInt(conversationId)) || conversationId?.includes('_') || conversationId?.includes('email');
+  // Detect if this is a userId or conversationId based on the URL path
+  const isUserId = location.startsWith('/messages/u/');
   const numericConvId = !isUserId ? parseInt(conversationId) : null;
 
   // State for DM data
@@ -88,6 +88,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         setDmData(data);
         // Update URL to canonical conversation route
         setLocation(`/messages/c/${data.conversation.id}`, { replace: true });
+        // Clear dmData after redirect so component switches to live React Query data
+        setTimeout(() => setDmData(null), 100);
       } catch (error: any) {
         console.error("Failed to open DM:", error);
         if (error.message?.includes('403')) {
