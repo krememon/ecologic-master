@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Mail, Shield, User, Eye, EyeOff } from "lucide-react";
+import { CheckCircle, Mail, Shield, User as UserIcon, Eye, EyeOff } from "lucide-react";
 import { FaGoogle } from "react-icons/fa";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { type User } from "@shared/schema";
 
 interface LinkedAccounts {
   hasEmailPassword: boolean;
@@ -25,7 +26,7 @@ export default function Profile() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   // Fetch user data
-  const { data: user, isLoading: userLoading } = useQuery({
+  const { data: user, isLoading: userLoading } = useQuery<User>({
     queryKey: ["/api/auth/user"],
   });
 
@@ -132,7 +133,7 @@ export default function Profile() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
+                  <UserIcon className="h-5 w-5" />
                   Profile Information
                 </CardTitle>
                 <CardDescription>
@@ -142,7 +143,7 @@ export default function Profile() {
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">
-                    <AvatarImage src={user?.profileImageUrl || ""} alt={user?.firstName} />
+                    <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || undefined} />
                     <AvatarFallback className="text-lg">
                       {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
                     </AvatarFallback>

@@ -193,18 +193,45 @@ export const documents = pgTable("documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Messages table
-export const messages = pgTable("messages", {
+// Conversations table for direct messages and group chats
+export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
-  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+  isGroup: boolean("is_group").default(false).notNull(),
+  createdById: varchar("created_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  companyIdx: index("conversations_company_idx").on(table.companyId),
+}));
+
+// Conversation participants table  
+export const conversationParticipants = pgTable("conversation_participants", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lastReadAt: timestamp("last_read_at"),
+  muted: boolean("muted").default(false).notNull(),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+}, (table) => ({
+  conversationUserIdx: index("conversation_participants_conv_user_idx").on(table.conversationId, table.userId),
+  userIdx: index("conversation_participants_user_idx").on(table.userId),
+}));
+
+// Messages table for chat messages
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   senderId: varchar("sender_id").notNull().references(() => users.id),
-  recipientId: varchar("recipient_id").references(() => users.id),
-  subject: varchar("subject"),
-  content: text("content").notNull(),
-  isRead: boolean("is_read").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+  body: text("body"),
+  attachments: jsonb("attachments"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  editedAt: timestamp("edited_at"),
+  deletedAt: timestamp("deleted_at"),
+}, (table) => ({
+  conversationIdx: index("messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+  senderIdx: index("messages_sender_idx").on(table.senderId),
+}));
 
 // Job Photos table for real-time progress tracking
 export const jobPhotos = pgTable("job_photos", {
@@ -253,8 +280,9 @@ export const scheduleItems = pgTable("schedule_items", {
 export const usersRelations = relations(users, ({ many }) => ({
   ownedCompanies: many(companies),
   companyMemberships: many(companyMembers),
-  sentMessages: many(messages, { relationName: "sender" }),
-  receivedMessages: many(messages, { relationName: "recipient" }),
+  sentMessages: many(messages),
+  conversationParticipants: many(conversationParticipants),
+  createdConversations: many(conversations),
 }));
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -268,7 +296,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   jobs: many(jobs),
   invoices: many(invoices),
   documents: many(documents),
-  messages: many(messages),
+  conversations: many(conversations),
 }));
 
 export const companyMembersRelations = relations(companyMembers, ({ one }) => ({
@@ -311,7 +339,6 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   assignments: many(jobAssignments),
   invoices: many(invoices),
   documents: many(documents),
-  messages: many(messages),
   photos: many(jobPhotos),
 }));
 
@@ -356,24 +383,38 @@ export const documentsRelations = relations(documents, ({ one }) => ({
   }),
 }));
 
-export const messagesRelations = relations(messages, ({ one }) => ({
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
   company: one(companies, {
-    fields: [messages.companyId],
+    fields: [conversations.companyId],
     references: [companies.id],
   }),
-  job: one(jobs, {
-    fields: [messages.jobId],
-    references: [jobs.id],
+  creator: one(users, {
+    fields: [conversations.createdById],
+    references: [users.id],
+  }),
+  participants: many(conversationParticipants),
+  messages: many(messages),
+}));
+
+export const conversationParticipantsRelations = relations(conversationParticipants, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [conversationParticipants.conversationId],
+    references: [conversations.id],
+  }),
+  user: one(users, {
+    fields: [conversationParticipants.userId],
+    references: [users.id],
+  }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, {
+    fields: [messages.conversationId],
+    references: [conversations.id],
   }),
   sender: one(users, {
     fields: [messages.senderId],
     references: [users.id],
-    relationName: "sender",
-  }),
-  recipient: one(users, {
-    fields: [messages.recipientId],
-    references: [users.id],
-    relationName: "recipient",
   }),
 }));
 
@@ -581,9 +622,22 @@ export const insertDocumentSchema = createInsertSchema(documents).omit({
   createdAt: true,
 });
 
+export const insertConversationSchema = createInsertSchema(conversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertConversationParticipantSchema = createInsertSchema(conversationParticipants).omit({
+  id: true,
+  joinedAt: true,
+});
+
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
+  editedAt: true,
+  deletedAt: true,
 });
 
 export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({
@@ -629,6 +683,10 @@ export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Document = typeof documents.$inferSelect;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type ConversationParticipant = typeof conversationParticipants.$inferSelect;
+export type InsertConversationParticipant = z.infer<typeof insertConversationParticipantSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type JobPhoto = typeof jobPhotos.$inferSelect;

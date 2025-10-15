@@ -1,0 +1,246 @@
+Goal
+
+Clicking Messages opens a two-pane view:
+
+Left: company people list (and existing conversations), search/filter.
+
+Right: chat thread with bubbles, timestamps, typing, and read receipts.
+
+Direct messages only (1:1) in v1; structure is ready for groups.
+
+1) Data Model (Prisma-style names; adapt if needed)
+
+User (existing)
+
+id, companyId, name, role, status
+
+Conversation
+
+id (cuid)
+
+companyId (FK Company)
+
+isGroup (bool, default false)
+
+createdById (FK User)
+
+createdAt, updatedAt
+
+ConversationParticipant
+
+conversationId (FK)
+
+userId (FK User)
+
+lastReadAt (timestamp, nullable)
+
+muted (bool, default false)
+
+PK: (conversationId, userId)
+
+Message
+
+id (cuid)
+
+conversationId (FK)
+
+senderId (FK User)
+
+body (text, nullable if attachments)
+
+attachments (jsonb[] or separate table; v1 allow none)
+
+createdAt, editedAt (nullable), deletedAt (soft delete)
+
+Notes
+
+Use lastReadAt per participant for read receipts.
+
+Add compound index: (conversationId, createdAt desc) for paging.
+
+Enforce company scoping: all rows carry companyId (Conversation -> derived for messages/participants).
+
+2) Server API
+
+Auth/RBAC: user must be ACTIVE and belong to the company. Block deactivated/suspended.
+
+Routes
+
+GET /api/messages/conversations?cursor=<id>&limit=30
+
+Returns user’s conversations (company-scoped), last message preview, unread count.
+
+POST /api/messages/conversations
+
+Body: { userId: "<otherUserId>" }
+
+Finds existing 1:1 convo in same company; creates if none. Returns conversation.
+
+GET /api/messages/conversations/:conversationId/messages?cursor=<createdAt>&limit=50
+
+Paged, newest first (or ascending with before cursor; choose one and stick to it).
+
+POST /api/messages/conversations/:conversationId/messages
+
+Body: { body: string }
+
+Validates membership; creates message; broadcasts realtime event.
+
+POST /api/messages/conversations/:conversationId/read
+
+Body: { at?: ISOString } (default now)
+
+Sets participant lastReadAt and broadcasts read receipt.
+
+POST /api/messages/typing
+
+Body: { conversationId, isTyping: boolean }
+
+Broadcast ephemeral typing events (not stored).
+
+Validation & Guards
+
+Both users must share the same company.
+
+Cannot start messages with deactivated or removed users.
+
+When a user is removed from a company, remove ConversationParticipant and stop access.
+
+3) Realtime (WebSocket or Pusher)
+
+Channels:
+
+company:{companyId}:presence (optional for presence dots)
+
+conversation:{conversationId} events:
+
+message:new → payload { id, body, sender, createdAt }
+
+typing → { userId, isTyping }
+
+read → { userId, lastReadAt }
+
+On connect: subscribe the user to all conversation channels they participate in (or lazy-subscribe when a thread opens).
+
+4) Client UI/UX
+Route: /messages
+
+Layout:
+
+Left rail (320–360px):
+
+Search input (“Search people or conversations”)
+
+Section “People” = active company users (excluding self); clicking opens/creates DM.
+
+Section “Conversations” = existing threads sorted by last activity, each with:
+
+Avatar, name, last message preview, relative time, unread badge.
+
+Right pane:
+
+Header: avatar + name, role, presence dot.
+
+Messages list (infinite scroll):
+
+Bubbles: right-aligned for self, left for other
+
+Group by day; each bubble shows time (e.g., 2:14 PM)
+
+Read indicator: small “Read” tick when lastReadAt >= message.createdAt for the other participant
+
+Composer:
+
+Multiline input with Enter = send, Shift+Enter = newline
+
+Show typing indicator when other user is typing
+
+Disabled if other user is deactivated or you’re removed
+
+Optimistic UI
+
+On send: add a local message with pending: true. Replace with server message on ack. On error, mark failed (retry icon).
+
+Empty states
+
+No conversations yet → “Start a conversation” and list of people below.
+
+5) Behavior & Edge Cases
+
+Unread counts: For a conversation, unread = messages with createdAt > my.lastReadAt and senderId != me.
+
+Soft delete: If you later add delete, keep tombstone (“Message deleted”) to preserve read math.
+
+Removed/Deactivated users:
+
+Hide from “People” list.
+
+Existing threads: show “User is inactive” banner; prevent sending.
+
+Permissions:
+
+Only Owner/Supervisor can message anyone; others can message peers (fine to allow everyone in v1).
+
+Search:
+
+v1: search by user name; v2 can add full-text over last messages.
+
+6) Notifications (optional v1, recommended v2)
+
+In-app badge: show dot & count on sidebar “Messages”.
+
+Email/Push (future): on message:new when recipient is offline (no WS), send a condensed email (rate limited).
+
+7) Caching & Query Keys (React Query)
+
+Conversations: ['conversations']
+
+Conversation messages: ['messages', conversationId]
+
+People list: ['companyUsers']
+
+On message:new:
+
+queryClient.setQueryData(['messages', id], append)
+
+queryClient.setQueryData(['conversations'], update preview & bump to top)
+
+On read:
+
+Update unread counts for that conversation and sidebar badge.
+
+8) Acceptance Criteria
+
+People list shows all active users in my company (not me); clicking opens a DM thread.
+
+I can send/receive messages with realtime updates; my outgoing bubbles align right, incoming left.
+
+Typing indicator appears while the other user types; disappears within 3s of inactivity.
+
+Unread badges show in the left rail; opening a thread marks it read and updates counts.
+
+Removing a user from the company instantly prevents them from sending and hides them from “People”.
+
+Refreshing the page preserves conversations and scrolls to the latest message.
+
+No success toasts; errors appear inline in the composer or as small error toasts.
+
+9) Hardening & Logs
+
+Rate limit POST /messages (e.g., 10/sec burst).
+
+Sanitize message body (no HTML injection); render as plain text with linkify URLs.
+
+Store all times in UTC; format in user’s TZ.
+
+Add basic audit log: message:new {conversationId, senderId, length}.
+
+10) Stretch (later)
+
+Group chats (isGroup=true, participants > 2)
+
+Attachments (S3 pre-signed uploads)
+
+Message reactions (👍❤️)
+
+Search across message content
