@@ -50,7 +50,7 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
 - **Problem Solved**: Eliminated "Loading conversation..." freeze bugs, race conditions, NaN URL errors, and complex client-side state management
 - **Architecture Changes**:
   - **New Server Route**: Added GET `/messages/u/:userId` that validates user, deterministically creates/finds conversation, and redirects to canonical route
-  - **Instant Client Navigation**: MessagesDirectory now navigates directly to `/messages/u/${userId}` with zero API calls or delays
+  - **Instant Client Navigation**: MessagesDirectory now navigates directly to `/messages/u/${userId}` via `window.location.href` (browser navigation, not SPA routing) with zero preliminary API calls
   - **302 Redirect Flow**: Server responds with redirect to `/messages/c/${conversationId}` after validating user and creating/finding conversation
   - **Simplified MessageThread**: Removed ~100 lines of code including all `isNewConversation` logic, `createConversationMutation`, and `companyUsers` query
 - **Server Route Implementation**:
