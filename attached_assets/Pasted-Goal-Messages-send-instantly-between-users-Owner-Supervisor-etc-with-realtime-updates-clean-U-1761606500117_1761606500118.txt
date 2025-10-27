@@ -1,0 +1,173 @@
+Goal: Messages send instantly between users (Owner → Supervisor etc.) with realtime updates, clean UI (no random timestamp bubbles), and no false “inactive user” block. Keep current UI styling.
+
+Scope
+
+Use Firebase/Firestore for chat data (threads/{threadId}/messages/{messageId}).
+
+Realtime subscription so both sender and receiver see messages immediately.
+
+Optimistic UI on send, with rollback on failure.
+
+Only block sending if the recipient is explicitly inactive.
+
+Filter out empty/placeholder messages; show one date separator per day; tiny time inside each bubble.
+
+Deliverables
+
+Data model
+
+threads/{threadId}: { members: string[] /* [userA, userB] */, createdAt, updatedAt }
+
+threads/{threadId}/messages/{messageId}: { text, senderId, createdAt }
+
+createdAt set with serverTimestamp().
+
+Security rules (Firestore)
+
+Only authenticated users who are members of a thread can read that thread and create messages.
+
+Allow read on thread doc if request.auth.uid in resource.data.members.
+
+Allow read/create on messages if request.auth.uid in get(/databases/$(db)/documents/threads/$(threadId)).data.members.
+
+Thread resolution
+
+When opening a DM, compute a deterministic thread id or query for an existing one with the same two member IDs; create one if missing.
+
+Store threadId in state/URL for the chat screen.
+
+Realtime subscription
+
+In ChatThread.tsx (or equivalent), subscribe with:
+
+onSnapshot(
+  query(collection(db,'threads',threadId,'messages'), orderBy('createdAt','asc')),
+  ...
+)
+
+
+Set state with the ordered list.
+
+Send handler (optimistic)
+
+On send:
+
+Append a temporary local message { id: uuid, text, senderId, createdAt: new Date() }.
+
+await addDoc(collection(db,'threads',threadId,'messages'), { text, senderId: meId, createdAt: serverTimestamp() }).
+
+If error, remove the temp message and surface a toast “Message failed to send”.
+
+Inactive user guard
+
+Enable input unless recipient is explicitly inactive/disabled.
+
+Implement helper:
+
+const isExplicitlyInactive = (u?: {status?: 'active'|'inactive'|'disabled', isActive?: boolean|null}) =>
+  u?.status === 'inactive' || u?.status === 'disabled' || u?.isActive === false;
+
+
+Only show the red banner + disable input when isExplicitlyInactive(recipient) === true.
+
+Missing/undefined status should be treated as active.
+
+Message rendering
+
+Filter out empty/falsy .text messages and any accidental timestamp-only items.
+
+Group by day; render one date pill per day (“Today”, “Yesterday”, or MMM d, yyyy).
+
+Bubble shows .text; a tiny, low-opacity time (hh:mm) bottom-right inside the bubble (no separate time bubbles).
+
+Files to modify (adjust paths to project)
+
+src/lib/firebase.ts (ensure initialized and exported as db).
+
+src/features/chat/ChatThread.tsx (subscribe + render grouped messages).
+
+src/features/chat/ChatInput.tsx (send handler + inactive guard).
+
+src/features/chat/threadService.ts (getOrCreateThread(memberA, memberB)).
+
+firestore.rules (add/adjust rules listed above).
+
+Optional: src/features/chat/messageUtils.ts for day grouping/formatting helpers.
+
+Acceptance tests (must pass)
+
+Open Owner and Supervisor in two different browsers → typing and pressing Send shows the new message instantly on both screens (≤100ms network permitting).
+
+No stray timestamp bubbles; one date separator per day.
+
+Setting a user’s status to "inactive" disables input and shows the banner; switching back to "active" re-enables without reload.
+
+Refresh either browser → history loads in correct order.
+
+If network error occurs during send, the temp bubble disappears and a toast shows an error.
+
+Reference snippets (use/adapt)
+
+Subscribe
+
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+export function subscribeToMessages(threadId: string, cb: (msgs: Msg[]) => void) {
+  const q = query(collection(db, 'threads', threadId, 'messages'), orderBy('createdAt','asc'));
+  return onSnapshot(q, (snap) => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Msg[];
+    cb(msgs);
+  });
+}
+
+
+Send (optimistic)
+
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+
+export async function sendMessage({ threadId, meId, text }: { threadId:string; meId:string; text:string }) {
+  return addDoc(collection(db,'threads',threadId,'messages'), {
+    text,
+    senderId: meId,
+    createdAt: serverTimestamp(),
+  });
+}
+
+
+Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    match /threads/{threadId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.members;
+      match /messages/{messageId} {
+        allow read, create: if request.auth != null
+          && request.auth.uid in get(/databases/$(db)/documents/threads/$(threadId)).data.members;
+      }
+    }
+  }
+}
+
+
+Inactive guard (UI)
+
+const canSendTo = (u?: {status?: string; isActive?: boolean|null}) =>
+  !(u?.status === 'inactive' || u?.status === 'disabled' || u?.isActive === false);
+
+
+Day grouping helpers
+
+export const isRenderableMessage = (m: Msg) => !!(m.text ?? '').trim();
+export const toDayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+
+Notes
+
+Do not block sending based on missing isActive or status.
+
+Preserve existing styling; only adjust structure to meet the behaviors above.
+
+Keep all changes idempotent and safe to re-run.
+
+Ship when all acceptance tests pass.
