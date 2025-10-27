@@ -140,8 +140,13 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Determine if data is loaded (either from DM or query)
   const dataLoaded = (dmData !== null && !dmLoading) || (!isUserId && !conversationLoading);
 
-  // Check if recipient is inactive (only when data is loaded)
-  const isRecipientInactive = dataLoaded && otherUser?.status?.toUpperCase() !== 'ACTIVE';
+  // Check if recipient is explicitly inactive (only when data is loaded)
+  // Only treat as inactive if status is explicitly DEACTIVATED or REMOVED
+  // Missing/undefined status is treated as active (tolerant approach)
+  const isRecipientInactive = dataLoaded && otherUser && (
+    otherUser.status?.toUpperCase() === 'DEACTIVATED' ||
+    otherUser.status?.toUpperCase() === 'REMOVED'
+  );
 
   // Composer enable rules
   const canSend = dataLoaded && !isRecipientInactive && !!currentConvId;
