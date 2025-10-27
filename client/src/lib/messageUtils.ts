@@ -9,8 +9,12 @@ export type MessageType = {
   isFailed?: boolean;
 };
 
-const toDayKey = (d: Date) =>
-  d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+const toDayKey = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 /**
  * Check if a message should be rendered (has actual content)

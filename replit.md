@@ -102,3 +102,26 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
   - Inactive users (DEACTIVATED/REMOVED): Banner shows "user is inactive", composer disabled
   - During load: Skeleton header, no banner flicker, smooth transition to loaded state
 - **Result**: Professional DM experience with proper status handling, zero flicker, and clear user feedback
+
+### October 27, 2025: Chat Screen Message Filtering & Day Grouping
+- **Feature**: Enhanced message display with empty message filtering, day-based grouping, and tolerant inactive user logic
+- **Problem Solved**: Random timestamp bubbles appearing, poor message organization, false inactive warnings
+- **Message Display Improvements**:
+  - **Empty Message Filtering**: `isRenderableMessage()` filters out messages with no text content
+  - **Day Grouping**: Messages grouped by day with clean date separators ("Today", "Yesterday", formatted dates)
+  - **Inline Timestamps**: Time displayed inside each message bubble (text-[10px]), not as separate items
+  - **Clean Layout**: max-w-[75%] message bubbles, space-y-6 between day groups, space-y-2 between messages
+- **Inactive User Logic Enhancement**:
+  - **Tolerant Approach**: Only treats users as inactive if status is explicitly 'DEACTIVATED' or 'REMOVED'
+  - **Missing Status Handling**: Undefined/null status treated as active (no false positives)
+  - **Updated Logic**: `isRecipientInactive = dataLoaded && otherUser && (status === 'DEACTIVATED' || status === 'REMOVED')`
+- **Technical Implementation**:
+  - **messageUtils.ts**: Utility functions for filtering (`isRenderableMessage`), grouping (`groupByDay`), and formatting (`formatDayLabel`, `formatTime`)
+  - **Zero-Padded Date Keys**: YYYY-MM-DD format ensures chronological sorting (e.g., "2025-01-02", "2025-10-15")
+  - **Chronological Ordering**: Lexicographical sort on padded keys produces correct day sequence across month/year boundaries
+- **User Experience**:
+  - No more random timestamp-only bubbles in conversation
+  - Clear visual separation by day with centered date pills
+  - Compact timestamps inside message bubbles
+  - No false "user is inactive" warnings for users with missing status fields
+- **Result**: Professional chat interface with clean message organization and accurate status handling
