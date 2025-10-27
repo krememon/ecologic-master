@@ -151,54 +151,59 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Composer enable rules
   const canSend = dataLoaded && !isRecipientInactive && !!currentConvId;
 
-  // Send message mutation with optimistic updates
-  const sendMessageMutation = useMutation({
-    mutationFn: async (body: string) => {
-      if (!currentConvId) throw new Error("No conversation ID");
-      
-      const response = await apiRequest(
-        "POST",
-        `/api/conversations/${currentConvId}/messages`,
-        { body }
-      );
-      return await response.json();
-    },
-    onMutate: async (body: string) => {
-      // Optimistic update
-      const optimisticMessage: MessageType = {
-        id: `temp-${Date.now()}`,
-        senderId: user!.id,
-        body,
-        createdAt: new Date(),
-        isPending: true,
-      };
-      setOptimisticMessages(prev => [...prev, optimisticMessage]);
-      setMessageBody("");
-    },
-    onSuccess: () => {
-      setOptimisticMessages([]);
-      if (currentConvId) {
-        queryClient.invalidateQueries({
-          queryKey: ["/api/conversations", currentConvId, "messages"],
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
-      }
-      textareaRef.current?.focus();
-    },
-    onError: (error, body) => {
-      // Mark last optimistic message as failed
-      setOptimisticMessages(prev => 
-        prev.map((msg, idx) => 
-          idx === prev.length - 1 ? { ...msg, isPending: false, isFailed: true } : msg
+  // Send message via WebSocket with optimistic update
+  const sendMessage = (body: string) => {
+    if (!body.trim() || !currentConvId || !ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const optimisticMessage: MessageType = {
+      id: tempId,
+      senderId: user!.id,
+      body: body.trim(),
+      createdAt: new Date(),
+      isPending: true,
+    };
+
+    // Add optimistic message immediately
+    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    setMessageBody("");
+
+    // Set timeout for failed state (7 seconds)
+    const timeoutId = setTimeout(() => {
+      setOptimisticMessages(prev =>
+        prev.map(msg =>
+          msg.id === tempId ? { ...msg, isPending: false, isFailed: true } : msg
         )
       );
       toast({
-        title: "Failed to send",
-        description: "Message failed to send. Click retry.",
+        title: "Message failed",
+        description: "Message took too long to send. Please try again.",
         variant: "destructive",
       });
-    },
-  });
+    }, 7000);
+
+    // Send via WebSocket
+    ws.current.send(
+      JSON.stringify({
+        type: 'message:send',
+        conversationId: currentConvId,
+        recipientId: otherUser?.id,
+        body: body.trim(),
+        tempId,
+      })
+    );
+
+    // Store timeout for cleanup
+    (ws.current as any)[`timeout_${tempId}`] = timeoutId;
+  };
+
+  // Dummy mutation for compatibility (not used anymore)
+  const sendMessageMutation = {
+    mutate: (body: string) => sendMessage(body),
+    isPending: false,
+  };
 
   // Mark as read mutation
   const markAsReadMutation = useMutation({
@@ -208,7 +213,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     },
   });
 
-  // WebSocket connection
+  // WebSocket connection with room-based subscriptions
   useEffect(() => {
     if (!user || !currentConvId) return;
 
@@ -217,23 +222,98 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
+      // Authenticate
       ws.current?.send(JSON.stringify({ type: "auth", userId: user.id }));
+      
+      // Join conversation room
+      setTimeout(() => {
+        ws.current?.send(JSON.stringify({ 
+          type: "thread:join", 
+          conversationId: currentConvId 
+        }));
+      }, 100);
     };
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
-      if (data.type === "new_message" && data.conversationId === currentConvId) {
+      // Handle message acknowledgment
+      if (data.type === "message:ack") {
+        const { ok, tempId, message, code } = data;
+        
+        if (ok && message) {
+          // Clear timeout
+          if (ws.current && (ws.current as any)[`timeout_${tempId}`]) {
+            clearTimeout((ws.current as any)[`timeout_${tempId}`]);
+            delete (ws.current as any)[`timeout_${tempId}`];
+          }
+          
+          // Replace optimistic message with real message
+          setOptimisticMessages(prev => prev.filter(msg => msg.id !== tempId));
+          
+          // Invalidate queries to fetch new message
+          queryClient.invalidateQueries({
+            queryKey: ["/api/conversations", currentConvId, "messages"],
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+          
+          // Refocus textarea
+          textareaRef.current?.focus();
+        } else {
+          // Clear timeout
+          if (ws.current && (ws.current as any)[`timeout_${tempId}`]) {
+            clearTimeout((ws.current as any)[`timeout_${tempId}`]);
+            delete (ws.current as any)[`timeout_${tempId}`];
+          }
+          
+          // Mark as failed
+          setOptimisticMessages(prev =>
+            prev.map(msg =>
+              msg.id === tempId ? { ...msg, isPending: false, isFailed: true } : msg
+            )
+          );
+          
+          // Show error toast
+          if (code === 'RECIPIENT_INACTIVE') {
+            toast({
+              title: "Cannot send message",
+              description: "Recipient is inactive",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Failed to send",
+              description: "Message failed to send. Please try again.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
+      
+      // Handle new message broadcast
+      else if (data.type === "message:created" && data.conversationId === currentConvId) {
+        // Invalidate queries to fetch new message
         queryClient.invalidateQueries({
           queryKey: ["/api/conversations", currentConvId, "messages"],
         });
         queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
-      } else if (data.type === "typing" && data.conversationId === currentConvId) {
+      }
+      
+      // Handle typing indicator (if still using)
+      else if (data.type === "typing" && data.conversationId === currentConvId) {
         setIsTyping(data.isTyping);
       }
     };
 
     return () => {
+      // Leave conversation room before closing
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({ 
+          type: "thread:leave", 
+          conversationId: currentConvId 
+        }));
+      }
+      
       ws.current?.close();
     };
   }, [user, currentConvId]);
@@ -259,7 +339,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   const handleSend = () => {
     if (!messageBody.trim() || !currentConvId) return;
-    sendMessageMutation.mutate(messageBody.trim());
+    sendMessage(messageBody.trim());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

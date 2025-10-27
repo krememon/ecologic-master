@@ -1874,7 +1874,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!wsClients.has(ws.userId)) {
             wsClients.set(ws.userId, new Set());
           }
-          wsClients.get(ws.userId)!.add(ws);
+          const userSockets = wsClients.get(ws.userId);
+          if (userSockets) {
+            userSockets.add(ws);
+          }
           
           ws.send(JSON.stringify({ type: 'auth_success' }));
         }
@@ -1945,19 +1948,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // 2. Check if recipient is explicitly inactive (tolerant approach)
             if (recipientId) {
               const recipient = await db
-                .select({ status: users.status, isActive: users.isActive })
+                .select({ status: users.status })
                 .from(users)
                 .where(eq(users.id, recipientId))
                 .limit(1);
               
               if (recipient.length > 0) {
-                const { status, isActive } = recipient[0];
-                // Only block if explicitly inactive
+                const { status } = recipient[0];
+                // Only block if explicitly inactive (tolerant - missing status = active)
                 const explicitlyInactive = 
                   status === 'INACTIVE' || 
                   status === 'DEACTIVATED' || 
-                  status === 'REMOVED' ||
-                  isActive === false;
+                  status === 'REMOVED';
                 
                 if (explicitlyInactive) {
                   ws.send(JSON.stringify({ 
