@@ -1,0 +1,279 @@
+Goal
+
+Messages must deliver instantly Owner ↔ Supervisor. Add explicit ACKs, join verification, room consistency, and clear error reporting. Provide a server test injector to isolate sockets vs DB.
+
+1) Server: constants for room naming
+// server/wsRooms.ts
+export const threadRoom = (companyId: string, pairKey: string) =>
+  `company:${companyId}:thread:${pairKey}`;
+export const companyRoom = (companyId: string) =>
+  `company:${companyId}`;
+
+2) Server: Join handshake + logging
+// server/wsHandlers.ts
+import { threadRoom, companyRoom } from './wsRooms';
+
+export function registerSocketHandlers(io) {
+  io.on('connection', (socket) => {
+    // Optional: attach user identity from auth middleware
+    // socket.data.userId, socket.data.companyId
+
+    socket.on('thread:join', ({ companyId, pairKey }, cb) => {
+      try {
+        if (!companyId || !pairKey) return cb?.({ ok:false, code:'BAD_ARGS' });
+        const room = threadRoom(companyId, pairKey);
+        socket.join(room);
+        socket.join(companyRoom(companyId));
+        socket.data = socket.data || {};
+        socket.data.companyId = companyId;
+        socket.data.joinedThreads = socket.data.joinedThreads || new Set();
+        socket.data.joinedThreads.add(room);
+
+        io.to(room).emit('thread:presence', { type:'join', userId: socket.data.userId, ts: Date.now() });
+        cb?.({ ok:true, room });
+      } catch (e) {
+        console.error('thread:join error', e);
+        cb?.({ ok:false, code:'SERVER_ERROR' });
+      }
+    });
+
+    socket.on('thread:leave', ({ companyId, pairKey }, cb) => {
+      try {
+        const room = threadRoom(companyId, pairKey);
+        socket.leave(room);
+        socket.data?.joinedThreads?.delete(room);
+        cb?.({ ok:true });
+      } catch (e) {
+        cb?.({ ok:false, code:'SERVER_ERROR' });
+      }
+    });
+
+    // Health check
+    socket.on('ping', (payload, cb) => cb?.({ ok:true, ts: Date.now(), echo: payload }));
+  });
+}
+
+
+Register this once where you create the server:
+
+// server/index.ts
+import { registerSocketHandlers } from './wsHandlers';
+registerSocketHandlers(io);
+
+3) Server: Send handler with bulletproof ACKs
+// server/messageSend.ts
+import { threadRoom } from './wsRooms';
+import { db } from './db'; // your pg client
+
+export async function handleSendMessage(io, socket, payload, cb) {
+  const t0 = Date.now();
+  try {
+    const { companyId, pairKey, senderId, recipientId, text } = payload || {};
+    if (!companyId || !pairKey || !senderId || !recipientId || !text?.trim()) {
+      return cb?.({ ok:false, code:'BAD_ARGS' });
+    }
+
+    // Verify socket joined that room (prevents wrong-room bugs)
+    const room = threadRoom(companyId, pairKey);
+    const joined = socket.data?.joinedThreads?.has(room);
+    if (!joined) {
+      // Auto-join to be forgiving in prod
+      socket.join(room);
+    }
+
+    // Guard: explicit inactive only
+    const rec = await db.oneOrNone(
+      `select status, is_active from employees where id = $1 and company_id = $2`,
+      [recipientId, companyId]
+    );
+    const explicitlyInactive = rec?.status === 'inactive' || rec?.status === 'disabled' || rec?.is_active === false;
+    if (explicitlyInactive) {
+      return cb?.({ ok:false, code:'RECIPIENT_INACTIVE' });
+    }
+
+    // Persist
+    const msg = await db.one(
+      `insert into messages (company_id, thread_key, sender_id, recipient_id, text)
+       values ($1, $2, $3, $4, $5)
+       returning id, company_id as "companyId", thread_key as "pairKey",
+                 sender_id as "senderId", recipient_id as "recipientId",
+                 text, created_at as "createdAt"`,
+      [companyId, pairKey, senderId, recipientId, text.trim()]
+    );
+
+    // Broadcast
+    io.to(room).emit('message:created', msg);
+
+    // ACK success
+    cb?.({ ok:true, message: msg, dt: Date.now() - t0 });
+  } catch (e:any) {
+    console.error('message:send failed:', e?.message || e);
+    cb?.({ ok:false, code:'SERVER_ERROR', detail: e?.message?.slice(0,200) });
+  }
+}
+
+
+Wire it:
+
+// server/index.ts (after registerSocketHandlers)
+import { handleSendMessage } from './messageSend';
+io.on('connection', (socket) => {
+  socket.on('message:send', (payload, cb) => handleSendMessage(io, socket, payload, cb));
+});
+
+4) Server: Test injector + debug endpoint
+// server/debug.ts
+import { threadRoom } from './wsRooms';
+import { db } from './db';
+
+export function registerDebug(app, io) {
+  // Inject a server-generated message (no DB) to isolate sockets
+  app.post('/debug/inject-message', (req, res) => {
+    const { companyId, pairKey, text = 'SERVER TEST' } = req.body || {};
+    if (!companyId || !pairKey) return res.status(400).json({ ok:false, code:'BAD_ARGS' });
+    const msg = {
+      id: 'debug-' + Math.random().toString(36).slice(2),
+      companyId, pairKey, senderId: 'server', recipientId: 'all',
+      text, createdAt: new Date().toISOString()
+    };
+    io.to(threadRoom(companyId, pairKey)).emit('message:created', msg);
+    res.json({ ok:true, message: msg });
+  });
+
+  // Read last 50 messages from DB for a thread
+  app.get('/debug/messages', async (req, res) => {
+    const { companyId, pairKey } = req.query;
+    if (!companyId || !pairKey) return res.status(400).json({ ok:false, code:'BAD_ARGS' });
+    const rows = await db.manyOrNone(
+      `select id, company_id as "companyId", thread_key as "pairKey",
+              sender_id as "senderId", recipient_id as "recipientId",
+              text, created_at as "createdAt"
+       from messages
+       where company_id = $1 and thread_key = $2
+       order by created_at asc
+       limit 50`,
+      [companyId, pairKey]
+    );
+    res.json({ ok:true, rows });
+  });
+}
+
+
+Register it:
+
+// server/index.ts
+import { registerDebug } from './debug';
+registerDebug(app, io);
+
+5) Client: mount join + verbose logs + send with ACK
+// ChatThread.tsx (or screen component)
+useEffect(() => {
+  if (!socket || !companyId || !pairKey) return;
+  console.log('[join] emitting', { companyId, pairKey });
+  socket.emit('thread:join', { companyId, pairKey }, (ack) => {
+    console.log('[join:ack]', ack);
+  });
+  return () => {
+    socket.emit('thread:leave', { companyId, pairKey }, (ack) => {
+      console.log('[leave:ack]', ack);
+    });
+  };
+}, [socket, companyId, pairKey]);
+
+useEffect(() => {
+  if (!socket) return;
+  const onCreated = (msg) => {
+    if (msg.pairKey !== pairKey || msg.companyId !== companyId) return;
+    setMessages((m) => {
+      const exists = m.some(x => x.id === msg.id);
+      return exists ? m : [...m, msg];
+    });
+  };
+  socket.on('message:created', onCreated);
+  return () => socket.off('message:created', onCreated);
+}, [socket, companyId, pairKey]);
+
+const send = (text) => {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return;
+  const tempId = crypto.randomUUID();
+  const optimistic = { id: tempId, text: trimmed, senderId: meId, createdAt: new Date().toISOString(), pending: true };
+  setMessages((m) => [...m, optimistic]);
+
+  console.log('[send] ->', { companyId, pairKey, senderId: meId, recipientId, text: trimmed });
+
+  let settled = false;
+  const timeout = setTimeout(() => {
+    if (!settled) {
+      settled = true;
+      console.warn('[send] timeout');
+      setMessages((m)=>m.map(x=>x.id===tempId?{...x, pending:false, failed:true}:x));
+    }
+  }, 7000);
+
+  socket.emit('message:send',
+    { companyId, pairKey, senderId: meId, recipientId, text: trimmed },
+    (ack) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      console.log('[send:ack]', ack);
+
+      if (!ack?.ok) {
+        setMessages((m)=>m.map(x=>x.id===tempId?{...x, pending:false, failed:true, error:ack?.code}:x));
+        return;
+      }
+      setMessages((m)=>m.map(x=>x.id===tempId?ack.message:x));
+    }
+  );
+};
+
+6) Quick SQL sanity (only if needed)
+-- Ensure columns exist and defaults are sane
+alter table messages
+  alter column created_at set default now();
+
+-- Optional: ensure is_active defaults true
+alter table employees
+  alter column is_active set default true;
+
+update employees
+set is_active = true
+where is_active is null and (status is null or status not in ('inactive','disabled'));
+
+7) 90-second test script
+
+Open Owner in normal window, Supervisor in Incognito.
+
+Open the same DM.
+
+In DevTools Console watch logs:
+
+You should see [join:ack] { ok:true, room: "company:...:thread:..." } in both windows.
+
+From either window, call:
+
+fetch('/debug/inject-message', { method:'POST', headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({ companyId: '<ID>', pairKey: '<PAIRKEY>', text: 'Server says hi' })
+})
+
+
+Both windows should instantly get message:created.
+
+If not: sockets/room join is the issue.
+
+Now send a real message. Check:
+
+[send] -> log appears.
+
+[send:ack] { ok:true, message:{...} } returns quickly.
+
+Message appears instantly in both windows.
+
+If [send:ack] returns { ok:false, code: ... }:
+
+RECIPIENT_INACTIVE → toggle that user active.
+
+BAD_ARGS → one of companyId/pairKey/senderId/recipientId/text missing.
+
+SERVER_ERROR with detail → share the detail string; we’ll fix the SQL quickly.
