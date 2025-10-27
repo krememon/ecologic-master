@@ -54,6 +54,15 @@ function getUserId(user: any): string {
 // Track connected WebSocket clients
 const wsClients = new Map<string, Set<WebSocket>>();
 
+// Track WebSocket rooms (conversation-based)
+const wsRooms = new Map<string, Set<WebSocket>>();
+
+// Extended WebSocket type with custom data
+interface ExtendedWebSocket extends WebSocket {
+  userId?: string;
+  rooms?: Set<string>;
+}
+
 function broadcastToUser(userId: string, message: any) {
   const userSockets = wsClients.get(userId);
   if (userSockets) {
@@ -1848,26 +1857,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket, req) => {
+  wss.on('connection', (ws: ExtendedWebSocket, req) => {
     console.log('New WebSocket connection');
-    let userId: string | null = null;
+    ws.rooms = new Set();
 
-    ws.on('message', (data) => {
+    ws.on('message', async (data) => {
       try {
         const message = JSON.parse(data.toString());
         console.log('Received message:', message);
         
         // Handle auth message to track this connection
         if (message.type === 'auth' && message.userId) {
-          userId = message.userId;
+          ws.userId = message.userId;
           
           // Add this socket to the user's set
-          if (!wsClients.has(userId)) {
-            wsClients.set(userId, new Set());
+          if (!wsClients.has(ws.userId)) {
+            wsClients.set(ws.userId, new Set());
           }
-          wsClients.get(userId)!.add(ws);
+          wsClients.get(ws.userId)!.add(ws);
           
           ws.send(JSON.stringify({ type: 'auth_success' }));
+        }
+        
+        // Handle thread:join - user joins a conversation room
+        else if (message.type === 'thread:join' && ws.userId) {
+          const { conversationId } = message;
+          if (!conversationId) return;
+          
+          const roomKey = `conversation:${conversationId}`;
+          
+          // Add socket to room
+          if (!wsRooms.has(roomKey)) {
+            wsRooms.set(roomKey, new Set());
+          }
+          wsRooms.get(roomKey)!.add(ws);
+          ws.rooms!.add(roomKey);
+          
+          console.log(`User ${ws.userId} joined ${roomKey}`);
+        }
+        
+        // Handle thread:leave - user leaves a conversation room
+        else if (message.type === 'thread:leave') {
+          const { conversationId } = message;
+          if (!conversationId) return;
+          
+          const roomKey = `conversation:${conversationId}`;
+          
+          // Remove socket from room
+          if (wsRooms.has(roomKey)) {
+            wsRooms.get(roomKey)!.delete(ws);
+            if (wsRooms.get(roomKey)!.size === 0) {
+              wsRooms.delete(roomKey);
+            }
+          }
+          ws.rooms!.delete(roomKey);
+          
+          console.log(`User ${ws.userId} left ${roomKey}`);
+        }
+        
+        // Handle message:send - send message with ACK
+        else if (message.type === 'message:send' && ws.userId) {
+          const { conversationId, body, recipientId } = message;
+          
+          if (!conversationId || !body?.trim()) {
+            ws.send(JSON.stringify({ 
+              type: 'message:ack', 
+              ok: false, 
+              code: 'INVALID_REQUEST',
+              tempId: message.tempId
+            }));
+            return;
+          }
+
+          try {
+            // 1. Verify user is a participant
+            const participant = await storage.getConversationParticipant(conversationId, ws.userId);
+            if (!participant) {
+              ws.send(JSON.stringify({ 
+                type: 'message:ack', 
+                ok: false, 
+                code: 'NOT_PARTICIPANT',
+                tempId: message.tempId
+              }));
+              return;
+            }
+
+            // 2. Check if recipient is explicitly inactive (tolerant approach)
+            if (recipientId) {
+              const recipient = await db
+                .select({ status: users.status, isActive: users.isActive })
+                .from(users)
+                .where(eq(users.id, recipientId))
+                .limit(1);
+              
+              if (recipient.length > 0) {
+                const { status, isActive } = recipient[0];
+                // Only block if explicitly inactive
+                const explicitlyInactive = 
+                  status === 'INACTIVE' || 
+                  status === 'DEACTIVATED' || 
+                  status === 'REMOVED' ||
+                  isActive === false;
+                
+                if (explicitlyInactive) {
+                  ws.send(JSON.stringify({ 
+                    type: 'message:ack', 
+                    ok: false, 
+                    code: 'RECIPIENT_INACTIVE',
+                    tempId: message.tempId
+                  }));
+                  return;
+                }
+              }
+            }
+
+            // 3. Persist the message
+            const newMessage = await storage.createConversationMessage({
+              conversationId,
+              senderId: ws.userId,
+              body: body.trim(),
+            });
+
+            // 4. Broadcast to all sockets in the room
+            const roomKey = `conversation:${conversationId}`;
+            const roomSockets = wsRooms.get(roomKey);
+            if (roomSockets) {
+              const broadcastMsg = JSON.stringify({
+                type: 'message:created',
+                conversationId,
+                message: newMessage,
+              });
+              
+              roomSockets.forEach((socket) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                  socket.send(broadcastMsg);
+                }
+              });
+            }
+
+            // 5. Send ACK to sender
+            ws.send(JSON.stringify({ 
+              type: 'message:ack', 
+              ok: true, 
+              message: newMessage,
+              tempId: message.tempId
+            }));
+            
+          } catch (error) {
+            console.error('Error sending message:', error);
+            ws.send(JSON.stringify({ 
+              type: 'message:ack', 
+              ok: false, 
+              code: 'SERVER_ERROR',
+              tempId: message.tempId
+            }));
+          }
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
@@ -1877,11 +2021,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('close', () => {
       console.log('WebSocket connection closed');
       
+      // Remove this socket from all rooms
+      if (ws.rooms) {
+        ws.rooms.forEach(roomKey => {
+          if (wsRooms.has(roomKey)) {
+            wsRooms.get(roomKey)!.delete(ws);
+            if (wsRooms.get(roomKey)!.size === 0) {
+              wsRooms.delete(roomKey);
+            }
+          }
+        });
+      }
+      
       // Remove this socket from the user's set
-      if (userId && wsClients.has(userId)) {
-        wsClients.get(userId)!.delete(ws);
-        if (wsClients.get(userId)!.size === 0) {
-          wsClients.delete(userId);
+      if (ws.userId && wsClients.has(ws.userId)) {
+        wsClients.get(ws.userId)!.delete(ws);
+        if (wsClients.get(ws.userId)!.size === 0) {
+          wsClients.delete(ws.userId);
         }
       }
     });

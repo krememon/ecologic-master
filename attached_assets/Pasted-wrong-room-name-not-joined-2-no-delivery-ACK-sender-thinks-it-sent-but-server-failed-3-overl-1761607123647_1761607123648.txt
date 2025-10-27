@@ -1,0 +1,155 @@
+wrong room name / not joined, 2) no delivery ACK (sender thinks it sent but server failed), 3) overly-strict “inactive” gate.
+
+1) WebSocket rooms (make sure both clients hear the same event)
+Server (Socket.IO style)
+// on connection (auth already done)
+io.on('connection', (socket) => {
+  // Join a thread room when user opens the DM
+  socket.on('thread:join', ({ companyId, pairKey }) => {
+    const room = `company:${companyId}:thread:${pairKey}`;
+    socket.join(room);
+    socket.data.companyId = companyId;
+    socket.data.rooms = socket.data.rooms || new Set();
+    socket.data.rooms.add(room);
+  });
+
+  socket.on('thread:leave', ({ companyId, pairKey }) => {
+    const room = `company:${companyId}:thread:${pairKey}`;
+    socket.leave(room);
+    socket.data?.rooms?.delete(room);
+  });
+
+  // Send message with ACK (see section 2)
+  socket.on('message:send', handleSendMessage);
+});
+
+Client (on chat screen mount / unmount)
+useEffect(() => {
+  if (!socket || !companyId || !pairKey) return;
+  socket.emit('thread:join', { companyId, pairKey });
+  return () => socket.emit('thread:leave', { companyId, pairKey });
+}, [socket, companyId, pairKey]);
+
+
+✅ This guarantees the sender and receiver are in exactly the same room:
+company:{companyId}:thread:{pairKey}.
+
+2) Delivery ACK + broadcast (so “send” is truly instant and reliable)
+Server: insert → broadcast → ACK
+async function handleSendMessage(payload, cb) {
+  try {
+    const { companyId, pairKey, senderId, recipientId, text } = payload;
+    // 0) Guard: only block if explicitly inactive
+    const recipient = await db.one('select status, is_active from employees where id=$1', [recipientId]);
+    const explicitlyInactive = recipient?.status === 'inactive' || recipient?.status === 'disabled' || recipient?.is_active === false;
+    if (explicitlyInactive) return cb?.({ ok:false, code:'RECIPIENT_INACTIVE' });
+
+    // 1) Persist
+    const msg = await db.one(
+      `insert into messages (thread_key, company_id, sender_id, recipient_id, text)
+       values ($1, $2, $3, $4, $5)
+       returning id, thread_key as "pairKey", company_id as "companyId", sender_id as "senderId", recipient_id as "recipientId", text, created_at as "createdAt"`,
+      [pairKey, companyId, senderId, recipientId, text]
+    );
+
+    // 2) Broadcast to the room both users joined
+    const room = `company:${companyId}:thread:${pairKey}`;
+    io.to(room).emit('message:created', msg);
+
+    // 3) Optional: poke thread list (unread counters)
+    io.to(`company:${companyId}`).emit('thread:touch', { pairKey, companyId, lastMessageAt: msg.createdAt });
+
+    // 4) ACK back to sender (so the UI can reconcile temp bubble)
+    cb?.({ ok:true, message: msg });
+  } catch (err) {
+    console.error('message:send failed', err);
+    cb?.({ ok:false, code:'SERVER_ERROR' });
+  }
+}
+
+Client: optimistic send + ACK reconcile + timeout
+const send = (text: string) => {
+  const tempId = crypto.randomUUID();
+  const optimistic = { id: tempId, text, senderId: meId, createdAt: new Date().toISOString(), pending: true };
+  setMessages((m) => [...m, optimistic]); // instant UI
+
+  let settled = false;
+  const timer = setTimeout(() => {
+    if (!settled) {
+      settled = true;
+      setMessages((m) => m.map(x => x.id === tempId ? { ...x, pending:false, failed:true } : x));
+      toast.error('Message failed — tap to retry');
+    }
+  }, 7000); // 7s safety
+
+  socket.emit(
+    'message:send',
+    { companyId, pairKey, senderId: meId, recipientId, text },
+    (res: { ok: boolean; code?: string; message?: any }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+
+      if (!res?.ok) {
+        setMessages((m) => m.map(x => x.id === tempId ? ({ ...x, pending:false, failed:true, error:res.code }) : x));
+        if (res?.code === 'RECIPIENT_INACTIVE') toast.error('Recipient is inactive');
+        else toast.error('Send failed');
+        return;
+      }
+      // Replace temp with server message
+      setMessages((m) => m.map(x => x.id === tempId ? res.message : x));
+    }
+  );
+};
+
+// Listener (both sender & receiver)
+useEffect(() => {
+  if (!socket) return;
+  const onCreated = (msg) => {
+    if (msg.pairKey !== pairKey) return;      // ignore other threads
+    setMessages((m) => {
+      // dedupe: if optimistic exists, replace it
+      const hasTemp = m.some(x => x.pending && x.text === msg.text && x.senderId === msg.senderId);
+      return hasTemp ? m.map(x => (x.pending && x.text === msg.text && x.senderId === msg.senderId) ? msg : x)
+                     : [...m, msg];
+    });
+  };
+  socket.on('message:created', onCreated);
+  return () => socket.off('message:created', onCreated);
+}, [socket, pairKey]);
+
+
+✅ Now the sender always knows if the server actually accepted the message.
+✅ The receiver gets it via message:created immediately (<100ms).
+
+3) Relax the “inactive user” gate (explicit only)
+
+If you still see “cannot receive messages,” ensure your DB defaults & checks are friendly:
+
+SQL (safe default)
+-- make sure it's default true (or active)
+alter table employees
+  alter column is_active set default true;
+
+update employees
+set is_active = true
+where is_active is null and (status is null or status not in ('inactive','disabled'));
+
+Client guard (unchanged from your description, but explicit)
+const explicitlyInactive = (u?: { status?: string; is_active?: boolean | null }) =>
+  u?.status === 'inactive' || u?.status === 'disabled' || u?.is_active === false;
+
+Quick verification (2 minutes)
+
+Open Owner (normal window) and Supervisor (Incognito).
+
+Navigate to the same DM (your pairKey hash guarantees same thread).
+
+Watch network tab / console on send:
+
+message:send → ACK { ok:true } within ~100–300ms
+
+Both screens receive message:created event.
+
+Turn a user inactive → send should be blocked with toast + no DB insert.
+Switch back to active → send works.
