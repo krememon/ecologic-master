@@ -1,0 +1,239 @@
+Awesome—let’s tighten up the chat screen.
+
+Here’s a focused, “do it in one shot” plan with drop-in code you (or your agent) can paste:
+
+1) Kill the random time-stamp bubbles
+
+Those bubbles are almost certainly messages with no text (or body) where the UI falls back to printing createdAt. We’ll render only real user/system messages and use one date separator per day.
+
+messageUtils.ts
+// Types you likely already have:
+export type Msg = {
+  id: string;
+  senderId: string;
+  text?: string;        // or "body"
+  type?: 'text'|'system';
+  createdAt: string | number | Date;
+};
+
+const toDayKey = (d: Date) =>
+  d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate();
+
+export const isRenderableMessage = (m: Msg) => {
+  const t = (m.text ?? '').trim();
+  if (m.type === 'system') return !!t;        // keep legit system notes
+  return t.length > 0;                        // hide empties / timestamp-only
+};
+
+export const groupByDay = (messages: Msg[]) => {
+  const out: Array<{day: string; items: Msg[]}> = [];
+  const map = new Map<string, Msg[]>();
+  messages.forEach((m) => {
+    const d = new Date(m.createdAt);
+    const k = toDayKey(d);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(m);
+  });
+  Array.from(map.entries())
+    .sort(([a],[b]) => (a<b?-1:1))
+    .forEach(([day, items]) => {
+      items.sort((a,b)=> +new Date(a.createdAt) - +new Date(b.createdAt));
+      out.push({ day, items });
+    });
+  return out;
+};
+
+export const formatDayLabel = (dayKey: string) => {
+  // e.g., "Today" / "Yesterday" / "Oct 15, 2025"
+  const [y,m,d] = dayKey.split('-').map(Number);
+  const day = new Date(y, m-1, d);
+  const today = new Date();
+  const diff = Math.floor((+today.setHours(0,0,0,0) - +day)/86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return day.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+};
+
+export const formatTime = (dt: Date) =>
+  dt.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' });
+
+ChatThread.tsx (the second screen list)
+import { isRenderableMessage, groupByDay, formatDayLabel, formatTime } from './messageUtils';
+
+const ChatThread = ({ rawMessages, meId }: { rawMessages: Msg[]; meId: string }) => {
+  const messages = (rawMessages ?? []).filter(isRenderableMessage);
+  const days = groupByDay(messages);
+
+  return (
+    <div className="space-y-6">
+      {days.map(({day, items}) => (
+        <div key={day}>
+          <div className="mx-auto my-3 w-fit rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-500">
+            {formatDayLabel(day)}
+          </div>
+
+          <div className="space-y-2">
+            {items.map(m => {
+              const mine = m.senderId === meId;
+              return (
+                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${mine ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                    <div>{m.text}</div>
+                    <div className="mt-1 text-[10px] opacity-60 text-right">
+                      {formatTime(new Date(m.createdAt))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+export default ChatThread;
+
+
+What this does
+
+Filters out empty messages (that were rendering as “6:46 PM”).
+
+Shows one date pill per day (“Today”, “Oct 15, 2025”).
+
+Keeps a small time under each bubble, not as separate bubbles.
+
+2) Fix “This user is inactive and cannot receive messages”
+
+That banner is coming from a guard like !recipient.isActive (or status !== 'active') that defaults to false when the field is missing. We’ll make the logic tolerant and only block if the user is explicitly inactive/disabled.
+
+Frontend guard (enable input unless explicitly inactive)
+type UserLite = { id: string; name: string; status?: 'active'|'inactive'|'disabled'; isActive?: boolean | null };
+
+const isExplicitlyInactive = (u?: UserLite | null) =>
+  u?.status === 'inactive' || u?.status === 'disabled' || u?.isActive === false;
+
+const canSendTo = (u?: UserLite | null) => !isExplicitlyInactive(u);
+
+// In your ChatInput component:
+const ChatInput = ({ recipient, onSend }: { recipient?: UserLite; onSend: (text:string)=>void; }) => {
+  const disabled = !canSendTo(recipient);
+  return (
+    <div className="border-t bg-white">
+      <div className="mx-4 my-3 flex items-center gap-2">
+        <input
+          placeholder="Type a message..."
+          className="flex-1 rounded-2xl border px-3 py-2 outline-none"
+          disabled={disabled}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const val = (e.target as HTMLInputElement).value.trim();
+              if (val) { onSend(val); (e.target as HTMLInputElement).value=''; }
+            }
+          }}
+        />
+        <button
+          className={`rounded-2xl px-3 py-2 ${disabled?'opacity-40 cursor-not-allowed':'hover:opacity-90'} bg-blue-400 text-white`}
+          disabled={disabled}
+          onClick={() => {
+            const el = document.activeElement as HTMLInputElement | null;
+            const val = (el?.value ?? '').trim();
+            if (val) { onSend(val); if (el) el.value=''; }
+          }}
+          aria-label="Send"
+        >✈️</button>
+      </div>
+
+      {isExplicitlyInactive(recipient) && (
+        <div className="mx-4 mb-3 text-xs text-red-500">
+          This user is inactive and cannot receive messages
+        </div>
+      )}
+    </div>
+  );
+};
+
+Backend (choose your stack)
+
+If you use Firestore:
+
+Make sure employee docs have isActive: true by default.
+
+Run a one-time fix to clean null/undefined to true.
+
+// scripts/fixActiveFlag.ts
+import { getFirestore } from 'firebase-admin/firestore';
+const db = getFirestore();
+
+async function main() {
+  const snap = await db.collection('employees').get();
+  const batch = db.batch();
+  snap.forEach(doc => {
+    const d = doc.data();
+    const status = d.status;                     // 'active' | 'inactive' | ...
+    const isActive = d.isActive;
+    const explicitlyInactive = status === 'inactive' || status === 'disabled' || isActive === false;
+    if (!explicitlyInactive && isActive !== true) {
+      batch.update(doc.ref, { isActive: true });
+    }
+  });
+  await batch.commit();
+  console.log('Normalized employee.isActive=true where not explicitly inactive.');
+}
+main();
+
+
+Loosen any server check that treats missing isActive as false. Example:
+
+// sendMessage cloud function / API
+if (recipient && recipient.isActive === false) {
+  throw new Error('RECIPIENT_INACTIVE');
+}
+// else allow; missing/true passes
+
+
+If you use Supabase/Postgres (Prisma):
+
+Default column: is_active BOOLEAN NOT NULL DEFAULT true.
+
+One-time fix:
+
+UPDATE employees
+SET is_active = TRUE
+WHERE is_active IS NULL
+  AND (status IS NULL OR status NOT IN ('inactive','disabled'));
+
+
+API guard:
+
+if (recipient && recipient.is_active === false) {
+  return res.status(403).json({ code:'RECIPIENT_INACTIVE' });
+}
+
+3) Make sure sending works end-to-end
+
+Hook the input to your send function and clear the banner:
+
+const handleSend = async (text: string) => {
+  // optimistic UI add
+  addLocalMessage({
+    id: crypto.randomUUID(),
+    text,
+    senderId: meId,
+    createdAt: new Date().toISOString(),
+    type: 'text'
+  });
+
+  // server call (replace with your client)
+  await api.messages.send({
+    threadId,
+    senderId: meId,
+    recipientId: recipient.id,
+    text
+  });
+};
+
+
+And pass it in:
+
+<ChatInput recipient={recipient} onSend={handleSend} />

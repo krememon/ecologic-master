@@ -9,8 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, Send, Loader2, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow, format, isToday, isYesterday, isSameDay } from "date-fns";
 import { useLocation } from "wouter";
+import { isRenderableMessage, groupByDay, formatDayLabel, formatTime, MessageType as MsgType } from "@/lib/messageUtils";
 
 interface MessageType {
   id: number | string; // Allow string for optimistic IDs
@@ -272,15 +272,6 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const formatMessageTime = (date: Date) => {
-    if (isToday(date)) {
-      return format(date, 'h:mm a');
-    } else if (isYesterday(date)) {
-      return `Yesterday ${format(date, 'h:mm a')}`;
-    } else {
-      return format(date, 'MMM d, h:mm a');
-    }
-  };
 
   // Error state for invalid route
   if (!conversationId) {
@@ -366,49 +357,60 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            {messages.map((msg, idx) => {
-              const isCurrentUser = msg.senderId === user?.id;
-              const showDate = idx === 0 || !isSameDay(msg.createdAt, messages[idx - 1].createdAt);
+          <div className="space-y-6">
+            {(() => {
+              // Filter out empty messages and group by day
+              const renderableMessages = messages.filter(isRenderableMessage);
+              const days = groupByDay(renderableMessages);
 
-              return (
-                <div key={msg.id}>
-                  {showDate && (
-                    <div className="flex justify-center my-4">
-                      <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                        {isToday(msg.createdAt) ? 'Today' : isYesterday(msg.createdAt) ? 'Yesterday' : format(msg.createdAt, 'MMMM d, yyyy')}
-                      </span>
-                    </div>
-                  )}
-                  <div
-                    className={cn(
-                      "flex gap-2 max-w-[80%]",
-                      isCurrentUser ? "ml-auto flex-row-reverse" : "mr-auto"
-                    )}
-                    data-testid={`message-${msg.id}`}
-                  >
-                    <div
-                      className={cn(
-                        "rounded-2xl px-4 py-2 break-words",
-                        isCurrentUser
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted",
-                        (msg as MessageType).isPending && "opacity-60",
-                        (msg as MessageType).isFailed && "opacity-40 border-2 border-destructive"
-                      )}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        isCurrentUser ? "text-primary-foreground/70" : "text-muted-foreground"
-                      )}>
-                        {(msg as MessageType).isPending ? "Sending..." : (msg as MessageType).isFailed ? "Failed" : formatMessageTime(msg.createdAt)}
-                      </p>
-                    </div>
+              return days.map(({ day, items }) => (
+                <div key={day}>
+                  {/* Day separator */}
+                  <div className="flex justify-center my-3">
+                    <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                      {formatDayLabel(day)}
+                    </span>
+                  </div>
+
+                  {/* Messages for this day */}
+                  <div className="space-y-2">
+                    {items.map((msg) => {
+                      const isCurrentUser = msg.senderId === user?.id;
+
+                      return (
+                        <div
+                          key={msg.id}
+                          className={cn(
+                            "flex max-w-[75%]",
+                            isCurrentUser ? "ml-auto justify-end" : "mr-auto justify-start"
+                          )}
+                          data-testid={`message-${msg.id}`}
+                        >
+                          <div
+                            className={cn(
+                              "rounded-2xl px-3 py-2 break-words",
+                              isCurrentUser
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted",
+                              msg.isPending && "opacity-60",
+                              msg.isFailed && "opacity-40 border-2 border-destructive"
+                            )}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                            <p className={cn(
+                              "text-[10px] mt-1 text-right",
+                              isCurrentUser ? "text-primary-foreground/60" : "text-muted-foreground/60"
+                            )}>
+                              {msg.isPending ? "Sending..." : msg.isFailed ? "Failed" : formatTime(msg.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
+              ));
+            })()}
             {isTyping && (
               <div className="flex gap-2 max-w-[80%] mr-auto">
                 <div className="bg-muted rounded-2xl px-4 py-2">
