@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -1853,6 +1854,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============== DEBUG ENDPOINTS ==============
+  // These endpoints help test WebSocket room subscriptions and message delivery
+  // PROTECTED: Only available in development environment
+  
+  // Middleware to gate debug endpoints to development only
+  const isDevelopment = (req: any, res: any, next: any) => {
+    if (process.env.NODE_ENV !== 'development') {
+      return res.status(404).json({ message: 'Not found' });
+    }
+    next();
+  };
+  
+  // Inject a server-generated message (no DB) to isolate socket delivery
+  app.post('/debug/inject-message', isDevelopment, isAuthenticated, (req, res) => {
+    try {
+      const { conversationId, text = 'SERVER TEST MESSAGE' } = req.body || {};
+      
+      if (!conversationId) {
+        return res.status(400).json({ ok: false, code: 'BAD_ARGS', message: 'conversationId required' });
+      }
+      
+      const roomKey = conversationRoom(conversationId);
+      const roomSockets = wsRooms.get(roomKey);
+      
+      if (!roomSockets || roomSockets.size === 0) {
+        return res.json({ 
+          ok: false, 
+          code: 'NO_SOCKETS',
+          message: `No sockets in room ${roomKey}`,
+          roomKey
+        });
+      }
+      
+      const testMessage = {
+        id: 'debug-' + Math.random().toString(36).slice(2),
+        conversationId,
+        senderId: 'SERVER',
+        body: text,
+        createdAt: new Date().toISOString(),
+        isDebug: true
+      };
+      
+      const broadcastMsg = JSON.stringify({
+        type: 'message:created',
+        conversationId,
+        message: testMessage,
+      });
+      
+      let sentCount = 0;
+      roomSockets.forEach((socket) => {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(broadcastMsg);
+          sentCount++;
+        }
+      });
+      
+      console.log(`[DEBUG:INJECT] Sent test message to ${sentCount}/${roomSockets.size} sockets in ${roomKey}`);
+      
+      res.json({ 
+        ok: true, 
+        message: testMessage,
+        roomKey,
+        socketCount: roomSockets.size,
+        sentCount
+      });
+    } catch (error: any) {
+      console.error('[DEBUG:INJECT] Error:', error);
+      res.status(500).json({ ok: false, code: 'SERVER_ERROR', detail: error?.message });
+    }
+  });
+  
+  // Get last 50 messages from DB for a conversation
+  app.get('/debug/messages', isDevelopment, isAuthenticated, async (req: any, res) => {
+    try {
+      const conversationId = parseInt(req.query.conversationId as string);
+      
+      if (!conversationId) {
+        return res.status(400).json({ ok: false, code: 'BAD_ARGS', message: 'conversationId required' });
+      }
+      
+      const messages = await storage.getConversationMessages(conversationId, 50);
+      const roomKey = conversationRoom(conversationId);
+      const roomSockets = wsRooms.get(roomKey);
+      
+      res.json({ 
+        ok: true, 
+        conversationId,
+        messageCount: messages.length,
+        messages,
+        roomInfo: {
+          roomKey,
+          socketCount: roomSockets?.size || 0
+        }
+      });
+    } catch (error: any) {
+      console.error('[DEBUG:MESSAGES] Error:', error);
+      res.status(500).json({ ok: false, code: 'SERVER_ERROR', detail: error?.message });
+    }
+  });
+  
+  // Get WebSocket room status
+  app.get('/debug/rooms', isDevelopment, isAuthenticated, (req, res) => {
+    try {
+      const rooms: Record<string, number> = {};
+      wsRooms.forEach((sockets, roomKey) => {
+        rooms[roomKey] = sockets.size;
+      });
+      
+      const users: Record<string, number> = {};
+      wsClients.forEach((sockets, userId) => {
+        users[userId] = sockets.size;
+      });
+      
+      res.json({
+        ok: true,
+        totalRooms: wsRooms.size,
+        totalUsers: wsClients.size,
+        rooms,
+        users
+      });
+    } catch (error: any) {
+      console.error('[DEBUG:ROOMS] Error:', error);
+      res.status(500).json({ ok: false, code: 'SERVER_ERROR', detail: error?.message });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -1884,63 +2011,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Handle thread:join - user joins a conversation room
         else if (message.type === 'thread:join' && ws.userId) {
-          const { conversationId } = message;
-          if (!conversationId) return;
-          
-          const roomKey = `conversation:${conversationId}`;
-          
-          // Add socket to room
-          if (!wsRooms.has(roomKey)) {
-            wsRooms.set(roomKey, new Set());
+          try {
+            const { conversationId } = message;
+            if (!conversationId) {
+              ws.send(JSON.stringify({ 
+                type: 'thread:join:ack', 
+                ok: false, 
+                code: 'BAD_ARGS',
+                requestId: message.requestId
+              }));
+              return;
+            }
+            
+            const roomKey = conversationRoom(conversationId);
+            
+            // Add socket to room
+            if (!wsRooms.has(roomKey)) {
+              wsRooms.set(roomKey, new Set());
+            }
+            wsRooms.get(roomKey)!.add(ws);
+            ws.rooms!.add(roomKey);
+            
+            console.log(`[WS:JOIN] User ${ws.userId} joined ${roomKey}, room now has ${wsRooms.get(roomKey)!.size} sockets`);
+            
+            // Send ACK
+            ws.send(JSON.stringify({ 
+              type: 'thread:join:ack', 
+              ok: true, 
+              room: roomKey,
+              conversationId,
+              requestId: message.requestId
+            }));
+          } catch (error) {
+            console.error('[WS:JOIN] Error:', error);
+            ws.send(JSON.stringify({ 
+              type: 'thread:join:ack', 
+              ok: false, 
+              code: 'SERVER_ERROR',
+              requestId: message.requestId
+            }));
           }
-          wsRooms.get(roomKey)!.add(ws);
-          ws.rooms!.add(roomKey);
-          
-          console.log(`User ${ws.userId} joined ${roomKey}`);
         }
         
         // Handle thread:leave - user leaves a conversation room
         else if (message.type === 'thread:leave') {
-          const { conversationId } = message;
-          if (!conversationId) return;
-          
-          const roomKey = `conversation:${conversationId}`;
-          
-          // Remove socket from room
-          if (wsRooms.has(roomKey)) {
-            wsRooms.get(roomKey)!.delete(ws);
-            if (wsRooms.get(roomKey)!.size === 0) {
-              wsRooms.delete(roomKey);
+          try {
+            const { conversationId } = message;
+            if (!conversationId) {
+              ws.send(JSON.stringify({ 
+                type: 'thread:leave:ack', 
+                ok: false, 
+                code: 'BAD_ARGS',
+                requestId: message.requestId
+              }));
+              return;
             }
+            
+            const roomKey = conversationRoom(conversationId);
+            
+            // Remove socket from room
+            if (wsRooms.has(roomKey)) {
+              wsRooms.get(roomKey)!.delete(ws);
+              const remainingCount = wsRooms.get(roomKey)!.size;
+              console.log(`[WS:LEAVE] User ${ws.userId} left ${roomKey}, ${remainingCount} sockets remaining`);
+              
+              if (remainingCount === 0) {
+                wsRooms.delete(roomKey);
+                console.log(`[WS:LEAVE] Room ${roomKey} deleted (empty)`);
+              }
+            }
+            ws.rooms!.delete(roomKey);
+            
+            // Send ACK
+            ws.send(JSON.stringify({ 
+              type: 'thread:leave:ack', 
+              ok: true,
+              conversationId,
+              requestId: message.requestId
+            }));
+          } catch (error) {
+            console.error('[WS:LEAVE] Error:', error);
+            ws.send(JSON.stringify({ 
+              type: 'thread:leave:ack', 
+              ok: false, 
+              code: 'SERVER_ERROR',
+              requestId: message.requestId
+            }));
           }
-          ws.rooms!.delete(roomKey);
-          
-          console.log(`User ${ws.userId} left ${roomKey}`);
+        }
+        
+        // Handle ping - health check
+        else if (message.type === 'ping') {
+          ws.send(JSON.stringify({ 
+            type: 'pong', 
+            ok: true, 
+            ts: Date.now(), 
+            echo: message.payload,
+            requestId: message.requestId
+          }));
         }
         
         // Handle message:send - send message with ACK
         else if (message.type === 'message:send' && ws.userId) {
-          const { conversationId, body, recipientId } = message;
+          const t0 = Date.now();
+          const { conversationId, body, recipientId, tempId } = message;
           
           if (!conversationId || !body?.trim()) {
             ws.send(JSON.stringify({ 
               type: 'message:ack', 
               ok: false, 
               code: 'INVALID_REQUEST',
-              tempId: message.tempId
+              tempId
             }));
             return;
           }
 
           try {
+            const roomKey = conversationRoom(conversationId);
+            
+            // Verify socket joined this room (auto-join if not for tolerance)
+            const joined = ws.rooms?.has(roomKey);
+            if (!joined) {
+              console.log(`[WS:SEND] Socket not in room ${roomKey}, auto-joining`);
+              if (!wsRooms.has(roomKey)) {
+                wsRooms.set(roomKey, new Set());
+              }
+              wsRooms.get(roomKey)!.add(ws);
+              ws.rooms!.add(roomKey);
+            }
+            
             // 1. Verify user is a participant
             const participant = await storage.getConversationParticipant(conversationId, ws.userId);
             if (!participant) {
+              console.log(`[WS:SEND] User ${ws.userId} not a participant in conversation ${conversationId}`);
               ws.send(JSON.stringify({ 
                 type: 'message:ack', 
                 ok: false, 
                 code: 'NOT_PARTICIPANT',
-                tempId: message.tempId
+                tempId
               }));
               return;
             }
@@ -1981,7 +2189,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
 
             // 4. Broadcast to all sockets in the room
-            const roomKey = `conversation:${conversationId}`;
             const roomSockets = wsRooms.get(roomKey);
             if (roomSockets) {
               const broadcastMsg = JSON.stringify({
@@ -1990,28 +2197,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 message: newMessage,
               });
               
+              let broadcastCount = 0;
               roomSockets.forEach((socket) => {
                 if (socket.readyState === WebSocket.OPEN) {
                   socket.send(broadcastMsg);
+                  broadcastCount++;
                 }
               });
+              
+              console.log(`[WS:SEND] Broadcast message ${newMessage.id} to ${broadcastCount}/${roomSockets.size} sockets in ${roomKey}`);
+            } else {
+              console.log(`[WS:SEND] Warning: Room ${roomKey} has no sockets`);
             }
 
             // 5. Send ACK to sender
+            const dt = Date.now() - t0;
+            console.log(`[WS:SEND] Message ${newMessage.id} sent successfully in ${dt}ms`);
             ws.send(JSON.stringify({ 
               type: 'message:ack', 
               ok: true, 
               message: newMessage,
-              tempId: message.tempId
+              tempId,
+              dt
             }));
             
-          } catch (error) {
-            console.error('Error sending message:', error);
+          } catch (error: any) {
+            const dt = Date.now() - t0;
+            console.error(`[WS:SEND] Error after ${dt}ms:`, error?.message || error);
             ws.send(JSON.stringify({ 
               type: 'message:ack', 
               ok: false, 
               code: 'SERVER_ERROR',
-              tempId: message.tempId
+              detail: error?.message?.slice(0, 200),
+              tempId,
+              dt
             }));
           }
         }

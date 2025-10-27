@@ -170,8 +170,13 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     setOptimisticMessages(prev => [...prev, optimisticMessage]);
     setMessageBody("");
 
+    console.log(`[WS:SEND] →`, { conversationId: currentConvId, recipientId: otherUser?.id, text: body.trim().slice(0, 50), tempId });
+
     // Set timeout for failed state (7 seconds)
+    const t0 = Date.now();
     const timeoutId = setTimeout(() => {
+      const elapsed = Date.now() - t0;
+      console.warn(`[WS:SEND] Timeout after ${elapsed}ms for tempId ${tempId}`);
       setOptimisticMessages(prev =>
         prev.map(msg =>
           msg.id === tempId ? { ...msg, isPending: false, isFailed: true } : msg
@@ -192,6 +197,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         recipientId: otherUser?.id,
         body: body.trim(),
         tempId,
+        requestId: `send-${Date.now()}`
       })
     );
 
@@ -222,14 +228,19 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
+      console.log(`[WS:OPEN] Connected to WebSocket`);
+      
       // Authenticate
       ws.current?.send(JSON.stringify({ type: "auth", userId: user.id }));
+      console.log(`[WS:AUTH] Sent auth for userId: ${user.id}`);
       
       // Join conversation room
       setTimeout(() => {
+        console.log(`[WS:JOIN] Joining conversation room ${currentConvId}`);
         ws.current?.send(JSON.stringify({ 
           type: "thread:join", 
-          conversationId: currentConvId 
+          conversationId: currentConvId,
+          requestId: `join-${Date.now()}`
         }));
       }, 100);
     };
@@ -237,9 +248,28 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
+      // Handle join ACK
+      if (data.type === "thread:join:ack") {
+        if (data.ok) {
+          console.log(`[WS:JOIN:ACK] ✓ Joined room ${data.room}`, data);
+        } else {
+          console.error(`[WS:JOIN:ACK] ✗ Failed to join room:`, data.code);
+        }
+      }
+      
+      // Handle leave ACK
+      else if (data.type === "thread:leave:ack") {
+        if (data.ok) {
+          console.log(`[WS:LEAVE:ACK] ✓ Left conversation ${data.conversationId}`);
+        } else {
+          console.error(`[WS:LEAVE:ACK] ✗ Failed to leave:`, data.code);
+        }
+      }
+      
       // Handle message acknowledgment
-      if (data.type === "message:ack") {
-        const { ok, tempId, message, code } = data;
+      else if (data.type === "message:ack") {
+        const { ok, tempId, message, code, dt } = data;
+        console.log(`[WS:SEND:ACK] ${ok ? '✓' : '✗'} tempId: ${tempId}, dt: ${dt}ms`, { ok, code });
         
         if (ok && message) {
           // Clear timeout
@@ -292,6 +322,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       
       // Handle new message broadcast
       else if (data.type === "message:created" && data.conversationId === currentConvId) {
+        console.log(`[WS:BROADCAST] Received message:created for conversation ${currentConvId}`, data.message);
         // Invalidate queries to fetch new message
         queryClient.invalidateQueries({
           queryKey: ["/api/conversations", currentConvId, "messages"],
@@ -308,12 +339,15 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     return () => {
       // Leave conversation room before closing
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        console.log(`[WS:LEAVE] Leaving conversation room ${currentConvId}`);
         ws.current.send(JSON.stringify({ 
           type: "thread:leave", 
-          conversationId: currentConvId 
+          conversationId: currentConvId,
+          requestId: `leave-${Date.now()}`
         }));
       }
       
+      console.log(`[WS:CLOSE] Closing WebSocket connection`);
       ws.current?.close();
     };
   }, [user, currentConvId]);
