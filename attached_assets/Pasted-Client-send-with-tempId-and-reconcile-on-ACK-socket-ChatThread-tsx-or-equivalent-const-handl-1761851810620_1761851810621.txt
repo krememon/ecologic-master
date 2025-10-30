@@ -1,0 +1,129 @@
+Client: send with tempId and reconcile on ACK / socket
+// ChatThread.tsx (or equivalent)
+const handleSend = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+
+  const tempId = crypto.randomUUID();
+  const optimistic = {
+    id: tempId,          // temp id used in UI
+    tempId,              // keep explicitly
+    conversationId,
+    senderId: meId,
+    recipientId,
+    text: trimmed,
+    createdAt: new Date().toISOString(),
+    pending: true
+  };
+
+  setMessages(prev => [...prev, optimistic]);   // append, don't replace
+
+  socket.emit(
+    'message:send',
+    { conversationId, senderId: meId, recipientId, text: trimmed, tempId },   // <—
+    (ack: any) => {
+      // If server accepted, replace temp by the real one using tempId
+      if (ack?.ok && ack.message) {
+        setMessages(prev =>
+          prev.map(m => (m.tempId && m.tempId === ack.message.tempId) ? ack.message : m)
+        );
+      } else if (ack && ack.ok === false) {
+        // Mark failed but KEEP in UI; user can retry
+        setMessages(prev =>
+          prev.map(m => (m.id === tempId ? { ...m, pending: false, failed: true, error: ack.code } : m))
+        );
+      }
+    }
+  );
+};
+
+// Socket listener: merge, don’t clobber
+useEffect(() => {
+  if (!socket || !conversationId) return;
+
+  const onIncoming = (msg: any) => {
+    if (msg.conversationId !== conversationId) return;
+
+    setMessages(prev => {
+      // If this is the server’s version of our optimistic, replace
+      const hadTemp = prev.some(m => m.tempId && m.tempId === msg.tempId);
+      if (hadTemp) {
+        return prev.map(m => (m.tempId === msg.tempId ? msg : m));
+      }
+      // Otherwise, avoid dupes by id
+      const exists = prev.some(m => m.id === msg.id);
+      return exists ? prev : [...prev, msg];
+    });
+  };
+
+  socket.on('message:created', onIncoming);
+  return () => socket.off('message:created', onIncoming);
+}, [socket, conversationId]);
+
+2) Server: carry tempId through ACK and broadcast
+// handleSendMessage.ts
+export async function handleSendMessage(io, socket, payload, cb) {
+  try {
+    const { conversationId, senderId, recipientId, text, tempId } = payload || {};
+    if (!conversationId || !senderId || !recipientId || !text?.trim()) {
+      return cb?.({ ok:false, code:'BAD_ARGS' });
+    }
+
+    const row = await db.one(
+      `insert into messages (conversation_id, sender_id, recipient_id, text)
+       values ($1,$2,$3,$4)
+       returning id,
+                 conversation_id as "conversationId",
+                 sender_id as "senderId",
+                 recipient_id as "recipientId",
+                 text,
+                 created_at as "createdAt"`,
+      [conversationId, senderId, recipientId, text.trim()]
+    );
+
+    const message = { ...row, tempId }; // echo back the client’s tempId
+
+    io.to(`conversation:${conversationId}`).emit('message:created', message);
+    cb?.({ ok:true, message });
+  } catch (e:any) {
+    cb?.({ ok:false, code:'SERVER_ERROR', detail:(e?.message||'').slice(0,200) });
+  }
+}
+
+3) Never clobber messages on fetch
+
+If you have a history loader like loadMessages(conversationId), merge instead of replacing:
+
+// After fetching `list` from API:
+setMessages(prev => {
+  const byId = new Map(prev.map(m => [m.id, m]));
+  // Keep pending/failed optimistics that don’t have a real id yet
+  prev.forEach(m => { if (m.pending || m.failed) byId.set(m.id, m); });
+  list.forEach(m => byId.set(m.id, m));
+  return Array.from(byId.values()).sort(
+    (a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+});
+
+
+This prevents the “optimistic bubble appears → fetch finishes → overwrite → bubble disappears” race.
+
+4) Sorting & types (easy stability wins)
+
+Ensure server returns ISO strings (created_at::text) or the driver does it already.
+
+When comparing conversationId, coerce to the same type (String(conversationId) on both sides) to avoid mismatches.
+
+Quick test (60 seconds)
+
+Open two browsers in the same conversation.
+
+Send “hi”.
+
+You should see the temp bubble with pending.
+
+Within ~100ms, it turns into the real message (same spot).
+
+It stays even if a history fetch completes.
+
+Turn the recipient inactive and send again: message stays as failed:true (no disappearance).

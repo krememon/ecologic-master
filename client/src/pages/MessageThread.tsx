@@ -322,8 +322,23 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       
       // Handle new message broadcast
       else if (data.type === "message:created" && data.conversationId === currentConvId) {
-        console.log(`[WS:BROADCAST] Received message:created for conversation ${currentConvId}`, data.message);
-        // Invalidate queries to fetch new message
+        const incomingMsg = data.message;
+        console.log(`[WS:BROADCAST] Received message:created for conversation ${currentConvId}`, incomingMsg);
+        
+        // Reconcile optimistic messages using tempId
+        setOptimisticMessages(prev => {
+          // If this message has a tempId matching an optimistic message, replace it
+          if (incomingMsg.tempId) {
+            const hadTemp = prev.some(m => m.id === incomingMsg.tempId);
+            if (hadTemp) {
+              console.log(`[WS:BROADCAST] Replacing optimistic message ${incomingMsg.tempId} with real message ${incomingMsg.id}`);
+              return prev.filter(m => m.id !== incomingMsg.tempId);
+            }
+          }
+          return prev;
+        });
+        
+        // Invalidate queries to fetch/update message list
         queryClient.invalidateQueries({
           queryKey: ["/api/conversations", currentConvId, "messages"],
         });

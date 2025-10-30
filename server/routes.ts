@@ -2194,7 +2194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const broadcastMsg = JSON.stringify({
                 type: 'message:created',
                 conversationId,
-                message: newMessage,
+                message: { ...newMessage, tempId },
               });
               
               let broadcastCount = 0;
