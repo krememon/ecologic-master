@@ -1,0 +1,196 @@
+Symptom
+
+On codetest account, clicking the Owner in Messages shows:
+“You don't have access to message this user.”
+
+Owner can DM others; others can’t DM Owner (or can’t load the DM thread).
+
+Goal
+
+If both users are active and in the same company, they can DM each other.
+
+Automatically upsert (get-or-create) the 1:1 conversation and its membership.
+
+Lock down access so only these two members can read/join/send in that conversation.
+
+1) Database contracts
+a) Conversations table (1:1)
+-- conversations: one row per pair within a company
+-- "pair_key" = sha256(company_id || ':' || sort(user_a_id, user_b_id))
+create table if not exists conversations (
+  id            bigserial primary key,
+  company_id    bigint not null,
+  pair_key      text   not null unique,
+  created_at    timestamptz not null default now()
+);
+create index if not exists conversations_company_idx on conversations(company_id);
+
+b) Conversation members
+create table if not exists conversation_members (
+  conversation_id bigint not null references conversations(id) on delete cascade,
+  user_id         bigint not null,
+  role            text   not null default 'member',
+  primary key (conversation_id, user_id)
+);
+
+
+(If these already exist, ensure constraints match the intent.)
+
+2) Server: getOrCreate conversation (Owner must be included)
+// util: deterministic pair key
+import crypto from 'crypto';
+function makePairKey(companyId: number|string, a: number|string, b: number|string) {
+  const [x, y] = [String(a), String(b)].sort();
+  return crypto.createHash('sha256').update(`${companyId}:${x}:${y}`).digest('hex');
+}
+
+// API: POST /api/conversations/upsert
+// body: { companyId, userAId, userBId }
+export async function upsertConversation(req, res) {
+  const { companyId, userAId, userBId } = req.body;
+  const me = req.auth.userId; // current session user
+
+  // 1) Only allow if the caller is one of the participants
+  if (![userAId, userBId].map(String).includes(String(me))) {
+    return res.status(403).json({ ok:false, code:'NOT_PARTICIPANT' });
+  }
+
+  // 2) Verify both users are ACTIVE and belong to the same company
+  const rows = await db.manyOrNone(
+    `select id, company_id, status from users where id in ($1,$2)`,
+    [userAId, userBId]
+  );
+  if (rows.length !== 2) return res.status(404).json({ ok:false, code:'USER_NOT_FOUND' });
+  if (!(rows.every(r => String(r.company_id) === String(companyId)))) {
+    return res.status(403).json({ ok:false, code:'DIFFERENT_COMPANY' });
+  }
+  if (rows.some(r => r.status in ('inactive','disabled'))) {
+    return res.status(403).json({ ok:false, code:'USER_INACTIVE' });
+  }
+
+  // 3) Upsert conversation + membership
+  const pairKey = makePairKey(companyId, userAId, userBId);
+  const convo = await db.one(
+    `insert into conversations (company_id, pair_key)
+       values ($1, $2)
+     on conflict (pair_key) do update set pair_key = excluded.pair_key
+     returning id`,
+    [companyId, pairKey]
+  );
+
+  await db.none(
+    `insert into conversation_members (conversation_id, user_id)
+       values ($1, $2)
+     on conflict (conversation_id, user_id) do nothing`,
+    [convo.id, userAId]
+  );
+  await db.none(
+    `insert into conversation_members (conversation_id, user_id)
+       values ($1, $2)
+     on conflict (conversation_id, user_id) do nothing`,
+    [convo.id, userBId]
+  );
+
+  return res.json({ ok:true, conversationId: convo.id });
+}
+
+3) Server: guarded reads and WebSocket join
+a) Read conversation (loader for DM screen)
+// GET /api/conversations/:id
+export async function getConversation(req, res) {
+  const me = req.auth.userId;
+  const { id } = req.params;
+
+  const member = await db.oneOrNone(
+    `select cm.user_id
+       from conversation_members cm
+      where cm.conversation_id = $1 and cm.user_id = $2`,
+    [id, me]
+  );
+  if (!member) return res.status(403).json({ ok:false, code:'NOT_A_MEMBER' });
+
+  // return basic info + other participant
+  const other = await db.one(
+    `select u.id, u.name, u.role from conversation_members cm
+      join users u on u.id = cm.user_id
+     where cm.conversation_id = $1 and cm.user_id <> $2`,
+    [id, me]
+  );
+  return res.json({ ok:true, conversationId: Number(id), other });
+}
+
+b) WebSocket room join must enforce membership
+io.on('connection', (socket) => {
+  socket.on('thread:join', async ({ conversationId }, cb) => {
+    const me = socket.data.userId;
+    const isMember = await db.oneOrNone(
+      `select 1 from conversation_members where conversation_id=$1 and user_id=$2`,
+      [conversationId, me]
+    );
+    if (!isMember) return cb?.({ ok:false, code:'NOT_A_MEMBER' });
+
+    socket.join(`conversation:${conversationId}`);
+    cb?.({ ok:true, room:`conversation:${conversationId}` });
+  });
+});
+
+4) Server: message:send must check membership (not role)
+// payload: { conversationId, text }
+socket.on('message:send', async (payload, cb) => {
+  const me = socket.data.userId;
+  const { conversationId, text } = payload || {};
+
+  // Membership check (NOT role check)
+  const isMember = await db.oneOrNone(
+    `select 1 from conversation_members where conversation_id=$1 and user_id=$2`,
+    [conversationId, me]
+  );
+  if (!isMember) return cb?.({ ok:false, code:'NOT_A_MEMBER' });
+
+  // Insert + broadcast ...
+});
+
+
+🔴 If you currently gate on role='owner' or “employees only”, remove that: membership within the same company is the only requirement.
+
+5) Frontend: open DM flow should call upsert before navigate
+
+When user taps a name in Messages:
+
+// click handler from user list
+const startDM = async (otherUserId: string) => {
+  const { ok, conversationId, code } = await api.post('/api/conversations/upsert', {
+    companyId, userAId: meId, userBId: otherUserId
+  });
+  if (!ok) {
+    toast.error(code === 'DIFFERENT_COMPANY' ? 'Different company' : 'Unable to start chat');
+    return;
+  }
+  navigate(`/chat/${conversationId}`);
+};
+
+6) Error mapping (fix your “Unable to load” screen)
+
+Map API codes → friendly messages:
+
+NOT_A_MEMBER → “You’re not part of this conversation.”
+
+DIFFERENT_COMPANY → “You can only message teammates in your company.”
+
+USER_INACTIVE → “That user is inactive.”
+
+Don’t default to a blanket “no access” if the fix is simply to upsert membership.
+
+✅ Acceptance tests
+
+Log in as Owner and as codetest (another user), same company.
+
+From codetest, click Owner → it should upsert and open the DM.
+
+No “You don’t have access” error.
+
+Both users can send/receive instantly.
+
+Mark Owner inactive → starting a new DM returns USER_INACTIVE; existing conversations still block sends with the same code.
+
+Users from different companies get DIFFERENT_COMPANY.
