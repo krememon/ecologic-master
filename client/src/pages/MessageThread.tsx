@@ -5,12 +5,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, Send, Loader2, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { isRenderableMessage, groupByDay, formatDayLabel, formatTime, mergeMessages, MessageType as MsgType } from "@/lib/messageUtils";
+import { motion, useSpring, useTransform, MotionValue } from "framer-motion";
 
 interface MessageType {
   id: number | string; // Allow string for optimistic IDs
@@ -59,6 +59,12 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ws = useRef<WebSocket | null>(null);
   const genRef = useRef(0);
+
+  // Swipe-to-reveal timestamps state
+  const progress = useSpring(0, { stiffness: 260, damping: 30 });
+  const rawProgressRef = useRef(0);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
 
   // Detect if this is a userId or conversationId based on the URL path
   const isUserId = location.startsWith('/messages/u/');
@@ -403,6 +409,44 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     return name.slice(0, 2).toUpperCase();
   };
 
+  // Swipe-to-reveal timestamp handlers
+  const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    startRef.current = { x: e.clientX, y: e.clientY };
+    draggingRef.current = false;
+  };
+
+  const onPointerMove: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!startRef.current) return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+
+    // Start horizontal gesture only if mostly horizontal and moved enough
+    if (!draggingRef.current) {
+      if (Math.abs(dx) < 8) return;
+      if (Math.abs(dx) <= Math.abs(dy)) return; // Vertical scroll wins
+      draggingRef.current = true;
+      e.preventDefault();
+    }
+
+    if (draggingRef.current) {
+      e.preventDefault();
+      // Only consider left drag (negative dx)
+      const left = Math.min(0, dx);
+      const p = Math.min(1, Math.max(0, -left / 80)); // 0..1 over ~80px
+      rawProgressRef.current = p;
+      progress.set(p);
+    }
+  };
+
+  const onPointerUpOrLeave = () => {
+    startRef.current = null;
+    draggingRef.current = false;
+    // Snap back
+    progress.stop();
+    progress.set(0);
+    rawProgressRef.current = 0;
+  };
+
 
   // Error state for invalid route
   if (!conversationId) {
@@ -474,7 +518,15 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       </div>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4" data-testid="scroll-area-messages">
+      <div 
+        className="flex-1 overflow-y-auto p-4 touch-pan-y" 
+        data-testid="scroll-area-messages"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUpOrLeave}
+        onPointerCancel={onPointerUpOrLeave}
+        onPointerLeave={onPointerUpOrLeave}
+      >
         {dmLoading || messagesLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -509,33 +561,13 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
                       const isCurrentUser = msg.senderId === user?.id;
 
                       return (
-                        <div
+                        <MessageBubble
                           key={msg.id}
-                          className={cn(
-                            "flex max-w-[75%]",
-                            isCurrentUser ? "ml-auto justify-end" : "mr-auto justify-start"
-                          )}
-                          data-testid={`message-${msg.id}`}
-                        >
-                          <div
-                            className={cn(
-                              "rounded-2xl px-3 py-2 break-words",
-                              isCurrentUser
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted",
-                              msg.isPending && "opacity-60",
-                              msg.isFailed && "opacity-40 border-2 border-destructive"
-                            )}
-                          >
-                            <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                            <p className={cn(
-                              "text-[10px] mt-1 text-right",
-                              isCurrentUser ? "text-primary-foreground/60" : "text-muted-foreground/60"
-                            )}>
-                              {msg.isPending ? "Sending..." : msg.isFailed ? "Failed" : formatTime(msg.createdAt)}
-                            </p>
-                          </div>
-                        </div>
+                          msg={msg}
+                          isCurrentUser={isCurrentUser}
+                          progress={progress}
+                          userId={user?.id}
+                        />
                       );
                     })}
                   </div>
@@ -556,7 +588,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             <div ref={messagesEndRef} />
           </div>
         )}
-      </ScrollArea>
+      </div>
 
       {/* Composer */}
       <div className="p-4 border-t border-border bg-card">
@@ -588,6 +620,54 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// Message bubble component with swipe-to-reveal timestamp
+interface MessageBubbleProps {
+  msg: MessageType;
+  isCurrentUser: boolean;
+  progress: MotionValue<number>;
+  userId?: string;
+}
+
+function MessageBubble({ msg, isCurrentUser, progress, userId }: MessageBubbleProps) {
+  const timeStr = msg.isPending ? "Sending..." : msg.isFailed ? "Failed" : formatTime(msg.createdAt);
+  const x = useTransform(progress, (p) => -Math.round(p * 56));
+
+  return (
+    <div
+      className={cn(
+        "relative flex max-w-[75%]",
+        isCurrentUser ? "ml-auto justify-end" : "mr-auto justify-start"
+      )}
+      data-testid={`message-${msg.id}`}
+    >
+      {/* Timestamp (revealed on drag) - always on right side */}
+      <motion.div
+        style={{
+          opacity: progress,
+        }}
+        className="absolute right-0 top-1/2 -translate-y-1/2 select-none text-[10px] text-muted-foreground pointer-events-none whitespace-nowrap pr-2"
+      >
+        {timeStr}
+      </motion.div>
+
+      {/* Bubble shifts left as progress increases */}
+      <motion.div
+        style={{ x }}
+        className={cn(
+          "rounded-2xl px-3 py-2 break-words",
+          isCurrentUser
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted",
+          msg.isPending && "opacity-60",
+          msg.isFailed && "opacity-40 border-2 border-destructive"
+        )}
+      >
+        <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+      </motion.div>
     </div>
   );
 }

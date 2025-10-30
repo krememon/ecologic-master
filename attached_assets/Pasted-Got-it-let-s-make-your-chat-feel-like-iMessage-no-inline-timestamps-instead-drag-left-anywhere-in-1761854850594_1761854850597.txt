@@ -1,0 +1,200 @@
+Got it—let’s make your chat feel like iMessage: no inline timestamps; instead, drag left anywhere in the thread to reveal timestamps, then they slide away when you let go.
+Below is a drop-in React implementation (Tailwind + Framer Motion) that:
+
+
+removes the per-bubble timestamp,
+
+
+adds a thread-level horizontal drag to reveal timestamps for all bubbles,
+
+
+animates bubbles slightly left while timestamps fade in on the right,
+
+
+snaps back on release.
+
+
+
+1) Install (if you don’t already have Framer Motion)
+npm i framer-motion
+
+
+2) Chat thread with “swipe to reveal timestamps”
+// ChatThread.tsx
+import { useRef, useState } from "react";
+import { motion, useSpring } from "framer-motion";
+
+type Msg = {
+  id: string;
+  text: string;
+  senderId: string;
+  createdAt: string; // ISO
+};
+
+export default function ChatThread({
+  meId,
+  messages,
+}: {
+  meId: string;
+  messages: Msg[];
+}) {
+  // progress: 0 (hidden) .. 1 (fully shown)
+  const progress = useSpring(0, { stiffness: 260, damping: 30 });
+  const rawProgressRef = useRef(0); // track numeric value
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const draggingRef = useRef(false);
+
+  const onPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    startRef.current = { x: e.clientX, y: e.clientY };
+    draggingRef.current = false;
+  };
+
+  const onPointerMove: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!startRef.current) return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+
+    // start horizontal gesture only if mostly horizontal and moved enough
+    if (!draggingRef.current) {
+      if (Math.abs(dx) < 8) return;
+      if (Math.abs(dx) <= Math.abs(dy)) return; // vertical scroll wins
+      draggingRef.current = true;
+    }
+
+    // Only consider left drag (negative dx)
+    const left = Math.min(0, dx);
+    const p = Math.min(1, Math.max(0, -left / 80)); // 0..1 over ~80px
+    rawProgressRef.current = p;
+    progress.set(p);
+  };
+
+  const onPointerUpOrLeave = () => {
+    startRef.current = null;
+    draggingRef.current = false;
+    // snap back
+    progress.stop();
+    progress.set(0);
+    rawProgressRef.current = 0;
+  };
+
+  return (
+    <div
+      className="flex h-full flex-col overflow-y-auto bg-white"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUpOrLeave}
+      onPointerCancel={onPointerUpOrLeave}
+      onPointerLeave={onPointerUpOrLeave}
+    >
+      <div className="mx-3 my-4 space-y-2">
+        {messages.map((m) => (
+          <MessageRow
+            key={m.id}
+            mine={m.senderId === meId}
+            text={m.text}
+            createdAt={m.createdAt}
+            progress={progress}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MessageRow({
+  mine,
+  text,
+  createdAt,
+  progress, // MotionValue<number>
+}: {
+  mine: boolean;
+  text: string;
+  createdAt: string;
+  progress: any;
+}) {
+  const time = formatTime(createdAt);
+
+  return (
+    <div className={`relative flex ${mine ? "justify-end" : "justify-start"}`}>
+      {/* Timestamp (revealed on drag) */}
+      <motion.div
+        style={{
+          opacity: progress, // fades in with progress
+        }}
+        className={`absolute right-0 top-1/2 -translate-y-1/2 select-none text-xs text-gray-500`}
+      >
+        {time}
+      </motion.div>
+
+      {/* Bubble shifts slightly left as progress increases */}
+      <motion.div
+        style={{ x: progress.get() ? progress.to((p: number) => -Math.round(p * 56)) : 0 }}
+        className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+          mine ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-900"
+        }`}
+      >
+        {text}
+      </motion.div>
+    </div>
+  );
+}
+
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+What this does
+
+
+By default, timestamps are hidden.
+
+
+Drag left anywhere in the thread: bubbles slide ~56px left and timestamps fade in on the right.
+
+
+Release: everything snaps back (like iMessage).
+
+
+
+3) Remove old inline timestamps (if present)
+If you still have small time text inside each bubble, delete it (or guard behind a feature flag):
+{/* remove this tiny time if you still render it */}
+{/* <div className="mt-1 text-[10px] opacity-60 text-right">{formatTime(...)} </div> */}
+
+
+4) Nice-to-haves (optional)
+
+
+Accessibility fallback: Add a small “i” toggle for desktop users who don’t drag:
+// place at top-right of the thread header
+<button
+  onClick={() => progress.set(progress.get() > 0 ? 0 : 1)}
+  className="text-xs text-gray-500 hover:text-gray-700"
+  aria-label="Toggle timestamps"
+>
+  ⓘ
+</button>
+
+
+
+Only reveal for the visible messages: current code already does; it’s per-row rendering tied to the same progress.
+
+
+
+5) QA checklist
+
+
+Scrolling vertically shouldn’t trigger the reveal.
+
+
+Dragging left anywhere reveals timestamps for all bubbles smoothly.
+
+
+Letting go hides them.
+
+
+No inline timestamps remain.
+
+
+If you want it per-message (reveal only the bubble you drag), I can give you that variant too—but this thread-level gesture is the closest to iMessage’s behavior.
