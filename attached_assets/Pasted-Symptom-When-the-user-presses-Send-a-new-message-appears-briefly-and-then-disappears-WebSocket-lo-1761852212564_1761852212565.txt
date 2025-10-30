@@ -1,0 +1,175 @@
+Symptom:
+When the user presses Send, a new message appears briefly and then disappears.
+WebSocket logs show the message is broadcast, so the bug is on the client state management side.
+
+Root causes to fix (any of these can delete the bubble):
+
+A history fetch (or React Query refetch/remount) finishes after the optimistic insert and replaces state instead of merging.
+
+The server ACK / socket event arrives but the client doesn’t reconcile the optimistic message (no tempId match), so a later setMessages(fetched) overwrites it.
+
+The chat screen re-mounts (route change, key change) and loses the temporary message before the server message arrives.
+
+Goal:
+Make messages stay after sending by (a) reconciling optimistics via tempId, (b) merging lists (never replacing), and (c) ignoring stale fetches.
+
+Deliverables
+1) Add tempId to send payload and carry it through ACK + broadcast
+
+On send, generate tempId = crypto.randomUUID(), store in the optimistic object, and include it in the socket.emit('message:send', {..., tempId}).
+
+On the server handler, echo tempId back in both:
+
+the ACK (cb({ ok: true, message: { ...row, tempId } }))
+
+the broadcast (io.to(room).emit('message:created', { ...row, tempId }))
+
+2) Client: true reconciliation and merge (never replace)
+
+Create a single helper that merges new items into state:
+
+// messageState.ts
+export function mergeMessages(prev: any[], incoming: any[]) {
+  const byId = new Map<string, any>();
+
+  // Keep everything we already have
+  for (const m of prev) byId.set(String(m.id ?? m.tempId), m);
+
+  // Replace optimistic with real using tempId, and upsert fetched
+  for (const m of incoming) {
+    const key = String(m.id ?? m.tempId);
+    // If we already have a temp bubble with same tempId, replace it
+    const existing = byId.get(key);
+    if (existing && existing.tempId && m.id && m.tempId === existing.tempId) {
+      byId.set(String(m.id), { ...existing, ...m, pending: false, failed: false });
+      if (key !== String(m.id)) byId.delete(key);
+    } else {
+      byId.set(key, { ...existing, ...m });
+    }
+  }
+
+  // Sort chronologically
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+}
+
+
+Use it everywhere you touch messages:
+
+setMessages(prev => mergeMessages(prev, [optimisticOrIncoming]));
+// For history fetch: mergeMessages(prev, fetchedList)
+
+
+Do not call setMessages(fetchedList) directly anywhere.
+
+3) Generation guard to ignore stale fetches
+
+Tag each fetch with a generation token; only the latest can write.
+
+const [messages, setMessages] = useState<any[]>([]);
+const genRef = useRef(0);
+const key = String(conversationId);
+
+useEffect(() => {
+  genRef.current++;               // new generation on convo change/mount
+  const myGen = genRef.current;
+
+  (async () => {
+    const list = await api.messages.list(key);
+    if (genRef.current !== myGen) return;   // stale -> ignore
+    setMessages(prev => mergeMessages(prev, list));
+  })();
+
+  return () => { genRef.current++; };       // invalidate pending responses
+}, [key]);
+
+
+If using React Query, also set on the messages query for this screen:
+
+useQuery(['messages', key], fetchFn, {
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  staleTime: 15_000,
+  select: data => data ?? []
+});
+
+4) Optimistic send (append), ACK/socket reconciliation
+const handleSend = (text: string) => {
+  const tempId = crypto.randomUUID();
+  const optimistic = {
+    id: tempId, tempId,
+    conversationId, senderId: meId, recipientId,
+    text: text.trim(),
+    createdAt: new Date().toISOString(),
+    pending: true
+  };
+  setMessages(prev => mergeMessages(prev, [optimistic]));
+
+  socket.emit('message:send',
+    { conversationId, senderId: meId, recipientId, text: optimistic.text, tempId },
+    (ack: any) => {
+      if (!ack?.ok) {
+        setMessages(prev => mergeMessages(prev, [{ ...optimistic, pending:false, failed:true, error: ack?.code }]));
+        return;
+      }
+      setMessages(prev => mergeMessages(prev, [ack.message]));
+    }
+  );
+};
+
+// Socket listener
+useEffect(() => {
+  if (!socket || !conversationId) return;
+  const onIncoming = (msg: any) => {
+    if (String(msg.conversationId) !== String(conversationId)) return;
+    setMessages(prev => mergeMessages(prev, [msg]));
+  };
+  socket.on('message:created', onIncoming);
+  return () => socket.off('message:created', onIncoming);
+}, [socket, conversationId]);
+
+5) Prevent remount churn
+
+Make sure the chat screen’s React key is stable for a given conversation:
+
+<Route path="/chat/:conversationId" element={<ChatScreen key={`chat-${conversationId}`} />} />
+
+
+If a parent already keys the child, remove extra keys that cause remounts during send.
+
+6) Join the correct room (conversationId)
+
+Ensure we join/leave conversation:${conversationId} and that the server emits to the same room with event message:created. Keep console logs:
+
+[JOIN], [JOIN:ACK]
+
+[WS OUT] message:send ->
+
+[ACK] message:send <-
+
+[WS IN] message:created <-
+
+Acceptance tests (must all pass)
+
+Open Owner and Supervisor in two browsers → same conversation.
+
+Send “hi”.
+
+Temp bubble appears with pending.
+
+Within ~100ms it turns solid (ACK/socket); it stays.
+
+Refresh either window → message persists.
+
+Trigger a history fetch (navigate away/back or refocus) → message still present (no disappearing).
+
+Mark recipient inactive → ACK { ok:false, code:'RECIPIENT_INACTIVE' }, bubble remains as failed (does not disappear).
+
+Notes
+
+Search codebase for any setMessages( that passes a plain array; replace with the mergeMessages(prev, incoming) pattern.
+
+Ensure server returns created_at as an ISO string (or ensure client handles Date parsing consistently).
+
+Keep conversationId typed consistently (string vs number) on both sides.

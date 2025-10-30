@@ -10,10 +10,11 @@ import { ChevronLeft, Send, Loader2, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
-import { isRenderableMessage, groupByDay, formatDayLabel, formatTime, MessageType as MsgType } from "@/lib/messageUtils";
+import { isRenderableMessage, groupByDay, formatDayLabel, formatTime, mergeMessages, MessageType as MsgType } from "@/lib/messageUtils";
 
 interface MessageType {
   id: number | string; // Allow string for optimistic IDs
+  tempId?: string; // For reconciliation
   conversationId?: number;
   senderId: string;
   body: string;
@@ -53,10 +54,11 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const [location, setLocation] = useLocation();
   const [messageBody, setMessageBody] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [optimisticMessages, setOptimisticMessages] = useState<MessageType[]>([]);
+  const [messages, setMessages] = useState<MessageType[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ws = useRef<WebSocket | null>(null);
+  const genRef = useRef(0);
 
   // Detect if this is a userId or conversationId based on the URL path
   const isUserId = location.startsWith('/messages/u/');
@@ -114,7 +116,9 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const { data: fetchedMessages = [], isLoading: messagesLoading } = useQuery<MessageType[]>({
     queryKey: ["/api/conversations", numericConvId, "messages"],
     enabled: !!numericConvId && !isNaN(numericConvId!),
-    staleTime: 5000,
+    staleTime: 15000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     placeholderData: [],
     select: (data: any) => {
       return data.map((msg: any) => ({
@@ -128,11 +132,23 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   // Get current conversation ID (either from DM or numeric)
   const currentConvId = dmData?.conversation?.id || numericConvId;
-
-  // Combine fetched messages with optimistic messages
-  const messages = dmData 
-    ? [...dmData.messages.map(m => ({ ...m, createdAt: new Date(m.createdAt) })), ...optimisticMessages]
-    : [...fetchedMessages, ...optimisticMessages];
+  
+  // Merge fetched messages with local state (never replace)
+  useEffect(() => {
+    if (dmData?.messages) {
+      const normalized = dmData.messages.map(m => ({ 
+        ...m, 
+        createdAt: new Date(m.createdAt) 
+      }));
+      setMessages(prev => mergeMessages(prev, normalized));
+    }
+  }, [dmData]);
+  
+  useEffect(() => {
+    if (fetchedMessages.length > 0) {
+      setMessages(prev => mergeMessages(prev, fetchedMessages));
+    }
+  }, [fetchedMessages]);
 
   // Get other user info
   const otherUser = dmData?.otherUser || (conversation as any)?.otherUser;
@@ -157,17 +173,18 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       return;
     }
 
-    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const tempId = crypto.randomUUID();
     const optimisticMessage: MessageType = {
       id: tempId,
+      tempId,
       senderId: user!.id,
       body: body.trim(),
       createdAt: new Date(),
       isPending: true,
     };
 
-    // Add optimistic message immediately
-    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    // Add optimistic message using merge (never replace)
+    setMessages(prev => mergeMessages(prev, [optimisticMessage]));
     setMessageBody("");
 
     console.log(`[WS:SEND] →`, { conversationId: currentConvId, recipientId: otherUser?.id, text: body.trim().slice(0, 50), tempId });
@@ -177,10 +194,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     const timeoutId = setTimeout(() => {
       const elapsed = Date.now() - t0;
       console.warn(`[WS:SEND] Timeout after ${elapsed}ms for tempId ${tempId}`);
-      setOptimisticMessages(prev =>
-        prev.map(msg =>
-          msg.id === tempId ? { ...msg, isPending: false, isFailed: true } : msg
-        )
+      setMessages(prev =>
+        mergeMessages(prev, [{ ...optimisticMessage, isPending: false, isFailed: true }])
       );
       toast({
         title: "Message failed",
@@ -271,37 +286,32 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         const { ok, tempId, message, code, dt } = data;
         console.log(`[WS:SEND:ACK] ${ok ? '✓' : '✗'} tempId: ${tempId}, dt: ${dt}ms`, { ok, code });
         
+        // Clear timeout
+        if (ws.current && (ws.current as any)[`timeout_${tempId}`]) {
+          clearTimeout((ws.current as any)[`timeout_${tempId}`]);
+          delete (ws.current as any)[`timeout_${tempId}`];
+        }
+        
         if (ok && message) {
-          // Clear timeout
-          if (ws.current && (ws.current as any)[`timeout_${tempId}`]) {
-            clearTimeout((ws.current as any)[`timeout_${tempId}`]);
-            delete (ws.current as any)[`timeout_${tempId}`];
-          }
-          
-          // Replace optimistic message with real message
-          setOptimisticMessages(prev => prev.filter(msg => msg.id !== tempId));
-          
-          // Invalidate queries to fetch new message
-          queryClient.invalidateQueries({
-            queryKey: ["/api/conversations", currentConvId, "messages"],
-          });
-          queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+          // Merge real message (replaces optimistic via tempId)
+          setMessages(prev => mergeMessages(prev, [{
+            ...message,
+            createdAt: new Date(message.createdAt),
+          }]));
           
           // Refocus textarea
           textareaRef.current?.focus();
         } else {
-          // Clear timeout
-          if (ws.current && (ws.current as any)[`timeout_${tempId}`]) {
-            clearTimeout((ws.current as any)[`timeout_${tempId}`]);
-            delete (ws.current as any)[`timeout_${tempId}`];
-          }
-          
-          // Mark as failed
-          setOptimisticMessages(prev =>
-            prev.map(msg =>
-              msg.id === tempId ? { ...msg, isPending: false, isFailed: true } : msg
-            )
-          );
+          // Mark as failed using merge
+          setMessages(prev => {
+            const failedMsg = prev.find(m => String(m.id) === String(tempId) || m.tempId === tempId);
+            if (!failedMsg) return prev;
+            return mergeMessages(prev, [{
+              ...failedMsg,
+              isPending: false,
+              isFailed: true,
+            }]);
+          });
           
           // Show error toast
           if (code === 'RECIPIENT_INACTIVE') {
@@ -325,24 +335,11 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         const incomingMsg = data.message;
         console.log(`[WS:BROADCAST] Received message:created for conversation ${currentConvId}`, incomingMsg);
         
-        // Reconcile optimistic messages using tempId
-        setOptimisticMessages(prev => {
-          // If this message has a tempId matching an optimistic message, replace it
-          if (incomingMsg.tempId) {
-            const hadTemp = prev.some(m => m.id === incomingMsg.tempId);
-            if (hadTemp) {
-              console.log(`[WS:BROADCAST] Replacing optimistic message ${incomingMsg.tempId} with real message ${incomingMsg.id}`);
-              return prev.filter(m => m.id !== incomingMsg.tempId);
-            }
-          }
-          return prev;
-        });
-        
-        // Invalidate queries to fetch/update message list
-        queryClient.invalidateQueries({
-          queryKey: ["/api/conversations", currentConvId, "messages"],
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+        // Merge incoming message (reconciles via tempId if present)
+        setMessages(prev => mergeMessages(prev, [{
+          ...incomingMsg,
+          createdAt: new Date(incomingMsg.createdAt),
+        }]));
       }
       
       // Handle typing indicator (if still using)

@@ -1,12 +1,64 @@
-// Message utilities for filtering, grouping, and formatting
+// Message utilities for filtering, grouping, formatting, and merging
 
 export type MessageType = {
   id: string | number;
+  tempId?: string;
   senderId: string;
   body: string;
   createdAt: Date;
   isPending?: boolean;
   isFailed?: boolean;
+};
+
+/**
+ * Merge incoming messages into existing state without losing optimistic messages
+ * This prevents the "bubble appears then disappears" bug
+ * 
+ * Rules:
+ * - Never replace entire array (always merge)
+ * - Reconcile optimistic messages using tempId
+ * - Keep pending/failed messages until they're replaced by real ones
+ * - Sort chronologically
+ */
+export const mergeMessages = (prev: MessageType[], incoming: MessageType[]): MessageType[] => {
+  const byId = new Map<string, MessageType>();
+
+  // Keep everything we already have
+  for (const m of prev) {
+    const key = String(m.id ?? m.tempId);
+    byId.set(key, m);
+  }
+
+  // Replace optimistic with real using tempId, and upsert fetched
+  for (const m of incoming) {
+    const incomingId = String(m.id);
+    const incomingTempId = m.tempId ? String(m.tempId) : null;
+    
+    // If we have an optimistic message with matching tempId, replace it
+    if (incomingTempId) {
+      const existingByTempId = byId.get(incomingTempId);
+      if (existingByTempId && existingByTempId.tempId === incomingTempId) {
+        // Replace optimistic with real message
+        byId.delete(incomingTempId);
+        byId.set(incomingId, { 
+          ...existingByTempId, 
+          ...m, 
+          isPending: false, 
+          isFailed: false 
+        });
+        continue;
+      }
+    }
+    
+    // Otherwise just upsert by ID
+    const existing = byId.get(incomingId);
+    byId.set(incomingId, { ...existing, ...m });
+  }
+
+  // Sort chronologically
+  return Array.from(byId.values()).sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
 };
 
 const toDayKey = (d: Date) => {
