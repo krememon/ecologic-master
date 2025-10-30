@@ -1,0 +1,99 @@
+AGENT PROMPT — “My own profile not showing in message list (fix self-user visibility)”
+
+Symptom:
+When a logged-in user (e.g., the Owner) opens the Messages page, they can see and message other users.
+But when other users (e.g., Supervisors, Technicians) open the Messages page, they do not see the owner’s name in the list — they have no one to click on to open a conversation.
+
+The Owner can message others, but other users can’t see or start a message with the Owner.
+
+🔍 Root Cause
+
+The query that loads the user list (the list of messageable profiles) is filtering out the current user or the owner incorrectly.
+
+Common patterns:
+
+The SQL or ORM query filters WHERE id != currentUserId and therefore hides the owner (should only hide yourself, not everyone else’s owner).
+
+The backend employees query uses WHERE company_id = ? AND role != 'owner' or status='active', but the owner’s record isn’t in the employees table (it’s in users or accounts).
+
+The owner’s profile isn’t being joined correctly with the company employees (missing in join or left join missing on null role).
+
+🎯 Goal
+
+Fix the employee list API so every active user in the company (including the owner) appears in the message list for everyone else.
+
+✅ Deliverables
+1) Backend query: return all users in the same company
+
+Replace any query like:
+
+SELECT id, name, role
+FROM employees
+WHERE company_id = $1 AND id != $2;
+
+
+With:
+
+SELECT u.id, u.name, u.role, u.status
+FROM users u
+WHERE u.company_id = $1
+  AND u.status = 'active'
+  AND u.id != $2;
+
+
+If your schema has employees separate from users, use a UNION:
+
+SELECT id, name, role FROM employees WHERE company_id=$1 AND status='active'
+UNION
+SELECT id, name, 'owner' AS role FROM users WHERE id = (SELECT owner_id FROM companies WHERE id=$1);
+
+2) If you store owner only in companies.owner_id
+
+Make sure the API that populates message contacts adds the owner manually:
+
+const employees = await db.manyOrNone('SELECT * FROM employees WHERE company_id=$1 AND status=$2', [companyId, 'active']);
+const owner = await db.oneOrNone('SELECT id, name, role FROM users WHERE id=(SELECT owner_id FROM companies WHERE id=$1)', [companyId]);
+
+const members = [...employees];
+if (owner && !members.some(m => m.id === owner.id)) members.push(owner);
+
+return members;
+
+3) Frontend list rendering
+
+Confirm the message list code does not hide the owner accidentally:
+
+// before
+const visibleUsers = users.filter(u => u.id !== meId);
+
+// keep this logic (hide self), but make sure owner is included in `users`
+const messageable = users.filter(u => u.id !== meId);
+
+
+If you’re filtering by role anywhere:
+
+// remove any "exclude owner" logic
+.filter(u => u.role !== 'owner')  // ❌ remove this line
+
+4) Optional: ensure owner record is synced to employees
+
+If your design expects every user (even the owner) to be in employees, add this check on company creation:
+
+await db.none(`
+  INSERT INTO employees (company_id, user_id, role, status)
+  SELECT $1, owner_id, 'owner', 'active'
+  FROM companies WHERE id=$1
+  ON CONFLICT (company_id, user_id) DO NOTHING;
+`, [companyId]);
+
+✅ Acceptance Tests
+
+Log in as Owner → see all employees.
+
+Log in as Supervisor → see the Owner in the list and can click to open chat.
+
+Log in as any employee → can see every active teammate including the Owner.
+
+Only inactive or suspended users are hidden.
+
+The only hidden profile is the current user’s own (no self-chat).
