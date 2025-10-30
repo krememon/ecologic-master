@@ -791,7 +791,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(companyMembers.companyId, companyId),
           sql`${users.id} != ${currentUserId}`,
-          eq(users.status, "ACTIVE")
+          sql`UPPER(${users.status}) = 'ACTIVE'`
         )
       )
       .orderBy(users.firstName);
