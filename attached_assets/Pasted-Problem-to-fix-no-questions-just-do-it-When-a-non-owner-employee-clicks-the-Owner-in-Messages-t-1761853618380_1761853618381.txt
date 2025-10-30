@@ -1,0 +1,192 @@
+Problem to fix (no questions, just do it):
+When a non-owner employee clicks the Owner in Messages, the DM screen shows “You don’t have access to message this user / Unable to load.”
+This must be fixed so that any active users in the same company can DM each other (including the Owner).
+
+Requirements
+
+
+Company-scoped access rule
+
+
+Allow a DM iff both users are active and belong to the same company.
+
+
+Do not gate on role (owner/supervisor/tech) for 1:1 DMs.
+
+
+
+
+Upsert conversation & membership on open
+
+
+On DM start (click user in list), call an API that get-or-create the conversation and ensures both members are in conversation_members.
+
+
+
+
+Fix all permission checks
+
+
+Any API (load conversation, list messages) and WebSocket join must check membership (row exists in conversation_members) instead of role.
+
+
+Return structured errors (NOT_A_MEMBER, DIFFERENT_COMPANY, USER_INACTIVE) and surface them in UI; but for normal same-company cases, it should pass.
+
+
+
+
+Backfill/migrate existing data
+
+
+For existing DMs involving the Owner, ensure the Owner has a conversation_members row.
+
+
+If the system stores Owner only in companies.owner_id, include them as a valid member.
+
+
+
+
+
+Implement
+A) API: upsert conversation + members
+Create/ensure endpoint (POST /api/conversations/upsert) that:
+
+
+Body: { companyId, userAId, userBId } (caller is one of them)
+
+
+Validations:
+
+
+Both users exist, status='active', and share company_id = companyId
+
+
+
+
+Compute deterministic pair_key = sha256(companyId + ':' + sorted(userAId, userBId))
+
+
+Upsert into conversations (company_id, pair_key) returning id
+
+
+Upsert both rows into conversation_members (conversation_id, user_id) with ON CONFLICT DO NOTHING
+
+
+Return { ok:true, conversationId }
+
+
+B) API: guard reads by membership (not role)
+
+
+GET /api/conversations/:id and message list endpoints must check:
+exists(select 1 from conversation_members where conversation_id=$1 and user_id=$ME)
+
+If false → 403 { ok:false, code:'NOT_A_MEMBER' }
+
+
+C) WebSocket: join & send must check membership
+
+
+thread:join receives { conversationId }. Allow join only if the caller is in conversation_members.
+
+
+message:send payload { conversationId, text, tempId? }. Allow only if the caller is in conversation_members.
+On insert, broadcast:
+io.to(`conversation:${conversationId}`).emit('message:created', { ...row, conversationId, tempId });
+
+ACK { ok:true, message }.
+
+
+D) Frontend: start DM flow
+
+
+When clicking a user in the list:
+const { ok, conversationId } = await api.post('/api/conversations/upsert', {
+  companyId, userAId: meId, userBId: targetUserId
+});
+if (!ok) { showToast('Unable to start chat'); return; }
+navigate(`/chat/${conversationId}`);
+
+
+
+On chat screen mount, join room conversation:${conversationId} and listen for message:created.
+
+
+E) Migration / backfill (run once)
+
+
+Ensure Owner appears in DM membership for any existing conversations with employees:
+
+
+-- If conversations use pair_key with company + two users,
+-- add missing membership rows for the owner side.
+insert into conversation_members (conversation_id, user_id)
+select c.id, u.owner_id
+from conversations c
+join companies u on u.id = c.company_id
+left join conversation_members cm on cm.conversation_id = c.id and cm.user_id = u.owner_id
+where cm.user_id is null;
+
+
+
+If the Owner is not in the employees table and the UI relies on that list, also ensure:
+
+
+insert into employees (company_id, user_id, role, status)
+select id as company_id, owner_id as user_id, 'owner' as role, 'active' as status
+from companies
+on conflict (company_id, user_id) do nothing;
+
+F) Error mapping in UI (replace generic screen)
+
+
+Map server codes:
+
+
+NOT_A_MEMBER → “You’re not a member of this conversation.”
+
+
+DIFFERENT_COMPANY → “You can only message teammates in your company.”
+
+
+USER_INACTIVE → “That user is inactive.”
+
+
+
+
+In normal same-company cases, user should never see these.
+
+
+
+Acceptance Tests (must all pass)
+
+
+Login as employee (codetest) → click Owner in Messages → DM opens (no error).
+
+
+Both users can send/receive instantly in that DM.
+
+
+Owner appears in everyone’s messageable list (except themselves).
+
+
+Mark Owner inactive → upsert refuses with USER_INACTIVE; existing convo blocks send with same code.
+
+
+Users in different companies can’t start a DM; error is DIFFERENT_COMPANY.
+
+
+WebSocket join only succeeds for conversation members; non-members get NOT_A_MEMBER.
+
+
+
+Notes
+
+
+Remove any role-based blocks like role != 'owner' on DM endpoints. Membership + same company is the policy.
+
+
+Keep logs for join ([JOIN:ACK]), send ACK, and broadcast while testing.
+
+
+Ship these changes now. After deploy, codetest → Owner should open the DM instead of showing “You don’t have access.”

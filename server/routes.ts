@@ -1537,13 +1537,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           and(
             eq(users.id, targetUserId),
             eq(companyMembers.companyId, company.id),
-            eq(users.status, 'ACTIVE')
+            sql`UPPER(${users.status}) = 'ACTIVE'`
           )
         )
         .limit(1);
 
       if (!targetUser) {
-        return res.status(403).json({ message: 'Target user not found or not accessible' });
+        return res.status(403).json({ 
+          code: 'USER_NOT_FOUND',
+          message: 'Target user not found or not accessible' 
+        });
       }
 
       // Deterministically get or create the 1:1 conversation
