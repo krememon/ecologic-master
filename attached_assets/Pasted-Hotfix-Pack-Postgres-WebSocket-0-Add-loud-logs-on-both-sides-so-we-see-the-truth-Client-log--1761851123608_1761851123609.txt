@@ -1,0 +1,204 @@
+Hotfix Pack (Postgres + WebSocket)
+0) Add loud logs on both sides (so we see the truth)
+Client: log join + send + ack + incoming
+// ChatThread.tsx (or the screen component)
+
+useEffect(() => {
+  if (!socket || !companyId || !pairKey) return;
+  console.log('[JOIN] ->', { companyId, pairKey });
+  socket.emit('thread:join', { companyId, pairKey }, (ack:any) => {
+    console.log('[JOIN:ACK] <-', ack);
+  });
+  return () => {
+    console.log('[LEAVE] ->', { companyId, pairKey });
+    socket.emit('thread:leave', { companyId, pairKey }, (ack:any) => {
+      console.log('[LEAVE:ACK] <-', ack);
+    });
+  };
+}, [socket, companyId, pairKey]);
+
+useEffect(() => {
+  if (!socket) return;
+  const onCreated = (msg:any) => {
+    console.log('[WS IN] message:created <-', msg);
+    if (msg.pairKey !== pairKey || msg.companyId !== companyId) return;
+    setMessages((m) => (m.some(x=>x.id===msg.id) ? m : [...m, msg]));
+  };
+  // listen to both (in case of event name mismatch in older code)
+  socket.on('message:created', onCreated);
+  socket.on('messages:created', onCreated);
+  return () => {
+    socket.off('message:created', onCreated);
+    socket.off('messages:created', onCreated);
+  };
+}, [socket, companyId, pairKey]);
+
+Server: log receives + broadcasts
+// server/index.ts (or socket wiring file)
+io.on('connection', (socket) => {
+  socket.on('thread:join', ({ companyId, pairKey }, cb) => {
+    const room = `company:${companyId}:thread:${pairKey}`;
+    console.log('[WS] join', { socket: socket.id, room });
+    socket.join(room);
+    cb?.({ ok:true, room });
+  });
+
+  socket.on('message:send', (payload, cb) => {
+    console.log('[WS IN] message:send', payload);
+    handleSendMessage(io, socket, payload, (ack:any) => {
+      console.log('[WS OUT] message:send:ack', ack);
+      cb?.(ack);
+    });
+  });
+});
+
+1) Wire the Send button for real (most common culprit)
+
+If your input is inside a <form>, the browser may be submitting the form and not calling your handler. Make it explicit:
+
+// ChatInput.tsx
+export function ChatInput({ onSend, canSend = true }: { onSend: (t:string)=>void; canSend?: boolean }) {
+  const [text, setText] = useState('');
+
+  const doSend = () => {
+    const t = text.trim();
+    if (!t || !canSend) return;
+    console.log('[UI] SEND CLICK', t);
+    onSend(t);              // <-- ensure this is passed from parent
+    setText('');
+  };
+
+  return (
+    <div className="border-t bg-white">
+      <div className="mx-4 my-3 flex items-center gap-2">
+        <input
+          value={text}
+          onChange={(e)=>setText(e.target.value)}
+          onKeyDown={(e)=>{ if (e.key==='Enter') { e.preventDefault(); doSend(); } }}
+          placeholder="Type a message..."
+          className="flex-1 rounded-2xl border px-3 py-2 outline-none"
+          disabled={!canSend}
+        />
+        <button
+          type="button"           // << prevent form submit
+          onClick={doSend}
+          disabled={!canSend}
+          className="rounded-2xl bg-blue-500 px-3 py-2 text-white disabled:opacity-40"
+          aria-label="Send"
+        >✈️</button>
+      </div>
+    </div>
+  );
+}
+
+2) Emit the exact payload the server expects + optimistic UI
+// parent screen
+const handleSend = (text: string) => {
+  if (!socket) return;
+  const tempId = crypto.randomUUID();
+  const optimistic = { id: tempId, text, senderId: meId, createdAt: new Date().toISOString(), pending: true };
+  setMessages((m)=>[...m, optimistic]);
+
+  console.log('[WS OUT] message:send ->', { companyId, pairKey, senderId: meId, recipientId, text });
+
+  let settled = false;
+  const t = setTimeout(() => {
+    if (!settled) {
+      settled = true;
+      console.warn('[TIMEOUT] message:send');
+      setMessages((m)=>m.map(x=>x.id===tempId?{...x, pending:false, failed:true}:x));
+    }
+  }, 7000);
+
+  socket.emit(
+    'message:send',
+    { companyId, pairKey, senderId: meId, recipientId, text },
+    (ack: any) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      console.log('[ACK] message:send <-', ack);
+
+      if (!ack?.ok) {
+        setMessages((m)=>m.map(x=>x.id===tempId?{...x, pending:false, failed:true, error:ack?.code}:x));
+        return;
+      }
+      setMessages((m)=>m.map(x=>x.id===tempId?ack.message:x));
+    }
+  );
+};
+
+
+Make sure the screen passes onSend={handleSend} into <ChatInput .../>.
+
+3) Server handler: accept, insert, broadcast (explicit inactive only)
+// server/messageSend.ts
+export async function handleSendMessage(io, socket, payload, cb) {
+  try {
+    const { companyId, pairKey, senderId, recipientId, text } = payload || {};
+    if (!companyId || !pairKey || !senderId || !recipientId || !text?.trim()) {
+      return cb?.({ ok:false, code:'BAD_ARGS' });
+    }
+
+    const room = `company:${companyId}:thread:${pairKey}`;
+
+    // explicit inactive only
+    const rec = await db.oneOrNone(
+      `select status, is_active from employees where id=$1 and company_id=$2`,
+      [recipientId, companyId]
+    );
+    const inactive = rec?.status === 'inactive' || rec?.status === 'disabled' || rec?.is_active === false;
+    if (inactive) return cb?.({ ok:false, code:'RECIPIENT_INACTIVE' });
+
+    const msg = await db.one(
+      `insert into messages (company_id, thread_key, sender_id, recipient_id, text)
+       values ($1,$2,$3,$4,$5)
+       returning id, company_id as "companyId", thread_key as "pairKey",
+                 sender_id as "senderId", recipient_id as "recipientId",
+                 text, created_at as "createdAt"`,
+      [companyId, pairKey, senderId, recipientId, text.trim()]
+    );
+
+    io.to(room).emit('message:created', msg);
+    cb?.({ ok:true, message: msg });
+  } catch (e:any) {
+    console.error('message:send error', e?.message || e);
+    cb?.({ ok:false, code:'SERVER_ERROR', detail: (e?.message||'').slice(0,200) });
+  }
+}
+
+4) Quick sanity on IDs (silent BAD_ARGS is super common)
+
+Put these logs before calling handleSend(text):
+
+console.log('[CHECK IDS]', {
+  companyId, pairKey, meId, recipientId,
+  allTruthy: !!companyId && !!pairKey && !!meId && !!recipientId
+});
+
+
+If any are undefined or empty → the server will reject as BAD_ARGS, and no message will appear.
+
+meId should be your authenticated user id.
+
+recipientId must be the other employee’s id.
+
+pairKey must be the same SHA-256 key you already use for the thread.
+
+companyId must match both users.
+
+5) One-button socket test (no DB)
+
+If you added the /debug/inject-message endpoint earlier:
+
+// run this in the browser console (with your actual IDs)
+fetch('/debug/inject-message', {
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({ companyId: '<companyId>', pairKey: '<pairKey>', text: 'WS TEST' })
+})
+
+
+If BOTH windows get "[WS IN] message:created" immediately → sockets/rooms are fine; the issue is send wiring or payload.
+
+If they don’t → it’s a room join / socket problem (check [JOIN:ACK] logs).
