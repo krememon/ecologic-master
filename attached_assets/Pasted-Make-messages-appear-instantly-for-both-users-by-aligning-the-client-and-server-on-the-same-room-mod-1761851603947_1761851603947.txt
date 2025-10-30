@@ -1,0 +1,233 @@
+Make messages appear instantly for both users by aligning the client and server on the same room model (conversation:{conversationId}) and event names. Replace old companyId+pairKey wiring on the chat screen with conversationId.
+
+Key facts (do not change):
+
+Backend already uses conversationId and logs show:
+[WS:JOIN] ... joined conversation:14 and [WS:SEND] Broadcast ... in conversation:14.
+
+Use WebSocket rooms: conversation:${conversationId}.
+
+Event emitted by server: message:created (keep this exact name).
+
+Database: Postgres (existing messages table).
+
+✅ Deliverables
+
+Frontend
+
+Join/leave the conversation:${conversationId} room on mount/unmount.
+
+Listen for message:created (and be tolerant to conversation:message just in case).
+
+Send payload must be { conversationId, senderId, recipientId, text }.
+
+Keep optimistic UI; reconcile on ACK; dedupe incoming messages.
+
+Console logs for [JOIN], [JOIN:ACK], [WS OUT], [ACK], [WS IN].
+
+Backend
+
+WebSocket join handler expects { conversationId } and joins conversation:${conversationId}.
+
+message:send handler accepts { conversationId, senderId, recipientId, text }.
+
+After DB insert, emit to room conversation:${conversationId} with event message:created and payload including conversationId.
+
+Return ACK { ok:true, message } or { ok:false, code }. Do NOT silently fail.
+
+Sanity tests
+
+Two browsers (Owner & Supervisor) open the same conversation → send → both receive within <100ms.
+
+Console shows [JOIN:ACK], [WS OUT], [ACK { ok:true }], and [WS IN].
+
+Mark a user inactive → server returns { ok:false, code:'RECIPIENT_INACTIVE' }; UI shows toast and does not append.
+
+🔧 Files to update (adjust paths to your project)
+Frontend
+
+src/features/chat/ChatThread.tsx
+
+import { useEffect, useRef, useState } from 'react';
+import { socket } from '@/lib/socket'; // your client instance
+
+export function ChatThread({ conversationId, meId, recipientId }) {
+  const [messages, setMessages] = useState<any[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  // Join the correct room and listen for messages
+  useEffect(() => {
+    if (!socket || !conversationId) return;
+
+    console.log('[JOIN] ->', { conversationId });
+    socket.emit('thread:join', { conversationId }, (ack:any) => console.log('[JOIN:ACK] <-', ack));
+
+    const onMessage = (msg:any) => {
+      console.log('[WS IN] message:created <-', msg);
+      if (msg.conversationId !== conversationId) return;
+      setMessages((prev) => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+    };
+
+    // Primary event
+    socket.on('message:created', onMessage);
+    // Optional tolerance if older server emitted this:
+    socket.on('conversation:message', onMessage);
+
+    return () => {
+      console.log('[LEAVE] ->', { conversationId });
+      socket.emit('thread:leave', { conversationId }, (ack:any) => console.log('[LEAVE:ACK] <-', ack));
+      socket.off('message:created', onMessage);
+      socket.off('conversation:message', onMessage);
+    };
+  }, [socket, conversationId]);
+
+  const handleSend = (text: string) => {
+    const trimmed = (text ?? '').trim();
+    if (!trimmed) return;
+
+    const tempId = crypto.randomUUID();
+    const optimistic = { id: tempId, text: trimmed, senderId: meId, conversationId, createdAt: new Date().toISOString(), pending: true };
+    setMessages((m) => [...m, optimistic]);
+    console.log('[WS OUT] message:send ->', { conversationId, senderId: meId, recipientId, text: trimmed });
+
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        console.warn('[TIMEOUT] message:send');
+        setMessages((m)=>m.map(x=>x.id===tempId?{...x, pending:false, failed:true}:x));
+      }
+    }, 7000);
+
+    socket.emit('message:send', { conversationId, senderId: meId, recipientId, text: trimmed }, (ack:any) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      console.log('[ACK] message:send <-', ack);
+
+      if (!ack?.ok) {
+        setMessages((m)=>m.map(x=>x.id===tempId?{...x, pending:false, failed:true, error:ack?.code}:x));
+        return;
+      }
+      setMessages((m)=>m.map(x=>x.id===tempId?ack.message:x));
+    });
+  };
+
+  // expose handleSend via props or pass into your ChatInput component
+  return (
+    <div className="flex flex-col h-full">
+      {/* ... your message rendering ... */}
+      <div ref={bottomRef} />
+      {/* ChatInput should call handleSend */}
+    </div>
+  );
+}
+
+
+src/features/chat/ChatInput.tsx
+
+export function ChatInput({ onSend, canSend = true }: { onSend:(t:string)=>void; canSend?:boolean }) {
+  const [text, setText] = useState('');
+  const doSend = () => { const t = text.trim(); if (!t || !canSend) return; onSend(t); setText(''); };
+  return (
+    <div className="border-t bg-white">
+      <div className="mx-4 my-3 flex items-center gap-2">
+        <input
+          value={text}
+          onChange={(e)=>setText(e.target.value)}
+          onKeyDown={(e)=>{ if (e.key==='Enter'){ e.preventDefault(); doSend(); } }}
+          placeholder="Type a message..."
+          className="flex-1 rounded-2xl border px-3 py-2"
+          disabled={!canSend}
+        />
+        <button type="button" className="rounded-2xl bg-blue-500 px-3 py-2 text-white disabled:opacity-40" disabled={!canSend} onClick={doSend}>
+          ✈️
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+Make sure your screen uses:
+
+<ChatInput onSend={handleSend} canSend={true /* unless explicitly inactive */} />
+
+Backend
+
+server/wsHandlers.ts
+
+export function registerSocketHandlers(io) {
+  io.on('connection', (socket) => {
+    socket.on('thread:join', ({ conversationId }, cb) => {
+      if (!conversationId) return cb?.({ ok:false, code:'BAD_ARGS' });
+      const room = `conversation:${conversationId}`;
+      console.log('[WS] join', { socket: socket.id, room });
+      socket.join(room);
+      cb?.({ ok:true, room });
+    });
+
+    socket.on('thread:leave', ({ conversationId }, cb) => {
+      const room = `conversation:${conversationId}`;
+      socket.leave(room);
+      cb?.({ ok:true });
+    });
+
+    socket.on('message:send', (payload, cb) => handleSendMessage(io, socket, payload, cb));
+  });
+}
+
+
+server/messageSend.ts
+
+export async function handleSendMessage(io, socket, payload, cb) {
+  try {
+    const { conversationId, senderId, recipientId, text } = payload || {};
+    if (!conversationId || !senderId || !recipientId || !text?.trim()) {
+      return cb?.({ ok:false, code:'BAD_ARGS' });
+    }
+
+    // Optional: explicit inactive guard (keep your current logic)
+    // const rec = await db.oneOrNone('select status, is_active from employees where id=$1', [recipientId]);
+    // if (rec?.status === 'inactive' || rec?.status === 'disabled' || rec?.is_active === false) {
+    //   return cb?.({ ok:false, code:'RECIPIENT_INACTIVE' });
+    // }
+
+    // Insert & return normalized row including conversationId
+    const msg = await db.one(
+      `insert into messages (conversation_id, sender_id, recipient_id, text)
+       values ($1,$2,$3,$4)
+       returning id, conversation_id as "conversationId",
+                 sender_id as "senderId", recipient_id as "recipientId",
+                 text, created_at as "createdAt"`,
+      [conversationId, senderId, recipientId, text.trim()]
+    );
+
+    // Broadcast to conversation room
+    const room = `conversation:${conversationId}`;
+    io.to(room).emit('message:created', msg);
+
+    cb?.({ ok:true, message: msg });
+  } catch (e:any) {
+    console.error('message:send error', e?.message || e);
+    cb?.({ ok:false, code:'SERVER_ERROR', detail: (e?.message||'').slice(0,200) });
+  }
+}
+
+✅ QA checklist (must all pass)
+
+When opening a chat, console shows:
+[JOIN] -> { conversationId } and [JOIN:ACK] <- { ok:true, room: "conversation:ID" }
+
+On send:
+[WS OUT] message:send -> { conversationId, senderId, recipientId, text }
+[ACK] message:send <- { ok:true, message:{ id, conversationId, ... } }
+
+Both windows receive:
+[WS IN] message:created <- { id, conversationId, text, ... }
+
+Message appears immediately in both UIs.
+
+If recipient inactive → [ACK] { ok:false, code:"RECIPIENT_INACTIVE" } and no message appended.
