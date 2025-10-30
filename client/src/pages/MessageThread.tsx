@@ -534,8 +534,13 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
       {/* Messages Area */}
       <div 
-        className="flex-1 overflow-y-auto p-4 touch-pan-y" 
+        className="flex-1 overflow-y-auto px-3 pt-4 touch-pan-y" 
         data-testid="scroll-area-messages"
+        style={{
+          paddingBottom: '0.25rem',
+          scrollBehavior: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUpOrLeave}
@@ -555,7 +560,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {(() => {
               // Filter out empty messages and group by day
               const renderableMessages = messages.filter(isRenderableMessage);
@@ -606,7 +611,14 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       </div>
 
       {/* Composer */}
-      <div className="p-4 border-t border-border bg-card">
+      <div 
+        className="px-3 py-2 border-t border-border bg-card"
+        style={{
+          position: 'sticky',
+          bottom: 0,
+          zIndex: 10,
+        }}
+      >
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
