@@ -59,6 +59,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ws = useRef<WebSocket | null>(null);
   const genRef = useRef(0);
+  const didMountRef = useRef(false);
 
   // Swipe-to-reveal timestamps state
   const progress = useSpring(0, { stiffness: 260, damping: 30 });
@@ -370,10 +371,24 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     };
   }, [user, currentConvId]);
 
-  // Auto-scroll to bottom
+  // Smart scroll: instant on mount, smooth for new messages
+  const scrollToBottom = (smooth: boolean) => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: smooth ? "smooth" : "auto",
+      block: "end",
+    });
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    // On first mount: jump instantly (no animation)
+    if (!didMountRef.current) {
+      scrollToBottom(false);
+      didMountRef.current = true;
+      return;
+    }
+    // On subsequent message changes: smooth scroll
+    scrollToBottom(true);
+  }, [messages.length]); // Only trigger on count change, not array reference
 
   // Mark as read when opened
   useEffect(() => {
