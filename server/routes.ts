@@ -1680,6 +1680,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // iOS-style message threads endpoint
+  app.get('/api/messages/threads', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      const limit = parseInt(req.query.limit as string) || 50;
+      const conversations = await storage.getUserConversations(userId, company.id);
+      
+      // Format for iOS-style display
+      const threads = await Promise.all(conversations.map(async (conv: any) => {
+        // Get participants
+        const participants = await db
+          .select({
+            userId: conversationParticipants.userId,
+            lastReadAt: conversationParticipants.lastReadAt,
+            user: {
+              id: users.id,
+              firstName: users.firstName,
+              lastName: users.lastName,
+            }
+          })
+          .from(conversationParticipants)
+          .innerJoin(users, eq(conversationParticipants.userId, users.id))
+          .where(eq(conversationParticipants.conversationId, conv.id));
+
+        const otherParticipant = participants.find((p: any) => p.userId !== userId);
+        const currentUserParticipant = participants.find((p: any) => p.userId === userId);
+
+        // Get last message
+        const [lastMessage] = await db
+          .select()
+          .from(messages)
+          .where(
+            and(
+              eq(messages.conversationId, conv.id),
+              sql`${messages.deletedAt} IS NULL`
+            )
+          )
+          .orderBy(desc(messages.createdAt))
+          .limit(1);
+
+        // Calculate unread count
+        let unreadCount = 0;
+        if (currentUserParticipant?.lastReadAt) {
+          const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conv.id),
+                sql`${messages.createdAt} > ${currentUserParticipant.lastReadAt}`,
+                sql`${messages.senderId} != ${userId}`,
+                sql`${messages.deletedAt} IS NULL`
+              )
+            );
+          unreadCount = result?.count || 0;
+        } else {
+          const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conv.id),
+                sql`${messages.senderId} != ${userId}`,
+                sql`${messages.deletedAt} IS NULL`
+              )
+            );
+          unreadCount = result?.count || 0;
+        }
+
+        // Synthesize message preview
+        let messageText: string | null = null;
+        let messageType: 'text' | 'image' | 'file' | 'system' = 'text';
+        
+        if (lastMessage) {
+          // Check for text message first
+          if (lastMessage.body) {
+            messageText = lastMessage.body;
+            messageType = 'text';
+          } 
+          // Check for attachments
+          else if (lastMessage.attachments) {
+            const attachments = lastMessage.attachments as any;
+            if (Array.isArray(attachments) && attachments.length > 0) {
+              // Count attachments by type
+              let photoCount = 0;
+              let videoCount = 0;
+              let audioCount = 0;
+              let fileCount = 0;
+              
+              for (const attachment of attachments) {
+                const mimeType = attachment.type || attachment.mimeType || '';
+                if (mimeType.startsWith('image/')) {
+                  photoCount++;
+                } else if (mimeType.startsWith('video/')) {
+                  videoCount++;
+                } else if (mimeType.startsWith('audio/')) {
+                  audioCount++;
+                } else {
+                  fileCount++;
+                }
+              }
+              
+              // Generate preview based on attachment types
+              if (photoCount > 0 && videoCount === 0 && audioCount === 0 && fileCount === 0) {
+                // Only photos
+                messageText = photoCount === 1 ? 'Photo' : `${photoCount} Photos`;
+                messageType = 'image';
+              } else if (videoCount > 0 && photoCount === 0 && audioCount === 0 && fileCount === 0) {
+                // Only videos
+                messageText = videoCount === 1 ? 'Video' : `${videoCount} Videos`;
+                messageType = 'file';
+              } else if (audioCount > 0 && photoCount === 0 && videoCount === 0 && fileCount === 0) {
+                // Only audio
+                messageText = audioCount === 1 ? 'Audio' : `${audioCount} Audio Files`;
+                messageType = 'file';
+              } else if (fileCount > 0 && photoCount === 0 && videoCount === 0 && audioCount === 0) {
+                // Only files
+                messageText = fileCount === 1 ? 'File' : `${fileCount} Files`;
+                messageType = 'file';
+              } else {
+                // Mixed types
+                const totalCount = photoCount + videoCount + audioCount + fileCount;
+                messageText = totalCount === 1 ? 'Attachment' : `${totalCount} Attachments`;
+                messageType = 'file';
+              }
+            } else {
+              messageText = 'Message';
+              messageType = 'system';
+            }
+          } 
+          // Fallback for empty message
+          else {
+            messageText = 'Message';
+            messageType = 'system';
+          }
+        }
+
+        // Format for iOS-style display
+        return {
+          id: conv.id.toString(),
+          otherUser: {
+            id: otherParticipant?.userId || '',
+            name: `${otherParticipant?.user?.firstName || ''} ${otherParticipant?.user?.lastName || ''}`.trim() || 'Unknown User',
+          },
+          lastMessage: lastMessage ? {
+            id: lastMessage.id.toString(),
+            text: messageText,
+            type: messageType,
+            createdAt: lastMessage.createdAt.toISOString(),
+            senderId: lastMessage.senderId,
+          } : null,
+          unreadCount,
+          lastReadAt: currentUserParticipant?.lastReadAt?.toISOString() || null,
+        };
+      }));
+
+      // Sort by last message time (most recent first)
+      threads.sort((a, b) => {
+        const aTime = a.lastMessage?.createdAt || new Date(0).toISOString();
+        const bTime = b.lastMessage?.createdAt || new Date(0).toISOString();
+        return bTime.localeCompare(aTime);
+      });
+
+      res.json(threads.slice(0, limit));
+    } catch (error) {
+      console.error('Error fetching message threads:', error);
+      res.status(500).json({ message: 'Failed to fetch message threads' });
+    }
+  });
+
   // Create or get conversation with a user
   app.post('/api/conversations', isAuthenticated, async (req: any, res) => {
     try {

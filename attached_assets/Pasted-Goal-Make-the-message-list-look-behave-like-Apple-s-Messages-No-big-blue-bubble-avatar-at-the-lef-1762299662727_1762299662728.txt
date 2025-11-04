@@ -1,0 +1,196 @@
+Goal
+
+Make the message list look/behave like Apple’s Messages:
+
+No big blue bubble/avatar at the left.
+
+Show a tiny blue dot only if there are unread messages in that thread.
+
+Replace the ROLE subtitle with a one-line preview of the latest message (like iOS).
+
+Keep the time on the right, with iOS-style formatting (e.g., 5:44 PM, Yesterday, or 10/20/24).
+
+Tighten vertical spacing like iOS (less empty space between last text and divider).
+
+Data & API (use or extend existing endpoints)
+
+If we don’t have it yet, create/extend an endpoint that returns conversation summaries for the current user:
+
+GET /api/messages/threads?limit=50
+
+Return for each thread:
+
+{
+  id: string,
+  otherUser: { id: string, name: string }, // no avatar needed
+  lastMessage: {
+    id: string,
+    text: string | null,
+    type: "text" | "image" | "file" | "system",
+    createdAt: string, // ISO
+    senderId: string
+  },
+  unreadCount: number,           // for current user
+  lastReadAt?: string | null     // optional, only if needed
+}
+
+
+Backend notes
+
+If there’s no lastMessage.text (e.g., it was an image), synthesize a preview like “Photo” or “File”.
+
+Compute unreadCount by comparing message timestamps to the current user’s lastReadAt per thread (or store a per-thread readPointer).
+
+UI Implementation
+Files to touch (or equivalents)
+
+MessagesList.tsx (page)
+
+ThreadRow.tsx (single row component)
+
+time.ts (format helpers)
+
+Design specs
+
+Left side: no avatar. The first column starts with the tiny blue dot only when unreadCount > 0.
+
+Center:
+
+Name (medium/bold when unread).
+
+Preview (single line, gray, truncates with ellipsis).
+
+If the last message is from the current user, prefix preview with “You: ” (not bold).
+
+Right side: time in muted gray, aligned right.
+
+Dividers: thin hairline divider between rows. Slightly larger top/bottom padding for iOS feel (but tighter than our current).
+
+Tap target: the whole row opens the thread.
+
+Tailwind layout (example)
+// ThreadRow.tsx
+import React from "react";
+import { formatInboxTime } from "@/utils/time";
+
+type Props = {
+  name: string;
+  lastMessageText: string;     // already synthesized (e.g., "Photo" if image)
+  lastMessageFromSelf: boolean;
+  lastMessageAt: string;       // ISO
+  unreadCount: number;
+  onClick: () => void;
+};
+
+export default function ThreadRow({
+  name,
+  lastMessageText,
+  lastMessageFromSelf,
+  lastMessageAt,
+  unreadCount,
+  onClick,
+}: Props) {
+  const preview = `${lastMessageFromSelf ? "You: " : ""}${lastMessageText || ""}`;
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/40 focus:bg-muted/60 text-left"
+    >
+      {/* Unread dot (only if unread) */}
+      <div className="w-3 flex justify-center">
+        {unreadCount > 0 && <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />}
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between">
+          <span className={`truncate ${unreadCount > 0 ? "font-semibold" : "font-medium"}`}>
+            {name}
+          </span>
+          <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+            {formatInboxTime(lastMessageAt)}
+          </span>
+        </div>
+        <div className="text-sm text-muted-foreground truncate">
+          {preview || " "}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// MessagesList.tsx (core list)
+import React from "react";
+import ThreadRow from "./ThreadRow";
+// fetch with SWR/React Query or whatever we’re using
+
+export default function MessagesList() {
+  // assume useThreads() returns the API shape listed above
+  const { data: threads } = useThreads();
+
+  return (
+    <div className="divide-y">
+      {threads?.map(t => (
+        <ThreadRow
+          key={t.id}
+          name={t.otherUser.name}
+          lastMessageText={t.lastMessage?.text ?? (t.lastMessage?.type === "image" ? "Photo" : t.lastMessage?.type === "file" ? "File" : "")}
+          lastMessageFromSelf={t.lastMessage?.senderId === currentUserId}
+          lastMessageAt={t.lastMessage?.createdAt ?? new Date().toISOString()}
+          unreadCount={t.unreadCount ?? 0}
+          onClick={() => router.push(`/messages/${t.id}`)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// utils/time.ts
+export function formatInboxTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  if (isYesterday) return "Yesterday";
+
+  // If within same year: M/D
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+  }
+  // Else full short date
+  return d.toLocaleDateString();
+}
+
+Styling notes
+
+Remove/stop rendering the left avatar circle entirely.
+
+Keep row height compact: py-3 is a good iOS-ish balance.
+
+Keep name weight semibold when unread; otherwise medium.
+
+Preview is single line truncate; gray tone via text-muted-foreground.
+
+Read/Unread Logic
+
+unreadCount > 0 → show the tiny blue dot and make the name bold(er).
+
+On opening a thread, call POST /api/messages/threads/:id/read to mark as read and update the list without a full reload.
+
+Edge Cases
+
+No last message text (images/files): show "Photo" or "File".
+
+System messages: hide from preview or show a short label like "System message".
+
+Very long texts: rely on truncate (ellipsis).
+
+Deleted users: show “(Deleted)” for name but keep preview/time.
