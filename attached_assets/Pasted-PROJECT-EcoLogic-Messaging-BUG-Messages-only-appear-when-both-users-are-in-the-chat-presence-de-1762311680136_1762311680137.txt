@@ -1,0 +1,97 @@
+PROJECT: EcoLogic — Messaging
+BUG: Messages only appear when both users are in the chat (presence-dependent).
+GOAL: Store-and-forward delivery. Messages persist and show up even if the recipient isn’t on that screen. Inbox auto-resorts to top on new activity.
+
+1) Server: make delivery durable (no presence dependency)
+
+Send API (atomic):
+
+Transaction: upsert conversation (deterministic pair key dm:${minId}|${maxId}) → insert Message → update Conversation.lastMessageAt = now().
+
+Set deliveredAt = now() on the server at send time (not when the recipient opens).
+
+Return the saved message (id, text, senderId, createdAt, deliveredAt, type).
+
+Messages fetch API:
+
+GET /api/dm/:otherUserId/messages?after=ISO → query the DB only:
+
+SELECT id, senderId, text, type, createdAt, deliveredAt
+FROM Message
+WHERE conversationId = $conversationId
+  AND ( $after IS NULL OR createdAt > $after )
+ORDER BY createdAt ASC
+LIMIT 100;
+
+
+No filters on presence, seenAt, or “viewer currently in chat”.
+
+Inbox API:
+
+For each coworker, compute conversationId and read:
+
+Conversation.lastMessageAt
+
+last message preview (latest Message)
+
+Sort server-side by COALESCE(lastMessageAt, 'epoch') DESC, name ASC.
+
+2) Client: always refetch from DB (polling + focus)
+
+DM screen
+
+On mount and on window/tab focus: fetch full history.
+
+Start a poller: every 5 seconds call GET /messages?after=lastMessage.createdAt. Append results. Clear poller on unmount.
+
+After send success:
+
+qc.invalidateQueries({ queryKey: ["dm", otherUserId] });
+qc.invalidateQueries({ queryKey: ["inbox"] }); // resorts by lastMessageAt
+
+
+Keep optimistic bubble, but replace it with the server message (match by tempId).
+
+Inbox
+
+Fetch on mount + refetchOnWindowFocus: true.
+
+Start a 15s poll (lightweight) to refresh list so new conversations jump to the top even without sockets.
+
+3) Optional realtime (only for speed, not correctness)
+
+SSE/WebSocket pushes MESSAGE_CREATED{ conversationId, createdAt } to recipients.
+
+Handler:
+
+onMessageCreated((e) => {
+  qc.invalidateQueries({ queryKey: ["inbox"] });
+  if (openDmUserId matches) qc.invalidateQueries({ queryKey: ["dm", openDmUserId] });
+});
+
+
+Even if realtime is disconnected, polling + focus refetch keeps everything correct.
+
+4) Guardrails & checks (add temporary logs)
+
+Log in send: { conversationId, savedMessageId }
+
+Log in fetch(dm): { conversationId, returnedCount, afterParam }
+
+Log in inbox: top 3 rows { name, lastMessageAt }
+
+Confirm DB has rows in Message immediately after send (not only in memory).
+
+5) Acceptance criteria
+
+Send from Dispatcher → Owner while Owner is not on the DM screen:
+
+Within ≤5s (poll) Owner’s inbox shows Dispatcher at top with preview.
+
+Opening the DM shows the new message (persists after full page reload).
+
+Reply from Owner → Dispatcher while Dispatcher is elsewhere:
+
+Dispatcher sees the DM pop to top within ≤5–15s; message persists on reload.
+
+Turning off realtime still passes the above (polling is enough).

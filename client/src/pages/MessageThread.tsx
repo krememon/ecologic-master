@@ -123,9 +123,11 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const { data: fetchedMessages = [], isLoading: messagesLoading } = useQuery<MessageType[]>({
     queryKey: ["/api/conversations", numericConvId, "messages"],
     enabled: !!numericConvId && !isNaN(numericConvId!),
-    staleTime: 15000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 0, // Always fetch fresh data for store-and-forward delivery
+    refetchOnMount: "always", // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnReconnect: true, // Refetch when network reconnects
+    refetchInterval: 5000, // Poll every 5 seconds for new messages
     placeholderData: [],
     select: (data: any) => {
       return data.map((msg: any) => ({
