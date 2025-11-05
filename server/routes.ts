@@ -2014,30 +2014,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           threadId: conversation ? conversation.id.toString() : undefined,
           lastMessage: lastMessage,
           unreadCount,
+          updatedAt: conversation ? conversation.updatedAt.toISOString() : null,
         };
       }));
 
-      // Sort by: unread first, then by last message time, then alphabetically
+      // iOS-style sorting: conversation.updatedAt desc (most recent activity first)
       peopleList.sort((a, b) => {
-        // Unread first
-        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
-        if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+        // Conversations with activity first (sorted by updatedAt desc)
+        const aTime = a.updatedAt || '';
+        const bTime = b.updatedAt || '';
         
-        // Then by last message time
-        const aTime = a.lastMessage?.createdAt || '';
-        const bTime = b.lastMessage?.createdAt || '';
         if (aTime && bTime) {
           const comparison = bTime.localeCompare(aTime);
           if (comparison !== 0) return comparison;
         } else if (aTime && !bTime) {
-          return -1;
+          return -1; // Conversations with messages come before those without
         } else if (!aTime && bTime) {
           return 1;
         }
         
-        // Finally alphabetically by name
+        // Finally alphabetically by name for coworkers without conversations
         return a.name.localeCompare(b.name);
       });
+
+      // Diagnostics: log first 3 items for debugging
+      const firstThree = peopleList.slice(0, 3).map(p => ({
+        name: p.name,
+        lastMessageAt: p.lastMessage?.createdAt || null,
+        updatedAt: p.updatedAt
+      }));
+      console.log('[people-list] first 3 items:', JSON.stringify(firstThree));
 
       res.json(peopleList);
     } catch (error) {
@@ -2068,6 +2074,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const conversation = await storage.getOrCreateConversation(userId, otherUserId, company.id);
+      
+      // Diagnostics: log pairKey and threadId for debugging
+      const ids = [userId, otherUserId].sort();
+      const pairKey = `${ids[0]}_${ids[1]}`;
+      console.log('[threads.ensure]', { pairKey, threadId: conversation.id });
+      
       res.json({ threadId: conversation.id.toString() });
     } catch (error) {
       console.error('Error ensuring thread:', error);
@@ -2188,6 +2200,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Verify user is a participant
       const participant = await storage.getConversationParticipant(conversationId, userId);
+      const isMember = !!participant;
+      
+      // Diagnostics: log send attempt
+      console.log('[send message]', { threadId: conversationId, senderId: userId, isMember });
+      
       if (!participant) {
         return res.status(403).json({ message: 'Not a participant in this conversation' });
       }

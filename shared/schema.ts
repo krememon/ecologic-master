@@ -206,6 +206,7 @@ export const conversations = pgTable("conversations", {
 }, (table) => ({
   companyIdx: index("conversations_company_idx").on(table.companyId),
   pairKeyIdx: uniqueIndex("conversations_pair_key_idx").on(table.pairKey),
+  updatedAtIdx: index("conversations_updated_at_idx").on(table.updatedAt.desc()),
 }));
 
 // Conversation participants table  

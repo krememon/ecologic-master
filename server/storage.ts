@@ -771,15 +771,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createConversationMessage(messageData: InsertMessage): Promise<Message> {
-    const [message] = await db.insert(messages).values(messageData).returning();
-    
-    // Update conversation's updatedAt
-    await db
-      .update(conversations)
-      .set({ updatedAt: new Date() })
-      .where(eq(conversations.id, messageData.conversationId));
-    
-    return message;
+    // Atomic transaction: create message + update conversation.updatedAt for guaranteed delivery
+    return await db.transaction(async (tx) => {
+      const [message] = await tx.insert(messages).values(messageData).returning();
+      
+      // Update conversation's updatedAt in same transaction (drives inbox sort)
+      await tx
+        .update(conversations)
+        .set({ updatedAt: new Date() })
+        .where(eq(conversations.id, messageData.conversationId));
+      
+      return message;
+    });
   }
 
   async markConversationAsRead(conversationId: number, userId: string): Promise<void> {

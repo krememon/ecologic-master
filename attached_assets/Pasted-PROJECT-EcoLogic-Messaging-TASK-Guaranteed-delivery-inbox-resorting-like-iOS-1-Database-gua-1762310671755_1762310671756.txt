@@ -1,0 +1,133 @@
+PROJECT: EcoLogic — Messaging
+TASK: Guaranteed delivery + inbox resorting like iOS.
+
+1) Database guarantees
+
+Add/ensure indexes:
+
+Message(threadId, createdAt desc)
+
+Thread(updatedAt desc)
+
+On every new message, update the thread’s updatedAt = now() (in the same transaction). This drives the inbox sort.
+
+// inside a single transaction
+const msg = await tx.message.create({
+  data: { threadId, senderId, text, type: "text" },
+});
+await tx.thread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
+
+2) One-thread-per-pair (prevents “ghost messages”)
+
+In threads.ensure, compute pairKey = min(userA,userB) + '|' + max(userA,userB) and @@unique([pairKey]) (or aUserId/bUserId columns with unique constraint). Always find-or-create by that key.
+
+3) Send Message API (atomic + validated)
+
+POST /api/messages/threads/:id/send
+
+Verify requester is ThreadMember.
+
+Transaction: create message → update thread.updatedAt → return the saved message (id, createdAt, senderId, text, type).
+
+Optionally compute recipientId(s) from members.
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const userId = session.user.id;
+  const threadId = params.id;
+
+  // membership check (required)
+  const member = await prisma.threadMember.findFirst({ where: { threadId, userId } });
+  if (!member) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const { text } = await req.json();
+
+  const result = await prisma.$transaction(async (tx) => {
+    const message = await tx.message.create({
+      data: { threadId, senderId: userId, text, type: "text" },
+      select: { id: true, threadId: true, senderId: true, text: true, createdAt: true, type: true },
+    });
+    await tx.thread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
+    return message;
+  });
+
+  // emit realtime event (see §4)
+  await emitToThreadMembers(threadId, { type: "MESSAGE_CREATED", payload: result });
+
+  return NextResponse.json(result, { status: 200 });
+}
+
+4) Realtime receive (fast) + polling fallback (safe)
+
+Implement one of these (both if easy):
+
+A) Server-Sent Events (SSE) (no extra infra)
+
+GET /api/realtime/sse streams events for the logged-in user.
+
+On server, when a message is created, call emitToUser(recipientId, event); SSE pushes { type:"MESSAGE_CREATED", payload:{threadId, ...} }.
+
+B) WebSocket/Pusher/Ably (if you already use one)
+
+Channel per userId (e.g., user.{id}) and a thread.{id} channel optional.
+
+Emit MESSAGE_CREATED to all thread members.
+
+Either way: if realtime is disconnected, the UI still works via query invalidation (below).
+
+5) Inbox: always sorted by latest activity
+
+GET /api/messages/people-list
+
+Sort by COALESCE(lastMessage.createdAt, NULL) desc, then name.
+
+Users with “Start a conversation” (no messages) naturally sit below active threads.
+
+6) Frontend cache rules (React Query)
+
+After a successful send:
+
+qc.invalidateQueries({ queryKey: ["thread", threadId] });
+qc.invalidateQueries({ queryKey: ["peopleList"] }); // resorts list using updatedAt
+
+
+On DM screen mount/focus:
+
+useQuery({ ..., refetchOnMount: "always", refetchOnWindowFocus: true });
+
+
+Realtime handler:
+
+on("MESSAGE_CREATED", (m) => {
+  qc.invalidateQueries({ queryKey: ["thread", m.threadId] });
+  qc.invalidateQueries({ queryKey: ["peopleList"] });
+});
+
+7) Optimistic → confirmed
+
+When sending, show an optimistic message with a temp id; on API success, replace it with the server message by timestamp/id. If API fails, roll back the optimistic item.
+
+8) Unread + top placement
+
+When a non-sender receives MESSAGE_CREATED, mark that thread unread in local cache and, because peopleList refetches and server updated updatedAt, the thread moves to the top automatically.
+
+9) Diagnostics (add logs temporarily)
+
+Log in threads.ensure: { pairKey, threadId }
+
+Log in send: { threadId, senderId, isMember }
+
+Log in people-list: first 3 items’ { name, lastMessageAt }
+
+If a sent message disappears on reload, one of these will show the culprit (duplicate thread or missing updatedAt).
+
+10) Acceptance tests (manual)
+
+Dispatcher sends Owner → Owner instantly sees message (realtime).
+
+Reload Owner DM → message persists.
+
+Inbox on both sides shows that DM first after send.
+
+Sender and recipient can ping-pong messages; no duplicates threads ever created.
+
+With realtime off (simulate), messages still appear after navigating back or reloading (thanks to invalidations).
