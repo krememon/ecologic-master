@@ -217,7 +217,7 @@ export const conversationParticipants = pgTable("conversation_participants", {
   muted: boolean("muted").default(false).notNull(),
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
 }, (table) => ({
-  conversationUserIdx: index("conversation_participants_conv_user_idx").on(table.conversationId, table.userId),
+  conversationUserIdx: uniqueIndex("conversation_participants_conv_user_uniq").on(table.conversationId, table.userId),
   userIdx: index("conversation_participants_user_idx").on(table.userId),
 }));
 

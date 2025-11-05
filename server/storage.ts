@@ -702,6 +702,41 @@ export class DatabaseStorage implements IStorage {
       .where(eq(conversations.pairKey, pairKey))
       .limit(1);
     
+    // Ensure both users are participants (defensive fix for data corruption)
+    // First, check existing participant count for 1:1 conversations
+    const existingParticipants = await db
+      .select({ userId: conversationParticipants.userId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.conversationId, existing.id));
+    
+    // For 1:1 conversations, enforce exactly 2 participants
+    if (!existing.isGroup && existingParticipants.length > 2) {
+      throw new Error(`Data corruption: 1:1 conversation ${existing.id} has ${existingParticipants.length} participants`);
+    }
+    
+    // Add missing participants if needed (but never exceed 2 for 1:1)
+    const missingUsers = [userId1, userId2].filter(
+      uid => !existingParticipants.some(p => p.userId === uid)
+    );
+    
+    if (missingUsers.length > 0) {
+      // Verify this won't exceed 2 participants for 1:1 conversations
+      if (!existing.isGroup && existingParticipants.length + missingUsers.length > 2) {
+        throw new Error(
+          `Cannot add ${missingUsers.length} participants to 1:1 conversation ${existing.id}: ` +
+          `would exceed 2-participant limit (currently has ${existingParticipants.length})`
+        );
+      }
+      
+      await db
+        .insert(conversationParticipants)
+        .values(missingUsers.map(uid => ({
+          conversationId: existing.id,
+          userId: uid,
+        })))
+        .onConflictDoNothing({ target: [conversationParticipants.conversationId, conversationParticipants.userId] });
+    }
+    
     return existing;
   }
 

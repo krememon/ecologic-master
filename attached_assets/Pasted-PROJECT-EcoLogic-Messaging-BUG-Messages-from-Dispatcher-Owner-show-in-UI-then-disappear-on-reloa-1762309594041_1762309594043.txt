@@ -1,0 +1,104 @@
+PROJECT: EcoLogic — Messaging
+BUG: Messages from Dispatcher→Owner show in UI then disappear on reload.
+GOAL: Guarantee a single 1:1 thread per pair, save messages to the correct thread, and always refetch with the server-confirmed state.
+
+1) DB & Constraints (one thread per pair)
+Add canonical pair columns on threads
+
+Add two columns and a unique index so there can never be two 1:1 threads for the same pair:
+
+-- Prisma model idea
+model Thread {
+  id           String   @id @default(cuid())
+  isGroup      Boolean  @default(false)
+  aUserId      String?  // canonical lower userId for 1:1
+  bUserId      String?  // canonical higher userId for 1:1
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([aUserId, bUserId], map: "uniq_direct_pair") // enforce single 1:1
+}
+
+
+If you can’t change the Thread model, store a pairKey (minId|maxId) with a unique index.
+
+Thread membership invariant
+
+Whenever a direct thread is created:
+
+exactly two ThreadMember rows (for those two users)
+
+both belong to the same company.
+
+2) Ensure-thread endpoint (no duplicates, always return the same one)
+
+POST /api/messages/threads.ensure
+
+const a = currentUserId < otherUserId ? currentUserId : otherUserId;
+const b = currentUserId < otherUserId ? otherUserId    : currentUserId;
+
+// 1) verify both users share the same active company membership
+// 2) find existing by (aUserId,bUserId)
+// 3) if none, create in a transaction:
+//    - create Thread { isGroup:false, aUserId:a, bUserId:b }
+//    - create ThreadMember rows for both
+// 4) return { threadId }
+
+
+This removes the race where two different API calls create two threads for the same pair.
+
+3) Send-message endpoint: validate membership + return saved message
+
+POST /api/messages/threads/:id/send
+
+Verify the sender is a member of that thread.
+
+Insert message with threadId, senderId, text, createdAt.
+
+Update thread updatedAt.
+
+Return the saved message (id, text, senderId, createdAt, type).
+
+If the sender isn’t a member, return 403 (prevents writing into a thread the viewer can’t later read).
+
+4) Thread fetch and inbox list must join by membership
+
+/api/messages/threads/:id should require the requester to be a ThreadMember.
+
+/api/messages/people-list left-joins from CompanyMember (we already changed) and, when a thread exists for that pair, uses that exact thread id.
+
+5) Frontend: replace optimistic with server-confirmed + cache refresh
+
+After send, replace the optimistic message with the server message (matching by a temp id), then:
+
+queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
+queryClient.invalidateQueries({ queryKey: ["peopleList"] });
+
+
+On opening a DM, always refetchOnMount: "always" so you never see a stale optimistic state.
+
+6) Quick diagnostics to run now (log these)
+
+When Dispatcher sends Owner a message:
+
+Log in threads.ensure: {aUserId, bUserId, returnedThreadId}.
+
+In send: log {threadId, senderId, isMember:true/false}.
+
+In get thread: log {threadId, requesterId, isMember:true/false, messagesCount}.
+
+If:
+
+two different threadIds appear for the same pair → duplicate-thread bug (fixed by #1/#2).
+
+isMember:false when fetching → message saved to a thread the user doesn’t belong to (fix by membership checks in #3/#4).
+
+Acceptance Criteria
+
+For any two users in the same company, only one 1:1 thread exists (verified by the unique constraint).
+
+Sending Dispatcher→Owner shows in the DM immediately, and persists after reload on both sides.
+
+Inbox preview/time updates right after sending.
+
+No “missing” messages when navigating back into the same DM.
