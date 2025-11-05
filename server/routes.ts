@@ -1881,7 +1881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           and(
             eq(companyMembers.companyId, company.id),
             sql`${users.id} != ${userId}`,
-            eq(users.status, 'ACTIVE')
+            sql`UPPER(${users.status}) = 'ACTIVE'`
           )
         );
 

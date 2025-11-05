@@ -1,0 +1,99 @@
+PROJECT: EcoLogic — Messages Inbox
+TASK: Make the inbox show all users linked to the same company (Owner included) for every logged-in user. Keep iOS styling from previous task.
+
+Problems to fix
+
+Owner isn’t showing up for Dispatcher (likely because coworkers are derived from User.companyId or an “employees only” query).
+
+Some tenants might store membership in a join table (e.g., CompanyMember). We must derive coworkers from membership, not from ad-hoc user fields.
+
+Data model normalization (adjust names to your schema)
+
+Ensure there is a membership table:
+
+CompanyMember { id, companyId, userId, role, status }
+
+Make sure every user, including the Owner, has a row in CompanyMember for that company (status = "active").
+
+If Owner only exists as Company.ownerId and not in CompanyMember, insert a membership row.
+
+One-time migration/repair (idempotent)
+
+Write a script/seed step that:
+
+For each company, if Company.ownerId exists and there is no CompanyMember for (ownerId, companyId), create it with role OWNER, status active.
+
+For all existing employees, ensure a CompanyMember row exists and status is active unless intentionally disabled.
+
+API: People list (LEFT JOIN from membership)
+
+Replace the base coworker query to derive from membership:
+
+GET /api/messages/people-list
+
+Rules
+
+Base set = all active memberships for the company of the current user’s active membership.
+
+Exclude only the current user from the list.
+
+No role filtering (Owner, Dispatcher, Technician… all included).
+
+Optional q search across user name/email, but do not apply a default filter when q is empty.
+
+Pseudocode (Prisma-style)
+
+const me = await prisma.companyMember.findFirst({
+  where: { userId: currentUserId, status: "active" },
+  select: { companyId: true },
+});
+if (!me?.companyId) return [];
+
+const memberships = await prisma.companyMember.findMany({
+  where: { companyId: me.companyId, status: "active", userId: { not: currentUserId } },
+  select: { user: { select: { id: true, name: true, email: true } } },
+});
+
+// coworker ids
+const coworkerIds = memberships.map(m => m.user.id);
+
+// find existing 1:1 threads that include me + any coworker
+// (same as previous task)
+// ...build response rows with lastMessage + unreadCount
+
+
+Important: Do not read coworkers from User.companyId or an “employees” table. Always derive from CompanyMember. This guarantees the Owner is included if they have a membership row.
+
+Ensure-thread endpoint
+
+No change to behavior, but permission check must also use membership:
+
+Confirm both currentUserId and otherUserId share an active membership in the same company.
+
+If either lacks membership, return 403.
+
+Frontend
+
+Keep using /api/messages/people-list as the list source.
+
+No UI changes needed; this is a data fix.
+
+After sending a message, still invalidateQueries(["peopleList"]) and invalidateQueries(["thread", threadId]).
+
+Tests / Validation (manual is fine)
+
+Log in as Dispatcher → Owner appears in list with “Start a conversation” (if no thread yet).
+
+Log in as Owner → Dispatcher and all other roles appear.
+
+Create DM Owner ↔ Dispatcher → send a message → back to list → preview/time update immediately.
+
+Search box empty → list is still populated (no accidental filter).
+
+If a user is set to inactive in CompanyMember, they disappear from list (expected).
+
+Edge guards
+
+If an org can have multiple companies per user, select the current company context (e.g., activeCompanyId from session/tenant switcher) to pick the right membership.
+
+If you soft-delete users, filter out user.deletedAt != null.
