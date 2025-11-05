@@ -1,0 +1,199 @@
+PROJECT: EcoLogic — Messaging
+PLAN B: Deterministic 1:1 DM key + “upsert-on-send” + list auto-resort with pure DB ordering (works even with no realtime).
+
+Goals
+
+A message always lands in the right DM and persists on reload.
+
+The DM list jumps to the top when a new message arrives.
+
+No duplicate threads. No membership confusion.
+
+1) Deterministic direct-DM key (no pre-thread required)
+
+Pair Key
+
+pairKey = `${min(userAId, userBId)}|${max(userAId, userBId)}`
+
+Schema (adjust to your ORM)
+-- Conversations table replaces fragile “thread creation” flow
+CREATE TABLE IF NOT EXISTS Conversation (
+  id           TEXT PRIMARY KEY,           -- id = 'dm:' || pairKey
+  pairKey      TEXT NOT NULL UNIQUE,       -- 'u123|u777'
+  isGroup      BOOLEAN NOT NULL DEFAULT FALSE,
+  lastMessageAt TIMESTAMP WITH TIME ZONE,
+  createdAt    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_conversation_pair ON Conversation(pairKey);
+
+CREATE TABLE IF NOT EXISTS Message (
+  id           TEXT PRIMARY KEY,
+  conversationId TEXT NOT NULL REFERENCES Conversation(id),
+  senderId     TEXT NOT NULL,
+  text         TEXT,
+  type         TEXT NOT NULL DEFAULT 'text',
+  createdAt    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Fast ordering
+CREATE INDEX IF NOT EXISTS idx_message_convo_created ON Message(conversationId, createdAt DESC);
+CREATE INDEX IF NOT EXISTS idx_convo_lastMessageAt ON Conversation(lastMessageAt DESC);
+
+
+Conversation.id for DMs is deterministic:
+
+conversationId = `dm:${pairKey}`
+
+
+This means you never “create” a thread elsewhere. You just upsert by pairKey when sending or opening.
+
+2) Send message = atomic “upsert conversation + insert message”
+
+POST /api/dm/:otherUserId/send
+
+export async function POST(req: Request, { params }) {
+  const userId = session.user.id;
+  const otherId = params.otherUserId;
+
+  // 1) membership guard: both must share an active company
+  assertSameCompany(userId, otherId);
+
+  // 2) deterministic keys
+  const [a, b] = [userId, otherId].sort();
+  const pairKey = `${a}|${b}`;
+  const conversationId = `dm:${pairKey}`;
+
+  const { text } = await req.json();
+
+  const result = await db.tx(async (tx) => {
+    // upsert conversation once (race-safe by UNIQUE(pairKey))
+    await tx.query(`
+      INSERT INTO "Conversation"(id, "pairKey", "isGroup", "lastMessageAt")
+      VALUES ($1, $2, FALSE, NOW())
+      ON CONFLICT ("pairKey") DO UPDATE SET "lastMessageAt" = NOW()
+    `, [conversationId, pairKey]);
+
+    // insert message
+    const msg = await tx.query(`
+      INSERT INTO "Message"(id, "conversationId", "senderId", "text", "type")
+      VALUES (gen_random_uuid()::text, $1, $2, $3, 'text')
+      RETURNING id, "conversationId", "senderId", "text", "type", "createdAt"
+    `, [conversationId, userId, text]);
+
+    // keep lastMessageAt accurate even if two sends race
+    await tx.query(`UPDATE "Conversation" SET "lastMessageAt" = GREATEST("lastMessageAt", NOW()) WHERE id = $1`, [conversationId]);
+
+    return msg.rows[0];
+  });
+
+  return NextResponse.json(result, { status: 200 });
+}
+
+
+Because Conversation is upserted by pairKey inside a transaction, you cannot get duplicate DMs for the same two users, and the message cannot “land in the wrong thread.”
+
+3) Open DM by otherUserId (no need to look up any thread id)
+
+GET /api/dm/:otherUserId/messages?cursor=...
+
+// derive pairKey and conversationId exactly the same way
+// if no conversation exists yet, first call returns [] (that’s fine)
+SELECT id, "senderId", "text", "type", "createdAt"
+FROM "Message"
+WHERE "conversationId" = $conversationId
+ORDER BY "createdAt" ASC
+LIMIT 50 OFFSET $cursor;
+
+
+This endpoint never 404s for valid coworker pairs; it just returns 0 messages if empty.
+
+4) Inbox list = everyone + last activity sort
+
+GET /api/messages/inbox
+
+Build everyone-in-company (excluding self) the same way you just did.
+
+For each coworker, derive conversationId from the deterministic pairKey and fetch a single row:
+
+SELECT "lastMessageAt" FROM "Conversation" WHERE id = $conversationId;
+SELECT id, "senderId", "text", "type", "createdAt"
+FROM "Message"
+WHERE "conversationId" = $conversationId
+ORDER BY "createdAt" DESC LIMIT 1;
+
+
+Build rows:
+
+{
+  otherUserId, name,
+  conversationId,                     // deterministic
+  lastMessage,                        // null if never messaged
+  lastMessageAt,                      // null if never messaged
+  unreadCount: 0                      // (optional: add read receipts later)
+}
+
+
+Sort server-side:
+
+ORDER BY
+  COALESCE(lastMessageAt, TIMESTAMP 'epoch') DESC,
+  name ASC;
+
+
+Because send always updates lastMessageAt, the conversation jumps to the top on the next fetch — no sockets required.
+
+5) Frontend (simple & reliable)
+DM screen
+
+Route: /messages/:otherUserId (not threadId).
+
+On mount/focus: fetch GET /api/dm/:otherUserId/messages with refetchOnMount: "always" and refetchOnWindowFocus: true.
+
+When sending:
+
+POST /api/dm/:otherUserId/send
+
+On success:
+
+qc.invalidateQueries({ queryKey: ["dm", otherUserId] });
+qc.invalidateQueries({ queryKey: ["inbox"] }); // resorts list by lastMessageAt
+
+
+Show optimistic bubble, replace with server message on success (using returned id).
+
+Inbox
+
+Data from GET /api/messages/inbox
+
+No client-side sort; trust server’s lastMessageAt.
+
+Row click navigates to /messages/:otherUserId.
+
+6) Why this works (and your issue disappears)
+
+There is exactly one DM per pair because the ID is deterministic (dm:min|max). No duplicates, no “wrong thread.”
+
+Messages cannot vanish on reload: they’re tied to the same conversationId on both sides.
+
+The list auto-resorts because lastMessageAt is updated in the same transaction as the send.
+
+Even if realtime is down, the next refetch shows the message and the conversation at the top.
+
+7) Quick verification checklist (do this right after deploy)
+
+Dispatcher → Owner: send “hi”.
+
+Owner opens /messages/dispatcherId → sees the message after reload.
+
+Inbox: Owner sees Dispatcher row at the top.
+
+Owner replies.
+
+Dispatcher reloads → message persists; inbox resorts to top.
+
+Confirm Conversation has one row for that pair and lastMessageAt updates each send.
+
+8) Optional: lightweight realtime (after it’s stable)
+
+Add SSE/WebSocket broadcasting after this deterministic base is working. The UI handler simply invalidates ["dm", otherUserId] and ["inbox"] on MESSAGE_CREATED.
