@@ -4,7 +4,7 @@ interface ThreadRowProps {
   name: string;
   lastMessageText: string | null;
   lastMessageFromSelf: boolean;
-  lastMessageAt: string;
+  lastMessageAt: string | null;
   unreadCount: number;
   onClick: () => void;
 }
@@ -18,7 +18,7 @@ export default function ThreadRow({
   onClick,
 }: ThreadRowProps) {
   const preview = lastMessageText
-    ? `${lastMessageFromSelf ? "You: " : ""}${lastMessageText}`
+    ? `${lastMessageFromSelf && lastMessageText !== "Start a conversation" ? "You: " : ""}${lastMessageText}`
     : "";
 
   return (
@@ -48,12 +48,14 @@ export default function ThreadRow({
           >
             {name}
           </span>
-          <span 
-            className="ml-2 shrink-0 text-xs text-muted-foreground"
-            data-testid="text-thread-time"
-          >
-            {formatInboxTime(lastMessageAt)}
-          </span>
+          {lastMessageAt && (
+            <span 
+              className="ml-2 shrink-0 text-xs text-muted-foreground"
+              data-testid="text-thread-time"
+            >
+              {formatInboxTime(lastMessageAt)}
+            </span>
+          )}
         </div>
         <div 
           className="text-sm text-muted-foreground truncate mt-0.5"

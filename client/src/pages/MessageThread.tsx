@@ -306,6 +306,9 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             createdAt: new Date(message.createdAt),
           }]));
           
+          // Invalidate peopleList to update inbox preview and timestamp
+          queryClient.invalidateQueries({ queryKey: ["peopleList"] });
+          
           // Refocus textarea
           textareaRef.current?.focus();
         } else {

@@ -1,27 +1,26 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, User } from "lucide-react";
 import { useLocation } from "wouter";
 import ThreadRow from "@/components/ThreadRow";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
-interface MessageThread {
+interface PersonInList {
   id: string;
-  otherUser: {
-    id: string;
-    name: string;
-  };
-  lastMessage: {
+  name: string;
+  hasThread: boolean;
+  threadId?: string;
+  lastMessage?: {
     id: string;
     text: string | null;
     type: "text" | "image" | "file" | "system";
     createdAt: string;
     senderId: string;
-  } | null;
+  };
   unreadCount: number;
-  lastReadAt: string | null;
 }
 
 export default function MessagesDirectory() {
@@ -29,22 +28,48 @@ export default function MessagesDirectory() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Fetch message threads (iOS-style)
-  const { data: threads = [], isLoading } = useQuery<MessageThread[]>({
-    queryKey: ["/api/messages/threads"],
+  // Fetch all coworkers with their thread status
+  const { data: peopleList = [], isLoading } = useQuery<PersonInList[]>({
+    queryKey: ["peopleList"],
+    queryFn: async () => {
+      const response = await fetch("/api/messages/people-list");
+      if (!response.ok) throw new Error("Failed to fetch people list");
+      return response.json();
+    },
     enabled: !!user,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     refetchInterval: 5000,
   });
 
-  const filteredThreads = threads.filter((thread) =>
-    thread.otherUser.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
+  // Mutation to ensure a thread exists
+  const ensureThread = useMutation({
+    mutationFn: async (otherUserId: string) => {
+      const response = await apiRequest("/api/messages/threads/ensure", {
+        method: "POST",
+        body: JSON.stringify({ otherUserId }),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["peopleList"] });
+    },
+  });
+
+  const filteredPeople = peopleList.filter((person) =>
+    person.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleThreadTap = (thread: MessageThread) => {
-    // Navigate to conversation
-    setLocation(`/messages/c/${thread.id}`);
+  const handlePersonTap = async (person: PersonInList) => {
+    if (person.hasThread && person.threadId) {
+      // Navigate directly if thread exists
+      setLocation(`/messages/c/${person.threadId}`);
+    } else {
+      // Create thread first, then navigate
+      const result = await ensureThread.mutateAsync(person.id);
+      setLocation(`/messages/c/${result.threadId}`);
+    }
   };
 
   return (
@@ -64,34 +89,37 @@ export default function MessagesDirectory() {
         </div>
       </div>
 
-      {/* Conversation Threads List */}
+      {/* People List */}
       <ScrollArea className="flex-1">
         <div className="divide-y divide-border">
           {isLoading ? (
             <div className="text-center text-muted-foreground py-16">
-              <p className="text-sm">Loading conversations...</p>
+              <p className="text-sm">Loading people...</p>
             </div>
-          ) : filteredThreads.length === 0 ? (
+          ) : filteredPeople.length === 0 ? (
             <div className="text-center text-muted-foreground py-16">
               <User className="h-12 w-12 mx-auto mb-3 opacity-20" />
               <p className="text-sm">
-                {searchQuery ? "No conversations found" : "No conversations yet"}
+                {searchQuery ? "No people found" : "No coworkers yet"}
               </p>
             </div>
           ) : (
-            filteredThreads
-              .filter((thread) => thread.lastMessage !== null) // Only show threads with messages
-              .map((thread) => (
-                <ThreadRow
-                  key={thread.id}
-                  name={thread.otherUser.name}
-                  lastMessageText={thread.lastMessage!.text || null}
-                  lastMessageFromSelf={thread.lastMessage!.senderId === user?.id}
-                  lastMessageAt={thread.lastMessage!.createdAt}
-                  unreadCount={thread.unreadCount}
-                  onClick={() => handleThreadTap(thread)}
-                />
-              ))
+            filteredPeople.map((person) => (
+              <ThreadRow
+                key={person.id}
+                name={person.name}
+                lastMessageText={
+                  person.lastMessage?.text || 
+                  (person.hasThread ? null : "Start a conversation")
+                }
+                lastMessageFromSelf={
+                  person.lastMessage?.senderId === user?.id || false
+                }
+                lastMessageAt={person.lastMessage?.createdAt || null}
+                unreadCount={person.unreadCount}
+                onClick={() => handlePersonTap(person)}
+              />
+            ))
           )}
         </div>
       </ScrollArea>
