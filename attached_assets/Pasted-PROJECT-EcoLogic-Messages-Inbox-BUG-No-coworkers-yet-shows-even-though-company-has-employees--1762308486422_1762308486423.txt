@@ -1,0 +1,229 @@
+PROJECT: EcoLogic — Messages Inbox
+BUG: “No coworkers yet” shows even though company has employees.
+
+What’s happening
+
+Our new /api/messages/people-list is likely returning [] due to scoping/filters. Common pitfalls:
+
+Missing/incorrect companyId scoping from the session.
+
+Accidentally filtering out everyone (e.g., WHERE active = true but seed data has active = null/false).
+
+Excluding the current user then also excluding everyone else with a wrong join.
+
+Applying a search filter by default (empty string treated as “match none”).
+
+Only returning users who already have threads (should be LEFT JOIN all coworkers).
+
+Fix — Server
+
+Implement people-list with LEFT JOIN over all active coworkers (except self), and optional search.
+
+Stack: Prisma (adjust if using SQL/ORM).
+
+Tables assumed: User, Thread (1:1), ThreadMember, Message.
+
+// /app/api/messages/people-list/route.ts
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json([], { status: 200 });
+
+  const currentUserId = session.user.id;
+
+  // Ensure company scoping
+  const me = await prisma.user.findUnique({
+    where: { id: currentUserId },
+    select: { companyId: true },
+  });
+  if (!me?.companyId) return NextResponse.json([], { status: 200 });
+
+  const { searchParams } = new URL(req.url);
+  const q = (searchParams.get("q") ?? "").trim();
+
+  // 1) Base coworker set (same company, active, not me)
+  const coworkers = await prisma.user.findMany({
+    where: {
+      companyId: me.companyId,
+      id: { not: currentUserId },
+      // If you don't have an 'active' flag, remove this:
+      OR: [{ active: true }, { active: null }],
+      ...(q
+        ? { name: { contains: q, mode: "insensitive" } }
+        : {}),
+    },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  if (coworkers.length === 0) return NextResponse.json([], { status: 200 });
+
+  // 2) Fetch latest 1:1 thread per coworker (if any)
+  // Threads are unique per pair (enforce in create)
+  const coworkerIds = coworkers.map(c => c.id);
+
+  // Find existing 1:1 threads between me and coworkers
+  const threads = await prisma.thread.findMany({
+    where: {
+      // 1:1 DMs: exactly two members (me + other)
+      isGroup: false,
+      members: {
+        some: { userId: currentUserId },
+      },
+      // limit to pairs that include any coworker
+      OR: coworkerIds.map(id => ({
+        members: { some: { userId: id } },
+      })),
+    },
+    include: {
+      members: { select: { userId: true, lastReadAt: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, text: true, type: true, senderId: true, createdAt: true } },
+    },
+  });
+
+  const threadByOtherId = new Map<string, (typeof threads)[number]>();
+  for (const t of threads) {
+    const other = t.members.find(m => m.userId !== currentUserId)?.userId;
+    if (other) threadByOtherId.set(other, t);
+  }
+
+  // 3) Build response rows with unread count
+  const rows = coworkers.map(cw => {
+    const t = threadByOtherId.get(cw.id);
+    const last = t?.messages?.[0] ?? null;
+
+    // unread: if there’s a message newer than my lastReadAt
+    let unreadCount = 0;
+    if (t) {
+      const meMember = t.members.find(m => m.userId === currentUserId);
+      if (!meMember?.lastReadAt && last) unreadCount = 1;
+      if (meMember?.lastReadAt && last && last.createdAt > meMember.lastReadAt) unreadCount = 1;
+      // (Optional) replace with an aggregate count if needed
+    }
+
+    return {
+      id: cw.id,
+      name: cw.name,
+      hasThread: Boolean(t),
+      threadId: t?.id ?? null,
+      lastMessage: last
+        ? {
+            id: last.id,
+            text: last.text,
+            type: last.type as "text" | "image" | "file" | "system",
+            senderId: last.senderId,
+            createdAt: last.createdAt.toISOString?.() ?? String(last.createdAt),
+          }
+        : null,
+      unreadCount,
+    };
+  });
+
+  // 4) Sort: recent first, then name (like iOS)
+  rows.sort((a, b) => {
+    const at = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+    const bt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+    if (bt !== at) return bt - at;
+    return a.name.localeCompare(b.name);
+  });
+
+  return NextResponse.json(rows, { status: 200 });
+}
+
+
+Ensure-thread endpoint (if not already correct):
+
+// /app/api/messages/threads.ensure/route.ts
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const currentUserId = session.user.id;
+  const { otherUserId } = await req.json();
+
+  // Check same company (prevent cross-company leakage)
+  const me = await prisma.user.findUnique({ where: { id: currentUserId }, select: { companyId: true } });
+  const other = await prisma.user.findUnique({ where: { id: otherUserId }, select: { companyId: true } });
+  if (!me?.companyId || !other?.companyId || me.companyId !== other.companyId) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // Look up existing 1:1 thread
+  const existing = await prisma.thread.findFirst({
+    where: {
+      isGroup: false,
+      members: { every: { userId: { in: [currentUserId, otherUserId] } } },
+    },
+    select: { id: true },
+  });
+
+  if (existing) return NextResponse.json({ threadId: existing.id }, { status: 200 });
+
+  const created = await prisma.thread.create({
+    data: {
+      isGroup: false,
+      members: {
+        create: [{ userId: currentUserId }, { userId: otherUserId }],
+      },
+    },
+    select: { id: true },
+  });
+
+  return NextResponse.json({ threadId: created.id }, { status: 200 });
+}
+
+
+Key guardrails: same company, don’t require prior messages, and don’t accidentally filter out inactive/null users unless you intend to.
+
+Fix — Frontend
+
+Use people-list as the source, and show a skeleton only while loading. If the array is empty, fallback to the existing Employees endpoint to double-check (prevents “blank” if people-list fails):
+
+// MessagesList.tsx (excerpt)
+const { data: people, isFetching } = useQuery({ queryKey: ["peopleList"], queryFn: fetchPeopleList, refetchOnMount: "always", refetchOnWindowFocus: true });
+
+const { data: employeesFallback } = useQuery({
+  queryKey: ["employeesFallback"],
+  queryFn: async () => (await fetch("/api/company/employees")).json(), // existing endpoint you already have
+  enabled: !isFetching && (people?.length ?? 0) === 0,
+});
+
+const rows = (people?.length ? people : (employeesFallback ?? []).map((e: any) => ({
+  id: e.id, name: e.name, hasThread: false, threadId: null, lastMessage: null, unreadCount: 0
+})));
+
+
+Row click: ensure thread then navigate.
+
+onClick={async () => {
+  const threadId = row.hasThread && row.threadId
+    ? row.threadId
+    : (await fetch("/api/messages/threads.ensure", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ otherUserId: row.id }) }).then(r => r.json())).threadId;
+  router.push(`/messages/${threadId}`);
+}}
+
+
+After send, invalidate both queries:
+
+queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
+queryClient.invalidateQueries({ queryKey: ["peopleList"] });
+
+Validation Checklist
+
+Log in as non-owner test user → inbox lists all coworkers.
+
+Search box empty → still lists coworkers (no default “match none” filter).
+
+Tap coworker with no prior DM → thread is created and opens.
+
+Send message → go back → inbox preview/time update.
+
+Re-enter DM → latest messages load (no stale cache).
+
+Unread dot shows only when unreadCount > 0.

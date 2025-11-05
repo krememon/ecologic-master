@@ -1867,19 +1867,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get all active users in the company (excluding current user)
+      // Join through companyMembers to get coworkers in the same company
       const coworkers = await db
         .select({
           id: users.id,
           firstName: users.firstName,
           lastName: users.lastName,
-          role: users.role,
+          status: users.status,
         })
         .from(users)
+        .innerJoin(companyMembers, eq(companyMembers.userId, users.id))
         .where(
           and(
-            eq(users.companyId, company.id),
+            eq(companyMembers.companyId, company.id),
             sql`${users.id} != ${userId}`,
-            eq(users.isActive, true)
+            eq(users.status, 'ACTIVE')
           )
         );
 
