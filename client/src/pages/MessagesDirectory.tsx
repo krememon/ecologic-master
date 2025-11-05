@@ -32,7 +32,9 @@ export default function MessagesDirectory() {
   const { data: peopleList = [], isLoading } = useQuery<PersonInList[]>({
     queryKey: ["peopleList"],
     queryFn: async () => {
-      const response = await fetch("/api/messages/people-list");
+      const response = await fetch("/api/messages/people-list", {
+        credentials: "include",
+      });
       if (!response.ok) throw new Error("Failed to fetch people list");
       return response.json();
     },
@@ -46,11 +48,14 @@ export default function MessagesDirectory() {
   // Mutation to ensure a thread exists
   const ensureThread = useMutation({
     mutationFn: async (otherUserId: string) => {
-      const response = await apiRequest("/api/messages/threads/ensure", {
+      const response = await fetch("/api/messages/threads/ensure", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ otherUserId }),
       });
-      return response;
+      if (!response.ok) throw new Error("Failed to ensure thread");
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["peopleList"] });
@@ -67,7 +72,7 @@ export default function MessagesDirectory() {
       setLocation(`/messages/c/${person.threadId}`);
     } else {
       // Create thread first, then navigate
-      const result = await ensureThread.mutateAsync(person.id);
+      const result: { threadId: string } = await ensureThread.mutateAsync(person.id);
       setLocation(`/messages/c/${result.threadId}`);
     }
   };
