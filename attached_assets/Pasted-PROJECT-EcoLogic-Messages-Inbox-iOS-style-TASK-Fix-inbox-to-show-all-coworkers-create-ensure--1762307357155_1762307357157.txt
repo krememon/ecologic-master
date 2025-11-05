@@ -1,0 +1,126 @@
+PROJECT: EcoLogic — Messages Inbox (iOS-style)
+TASK: Fix inbox to show all coworkers, create/ensure threads on tap, and refresh DM + inbox after sending. Keep the iOS-style list (tiny blue unread dot, one-line preview, time on right).
+
+Objectives
+
+Inbox lists every active coworker in the company, not just existing DM threads.
+
+Tapping a coworker with no thread creates/ensures a 1:1 thread, then opens it.
+
+After sending a message, re-entering the DM shows the latest messages; the inbox preview/time update immediately.
+
+Unread logic: show tiny blue dot only when unreadCount > 0. Name is semibold when unread.
+
+Second line shows last message preview (prefix “You: ” if sent by current user). If no thread, show “Start a conversation”.
+
+Keep time formatting: Today → h:mm AM/PM; Yesterday → “Yesterday”; else M/D/YY.
+
+Backend
+
+Add endpoint to return coworkers LEFT-JOINed with their latest thread:
+
+GET /api/messages/people-list
+
+Response array items:
+
+{
+  id: string,                 // otherUserId
+  name: string,
+  hasThread: boolean,
+  threadId?: string,
+  lastMessage?: { id: string; text: string|null; type: "text"|"image"|"file"|"system"; senderId: string; createdAt: string },
+  unreadCount: number
+}
+
+
+Base set = all active users in the same company (respect DM permissions if any).
+
+LEFT JOIN most-recent 1:1 thread with current user; compute unreadCount for current user.
+
+Add “ensure thread” endpoint to get/create a 1:1 thread:
+
+POST /api/messages/threads.ensure body { otherUserId: string } → { threadId: string }.
+
+Frontend (React/Next + React Query)
+
+Inbox data source
+
+Replace current list query with GET /api/messages/people-list.
+
+React Query options: refetchOnMount: "always", refetchOnWindowFocus: true, refetchOnReconnect: true.
+
+Row click
+
+If hasThread use threadId; else call POST /api/messages/threads.ensure and then navigate to /messages/{threadId}.
+
+DM screen refreshing
+
+Thread query ["thread", threadId] with same refetch options as above.
+
+useSendMessage(threadId) mutation:
+
+On mutate: optimistic append message to ["thread", threadId].
+
+On success: invalidateQueries(["thread", threadId]) and invalidateQueries(["peopleList"]).
+
+On route focus (when navigating back into DM), refetch ["thread", threadId]. For Next.js, also add a visibility or route-change listener that invalidates the thread query.
+
+Unread + preview rules
+
+Unread dot: render only if unreadCount > 0.
+
+Name weight: semibold when unread; medium otherwise.
+
+Preview text:
+
+If lastMessage.text → use it (prefix You: if senderId === currentUserId).
+
+Else if type === "image" → "Photo".
+
+Else if type === "file" → "File".
+
+Else if no thread → "Start a conversation".
+
+Time formatting helper
+
+formatInboxTime(iso):
+
+Same day → locale h:mm AM/PM.
+
+Yesterday → "Yesterday".
+
+Same year → M/D/YY.
+
+Else → toLocaleDateString().
+
+UI specifics (keep iOS feel)
+
+Remove avatar bubbles entirely.
+
+Tiny blue dot container width ~ w-3; dot h-2 w-2 rounded-full bg-blue-500.
+
+Row: px-4 py-3, whole row clickable, divider between rows.
+
+Name + time on first line; preview on second line truncate text-muted-foreground.
+
+Acceptance Criteria
+
+Inbox shows all coworkers for the logged-in user (not just the Owner).
+
+Tapping any coworker always opens a valid thread (created if needed).
+
+Sending a message then backing out and re-entering shows the new message immediately; the inbox preview and time update without manual refresh.
+
+Unread dot and bolding behave correctly; preview line matches rules; time renders per spec.
+
+No regressions to existing message send/receive.
+
+Deliverables
+
+Updated API handlers for /people-list and /threads.ensure.
+
+Updated React Query hooks for people list, ensure thread, thread fetch, and send message.
+
+Updated Messages list UI using the iOS-style row (no avatars, tiny dot, preview, time).
+
+Basic tests (or manual test notes) proving: all coworkers listed, ensure thread works, cache invalidation/refreshing works after send and after re-entry.

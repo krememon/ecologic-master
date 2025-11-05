@@ -1856,6 +1856,223 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all coworkers with their thread status (for inbox that shows everyone)
+  app.get('/api/messages/people-list', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      // Get all active users in the company (excluding current user)
+      const coworkers = await db
+        .select({
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          role: users.role,
+        })
+        .from(users)
+        .where(
+          and(
+            eq(users.companyId, company.id),
+            sql`${users.id} != ${userId}`,
+            eq(users.isActive, true)
+          )
+        );
+
+      // For each coworker, find their 1:1 thread with current user
+      const peopleList = await Promise.all(coworkers.map(async (coworker) => {
+        // Create pairKey (consistent ordering)
+        const ids = [userId, coworker.id].sort();
+        const pairKey = `${ids[0]}_${ids[1]}`;
+
+        // Find existing 1:1 conversation
+        const [conversation] = await db
+          .select()
+          .from(conversations)
+          .where(
+            and(
+              eq(conversations.pairKey, pairKey),
+              eq(conversations.isGroup, false)
+            )
+          )
+          .limit(1);
+
+        let lastMessage: any = null;
+        let unreadCount = 0;
+        let currentUserParticipant: any = null;
+
+        if (conversation) {
+          // Get last message
+          const [msg] = await db
+            .select()
+            .from(messages)
+            .where(
+              and(
+                eq(messages.conversationId, conversation.id),
+                sql`${messages.deletedAt} IS NULL`
+              )
+            )
+            .orderBy(desc(messages.createdAt))
+            .limit(1);
+
+          if (msg) {
+            // Synthesize message preview
+            let messageText: string | null = null;
+            let messageType: 'text' | 'image' | 'file' | 'system' = 'text';
+            
+            if (msg.body) {
+              messageText = msg.body;
+              messageType = 'text';
+            } else if (msg.attachments) {
+              const attachments = msg.attachments as any;
+              if (Array.isArray(attachments) && attachments.length > 0) {
+                const photoCount = attachments.filter((a: any) => (a.type || a.mimeType || '').startsWith('image/')).length;
+                const videoCount = attachments.filter((a: any) => (a.type || a.mimeType || '').startsWith('video/')).length;
+                const audioCount = attachments.filter((a: any) => (a.type || a.mimeType || '').startsWith('audio/')).length;
+                const fileCount = attachments.length - photoCount - videoCount - audioCount;
+                
+                if (photoCount > 0 && videoCount === 0 && audioCount === 0 && fileCount === 0) {
+                  messageText = photoCount === 1 ? 'Photo' : `${photoCount} Photos`;
+                  messageType = 'image';
+                } else if (videoCount > 0 && photoCount === 0 && audioCount === 0 && fileCount === 0) {
+                  messageText = videoCount === 1 ? 'Video' : `${videoCount} Videos`;
+                  messageType = 'file';
+                } else {
+                  const totalCount = attachments.length;
+                  messageText = totalCount === 1 ? 'Attachment' : `${totalCount} Attachments`;
+                  messageType = 'file';
+                }
+              } else {
+                messageText = 'Message';
+                messageType = 'system';
+              }
+            } else {
+              messageText = 'Message';
+              messageType = 'system';
+            }
+
+            lastMessage = {
+              id: msg.id.toString(),
+              text: messageText,
+              type: messageType,
+              senderId: msg.senderId,
+              createdAt: msg.createdAt.toISOString(),
+            };
+          }
+
+          // Get current user's participant record for lastReadAt
+          [currentUserParticipant] = await db
+            .select()
+            .from(conversationParticipants)
+            .where(
+              and(
+                eq(conversationParticipants.conversationId, conversation.id),
+                eq(conversationParticipants.userId, userId)
+              )
+            )
+            .limit(1);
+
+          // Calculate unread count
+          if (currentUserParticipant?.lastReadAt) {
+            const [result] = await db
+              .select({ count: sql<number>`count(*)` })
+              .from(messages)
+              .where(
+                and(
+                  eq(messages.conversationId, conversation.id),
+                  sql`${messages.createdAt} > ${currentUserParticipant.lastReadAt}`,
+                  sql`${messages.senderId} != ${userId}`,
+                  sql`${messages.deletedAt} IS NULL`
+                )
+              );
+            unreadCount = result?.count || 0;
+          } else {
+            const [result] = await db
+              .select({ count: sql<number>`count(*)` })
+              .from(messages)
+              .where(
+                and(
+                  eq(messages.conversationId, conversation.id),
+                  sql`${messages.senderId} != ${userId}`,
+                  sql`${messages.deletedAt} IS NULL`
+                )
+              );
+            unreadCount = result?.count || 0;
+          }
+        }
+
+        return {
+          id: coworker.id,
+          name: `${coworker.firstName} ${coworker.lastName}`.trim(),
+          hasThread: !!conversation,
+          threadId: conversation ? conversation.id.toString() : undefined,
+          lastMessage: lastMessage,
+          unreadCount,
+        };
+      }));
+
+      // Sort by: unread first, then by last message time, then alphabetically
+      peopleList.sort((a, b) => {
+        // Unread first
+        if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+        if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
+        
+        // Then by last message time
+        const aTime = a.lastMessage?.createdAt || '';
+        const bTime = b.lastMessage?.createdAt || '';
+        if (aTime && bTime) {
+          const comparison = bTime.localeCompare(aTime);
+          if (comparison !== 0) return comparison;
+        } else if (aTime && !bTime) {
+          return -1;
+        } else if (!aTime && bTime) {
+          return 1;
+        }
+        
+        // Finally alphabetically by name
+        return a.name.localeCompare(b.name);
+      });
+
+      res.json(peopleList);
+    } catch (error) {
+      console.error('Error fetching people list:', error);
+      res.status(500).json({ message: 'Failed to fetch people list' });
+    }
+  });
+
+  // Ensure a 1:1 thread exists with a user (create if needed)
+  app.post('/api/messages/threads/ensure', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { otherUserId } = req.body;
+
+      if (!otherUserId) {
+        return res.status(400).json({ message: 'otherUserId is required' });
+      }
+
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      // Verify other user is in the same company
+      const otherUserCompany = await storage.getUserCompany(otherUserId);
+      if (!otherUserCompany || otherUserCompany.id !== company.id) {
+        return res.status(403).json({ message: 'Cannot message users outside your company' });
+      }
+
+      const conversation = await storage.getOrCreateConversation(userId, otherUserId, company.id);
+      res.json({ threadId: conversation.id.toString() });
+    } catch (error) {
+      console.error('Error ensuring thread:', error);
+      res.status(500).json({ message: 'Failed to ensure thread' });
+    }
+  });
+
   // Create or get conversation with a user
   app.post('/api/conversations', isAuthenticated, async (req: any, res) => {
     try {
