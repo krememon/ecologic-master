@@ -1,0 +1,105 @@
+Messages send but do not persist when navigating away and back. Implement persistence using a deterministic DM “thread_key” approach (no conversations/members dependency) so the same chat always loads the same history.
+
+1) Create a new table dm_messages
+
+Run a migration (Supabase SQL). If table exists, adjust columns to match:
+
+id uuid primary key default gen_random_uuid()
+
+company_id uuid not null
+
+thread_key text not null -- deterministic key for a DM thread
+
+sender_id uuid not null
+
+recipient_id uuid not null
+
+content text not null
+
+created_at timestamptz default now()
+
+Indexes:
+
+create index on dm_messages(company_id, thread_key, created_at)
+
+create index on dm_messages(recipient_id, created_at)
+
+2) Deterministic thread_key
+
+Implement helper makeThreadKey(companyId, userA, userB):
+
+Sort user ids lexicographically
+
+Return ${companyId}:${minUserId}:${maxUserId}
+This guarantees the SAME key every time regardless of who starts the DM.
+
+3) Save messages ONLY through DB insert
+
+Replace existing send logic with:
+
+compute thread_key = makeThreadKey(companyId, auth.uid(), recipientId)
+
+insert into dm_messages { company_id, thread_key, sender_id: auth.uid(), recipient_id: recipientId, content }
+
+select the inserted row and append it to UI state
+
+4) Load messages on chat open (and on re-enter)
+
+On Chat page mount and whenever recipientId changes:
+
+compute thread_key the same way
+
+query dm_messages:
+supabase.from("dm_messages")
+.select("*")
+.eq("company_id", companyId)
+.eq("thread_key", thread_key)
+.order("created_at", { ascending: true })
+
+setMessages(data)
+
+IMPORTANT: The chat screen must NOT rely on any conversationId passed through navigation state. It must derive thread_key from (companyId + the 2 user ids) every time.
+
+5) Realtime subscription (optional but recommended)
+
+Subscribe to INSERTs where company_id matches and thread_key matches; append payload.new to messages.
+Unsubscribe on unmount.
+
+6) Fix the DM list ordering (top-most recent)
+
+Update DM list query to order by latest message:
+Option A (quick): query dm_messages for latest per thread_key in JS and sort (acceptable for small scale)
+Option B (better): create a view dm_threads that returns thread_key, last_message_at, last_message_preview, other_user_id
+Then order the DM list by last_message_at desc.
+
+7) RLS policies (critical)
+
+Enable RLS on dm_messages and add policies:
+
+SELECT: allow if auth.uid() = sender_id OR auth.uid() = recipient_id
+INSERT: allow if auth.uid() = sender_id AND company_id is user’s company
+
+If the app has a company membership table already, enforce company match via EXISTS check.
+
+8) Debug logging requirement
+
+Add console logs on:
+
+computed thread_key
+
+insert result/error
+
+load query result/error
+If load returns 0 rows but insert succeeded, it’s an RLS or filter mismatch—fix that.
+
+Deliverables
+
+SQL migration (table + indexes + RLS policies)
+
+Updated Chat component code: sendMessage(), loadMessages(), realtime subscribe
+
+Updated DM list sorting to move active threads to top
+
+Confirm: send message -> navigate back -> re-open chat -> history is still there
+
+Do not change styling. Only persistence + loading + ordering.
