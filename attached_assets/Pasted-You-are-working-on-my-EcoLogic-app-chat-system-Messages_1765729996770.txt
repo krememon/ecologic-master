@@ -1,0 +1,105 @@
+You are working on my EcoLogic app chat system. Messages currently send successfully, but when I leave a chat (back arrow) and re-open it, the message history is gone. Fix this by persisting messages in the database and reloading them whenever a chat is opened.
+
+1) Confirm/implement Supabase tables
+
+If they do not exist, create them (SQL migration is fine):
+
+conversations
+
+id uuid primary key default gen_random_uuid()
+
+company_id uuid not null
+
+created_at timestamptz default now()
+
+conversation_members
+
+conversation_id uuid references conversations(id) on delete cascade
+
+user_id uuid references profiles(id) on delete cascade (or users table you use)
+
+created_at timestamptz default now()
+Primary key (conversation_id, user_id)
+
+messages
+
+id uuid primary key default gen_random_uuid()
+
+conversation_id uuid references conversations(id) on delete cascade
+
+sender_id uuid references profiles(id)
+
+content text not null
+
+created_at timestamptz default now()
+
+Add indexes:
+
+messages(conversation_id, created_at)
+
+conversation_members(user_id)
+
+Enable RLS and create policies so users can read/write only conversations they belong to:
+
+SELECT messages where user is a member of that conversation
+
+INSERT messages only if user is a member and sender_id = auth.uid()
+
+SELECT conversations only if auth.uid() is a member
+
+INSERT conversation_members only for same company (use existing company_id logic)
+
+2) Ensure we have a stable conversation_id for every DM
+
+When user clicks a person to DM:
+
+Find an existing conversation that has exactly these two members (and same company_id).
+
+If none exists, create a conversation row, then insert two rows into conversation_members.
+Return that conversation_id to the chat screen.
+
+Implement helper:
+
+getOrCreateDMConversation(companyId, userIdA, userIdB) -> conversationId
+
+3) Persist messages on send (DB insert)
+
+Replace any “only setState” send logic.
+On send:
+
+insert into messages { conversation_id, sender_id: auth.uid(), content }
+
+return inserted row (select().single())
+
+append returned row to UI state
+
+4) Load messages when opening the chat
+
+On Chat screen mount and whenever conversationId changes:
+
+query supabase.from("messages").select("*").eq("conversation_id", conversationId).order("created_at", { ascending: true })
+
+setMessages(result)
+This must run every time you enter the chat so history shows after navigating back.
+
+5) Optional but recommended: realtime updates
+
+Subscribe to INSERTs on messages filtered by conversation_id and append incoming messages to state.
+Clean up subscription on unmount.
+
+6) Update “DM list ordering”
+
+If we have a DM list, order by last message time:
+
+Use a query that joins conversations with latest message (MAX(created_at)) or maintain a conversations.last_message_at that updates via trigger on message insert.
+After a message insert, the conversation should float to the top.
+
+7) Deliverables
+
+Provide the SQL migration (or Supabase SQL editor script) for the tables + RLS policies.
+
+Provide the exact code changes in the chat components (ChatList, ChatWindow/ChatPage) and any API/helper file.
+
+Ensure navigating back and re-opening a chat always shows prior messages.
+
+Do not change UI styling unless necessary. Focus only on persistence + loading + correct conversation_id logic.

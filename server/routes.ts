@@ -2174,10 +2174,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verify user is a participant
       const participant = await storage.getConversationParticipant(conversationId, userId);
       if (!participant) {
+        console.log('[get messages] User not participant:', { conversationId, userId });
         return res.status(403).json({ message: 'Not a participant in this conversation' });
       }
 
       const msgs = await storage.getConversationMessages(conversationId, limit, cursor);
+      
+      // Diagnostics: log message fetch
+      console.log('[get messages]', { 
+        conversationId, 
+        userId, 
+        count: msgs.length,
+        firstMsgId: msgs[0]?.id,
+        lastMsgId: msgs[msgs.length - 1]?.id
+      });
       
       // Reverse to get chronological order (oldest first)
       res.json(msgs.reverse());

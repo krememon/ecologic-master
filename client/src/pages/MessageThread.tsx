@@ -76,6 +76,17 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const [dmError, setDmError] = useState<string | null>(null);
   const [dmLoading, setDmLoading] = useState(isUserId);
 
+  // Debug: Log component mount/unmount and key state
+  useEffect(() => {
+    console.log('[MessageThread] MOUNTED with:', { 
+      conversationId, 
+      isUserId, 
+      numericConvId,
+      queryEnabled: !!numericConvId && !isNaN(numericConvId!)
+    });
+    return () => console.log('[MessageThread] UNMOUNTED');
+  }, []);
+
   // Open DM if navigating via userId
   useEffect(() => {
     if (!isUserId || !user) return;
@@ -153,11 +164,23 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     }
   }, [dmData]);
   
+  // Hydrate messages from API on mount and whenever fetchedMessages changes
+  // IMPORTANT: No length guard - we must always update state when data arrives
+  // This fixes the bug where messages disappear on navigation back
   useEffect(() => {
-    if (fetchedMessages.length > 0) {
-      setMessages(prev => mergeMessages(prev, fetchedMessages));
-    }
-  }, [fetchedMessages]);
+    console.log('[MessageThread] fetchedMessages updated:', { 
+      count: fetchedMessages.length, 
+      conversationId: numericConvId,
+      first: fetchedMessages[0]?.body?.slice(0, 30),
+      last: fetchedMessages[fetchedMessages.length - 1]?.body?.slice(0, 30)
+    });
+    
+    // Always set messages from server data - merge to preserve optimistic messages
+    setMessages(prev => {
+      if (fetchedMessages.length === 0 && prev.length === 0) return prev;
+      return mergeMessages(prev, fetchedMessages);
+    });
+  }, [fetchedMessages, numericConvId]);
 
   // Get other user info
   const otherUser = dmData?.otherUser || (conversation as any)?.otherUser;
