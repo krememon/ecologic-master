@@ -1,0 +1,73 @@
+Implement conversation reordering in EcoLogic messaging:
+
+GOAL
+- In the conversation list (message board / inbox sidebar), conversations must be automatically ordered by most recent activity.
+- When ANY new message is sent/received in a thread, that thread moves to the top immediately.
+- After refresh, ordering must still be correct (based on latest message timestamp in DB).
+- Do not break the existing working realtime messaging.
+
+DEFINITIONS
+- A "conversation" = one thread_id (e.g. dm:companyId:userA:userB)
+- "Recent activity" = max(created_at) of messages in that thread
+
+A) DATABASE SUPPORT (choose best option)
+Option 1 (recommended): Create a lightweight table to track conversation metadata.
+- Create table public.conversations with:
+  id uuid primary key default gen_random_uuid()
+  company_id uuid not null
+  thread_id text not null unique
+  participant_a uuid not null
+  participant_b uuid not null
+  last_message_at timestamptz not null default now()
+  last_message_preview text
+  created_at timestamptz not null default now()
+
+- Index: (company_id, last_message_at desc)
+- Ensure RLS permissive for authenticated like before (select/insert/update allowed) OR if existing membership logic exists, respect it.
+
+- On every message insert, upsert into conversations:
+  thread_id, company_id, participant_a/b (sorted), last_message_at=message.created_at, last_message_preview=message.body
+
+Option 2 (if you refuse new table): Query messages grouped by thread_id and sort by max(created_at), but this is slower and harder in Supabase client; use only if conversations table is not feasible.
+
+Implement Option 1 unless there is already an equivalent table.
+
+B) UPDATING conversations ON MESSAGE SEND
+- When sending a message, after inserting into public.messages, upsert into public.conversations:
+  - thread_id
+  - company_id
+  - participant_a/participant_b (sorted currentUserId and otherUserId)
+  - last_message_at = now() or message created_at returned from insert
+  - last_message_preview = body
+Use supabase.from('conversations').upsert(..., { onConflict: 'thread_id' })
+
+C) REALTIME UPDATES FOR REORDERING
+- In the conversation list component (Inbox / ConversationsList), subscribe to realtime INSERT events on public.messages for this company (or for thread_ids visible):
+  - On INSERT payload:
+    - If payload.new.thread_id is in the conversation list, update that conversation’s last_message_at and preview
+    - Move that conversation to index 0 (top)
+    - If not present, create it by fetching/upserting conversation row and then add to list at top
+- Also subscribe to realtime UPDATE on public.conversations (optional but clean) so ordering stays correct even if changes occur elsewhere.
+  If subscribing to conversations updates is easier, do it: listen to UPDATE where company_id matches, then update the row locally and re-sort by last_message_at desc.
+
+D) LOADING CONVERSATION LIST
+- On load, fetch from conversations table:
+  supabase.from('conversations')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('last_message_at', { ascending: false })
+
+- Render list in that order.
+- Conversation list must NOT be static; it must reorder live.
+
+E) UI EXPECTATIONS
+- The top conversation should always be the most recently active.
+- When currently-open thread receives a new message, it should stay selected but also move to top in the sidebar.
+- Use stable keys (thread_id).
+- Dedupe and prevent flicker.
+
+F) DELIVERABLE
+- Show which files changed and confirm the sidebar conversation list reorders instantly on new message.
+- Verify with two browser sessions (A and B): when B sends a message, A sees that thread jump to top.
+
+Implement now.

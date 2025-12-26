@@ -5,7 +5,14 @@ import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
+
+// Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
+function generatePairKey(companyId: number, userId1: string, userId2: string): string {
+  const sorted = [userId1, userId2].sort();
+  const str = `${companyId}:${sorted[0]}:${sorted[1]}`;
+  return createHash('sha256').update(str).digest('hex');
+}
 import { promisify } from "util";
 import multer from "multer";
 import path from "path";
@@ -1887,9 +1894,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // For each coworker, find their 1:1 thread with current user
       const peopleList = await Promise.all(coworkers.map(async (coworker) => {
-        // Create pairKey (consistent ordering)
-        const ids = [userId, coworker.id].sort();
-        const pairKey = `${ids[0]}_${ids[1]}`;
+        // Create pairKey using the same hash function as storage.ts
+        const pairKey = generatePairKey(company.id, userId, coworker.id);
 
         // Find existing 1:1 conversation
         const [conversation] = await db
