@@ -1,0 +1,115 @@
+Fix EcoLogic unread indicator (blue dot) to be seamless and correct.
+
+GOAL
+- Blue dot shows on a conversation ONLY if there are unread messages for the current user in that thread.
+- A message becomes "read" when the user opens/views that conversation (or we explicitly mark it read).
+- Blue dot disappears immediately after the conversation is viewed and stays gone after refresh.
+- Blue dot MUST appear automatically when a new message is received and the conversation has not been opened yet.
+- Must work reliably with realtime.
+
+ASSUMPTIONS
+- We already have public.messages table and public.conversations table (or equivalent). If conversations doesn’t exist yet, create it as previously described. Unread status should be stored in DB, not just local state.
+
+IMPLEMENTATION (RECOMMENDED: per-user read pointer)
+
+A) DATABASE CHANGES
+1) Create table public.conversation_reads to track last read time per user per thread:
+   columns:
+     id uuid primary key default gen_random_uuid()
+     company_id uuid not null
+     thread_id text not null
+     user_id uuid not null
+     last_read_at timestamptz not null default '1970-01-01'
+     updated_at timestamptz not null default now()
+
+   constraint:
+     unique (thread_id, user_id)
+
+   indexes:
+     (company_id, user_id)
+     (thread_id, user_id)
+
+2) RLS (permissive for now like other tables):
+   enable RLS
+   allow select/insert/update for authenticated
+   (If you already enforce membership, match that later; for now must work.)
+
+B) HOW TO DETERMINE UNREAD (NO STORED BOOLEAN)
+Unread for a conversation = exists a message in that thread where:
+- created_at > last_read_at for this user
+- sender_id != currentUserId  (don’t count your own messages as unread)
+So blue dot = true if last_message_at > last_read_at AND last_message_sender != currentUser
+
+To avoid heavy “exists” queries, store sender info in conversations:
+- Ensure conversations table includes:
+   last_message_at timestamptz
+   last_message_sender_id uuid
+   last_message_preview text
+Update these on every message insert (send/receive).
+
+If last_message_sender_id column doesn’t exist, add it via SQL migration and update upsert logic.
+
+C) UPDATE conversations ON MESSAGE INSERT
+Whenever inserting into messages, also upsert conversations with:
+- last_message_at
+- last_message_sender_id
+- last_message_preview
+
+Also ensure realtime listeners update the conversation row in local state.
+
+D) LOADING THE CONVERSATION LIST WITH UNREAD STATE
+In ConversationsList:
+1) Fetch conversations ordered by last_message_at desc.
+2) Fetch conversation_reads for currentUserId:
+   supabase.from('conversation_reads')
+     .select('thread_id,last_read_at')
+     .eq('company_id', companyId)
+     .eq('user_id', currentUserId)
+
+3) Build a map: lastReadByThreadId
+4) For each conversation row compute:
+   const lastRead = lastReadByThreadId[thread_id] ?? '1970-01-01'
+   const isUnread =
+     conversation.last_message_sender_id !== currentUserId &&
+     new Date(conversation.last_message_at) > new Date(lastRead)
+
+Render the blue dot only if isUnread is true.
+
+E) MARK AS READ WHEN OPENING A CONVERSATION (CRITICAL)
+In the Chat screen (when threadId is opened/selected):
+- Immediately upsert conversation_reads for (thread_id, user_id):
+  last_read_at = now()
+  updated_at = now()
+Use:
+  supabase.from('conversation_reads').upsert(
+    { company_id, thread_id, user_id: currentUserId, last_read_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { onConflict: 'thread_id,user_id' }
+  )
+
+After upsert succeeds:
+- Update local lastReadByThreadId map so dot disappears instantly (no refresh needed).
+
+Only do this when the chat is actually viewed (threadId set). This is what makes it “seamless”.
+
+F) REALTIME: MAKE DOT APPEAR AUTOMATICALLY
+When a new message INSERT event arrives (realtime):
+- Update the conversation list entry’s last_message_at and last_message_sender_id and move it to top.
+- Recompute unread using last_read_at map:
+  - If sender != current user AND created_at > last_read_at => set unread true.
+This makes the dot appear instantly without waiting for refresh.
+
+G) EDGE CASES
+- If a user has never opened a conversation, they will have no conversation_reads row -> treat as last_read_at = epoch so any incoming message marks unread.
+- When the user is currently viewing a thread and a new message arrives, still mark as read only if the thread is open:
+   - After appending message in the open thread, also update conversation_reads last_read_at = now() so it doesn’t show unread while you’re literally in it.
+- Ensure time comparisons use ISO strings and Date objects correctly.
+
+H) DELIVERABLES / VERIFICATION
+- Show the SQL migration(s) used.
+- List files changed.
+- Verify with two sessions:
+  1) A and B have a convo. B sends message while A is NOT in that thread -> A sees blue dot.
+  2) A clicks thread -> dot disappears and stays gone after refresh.
+  3) If A is already inside thread when B sends -> dot does NOT appear (or disappears immediately).
+
+Implement this now.
