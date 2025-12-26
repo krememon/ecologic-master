@@ -1,0 +1,60 @@
+Implement proper conversation header title for EcoLogic chat.
+
+GOAL
+- The chat header must display the correct name of the conversation.
+- For 1-on-1 chats, show the OTHER participant’s name (not the current user).
+- Header must load correctly on refresh and when navigating directly to /messages/:id
+- No placeholder or skeleton once data is loaded.
+
+ASSUMPTIONS
+- Conversations are identified by thread_id
+- There is a users table (or profiles table) with id + name (or first_name / last_name)
+- Conversation participants are already known OR derivable from thread_id or conversationParticipants table.
+
+IMPLEMENTATION OPTIONS
+Use the BEST one available in the app (do NOT invent new hacks).
+
+––––––––––––––––––
+OPTION A (preferred): conversationParticipants table exists
+––––––––––––––––––
+1) Query conversationParticipants for the current thread_id
+2) Filter out the current user
+3) Use the remaining participant’s user_id
+4) Fetch that user’s display name
+5) Render it in the header
+
+––––––––––––––––––
+OPTION B: thread_id encodes both user IDs (dm:companyId:userA:userB)
+––––––––––––––––––
+1) Parse thread_id
+2) Extract the two user IDs
+3) Remove currentUserId
+4) Fetch remaining user’s profile
+5) Render name
+
+––––––––––––––––––
+HEADER BEHAVIOR
+- While loading: show a subtle skeleton or “Loading…”
+- Once loaded: render the name
+- If name fails to load: fallback to “Conversation”
+
+––––––––––––––––––
+CODE REQUIREMENTS
+- Header component should receive:
+   - thread_id
+   - currentUserId
+- Fetch logic should live in the MessageThread page or a hook (not hardcoded)
+- Avoid duplicate fetches if conversation data already exists in state
+- Ensure cleanup on unmount
+
+––––––––––––––––––
+FILES TO UPDATE (likely)
+- client/src/pages/MessageThread.tsx
+- client/src/components/ChatHeader.tsx (or similar)
+
+––––––––––––––––––
+DELIVERABLE
+- Header shows the correct user name for every conversation
+- Switching conversations updates the header immediately
+- Refreshing the page keeps the correct name
+- List files changed
