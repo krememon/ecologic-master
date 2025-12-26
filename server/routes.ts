@@ -561,6 +561,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single user profile (requires same company)
+  app.get('/api/users/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = getUserId(req.user);
+      const { userId } = req.params;
+      
+      // Get both users' companies
+      const currentUserCompany = await storage.getUserCompany(currentUserId);
+      const targetUserCompany = await storage.getUserCompany(userId);
+      
+      // Verify same company
+      if (!currentUserCompany || !targetUserCompany || currentUserCompany.id !== targetUserCompany.id) {
+        return res.status(403).json({ message: "Cannot access users outside your organization" });
+      }
+      
+      // Fetch user details
+      const [targetUser] = await db
+        .select({
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          profileImageUrl: users.profileImageUrl,
+          role: users.role,
+          status: users.status,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({
+        id: targetUser.id,
+        name: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
+        firstName: targetUser.firstName,
+        lastName: targetUser.lastName,
+        email: targetUser.email,
+        avatar: targetUser.profileImageUrl,
+        role: targetUser.role,
+        status: targetUser.status,
+      });
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
   // Get user's jobs summary (requires same organization)
   app.get('/api/users/:userId/jobs/summary', isAuthenticated, async (req: any, res) => {
     try {

@@ -182,23 +182,46 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     });
   }, [fetchedMessages, numericConvId]);
 
-  // Get other user info
-  const otherUser = dmData?.otherUser || (conversation as any)?.otherUser;
+  // Get other user info - primary source is DM data or conversation query
+  const otherUserFromData = dmData?.otherUser || (conversation as any)?.otherUser;
   
-  // DEBUG: Log header data sources
+  // Fallback: Derive other user from messages if primary sources fail
+  const [derivedOtherUser, setDerivedOtherUser] = useState<OtherUserType | null>(null);
+  
+  // Derive other participant from loaded messages when primary sources are empty
   useEffect(() => {
-    console.log('[MessageThread:Header] Data sources:', {
-      conversationId,
-      isUserId,
-      numericConvId,
-      currentConvId,
-      dmLoading,
-      conversationLoading,
-      dmData: dmData ? { hasOtherUser: !!dmData.otherUser, otherUserName: dmData.otherUser?.name } : null,
-      conversation: conversation ? { hasOtherUser: !!(conversation as any)?.otherUser, otherUserName: (conversation as any)?.otherUser?.name } : null,
-      resolvedOtherUser: otherUser ? { name: otherUser.name, id: otherUser.id } : null,
-    });
-  }, [conversationId, isUserId, numericConvId, currentConvId, dmLoading, conversationLoading, dmData, conversation, otherUser]);
+    if (otherUserFromData || !user || messages.length === 0) return;
+    
+    // Find a message not sent by current user to get the other participant's ID
+    const otherMessage = messages.find(m => m.senderId !== user.id);
+    const otherUserId = otherMessage?.senderId;
+    
+    if (!otherUserId || derivedOtherUser?.id === otherUserId) return;
+    
+    // Fetch the other user's profile
+    const fetchOtherUser = async () => {
+      try {
+        const response = await fetch(`/api/users/${otherUserId}`);
+        if (response.ok) {
+          const userData = await response.json();
+          setDerivedOtherUser({
+            id: userData.id,
+            name: userData.name || `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email || 'Unknown',
+            avatar: userData.profileImageUrl || userData.avatar || null,
+            role: userData.role || 'member',
+            status: userData.status || 'active',
+          });
+        }
+      } catch (error) {
+        console.error('[MessageThread] Failed to fetch other user:', error);
+      }
+    };
+    
+    fetchOtherUser();
+  }, [user, messages, otherUserFromData, derivedOtherUser?.id]);
+  
+  // Use derived user as fallback when primary sources are empty
+  const otherUser = otherUserFromData || derivedOtherUser;
 
   // Determine if data is loaded (either from DM or query)
   const dataLoaded = (dmData !== null && !dmLoading) || (!isUserId && !conversationLoading);
@@ -583,10 +606,16 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
               </p>
             </div>
           </>
-        ) : (
+        ) : (dmLoading || messagesLoading) ? (
           <div className="flex-1">
             <div className="h-5 w-32 bg-muted animate-pulse rounded" />
             <div className="h-3 w-20 bg-muted animate-pulse rounded mt-1" />
+          </div>
+        ) : (
+          <div className="flex-1">
+            <h2 className="font-semibold" data-testid="text-other-user-name">
+              {messages.length === 0 ? "New Message" : "Conversation"}
+            </h2>
           </div>
         )}
       </div>
