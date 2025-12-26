@@ -1,0 +1,71 @@
+We still have a right-side vertical bar in the phone preview. Previous attempts did not work, so we are likely targeting the wrong element.
+
+TASK: Identify EXACTLY which DOM element is producing the right-side bar (scrollbar/gutter), then eliminate it while keeping messages scrollable.
+
+STEP 1 — FIND THE SCROLL OWNER (do not guess)
+Open DevTools on the preview and run this in the Console:
+
+(() => {
+  const els = Array.from(document.querySelectorAll('*'));
+  const scrollers = els.filter(el => {
+    const cs = getComputedStyle(el);
+    const oy = cs.overflowY;
+    const ox = cs.overflowX;
+    const canScrollY = (oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1;
+    const canScrollX = (ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 1;
+    const hasScrollStyle = (oy === 'scroll' || ox === 'scroll');
+    return canScrollY || canScrollX || hasScrollStyle;
+  }).map(el => ({
+    el,
+    tag: el.tagName,
+    id: el.id,
+    class: el.className,
+    overflowY: getComputedStyle(el).overflowY,
+    overflowX: getComputedStyle(el).overflowX,
+    scrollH: el.scrollHeight,
+    clientH: el.clientHeight,
+    scrollW: el.scrollWidth,
+    clientW: el.clientWidth
+  }));
+  console.table(scrollers.slice(0, 30));
+  return scrollers;
+})();
+
+This will reveal the element(s) that can scroll / are forcing scroll.
+
+STEP 2 — FIX THE ACTUAL CAUSE (depending on what Step 1 finds)
+
+CASE A: The scrollbar owner is the MESSAGES container (expected)
+- Ensure it uses overflow-y-auto (NOT overflow-y-scroll)
+- Add scrollbar removal styles DIRECTLY on that element:
+  - scrollbar-width:none;
+  - -ms-overflow-style:none;
+  - ::-webkit-scrollbar { width:0; height:0; display:none; }
+
+CASE B: The scrollbar owner is a PARENT WRAPPER (most likely in Replit preview)
+- Set that wrapper to overflow:hidden AND overflow-x:hidden.
+- Ensure ONLY the messages list has overflow-y-auto.
+- Remove any "scrollbar-gutter: stable" found on wrapper/root. That property reserves a gutter that looks like a bar.
+
+CASE C: The bar is caused by horizontal overflow (scrollWidth > clientWidth)
+- Find which element has scrollWidth > clientWidth from the console output
+- Fix by adding min-w-0 on flex children and overflow-x-hidden on the chat root and messages root
+- Ensure no element uses width:100vw inside a constrained phone frame (100vw often causes 2–8px overflow)
+
+STEP 3 — SEARCH & REMOVE SCROLLBAR-GUTTER / FORCED SCROLL
+Search the codebase for:
+- overflow-y-scroll
+- overflow: scroll
+- scrollbar-gutter
+If found on chat root or layout wrappers, remove it or override to auto/hidden.
+
+STEP 4 — VERIFY
+- Right-side bar is gone in phone preview
+- Header + input bar visible
+- Only messages scroll
+- No horizontal scrolling
+
+DELIVERABLE
+- Tell me the exact element (tag/class) that was producing the bar
+- Show the final fix applied
+- List files changed
