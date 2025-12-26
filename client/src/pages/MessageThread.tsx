@@ -526,9 +526,16 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   // Show header and composer immediately, even while loading
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-background">
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-border bg-card">
+    <div 
+      className="flex flex-col bg-background overflow-hidden"
+      style={{
+        height: '100dvh',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      {/* Header - fixed height */}
+      <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card">
         <Button
           variant="ghost"
           size="icon"
@@ -560,12 +567,11 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         )}
       </div>
 
-      {/* Messages Area */}
+      {/* Messages Area - flex-1 to fill available space, only this scrolls */}
       <div 
-        className="flex-1 overflow-y-auto px-3 pt-4 touch-pan-y" 
+        className="flex-1 min-h-0 overflow-y-auto px-3 pt-4 touch-pan-y" 
         data-testid="scroll-area-messages"
         style={{
-          paddingBottom: '0.25rem',
           scrollBehavior: 'auto',
           WebkitOverflowScrolling: 'touch',
         }}
@@ -638,15 +644,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         )}
       </div>
 
-      {/* Composer */}
-      <div 
-        className="px-3 py-2 border-t border-border bg-card"
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          zIndex: 10,
-        }}
-      >
+      {/* Composer - fixed at bottom */}
+      <div className="flex-shrink-0 px-3 py-2 border-t border-border bg-card">
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}

@@ -1,0 +1,76 @@
+Fix EcoLogic chat screen layout so it always fits fully inside the phone viewport without needing page scroll to see the top back arrow OR the bottom message input bar.
+
+Current issue: chat renders at desktop-scale inside a phone-sized frame. The container isn’t constrained to a true mobile viewport height, so header + messages + input don’t lock correctly.
+
+REQUIREMENTS
+- The chat page must be a strict vertical flex layout:
+  Header (fixed)
+  Messages list (flex:1, scrollable)
+  Input bar (fixed at bottom, always visible)
+- The overall chat container must be constrained to the viewport height using mobile-safe units: 100dvh (fallback to 100vh if needed).
+- Prevent the entire page from scrolling; only the messages list should scroll.
+- Add safe-area padding for iOS: env(safe-area-inset-top/bottom)
+
+DO THIS:
+
+1) GLOBAL HEIGHT CONSTRAINTS
+In global CSS (index.css / globals.css / App.css), ensure:
+html, body, #root { height: 100%; }
+body { margin: 0; overflow: hidden; }  // stop page scroll on chat layout
+
+If overflow hidden globally breaks other pages, then apply overflow hidden only on the Chat route root container (preferred).
+
+2) CHAT PAGE CONTAINER (MOST IMPORTANT)
+In the Chat page component (the route that renders the phone chat screen, likely Messages page / Conversation page), wrap the whole chat UI with a root div:
+
+- height: 100dvh (or Tailwind h-dvh / min-h-dvh)
+- display:flex; flex-direction:column;
+- overflow:hidden;
+- padding-top: env(safe-area-inset-top)
+- padding-bottom: env(safe-area-inset-bottom)
+
+Example (Tailwind):
+<div className="h-dvh flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+
+If Tailwind doesn’t support h-dvh, use inline style:
+style={{ height: '100dvh' }}
+
+3) HEADER FIXED
+Header should be:
+flex: 0 0 auto;
+height: (e.g. 56px)
+No scrolling
+
+4) MESSAGES SCROLL AREA
+Messages container should be:
+flex: 1 1 auto;
+overflow-y: auto;
+-webkit-overflow-scrolling: touch;
+padding-bottom: 8px (so last message isn’t hidden behind input)
+
+IMPORTANT: the messages container should NOT push the input offscreen.
+
+5) INPUT BAR LOCKED
+Input bar should be:
+flex: 0 0 auto;
+position: sticky; bottom: 0; (optional)
+or just remain last flex child
+Add background + border-top so it looks pinned.
+Also include safe-area bottom padding:
+padding-bottom: calc(env(safe-area-inset-bottom) + 8px)
+
+6) PHONE PREVIEW WIDTH
+Ensure the chat page root uses width: 100% and does not have desktop max-width constraints that break alignment inside the phone frame.
+For message bubbles, use max-width like 75% of container and ensure proper padding for mobile:
+max-w-[75%] or style maxWidth:'75%'
+
+DELIVERABLE
+- Make the chat screen show BOTH:
+  - top back arrow header
+  - bottom input bar
+  at the same time without page scroll
+- Only message list scrolls
+- Works in Replit mobile preview and normal desktop
+- List the files changed
+
+Implement now.
