@@ -125,9 +125,9 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     openDM();
   }, [conversationId, isUserId, user]);
 
-  // Fallback to numeric conversation ID flow
+  // Fallback to numeric conversation ID flow - fetch single conversation with otherUser
   const { data: conversation, isLoading: conversationLoading } = useQuery({
-    queryKey: ["/api/conversations", numericConvId],
+    queryKey: [`/api/conversations/${numericConvId}`],
     enabled: !!numericConvId && !isNaN(numericConvId!),
   });
 
