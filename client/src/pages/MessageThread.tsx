@@ -569,7 +569,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
       {/* Messages Area - flex-1 to fill available space, only this scrolls */}
       <div 
-        className="flex-1 min-h-0 overflow-y-auto px-3 pt-4 touch-pan-y" 
+        className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-3 pt-4 touch-pan-y" 
         data-testid="scroll-area-messages"
         style={{
           scrollBehavior: 'auto',
