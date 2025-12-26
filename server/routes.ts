@@ -576,7 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Cannot access users outside your organization" });
       }
       
-      // Fetch user details
+      // Fetch user details (role comes from companyMembers, not users table)
       const [targetUser] = await db
         .select({
           id: users.id,
@@ -584,7 +584,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: users.lastName,
           email: users.email,
           profileImageUrl: users.profileImageUrl,
-          role: users.role,
           status: users.status,
         })
         .from(users)
@@ -595,6 +594,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
+      // Get role from companyMembers
+      const [membership] = await db
+        .select({ role: companyMembers.role })
+        .from(companyMembers)
+        .where(and(
+          eq(companyMembers.userId, userId),
+          eq(companyMembers.companyId, targetUserCompany.id)
+        ))
+        .limit(1);
+      
       res.json({
         id: targetUser.id,
         name: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email,
@@ -602,7 +611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: targetUser.lastName,
         email: targetUser.email,
         avatar: targetUser.profileImageUrl,
-        role: targetUser.role,
+        role: membership?.role || 'member',
         status: targetUser.status,
       });
     } catch (error) {
@@ -2189,34 +2198,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: 'Conversation not found' });
       }
 
-      // Get all participants to find the other user
+      // Get all participants to find the other user (role comes from companyMembers, not users)
       const participants = await db
         .select({
-          userId: conversationParticipants.userId,
-          user: {
-            id: users.id,
-            firstName: users.firstName,
-            lastName: users.lastName,
-            email: users.email,
-            profileImageUrl: users.profileImageUrl,
-            status: users.status,
-            role: users.role,
-          }
+          usrId: conversationParticipants.userId,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          profileImageUrl: users.profileImageUrl,
+          status: users.status,
         })
         .from(conversationParticipants)
         .innerJoin(users, eq(conversationParticipants.userId, users.id))
         .where(eq(conversationParticipants.conversationId, conversationId));
 
-      const otherParticipant = participants.find((p: any) => p.userId !== userId);
+      console.log('[GET /api/conversations/:id] participants:', JSON.stringify(participants));
+      console.log('[GET /api/conversations/:id] currentUserId:', userId);
+
+      const otherParticipant = participants.find((p: any) => p.usrId !== userId);
+      console.log('[GET /api/conversations/:id] otherParticipant:', JSON.stringify(otherParticipant));
+      
+      // Get role from companyMembers if we have the other participant
+      let role = 'member';
+      if (otherParticipant?.usrId && conversation.companyId) {
+        const [membership] = await db
+          .select({ role: companyMembers.role })
+          .from(companyMembers)
+          .where(and(
+            eq(companyMembers.userId, otherParticipant.usrId),
+            eq(companyMembers.companyId, conversation.companyId)
+          ))
+          .limit(1);
+        role = membership?.role || 'member';
+      }
       
       // Format otherUser with computed name field (matching DM open endpoint format)
-      const otherUser = otherParticipant?.user ? {
-        id: otherParticipant.user.id,
-        name: `${otherParticipant.user.firstName || ''} ${otherParticipant.user.lastName || ''}`.trim() || otherParticipant.user.email,
-        avatar: otherParticipant.user.profileImageUrl,
-        role: otherParticipant.user.role || 'member',
-        status: otherParticipant.user.status,
+      const otherUser = otherParticipant ? {
+        id: otherParticipant.usrId,
+        name: `${otherParticipant.firstName || ''} ${otherParticipant.lastName || ''}`.trim() || otherParticipant.email,
+        avatar: otherParticipant.profileImageUrl,
+        role,
+        status: otherParticipant.status,
       } : null;
+      
+      console.log('[GET /api/conversations/:id] otherUser:', JSON.stringify(otherUser));
 
       res.json({
         id: conversation.id,

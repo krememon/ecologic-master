@@ -182,8 +182,17 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     });
   }, [fetchedMessages, numericConvId]);
 
+  // Debug: Log conversation data
+  useEffect(() => {
+    console.log('[MessageThread] conversation data:', conversation);
+    console.log('[MessageThread] dmData:', dmData);
+  }, [conversation, dmData]);
+
   // Get other user info - primary source is DM data or conversation query
   const otherUserFromData = dmData?.otherUser || (conversation as any)?.otherUser;
+  
+  // Debug: Log derived other user
+  console.log('[MessageThread] otherUserFromData:', otherUserFromData);
   
   // Fallback: Derive other user from messages if primary sources fail
   const [derivedOtherUser, setDerivedOtherUser] = useState<OtherUserType | null>(null);
