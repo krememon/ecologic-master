@@ -524,11 +524,21 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     );
   }
 
+  // Lock body scroll on mount, unlock on unmount (prevents page scroll with many messages)
+  useEffect(() => {
+    document.body.classList.add('chat-screen-active');
+    return () => {
+      document.body.classList.remove('chat-screen-active');
+    };
+  }, []);
+
   // Show header and composer immediately, even while loading
   return (
     <div 
-      className="flex flex-col h-full w-full bg-background overflow-hidden"
+      className="flex flex-col bg-background overflow-hidden"
       style={{
+        height: '100dvh',
+        maxHeight: '100dvh',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}

@@ -11,6 +11,16 @@
   display: none;              /* Chrome/Safari */
 }
 
+/* Lock page scroll when chat screen is active */
+body.chat-screen-active {
+  overflow: hidden !important;
+  height: 100% !important;
+}
+body.chat-screen-active #root {
+  overflow: hidden !important;
+  height: 100% !important;
+}
+
 /* Prevent zoom and double-tap zoom */
 * {
   touch-action: manipulation;

@@ -1,0 +1,70 @@
+The chat layout only breaks when there are many messages: the page starts scrolling and the scrollbar appears, meaning the header + composer are being treated as part of the page scroll instead of staying fixed in the flex column.
+
+GOAL:
+- Header always visible (never scrolls away)
+- Input/composer always visible at bottom (never scrolls away)
+- ONLY the messages area scrolls
+- This must remain true even when the chat has a LOT of messages
+
+ROOT CAUSE:
+A flex child with overflow needs min-h-0 (and sometimes min-w-0) OR it will expand beyond the container and force the parent/page to scroll. That’s exactly what’s happening when there are many messages.
+
+DO THIS:
+
+1) Ensure the chat route root container is locked:
+- height: 100dvh
+- display: flex; flex-direction: column
+- overflow: hidden
+Tailwind example:
+<div className="h-dvh flex flex-col overflow-hidden">
+
+2) Ensure the *direct parent* of the messages scroller also allows shrinking:
+If your structure is:
+ChatRoot
+  Header
+  ContentWrapper
+    MessagesScroller
+  Composer
+
+Then ContentWrapper MUST have:
+- flex-1
+- min-h-0
+- overflow-hidden
+Example:
+<div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+
+3) Messages scroller MUST be:
+- flex-1
+- min-h-0   (critical)
+- overflow-y-auto
+- overflow-x-hidden
+Example:
+<div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+
+4) Header and Composer MUST be non-scrolling:
+Header:
+- flex-shrink-0
+Composer:
+- flex-shrink-0
+NO sticky needed if the flex layout is correct.
+
+5) Prevent BODY/PAGE scrolling on chat route only (don’t break other pages):
+In Chat route mount/unmount (useEffect), toggle a body class:
+- add class "no-page-scroll" on mount
+- remove on unmount
+CSS:
+.no-page-scroll { overflow: hidden; height: 100%; }
+
+This ensures long chats never cause the entire page to scroll.
+
+6) Confirm no wrapper uses h-full without a constrained parent:
+Search MessageThread.tsx and any wrapper components for:
+- h-full
+- overflow-y-auto
+If a parent is h-full but its parent isn’t height-constrained, it causes exactly this bug. Replace with the flex/min-h-0 structure above.
+
+DELIVERABLE:
+- Long chat must NOT create page scroll
+- Only message list scrolls
+- Header + input always visible
+- Confirm which file(s) you changed (likely MessageThread.tsx and maybe Layout.tsx)
