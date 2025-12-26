@@ -1,0 +1,87 @@
+You are working on EcoLogic (React + JavaScript + Supabase). Messaging currently sends but does NOT persist (messages disappear when navigating back/refresh). Fix messaging end-to-end so that:
+
+1) User A sends a message -> User B receives it in real-time
+2) Messages are SAVED in Supabase
+3) When leaving chat and coming back / refreshing page, full history loads from Supabase
+4) No message history is stored only in React state (state can mirror, but DB is source of truth)
+
+DO THIS NOW:
+
+A) SUPABASE DATABASE
+- Ensure a table exists: public.messages
+  Columns:
+    id uuid primary key default gen_random_uuid()
+    company_id uuid not null
+    thread_id text not null
+    sender_id uuid not null
+    recipient_id uuid null
+    body text not null
+    created_at timestamptz not null default now()
+- Add indexes:
+    (thread_id, created_at)
+    (company_id, created_at)
+- Enable RLS on messages and add permissive policies for authenticated users:
+    SELECT allowed
+    INSERT allowed
+(If there is already a messages table, migrate/adjust to match these columns. Update code to use the existing schema if needed.)
+
+B) THREAD ID (CRITICAL)
+- Implement a deterministic function buildThreadId(companyId, userIdA, userIdB)
+- It must sort user ids so both sides compute the same thread id:
+    const [a,b] = [userIdA, userIdB].sort();
+    return `dm:${companyId}:${a}:${b}`;
+
+C) FRONTEND: CHAT SCREEN FIX
+Locate the chat UI component(s) (e.g. Chat.jsx / Messages.jsx / Conversation.jsx). Refactor to this behavior:
+
+1. On mount (and when thread_id changes), fetch history from Supabase ordered by created_at asc:
+   supabase.from('messages')
+     .select('*')
+     .eq('thread_id', threadId)
+     .order('created_at', { ascending: true })
+
+2. Subscribe to realtime inserts for this thread and append new messages:
+   supabase.channel(`messages:${threadId}`)
+     .on(
+       'postgres_changes',
+       { event: 'INSERT', schema: 'public', table: 'messages', filter: `thread_id=eq.${threadId}` },
+       payload => append payload.new if not already in list
+     )
+     .subscribe()
+
+3. Cleanup subscription on unmount:
+   supabase.removeChannel(channel)
+
+4. Send message flow MUST insert into Supabase first (DB is truth), not only update local state:
+   await supabase.from('messages').insert({
+     company_id,
+     thread_id: threadId,
+     sender_id: currentUserId,
+     recipient_id: otherUserId,
+     body: messageText
+   });
+
+Then clear input. Do NOT manually push optimistic message unless you also dedupe by id, because realtime insert will come back.
+
+D) DEDUPE + STABILITY
+- Ensure messages state uses message.id as key
+- When receiving realtime inserts, prevent duplicates (e.g. keep a Set of ids or check array.some(m=>m.id===newId))
+
+E) DATA SOURCES
+- Determine currentUserId from Supabase auth session (supabase.auth.getUser() or your existing auth context)
+- Determine company_id from your existing user profile/company context (whatever EcoLogic uses). If missing, add it to your auth/profile fetch so it’s always available.
+
+F) UI/UX
+- When chat loads, show a loading state then render messages
+- Auto-scroll to bottom on new message after render (simple useEffect on messages length)
+
+G) VERIFY
+- Test with two accounts in two browser sessions:
+  1) Send message from A to B -> B sees instantly
+  2) Refresh both -> history still there
+  3) Navigate away and back -> history still there
+
+DELIVERABLES:
+- Commit code changes + show me which files changed
+- If you had to create SQL, output it in a file or in the agent response
+- Make sure there are no console errors and no “messages disappear” behavior anymore
