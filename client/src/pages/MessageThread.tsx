@@ -525,11 +525,14 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   }
 
   // Show header and composer immediately, even while loading
+  // Use negative margins to break out of Layout's p-6 padding and fill viewport
   return (
     <div 
-      className="flex flex-col bg-background overflow-hidden"
+      className="flex flex-col bg-background overflow-hidden -m-6"
       style={{
+        width: 'calc(100% + 3rem)',
         height: '100dvh',
+        maxHeight: '100dvh',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
