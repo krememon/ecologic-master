@@ -2150,6 +2150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: users.email,
             profileImageUrl: users.profileImageUrl,
             status: users.status,
+            role: users.role,
           }
         })
         .from(conversationParticipants)
@@ -2157,11 +2158,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(conversationParticipants.conversationId, conversationId));
 
       const otherParticipant = participants.find((p: any) => p.userId !== userId);
+      
+      // Format otherUser with computed name field (matching DM open endpoint format)
+      const otherUser = otherParticipant?.user ? {
+        id: otherParticipant.user.id,
+        name: `${otherParticipant.user.firstName || ''} ${otherParticipant.user.lastName || ''}`.trim() || otherParticipant.user.email,
+        avatar: otherParticipant.user.profileImageUrl,
+        role: otherParticipant.user.role || 'member',
+        status: otherParticipant.user.status,
+      } : null;
 
       res.json({
         id: conversation.id,
         isGroup: conversation.isGroup,
-        otherUser: otherParticipant?.user,
+        otherUser,
       });
     } catch (error) {
       console.error('Error fetching conversation:', error);

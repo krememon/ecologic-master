@@ -1,0 +1,50 @@
+The chat header still does not show the conversation name. We need a new approach that is guaranteed to work.
+
+PRIMARY GOAL
+- The header must show the correct conversation name every time (refresh, deep-link, switching threads).
+- No placeholder pill once loaded.
+- Do not rely on fragile multi-step joins that can return null.
+
+STEP 1 — DEBUG THE REAL CAUSE (DO NOT GUESS)
+In MessageThread.tsx (or wherever the header is rendered), log these:
+- route param (conversation id or thread id)
+- computed thread_id (if any)
+- currentUserId
+- fetched conversation object (if any)
+- fetched participants (if any)
+
+We need to confirm whether we are mixing up:
+- conversation id vs thread_id
+- thread_id formatting differences
+- missing participants rows
+
+STEP 2 — IMPLEMENT FAILPROOF SOLUTION (DENORMALIZE TITLE)
+A) Add a title column to conversations table if not present:
+  title text null
+  (optional: participant_a_name, participant_b_name, or last_message_sender_name)
+
+B) When conversations are created/updated (upsert on message send/receive), also set title:
+- For 1:1 chat, title should be the OTHER user's display name from the users/profiles table.
+- Determine the other user id from participant_a/participant_b (or from thread_id parsing).
+- Fetch the other user name ONCE and store it into conversations.title.
+
+C) On Chat thread page, header should simply read from conversations.title:
+- Fetch conversation row by conversation id or thread_id (whichever is the true identifier in your routes)
+- Render title in header immediately
+- Fallbacks:
+  1) If title is null, compute title client-side once and then PATCH/UPDATE conversations.title
+  2) If still unknown, show "Conversation"
+
+STEP 3 — ENSURE ROUTE IDENTIFIER IS CORRECT
+If the route is /messages/c/:id, confirm what :id represents:
+- If it is conversation id -> query conversations by id
+- If it is thread_id -> query conversations by thread_id
+
+Stop using the wrong key. This is the most common reason header never loads.
+
+DELIVERABLES
+- Header shows real name (not placeholder)
+- Works for long and short chats
+- Works after refresh
+- Switching between conversations updates title immediately
+- List files changed + any SQL migration used

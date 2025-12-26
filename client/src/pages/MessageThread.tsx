@@ -184,6 +184,21 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
   // Get other user info
   const otherUser = dmData?.otherUser || (conversation as any)?.otherUser;
+  
+  // DEBUG: Log header data sources
+  useEffect(() => {
+    console.log('[MessageThread:Header] Data sources:', {
+      conversationId,
+      isUserId,
+      numericConvId,
+      currentConvId,
+      dmLoading,
+      conversationLoading,
+      dmData: dmData ? { hasOtherUser: !!dmData.otherUser, otherUserName: dmData.otherUser?.name } : null,
+      conversation: conversation ? { hasOtherUser: !!(conversation as any)?.otherUser, otherUserName: (conversation as any)?.otherUser?.name } : null,
+      resolvedOtherUser: otherUser ? { name: otherUser.name, id: otherUser.id } : null,
+    });
+  }, [conversationId, isUserId, numericConvId, currentConvId, dmLoading, conversationLoading, dmData, conversation, otherUser]);
 
   // Determine if data is loaded (either from DM or query)
   const dataLoaded = (dmData !== null && !dmLoading) || (!isUserId && !conversationLoading);
