@@ -1211,6 +1211,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Document routes
+  app.get('/api/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const docs = await storage.getDocuments(company.id);
+      res.json(docs);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      res.status(500).json({ message: "Failed to fetch documents" });
+    }
+  });
+
+  app.post('/api/documents', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      const { name, category, jobId } = req.body;
+      const fileName = `${Date.now()}-${req.file.originalname}`;
+      const filePath = `uploads/${fileName}`;
+      
+      // Move file to proper location
+      const fs = await import('fs');
+      fs.renameSync(req.file.path, filePath);
+      
+      const documentData = {
+        companyId: company.id,
+        jobId: jobId ? parseInt(jobId) : null,
+        name: name || req.file.originalname,
+        type: req.file.mimetype,
+        category: category || 'Other',
+        fileUrl: `/${filePath}`,
+        fileSize: req.file.size,
+        uploadedBy: userId,
+      };
+      
+      const document = await storage.createDocument(documentData);
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ message: "Failed to upload document" });
+    }
+  });
+
+  app.delete('/api/documents/:documentId', isAuthenticated, async (req: any, res) => {
+    try {
+      const documentId = parseInt(req.params.documentId);
+      await storage.deleteDocument(documentId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ message: "Failed to delete document" });
+    }
+  });
+
   // Schedule routes
   app.get('/api/schedule-items', isAuthenticated, async (req: any, res) => {
     try {
