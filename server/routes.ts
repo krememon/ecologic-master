@@ -1280,6 +1280,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/documents/:documentId', isAuthenticated, async (req: any, res) => {
+    try {
+      const documentId = parseInt(req.params.documentId);
+      const { status } = req.body;
+      
+      if (!status) {
+        return res.status(400).json({ message: "Status is required" });
+      }
+      
+      const updatedDoc = await storage.updateDocumentStatus(documentId, status);
+      res.json(updatedDoc);
+    } catch (error) {
+      console.error("Error updating document:", error);
+      res.status(500).json({ message: "Failed to update document" });
+    }
+  });
+
   // Schedule routes
   app.get('/api/schedule-items', isAuthenticated, async (req: any, res) => {
     try {

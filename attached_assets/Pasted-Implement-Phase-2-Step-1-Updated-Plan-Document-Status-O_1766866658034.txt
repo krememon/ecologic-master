@@ -1,0 +1,59 @@
+Implement Phase 2 Step 1 (Updated Plan): Document Status ONLY for workflow categories.
+
+GOAL
+- Add document statuses, but ONLY for workflow documents:
+  Contracts, Estimates, Invoices, Permits
+- Photos, Manuals, Other should NOT show status anywhere and should not require a status to function.
+- Prepare for approvals later without cluttering the UI.
+
+WORKFLOW CATEGORIES
+const WORKFLOW_CATEGORIES = ['Contracts','Estimates','Invoices','Permits'];
+
+STATUSES (V1)
+- Draft (default)
+- Pending Approval
+- Approved
+- Rejected
+
+DATABASE
+Option A (simple): Add status column to documents table (even if not used for photos/manuals)
+- status text NOT NULL default 'Draft'
+- updated_at timestamptz default now()
+
+This is fine as long as the UI only shows/uses status when category is in WORKFLOW_CATEGORIES.
+
+FRONTEND REQUIREMENTS
+1) Documents List UI
+- For documents whose category is in WORKFLOW_CATEGORIES:
+  - show a small status pill (Draft / Pending / Approved / Rejected)
+- For Photos/Manuals/Other:
+  - do NOT show a status pill at all (no empty space)
+  - keep the card clean
+
+2) Preview Modal UI
+- For workflow docs:
+  - show Status line under filename (ex: "Status: Draft")
+  - include “Change status” dropdown in the modal
+- For non-workflow docs:
+  - do NOT show status or status dropdown at all
+
+3) Updating Status
+- Add API route to update status:
+  PATCH /api/documents/:id
+  body: { status }
+- Update DB and updated_at
+- Frontend should update list immediately after change
+
+4) Upload Defaults
+- Upload sets category as selected.
+- Status can still default to Draft in DB, but UI only displays status for workflow categories.
+
+EMPTY STATES / FILTERING
+- Keep existing category dropdown filter working.
+- Do NOT add status filtering yet unless easy—optional.
+
+DELIVERABLE
+- Upload a photo -> no status shown anywhere.
+- Upload a contract -> shows “Draft” status pill and status dropdown in preview modal.
+- Change contract status -> list updates instantly.
+- List files changed + SQL migration if added.

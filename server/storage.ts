@@ -124,6 +124,7 @@ export interface IStorage {
   // Document operations
   getDocuments(companyId: number): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
+  updateDocumentStatus(id: number, status: string): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
   
   // Messaging operations
@@ -639,6 +640,15 @@ export class DatabaseStorage implements IStorage {
 
   async createDocument(documentData: InsertDocument): Promise<Document> {
     const [document] = await db.insert(documents).values(documentData).returning();
+    return document;
+  }
+
+  async updateDocumentStatus(id: number, status: string): Promise<Document> {
+    const [document] = await db
+      .update(documents)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(documents.id, id))
+      .returning();
     return document;
   }
 
