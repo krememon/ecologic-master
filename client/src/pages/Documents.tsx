@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2 } from "lucide-react";
+import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File } from "lucide-react";
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, type DocumentCategory } from "@shared/schema";
@@ -26,6 +26,17 @@ interface DocumentType {
 }
 
 
+function getFileType(fileName: string, mimeType?: string | null): 'image' | 'pdf' | 'other' {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  if (mimeType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)) {
+    return 'image';
+  }
+  if (mimeType === 'application/pdf' || ext === 'pdf') {
+    return 'pdf';
+  }
+  return 'other';
+}
+
 export default function Documents() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -35,6 +46,8 @@ export default function Documents() {
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>("Other");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedDoc, setSelectedDoc] = useState<DocumentType | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { data: documents = [], isLoading: documentsLoading } = useQuery<DocumentType[]>({
     queryKey: ["/api/documents"],
@@ -240,7 +253,15 @@ export default function Documents() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredDocuments.map((document) => (
-                <Card key={document.id} className="hover:shadow-md transition-shadow" data-testid={`document-card-${document.id}`}>
+                <Card 
+                  key={document.id} 
+                  className="hover:shadow-md transition-shadow cursor-pointer" 
+                  data-testid={`document-card-${document.id}`}
+                  onClick={() => {
+                    setSelectedDoc(document);
+                    setIsPreviewOpen(true);
+                  }}
+                >
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center justify-between text-base">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -263,7 +284,10 @@ export default function Documents() {
                           size="sm" 
                           variant="outline" 
                           className="flex-1"
-                          onClick={() => window.open(document.fileUrl, '_blank')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(document.fileUrl, '_blank');
+                          }}
                           data-testid={`button-download-${document.id}`}
                         >
                           <Download className="w-3 h-3 mr-1" />
@@ -282,6 +306,83 @@ export default function Documents() {
           <ApprovalWorkflow />
         </TabsContent>
       </Tabs>
+
+      {/* Document Preview Modal */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 pr-8">
+              <FileText className="h-5 w-5 flex-shrink-0" />
+              <span className="truncate">{selectedDoc?.name}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto py-4">
+            {selectedDoc && (() => {
+              const fileType = getFileType(selectedDoc.name, selectedDoc.type);
+              if (fileType === 'image') {
+                return (
+                  <img 
+                    src={selectedDoc.fileUrl} 
+                    alt={selectedDoc.name}
+                    className="w-full rounded-xl object-contain max-h-[60vh]"
+                    data-testid="preview-image"
+                  />
+                );
+              }
+              if (fileType === 'pdf') {
+                return (
+                  <div className="space-y-4">
+                    <iframe 
+                      src={selectedDoc.fileUrl}
+                      className="w-full h-[60vh] rounded-xl border"
+                      title={selectedDoc.name}
+                      data-testid="preview-pdf"
+                    />
+                    <div className="text-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(selectedDoc.fileUrl, '_blank')}
+                        data-testid="button-open-pdf-tab"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Open in New Tab
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <File className="h-16 w-16 text-slate-400 mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                    No preview available
+                  </h3>
+                  <p className="text-slate-600 dark:text-slate-400 mb-4">
+                    This file type cannot be previewed in the browser.
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setIsPreviewOpen(false)}
+              data-testid="button-close-preview"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => selectedDoc && window.open(selectedDoc.fileUrl, '_blank')}
+              data-testid="button-preview-download"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
