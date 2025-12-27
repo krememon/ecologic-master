@@ -1,9 +1,10 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, User, X } from "lucide-react";
 import { useLocation } from "wouter";
 import ThreadRow from "@/components/ThreadRow";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -62,9 +63,15 @@ export default function MessagesDirectory() {
     },
   });
 
-  const filteredPeople = peopleList.filter((person) =>
-    person.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Normalize search query and compute filtered list
+  const q = searchQuery.trim().toLowerCase();
+  const filteredPeople = useMemo(() => {
+    if (!q) return peopleList;
+    return peopleList.filter((person) => {
+      const name = (person.name || "").toLowerCase();
+      return name.includes(q);
+    });
+  }, [peopleList, q]);
 
   const handlePersonTap = async (person: PersonInList) => {
     if (person.hasThread && person.threadId) {
@@ -89,8 +96,19 @@ export default function MessagesDirectory() {
             placeholder="Search people..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 pr-9"
           />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={() => setSearchQuery("")}
+              data-testid="button-clear-search"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -105,7 +123,11 @@ export default function MessagesDirectory() {
             <div className="text-center text-muted-foreground py-16">
               <User className="h-12 w-12 mx-auto mb-3 opacity-20" />
               <p className="text-sm">
-                {searchQuery ? "No people found" : "No coworkers yet"}
+                {q ? (
+                  <>No matches for "<span className="font-medium text-foreground">{searchQuery.trim()}</span>"</>
+                ) : (
+                  "No coworkers yet"
+                )}
               </p>
             </div>
           ) : (
