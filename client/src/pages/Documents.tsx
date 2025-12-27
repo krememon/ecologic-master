@@ -13,16 +13,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File } from "lucide-react";
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
-import { DOCUMENT_CATEGORIES, type DocumentCategory } from "@shared/schema";
+import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
 
 interface DocumentType {
   id: number;
   name: string;
   type: string | null;
   category: string;
+  status: string;
   fileUrl: string;
   fileSize: number | null;
   createdAt: string;
+}
+
+function isWorkflowCategory(category: string): boolean {
+  return (WORKFLOW_CATEGORIES as readonly string[]).includes(category);
+}
+
+function getStatusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  switch (status) {
+    case 'Approved': return 'default';
+    case 'Rejected': return 'destructive';
+    case 'Pending Approval': return 'secondary';
+    default: return 'outline';
+  }
 }
 
 
@@ -74,6 +88,27 @@ export default function Documents() {
     },
     onError: () => {
       toast({ title: "Upload failed", description: "Failed to upload document. Please try again.", variant: "destructive" });
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const response = await fetch(`/api/documents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error("Update failed");
+      return response.json();
+    },
+    onSuccess: (updatedDoc) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      setSelectedDoc(updatedDoc);
+      toast({ title: "Status updated", description: `Document status changed to ${updatedDoc.status}.` });
+    },
+    onError: () => {
+      toast({ title: "Update failed", description: "Failed to update document status.", variant: "destructive" });
     },
   });
 
@@ -268,9 +303,16 @@ export default function Documents() {
                         <FileText className="h-4 w-4 flex-shrink-0" />
                         <span className="truncate">{document.name}</span>
                       </div>
-                      <Badge variant="outline" className="text-xs flex-shrink-0 ml-2">
-                        {document.category}
-                      </Badge>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        {isWorkflowCategory(document.category) && (
+                          <Badge variant={getStatusVariant(document.status)} className="text-xs" data-testid={`status-pill-${document.id}`}>
+                            {document.status}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">
+                          {document.category}
+                        </Badge>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -316,6 +358,31 @@ export default function Documents() {
               <span className="truncate">{selectedDoc?.name}</span>
             </DialogTitle>
           </DialogHeader>
+          
+          {/* Status section for workflow categories only */}
+          {selectedDoc && isWorkflowCategory(selectedDoc.category) && (
+            <div className="flex items-center gap-3 py-2 border-b">
+              <span className="text-sm text-slate-600 dark:text-slate-400">Status:</span>
+              <Select 
+                value={selectedDoc.status} 
+                onValueChange={(newStatus) => statusMutation.mutate({ id: selectedDoc.id, status: newStatus })}
+                disabled={statusMutation.isPending}
+              >
+                <SelectTrigger className="w-[180px]" data-testid="select-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DOCUMENT_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status} data-testid={`status-option-${status.toLowerCase().replace(' ', '-')}`}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {statusMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            </div>
+          )}
+
           <div className="flex-1 overflow-auto py-4">
             {selectedDoc && (() => {
               const fileType = getFileType(selectedDoc.name, selectedDoc.type);
