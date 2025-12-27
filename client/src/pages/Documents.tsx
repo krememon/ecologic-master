@@ -25,7 +25,6 @@ interface DocumentType {
   createdAt: string;
 }
 
-const ALL_CATEGORIES = ['All', ...DOCUMENT_CATEGORIES] as const;
 
 export default function Documents() {
   const { toast } = useToast();
@@ -119,31 +118,21 @@ export default function Documents() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-6">
-          {/* Category Filter Pills */}
-          <div className="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-2">
-            {ALL_CATEGORIES.map((category) => (
-              <Button
-                key={category}
-                variant={activeCategory === category ? "default" : "outline"}
-                size="sm"
-                onClick={() => setActiveCategory(category)}
-                className="whitespace-nowrap"
-                data-testid={`filter-${category.toLowerCase()}`}
-              >
-                {category}
-                {category !== 'All' && (
-                  <Badge variant="secondary" className="ml-2 text-xs">
-                    {documents.filter(d => d.category === category).length}
-                  </Badge>
-                )}
-              </Button>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              {activeCategory === 'All' ? 'All Documents' : activeCategory} ({filteredDocuments.length})
-            </h3>
+          {/* Filter Row: Category Dropdown + Upload Button */}
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <Select value={activeCategory} onValueChange={setActiveCategory}>
+              <SelectTrigger className="w-[180px]" data-testid="filter-category-dropdown">
+                <SelectValue placeholder="All documents" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All" data-testid="filter-all">All documents</SelectItem>
+                {DOCUMENT_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat} data-testid={`filter-${cat.toLowerCase()}`}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-upload-document">
