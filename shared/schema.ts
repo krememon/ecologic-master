@@ -181,6 +181,10 @@ export const invoices = pgTable("invoices", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Document categories
+export const DOCUMENT_CATEGORIES = ['Contracts', 'Estimates', 'Invoices', 'Permits', 'Photos', 'Manuals', 'Other'] as const;
+export type DocumentCategory = typeof DOCUMENT_CATEGORIES[number];
+
 // Documents table
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
@@ -188,6 +192,7 @@ export const documents = pgTable("documents", {
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type"), // contract, permit, blueprint, receipt, photo
+  category: varchar("category", { length: 50 }).notNull().default("Other"), // Contracts, Estimates, Invoices, Permits, Photos, Manuals, Other
   fileUrl: varchar("file_url").notNull(),
   fileSize: integer("file_size"),
   uploadedBy: varchar("uploaded_by").references(() => users.id),
