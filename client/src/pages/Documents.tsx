@@ -145,12 +145,10 @@ export default function Documents() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Documents & Approvals</h1>
-          <p className="text-slate-600 dark:text-slate-400">Manage project documents and e-signature approval workflows</p>
-        </div>
+    <div className="w-full max-w-md mx-auto px-4 pb-24">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Documents & Approvals</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage project documents and e-signature approval workflows</p>
       </div>
 
       <Tabs defaultValue="documents" className="w-full">
@@ -268,7 +266,7 @@ export default function Documents() {
               <div className="animate-pulse text-slate-500">Loading documents...</div>
             </div>
           ) : filteredDocuments.length === 0 ? (
-            <Card>
+            <Card className="w-full rounded-2xl border bg-white dark:bg-slate-900 shadow-sm">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FolderOpen className="h-12 w-12 text-slate-400 mb-4" />
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
@@ -286,11 +284,11 @@ export default function Documents() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 space-y-3">
               {filteredDocuments.map((document) => (
                 <Card 
                   key={document.id} 
-                  className="hover:shadow-md transition-shadow cursor-pointer" 
+                  className="w-full rounded-2xl border bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow cursor-pointer" 
                   data-testid={`document-card-${document.id}`}
                   onClick={() => {
                     setSelectedDoc(document);
