@@ -1,0 +1,88 @@
+Implement Documents permissions with a strict model:
+
+RULES (V1)
+- “Admins” = Owner + Supervisor
+- “Field” = everyone else (Technician, Dispatcher, Estimator, etc.) unless you explicitly treat them as Admin
+
+DOCUMENT TYPES
+Official categories (Admins only for create/edit/status/delete):
+- Contracts
+- Estimates
+- Invoices
+- Permits
+- Manuals
+
+Operational categories (Field allowed upload, but restricted):
+- Photos (Field can upload)
+- Other (Admins only for now, to keep it strict)
+
+PERMISSIONS
+1) Viewing
+- Everyone can VIEW documents (we will later restrict to job assignment if needed)
+
+2) Uploading
+- Admins: can upload any category (official + photos)
+- Field:
+  - can upload ONLY Photos
+  - Photos must be job-linked (job_id required)
+  - cannot upload company-wide docs
+
+3) Status changes (workflow statuses)
+- Only Admins can change status
+- Status UI should only appear for Admins AND only for official workflow categories (Contracts/Estimates/Invoices/Permits)
+
+4) Delete
+- Only Admins can delete documents
+
+FRONTEND CHANGES
+A) Create helper functions in a shared util:
+- isAdmin(role) => role in ['Owner','Supervisor']
+- canUploadCategory(role, category)
+- requireJobForUpload(role, category)
+- canDelete(role)
+- canChangeStatus(role)
+
+B) Documents page UI behavior
+- If Field user:
+  - Replace “Upload Document” button with “Upload Photo”
+  - In upload modal, category should be locked to “Photos” (no dropdown)
+  - Job selection should be REQUIRED (cannot submit if no job selected)
+- If Admin:
+  - Keep full Upload Document with category dropdown
+  - Allow company-wide or job-linked
+
+C) Preview modal behavior
+- Delete button ONLY for Admin
+- Status section ONLY for Admin and only for official workflow docs
+
+D) UX
+- If a user attempts a forbidden action, show a clean toast:
+  “You don’t have permission to do that.”
+
+BACKEND ENFORCEMENT (CRITICAL)
+Do NOT rely only on UI. Enforce permissions in API routes too:
+1) Upload endpoint (POST /api/documents or your existing route)
+- Determine user role from session/auth
+- If not Admin:
+  - reject if category != 'Photos'
+  - reject if job_id is null
+Return 403.
+
+2) Status update endpoint (PATCH /api/documents/:id)
+- Only Admin allowed. Otherwise 403.
+
+3) Delete endpoint (DELETE /api/documents/:id)
+- Only Admin allowed. Otherwise 403.
+
+DELIVERABLE TESTS
+- Log in as Technician:
+  - Can upload photo ONLY when selecting a job
+  - Cannot upload contracts/invoices/etc
+  - Cannot see status dropdown
+  - Cannot delete
+- Log in as Owner/Supervisor:
+  - Full upload categories
+  - Can change status for Contracts/Estimates/Invoices/Permits
+  - Can delete documents
+- Confirm backend returns 403 if Field tries to bypass via API call
+- List files changed

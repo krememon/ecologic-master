@@ -14,6 +14,8 @@ import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLi
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
+import { isAdmin, canDelete, canChangeStatus, getUploadableCategories, requireJobForUpload } from "@shared/documentPermissions";
+import { Trash2, Camera } from "lucide-react";
 
 interface JobInfo {
   id: number;
@@ -101,6 +103,16 @@ export default function Documents() {
     enabled: isAuthenticated,
   });
 
+  // Get user role from membership
+  const { data: membership } = useQuery<{ role: string }>({
+    queryKey: ["/api/user/membership"],
+    enabled: isAuthenticated,
+  });
+  
+  const userRole = membership?.role || '';
+  const userIsAdmin = isAdmin(userRole);
+  const uploadableCategories = getUploadableCategories(userRole);
+
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const response = await fetch("/api/documents", {
@@ -108,20 +120,45 @@ export default function Documents() {
         credentials: "include",
         body: formData,
       });
-      if (!response.ok) throw new Error("Upload failed");
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Upload failed");
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
       setUploadOpen(false);
       setUploadName("");
-      setUploadCategory("Other");
+      setUploadCategory(userIsAdmin ? "Other" : "Photos");
       setUploadJobId("company-wide");
       setSelectedFile(null);
       toast({ title: "Document uploaded", description: "Your document has been uploaded successfully." });
     },
-    onError: () => {
-      toast({ title: "Upload failed", description: "Failed to upload document. Please try again.", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Upload failed", description: error.message || "You don't have permission to do that.", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (documentId: number) => {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Delete failed");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      setIsPreviewOpen(false);
+      setSelectedDoc(null);
+      toast({ title: "Document deleted", description: "The document has been deleted." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Delete failed", description: error.message || "You don't have permission to do that.", variant: "destructive" });
     },
   });
 
@@ -294,16 +331,30 @@ export default function Documents() {
                 </Badge>
               </div>
             )}
-            <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+            <Dialog open={uploadOpen} onOpenChange={(open) => {
+              setUploadOpen(open);
+              if (open && !userIsAdmin) {
+                setUploadCategory("Photos");
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button data-testid="button-upload-document">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Document
+                  {userIsAdmin ? (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Document
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="w-4 h-4 mr-2" />
+                      Upload Photo
+                    </>
+                  )}
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Upload Document</DialogTitle>
+                  <DialogTitle>{userIsAdmin ? 'Upload Document' : 'Upload Photo'}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
@@ -313,6 +364,7 @@ export default function Documents() {
                         ref={fileInputRef}
                         id="file"
                         type="file"
+                        accept={userIsAdmin ? undefined : "image/*"}
                         onChange={handleFileSelect}
                         className="flex-1"
                         data-testid="input-file"
@@ -325,32 +377,45 @@ export default function Documents() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="name">Document Name</Label>
+                    <Label htmlFor="name">{userIsAdmin ? 'Document Name' : 'Photo Name'}</Label>
                     <Input
                       id="name"
                       value={uploadName}
                       onChange={(e) => setUploadName(e.target.value)}
-                      placeholder="Enter document name"
+                      placeholder={userIsAdmin ? "Enter document name" : "Enter photo name"}
                       data-testid="input-document-name"
                     />
                   </div>
+                  {userIsAdmin ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Category</Label>
+                      <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocumentCategory)}>
+                        <SelectTrigger data-testid="select-category">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {uploadableCategories.map((cat) => (
+                            <SelectItem key={cat} value={cat} data-testid={`option-${cat.toLowerCase()}`}>
+                              {cat}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-md text-sm">
+                        <Camera className="h-4 w-4" />
+                        <span>Photos</span>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <Label htmlFor="category">Category</Label>
-                    <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocumentCategory)}>
-                      <SelectTrigger data-testid="select-category">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DOCUMENT_CATEGORIES.map((cat) => (
-                          <SelectItem key={cat} value={cat} data-testid={`option-${cat.toLowerCase()}`}>
-                            {cat}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="job">Attach to Job</Label>
+                    <Label htmlFor="job">
+                      Attach to Job
+                      {!userIsAdmin && <span className="text-red-500 ml-1">*</span>}
+                    </Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -360,11 +425,14 @@ export default function Documents() {
                     >
                       <span className="truncate">
                         {uploadJobId === 'company-wide' 
-                          ? 'Company-wide (No job)' 
+                          ? (userIsAdmin ? 'Company-wide (No job)' : 'Select a job (required)')
                           : jobs.find(j => j.id.toString() === uploadJobId)?.title || 'Select job'}
                       </span>
                       <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
                     </Button>
+                    {!userIsAdmin && uploadJobId === 'company-wide' && (
+                      <p className="text-xs text-red-500">Photos must be attached to a job</p>
+                    )}
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={() => setUploadOpen(false)} data-testid="button-cancel">
@@ -372,7 +440,7 @@ export default function Documents() {
                     </Button>
                     <Button 
                       onClick={handleUpload} 
-                      disabled={!selectedFile || uploadMutation.isPending}
+                      disabled={!selectedFile || uploadMutation.isPending || (!userIsAdmin && uploadJobId === 'company-wide')}
                       data-testid="button-submit-upload"
                     >
                       {uploadMutation.isPending ? (
@@ -664,8 +732,8 @@ export default function Documents() {
             </DialogTitle>
           </DialogHeader>
           
-          {/* Status section for workflow categories only */}
-          {selectedDoc && isWorkflowCategory(selectedDoc.category) && (
+          {/* Status section for workflow categories - Admin only */}
+          {selectedDoc && isWorkflowCategory(selectedDoc.category) && userIsAdmin && (
             <div className="flex items-center gap-3 py-2 border-b">
               <span className="text-sm text-slate-600 dark:text-slate-400">Status:</span>
               <Select 
@@ -737,21 +805,40 @@ export default function Documents() {
               );
             })()}
           </div>
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setIsPreviewOpen(false)}
-              data-testid="button-close-preview"
-            >
-              Close
-            </Button>
-            <Button
-              onClick={() => selectedDoc && window.open(selectedDoc.fileUrl, '_blank')}
-              data-testid="button-preview-download"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download
-            </Button>
+          <div className="flex justify-between gap-2 pt-4 border-t">
+            <div>
+              {userIsAdmin && selectedDoc && (
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteMutation.mutate(selectedDoc.id)}
+                  disabled={deleteMutation.isPending}
+                  data-testid="button-delete-document"
+                >
+                  {deleteMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-2" />
+                  )}
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsPreviewOpen(false)}
+                data-testid="button-close-preview"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => selectedDoc && window.open(selectedDoc.fileUrl, '_blank')}
+                data-testid="button-preview-download"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

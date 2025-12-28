@@ -641,6 +641,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get current user's membership/role
+  app.get('/api/user/membership', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      
+      res.json({
+        role: member?.role || 'Technician',
+        companyId: company.id,
+        companyName: company.name,
+      });
+    } catch (error) {
+      console.error("Error fetching user membership:", error);
+      res.status(500).json({ message: "Failed to fetch membership" });
+    }
+  });
+
   app.post('/api/companies', async (req: any, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -1243,6 +1266,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { name, category, jobId } = req.body;
+      
+      // Get user role for permission check
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role || 'Technician';
+      const isAdmin = ['Owner', 'Supervisor'].includes(userRole);
+      
+      // Permission check: Field users can only upload Photos with a job attached
+      if (!isAdmin) {
+        if (category !== 'Photos') {
+          return res.status(403).json({ message: "You don't have permission to upload this category" });
+        }
+        if (!jobId) {
+          return res.status(403).json({ message: "Photos must be attached to a job" });
+        }
+      }
+      
       const fileName = `${Date.now()}-${req.file.originalname}`;
       const filePath = `uploads/${fileName}`;
       
@@ -1271,6 +1310,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/documents/:documentId', isAuthenticated, async (req: any, res) => {
     try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Permission check: Only Admins can delete documents
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role || 'Technician';
+      const isAdmin = ['Owner', 'Supervisor'].includes(userRole);
+      
+      if (!isAdmin) {
+        return res.status(403).json({ message: "You don't have permission to delete documents" });
+      }
+      
       const documentId = parseInt(req.params.documentId);
       await storage.deleteDocument(documentId);
       res.status(204).send();
@@ -1282,6 +1337,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch('/api/documents/:documentId', isAuthenticated, async (req: any, res) => {
     try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Permission check: Only Admins can change status
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role || 'Technician';
+      const isAdmin = ['Owner', 'Supervisor'].includes(userRole);
+      
+      if (!isAdmin) {
+        return res.status(403).json({ message: "You don't have permission to change document status" });
+      }
+      
       const documentId = parseInt(req.params.documentId);
       const { status } = req.body;
       
