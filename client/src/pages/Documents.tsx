@@ -15,15 +15,29 @@ import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
 
+interface JobInfo {
+  id: number;
+  title: string;
+  clientName: string | null;
+}
+
 interface DocumentType {
   id: number;
   name: string;
   type: string | null;
   category: string;
   status: string;
+  jobId: number | null;
+  job: JobInfo | null;
   fileUrl: string;
   fileSize: number | null;
   createdAt: string;
+}
+
+interface JobType {
+  id: number;
+  title: string;
+  clientName: string | null;
 }
 
 function isWorkflowCategory(category: string): boolean {
@@ -55,9 +69,11 @@ export default function Documents() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [activeCategory, setActiveCategory] = useState<string>('All');
+  const [activeJobFilter, setActiveJobFilter] = useState<string>('all');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>("Other");
+  const [uploadJobId, setUploadJobId] = useState<string>('company-wide');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<DocumentType | null>(null);
@@ -65,6 +81,11 @@ export default function Documents() {
 
   const { data: documents = [], isLoading: documentsLoading } = useQuery<DocumentType[]>({
     queryKey: ["/api/documents"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: jobs = [] } = useQuery<JobType[]>({
+    queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
   });
 
@@ -83,6 +104,7 @@ export default function Documents() {
       setUploadOpen(false);
       setUploadName("");
       setUploadCategory("Other");
+      setUploadJobId("company-wide");
       setSelectedFile(null);
       toast({ title: "Document uploaded", description: "Your document has been uploaded successfully." });
     },
@@ -113,9 +135,23 @@ export default function Documents() {
   });
 
   const filteredDocuments = useMemo(() => {
-    if (activeCategory === 'All') return documents;
-    return documents.filter(doc => doc.category === activeCategory);
-  }, [documents, activeCategory]);
+    let result = documents;
+    
+    // Filter by job
+    if (activeJobFilter === 'company-wide') {
+      result = result.filter(doc => doc.jobId === null);
+    } else if (activeJobFilter !== 'all') {
+      const jobId = parseInt(activeJobFilter);
+      result = result.filter(doc => doc.jobId === jobId);
+    }
+    
+    // Filter by category
+    if (activeCategory !== 'All') {
+      result = result.filter(doc => doc.category === activeCategory);
+    }
+    
+    return result;
+  }, [documents, activeCategory, activeJobFilter]);
 
   const handleUpload = () => {
     if (!selectedFile) return;
@@ -123,6 +159,9 @@ export default function Documents() {
     formData.append("file", selectedFile);
     formData.append("name", uploadName || selectedFile.name);
     formData.append("category", uploadCategory);
+    if (uploadJobId !== 'company-wide') {
+      formData.append("jobId", uploadJobId);
+    }
     uploadMutation.mutate(formData);
   };
 
@@ -164,21 +203,37 @@ export default function Documents() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-6">
-          {/* Filter Row: Category Dropdown + Upload Button */}
-          <div className="flex items-center justify-between gap-4 mb-6">
-            <Select value={activeCategory} onValueChange={setActiveCategory}>
-              <SelectTrigger className="w-[180px]" data-testid="filter-category-dropdown">
-                <SelectValue placeholder="All documents" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All" data-testid="filter-all">All documents</SelectItem>
-                {DOCUMENT_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat} data-testid={`filter-${cat.toLowerCase()}`}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Filter Row: Job + Category Dropdowns + Upload Button */}
+          <div className="flex flex-col gap-3 mb-6">
+            <div className="flex items-center gap-2">
+              <Select value={activeJobFilter} onValueChange={setActiveJobFilter}>
+                <SelectTrigger className="flex-1" data-testid="filter-job-dropdown">
+                  <SelectValue placeholder="All jobs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" data-testid="filter-job-all">All jobs</SelectItem>
+                  <SelectItem value="company-wide" data-testid="filter-job-company-wide">Company-wide</SelectItem>
+                  {jobs.map((job) => (
+                    <SelectItem key={job.id} value={job.id.toString()} data-testid={`filter-job-${job.id}`}>
+                      {job.title}{job.clientName ? ` - ${job.clientName}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={activeCategory} onValueChange={setActiveCategory}>
+                <SelectTrigger className="flex-1" data-testid="filter-category-dropdown">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All" data-testid="filter-all">All categories</SelectItem>
+                  {DOCUMENT_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat} data-testid={`filter-${cat.toLowerCase()}`}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-upload-document">
@@ -229,6 +284,22 @@ export default function Documents() {
                         {DOCUMENT_CATEGORIES.map((cat) => (
                           <SelectItem key={cat} value={cat} data-testid={`option-${cat.toLowerCase()}`}>
                             {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="job">Attach to Job</Label>
+                    <Select value={uploadJobId} onValueChange={setUploadJobId}>
+                      <SelectTrigger data-testid="select-job">
+                        <SelectValue placeholder="Company-wide" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="company-wide" data-testid="option-job-company-wide">Company-wide (No job)</SelectItem>
+                        {jobs.map((job) => (
+                          <SelectItem key={job.id} value={job.id.toString()} data-testid={`option-job-${job.id}`}>
+                            {job.title}{job.clientName ? ` - ${job.clientName}` : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -315,6 +386,11 @@ export default function Documents() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
+                      {document.job && (
+                        <div className="text-sm text-blue-600 dark:text-blue-400" data-testid={`job-label-${document.id}`}>
+                          Job: {document.job.title}{document.job.clientName ? ` - ${document.job.clientName}` : ''}
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400">
                         <span>Size: {((document.fileSize || 0) / 1024).toFixed(1)} KB</span>
                         <span>{new Date(document.createdAt).toLocaleDateString()}</span>
