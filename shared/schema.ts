@@ -6,6 +6,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  unique,
   serial,
   integer,
   decimal,
@@ -163,6 +164,18 @@ export const jobAssignments = pgTable("job_assignments", {
   subcontractorId: integer("subcontractor_id").notNull().references(() => subcontractors.id),
   assignedAt: timestamp("assigned_at").defaultNow(),
 });
+
+// Crew assignments table (many-to-many relationship between jobs and users/employees)
+export const crewAssignments = pgTable("crew_assignments", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  assignedAt: timestamp("assigned_at").defaultNow(),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+}, (table) => ({
+  uniqueJobUser: unique().on(table.jobId, table.userId),
+}));
 
 // Invoices table
 export const invoices = pgTable("invoices", {
@@ -356,6 +369,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
     references: [clients.id],
   }),
   assignments: many(jobAssignments),
+  crewAssignments: many(crewAssignments),
   invoices: many(invoices),
   documents: many(documents),
   photos: many(jobPhotos),
@@ -369,6 +383,25 @@ export const jobAssignmentsRelations = relations(jobAssignments, ({ one }) => ({
   subcontractor: one(subcontractors, {
     fields: [jobAssignments.subcontractorId],
     references: [subcontractors.id],
+  }),
+}));
+
+export const crewAssignmentsRelations = relations(crewAssignments, ({ one }) => ({
+  job: one(jobs, {
+    fields: [crewAssignments.jobId],
+    references: [jobs.id],
+  }),
+  user: one(users, {
+    fields: [crewAssignments.userId],
+    references: [users.id],
+  }),
+  company: one(companies, {
+    fields: [crewAssignments.companyId],
+    references: [companies.id],
+  }),
+  assignedByUser: one(users, {
+    fields: [crewAssignments.assignedBy],
+    references: [users.id],
   }),
 }));
 
@@ -663,6 +696,14 @@ export const insertJobPhotoSchema = createInsertSchema(jobPhotos).omit({
   id: true,
   createdAt: true,
 });
+
+// Crew assignment insert schema
+export const insertCrewAssignmentSchema = createInsertSchema(crewAssignments).omit({
+  id: true,
+  assignedAt: true,
+});
+export type InsertCrewAssignment = z.infer<typeof insertCrewAssignmentSchema>;
+export type CrewAssignment = typeof crewAssignments.$inferSelect;
 
 export const insertScheduleItemSchema = createInsertSchema(scheduleItems).omit({
   id: true,
