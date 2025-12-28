@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File } from "lucide-react";
+import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File, Search, ChevronDown, Building2, Briefcase } from "lucide-react";
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
@@ -38,7 +38,15 @@ interface JobType {
   id: number;
   title: string;
   clientName: string | null;
+  location?: string | null;
+  city?: string | null;
+  status?: string;
 }
+
+type JobFilterMode = 
+  | { mode: 'all' }
+  | { mode: 'company' }
+  | { mode: 'job'; jobId: number; label: string };
 
 function isWorkflowCategory(category: string): boolean {
   return (WORKFLOW_CATEGORIES as readonly string[]).includes(category);
@@ -69,11 +77,15 @@ export default function Documents() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [activeCategory, setActiveCategory] = useState<string>('All');
-  const [activeJobFilter, setActiveJobFilter] = useState<string>('all');
+  const [jobFilter, setJobFilter] = useState<JobFilterMode>({ mode: 'all' });
+  const [jobPickerOpen, setJobPickerOpen] = useState(false);
+  const [jobSearchQuery, setJobSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>("Other");
   const [uploadJobId, setUploadJobId] = useState<string>('company-wide');
+  const [uploadJobPickerOpen, setUploadJobPickerOpen] = useState(false);
+  const [uploadJobSearchQuery, setUploadJobSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<DocumentType | null>(null);
@@ -134,15 +146,43 @@ export default function Documents() {
     },
   });
 
+  // Filter jobs for search
+  const filteredJobs = useMemo(() => {
+    const query = jobSearchQuery.trim().toLowerCase();
+    if (!query) return jobs.slice(0, 100);
+    return jobs.filter(job => {
+      const searchFields = [
+        job.title,
+        job.clientName,
+        job.location,
+        job.city
+      ].filter(Boolean).map(f => f!.toLowerCase());
+      return searchFields.some(field => field.includes(query));
+    }).slice(0, 100);
+  }, [jobs, jobSearchQuery]);
+
+  const uploadFilteredJobs = useMemo(() => {
+    const query = uploadJobSearchQuery.trim().toLowerCase();
+    if (!query) return jobs.slice(0, 100);
+    return jobs.filter(job => {
+      const searchFields = [
+        job.title,
+        job.clientName,
+        job.location,
+        job.city
+      ].filter(Boolean).map(f => f!.toLowerCase());
+      return searchFields.some(field => field.includes(query));
+    }).slice(0, 100);
+  }, [jobs, uploadJobSearchQuery]);
+
   const filteredDocuments = useMemo(() => {
     let result = documents;
     
     // Filter by job
-    if (activeJobFilter === 'company-wide') {
+    if (jobFilter.mode === 'company') {
       result = result.filter(doc => doc.jobId === null);
-    } else if (activeJobFilter !== 'all') {
-      const jobId = parseInt(activeJobFilter);
-      result = result.filter(doc => doc.jobId === jobId);
+    } else if (jobFilter.mode === 'job') {
+      result = result.filter(doc => doc.jobId === jobFilter.jobId);
     }
     
     // Filter by category
@@ -151,7 +191,7 @@ export default function Documents() {
     }
     
     return result;
-  }, [documents, activeCategory, activeJobFilter]);
+  }, [documents, activeCategory, jobFilter]);
 
   const handleUpload = () => {
     if (!selectedFile) return;
@@ -203,23 +243,22 @@ export default function Documents() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-6">
-          {/* Filter Row: Job + Category Dropdowns + Upload Button */}
+          {/* Filter Row: Job Picker Button + Category Dropdown */}
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex items-center gap-2">
-              <Select value={activeJobFilter} onValueChange={setActiveJobFilter}>
-                <SelectTrigger className="flex-1" data-testid="filter-job-dropdown">
-                  <SelectValue placeholder="All jobs" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" data-testid="filter-job-all">All jobs</SelectItem>
-                  <SelectItem value="company-wide" data-testid="filter-job-company-wide">Company-wide</SelectItem>
-                  {jobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id.toString()} data-testid={`filter-job-${job.id}`}>
-                      {job.title}{job.clientName ? ` - ${job.clientName}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Button 
+                variant="outline" 
+                className="flex-1 justify-between"
+                onClick={() => setJobPickerOpen(true)}
+                data-testid="button-job-picker"
+              >
+                <span className="truncate">
+                  {jobFilter.mode === 'all' ? 'All jobs' : 
+                   jobFilter.mode === 'company' ? 'Company-wide' : 
+                   jobFilter.label}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+              </Button>
               <Select value={activeCategory} onValueChange={setActiveCategory}>
                 <SelectTrigger className="flex-1" data-testid="filter-category-dropdown">
                   <SelectValue placeholder="All categories" />
@@ -234,6 +273,27 @@ export default function Documents() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Selected Job Chip */}
+            {jobFilter.mode === 'job' && (
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant="secondary" 
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm"
+                  data-testid="chip-selected-job"
+                >
+                  <Briefcase className="h-3 w-3" />
+                  <span className="truncate max-w-[200px]">Job: {jobFilter.label}</span>
+                  <button 
+                    onClick={() => setJobFilter({ mode: 'all' })}
+                    className="ml-1 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full p-0.5"
+                    data-testid="button-clear-job-filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              </div>
+            )}
             <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-upload-document">
@@ -291,19 +351,20 @@ export default function Documents() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="job">Attach to Job</Label>
-                    <Select value={uploadJobId} onValueChange={setUploadJobId}>
-                      <SelectTrigger data-testid="select-job">
-                        <SelectValue placeholder="Company-wide" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="company-wide" data-testid="option-job-company-wide">Company-wide (No job)</SelectItem>
-                        {jobs.map((job) => (
-                          <SelectItem key={job.id} value={job.id.toString()} data-testid={`option-job-${job.id}`}>
-                            {job.title}{job.clientName ? ` - ${job.clientName}` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => setUploadJobPickerOpen(true)}
+                      data-testid="button-select-job"
+                    >
+                      <span className="truncate">
+                        {uploadJobId === 'company-wide' 
+                          ? 'Company-wide (No job)' 
+                          : jobs.find(j => j.id.toString() === uploadJobId)?.title || 'Select job'}
+                      </span>
+                      <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+                    </Button>
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={() => setUploadOpen(false)} data-testid="button-cancel">
@@ -422,6 +483,176 @@ export default function Documents() {
           <ApprovalWorkflow />
         </TabsContent>
       </Tabs>
+
+      {/* Job Picker Modal */}
+      <Dialog open={jobPickerOpen} onOpenChange={(open) => {
+        setJobPickerOpen(open);
+        if (!open) setJobSearchQuery('');
+      }}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Select Job</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search jobs..."
+              value={jobSearchQuery}
+              onChange={(e) => setJobSearchQuery(e.target.value)}
+              className="pl-10"
+              data-testid="input-job-search"
+            />
+          </div>
+          <div className="flex-1 overflow-auto space-y-1">
+            {/* Quick Options */}
+            <div className="pb-2 mb-2 border-b">
+              <button
+                onClick={() => {
+                  setJobFilter({ mode: 'all' });
+                  setJobPickerOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  jobFilter.mode === 'all' 
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                data-testid="option-all-jobs"
+              >
+                <FolderOpen className="h-4 w-4 text-slate-500" />
+                <span>All jobs</span>
+              </button>
+              <button
+                onClick={() => {
+                  setJobFilter({ mode: 'company' });
+                  setJobPickerOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  jobFilter.mode === 'company' 
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                data-testid="option-company-wide"
+              >
+                <Building2 className="h-4 w-4 text-slate-500" />
+                <span>Company-wide</span>
+              </button>
+            </div>
+            {/* Job List */}
+            {filteredJobs.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                No matching jobs
+              </div>
+            ) : (
+              filteredJobs.map((job) => {
+                const label = job.title + (job.clientName ? ` - ${job.clientName}` : '');
+                const isSelected = jobFilter.mode === 'job' && jobFilter.jobId === job.id;
+                return (
+                  <button
+                    key={job.id}
+                    onClick={() => {
+                      setJobFilter({ mode: 'job', jobId: job.id, label });
+                      setJobPickerOpen(false);
+                    }}
+                    className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                      isSelected 
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                    data-testid={`option-job-${job.id}`}
+                  >
+                    <Briefcase className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-500" />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{job.title}</div>
+                      {(job.clientName || job.city) && (
+                        <div className="text-xs text-slate-500 truncate">
+                          {[job.clientName, job.city].filter(Boolean).join(' • ')}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Job Picker Modal */}
+      <Dialog open={uploadJobPickerOpen} onOpenChange={(open) => {
+        setUploadJobPickerOpen(open);
+        if (!open) setUploadJobSearchQuery('');
+      }}>
+        <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Attach to Job</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search jobs..."
+              value={uploadJobSearchQuery}
+              onChange={(e) => setUploadJobSearchQuery(e.target.value)}
+              className="pl-10"
+              data-testid="input-upload-job-search"
+            />
+          </div>
+          <div className="flex-1 overflow-auto space-y-1">
+            {/* Quick Options */}
+            <div className="pb-2 mb-2 border-b">
+              <button
+                onClick={() => {
+                  setUploadJobId('company-wide');
+                  setUploadJobPickerOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  uploadJobId === 'company-wide' 
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                data-testid="upload-option-company-wide"
+              >
+                <Building2 className="h-4 w-4 text-slate-500" />
+                <span>Company-wide (No job)</span>
+              </button>
+            </div>
+            {/* Job List */}
+            {uploadFilteredJobs.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                No matching jobs
+              </div>
+            ) : (
+              uploadFilteredJobs.map((job) => {
+                const isSelected = uploadJobId === job.id.toString();
+                return (
+                  <button
+                    key={job.id}
+                    onClick={() => {
+                      setUploadJobId(job.id.toString());
+                      setUploadJobPickerOpen(false);
+                    }}
+                    className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                      isSelected 
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                    data-testid={`upload-option-job-${job.id}`}
+                  >
+                    <Briefcase className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-500" />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{job.title}</div>
+                      {(job.clientName || job.city) && (
+                        <div className="text-xs text-slate-500 truncate">
+                          {[job.clientName, job.city].filter(Boolean).join(' • ')}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Document Preview Modal */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
