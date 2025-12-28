@@ -1221,6 +1221,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get crew assignments for a job
+  app.get('/api/jobs/:jobId/crew', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Verify job belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      const assignments = await storage.getJobCrewAssignments(jobId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching crew assignments:", error);
+      res.status(500).json({ message: "Failed to fetch crew assignments" });
+    }
+  });
+
+  // Bulk assign crew members to a job (Admin-only: Owner/Supervisor)
+  app.post('/api/jobs/:jobId/crew', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Check if user is admin (Owner or Supervisor)
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role?.toUpperCase() || 'TECHNICIAN';
+      
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
+        return res.status(403).json({ message: "Only Owner or Supervisor can assign crew members" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      const { userIds } = req.body;
+      
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ message: "userIds array is required" });
+      }
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      // Verify all users are in the company
+      for (const uid of userIds) {
+        const userMember = await storage.getCompanyMember(company.id, uid);
+        if (!userMember) {
+          return res.status(400).json({ message: `User ${uid} is not a member of this company` });
+        }
+      }
+      
+      const result = await storage.addJobCrewAssignments(jobId, userIds, company.id, userId);
+      
+      res.json({ ok: true, added: result.added });
+    } catch (error) {
+      console.error("Error assigning crew:", error);
+      res.status(500).json({ message: "Failed to assign crew members" });
+    }
+  });
+
+  // Remove a crew member from a job (Admin-only: Owner/Supervisor)
+  app.delete('/api/jobs/:jobId/crew/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = getUserId(req.user);
+      const company = await storage.getUserCompany(currentUserId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Check if user is admin (Owner or Supervisor)
+      const member = await storage.getCompanyMember(company.id, currentUserId);
+      const userRole = member?.role?.toUpperCase() || 'TECHNICIAN';
+      
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
+        return res.status(403).json({ message: "Only Owner or Supervisor can remove crew members" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      const targetUserId = req.params.userId;
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      await storage.removeJobCrewAssignment(jobId, targetUserId);
+      
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error removing crew member:", error);
+      res.status(500).json({ message: "Failed to remove crew member" });
+    }
+  });
+
   // Job Photos routes
   app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
     try {

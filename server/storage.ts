@@ -7,6 +7,7 @@ import {
   subcontractors,
   jobs,
   jobAssignments,
+  crewAssignments,
   invoices,
   documents,
   messages,
@@ -93,6 +94,11 @@ export interface IStorage {
   getCompanyByInviteCode(inviteCode: string): Promise<Company | undefined>;
   rotateInviteCode(companyId: number, newCode: string): Promise<Company>;
   getCompanyMember(companyId: number, userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined>;
+  
+  // Crew assignment operations
+  getJobCrewAssignments(jobId: number): Promise<any[]>;
+  addJobCrewAssignments(jobId: number, userIds: string[], companyId: number, assignedBy: string): Promise<{ added: number }>;
+  removeJobCrewAssignment(jobId: number, userId: string): Promise<void>;
   
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
@@ -410,6 +416,61 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(1);
     return member;
+  }
+
+  async getJobCrewAssignments(jobId: number): Promise<any[]> {
+    const assignments = await db
+      .select({
+        id: crewAssignments.id,
+        jobId: crewAssignments.jobId,
+        userId: crewAssignments.userId,
+        companyId: crewAssignments.companyId,
+        assignedAt: crewAssignments.assignedAt,
+        assignedBy: crewAssignments.assignedBy,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+          profileImageUrl: users.profileImageUrl,
+        },
+      })
+      .from(crewAssignments)
+      .innerJoin(users, eq(crewAssignments.userId, users.id))
+      .where(eq(crewAssignments.jobId, jobId))
+      .orderBy(desc(crewAssignments.assignedAt));
+    return assignments;
+  }
+
+  async addJobCrewAssignments(jobId: number, userIds: string[], companyId: number, assignedBy: string): Promise<{ added: number }> {
+    if (userIds.length === 0) return { added: 0 };
+    
+    const values = userIds.map(userId => ({
+      jobId,
+      userId,
+      companyId,
+      assignedBy,
+    }));
+    
+    // Use ON CONFLICT DO NOTHING for idempotent bulk insert
+    const result = await db
+      .insert(crewAssignments)
+      .values(values)
+      .onConflictDoNothing({ target: [crewAssignments.jobId, crewAssignments.userId] })
+      .returning();
+    
+    return { added: result.length };
+  }
+
+  async removeJobCrewAssignment(jobId: number, userId: string): Promise<void> {
+    await db
+      .delete(crewAssignments)
+      .where(
+        and(
+          eq(crewAssignments.jobId, jobId),
+          eq(crewAssignments.userId, userId)
+        )
+      );
   }
 
   async getClients(companyId: number): Promise<Client[]> {

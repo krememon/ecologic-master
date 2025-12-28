@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, UserPlus, Loader2, X } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, UserPlus, Loader2, X, Check } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -260,6 +260,7 @@ export default function Jobs() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [technicianSearch, setTechnicianSearch] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -317,6 +318,34 @@ export default function Jobs() {
     queryKey: [`/api/jobs/${selectedJob?.id}/photos`],
     enabled: !!selectedJob?.id,
   });
+
+  // Fetch current crew assignments for selected job
+  interface CrewAssignment {
+    id: number;
+    jobId: number;
+    userId: string;
+    companyId: number;
+    assignedAt: string;
+    user: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      email: string;
+      profileImageUrl: string | null;
+    };
+  }
+  const { data: crewAssignments = [] } = useQuery<CrewAssignment[]>({
+    queryKey: ['/api/jobs', selectedJob?.id, 'crew'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${selectedJob?.id}/crew`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch crew');
+      return res.json();
+    },
+    enabled: !!selectedJob?.id && isAdmin,
+  });
+  
+  // Get set of already assigned user IDs
+  const assignedUserIds = new Set(crewAssignments.map(a => a.userId));
 
   // Fetch company members for assignment (only fetch when modal is open)
   // The /api/org/users endpoint automatically filters by the current user's company
@@ -541,21 +570,21 @@ export default function Jobs() {
     },
   });
 
-  // Assign technician mutation
-  const assignTechnicianMutation = useMutation({
-    mutationFn: async ({ jobId, technicianId }: { jobId: number; technicianId: string | null }) => {
-      const res = await apiRequest("PATCH", `/api/jobs/${jobId}/assign`, { technicianId });
+  // Bulk assign crew mutation
+  const assignCrewMutation = useMutation({
+    mutationFn: async ({ jobId, userIds }: { jobId: number; userIds: string[] }) => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/crew`, { userIds });
       return await res.json();
     },
-    onSuccess: (updatedJob) => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      // Update selected job to reflect the change
-      setSelectedJob(prev => prev ? { ...prev, assignedTo: updatedJob.assignedTo } : null);
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', selectedJob?.id, 'crew'] });
       setIsAssignModalOpen(false);
       setTechnicianSearch("");
+      setSelectedUserIds(new Set());
       toast({
         title: "Success",
-        description: updatedJob.assignedTo ? "Technician assigned successfully" : "Technician unassigned",
+        description: `Assigned ${result.added} crew member${result.added !== 1 ? 's' : ''}`,
       });
     },
     onError: (error: Error) => {
@@ -570,7 +599,29 @@ export default function Jobs() {
       }
       toast({
         title: "Error",
-        description: "Failed to assign technician",
+        description: "Failed to assign crew members",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Remove crew member mutation
+  const removeCrewMutation = useMutation({
+    mutationFn: async ({ jobId, userId }: { jobId: number; userId: string }) => {
+      const res = await apiRequest("DELETE", `/api/jobs/${jobId}/crew/${userId}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', selectedJob?.id, 'crew'] });
+      toast({
+        title: "Success",
+        description: "Crew member removed",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to remove crew member",
         variant: "destructive",
       });
     },
@@ -1208,14 +1259,17 @@ export default function Jobs() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Assign Technician Modal */}
+      {/* Assign Crew Members Modal (Multi-select) */}
       <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
         setIsAssignModalOpen(open);
-        if (!open) setTechnicianSearch("");
+        if (!open) {
+          setTechnicianSearch("");
+          setSelectedUserIds(new Set());
+        }
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign Crew Member</DialogTitle>
+            <DialogTitle>Assign Crew Members</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {/* Search Input */}
@@ -1230,7 +1284,7 @@ export default function Jobs() {
               />
             </div>
             
-            {/* Technician List */}
+            {/* Crew Member List */}
             <div className="max-h-[300px] overflow-y-auto border rounded-lg divide-y">
               {crewMembersLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -1238,48 +1292,54 @@ export default function Jobs() {
                 </div>
               ) : filteredTechnicians.length === 0 ? (
                 <div className="py-8 text-center text-slate-500">
-                  {technicianSearch ? 'No crew members match your search' : 'No assignable crew members found'}
+                  {technicianSearch ? 'No crew members match your search' : 'No assignable crew members found. Add employees to your company first.'}
                 </div>
               ) : (
                 <>
-                  {/* Unassign option */}
-                  {selectedJob?.assignedTo && (
-                    <button
-                      onClick={() => selectedJob && assignTechnicianMutation.mutate({ 
-                        jobId: selectedJob.id, 
-                        technicianId: null 
-                      })}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left"
-                      disabled={assignTechnicianMutation.isPending}
-                      data-testid="button-unassign"
-                    >
-                      <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                        <X className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">Unassign</div>
-                        <div className="text-xs text-slate-500">Remove current assignment</div>
-                      </div>
-                    </button>
-                  )}
                   {filteredTechnicians.map((tech) => {
-                    const isSelected = selectedJob?.assignedTo === tech.id;
+                    const isAlreadyAssigned = assignedUserIds.has(tech.id);
+                    const isChecked = selectedUserIds.has(tech.id);
                     const techName = `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
+                    
+                    const toggleSelection = () => {
+                      if (isAlreadyAssigned) return;
+                      const newSet = new Set(selectedUserIds);
+                      if (isChecked) {
+                        newSet.delete(tech.id);
+                      } else {
+                        newSet.add(tech.id);
+                      }
+                      setSelectedUserIds(newSet);
+                    };
+                    
                     return (
                       <button
                         key={tech.id}
-                        onClick={() => selectedJob && assignTechnicianMutation.mutate({ 
-                          jobId: selectedJob.id, 
-                          technicianId: tech.id 
-                        })}
+                        onClick={toggleSelection}
+                        disabled={isAlreadyAssigned || assignCrewMutation.isPending}
                         className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-50 dark:bg-blue-900/30' 
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                          isAlreadyAssigned 
+                            ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800/50' 
+                            : isChecked 
+                              ? 'bg-blue-50 dark:bg-blue-900/30' 
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
-                        disabled={assignTechnicianMutation.isPending}
-                        data-testid={`button-select-technician-${tech.id}`}
+                        data-testid={`button-select-crew-${tech.id}`}
                       >
+                        {/* Checkbox */}
+                        <div className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                          isAlreadyAssigned 
+                            ? 'bg-green-100 border-green-400 dark:bg-green-900/30 dark:border-green-600'
+                            : isChecked 
+                              ? 'bg-blue-500 border-blue-500' 
+                              : 'border-slate-300 dark:border-slate-600'
+                        }`}>
+                          {(isAlreadyAssigned || isChecked) && (
+                            <Check className="h-3 w-3 text-white" />
+                          )}
+                        </div>
+                        
+                        {/* Avatar */}
                         {tech.profileImageUrl ? (
                           <img 
                             src={tech.profileImageUrl} 
@@ -1291,6 +1351,8 @@ export default function Jobs() {
                             <User className="h-4 w-4 text-slate-500" />
                           </div>
                         )}
+                        
+                        {/* Info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 dark:text-slate-100 truncate">{techName}</span>
@@ -1298,8 +1360,9 @@ export default function Jobs() {
                           </div>
                           <div className="text-xs text-slate-500 truncate">{tech.email}</div>
                         </div>
-                        {isSelected && (
-                          <Badge variant="secondary" className="text-xs shrink-0">Current</Badge>
+                        
+                        {isAlreadyAssigned && (
+                          <Badge variant="secondary" className="text-xs shrink-0 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Assigned</Badge>
                         )}
                       </button>
                     );
@@ -1308,12 +1371,43 @@ export default function Jobs() {
               )}
             </div>
             
-            {assignTechnicianMutation.isPending && (
-              <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Assigning...
-              </div>
-            )}
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setIsAssignModalOpen(false);
+                  setSelectedUserIds(new Set());
+                  setTechnicianSearch("");
+                }}
+                disabled={assignCrewMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (selectedJob && selectedUserIds.size > 0) {
+                    assignCrewMutation.mutate({
+                      jobId: selectedJob.id,
+                      userIds: Array.from(selectedUserIds),
+                    });
+                  }
+                }}
+                disabled={selectedUserIds.size === 0 || assignCrewMutation.isPending}
+                data-testid="button-assign-crew"
+              >
+                {assignCrewMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Assigning...
+                  </>
+                ) : (
+                  `Assign (${selectedUserIds.size})`
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
