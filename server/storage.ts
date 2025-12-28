@@ -1133,7 +1133,8 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (status) {
-      conditions.push(eq(users.status, status));
+      // Normalize status to uppercase for case-insensitive matching
+      conditions.push(sql`UPPER(${users.status}) = ${status.toUpperCase()}`);
     }
 
     // Get users with their roles in the company

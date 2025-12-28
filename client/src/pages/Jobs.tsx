@@ -330,12 +330,12 @@ export default function Jobs() {
     profileImageUrl: string | null;
   }
   const { data: crewMembersData, isLoading: crewMembersLoading } = useQuery<{ users: OrgUser[] }>({
-    queryKey: ["/api/org/users?status=active"],
+    queryKey: ["/api/org/users?status=ACTIVE"],
     enabled: isAssignModalOpen && isAdmin,
   });
   
-  // Assignable roles: Technician and Supervisor (exclude Owner from assignment list)
-  const ASSIGNABLE_ROLES = ['Technician', 'Supervisor'];
+  // Assignable roles: field workers (exclude Owner from assignment list)
+  const ASSIGNABLE_ROLES = ['Technician', 'Supervisor', 'Project Manager', 'Admin Assistant'];
   const assignableMembers = (crewMembersData?.users || []).filter(
     member => ASSIGNABLE_ROLES.includes(member.role)
   );
