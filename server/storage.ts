@@ -92,6 +92,7 @@ export interface IStorage {
   updateCompany(id: number, company: Partial<InsertCompany>): Promise<Company>;
   getCompanyByInviteCode(inviteCode: string): Promise<Company | undefined>;
   rotateInviteCode(companyId: number, newCode: string): Promise<Company>;
+  getCompanyMember(companyId: number, userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined>;
   
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
@@ -391,6 +392,24 @@ export class DatabaseStorage implements IStorage {
       .where(eq(companies.id, companyId))
       .returning();
     return company;
+  }
+
+  async getCompanyMember(companyId: number, userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined> {
+    const [member] = await db
+      .select({
+        userId: companyMembers.userId,
+        companyId: companyMembers.companyId,
+        role: companyMembers.role,
+      })
+      .from(companyMembers)
+      .where(
+        and(
+          eq(companyMembers.companyId, companyId),
+          eq(companyMembers.userId, userId)
+        )
+      )
+      .limit(1);
+    return member;
   }
 
   async getClients(companyId: number): Promise<Client[]> {

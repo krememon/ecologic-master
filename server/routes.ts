@@ -1188,9 +1188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user is admin (Owner or Supervisor)
       const member = await storage.getCompanyMember(company.id, userId);
-      const userRole = member?.role || 'Technician';
+      const userRole = member?.role?.toUpperCase() || 'TECHNICIAN';
       
-      if (userRole !== 'Owner' && userRole !== 'Supervisor') {
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
         return res.status(403).json({ message: "Only Owner or Supervisor can assign technicians" });
       }
       

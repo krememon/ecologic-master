@@ -1,0 +1,68 @@
+Fix “Assign Crew Member” so selecting a person actually assigns them to the job.
+
+CURRENT STATE
+- Modal correctly loads company users
+- Clicking a user shows error toast: “Failed to assign technician”
+- So the assignment API/DB insert is failing.
+
+GOAL
+- Assigning a crew member should create a row in job_assignments (job_id, user_id, company_id, created_at).
+- Support multiple crew members per job.
+- UI updates immediately after successful assignment.
+
+STEP 1 — VERIFY DATA MODEL
+Locate the table used for assignments:
+- job_assignments (or similar)
+Confirm required columns (job_id, user_id, company_id, etc).
+Confirm unique constraint (job_id, user_id) if present.
+
+STEP 2 — FIX THE ASSIGN API
+Find the API route used when clicking a user in the modal.
+Standardize it to one of these patterns (choose one and align FE+BE):
+
+Option A (single add):
+POST /api/jobs/:jobId/assignments
+body: { userId: "uuid" }
+
+Option B (bulk add):
+POST /api/jobs/:jobId/assignments
+body: { userIds: ["uuid","uuid"] }
+
+Implement insert using the correct column names:
+- user_id (NOT technician_id)
+- job_id
+- company_id derived from session/company context
+
+Handle duplicate gracefully:
+- if unique conflict, treat as success (idempotent) and return 200
+
+Return JSON with:
+{ ok: true, assignment: {...} }
+
+STEP 3 — RLS / PERMISSIONS
+If using Supabase RLS:
+- Ensure Owner/Supervisor can INSERT into job_assignments for their company.
+- Ensure they can DELETE too (for removing crew later).
+If blocked, add the proper RLS policy.
+
+STEP 4 — FRONTEND FIX
+In AssignCrew modal:
+- Make sure the click handler calls the correct API endpoint + payload.
+- After success:
+  - refresh assignments list (re-fetch GET /api/jobs/:id/assignments)
+  - close modal OR keep open (your choice) but update UI so user disappears from list as “already assigned”
+- Improve error toast by showing server error message if provided:
+  “Failed to assign: {message}”
+
+STEP 5 — DEBUGGING
+If assignment fails again:
+- Log the exact API response status + body to console.
+- Log server error details.
+Do NOT swallow errors.
+
+DELIVERABLE
+- Clicking a user assigns them successfully (DB row created)
+- Job shows assigned crew immediately
+- No more generic “Failed to assign technician”
+- Duplicate clicks don’t error (idempotent)
+- List files changed
