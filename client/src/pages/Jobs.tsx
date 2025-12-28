@@ -334,10 +334,11 @@ export default function Jobs() {
     enabled: isAssignModalOpen && isAdmin,
   });
   
-  // Assignable roles: field workers (exclude Owner from assignment list)
-  const ASSIGNABLE_ROLES = ['Technician', 'Supervisor', 'Project Manager', 'Admin Assistant'];
+  // Assignable roles: all field workers (exclude Owner from assignment list)
+  // Roles are stored as UPPERCASE in database
+  const ASSIGNABLE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'PROJECT_MANAGER', 'ADMIN_ASSISTANT', 'DISPATCHER', 'ESTIMATOR'];
   const assignableMembers = (crewMembersData?.users || []).filter(
-    member => ASSIGNABLE_ROLES.includes(member.role)
+    member => ASSIGNABLE_ROLES.includes(member.role?.toUpperCase())
   );
   
   // Filter by search (name or email, case-insensitive)

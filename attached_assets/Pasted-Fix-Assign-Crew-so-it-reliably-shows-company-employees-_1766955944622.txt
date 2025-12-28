@@ -1,0 +1,60 @@
+Fix Assign Crew so it reliably shows company employees. It is currently returning empty.
+
+GOAL
+- The Assign Crew modal must list real people who belong to the current user’s company.
+- Remove all guesswork by creating a single source-of-truth endpoint and wiring the UI to it.
+- Add debugging so we can see why it’s empty if it fails again.
+
+STEP A — FIND MEMBERSHIP SOURCE OF TRUTH
+Search the codebase for how the app currently determines "current company" and where members/employees are stored.
+Look for tables like: company_users, employees, members, profiles (with company_id), user_companies.
+Use whichever is actually being used elsewhere (if there is an Employees page, reuse that logic).
+
+STEP B — CREATE A SINGLE ENDPOINT
+Create GET /api/company/members that returns company members for the logged-in user.
+
+Return shape:
+[{ id, name, email, role }]
+
+Implementation requirements:
+1) Determine current user id from session/auth
+2) Determine company_id for that user (same way the rest of app does)
+3) Query membership table for members in that company
+4) JOIN to profiles/users table to get name/email/role if needed
+
+IMPORTANT DEBUGGING:
+- Log (server console) these values:
+   currentUserId
+   resolvedCompanyId
+   membership table name being queried
+   number of rows returned
+- If resolvedCompanyId is null, throw an error response with message "company_id not resolved"
+
+STEP C — RLS/POLICY CHECK
+If using Supabase with RLS:
+- Ensure logged-in user can read company members for their company.
+- Add/adjust SELECT policy so members of a company can read rows for their company.
+- If there is an "Owner-only" restriction now, then allow Owner/Supervisor at minimum.
+
+STEP D — FRONTEND: FORCE MODAL TO USE THIS ENDPOINT
+Update AssignCrew modal:
+- On open, fetch /api/company/members
+- Display list
+- Search filters name/email
+- Exclude people already assigned to job
+- If empty, display a more specific message:
+   “No company members found. Add employees to your company first.”
+
+STEP E — CONFIRM DATA EXISTS
+If the membership table is empty:
+- Ensure the current logged-in user is inserted as a member of the company on signup / company creation.
+- Ensure employee invites or seed employees create rows in the same membership table.
+
+DELIVERABLE
+- Assign modal shows real company members
+- Add/remove assignments works
+- If it fails, logs clearly show whether it’s:
+   (a) no company_id resolved
+   (b) membership table empty
+   (c) RLS denied
+- List files changed
