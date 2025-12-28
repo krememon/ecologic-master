@@ -122,7 +122,7 @@ export interface IStorage {
   deleteInvoice(id: number): Promise<void>;
   
   // Document operations
-  getDocuments(companyId: number): Promise<Document[]>;
+  getDocuments(companyId: number): Promise<any[]>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocumentStatus(id: number, status: string): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
@@ -634,8 +634,43 @@ export class DatabaseStorage implements IStorage {
     await db.delete(invoices).where(eq(invoices.id, id));
   }
 
-  async getDocuments(companyId: number): Promise<Document[]> {
-    return await db.select().from(documents).where(eq(documents.companyId, companyId));
+  async getDocuments(companyId: number): Promise<any[]> {
+    const result = await db
+      .select({
+        id: documents.id,
+        companyId: documents.companyId,
+        jobId: documents.jobId,
+        name: documents.name,
+        type: documents.type,
+        category: documents.category,
+        status: documents.status,
+        fileUrl: documents.fileUrl,
+        fileSize: documents.fileSize,
+        uploadedBy: documents.uploadedBy,
+        createdAt: documents.createdAt,
+        updatedAt: documents.updatedAt,
+        jobTitle: jobs.title,
+        jobClientName: jobs.clientName,
+      })
+      .from(documents)
+      .leftJoin(jobs, eq(documents.jobId, jobs.id))
+      .where(eq(documents.companyId, companyId));
+    
+    return result.map(doc => ({
+      id: doc.id,
+      companyId: doc.companyId,
+      jobId: doc.jobId,
+      name: doc.name,
+      type: doc.type,
+      category: doc.category,
+      status: doc.status,
+      fileUrl: doc.fileUrl,
+      fileSize: doc.fileSize,
+      uploadedBy: doc.uploadedBy,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+      job: doc.jobId ? { id: doc.jobId, title: doc.jobTitle, clientName: doc.jobClientName } : null,
+    }));
   }
 
   async createDocument(documentData: InsertDocument): Promise<Document> {
