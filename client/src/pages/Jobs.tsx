@@ -318,7 +318,8 @@ export default function Jobs() {
     enabled: !!selectedJob?.id,
   });
 
-  // Fetch technicians for assignment (only fetch when modal is open)
+  // Fetch company members for assignment (only fetch when modal is open)
+  // The /api/org/users endpoint automatically filters by the current user's company
   interface OrgUser {
     id: string;
     firstName: string | null;
@@ -328,18 +329,23 @@ export default function Jobs() {
     status: string;
     profileImageUrl: string | null;
   }
-  const { data: techniciansData, isLoading: techniciansLoading } = useQuery<{ users: OrgUser[] }>({
-    queryKey: ["/api/org/users?role=Technician&status=active"],
+  const { data: crewMembersData, isLoading: crewMembersLoading } = useQuery<{ users: OrgUser[] }>({
+    queryKey: ["/api/org/users?status=active"],
     enabled: isAssignModalOpen && isAdmin,
   });
-  const technicians = techniciansData?.users || [];
   
-  // Filter technicians by search
-  const filteredTechnicians = technicians.filter(tech => {
-    if (!technicianSearch.trim()) return true;
+  // Assignable roles: Technician and Supervisor (exclude Owner from assignment list)
+  const ASSIGNABLE_ROLES = ['Technician', 'Supervisor'];
+  const assignableMembers = (crewMembersData?.users || []).filter(
+    member => ASSIGNABLE_ROLES.includes(member.role)
+  );
+  
+  // Filter by search (name or email, case-insensitive)
+  const filteredTechnicians = assignableMembers.filter(tech => {
+    const searchTerm = technicianSearch.trim().toLowerCase();
+    if (!searchTerm) return true;
     const name = `${tech.firstName || ''} ${tech.lastName || ''}`.toLowerCase();
-    return name.includes(technicianSearch.toLowerCase()) || 
-           tech.email.toLowerCase().includes(technicianSearch.toLowerCase());
+    return name.includes(searchTerm) || tech.email.toLowerCase().includes(searchTerm);
   });
 
   // Filter jobs based on role and search query
@@ -572,7 +578,7 @@ export default function Jobs() {
   // Get assigned technician name
   const getAssignedTechnicianName = (assignedTo: string | null): string => {
     if (!assignedTo) return "Unassigned";
-    const tech = technicians.find(t => t.id === assignedTo);
+    const tech = assignableMembers.find((t: OrgUser) => t.id === assignedTo);
     if (tech) {
       return `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
     }
@@ -1208,30 +1214,30 @@ export default function Jobs() {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign Technician</DialogTitle>
+            <DialogTitle>Assign Crew Member</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search technicians..."
+                placeholder="Search by name or email..."
                 value={technicianSearch}
                 onChange={(e) => setTechnicianSearch(e.target.value)}
                 className="pl-9"
-                data-testid="input-technician-search"
+                data-testid="input-crew-search"
               />
             </div>
             
             {/* Technician List */}
             <div className="max-h-[300px] overflow-y-auto border rounded-lg divide-y">
-              {techniciansLoading ? (
+              {crewMembersLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
               ) : filteredTechnicians.length === 0 ? (
                 <div className="py-8 text-center text-slate-500">
-                  {technicianSearch ? 'No technicians match your search' : 'No technicians available'}
+                  {technicianSearch ? 'No crew members match your search' : 'No assignable crew members found'}
                 </div>
               ) : (
                 <>
@@ -1285,11 +1291,14 @@ export default function Jobs() {
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{techName}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-900 dark:text-slate-100 truncate">{techName}</span>
+                            <Badge variant="outline" className="text-xs shrink-0">{tech.role}</Badge>
+                          </div>
                           <div className="text-xs text-slate-500 truncate">{tech.email}</div>
                         </div>
                         {isSelected && (
-                          <Badge variant="secondary" className="text-xs">Current</Badge>
+                          <Badge variant="secondary" className="text-xs shrink-0">Current</Badge>
                         )}
                       </button>
                     );
