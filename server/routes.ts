@@ -1176,6 +1176,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Assign technician to job (Admin-only: Owner/Supervisor)
+  app.patch('/api/jobs/:id/assign', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Check if user is admin (Owner or Supervisor)
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role || 'Technician';
+      
+      if (userRole !== 'Owner' && userRole !== 'Supervisor') {
+        return res.status(403).json({ message: "Only Owner or Supervisor can assign technicians" });
+      }
+      
+      const jobId = parseInt(req.params.id);
+      const { technicianId } = req.body;
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      // If technicianId is provided, verify technician is in the company
+      if (technicianId) {
+        const techMember = await storage.getCompanyMember(company.id, technicianId);
+        if (!techMember) {
+          return res.status(400).json({ message: "Technician not found in company" });
+        }
+      }
+      
+      // Update the job's assignedTo field
+      const updatedJob = await storage.updateJob(jobId, { assignedTo: technicianId || null });
+      
+      res.json(updatedJob);
+    } catch (error) {
+      console.error("Error assigning technician:", error);
+      res.status(500).json({ message: "Failed to assign technician" });
+    }
+  });
+
   // Job Photos routes
   app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
     try {
