@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, UserPlus, Loader2, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -258,6 +258,11 @@ export default function Jobs() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [technicianSearch, setTechnicianSearch] = useState("");
+  
+  // Check if user is admin (Owner or Supervisor)
+  const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
 
   // Reset description expansion when job changes
   useEffect(() => {
@@ -311,6 +316,30 @@ export default function Jobs() {
   const { data: jobPhotos = [] } = useQuery<JobPhoto[]>({
     queryKey: [`/api/jobs/${selectedJob?.id}/photos`],
     enabled: !!selectedJob?.id,
+  });
+
+  // Fetch technicians for assignment (only fetch when modal is open)
+  interface OrgUser {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    role: string;
+    status: string;
+    profileImageUrl: string | null;
+  }
+  const { data: techniciansData, isLoading: techniciansLoading } = useQuery<{ users: OrgUser[] }>({
+    queryKey: ["/api/org/users?role=Technician&status=active"],
+    enabled: isAssignModalOpen && isAdmin,
+  });
+  const technicians = techniciansData?.users || [];
+  
+  // Filter technicians by search
+  const filteredTechnicians = technicians.filter(tech => {
+    if (!technicianSearch.trim()) return true;
+    const name = `${tech.firstName || ''} ${tech.lastName || ''}`.toLowerCase();
+    return name.includes(technicianSearch.toLowerCase()) || 
+           tech.email.toLowerCase().includes(technicianSearch.toLowerCase());
   });
 
   // Filter jobs based on role and search query
@@ -505,6 +534,51 @@ export default function Jobs() {
     },
   });
 
+  // Assign technician mutation
+  const assignTechnicianMutation = useMutation({
+    mutationFn: async ({ jobId, technicianId }: { jobId: number; technicianId: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${jobId}/assign`, { technicianId });
+      return await res.json();
+    },
+    onSuccess: (updatedJob) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      // Update selected job to reflect the change
+      setSelectedJob(prev => prev ? { ...prev, assignedTo: updatedJob.assignedTo } : null);
+      setIsAssignModalOpen(false);
+      setTechnicianSearch("");
+      toast({
+        title: "Success",
+        description: updatedJob.assignedTo ? "Technician assigned successfully" : "Technician unassigned",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to assign technician",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Get assigned technician name
+  const getAssignedTechnicianName = (assignedTo: string | null): string => {
+    if (!assignedTo) return "Unassigned";
+    const tech = technicians.find(t => t.id === assignedTo);
+    if (tech) {
+      return `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
+    }
+    return "Loading...";
+  };
+
   // Validate file before upload
   const validateFile = (file: File): string | null => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/webp'];
@@ -676,6 +750,30 @@ export default function Jobs() {
                           </dd>
                         </div>
                       )}
+                      
+                      {/* Assigned Technician */}
+                      <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned to:</dt>
+                        <dd className="flex items-center gap-2">
+                          <span className={`text-slate-900 dark:text-slate-100 truncate ${!selectedJob.assignedTo ? 'italic text-slate-500' : ''}`} data-testid="text-job-assigned">
+                            {selectedJob.assignedTo 
+                              ? getAssignedTechnicianName(selectedJob.assignedTo) 
+                              : 'Unassigned'}
+                          </span>
+                          {isAdmin && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => setIsAssignModalOpen(true)}
+                              data-testid="button-assign-technician"
+                            >
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              {selectedJob.assignedTo ? 'Change' : 'Assign'}
+                            </Button>
+                          )}
+                        </dd>
+                      </div>
                       
                       {/* Address */}
                       {selectedJob.location && (
@@ -1102,6 +1200,113 @@ export default function Jobs() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Assign Technician Modal */}
+      <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
+        setIsAssignModalOpen(open);
+        if (!open) setTechnicianSearch("");
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Technician</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search technicians..."
+                value={technicianSearch}
+                onChange={(e) => setTechnicianSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-technician-search"
+              />
+            </div>
+            
+            {/* Technician List */}
+            <div className="max-h-[300px] overflow-y-auto border rounded-lg divide-y">
+              {techniciansLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                </div>
+              ) : filteredTechnicians.length === 0 ? (
+                <div className="py-8 text-center text-slate-500">
+                  {technicianSearch ? 'No technicians match your search' : 'No technicians available'}
+                </div>
+              ) : (
+                <>
+                  {/* Unassign option */}
+                  {selectedJob?.assignedTo && (
+                    <button
+                      onClick={() => selectedJob && assignTechnicianMutation.mutate({ 
+                        jobId: selectedJob.id, 
+                        technicianId: null 
+                      })}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left"
+                      disabled={assignTechnicianMutation.isPending}
+                      data-testid="button-unassign"
+                    >
+                      <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <X className="h-4 w-4 text-slate-500" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-slate-900 dark:text-slate-100">Unassign</div>
+                        <div className="text-xs text-slate-500">Remove current assignment</div>
+                      </div>
+                    </button>
+                  )}
+                  {filteredTechnicians.map((tech) => {
+                    const isSelected = selectedJob?.assignedTo === tech.id;
+                    const techName = `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
+                    return (
+                      <button
+                        key={tech.id}
+                        onClick={() => selectedJob && assignTechnicianMutation.mutate({ 
+                          jobId: selectedJob.id, 
+                          technicianId: tech.id 
+                        })}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                          isSelected 
+                            ? 'bg-blue-50 dark:bg-blue-900/30' 
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                        disabled={assignTechnicianMutation.isPending}
+                        data-testid={`button-select-technician-${tech.id}`}
+                      >
+                        {tech.profileImageUrl ? (
+                          <img 
+                            src={tech.profileImageUrl} 
+                            alt={techName}
+                            className="h-8 w-8 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                            <User className="h-4 w-4 text-slate-500" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{techName}</div>
+                          <div className="text-xs text-slate-500 truncate">{tech.email}</div>
+                        </div>
+                        {isSelected && (
+                          <Badge variant="secondary" className="text-xs">Current</Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+            
+            {assignTechnicianMutation.isPending && (
+              <div className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Assigning...
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
