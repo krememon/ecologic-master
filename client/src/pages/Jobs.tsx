@@ -627,16 +627,6 @@ export default function Jobs() {
     },
   });
 
-  // Get assigned technician name
-  const getAssignedTechnicianName = (assignedTo: string | null): string => {
-    if (!assignedTo) return "Unassigned";
-    const tech = assignableMembers.find((t: OrgUser) => t.id === assignedTo);
-    if (tech) {
-      return `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
-    }
-    return "Loading...";
-  };
-
   // Validate file before upload
   const validateFile = (file: File): string | null => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/webp'];
@@ -809,25 +799,63 @@ export default function Jobs() {
                         </div>
                       )}
                       
-                      {/* Assigned Technician */}
+                      {/* Assigned Crew (Multi-member) */}
                       <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned to:</dt>
+                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned Crew:</dt>
                         <dd className="flex items-center gap-2">
-                          <span className={`text-slate-900 dark:text-slate-100 truncate ${!selectedJob.assignedTo ? 'italic text-slate-500' : ''}`} data-testid="text-job-assigned">
-                            {selectedJob.assignedTo 
-                              ? getAssignedTechnicianName(selectedJob.assignedTo) 
-                              : 'Unassigned'}
-                          </span>
+                          {crewAssignments.length === 0 ? (
+                            <span className="italic text-slate-500" data-testid="text-job-assigned">Unassigned</span>
+                          ) : (
+                            <div className="flex items-center gap-2" data-testid="text-job-assigned">
+                              {/* Avatar bubbles - show up to 3 */}
+                              <div className="flex -space-x-2">
+                                {crewAssignments.slice(0, 3).map((assignment) => {
+                                  const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
+                                  const initials = (assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '') || assignment.user.email[0].toUpperCase();
+                                  return assignment.user.profileImageUrl ? (
+                                    <img
+                                      key={assignment.userId}
+                                      src={assignment.user.profileImageUrl}
+                                      alt={name}
+                                      title={name}
+                                      className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 object-cover"
+                                    />
+                                  ) : (
+                                    <div
+                                      key={assignment.userId}
+                                      title={name}
+                                      className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300"
+                                    >
+                                      {initials}
+                                    </div>
+                                  );
+                                })}
+                                {crewAssignments.length > 3 && (
+                                  <div className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-medium text-slate-700 dark:text-slate-200">
+                                    +{crewAssignments.length - 3}
+                                  </div>
+                                )}
+                              </div>
+                              {/* Names subtitle for small crews */}
+                              {crewAssignments.length <= 2 && (
+                                <span className="text-sm text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
+                                  {crewAssignments.map(a => 
+                                    `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || a.user.email.split('@')[0]
+                                  ).join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {isAdmin && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="h-6 px-2 text-xs"
                               onClick={() => setIsAssignModalOpen(true)}
-                              data-testid="button-assign-technician"
+                              data-testid="button-assign-crew"
                             >
                               <UserPlus className="h-3 w-3 mr-1" />
-                              {selectedJob.assignedTo ? 'Change' : 'Assign'}
+                              {crewAssignments.length > 0 ? 'Edit Crew' : 'Add Crew'}
                             </Button>
                           )}
                         </dd>
