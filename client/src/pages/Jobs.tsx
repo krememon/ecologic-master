@@ -800,20 +800,21 @@ export default function Jobs() {
                         </div>
                       )}
                       
-                      {/* Assigned Crew (Multi-member) */}
-                      <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap flex items-center gap-2">
+                      {/* Assigned Crew (Multi-member) - Fixed layout to prevent button clipping */}
+                      <div className="flex items-center gap-2 py-2">
+                        {/* Label - fixed width */}
+                        <div className="w-28 font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap flex-shrink-0">
                           Assigned Crew:
-                          {/* DEBUG PILL - REMOVE AFTER FIX */}
-                          <span style={{background:"yellow", padding:"2px 6px", fontSize:"10px", fontWeight:"bold"}}>DEBUG:role={role},isAdmin={String(isAdmin)}</span>
-                        </dt>
-                        <dd className="flex items-center gap-2">
+                        </div>
+                        
+                        {/* Crew display - can shrink */}
+                        <div className="flex-1 min-w-0 flex items-center gap-2" data-testid="text-job-assigned">
                           {crewAssignments.length === 0 ? (
-                            <span className="italic text-slate-500" data-testid="text-job-assigned">Unassigned</span>
+                            <span className="italic text-slate-500">Unassigned</span>
                           ) : (
-                            <div className="flex items-center gap-2" data-testid="text-job-assigned">
+                            <>
                               {/* Avatar bubbles - show up to 3 */}
-                              <div className="flex -space-x-2">
+                              <div className="flex -space-x-2 flex-shrink-0">
                                 {crewAssignments.slice(0, 3).map((assignment) => {
                                   const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
                                   const initials = (assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '') || assignment.user.email[0].toUpperCase();
@@ -843,30 +844,29 @@ export default function Jobs() {
                               </div>
                               {/* Names subtitle for small crews */}
                               {crewAssignments.length <= 2 && (
-                                <span className="text-sm text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
+                                <span className="min-w-0 truncate text-sm text-slate-700 dark:text-slate-300">
                                   {crewAssignments.map(a => 
                                     `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || a.user.email.split('@')[0]
                                   ).join(', ')}
                                 </span>
                               )}
-                            </div>
+                            </>
                           )}
-                          {/* DEBUG: Always show button (remove role check temporarily) */}
+                        </div>
+                        
+                        {/* Edit button - never shrinks */}
+                        {isAdmin && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 px-3 text-xs relative z-10"
-                            style={{border:"3px solid red", background:"#ffffcc"}}
-                            onClick={() => {
-                              console.log('[DEBUG] Edit Crew button clicked, opening modal');
-                              setIsAssignModalOpen(true);
-                            }}
+                            className="flex-shrink-0 h-7 px-3 text-xs"
+                            onClick={() => setIsAssignModalOpen(true)}
                             data-testid="button-assign-crew"
                           >
                             <UserPlus className="h-3 w-3 mr-1" />
-                            EDIT CREW (DEBUG)
+                            {crewAssignments.length > 0 ? 'Edit' : 'Add'}
                           </Button>
-                        </dd>
+                        )}
                       </div>
                       
                       {/* Address */}
