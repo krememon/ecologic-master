@@ -1,0 +1,61 @@
+Fix Edit Crew modal toggle + diff logic. Currently unchecking behaves backwards and saving “removes” but does not actually remove; it swaps crew unexpectedly.
+
+SYMPTOMS
+- Clicking a checked user does not uncheck (it checks/toggles wrong)
+- Save shows “successfully removed” but crew isn’t removed; assignments get swapped
+
+ROOT CAUSE LIKELY
+- selectedIds initialized wrong (empty or not based on assigned)
+- checkbox checked prop inverted
+- diff logic compares against a changing assignedUserIds instead of a frozen snapshot
+- toggling against wrong set or stale state
+
+REQUIRED FIX (BULLETPROOF IMPLEMENTATION)
+1) On modal open, fetch current assigned users for job.
+2) Set TWO separate states:
+   - originalAssignedIds: Set<string> (snapshot, never mutate after set)
+   - selectedIds: Set<string> (mutable)
+   Initialize:
+     originalAssignedIds = new Set(assignedIdsFromAPI)
+     selectedIds = new Set(assignedIdsFromAPI)
+
+3) Checkbox render must be:
+   checked={selectedIds.has(user.id)}
+   (NOT inverted)
+
+4) Toggle handler must be:
+   setSelectedIds(prev => {
+     const next = new Set(prev);
+     if (next.has(userId)) next.delete(userId);
+     else next.add(userId);
+     return next;
+   });
+
+5) On Save compute diffs using the snapshot:
+   const toAdd = [...selectedIds].filter(id => !originalAssignedIds.has(id));
+   const toRemove = [...originalAssignedIds].filter(id => !selectedIds.has(id));
+
+6) Call backend:
+   - if toAdd.length > 0 -> bulk add
+   - if toRemove.length > 0 -> bulk remove
+   Ensure calls do not overwrite/replace assignments, only add/remove.
+
+7) After save:
+   - refetch assigned crew for job details
+   - close modal
+   - Toast should accurately say:
+     “Added X, removed Y” (not just removed)
+
+8) Add console logs (temporary) before API calls:
+   - originalAssignedIds
+   - selectedIds
+   - toAdd
+   - toRemove
+So we can confirm behavior quickly.
+
+DELIVERABLE
+- Clicking a checked person unchecks them visually
+- Saving actually removes them from job assignments
+- No swapping/replacing occurs
+- Toast matches reality (added/removed counts)
+- List files changed

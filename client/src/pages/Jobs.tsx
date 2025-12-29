@@ -261,6 +261,7 @@ export default function Jobs() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [technicianSearch, setTechnicianSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -597,6 +598,7 @@ export default function Jobs() {
       setIsAssignModalOpen(false);
       setTechnicianSearch("");
       setSelectedUserIds(new Set());
+      setOriginalAssignedIds(new Set());
       
       // Build description message
       const parts = [];
@@ -1290,11 +1292,15 @@ export default function Jobs() {
       <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
         setIsAssignModalOpen(open);
         if (open) {
-          // Pre-check already assigned users when opening
-          setSelectedUserIds(new Set(assignedUserIds));
+          // Capture snapshot of currently assigned users (frozen, never mutate)
+          const currentAssigned = new Set(crewAssignments.map(a => a.userId));
+          setOriginalAssignedIds(currentAssigned);
+          // Initialize selected with same values (mutable copy)
+          setSelectedUserIds(new Set(currentAssigned));
         } else {
           setTechnicianSearch("");
           setSelectedUserIds(new Set());
+          setOriginalAssignedIds(new Set());
         }
       }}>
         <DialogContent className="sm:max-w-md">
@@ -1412,9 +1418,15 @@ export default function Jobs() {
                 className="flex-1"
                 onClick={() => {
                   if (selectedJob) {
-                    // Compute diffs
-                    const toAdd = Array.from(selectedUserIds).filter(id => !assignedUserIds.has(id));
-                    const toRemove = Array.from(assignedUserIds).filter(id => !selectedUserIds.has(id));
+                    // Compute diffs using the frozen snapshot (originalAssignedIds)
+                    const toAdd = Array.from(selectedUserIds).filter(id => !originalAssignedIds.has(id));
+                    const toRemove = Array.from(originalAssignedIds).filter(id => !selectedUserIds.has(id));
+                    
+                    // Debug logs
+                    console.log('[Crew Update] originalAssignedIds:', Array.from(originalAssignedIds));
+                    console.log('[Crew Update] selectedUserIds:', Array.from(selectedUserIds));
+                    console.log('[Crew Update] toAdd:', toAdd);
+                    console.log('[Crew Update] toRemove:', toRemove);
                     
                     if (toAdd.length > 0 || toRemove.length > 0) {
                       updateCrewMutation.mutate({
