@@ -1,0 +1,67 @@
+Unassign still not working because the Edit Crew modal is NOT loading existing assignments.
+Evidence: modal debug shows Original:0 Selected:0 even though job details shows assigned crew bubbles.
+
+Fix requirements:
+A) Modal must initialize with current assigned crew IDs (so checkboxes start checked).
+B) Unchecking must remove/unassign. Saving should update the job crew to EXACTLY match selectedIds.
+
+PART 1 — PASS ASSIGNED IDS INTO MODAL
+1) Find where the Edit Crew modal is opened in Jobs.tsx.
+2) Ensure the job details data includes current assignments as an array of user IDs, e.g. job.assignedCrewIds or job.assignments.map(a=>a.userId).
+3) Pass that array into the modal as `assignedIds`.
+
+PART 2 — INIT STATE ON OPEN (NO RE-INIT LOOP)
+4) Inside modal component:
+- add state:
+  const [originalAssignedIds, setOriginalAssignedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+5) When modal opens (dependency should be [isOpen, assignedIds, jobId] but MUST NOT depend on selectedIds):
+useEffect(() => {
+  if (!isOpen) return;
+  const normalized = (assignedIds || []).map(String);
+  setOriginalAssignedIds(normalized);
+  setSelectedIds(new Set(normalized));
+}, [isOpen, jobId, assignedIds]);
+
+Now existing crew checkboxes will start checked.
+
+PART 3 — CHECKBOX MUST BE CONTROLLED
+6) Row checkbox must be:
+checked={selectedIds.has(user.id)}
+onChange={() => toggle(user.id)}
+
+toggle implementation:
+setSelectedIds(prev => {
+  const next = new Set(prev);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+});
+
+PART 4 — SAVE SHOULD “REPLACE CREW” (BEST APPROACH)
+7) Add/Use a backend endpoint that replaces assignments in one request:
+PUT /api/jobs/:id/assignments
+Body: { userIds: string[] }
+
+Server logic (transaction):
+- DELETE FROM job_assignments WHERE job_id = ?
+- INSERT new rows for each userId
+Return the final assigned userIds.
+
+8) Frontend save:
+await fetch(`/api/jobs/${jobId}/assignments`, { method:"PUT", body: JSON.stringify({ userIds: [...selectedIds] }) })
+
+9) After save, refetch assignments/job details so the UI bubbles update correctly.
+
+PART 5 — REMOVE DEBUG UI
+10) Once confirmed working:
+- remove the yellow debug box in modal
+- remove any debug pills in job details
+
+DELIVERABLE
+- When modal opens, already-assigned users are CHECKED.
+- Unchecking a user removes them after Save.
+- No swapping behavior.
+- Assigned Crew display updates immediately after save.
+- List files changed.

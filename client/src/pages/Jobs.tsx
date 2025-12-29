@@ -348,6 +348,18 @@ export default function Jobs() {
   // Get set of already assigned user IDs
   const assignedUserIds = new Set(crewAssignments.map(a => a.userId));
 
+  // Initialize crew modal state when it opens or when crewAssignments data changes
+  useEffect(() => {
+    if (!isAssignModalOpen) return;
+    
+    // Wait for crewAssignments data to be available
+    const assignedIds = crewAssignments.map(a => a.userId);
+    console.log('[Modal Init] isAssignModalOpen:', isAssignModalOpen, 'crewAssignments:', crewAssignments.length, 'assignedIds:', assignedIds);
+    
+    setOriginalAssignedIds(new Set(assignedIds));
+    setSelectedUserIds(new Set(assignedIds));
+  }, [isAssignModalOpen, crewAssignments]);
+
   // Fetch company members for assignment (only fetch when modal is open)
   // The /api/org/users endpoint automatically filters by the current user's company
   interface OrgUser {
@@ -1298,17 +1310,13 @@ export default function Jobs() {
       {/* Edit Crew Members Modal (Multi-select with add/remove) */}
       <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
         setIsAssignModalOpen(open);
-        if (open) {
-          // Capture snapshot of currently assigned users (frozen, never mutate)
-          const currentAssigned = new Set(crewAssignments.map(a => a.userId));
-          setOriginalAssignedIds(currentAssigned);
-          // Initialize selected with same values (mutable copy)
-          setSelectedUserIds(new Set(currentAssigned));
-        } else {
+        if (!open) {
+          // Clear state when closing
           setTechnicianSearch("");
           setSelectedUserIds(new Set());
           setOriginalAssignedIds(new Set());
         }
+        // Note: initialization happens in useEffect when modal opens
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
