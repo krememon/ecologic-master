@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, UserPlus, Loader2, X, Check } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, UserPlus, Users, Loader2, X, Check } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1231,11 +1231,11 @@ export default function Jobs() {
                   </div>
                 )}
                 
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                  <p className="text-xs text-slate-500">
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center gap-2">
+                  <p className="text-xs text-slate-500 truncate min-w-0">
                     Created {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-shrink-0">
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -1244,9 +1244,25 @@ export default function Jobs() {
                         e.stopPropagation();
                         setSelectedJob(job);
                       }}
+                      data-testid={`button-view-job-${job.id}`}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
+                    {isAdmin && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-purple-500 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedJob(job);
+                          setIsAssignModalOpen(true);
+                        }}
+                        data-testid={`button-crew-job-${job.id}`}
+                      >
+                        <Users className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -1255,6 +1271,7 @@ export default function Jobs() {
                         e.stopPropagation();
                         setEditingJob(job);
                       }}
+                      data-testid={`button-edit-job-${job.id}`}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -1266,6 +1283,7 @@ export default function Jobs() {
                         e.stopPropagation();
                         setJobToDelete({ id: job.id, title: job.title });
                       }}
+                      data-testid={`button-delete-job-${job.id}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
