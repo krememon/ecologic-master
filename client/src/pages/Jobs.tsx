@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, UserPlus, Users, Loader2, X, Check } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -259,6 +259,7 @@ export default function Jobs() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [crewJobId, setCrewJobId] = useState<number | null>(null); // Separate state for crew editing
   const [technicianSearch, setTechnicianSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
@@ -320,7 +321,7 @@ export default function Jobs() {
     enabled: !!selectedJob?.id,
   });
 
-  // Fetch current crew assignments for selected job
+  // Fetch current crew assignments for crew modal (uses crewJobId, not selectedJob)
   interface CrewAssignment {
     id: number;
     jobId: number;
@@ -336,6 +337,17 @@ export default function Jobs() {
     };
   }
   const { data: crewAssignments = [] } = useQuery<CrewAssignment[]>({
+    queryKey: ['/api/jobs', crewJobId, 'crew'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${crewJobId}/crew`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch crew');
+      return res.json();
+    },
+    enabled: !!crewJobId && isAdmin,
+  });
+  
+  // Fetch crew for Job Insights modal display (read-only)
+  const { data: selectedJobCrew = [] } = useQuery<CrewAssignment[]>({
     queryKey: ['/api/jobs', selectedJob?.id, 'crew'],
     queryFn: async () => {
       const res = await fetch(`/api/jobs/${selectedJob?.id}/crew`, { credentials: 'include' });
@@ -601,10 +613,11 @@ export default function Jobs() {
       
       return results;
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', selectedJob?.id, 'crew'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', variables.jobId, 'crew'] });
       setIsAssignModalOpen(false);
+      setCrewJobId(null);
       setTechnicianSearch("");
       setSelectedUserIds(new Set());
       setOriginalAssignedIds(new Set());
@@ -809,22 +822,17 @@ export default function Jobs() {
                         </div>
                       )}
                       
-                      {/* Assigned Crew (Multi-member) - Fixed layout to prevent button clipping */}
-                      <div className="flex items-center gap-2 py-2">
-                        {/* Label - fixed width */}
-                        <div className="w-28 font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap flex-shrink-0">
-                          Assigned Crew:
-                        </div>
-                        
-                        {/* Crew display - can shrink */}
-                        <div className="flex-1 min-w-0 flex items-center gap-2" data-testid="text-job-assigned">
-                          {crewAssignments.length === 0 ? (
+                      {/* Assigned Crew (Read-only display) */}
+                      <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned Crew:</dt>
+                        <dd className="flex items-center gap-2" data-testid="text-job-assigned">
+                          {selectedJobCrew.length === 0 ? (
                             <span className="italic text-slate-500">Unassigned</span>
                           ) : (
                             <>
                               {/* Avatar bubbles - show up to 3 */}
                               <div className="flex -space-x-2 flex-shrink-0">
-                                {crewAssignments.slice(0, 3).map((assignment) => {
+                                {selectedJobCrew.slice(0, 3).map((assignment) => {
                                   const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
                                   const initials = (assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '') || assignment.user.email[0].toUpperCase();
                                   return assignment.user.profileImageUrl ? (
@@ -845,37 +853,23 @@ export default function Jobs() {
                                     </div>
                                   );
                                 })}
-                                {crewAssignments.length > 3 && (
+                                {selectedJobCrew.length > 3 && (
                                   <div className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-medium text-slate-700 dark:text-slate-200">
-                                    +{crewAssignments.length - 3}
+                                    +{selectedJobCrew.length - 3}
                                   </div>
                                 )}
                               </div>
-                              {/* Names subtitle for small crews */}
-                              {crewAssignments.length <= 2 && (
+                              {/* Names for small crews */}
+                              {selectedJobCrew.length <= 2 && (
                                 <span className="min-w-0 truncate text-sm text-slate-700 dark:text-slate-300">
-                                  {crewAssignments.map(a => 
+                                  {selectedJobCrew.map(a => 
                                     `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || a.user.email.split('@')[0]
                                   ).join(', ')}
                                 </span>
                               )}
                             </>
                           )}
-                        </div>
-                        
-                        {/* Edit button - never shrinks */}
-                        {isAdmin && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-shrink-0 h-7 px-3 text-xs"
-                            onClick={() => setIsAssignModalOpen(true)}
-                            data-testid="button-assign-crew"
-                          >
-                            <UserPlus className="h-3 w-3 mr-1" />
-                            {crewAssignments.length > 0 ? 'Edit' : 'Add'}
-                          </Button>
-                        )}
+                        </dd>
                       </div>
                       
                       {/* Address */}
@@ -1255,7 +1249,7 @@ export default function Jobs() {
                         className="h-8 w-8 p-0 text-purple-500 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedJob(job);
+                          setCrewJobId(job.id);
                           setIsAssignModalOpen(true);
                         }}
                         data-testid={`button-crew-job-${job.id}`}
@@ -1327,6 +1321,7 @@ export default function Jobs() {
         setIsAssignModalOpen(open);
         if (!open) {
           // Clear state when closing
+          setCrewJobId(null);
           setTechnicianSearch("");
           setSelectedUserIds(new Set());
           setOriginalAssignedIds(new Set());
@@ -1449,14 +1444,14 @@ export default function Jobs() {
               <Button
                 className="flex-1"
                 onClick={() => {
-                  if (selectedJob) {
+                  if (crewJobId) {
                     // Compute diffs using the frozen snapshot (originalAssignedIds)
                     const toAdd = Array.from(selectedUserIds).filter(id => !originalAssignedIds.has(id));
                     const toRemove = Array.from(originalAssignedIds).filter(id => !selectedUserIds.has(id));
                     
                     if (toAdd.length > 0 || toRemove.length > 0) {
                       updateCrewMutation.mutate({
-                        jobId: selectedJob.id,
+                        jobId: crewJobId,
                         toAdd,
                         toRemove,
                       });
