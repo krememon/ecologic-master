@@ -475,10 +475,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeJobCrewAssignments(jobId: number, userIds: string[]): Promise<{ removed: number }> {
+    console.log('[DEBUG storage.removeJobCrewAssignments] jobId:', jobId, 'userIds:', userIds);
     if (userIds.length === 0) return { removed: 0 };
     
     let removed = 0;
     for (const userId of userIds) {
+      console.log('[DEBUG storage] Deleting assignment for userId:', userId);
       const result = await db
         .delete(crewAssignments)
         .where(
@@ -488,9 +490,11 @@ export class DatabaseStorage implements IStorage {
           )
         )
         .returning();
+      console.log('[DEBUG storage] Deleted rows:', result.length, 'result:', result);
       removed += result.length;
     }
     
+    console.log('[DEBUG storage] Total removed:', removed);
     return { removed };
   }
 

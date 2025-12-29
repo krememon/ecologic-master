@@ -802,7 +802,11 @@ export default function Jobs() {
                       
                       {/* Assigned Crew (Multi-member) */}
                       <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned Crew:</dt>
+                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap flex items-center gap-2">
+                          Assigned Crew:
+                          {/* DEBUG PILL - REMOVE AFTER FIX */}
+                          <span style={{background:"yellow", padding:"2px 6px", fontSize:"10px", fontWeight:"bold"}}>DEBUG:role={role},isAdmin={String(isAdmin)}</span>
+                        </dt>
                         <dd className="flex items-center gap-2">
                           {crewAssignments.length === 0 ? (
                             <span className="italic text-slate-500" data-testid="text-job-assigned">Unassigned</span>
@@ -847,18 +851,21 @@ export default function Jobs() {
                               )}
                             </div>
                           )}
-                          {isAdmin && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => setIsAssignModalOpen(true)}
-                              data-testid="button-assign-crew"
-                            >
-                              <UserPlus className="h-3 w-3 mr-1" />
-                              {crewAssignments.length > 0 ? 'Edit Crew' : 'Add Crew'}
-                            </Button>
-                          )}
+                          {/* DEBUG: Always show button (remove role check temporarily) */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-3 text-xs relative z-10"
+                            style={{border:"3px solid red", background:"#ffffcc"}}
+                            onClick={() => {
+                              console.log('[DEBUG] Edit Crew button clicked, opening modal');
+                              setIsAssignModalOpen(true);
+                            }}
+                            data-testid="button-assign-crew"
+                          >
+                            <UserPlus className="h-3 w-3 mr-1" />
+                            EDIT CREW (DEBUG)
+                          </Button>
                         </dd>
                       </div>
                       
@@ -1308,6 +1315,14 @@ export default function Jobs() {
             <DialogTitle>{crewAssignments.length > 0 ? 'Edit Crew' : 'Assign Crew Members'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* DEBUG STATUS - REMOVE AFTER FIX */}
+            <div style={{background:"#ffffcc", padding:"8px", fontSize:"12px", border:"1px solid orange"}}>
+              <strong>DEBUG:</strong> Original: {originalAssignedIds.size} | Selected: {selectedUserIds.size}
+              <br/>
+              <small>Original IDs: {Array.from(originalAssignedIds).join(', ') || 'none'}</small>
+              <br/>
+              <small>Selected IDs: {Array.from(selectedUserIds).join(', ') || 'none'}</small>
+            </div>
             {/* Helper text */}
             <p className="text-sm text-slate-500">Check users to assign, uncheck to remove from this job.</p>
             

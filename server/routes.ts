@@ -1351,6 +1351,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobId = parseInt(req.params.jobId);
       const { userIds } = req.body;
       
+      console.log('[DEBUG crew/remove] jobId:', jobId, 'userIds:', userIds);
+      
       if (!Array.isArray(userIds)) {
         return res.status(400).json({ message: "userIds array is required" });
       }
@@ -1362,6 +1364,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const result = await storage.removeJobCrewAssignments(jobId, userIds);
+      
+      console.log('[DEBUG crew/remove] result:', result);
       
       res.json({ ok: true, removed: result.removed });
     } catch (error) {
