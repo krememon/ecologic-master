@@ -1340,13 +1340,17 @@ export default function Jobs() {
                     const techName = `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
                     
                     const toggleSelection = () => {
-                      const newSet = new Set(selectedUserIds);
-                      if (isChecked) {
-                        newSet.delete(tech.id);
-                      } else {
-                        newSet.add(tech.id);
-                      }
-                      setSelectedUserIds(newSet);
+                      // Use functional update to avoid stale closure
+                      setSelectedUserIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(tech.id)) {
+                          next.delete(tech.id);
+                        } else {
+                          next.add(tech.id);
+                        }
+                        console.log('[Toggle]', tech.id, 'was in set:', prev.has(tech.id), 'now in set:', next.has(tech.id));
+                        return next;
+                      });
                     };
                     
                     return (
