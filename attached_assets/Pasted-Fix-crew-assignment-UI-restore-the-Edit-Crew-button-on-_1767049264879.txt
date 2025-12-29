@@ -1,0 +1,66 @@
+Fix crew assignment UI: restore the “Edit Crew” button on Job Details and make modal work as a true checklist where check=assign and uncheck=unassign.
+
+ISSUES
+1) Job Details no longer shows the “Edit Crew” / “Assign Crew” button.
+2) Crew modal does not allow reliable check/uncheck behavior (check assigns, uncheck unassigns).
+
+GOAL
+- Job Details always shows an “Edit Crew” button (Owner/Supervisor only) next to “Assigned Crew”.
+- Modal supports check/uncheck for all company members.
+- Save applies additions and removals correctly.
+
+PART A — RESTORE EDIT BUTTON (JOB DETAILS)
+1) Locate Job Details component where “Assigned Crew:” is displayed.
+2) Add a button on the right side:
+   - Label: “Edit” (or “Edit Crew”)
+   - Visible only for roles: OWNER, SUPERVISOR
+3) On click: open the existing AssignCrew modal.
+
+Ensure we did NOT accidentally remove the trigger prop/state that opens the modal.
+
+PART B — MAKE MODAL TRUE CHECKLIST
+4) On modal open:
+   - Fetch assigned user ids for this job (GET /api/jobs/:jobId/assignments)
+   - Fetch company members list (GET /api/org/users or /api/company/members)
+5) Create TWO separate sets:
+   - originalAssignedIds (snapshot that never changes while modal open)
+   - selectedIds (the checkbox state)
+   Initialize both from assigned ids:
+     originalAssignedIds = new Set(assignedIds)
+     selectedIds = new Set(assignedIds)
+
+6) Checkbox must render as:
+   checked={selectedIds.has(user.id)}
+   (NOT inverted)
+
+7) Clicking a row toggles ONLY selectedIds:
+   if selectedIds has id -> delete
+   else -> add
+
+PART C — SAVE (APPLY CHANGES)
+8) On Save compute diffs using snapshot:
+   toAdd = selectedIds - originalAssignedIds
+   toRemove = originalAssignedIds - selectedIds
+
+9) Call backend:
+   - POST /api/jobs/:jobId/assignments  { userIds: toAdd } (bulk add)
+   - DELETE (bulk) /api/jobs/:jobId/assignments  { userIds: toRemove }
+     (or POST /remove endpoint if that’s what we implemented)
+
+10) After success:
+   - close modal
+   - refetch job assignments so Job Details updates instantly
+   - toast should say: “Added X, removed Y” (accurate)
+
+PART D — TEMP DEBUG
+11) Add temporary console logs before Save:
+   assignedIds, selectedIds, toAdd, toRemove
+So we can verify it’s not inverted again.
+
+DELIVERABLE
+- “Edit Crew” button is visible again on Job Details
+- Modal shows checkmarks for currently assigned users
+- Unchecking actually unassigns after Save
+- Checking assigns after Save
+- No swapping behavior
+- List files changed
