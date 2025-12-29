@@ -352,10 +352,7 @@ export default function Jobs() {
   useEffect(() => {
     if (!isAssignModalOpen) return;
     
-    // Wait for crewAssignments data to be available
     const assignedIds = crewAssignments.map(a => a.userId);
-    console.log('[Modal Init] isAssignModalOpen:', isAssignModalOpen, 'crewAssignments:', crewAssignments.length, 'assignedIds:', assignedIds);
-    
     setOriginalAssignedIds(new Set(assignedIds));
     setSelectedUserIds(new Set(assignedIds));
   }, [isAssignModalOpen, crewAssignments]);
@@ -1323,14 +1320,6 @@ export default function Jobs() {
             <DialogTitle>{crewAssignments.length > 0 ? 'Edit Crew' : 'Assign Crew Members'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {/* DEBUG STATUS - REMOVE AFTER FIX */}
-            <div style={{background:"#ffffcc", padding:"8px", fontSize:"12px", border:"1px solid orange"}}>
-              <strong>DEBUG:</strong> Original: {originalAssignedIds.size} | Selected: {selectedUserIds.size}
-              <br/>
-              <small>Original IDs: {Array.from(originalAssignedIds).join(', ') || 'none'}</small>
-              <br/>
-              <small>Selected IDs: {Array.from(selectedUserIds).join(', ') || 'none'}</small>
-            </div>
             {/* Helper text */}
             <p className="text-sm text-slate-500">Check users to assign, uncheck to remove from this job.</p>
             
@@ -1363,7 +1352,6 @@ export default function Jobs() {
                     const techName = `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
                     
                     const toggleSelection = () => {
-                      // Use functional update to avoid stale closure
                       setSelectedUserIds(prev => {
                         const next = new Set(prev);
                         if (next.has(tech.id)) {
@@ -1371,7 +1359,6 @@ export default function Jobs() {
                         } else {
                           next.add(tech.id);
                         }
-                        console.log('[Toggle]', tech.id, 'was in set:', prev.has(tech.id), 'now in set:', next.has(tech.id));
                         return next;
                       });
                     };
@@ -1448,12 +1435,6 @@ export default function Jobs() {
                     // Compute diffs using the frozen snapshot (originalAssignedIds)
                     const toAdd = Array.from(selectedUserIds).filter(id => !originalAssignedIds.has(id));
                     const toRemove = Array.from(originalAssignedIds).filter(id => !selectedUserIds.has(id));
-                    
-                    // Debug logs
-                    console.log('[Crew Update] originalAssignedIds:', Array.from(originalAssignedIds));
-                    console.log('[Crew Update] selectedUserIds:', Array.from(selectedUserIds));
-                    console.log('[Crew Update] toAdd:', toAdd);
-                    console.log('[Crew Update] toRemove:', toRemove);
                     
                     if (toAdd.length > 0 || toRemove.length > 0) {
                       updateCrewMutation.mutate({
