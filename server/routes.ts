@@ -1330,6 +1330,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk remove crew members from a job (Admin-only: Owner/Supervisor)
+  app.post('/api/jobs/:jobId/crew/remove', isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = getUserId(req.user);
+      const company = await storage.getUserCompany(currentUserId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Check if user is admin (Owner or Supervisor)
+      const member = await storage.getCompanyMember(company.id, currentUserId);
+      const userRole = member?.role?.toUpperCase() || 'TECHNICIAN';
+      
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
+        return res.status(403).json({ message: "Only Owner or Supervisor can remove crew members" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      const { userIds } = req.body;
+      
+      if (!Array.isArray(userIds)) {
+        return res.status(400).json({ message: "userIds array is required" });
+      }
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      const result = await storage.removeJobCrewAssignments(jobId, userIds);
+      
+      res.json({ ok: true, removed: result.removed });
+    } catch (error) {
+      console.error("Error removing crew members:", error);
+      res.status(500).json({ message: "Failed to remove crew members" });
+    }
+  });
+
   // Job Photos routes
   app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
     try {

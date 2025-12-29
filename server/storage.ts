@@ -99,6 +99,7 @@ export interface IStorage {
   getJobCrewAssignments(jobId: number): Promise<any[]>;
   addJobCrewAssignments(jobId: number, userIds: string[], companyId: number, assignedBy: string): Promise<{ added: number }>;
   removeJobCrewAssignment(jobId: number, userId: string): Promise<void>;
+  removeJobCrewAssignments(jobId: number, userIds: string[]): Promise<{ removed: number }>;
   
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
@@ -471,6 +472,26 @@ export class DatabaseStorage implements IStorage {
           eq(crewAssignments.userId, userId)
         )
       );
+  }
+
+  async removeJobCrewAssignments(jobId: number, userIds: string[]): Promise<{ removed: number }> {
+    if (userIds.length === 0) return { removed: 0 };
+    
+    let removed = 0;
+    for (const userId of userIds) {
+      const result = await db
+        .delete(crewAssignments)
+        .where(
+          and(
+            eq(crewAssignments.jobId, jobId),
+            eq(crewAssignments.userId, userId)
+          )
+        )
+        .returning();
+      removed += result.length;
+    }
+    
+    return { removed };
   }
 
   async getClients(companyId: number): Promise<Client[]> {

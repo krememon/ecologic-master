@@ -570,11 +570,26 @@ export default function Jobs() {
     },
   });
 
-  // Bulk assign crew mutation
-  const assignCrewMutation = useMutation({
-    mutationFn: async ({ jobId, userIds }: { jobId: number; userIds: string[] }) => {
-      const res = await apiRequest("POST", `/api/jobs/${jobId}/crew`, { userIds });
-      return await res.json();
+  // Update crew mutation (handles both add and remove)
+  const updateCrewMutation = useMutation({
+    mutationFn: async ({ jobId, toAdd, toRemove }: { jobId: number; toAdd: string[]; toRemove: string[] }) => {
+      const results = { added: 0, removed: 0 };
+      
+      // Add new crew members
+      if (toAdd.length > 0) {
+        const addRes = await apiRequest("POST", `/api/jobs/${jobId}/crew`, { userIds: toAdd });
+        const addData = await addRes.json();
+        results.added = addData.added || 0;
+      }
+      
+      // Remove crew members
+      if (toRemove.length > 0) {
+        const removeRes = await apiRequest("POST", `/api/jobs/${jobId}/crew/remove`, { userIds: toRemove });
+        const removeData = await removeRes.json();
+        results.removed = removeData.removed || 0;
+      }
+      
+      return results;
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
@@ -582,9 +597,15 @@ export default function Jobs() {
       setIsAssignModalOpen(false);
       setTechnicianSearch("");
       setSelectedUserIds(new Set());
+      
+      // Build description message
+      const parts = [];
+      if (result.added > 0) parts.push(`${result.added} added`);
+      if (result.removed > 0) parts.push(`${result.removed} removed`);
+      
       toast({
-        title: "Success",
-        description: `Assigned ${result.added} crew member${result.added !== 1 ? 's' : ''}`,
+        title: "Crew Updated",
+        description: parts.length > 0 ? parts.join(', ') : "No changes made",
       });
     },
     onError: (error: Error) => {
@@ -599,29 +620,7 @@ export default function Jobs() {
       }
       toast({
         title: "Error",
-        description: "Failed to assign crew members",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Remove crew member mutation
-  const removeCrewMutation = useMutation({
-    mutationFn: async ({ jobId, userId }: { jobId: number; userId: string }) => {
-      const res = await apiRequest("DELETE", `/api/jobs/${jobId}/crew/${userId}`);
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', selectedJob?.id, 'crew'] });
-      toast({
-        title: "Success",
-        description: "Crew member removed",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to remove crew member",
+        description: "Failed to update crew",
         variant: "destructive",
       });
     },
@@ -1287,19 +1286,25 @@ export default function Jobs() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Assign Crew Members Modal (Multi-select) */}
+      {/* Edit Crew Members Modal (Multi-select with add/remove) */}
       <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
         setIsAssignModalOpen(open);
-        if (!open) {
+        if (open) {
+          // Pre-check already assigned users when opening
+          setSelectedUserIds(new Set(assignedUserIds));
+        } else {
           setTechnicianSearch("");
           setSelectedUserIds(new Set());
         }
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign Crew Members</DialogTitle>
+            <DialogTitle>{crewAssignments.length > 0 ? 'Edit Crew' : 'Assign Crew Members'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Helper text */}
+            <p className="text-sm text-slate-500">Check users to assign, uncheck to remove from this job.</p>
+            
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -1325,12 +1330,10 @@ export default function Jobs() {
               ) : (
                 <>
                   {filteredTechnicians.map((tech) => {
-                    const isAlreadyAssigned = assignedUserIds.has(tech.id);
                     const isChecked = selectedUserIds.has(tech.id);
                     const techName = `${tech.firstName || ''} ${tech.lastName || ''}`.trim() || tech.email;
                     
                     const toggleSelection = () => {
-                      if (isAlreadyAssigned) return;
                       const newSet = new Set(selectedUserIds);
                       if (isChecked) {
                         newSet.delete(tech.id);
@@ -1344,25 +1347,21 @@ export default function Jobs() {
                       <button
                         key={tech.id}
                         onClick={toggleSelection}
-                        disabled={isAlreadyAssigned || assignCrewMutation.isPending}
+                        disabled={updateCrewMutation.isPending}
                         className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                          isAlreadyAssigned 
-                            ? 'opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800/50' 
-                            : isChecked 
-                              ? 'bg-blue-50 dark:bg-blue-900/30' 
-                              : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                          isChecked 
+                            ? 'bg-blue-50 dark:bg-blue-900/30' 
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                         data-testid={`button-select-crew-${tech.id}`}
                       >
                         {/* Checkbox */}
                         <div className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 ${
-                          isAlreadyAssigned 
-                            ? 'bg-green-100 border-green-400 dark:bg-green-900/30 dark:border-green-600'
-                            : isChecked 
-                              ? 'bg-blue-500 border-blue-500' 
-                              : 'border-slate-300 dark:border-slate-600'
+                          isChecked 
+                            ? 'bg-blue-500 border-blue-500' 
+                            : 'border-slate-300 dark:border-slate-600'
                         }`}>
-                          {(isAlreadyAssigned || isChecked) && (
+                          {isChecked && (
                             <Check className="h-3 w-3 text-white" />
                           )}
                         </div>
@@ -1388,10 +1387,6 @@ export default function Jobs() {
                           </div>
                           <div className="text-xs text-slate-500 truncate">{tech.email}</div>
                         </div>
-                        
-                        {isAlreadyAssigned && (
-                          <Badge variant="secondary" className="text-xs shrink-0 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Assigned</Badge>
-                        )}
                       </button>
                     );
                   })}
@@ -1409,30 +1404,40 @@ export default function Jobs() {
                   setSelectedUserIds(new Set());
                   setTechnicianSearch("");
                 }}
-                disabled={assignCrewMutation.isPending}
+                disabled={updateCrewMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 className="flex-1"
                 onClick={() => {
-                  if (selectedJob && selectedUserIds.size > 0) {
-                    assignCrewMutation.mutate({
-                      jobId: selectedJob.id,
-                      userIds: Array.from(selectedUserIds),
-                    });
+                  if (selectedJob) {
+                    // Compute diffs
+                    const toAdd = Array.from(selectedUserIds).filter(id => !assignedUserIds.has(id));
+                    const toRemove = Array.from(assignedUserIds).filter(id => !selectedUserIds.has(id));
+                    
+                    if (toAdd.length > 0 || toRemove.length > 0) {
+                      updateCrewMutation.mutate({
+                        jobId: selectedJob.id,
+                        toAdd,
+                        toRemove,
+                      });
+                    } else {
+                      // No changes, just close
+                      setIsAssignModalOpen(false);
+                    }
                   }
                 }}
-                disabled={selectedUserIds.size === 0 || assignCrewMutation.isPending}
-                data-testid="button-assign-crew"
+                disabled={updateCrewMutation.isPending}
+                data-testid="button-save-crew"
               >
-                {assignCrewMutation.isPending ? (
+                {updateCrewMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Assigning...
+                    Saving...
                   </>
                 ) : (
-                  `Assign (${selectedUserIds.size})`
+                  `Update Crew (${selectedUserIds.size})`
                 )}
               </Button>
             </div>
