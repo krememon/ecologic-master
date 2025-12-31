@@ -97,6 +97,7 @@ export interface IStorage {
   
   // Crew assignment operations
   getJobCrewAssignments(jobId: number): Promise<any[]>;
+  getUserJobAssignments(userId: string): Promise<{ jobId: number }[]>;
   addJobCrewAssignments(jobId: number, userIds: string[], companyId: number, assignedBy: string): Promise<{ added: number }>;
   removeJobCrewAssignment(jobId: number, userId: string): Promise<void>;
   removeJobCrewAssignments(jobId: number, userIds: string[]): Promise<{ removed: number }>;
@@ -443,6 +444,14 @@ export class DatabaseStorage implements IStorage {
     return assignments;
   }
 
+  async getUserJobAssignments(userId: string): Promise<{ jobId: number }[]> {
+    const assignments = await db
+      .select({ jobId: crewAssignments.jobId })
+      .from(crewAssignments)
+      .where(eq(crewAssignments.userId, userId));
+    return assignments;
+  }
+
   async addJobCrewAssignments(jobId: number, userIds: string[], companyId: number, assignedBy: string): Promise<{ added: number }> {
     if (userIds.length === 0) return { added: 0 };
     
@@ -772,6 +781,14 @@ export class DatabaseStorage implements IStorage {
       updatedAt: doc.updatedAt,
       job: doc.jobId ? { id: doc.jobId, title: doc.jobTitle, clientName: doc.jobClientName } : null,
     }));
+  }
+
+  async getDocument(id: number): Promise<Document | null> {
+    const [document] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, id));
+    return document || null;
   }
 
   async createDocument(documentData: InsertDocument): Promise<Document> {

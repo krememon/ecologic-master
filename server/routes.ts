@@ -23,6 +23,16 @@ import { aiScheduler } from "./ai-scheduler";
 import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
+import { 
+  canUploadCategory, 
+  canUploadCompanyWide, 
+  canDelete, 
+  canChangeStatus, 
+  canTransitionStatus, 
+  canViewCompanyWideDocuments,
+  getPermissionErrorMessage,
+  type DocumentStatus
+} from "../shared/documentPermissions";
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 // Stripe removed
@@ -1438,7 +1448,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      const docs = await storage.getDocuments(company.id);
+      // Get user role for filtering
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role || 'TECHNICIAN';
+      
+      let docs = await storage.getDocuments(company.id);
+      
+      // Filter documents based on role visibility
+      if (userRole.toUpperCase() === 'TECHNICIAN') {
+        // Technicians can only see documents for jobs they are assigned to
+        const userAssignments = await storage.getUserJobAssignments(userId);
+        const assignedJobIds = new Set(userAssignments.map(a => a.jobId));
+        
+        docs = docs.filter(doc => {
+          // Technicians cannot see company-wide documents (jobId = null)
+          if (!doc.jobId) return false;
+          // Only show docs for jobs they are assigned to
+          return assignedJobIds.has(doc.jobId);
+        });
+      }
+      // Owner, Supervisor, Dispatcher, Estimator can see all docs
+      
       res.json(docs);
     } catch (error) {
       console.error("Error fetching documents:", error);
@@ -1463,16 +1493,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get user role for permission check
       const member = await storage.getCompanyMember(company.id, userId);
-      const userRole = member?.role || 'Technician';
-      const isAdmin = ['Owner', 'Supervisor'].includes(userRole);
+      const userRole = member?.role || 'TECHNICIAN';
       
-      // Permission check: Field users can only upload Photos with a job attached
-      if (!isAdmin) {
-        if (category !== 'Photos') {
-          return res.status(403).json({ message: "You don't have permission to upload this category" });
-        }
-        if (!jobId) {
-          return res.status(403).json({ message: "Photos must be attached to a job" });
+      // Role-based permission check: Can this role upload this category?
+      if (!canUploadCategory(userRole, category)) {
+        return res.status(403).json({ message: getPermissionErrorMessage('upload') });
+      }
+      
+      // Check if non-admin is trying to upload company-wide (no jobId)
+      if (!jobId && !canUploadCompanyWide(userRole)) {
+        return res.status(403).json({ message: "Documents must be attached to a job" });
+      }
+      
+      // Technicians can only upload to jobs they are assigned to
+      if (userRole.toUpperCase() === 'TECHNICIAN' && jobId) {
+        const assignments = await storage.getJobCrewAssignments(parseInt(jobId));
+        const isAssigned = assignments.some(a => a.userId === userId);
+        if (!isAssigned) {
+          return res.status(403).json({ message: "You can only upload to jobs you are assigned to" });
         }
       }
       
@@ -1513,11 +1551,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Permission check: Only Admins can delete documents
       const member = await storage.getCompanyMember(company.id, userId);
-      const userRole = member?.role || 'Technician';
-      const isAdmin = ['Owner', 'Supervisor'].includes(userRole);
+      const userRole = member?.role || 'TECHNICIAN';
       
-      if (!isAdmin) {
-        return res.status(403).json({ message: "You don't have permission to delete documents" });
+      if (!canDelete(userRole)) {
+        return res.status(403).json({ message: getPermissionErrorMessage('delete') });
       }
       
       const documentId = parseInt(req.params.documentId);
@@ -1538,20 +1575,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      // Permission check: Only Admins can change status
       const member = await storage.getCompanyMember(company.id, userId);
-      const userRole = member?.role || 'Technician';
-      const isAdmin = ['Owner', 'Supervisor'].includes(userRole);
-      
-      if (!isAdmin) {
-        return res.status(403).json({ message: "You don't have permission to change document status" });
-      }
+      const userRole = member?.role || 'TECHNICIAN';
       
       const documentId = parseInt(req.params.documentId);
       const { status } = req.body;
       
       if (!status) {
         return res.status(400).json({ message: "Status is required" });
+      }
+      
+      // Get the document to check its category and current status
+      const doc = await storage.getDocument(documentId);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Check if user can change status for this category
+      if (!canChangeStatus(userRole, doc.category)) {
+        return res.status(403).json({ message: getPermissionErrorMessage('changeStatus') });
+      }
+      
+      // Check if this specific transition is allowed
+      if (!canTransitionStatus(userRole, doc.category, doc.status as DocumentStatus, status as DocumentStatus)) {
+        return res.status(403).json({ message: "You don't have permission to make this status change" });
       }
       
       const updatedDoc = await storage.updateDocumentStatus(documentId, status);
