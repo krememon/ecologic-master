@@ -31,6 +31,7 @@ import {
   canTransitionStatus, 
   canViewCompanyWideDocuments,
   getPermissionErrorMessage,
+  requireJobForUpload,
   type DocumentStatus
 } from "../shared/documentPermissions";
 import { db } from "./db";
@@ -1500,9 +1501,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: getPermissionErrorMessage('upload') });
       }
       
-      // Check if non-admin is trying to upload company-wide (no jobId)
-      if (!jobId && !canUploadCompanyWide(userRole)) {
-        return res.status(403).json({ message: "Documents must be attached to a job" });
+      // Check if this role requires a job for this category
+      if (!jobId && requireJobForUpload(userRole, category)) {
+        return res.status(403).json({ message: "Documents of this type must be attached to a job" });
       }
       
       // Technicians can only upload to jobs they are assigned to
