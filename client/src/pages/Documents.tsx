@@ -14,7 +14,7 @@ import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLi
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
-import { isAdmin, canDelete, canChangeStatus, getUploadableCategories, requireJobForUpload } from "@shared/documentPermissions";
+import { isAdmin, canDelete, canChangeStatus, getUploadableCategories, requireJobForUpload, isWorkflowCategory as checkWorkflowCategory, getAllowedStatusTransitions, type DocumentStatus as PermDocStatus } from "@shared/documentPermissions";
 import { Trash2, Camera } from "lucide-react";
 
 interface JobInfo {
@@ -732,29 +732,40 @@ export default function Documents() {
             </DialogTitle>
           </DialogHeader>
           
-          {/* Status section for workflow categories - Admin only */}
-          {selectedDoc && isWorkflowCategory(selectedDoc.category) && userIsAdmin && (
-            <div className="flex items-center gap-3 py-2 border-b">
-              <span className="text-sm text-slate-600 dark:text-slate-400">Status:</span>
-              <Select 
-                value={selectedDoc.status} 
-                onValueChange={(newStatus) => statusMutation.mutate({ id: selectedDoc.id, status: newStatus })}
-                disabled={statusMutation.isPending}
-              >
-                <SelectTrigger className="w-[180px]" data-testid="select-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOCUMENT_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status} data-testid={`status-option-${status.toLowerCase().replace(' ', '-')}`}>
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {statusMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-            </div>
-          )}
+          {/* Status section for workflow categories - role-based */}
+          {selectedDoc && isWorkflowCategory(selectedDoc.category) && canChangeStatus(userRole, selectedDoc.category) && (() => {
+            const allowedStatuses = getAllowedStatusTransitions(userRole, selectedDoc.category, selectedDoc.status as PermDocStatus);
+            return (
+              <div className="flex items-center gap-3 py-2 border-b">
+                <span className="text-sm text-slate-600 dark:text-slate-400">Status:</span>
+                <Badge variant={getStatusVariant(selectedDoc.status)} className="mr-2">
+                  {selectedDoc.status}
+                </Badge>
+                {allowedStatuses.length > 0 && (
+                  <>
+                    <span className="text-sm text-slate-400">→</span>
+                    <Select 
+                      value="" 
+                      onValueChange={(newStatus) => statusMutation.mutate({ id: selectedDoc.id, status: newStatus })}
+                      disabled={statusMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[180px]" data-testid="select-status">
+                        <SelectValue placeholder="Change to..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allowedStatuses.map((status) => (
+                          <SelectItem key={status} value={status} data-testid={`status-option-${status.toLowerCase().replace(' ', '-')}`}>
+                            {status}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {statusMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="flex-1 overflow-auto py-4">
             {selectedDoc && (() => {
@@ -807,7 +818,7 @@ export default function Documents() {
           </div>
           <div className="flex justify-between gap-2 pt-4 border-t">
             <div>
-              {userIsAdmin && selectedDoc && (
+              {canDelete(userRole) && selectedDoc && (
                 <Button
                   variant="destructive"
                   onClick={() => deleteMutation.mutate(selectedDoc.id)}
