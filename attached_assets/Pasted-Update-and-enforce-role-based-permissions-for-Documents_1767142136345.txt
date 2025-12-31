@@ -1,0 +1,133 @@
+Update and enforce role-based permissions for Documents in EcoLogic including Owner, Supervisor, Dispatcher, Estimator, Technician.
+
+GOAL
+- Keep official paperwork controlled.
+- Allow Dispatcher/Estimator to do only what matches their real job.
+- Enforce rules in BOTH frontend UI and backend API (no bypassing).
+
+ROLES
+- Owner
+- Supervisor
+- Dispatcher
+- Estimator
+- Technician
+
+DOCUMENT CATEGORIES
+Official / workflow docs:
+- Contracts
+- Estimates
+- Invoices
+- Permits
+
+Reference / operational docs:
+- Photos
+- Manuals
+- Other
+
+PERMISSIONS SUMMARY
+
+OWNER (Admin)
+- Full access to everything:
+  view/upload/delete/rename/assign docs to jobs
+  change status for workflow docs
+  company-wide + all jobs
+
+SUPERVISOR (Admin)
+- Same as Owner for documents:
+  view/upload/delete/rename/assign docs to jobs
+  change status for workflow docs
+  all jobs + company-wide
+
+ESTIMATOR (Limited-office)
+- Can view documents
+- Can upload:
+  - Estimates
+  - (optional) Contracts as draft only (if you want; otherwise exclude)
+- Can set status ONLY for Estimates (Draft -> Pending Approval)
+- Cannot:
+  - Approve/Reject
+  - Upload invoices
+  - Delete documents
+  - Upload permits (optional; default no)
+  - Upload manuals/company-wide docs
+  - Change status for Contracts/Invoices/Permits
+
+DISPATCHER (Operations-office)
+- Can view documents
+- Can upload:
+  - Permits
+  - Photos
+- Can NOT change status (keep strict)
+- Cannot:
+  - Upload contracts/estimates/invoices
+  - Delete documents
+  - Upload manuals/company-wide docs (optional; default no)
+
+TECHNICIAN (Field)
+- Can view/download ONLY documents for jobs they are assigned to
+- Can upload Photos ONLY (job-linked required)
+- Cannot:
+  - Upload contracts/estimates/invoices/permits/manuals/other
+  - Delete documents
+  - Rename/edit document details
+  - Change status
+  - Assign documents to jobs
+
+STRICT RULES (IMPORTANT)
+1) Company-wide documents (job_id = null):
+- Only Owner/Supervisor can create/edit/delete.
+- Everyone else cannot upload company-wide docs.
+
+2) Status controls:
+- Only Owner/Supervisor can Approve/Reject.
+- Estimator can only move Estimates to Pending Approval (optional).
+- No one else changes status.
+
+FRONTEND REQUIREMENTS
+- Hide/disable actions based on role.
+- Upload modal behavior:
+  - Owner/Supervisor: full category dropdown + optional company-wide
+  - Estimator: category locked to Estimates (and optional Contracts draft if enabled), job required
+  - Dispatcher: category locked to Permits or Photos, job required
+  - Technician: category locked to Photos, job required
+- Preview modal:
+  - Delete button ONLY for Owner/Supervisor
+  - Rename/edit ONLY for Owner/Supervisor
+  - Status dropdown:
+    - Owner/Supervisor for workflow categories
+    - (Optional) Estimator only for Estimates with limited transitions
+
+BACKEND ENFORCEMENT (CRITICAL)
+Enforce these rules on the API:
+
+POST /api/documents
+- Owner/Supervisor: allow any category, job_id optional
+- Estimator: allow Estimates (and optional Contracts draft), job_id required, reject company-wide
+- Dispatcher: allow Permits + Photos, job_id required, reject company-wide
+- Technician: allow Photos only, job_id required, reject company-wide
+Return 403 if violated.
+
+PATCH /api/documents/:id (status)
+- Owner/Supervisor: allow status changes for workflow docs
+- Estimator (optional): allow ONLY for category=Estimates and ONLY transitions:
+  Draft -> Pending Approval
+Everyone else: 403
+
+DELETE /api/documents/:id
+- Owner/Supervisor only, everyone else: 403
+
+GET /api/documents (visibility)
+- Owner/Supervisor: return all company docs
+- Estimator/Dispatcher: return docs for jobs they have access to (start simple: all jobs, or restrict later)
+- Technician: return ONLY docs tied to jobs they are assigned to; exclude company-wide
+
+ERROR HANDLING
+- Return 403 for unauthorized actions
+- Frontend shows: “You don’t have permission to do that.”
+
+DELIVERABLE
+- Dispatcher and Estimator have limited, realistic document powers
+- Admins control all official docs
+- Technicians cannot touch official docs, only upload photos to assigned jobs
+- UI matches backend enforcement
+- List files and routes changed
