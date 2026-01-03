@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
@@ -31,18 +31,27 @@ interface SidebarProps {
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const { t } = useTranslation();
-  const { can, canAny } = useCan();
-  const navigation = getNavigation(t);
+  const { can, canAny, role } = useCan();
 
-  // Filter navigation items based on permissions
-  const filteredNavigation = navigation.filter(item => {
-    // If item has permissionAny, check if user has any of those permissions
-    if ((item as any).permissionAny) {
-      return canAny((item as any).permissionAny);
+  // Filter navigation items based on current user's permissions
+  // useMemo ensures this recalculates when role changes (e.g., after login/logout)
+  const filteredNavigation = useMemo(() => {
+    const navigation = getNavigation(t);
+    
+    // If no role, show no navigation items (safety check)
+    if (!role) {
+      return [];
     }
-    // Otherwise, check the single permission (or allow if no permission required)
-    return !item.permission || can(item.permission);
-  });
+    
+    return navigation.filter(item => {
+      // If item has permissionAny, check if user has any of those permissions
+      if ((item as any).permissionAny) {
+        return canAny((item as any).permissionAny);
+      }
+      // Otherwise, check the single permission (or allow if no permission required)
+      return !item.permission || can(item.permission);
+    });
+  }, [t, role, can, canAny]);
 
   // Debug logging
   useEffect(() => {

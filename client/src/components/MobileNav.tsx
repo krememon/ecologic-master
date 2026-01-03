@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Menu, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,22 @@ import {
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
+import type { Permission } from "@shared/permissions";
+
+// Navigation items with permission requirements - must match Sidebar.tsx
+const getNavigation = (t: any) => [
+  { href: "/", icon: LayoutDashboard, label: t('navigation.home'), permission: null },
+  { href: "/schedule", icon: Brain, label: t('navigation.schedule'), permission: "schedule.view" as Permission },
+  { href: "/jobs", icon: Building2, label: t('navigation.jobs'), permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
+  { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors'), permission: "clients.manage" as Permission },
+  { href: "/clients", icon: Users, label: t('navigation.clients'), permission: "clients.manage" as Permission },
+  { href: "/invoicing", icon: FileText, label: t('navigation.invoicing'), permission: "invoicing.manage" as Permission },
+  { href: "/payments", icon: DollarSign, label: "Payments", permission: "invoicing.manage" as Permission },
+  { href: "/documents", icon: FolderOpen, label: t('navigation.documents'), permission: "documents.manage" as Permission },
+  { href: "/messages", icon: MessageSquare, label: t('navigation.messages'), permission: null },
+  { href: "/employees", icon: UsersIcon, label: "Employees", permission: "users.view" as Permission },
+  { href: "/settings", icon: Settings, label: t('navigation.settings'), permission: null },
+];
 
 interface MobileNavProps {
   user: any;
@@ -30,7 +46,27 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
   const { t } = useTranslation();
-  const { can } = useCan();
+  const { can, canAny, role } = useCan();
+
+  // Filter navigation items based on current user's permissions
+  // This recalculates when role changes (e.g., after login/logout)
+  const navigationItems = useMemo(() => {
+    const navigation = getNavigation(t);
+    
+    // If no role, show no navigation items (safety check)
+    if (!role) {
+      return [];
+    }
+    
+    return navigation.filter(item => {
+      // If item has permissionAny, check if user has any of those permissions
+      if ((item as any).permissionAny) {
+        return canAny((item as any).permissionAny);
+      }
+      // Otherwise, check the single permission (or allow if no permission required)
+      return !item.permission || can(item.permission);
+    });
+  }, [t, role, can, canAny]);
 
   const handleToggle = () => {
     console.log('Mobile nav toggle clicked, current state:', isOpen);
@@ -47,20 +83,6 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       setIsOpen(false);
     }, 150);
   };
-
-  const navigationItems = [
-    { href: "/", icon: LayoutDashboard, label: t('navigation.home') },
-    { href: "/schedule", icon: Brain, label: t('navigation.schedule') },
-    { href: "/jobs", icon: Building2, label: t('navigation.jobs') },
-    { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors') },
-    { href: "/clients", icon: Users, label: t('navigation.clients') },
-    { href: "/invoicing", icon: FileText, label: t('navigation.invoicing') },
-    { href: "/payments", icon: DollarSign, label: "Payments" },
-    { href: "/documents", icon: FolderOpen, label: t('navigation.documents') },
-    { href: "/messages", icon: MessageSquare, label: t('navigation.messages') },
-    ...(can('users.view') ? [{ href: "/employees", icon: UsersIcon, label: "Employees" }] : []),
-    { href: "/settings", icon: Settings, label: t('navigation.settings') },
-  ];
 
   return (
     <>
