@@ -1,0 +1,128 @@
+Implement EcoLogic Role-Based Document Visibility System (Final Architecture)
+
+GOAL
+- Documents are visible based on ROLE + JOB ACCESS.
+- No manual per-user sharing.
+- If user cannot access a document, it must be COMPLETELY hidden (not disabled).
+- System must scale cleanly and support future AI features.
+
+ROLES
+- Owner
+- Supervisor
+- Dispatcher
+- Estimator
+- Technician
+
+ROLE GROUPING
+- Admin = Owner + Supervisor
+- Owner has special bypass for owner_only documents
+
+DOCUMENT VISIBILITY VALUES (exact enum)
+Each document must have ONE visibility value:
+
+- customer_internal
+- assigned_crew_only
+- office_only
+- internal
+- owner_only
+
+DOCUMENT SCOPE
+Documents may belong to:
+- Company
+- Customer
+- Job
+- Equipment
+
+Visibility rules apply REGARDLESS of scope.
+
+CORE PRINCIPLE
+A user can see a document ONLY IF:
+1) Their role allows the document’s visibility level
+AND
+2) They have access to the related job (if job-linked)
+
+Otherwise → document is NOT returned by API.
+
+ROLE VISIBILITY RULES
+
+OWNER
+- Can see ALL documents
+- Ignores all visibility restrictions
+- Can see owner_only documents
+
+SUPERVISOR (Admin)
+- Can see documents for jobs they oversee
+- Allowed visibilities:
+  - customer_internal
+  - assigned_crew_only
+  - internal
+  - office_only
+- Cannot see:
+  - owner_only
+
+DISPATCHER
+- Can see all jobs
+- Allowed visibilities:
+  - customer_internal
+  - office_only
+  - internal
+- Cannot see:
+  - assigned_crew_only
+  - owner_only
+
+ESTIMATOR
+- Can see customer-facing + estimating documents
+- Allowed visibilities:
+  - customer_internal
+  - office_only
+- Cannot see:
+  - assigned_crew_only
+  - internal
+  - owner_only
+
+TECHNICIAN
+- Can see ONLY jobs they are assigned to
+- Allowed visibilities:
+  - customer_internal
+  - assigned_crew_only
+- Cannot see:
+  - office_only
+  - internal
+  - owner_only
+
+BACKEND ENFORCEMENT (CRITICAL)
+API must enforce visibility — frontend must not filter sensitive data.
+
+GET /api/documents:
+1) Resolve user role + company_id
+2) If Owner:
+   - return all company documents
+3) Else:
+   - determine accessible job_ids for user
+   - return documents WHERE:
+     - company_id matches
+     - visibility IN allowed_visibilities_for_role
+     - AND (
+         document has no job_id
+         OR job_id IN accessible_job_ids
+       )
+
+Do NOT return restricted documents in any form.
+
+FRONTEND RULES
+- Do NOT show disabled or locked documents
+- Do NOT show placeholders for restricted docs
+- Only render documents returned by API
+- Job pickers must be filtered to jobs the user can access
+
+WHY THIS SYSTEM EXISTS
+- Prevents “everyone sees everything” problem
+- Supports office-only, crew-only, internal documents
+- Scales cleanly with large companies
+- Enables future AI features (summaries, alerts, approvals)
+
+DELIVERABLE
+- Document visibility enforced strictly by role + job access
+- No data leaks via API or UI
+- System works consistently on desktop and mobile
+- List files and routes changed

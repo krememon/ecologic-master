@@ -5,13 +5,55 @@ export const WORKFLOW_CATEGORIES = ['Contracts', 'Estimates', 'Invoices', 'Permi
 export const REFERENCE_CATEGORIES = ['Photos', 'Manuals', 'Other'] as const;
 export const ALL_CATEGORIES = [...WORKFLOW_CATEGORIES, ...REFERENCE_CATEGORIES] as const;
 
+// Document visibility levels
+export const DOCUMENT_VISIBILITIES = [
+  'customer_internal',   // Visible to customers and all internal roles
+  'assigned_crew_only',  // Only visible to assigned crew (Technicians, Supervisors)
+  'office_only',         // Office staff only (not technicians in the field)
+  'internal',            // All internal staff, not customer-facing
+  'owner_only'           // Only Owner can see
+] as const;
+
 export type Role = typeof ALL_ROLES[number];
 export type Category = typeof ALL_CATEGORIES[number];
 export type WorkflowCategory = typeof WORKFLOW_CATEGORIES[number];
+export type DocumentVisibility = typeof DOCUMENT_VISIBILITIES[number];
 
 export type DocumentAction = 'view' | 'upload' | 'delete' | 'rename' | 'changeStatus' | 'assignToJob';
 
 export type DocumentStatus = 'Draft' | 'Pending Approval' | 'Approved' | 'Rejected';
+
+// Visibility permissions per role
+// Each role can see documents with these visibility levels
+const VISIBILITY_BY_ROLE: Record<Role, DocumentVisibility[]> = {
+  OWNER: ['customer_internal', 'assigned_crew_only', 'office_only', 'internal', 'owner_only'], // Owner sees ALL
+  SUPERVISOR: ['customer_internal', 'assigned_crew_only', 'internal', 'office_only'], // Not owner_only
+  DISPATCHER: ['customer_internal', 'office_only', 'internal'], // Not assigned_crew_only, owner_only
+  ESTIMATOR: ['customer_internal', 'office_only'], // Not assigned_crew_only, internal, owner_only
+  TECHNICIAN: ['customer_internal', 'assigned_crew_only'], // Not office_only, internal, owner_only
+};
+
+// Get allowed visibilities for a role
+export function getAllowedVisibilities(role: string | null | undefined): DocumentVisibility[] {
+  const normalized = normalizeRole(role);
+  if (!normalized) return [];
+  return VISIBILITY_BY_ROLE[normalized] || [];
+}
+
+// Check if a role can see a document with given visibility
+export function canSeeVisibility(role: string | null | undefined, visibility: DocumentVisibility): boolean {
+  const allowed = getAllowedVisibilities(role);
+  return allowed.includes(visibility);
+}
+
+// Roles that can access all jobs (not restricted by assignment)
+export function canAccessAllJobs(role: string | null | undefined): boolean {
+  const normalized = normalizeRole(role);
+  if (!normalized) return false;
+  // Technician is the only role restricted to assigned jobs
+  // All other roles can see all jobs
+  return normalized !== 'TECHNICIAN';
+}
 
 function normalizeRole(role: string | null | undefined): Role | null {
   if (!role) return null;

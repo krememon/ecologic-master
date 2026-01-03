@@ -21,6 +21,15 @@ import { z } from "zod";
 // Role enum for RBAC
 export const roleEnum = pgEnum("role", ["OWNER", "SUPERVISOR", "TECHNICIAN", "DISPATCHER", "ESTIMATOR"]);
 
+// Document visibility enum
+export const documentVisibilityEnum = pgEnum("document_visibility", [
+  "customer_internal",   // Visible to customers and all internal roles
+  "assigned_crew_only",  // Only visible to assigned crew (Technicians, Supervisors)
+  "office_only",         // Office staff only (not technicians in the field)
+  "internal",            // All internal staff, not customer-facing
+  "owner_only"           // Only Owner can see
+]);
+
 // Session storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const sessions = pgTable(
@@ -215,6 +224,7 @@ export const documents = pgTable("documents", {
   type: varchar("type"), // contract, permit, blueprint, receipt, photo
   category: varchar("category", { length: 50 }).notNull().default("Other"), // Contracts, Estimates, Invoices, Permits, Photos, Manuals, Other
   status: varchar("status", { length: 50 }).notNull().default("Draft"), // Draft, Pending Approval, Approved, Rejected
+  visibility: documentVisibilityEnum("visibility").notNull().default("internal"), // Role-based visibility level
   fileUrl: varchar("file_url").notNull(),
   fileSize: integer("file_size"),
   uploadedBy: varchar("uploaded_by").references(() => users.id),
