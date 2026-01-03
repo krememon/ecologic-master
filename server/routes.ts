@@ -32,7 +32,10 @@ import {
   canViewCompanyWideDocuments,
   getPermissionErrorMessage,
   requireJobForUpload,
-  type DocumentStatus
+  getAllowedVisibilities,
+  canAccessAllJobs,
+  type DocumentStatus,
+  type DocumentVisibility
 } from "../shared/documentPermissions";
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
@@ -1464,27 +1467,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user role for filtering
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = member?.role || 'TECHNICIAN';
+      const normalizedRole = userRole.toUpperCase();
       
       let docs = await storage.getDocuments(company.id);
       
-      // Filter documents based on role visibility
-      // Admins (Owner/Supervisor) can see all documents including company-wide
-      // Non-admins (Dispatcher/Estimator/Technician) can only see docs for jobs they are assigned to
-      const adminRoles = ['OWNER', 'SUPERVISOR'];
-      const isAdmin = adminRoles.includes(userRole.toUpperCase());
-      
-      if (!isAdmin) {
-        // Non-admins: filter to only assigned jobs, exclude company-wide docs
-        const userAssignments = await storage.getUserJobAssignments(userId);
-        const assignedJobIds = new Set(userAssignments.map(a => a.jobId));
-        
-        docs = docs.filter(doc => {
-          // Non-admins cannot see company-wide documents (jobId = null)
-          if (!doc.jobId) return false;
-          // Only show docs for jobs they are assigned to
-          return assignedJobIds.has(doc.jobId);
-        });
+      // OWNER bypasses all visibility restrictions
+      if (normalizedRole === 'OWNER') {
+        return res.json(docs);
       }
+      
+      // Get allowed visibility levels for this role
+      const allowedVisibilities = getAllowedVisibilities(userRole);
+      
+      // Determine if user can access all jobs or only assigned ones
+      const canSeeAllJobs = canAccessAllJobs(userRole);
+      
+      // Get user's assigned job IDs if needed
+      let assignedJobIds: Set<number> = new Set();
+      if (!canSeeAllJobs) {
+        const userAssignments = await storage.getUserJobAssignments(userId);
+        assignedJobIds = new Set(userAssignments.map(a => a.jobId));
+      }
+      
+      // Filter documents by:
+      // 1. Visibility level - must be in allowed visibilities for this role
+      // 2. Job access - if user can't see all jobs, only show docs for assigned jobs
+      docs = docs.filter(doc => {
+        // Check visibility level
+        const docVisibility = (doc.visibility || 'internal') as DocumentVisibility;
+        if (!allowedVisibilities.includes(docVisibility)) {
+          return false;
+        }
+        
+        // Check job access (if restricted to assigned jobs only)
+        if (!canSeeAllJobs) {
+          // If document has no job (company-wide), non-assigned users can't see it
+          if (!doc.jobId) return false;
+          // Only show docs for jobs user is assigned to
+          return assignedJobIds.has(doc.jobId);
+        }
+        
+        return true;
+      });
       
       res.json(docs);
     } catch (error) {
@@ -1506,7 +1530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
-      const { name, category, jobId } = req.body;
+      const { name, category, jobId, visibility } = req.body;
       
       // Get user role for permission check
       const member = await storage.getCompanyMember(company.id, userId);
@@ -1544,6 +1568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: name || req.file.originalname,
         type: req.file.mimetype,
         category: category || 'Other',
+        visibility: visibility || 'internal',
         fileUrl: `/${filePath}`,
         fileSize: req.file.size,
         uploadedBy: userId,
