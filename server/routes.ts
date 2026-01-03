@@ -675,6 +675,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get current user's assigned job IDs (for document filtering)
+  app.get('/api/user/assigned-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const assignments = await storage.getUserJobAssignments(userId);
+      res.json(assignments.map(a => a.jobId));
+    } catch (error) {
+      console.error("Error fetching user assigned jobs:", error);
+      res.status(500).json({ message: "Failed to fetch assigned jobs" });
+    }
+  });
+
   app.post('/api/companies', async (req: any, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -1456,19 +1468,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let docs = await storage.getDocuments(company.id);
       
       // Filter documents based on role visibility
-      if (userRole.toUpperCase() === 'TECHNICIAN') {
-        // Technicians can only see documents for jobs they are assigned to
+      // Admins (Owner/Supervisor) can see all documents including company-wide
+      // Non-admins (Dispatcher/Estimator/Technician) can only see docs for jobs they are assigned to
+      const adminRoles = ['OWNER', 'SUPERVISOR'];
+      const isAdmin = adminRoles.includes(userRole.toUpperCase());
+      
+      if (!isAdmin) {
+        // Non-admins: filter to only assigned jobs, exclude company-wide docs
         const userAssignments = await storage.getUserJobAssignments(userId);
         const assignedJobIds = new Set(userAssignments.map(a => a.jobId));
         
         docs = docs.filter(doc => {
-          // Technicians cannot see company-wide documents (jobId = null)
+          // Non-admins cannot see company-wide documents (jobId = null)
           if (!doc.jobId) return false;
           // Only show docs for jobs they are assigned to
           return assignedJobIds.has(doc.jobId);
         });
       }
-      // Owner, Supervisor, Dispatcher, Estimator can see all docs
       
       res.json(docs);
     } catch (error) {

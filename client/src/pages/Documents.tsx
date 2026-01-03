@@ -109,9 +109,22 @@ export default function Documents() {
     enabled: isAuthenticated,
   });
   
+  // Get user's assigned job IDs (for non-admins)
+  const { data: assignedJobIds = [] } = useQuery<number[]>({
+    queryKey: ["/api/user/assigned-jobs"],
+    enabled: isAuthenticated,
+  });
+  
   const userRole = membership?.role || '';
   const userIsAdmin = isAdmin(userRole);
   const uploadableCategories = getUploadableCategories(userRole);
+  
+  // For non-admins, filter jobs to only show assigned jobs
+  const availableJobs = useMemo(() => {
+    if (userIsAdmin) return jobs;
+    const assignedSet = new Set(assignedJobIds);
+    return jobs.filter(job => assignedSet.has(job.id));
+  }, [jobs, assignedJobIds, userIsAdmin]);
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -183,11 +196,11 @@ export default function Documents() {
     },
   });
 
-  // Filter jobs for search
+  // Filter jobs for search (uses availableJobs which is pre-filtered for non-admins)
   const filteredJobs = useMemo(() => {
     const query = jobSearchQuery.trim().toLowerCase();
-    if (!query) return jobs.slice(0, 100);
-    return jobs.filter(job => {
+    if (!query) return availableJobs.slice(0, 100);
+    return availableJobs.filter(job => {
       const searchFields = [
         job.title,
         job.clientName,
@@ -196,12 +209,12 @@ export default function Documents() {
       ].filter(Boolean).map(f => f!.toLowerCase());
       return searchFields.some(field => field.includes(query));
     }).slice(0, 100);
-  }, [jobs, jobSearchQuery]);
+  }, [availableJobs, jobSearchQuery]);
 
   const uploadFilteredJobs = useMemo(() => {
     const query = uploadJobSearchQuery.trim().toLowerCase();
-    if (!query) return jobs.slice(0, 100);
-    return jobs.filter(job => {
+    if (!query) return availableJobs.slice(0, 100);
+    return availableJobs.filter(job => {
       const searchFields = [
         job.title,
         job.clientName,
@@ -210,7 +223,7 @@ export default function Documents() {
       ].filter(Boolean).map(f => f!.toLowerCase());
       return searchFields.some(field => field.includes(query));
     }).slice(0, 100);
-  }, [jobs, uploadJobSearchQuery]);
+  }, [availableJobs, uploadJobSearchQuery]);
 
   const filteredDocuments = useMemo(() => {
     let result = documents;
@@ -290,9 +303,11 @@ export default function Documents() {
                 data-testid="button-job-picker"
               >
                 <span className="truncate">
-                  {jobFilter.mode === 'all' ? 'All jobs' : 
-                   jobFilter.mode === 'company' ? 'Company-wide' : 
-                   jobFilter.label}
+                  {jobFilter.mode === 'all' 
+                    ? (userIsAdmin ? 'All jobs' : 'Your assigned jobs') 
+                    : jobFilter.mode === 'company' 
+                      ? 'Company-wide' 
+                      : jobFilter.label}
                 </span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
@@ -311,7 +326,7 @@ export default function Documents() {
               </Select>
             </div>
 
-            {/* Selected Job Chip */}
+            {/* Selected Job Chip - show when a specific job is selected */}
             {jobFilter.mode === 'job' && (
               <div className="flex items-center gap-2">
                 <Badge 
@@ -335,6 +350,10 @@ export default function Documents() {
               setUploadOpen(open);
               if (open && !userIsAdmin) {
                 setUploadCategory("Photos");
+                // Non-admins must select a job - set first available if none selected
+                if (uploadJobId === 'company-wide' && availableJobs.length > 0) {
+                  setUploadJobId(availableJobs[0].id.toString());
+                }
               }
             }}>
               <DialogTrigger asChild>
@@ -574,6 +593,7 @@ export default function Documents() {
           <div className="flex-1 overflow-auto space-y-1">
             {/* Quick Options */}
             <div className="pb-2 mb-2 border-b">
+              {/* All jobs / Your assigned jobs option */}
               <button
                 onClick={() => {
                   setJobFilter({ mode: 'all' });
@@ -587,23 +607,26 @@ export default function Documents() {
                 data-testid="option-all-jobs"
               >
                 <FolderOpen className="h-4 w-4 text-slate-500" />
-                <span>All jobs</span>
+                <span>{userIsAdmin ? 'All jobs' : 'Your assigned jobs'}</span>
               </button>
-              <button
-                onClick={() => {
-                  setJobFilter({ mode: 'company' });
-                  setJobPickerOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  jobFilter.mode === 'company' 
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-                data-testid="option-company-wide"
-              >
-                <Building2 className="h-4 w-4 text-slate-500" />
-                <span>Company-wide</span>
-              </button>
+              {/* Company-wide option - only for admins */}
+              {userIsAdmin && (
+                <button
+                  onClick={() => {
+                    setJobFilter({ mode: 'company' });
+                    setJobPickerOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    jobFilter.mode === 'company' 
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  data-testid="option-company-wide"
+                >
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  <span>Company-wide</span>
+                </button>
+              )}
             </div>
             {/* Job List */}
             {filteredJobs.length === 0 ? (
@@ -665,24 +688,26 @@ export default function Documents() {
             />
           </div>
           <div className="flex-1 overflow-auto space-y-1">
-            {/* Quick Options */}
-            <div className="pb-2 mb-2 border-b">
-              <button
-                onClick={() => {
-                  setUploadJobId('company-wide');
-                  setUploadJobPickerOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  uploadJobId === 'company-wide' 
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-                data-testid="upload-option-company-wide"
-              >
-                <Building2 className="h-4 w-4 text-slate-500" />
-                <span>Company-wide (No job)</span>
-              </button>
-            </div>
+            {/* Quick Options - Only show company-wide for admins */}
+            {userIsAdmin && (
+              <div className="pb-2 mb-2 border-b">
+                <button
+                  onClick={() => {
+                    setUploadJobId('company-wide');
+                    setUploadJobPickerOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    uploadJobId === 'company-wide' 
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  data-testid="upload-option-company-wide"
+                >
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  <span>Company-wide (No job)</span>
+                </button>
+              </div>
+            )}
             {/* Job List */}
             {uploadFilteredJobs.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
