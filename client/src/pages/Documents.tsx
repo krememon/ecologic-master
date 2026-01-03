@@ -14,7 +14,7 @@ import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLi
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
-import { isAdmin, canDelete, canChangeStatus, getUploadableCategories, requireJobForUpload, isWorkflowCategory as checkWorkflowCategory, getAllowedStatusTransitions, type DocumentStatus as PermDocStatus } from "@shared/documentPermissions";
+import { isAdmin, canDelete, canChangeStatus, getUploadableCategories, requireJobForUpload, isWorkflowCategory as checkWorkflowCategory, getAllowedStatusTransitions, DOCUMENT_VISIBILITIES, type DocumentStatus as PermDocStatus, type DocumentVisibility } from "@shared/documentPermissions";
 import { Trash2, Camera } from "lucide-react";
 
 interface JobInfo {
@@ -29,6 +29,7 @@ interface DocumentType {
   type: string | null;
   category: string;
   status: string;
+  visibility: DocumentVisibility;
   jobId: number | null;
   job: JobInfo | null;
   fileUrl: string;
@@ -63,6 +64,26 @@ function getStatusVariant(status: string): "default" | "secondary" | "destructiv
   }
 }
 
+function getVisibilityLabel(visibility: DocumentVisibility): string {
+  switch (visibility) {
+    case 'customer_internal': return 'Everyone';
+    case 'assigned_crew_only': return 'Crew Only';
+    case 'office_only': return 'Office Only';
+    case 'internal': return 'Internal';
+    case 'owner_only': return 'Owner Only';
+    default: return 'Internal';
+  }
+}
+
+function getVisibilityVariant(visibility: DocumentVisibility): "default" | "secondary" | "destructive" | "outline" {
+  switch (visibility) {
+    case 'customer_internal': return 'default';
+    case 'owner_only': return 'destructive';
+    case 'assigned_crew_only': return 'secondary';
+    default: return 'outline';
+  }
+}
+
 
 function getFileType(fileName: string, mimeType?: string | null): 'image' | 'pdf' | 'other' {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -88,6 +109,7 @@ export default function Documents() {
   const [uploadJobId, setUploadJobId] = useState<string>('company-wide');
   const [uploadJobPickerOpen, setUploadJobPickerOpen] = useState(false);
   const [uploadJobSearchQuery, setUploadJobSearchQuery] = useState('');
+  const [uploadVisibility, setUploadVisibility] = useState<DocumentVisibility>('internal');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<DocumentType | null>(null);
@@ -249,6 +271,7 @@ export default function Documents() {
     formData.append("file", selectedFile);
     formData.append("name", uploadName || selectedFile.name);
     formData.append("category", uploadCategory);
+    formData.append("visibility", uploadVisibility);
     if (uploadJobId !== 'company-wide') {
       formData.append("jobId", uploadJobId);
     }
@@ -406,21 +429,51 @@ export default function Documents() {
                     />
                   </div>
                   {userIsAdmin ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Category</Label>
-                      <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocumentCategory)}>
-                        <SelectTrigger data-testid="select-category">
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {uploadableCategories.map((cat) => (
-                            <SelectItem key={cat} value={cat} data-testid={`option-${cat.toLowerCase()}`}>
-                              {cat}
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="category">Category</Label>
+                        <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocumentCategory)}>
+                          <SelectTrigger data-testid="select-category">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {uploadableCategories.map((cat) => (
+                              <SelectItem key={cat} value={cat} data-testid={`option-${cat.toLowerCase()}`}>
+                                {cat}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="visibility">Who can see this?</Label>
+                        <Select value={uploadVisibility} onValueChange={(v) => setUploadVisibility(v as DocumentVisibility)}>
+                          <SelectTrigger data-testid="select-visibility">
+                            <SelectValue placeholder="Select visibility" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="customer_internal" data-testid="visibility-customer-internal">
+                              Everyone (Customer & Team)
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            <SelectItem value="assigned_crew_only" data-testid="visibility-assigned-crew">
+                              Assigned Crew Only
+                            </SelectItem>
+                            <SelectItem value="office_only" data-testid="visibility-office-only">
+                              Office Staff Only
+                            </SelectItem>
+                            <SelectItem value="internal" data-testid="visibility-internal">
+                              Internal Team Only
+                            </SelectItem>
+                            <SelectItem value="owner_only" data-testid="visibility-owner-only">
+                              Owner Only
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Controls which team members can view this document
+                        </p>
+                      </div>
+                    </>
                   ) : (
                     <div className="space-y-2">
                       <Label>Category</Label>
@@ -529,6 +582,11 @@ export default function Documents() {
                         <Badge variant="outline" className="text-xs">
                           {document.category}
                         </Badge>
+                        {userIsAdmin && document.visibility && (
+                          <Badge variant={getVisibilityVariant(document.visibility)} className="text-xs" data-testid={`visibility-pill-${document.id}`}>
+                            {getVisibilityLabel(document.visibility)}
+                          </Badge>
+                        )}
                       </div>
                     </CardTitle>
                   </CardHeader>
