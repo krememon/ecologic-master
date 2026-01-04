@@ -107,6 +107,19 @@ const getStatusIcon = (status: string) => {
   }
 };
 
+const getStatusLabel = (status: string) => {
+  switch (status) {
+    case 'draft': return 'Draft';
+    case 'sent': return 'Sent';
+    case 'viewed': return 'Viewed';
+    case 'signed': return 'Signed';
+    case 'declined': return 'Declined';
+    case 'expired': return 'Expired';
+    case 'canceled': return 'Canceled';
+    default: return status;
+  }
+};
+
 export default function SignatureRequests({ 
   prefilledDocumentId, 
   prefilledDocumentName,
@@ -184,6 +197,30 @@ export default function SignatureRequests({
     onError: (error: Error) => {
       toast({
         title: "Failed to Delete",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Send mutation - transitions draft → sent
+  const sendMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiRequest("POST", `/api/signature-requests/${id}/send`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/signature-requests"] });
+      // Update selectedRequest with new status
+      setSelectedRequest(prev => prev ? { ...prev, status: 'sent' } : null);
+      toast({
+        title: "Signature request sent",
+        description: "The request has been marked as sent",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to Send",
         description: error.message,
         variant: "destructive",
       });
@@ -508,7 +545,7 @@ export default function SignatureRequests({
                   {request.document?.name || `Document #${request.documentId}`}
                 </CardTitle>
                 <Badge className={getStatusColor(request.status)}>
-                  {request.status}
+                  {getStatusLabel(request.status)}
                 </Badge>
               </div>
             </CardHeader>
@@ -561,7 +598,7 @@ export default function SignatureRequests({
                 Signature Request
               </DialogTitle>
               <Badge className={getStatusColor(selectedRequest?.status || '')}>
-                {selectedRequest?.status}
+                {getStatusLabel(selectedRequest?.status || '')}
               </Badge>
             </div>
           </DialogHeader>
@@ -626,7 +663,7 @@ export default function SignatureRequests({
                 </p>
               </div>
 
-              {/* Actions */}
+              {/* Actions - Only show for draft requests with proper role */}
               {canCreate && selectedRequest.status === 'draft' && (
                 <div className="flex justify-end gap-2 pt-4 border-t">
                   <Button 
@@ -637,10 +674,19 @@ export default function SignatureRequests({
                         deleteMutation.mutate(selectedRequest.id);
                       }
                     }}
-                    disabled={deleteMutation.isPending}
+                    disabled={deleteMutation.isPending || sendMutation.isPending}
+                    data-testid="button-delete-request"
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
+                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                  </Button>
+                  <Button 
+                    onClick={() => sendMutation.mutate(selectedRequest.id)}
+                    disabled={sendMutation.isPending || deleteMutation.isPending}
+                    data-testid="button-send-request"
+                  >
+                    <Send className="h-4 w-4 mr-1" />
+                    {sendMutation.isPending ? 'Sending...' : 'Send for Signature'}
                   </Button>
                 </div>
               )}
