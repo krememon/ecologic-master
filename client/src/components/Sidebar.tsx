@@ -16,7 +16,7 @@ const getNavigation = (t: any) => [
   { name: t('navigation.clients'), href: "/clients", icon: UserCheck, permission: "clients.manage" as Permission },
   { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText, permission: "invoicing.manage" as Permission },
   { name: "Payments", href: "/payments", icon: DollarSign, permission: "invoicing.manage" as Permission },
-  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "documents.manage" as Permission },
+  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "documents.view" as Permission },
   { name: t('navigation.messages'), href: "/messages", icon: MessageSquare, permission: null },
   { name: "Employees", href: "/employees", icon: UsersIcon, permission: "users.view" as Permission },
 ];

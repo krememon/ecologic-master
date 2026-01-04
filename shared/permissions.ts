@@ -21,6 +21,7 @@ export type Permission =
   | "leads.convert"
   | "clients.manage"
   | "invoicing.manage"
+  | "documents.view"
   | "documents.manage";
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -44,6 +45,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "leads.convert",
     "clients.manage",
     "invoicing.manage",
+    "documents.view",
     "documents.manage",
   ],
   SUPERVISOR: [
@@ -65,6 +67,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "leads.convert",
     "clients.manage",
     "invoicing.manage",
+    "documents.view",
     "documents.manage",
   ],
   TECHNICIAN: [
@@ -73,6 +76,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "jobs.photos.upload",
     "jobs.tasks.complete",
     "schedule.view",
+    "documents.view",
   ],
   DISPATCHER: [
     "schedule.view",
@@ -82,6 +86,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "jobs.edit",
     "jobs.delete",
     "jobs.create",
+    "documents.view",
   ],
   ESTIMATOR: [
     "estimates.create",
@@ -90,6 +95,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "clients.manage",
     "jobs.view.all",
     "schedule.view",
+    "documents.view",
   ],
 };
 
