@@ -61,6 +61,8 @@ interface SignatureRequest {
   signedAt?: string;
   signUrl?: string;
   signingUrl?: string; // Only returned on creation
+  deliveryStatus?: string; // sent, failed
+  deliveryError?: string;
   document?: {
     id: number;
     name: string;
@@ -209,25 +211,37 @@ export default function SignatureRequests({
     },
   });
 
-  // Send mutation - transitions draft → sent
+  // Send mutation - transitions draft → sent, sends email via Resend
   const sendMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await apiRequest("POST", `/api/signature-requests/${id}/send`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Failed to send');
+      }
       return res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/signature-requests"] });
-      // Update selectedRequest with new status
-      setSelectedRequest(prev => prev ? { ...prev, status: 'sent' } : null);
+      // Update selectedRequest with new status and signUrl
+      setSelectedRequest(prev => prev ? { 
+        ...prev, 
+        status: 'sent', 
+        sentAt: data.sentAt,
+        signUrl: data.signUrl,
+        deliveryStatus: 'sent'
+      } : null);
       toast({
-        title: "Signature request sent",
-        description: "The request has been marked as sent",
+        title: "Email sent successfully",
+        description: `Signature request sent to ${selectedRequest?.customerEmail || 'customer'}`,
       });
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to Send",
-        description: error.message,
+        title: "Email failed to send",
+        description: error.message.includes('RESEND') || error.message.includes('EMAIL') 
+          ? "Please check your email settings in Secrets (RESEND_API_KEY, EMAIL_FROM)."
+          : error.message,
         variant: "destructive",
       });
     },
