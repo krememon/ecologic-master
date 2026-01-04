@@ -4229,16 +4229,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============== PUBLIC SIGNING PAGE ROUTE ==============
-  // This route serves the standalone public signing HTML page
-  // It must be registered BEFORE the Vite catch-all middleware
+  // This route serves the public signing page WITHOUT going through auth
+  // In development: serve separate HTML that loads the standalone entry point via Vite
+  // In production: serve the regular index.html (main.tsx checks the route and renders PublicSignApp)
   // NO AUTH - completely public
   app.get('/sign/:token', (req, res) => {
-    console.log("[PublicSign] Serving public-sign.html for token:", req.params.token?.substring(0, 8) + "...");
+    console.log("[PublicSign] Serving signing page for token:", req.params.token?.substring(0, 8) + "...");
     
     const isDev = process.env.NODE_ENV !== 'production';
     
     if (isDev) {
-      // In development, serve HTML that loads the entry point via Vite
+      // In development, serve HTML that loads the standalone entry point via Vite
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -4263,28 +4264,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 </html>`;
       res.status(200).set({ "Content-Type": "text/html" }).send(html);
     } else {
-      // In production, serve the built HTML file
-      const htmlPath = path.resolve(import.meta.dirname, 'public', 'public-sign.html');
-      if (fs.existsSync(htmlPath)) {
-        res.sendFile(htmlPath);
-      } else {
-        // Fallback: serve inline HTML that loads the bundle
-        const html = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign Document - EcoLogic</title>
-    <meta name="robots" content="noindex, nofollow" />
-    <link rel="stylesheet" href="/assets/public-sign.css" />
-  </head>
-  <body>
-    <div id="public-sign-root"></div>
-    <script type="module" src="/assets/public-sign.js"></script>
-  </body>
-</html>`;
-        res.status(200).set({ "Content-Type": "text/html" }).send(html);
-      }
+      // In production, serve the regular index.html
+      // main.tsx checks window.location.pathname and renders PublicSignApp for /sign/ routes
+      const htmlPath = path.resolve(import.meta.dirname, 'public', 'index.html');
+      res.sendFile(htmlPath);
     }
   });
 
