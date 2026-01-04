@@ -504,8 +504,10 @@ export default function Documents() {
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
               <Select value={activeCategory} onValueChange={setActiveCategory}>
-                <SelectTrigger className="flex-1" data-testid="filter-category-dropdown">
-                  <SelectValue placeholder="All categories" />
+                <SelectTrigger className="flex-1 min-w-0" data-testid="filter-category-dropdown">
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {activeCategory === 'All' ? 'All categories' : activeCategory}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All" data-testid="filter-all">All categories</SelectItem>
