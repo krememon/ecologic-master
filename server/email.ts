@@ -4,6 +4,40 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const DEFAULT_FROM = 'onboarding@resend.dev';
 
+export function getAppBaseUrl(): string | null {
+  const rawUrl = process.env.APP_BASE_URL;
+  
+  if (!rawUrl) {
+    console.warn('[Email] APP_BASE_URL not set');
+    return null;
+  }
+  
+  let url = rawUrl.trim();
+  
+  // Reject internal Replit hostnames that look like re_* tokens
+  if (url.includes('re_') || url.startsWith('re_')) {
+    console.warn('[Email] APP_BASE_URL contains invalid re_* pattern:', url);
+    return null;
+  }
+  
+  // Must contain a dot (valid domain)
+  if (!url.includes('.')) {
+    console.warn('[Email] APP_BASE_URL does not contain a valid domain:', url);
+    return null;
+  }
+  
+  // Add https:// if no protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `https://${url}`;
+  }
+  
+  // Strip trailing slash
+  url = url.replace(/\/+$/, '');
+  
+  console.log('[Email] Using APP_BASE_URL:', url);
+  return url;
+}
+
 function normalizeFromAddress(rawFrom?: string): string {
   if (!rawFrom) {
     console.warn('[Email] EMAIL_FROM not set, using fallback:', DEFAULT_FROM);

@@ -1,0 +1,92 @@
+TASK: Fix “Review & Sign” link so it always opens the signing page (no NXDOMAIN / invalid hostnames)
+
+CURRENT BUG
+Email sends successfully, but clicking “Review & Sign” opens a broken URL like:
+re_f5j9errx_frs9gavbuesvdkrwbdduegun (DNS_PROBE_FINISHED_NXDOMAIN)
+
+This means our signing link is being generated from an invalid base URL / internal hostname fallback.
+We must always generate links using a valid public base URL with https.
+
+GOAL
+1) Email “Review & Sign” button must link to a real page that loads in the browser.
+2) Link must work from Gmail on phone + desktop.
+3) If APP_BASE_URL is missing or invalid, do NOT generate a broken link. Fail with a clear error and show a toast “Signing link misconfigured”.
+
+REQUIREMENTS
+- Use process.env.APP_BASE_URL as the canonical base URL.
+- APP_BASE_URL must include protocol, e.g. https://xxxx.replit.app
+- Never use internal Replit hostnames or request headers that look like re_*
+- Add safe validation and fallback behavior.
+- Do NOT break RBAC or existing Docs/Signature Request features.
+
+BACKEND CHANGES
+
+A) Create a helper: getAppBaseUrl()
+- Reads APP_BASE_URL from env
+- Trims it
+- Ensures it starts with http:// or https:// (force https if missing)
+- Rejects values that contain "re_" or do not include a dot domain
+- Strips trailing slash
+
+Example behavior:
+- "https://myapp.replit.app/" => "https://myapp.replit.app"
+- "myapp.replit.app" => "https://myapp.replit.app"
+- "re_f5j9..." => INVALID
+
+If invalid/missing: return null
+
+B) Update signature email template generator:
+- Wherever we build signingUrl, do NOT use req.headers.host or any “origin” fallback.
+- Use:
+  const base = getAppBaseUrl();
+  if (!base) throw new Error("APP_BASE_URL is missing/invalid. Set it to your public app URL (https://...replit.app).");
+  const signingUrl = `${base}/sign/${token}`;
+
+- Ensure token is URL-safe:
+  encodeURIComponent(token)
+
+C) Update POST /api/signature-requests/:id/send
+- Before sending email, verify base url is valid (getAppBaseUrl() not null).
+- If invalid:
+  - return 500 with a clear JSON error:
+    { message: "Signing link misconfigured", error: "APP_BASE_URL missing/invalid" }
+  - DO NOT mark request as "sent"
+- If valid and email sends:
+  - mark status = "sent"
+  - sentAt = now()
+
+FRONTEND CHANGES
+
+D) When clicking “Send”:
+- If API returns 500 with APP_BASE_URL misconfigured:
+  Show a toast: “Email not sent — signing link is misconfigured. Set APP_BASE_URL in Secrets to your Replit public URL.”
+
+E) Ensure the public signing route exists and is reachable:
+- Confirm we have a frontend page route:
+  /sign/:token
+- If it does not exist, create it:
+  - Minimal page: “Review & Sign”
+  - Fetch signature request by token from a public endpoint:
+    GET /api/public/signature-requests/:token
+  - Show doc name + preview
+  - Show signature pad/button (if already implemented keep it)
+  - If token invalid/expired: show friendly error state
+
+API NEEDED (if not already present)
+F) Create public endpoint:
+GET /api/public/signature-requests/:token
+- Returns safe fields: id, document name/url, customerName, message, status
+- No auth required
+- Enforce that request must be "sent" (or allow "draft" only in dev)
+
+DELIVERABLES
+1) “Review & Sign” link always uses https://<yourapp>.replit.app/sign/<token>
+2) No more NXDOMAIN broken links
+3) If APP_BASE_URL missing/invalid, we stop and show a clear error instead of sending a broken email
+4) /sign/:token page loads and fetches request data
+
+TEST PLAN
+- Set APP_BASE_URL to your Replit public URL
+- Send a signature request to a real Gmail address
+- Click “Review & Sign” on phone and desktop
+- Confirm the page loads (no DNS error)

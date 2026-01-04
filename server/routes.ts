@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { sendSignatureRequestEmail, sendTestEmail } from "./email";
+import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 
@@ -2348,9 +2348,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Only draft requests can be sent" });
       }
       
-      // Generate signing URL using APP_BASE_URL (required for email links)
-      const baseUrl = process.env.APP_BASE_URL || process.env.BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
-      const signUrl = `${baseUrl}/sign/${request.accessToken}`;
+      // Validate APP_BASE_URL before generating signing link
+      const baseUrl = getAppBaseUrl();
+      if (!baseUrl) {
+        return res.status(500).json({ 
+          message: "Signing link misconfigured",
+          error: "APP_BASE_URL missing/invalid. Set it to your public app URL (e.g., https://yourapp.replit.app)"
+        });
+      }
+      
+      // Generate signing URL with validated base URL
+      const signUrl = `${baseUrl}/sign/${encodeURIComponent(request.accessToken)}`;
       
       // Send email via Resend - no silent skipping
       try {
