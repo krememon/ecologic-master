@@ -1622,6 +1622,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete documents
+  app.delete('/api/documents/bulk', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Permission check: Only Admins can delete documents
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role || 'TECHNICIAN';
+      
+      if (!canDelete(userRole)) {
+        return res.status(403).json({ message: getPermissionErrorMessage('delete') });
+      }
+      
+      const { documentIds } = req.body;
+      
+      if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+        return res.status(400).json({ message: "documentIds array is required" });
+      }
+      
+      // Parse IDs as integers
+      const ids = documentIds.map((id: string | number) => parseInt(String(id), 10)).filter((id: number) => !isNaN(id));
+      
+      if (ids.length === 0) {
+        return res.status(400).json({ message: "No valid document IDs provided" });
+      }
+      
+      const deletedCount = await storage.deleteDocumentsBulk(ids, company.id);
+      res.json({ deleted: deletedCount, message: `Successfully deleted ${deletedCount} document(s)` });
+    } catch (error) {
+      console.error("Error bulk deleting documents:", error);
+      res.status(500).json({ message: "Failed to delete documents" });
+    }
+  });
+
   app.patch('/api/documents/:documentId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

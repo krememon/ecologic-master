@@ -51,7 +51,7 @@ import {
   type InsertApprovalHistory,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import crypto from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations
@@ -132,9 +132,11 @@ export interface IStorage {
   
   // Document operations
   getDocuments(companyId: number): Promise<any[]>;
+  getDocument(id: number): Promise<Document | null>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocumentStatus(id: number, status: string): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
+  deleteDocumentsBulk(ids: number[], companyId: number): Promise<number>;
   
   // Messaging operations
   // Conversations
@@ -818,6 +820,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
+  }
+
+  async deleteDocumentsBulk(ids: number[], companyId: number): Promise<number> {
+    if (ids.length === 0) return 0;
+    // Delete only documents that belong to this company
+    const result = await db
+      .delete(documents)
+      .where(
+        and(
+          inArray(documents.id, ids),
+          eq(documents.companyId, companyId)
+        )
+      );
+    return ids.length; // Return count of requested deletions
   }
 
   // Messaging operations
