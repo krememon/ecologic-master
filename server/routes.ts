@@ -1489,25 +1489,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignedJobIds = new Set(userAssignments.map(a => a.jobId));
       }
       
+      // DEBUG: Log before filtering
+      const countBeforeFilter = docs.length;
+      
       // Filter documents by:
       // 1. Visibility level - must be in allowed visibilities for this role
-      // 2. Job access - if user can't see all jobs, only show docs for assigned jobs
+      // 2. Job access - for job-scoped docs, technicians only see assigned jobs
+      //    For company-scoped docs (no jobId), visibility alone determines access
       docs = docs.filter(doc => {
-        // Check visibility level
+        // Check visibility level first
         const docVisibility = (doc.visibility || 'internal') as DocumentVisibility;
         if (!allowedVisibilities.includes(docVisibility)) {
           return false;
         }
         
-        // Check job access (if restricted to assigned jobs only)
-        if (!canSeeAllJobs) {
-          // If document has no job (company-wide), non-assigned users can't see it
-          if (!doc.jobId) return false;
-          // Only show docs for jobs user is assigned to
+        // For job-scoped documents, check job assignment if user can't see all jobs
+        if (doc.jobId && !canSeeAllJobs) {
+          // Only show job-scoped docs for jobs user is assigned to
           return assignedJobIds.has(doc.jobId);
         }
         
+        // Company-scoped docs (no jobId) pass through if visibility allows
         return true;
+      });
+      
+      // DEBUG: Log after filtering
+      console.log('[Documents API Debug]', {
+        role: normalizedRole,
+        userId,
+        countBeforeFilter,
+        countAfterFilter: docs.length,
+        allowedVisibilities,
+        canSeeAllJobs,
+        assignedJobIds: Array.from(assignedJobIds),
       });
       
       res.json(docs);
