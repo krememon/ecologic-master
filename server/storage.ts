@@ -133,6 +133,7 @@ export interface IStorage {
   // Document operations
   getDocuments(companyId: number): Promise<any[]>;
   getDocument(id: number): Promise<Document | null>;
+  getDocumentsByIds(ids: number[], companyId: number): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocumentStatus(id: number, status: string): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
@@ -793,6 +794,20 @@ export class DatabaseStorage implements IStorage {
       .from(documents)
       .where(eq(documents.id, id));
     return document || null;
+  }
+
+  async getDocumentsByIds(ids: number[], companyId: number): Promise<Document[]> {
+    if (ids.length === 0) return [];
+    const result = await db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          inArray(documents.id, ids),
+          eq(documents.companyId, companyId)
+        )
+      );
+    return result;
   }
 
   async createDocument(documentData: InsertDocument): Promise<Document> {

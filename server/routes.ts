@@ -1681,12 +1681,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No valid document IDs provided" });
       }
       
-      // Try to delete files first (but don't fail if file deletion fails)
+      // Get documents that belong to this company BEFORE deletion (for file cleanup)
+      const docsToDelete = await storage.getDocumentsByIds(ids, company.id);
+      console.log('[DELETE] Found', docsToDelete.length, 'documents belonging to company');
+      
+      // Delete files for company-owned documents only
       try {
         const fs = await import('fs');
-        for (const id of ids) {
-          const doc = await storage.getDocument(id);
-          if (doc && doc.fileUrl) {
+        for (const doc of docsToDelete) {
+          if (doc.fileUrl) {
             const filePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
             if (fs.existsSync(filePath)) {
               fs.unlinkSync(filePath);
