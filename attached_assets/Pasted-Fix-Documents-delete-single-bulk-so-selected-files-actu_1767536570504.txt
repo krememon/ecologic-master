@@ -1,0 +1,44 @@
+Fix Documents delete (single + bulk) so selected files actually delete, and if a document is linked to a job it disappears from Job Insights too.
+
+Problem:
+- UI selection works but clicking Delete shows toast "Delete failed / Failed to delete document"
+- The document is not actually removed from DB/storage
+- If doc has jobId, deleting must also remove it from Job Insights (no orphan records)
+
+Requirements:
+1) Backend: Make sure there is a working delete endpoint for documents.
+   - Support BOTH:
+     A) DELETE /api/documents/:id (single delete)
+     B) POST /api/documents/bulk-delete with body { ids: string[] } (bulk delete)
+   - Enforce permissions:
+     - Owner/Admin can delete any doc in org
+     - Supervisor can delete docs for jobs they can access OR docs they uploaded
+     - Everyone else cannot delete (return 403)
+   - When deleting:
+     - Delete the document row from the documents table
+     - Delete the stored file from storage (and any thumbnails/variants if used)
+     - If versioning exists, delete versions too (or delete by parentId)
+   - Return a clear JSON response { success: true, deletedIds: [...] }
+
+2) Frontend:
+   - In Documents page bulk-select mode, the Delete button must call bulk-delete endpoint.
+   - After success, remove deleted docs from local state immediately and/or re-fetch list.
+   - Show success toast with count: "Deleted 3 documents"
+   - If 403, show toast: "You don't have permission to delete documents"
+   - Ensure the same docs list component doesn’t keep stale selection after delete (clear selectedIds)
+
+3) Job Insights sync:
+   - Confirm Job Insights uses the same documents source (documents table filtered by jobId).
+   - If so, nothing special is needed: once the document row is deleted, Job Insights should no longer show it.
+   - If Job Insights stores separate “job insight photos” rows, then update delete flow so deleting a document also deletes any related job_insights row that points to it (by documentId).
+
+Deliverable:
+- Deleting a single doc works
+- Bulk delete works
+- Deleted docs disappear immediately from Documents list
+- Deleted docs linked to a job disappear from Job Insights too
+- List all files changed
+
+Debugging instructions:
+- If delete still fails, log the server error stack + the request path/body.
+- Verify the client is hitting the correct route and the server route exists.
