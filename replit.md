@@ -42,7 +42,7 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Status workflow: draft → sent → viewed → signed/declined/expired/canceled
   - "Send for Signature" action available from Documents page preview modal AND signature request detail view
   - Send action (POST /api/signature-requests/:id/send): Transitions draft→sent, records sentAt timestamp and sentByUserId, enforces RBAC and document visibility, sends branded HTML email to customer with signing link
-  - **Email Notifications**: Uses nodemailer to send professional HTML emails to customers with company branding, document name, optional message, and "Review & Sign Document" CTA button. SMTP configuration via env vars (SMTP_USER, SMTP_PASS, SMTP_HOST). Email sending is non-blocking in dev (skipped if SMTP not configured).
+  - **Email Notifications**: Uses Resend to send professional HTML emails to customers with company branding, document name, optional message, and "Review & Sign Document" CTA button. Configuration via secrets (RESEND_API_KEY, EMAIL_FROM, APP_BASE_URL). Email delivery fails loudly if not configured - no silent skipping. Debug endpoint at POST /api/debug/test-email (dev only, owner only) for testing email configuration.
   - **Public Signing Flow**: Customer-facing route at /sign/:token (accessible without authentication). Public API routes at /api/public/signature-requests/:token. Automatically marks request as "viewed" on page load, displays document info/company name/message, requires agreement checkbox before signing, and updates status to "signed" on completion.
   - Delete action only available for draft status (hidden not disabled for non-drafts)
   - Status pills show proper capitalization (Draft, Sent, Viewed, etc.)
