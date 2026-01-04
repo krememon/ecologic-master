@@ -1,0 +1,86 @@
+TASK: Make /sign/:token a PUBLIC signing page (no EcoLogic login required)
+
+CURRENT BUG
+Email link goes to:
+  https://eco-logic-pjpell077.replit.app/sign/<token>
+But it redirects to the normal EcoLogic sign-in page. This means /sign/* is currently behind auth routing/guards.
+
+GOAL
+- /sign/:token must be publicly accessible for customers.
+- Customer should see a clean “Review & Sign” page with:
+  - document title + preview (image/pdf)
+  - signature pad
+  - typed name (optional)
+  - Sign & Submit button
+- No sidebar, no dashboard UI, no auth required.
+
+FRONTEND CHANGES (must-do)
+1) Add a public route:
+   - In the main router (App routes), add a route BEFORE auth-protected routes:
+     Route path="/sign/:token" element={<PublicSignPage />}
+   Ensure this route is NOT wrapped by AuthGuard / ProtectedRoute.
+
+2) Update auth gate logic:
+   - If there is a global redirect like:
+     if (!user) navigate("/login")
+     then EXEMPT paths that start with "/sign/"
+   - Example logic:
+     const isPublicSign = location.pathname.startsWith("/sign/");
+     if (!user && !isPublicSign) redirect to /login
+
+3) Create the PublicSignPage component:
+   - Read token from URL params.
+   - Fetch signing payload from backend:
+     GET /api/signature-requests/public/:token
+   - Render:
+     - Document name, category badge
+     - Customer name/email
+     - Document preview:
+        - image -> <img>
+        - pdf -> <iframe> or open in new tab
+     - Signature pad canvas
+     - Name input (prefill customerName)
+     - Buttons: Clear, Submit Signature
+   - Loading + error states:
+     - invalid token -> “Link expired or invalid”
+     - already signed -> “Already signed” + timestamp
+
+BACKEND CHANGES (must-do)
+4) Add a PUBLIC endpoint that does NOT require auth:
+   GET /api/signature-requests/public/:token
+   - Find signature request by token
+   - Validate:
+     - exists
+     - status is not voided
+     - not expired (if expiresAt exists)
+   - Return safe payload ONLY (no internal company data):
+     { id, status, customerName, customerEmail, message, document: { id, name, category, url, mimeType }, job: { id, title } }
+
+5) Ensure route bypasses auth middleware:
+   - If you use requireAuth globally, add exception for:
+     /api/signature-requests/public/*
+   - IMPORTANT: do not expose private docs:
+     This endpoint should only return the document tied to THIS signature request token.
+
+6) Add submit endpoint (public):
+   POST /api/signature-requests/public/:token/sign
+   Body: { signedName, signatureDataUrl } (or svg)
+   - Validate token again
+   - Save signature image (store in storage)
+   - Update signature request:
+     status="signed"
+     signedAt=now
+     signed_name=signedName
+     signature_url=publicUrl
+   - Return success.
+
+TESTING / ACCEPTANCE
+- Clicking email link opens the PublicSignPage (no login)
+- You can see doc preview and sign
+- After signing, status updates to “Signed”
+- Re-opening link shows “Already signed”
+- Auth-protected pages still require login
+
+CLEANUP
+- Remove debug logs after confirmed working.
+- Keep styling consistent with EcoLogic (clean card, centered, mobile-first).

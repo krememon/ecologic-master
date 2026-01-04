@@ -60,10 +60,11 @@ function Router() {
     );
   }
 
-  // Authenticated but no company - redirect to join company
+  // Authenticated but no company - redirect to join company (but allow public signing)
   if (!user?.company) {
     return (
       <Switch>
+        <Route path="/sign/:token" component={PublicSign} />
         <Route path="/join-company" component={JoinCompany} />
         <Route>{() => <Redirect to="/join-company" />}</Route>
       </Switch>
