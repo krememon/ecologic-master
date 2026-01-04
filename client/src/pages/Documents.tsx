@@ -597,17 +597,21 @@ export default function Documents() {
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FolderOpen className="h-12 w-12 text-slate-400 mb-4" />
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  {activeCategory === 'All' ? 'No documents yet' : `No ${activeCategory} documents yet`}
+                  {activeCategory === 'All' ? 'No documents available' : `No ${activeCategory} documents available`}
                 </h3>
-                <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
-                  {activeCategory === 'All' 
+                <p className="text-slate-600 dark:text-slate-400 text-center mb-4 max-w-md">
+                  {userRole.toUpperCase() === 'TECHNICIAN' ? (
+                    <>You can only see documents for jobs you're assigned to. If you expect to see documents here, check with your supervisor about your job assignments.</>
+                  ) : activeCategory === 'All' 
                     ? 'Upload contracts, plans, and other project documents.'
                     : `Upload ${activeCategory.toLowerCase()} to see them here.`}
                 </p>
-                <Button onClick={() => setUploadOpen(true)} data-testid="button-upload-first">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Your First Document
-                </Button>
+                {uploadableCategories.length > 0 && (
+                  <Button onClick={() => setUploadOpen(true)} data-testid="button-upload-first">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Your First Document
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
