@@ -4228,48 +4228,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // ============== PUBLIC SIGNING PAGE ROUTE ==============
-  // This route serves the public signing page WITHOUT going through auth
-  // In development: serve separate HTML that loads the standalone entry point via Vite
-  // In production: serve the regular index.html (main.tsx checks the route and renders PublicSignApp)
-  // NO AUTH - completely public
-  app.get('/sign/:token', (req, res) => {
-    console.log("[PublicSign] Serving signing page for token:", req.params.token?.substring(0, 8) + "...");
-    
-    const isDev = process.env.NODE_ENV !== 'production';
-    
-    if (isDev) {
-      // In development, serve HTML that loads the standalone entry point via Vite
-      const html = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign Document - EcoLogic</title>
-    <meta name="description" content="Review and sign your document" />
-    <meta name="robots" content="noindex, nofollow" />
-    <script type="module">
-      import RefreshRuntime from '/@react-refresh'
-      RefreshRuntime.injectIntoGlobalHook(window)
-      window.$RefreshReg$ = () => {}
-      window.$RefreshSig$ = () => (type) => type
-      window.__vite_plugin_react_preamble_installed__ = true
-    </script>
-    <script type="module" src="/@vite/client"></script>
-  </head>
-  <body>
-    <div id="public-sign-root"></div>
-    <script type="module" src="/src/public/public-sign-entry.tsx"></script>
-  </body>
-</html>`;
-      res.status(200).set({ "Content-Type": "text/html" }).send(html);
-    } else {
-      // In production, serve the regular index.html
-      // main.tsx checks window.location.pathname and renders PublicSignApp for /sign/ routes
-      const htmlPath = path.resolve(import.meta.dirname, 'public', 'index.html');
-      res.sendFile(htmlPath);
-    }
-  });
-
   return httpServer;
 }

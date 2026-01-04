@@ -1,0 +1,61 @@
+The /sign/:token link is still loading the normal EcoLogic SPA and going to the login page.
+This means our Express/Vite catch-all is still serving index.html for /sign routes.
+
+GOAL:
+Make /sign/:token serve a dedicated public signing HTML entry BEFORE any Vite/static/catch-all routing, so the SPA never loads for /sign.
+
+DO THIS EXACTLY:
+
+1) Create a static file:
+public/public-sign.html
+- must contain <div id="public-sign-root"></div>
+- must load /public-sign.js (or /public-sign.tsx bundle) via <script type="module" src="/public-sign.tsx"></script> if using Vite dev
+IMPORTANT: This HTML must NOT be the normal index.html and must NOT load the main app bundle.
+
+2) Add an Express route at the TOP of server startup, BEFORE:
+- Vite middleware
+- express.static
+- any app.get("*") fallback
+Route:
+GET /sign/:token
+
+Implementation:
+- return the file public/public-sign.html
+- no redirects
+- no auth checks
+
+Example:
+app.get("/sign/:token", (req,res)=> {
+  res.sendFile(path.join(process.cwd(),"public","public-sign.html"));
+});
+
+3) Ensure the SPA fallback DOES NOT steal /sign
+If there is an SPA fallback like:
+app.get("*", ...)
+Change it to EXCLUDE /sign:
+app.get(/^\/(?!sign\/).*/, ...)
+
+or do a guard:
+if (req.path.startsWith("/sign/")) return next();
+
+4) Create the public signing client entry:
+public/public-sign.tsx (or src/public-sign.tsx)
+This script must:
+- read token from window.location.pathname
+- call GET /api/public/signature-requests/:token
+- render a minimal signing UI
+- POST /api/public/sign/:token
+
+IMPORTANT: This file must be loaded only by public-sign.html, not the main App.tsx.
+
+5) Verification steps (MUST DO):
+- In dev console logs, add:
+console.log("PUBLIC SIGN HTML LOADED", window.location.pathname)
+and confirm it prints when opening the email link.
+- Also run a quick test:
+Visit /sign/testtoken and confirm it serves public-sign.html (not the EcoLogic login page).
+
+EXPECTED RESULT:
+Clicking an emailed /sign/:token link loads public-sign.html and the public signing UI immediately, even in incognito, with NO EcoLogic login screen.
+
+DO NOT attempt more App.tsx auth bypass routing. This must be solved at the server routing layer.
