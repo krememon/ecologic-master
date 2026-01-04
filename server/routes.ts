@@ -2371,7 +2371,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           companyName: company.name,
         });
         
-        // Email succeeded - update status to 'sent'
+        // Email succeeded - update status to 'sent' with 14-day expiry
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 14); // 14-day expiry
+        
         const [finalUpdated] = await db
           .update(signatureRequests)
           .set({
@@ -2379,6 +2382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sentAt: new Date(),
             sentByUserId: userId,
             signUrl: signUrl,
+            expiresAt: expiresAt,
             deliveryStatus: 'sent',
             deliveryError: null,
             updatedAt: new Date(),
@@ -2453,15 +2457,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/public/signature-requests/:token', async (req, res) => {
     try {
       const { token } = req.params;
+      console.log("[PublicSign] GET token:", token?.substring(0, 8) + "...");
       
       if (!token || token.length < 32) {
-        return res.status(404).json({ message: "Invalid token" });
+        return res.status(404).json({ message: "Invalid link" });
       }
       
       const request = await storage.getSignatureRequestByToken(token);
       
       if (!request) {
-        return res.status(404).json({ message: "Signature request not found" });
+        return res.status(404).json({ message: "Invalid link" });
+      }
+      
+      console.log("[PublicSign] status:", request.status, "expiresAt:", request.expiresAt);
+      
+      // Check if already signed
+      if (request.status === 'signed' || request.signedAt) {
+        return res.status(400).json({ message: "Already signed" });
+      }
+      
+      // Check if expired
+      if (request.expiresAt && new Date() > new Date(request.expiresAt)) {
+        return res.status(410).json({ message: "Link expired" });
+      }
+      
+      // Check if status allows signing (must be sent or viewed)
+      if (!['sent', 'viewed'].includes(request.status)) {
+        return res.status(400).json({ message: "This request is not available for signing" });
       }
       
       // Get document info
@@ -2482,9 +2504,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         documentName: doc.name,
         documentUrl: doc.fileUrl,
         documentCategory: doc.category,
+        documentMimeType: doc.mimeType,
         companyName: company?.name || 'Unknown Company',
         viewedAt: request.viewedAt,
         signedAt: request.signedAt,
+        expiresAt: request.expiresAt,
       });
     } catch (error) {
       console.error("Error fetching public signature request:", error);
@@ -2522,37 +2546,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/public/signature-requests/:token/sign - Sign the document (MVP)
+  // POST /api/public/signature-requests/:token/sign - Sign the document
   app.post('/api/public/signature-requests/:token/sign', async (req, res) => {
     try {
       const { token } = req.params;
+      const { signatureDataUrl, signerName } = req.body;
+      
+      console.log("[PublicSign] POST sign token:", token?.substring(0, 8) + "...");
       
       const request = await storage.getSignatureRequestByToken(token);
       
       if (!request) {
-        return res.status(404).json({ message: "Signature request not found" });
+        return res.status(404).json({ message: "Invalid link" });
+      }
+      
+      // Check if already signed
+      if (request.status === 'signed' || request.signedAt) {
+        return res.status(400).json({ message: "Already signed" });
+      }
+      
+      // Check if expired
+      if (request.expiresAt && new Date() > new Date(request.expiresAt)) {
+        return res.status(410).json({ message: "Link expired" });
       }
       
       // Can only sign if status is sent or viewed
       if (!['sent', 'viewed'].includes(request.status)) {
-        return res.status(400).json({ 
-          message: request.status === 'signed' 
-            ? "This document has already been signed" 
-            : "This document cannot be signed"
-        });
+        return res.status(400).json({ message: "This request is not available for signing" });
       }
       
-      // Mark as signed
+      // Validate signature data
+      if (!signatureDataUrl || typeof signatureDataUrl !== 'string') {
+        return res.status(400).json({ message: "Signature is required" });
+      }
+      
+      if (!signatureDataUrl.startsWith('data:image/png;base64,')) {
+        return res.status(400).json({ message: "Invalid signature format" });
+      }
+      
+      // Check size (roughly 2MB limit for base64)
+      if (signatureDataUrl.length > 2 * 1024 * 1024 * 1.37) {
+        return res.status(400).json({ message: "Signature data too large" });
+      }
+      
+      console.log("[PublicSign] saving signature bytes:", signatureDataUrl.length);
+      
+      // Store signature data URL directly (for MVP - could move to file storage later)
+      const signedNameValue = signerName?.trim() || request.customerName;
+      
+      // Mark as signed with signature data
       await db
         .update(signatureRequests)
         .set({
           status: 'signed',
           signedAt: new Date(),
+          signatureUrl: signatureDataUrl, // Store base64 directly for MVP
+          signedName: signedNameValue,
           updatedAt: new Date(),
         })
         .where(eq(signatureRequests.id, request.id));
       
-      res.json({ success: true, message: "Document signed successfully" });
+      res.json({ ok: true, message: "Document signed successfully" });
     } catch (error) {
       console.error("Error signing document:", error);
       res.status(500).json({ message: "Failed to sign document" });
