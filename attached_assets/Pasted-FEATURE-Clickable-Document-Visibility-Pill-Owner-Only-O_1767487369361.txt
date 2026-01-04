@@ -1,0 +1,59 @@
+FEATURE: Clickable Document Visibility Pill (Owner Only / Office Only / etc.)
+
+GOAL
+Allow authorized users to click the visibility badge (“Owner Only”) on a document card or preview modal
+and change the document’s visibility value (enum). This controls who can see the doc via our existing
+role + job-access permission system.
+
+UX REQUIREMENTS
+1) The visibility pill is clickable ONLY for:
+   - Owner always
+   - Supervisor optionally (allowed to change except owner_only if we want)
+   - Everyone else: pill is read-only (no click, no hover)
+
+2) Clicking pill opens a Modal/Bottom Sheet titled “Document Visibility”
+   - Shows a list of visibility options with short descriptions
+   - Current visibility is selected
+   - “Cancel” + “Save” buttons
+
+3) On Save:
+   - Call backend PATCH endpoint to update the document visibility
+   - Optimistically update UI so the pill updates immediately
+   - Show toast “Visibility updated”
+
+4) Do NOT allow data leaks:
+   - Backend must enforce that only authorized roles can update visibility
+   - If unauthorized, return 403 and UI shows an error toast
+
+DATA MODEL
+Document has field: visibility enum
+Values (exact):
+- customer_internal
+- assigned_crew_only
+- office_only
+- internal
+- owner_only
+
+BACKEND
+Add/confirm route:
+PATCH /api/documents/:id/visibility
+Body: { visibility: "owner_only" | ... }
+
+Server-side authorization:
+- Owner can set any visibility
+- Supervisor can set any visibility EXCEPT owner_only (if we enforce that rule)
+- Dispatcher/Estimator/Technician: forbidden (403)
+
+Also validate visibility is one of the enum values (400 if invalid).
+
+FRONTEND
+- Add state: visibilityModalOpen, selectedVisibility
+- On open: set selectedVisibility = document.visibility
+- On Save: PATCH, update local document list state + close modal
+- Ensure it works on mobile (bottom sheet is ideal)
+
+FILES LIKELY TO CHANGE
+- client/src/pages/Documents.tsx (document card + preview modal)
+- server/routes.ts (PATCH route)
+- server/storage.ts (db update method)
+- shared/schema.ts (ensure visibility enum is shared)

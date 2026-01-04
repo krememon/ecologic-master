@@ -1651,6 +1651,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update document visibility (Owner + Supervisor only)
+  app.patch('/api/documents/:documentId/visibility', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // Only Owner and Supervisor can change visibility
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
+        return res.status(403).json({ message: "You don't have permission to change document visibility" });
+      }
+      
+      const documentId = parseInt(req.params.documentId);
+      const { visibility } = req.body;
+      
+      // Validate visibility value
+      const validVisibilities = ['customer_internal', 'assigned_crew_only', 'office_only', 'internal', 'owner_only'];
+      if (!visibility || !validVisibilities.includes(visibility)) {
+        return res.status(400).json({ message: "Invalid visibility value" });
+      }
+      
+      // Supervisor cannot set owner_only
+      if (userRole === 'SUPERVISOR' && visibility === 'owner_only') {
+        return res.status(403).json({ message: "Supervisors cannot set Owner Only visibility" });
+      }
+      
+      // Get the document to verify it exists and belongs to company
+      const doc = await storage.getDocument(documentId);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      if (doc.companyId !== company.id) {
+        return res.status(403).json({ message: "Document not found" });
+      }
+      
+      const updatedDoc = await storage.updateDocumentVisibility(documentId, visibility);
+      res.json(updatedDoc);
+    } catch (error) {
+      console.error("Error updating document visibility:", error);
+      res.status(500).json({ message: "Failed to update document visibility" });
+    }
+  });
+
   // Schedule routes
   app.get('/api/schedule-items', isAuthenticated, async (req: any, res) => {
     try {

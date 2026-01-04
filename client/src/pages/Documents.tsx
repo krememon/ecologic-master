@@ -114,6 +114,9 @@ export default function Documents() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDoc, setSelectedDoc] = useState<DocumentType | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [visibilityModalOpen, setVisibilityModalOpen] = useState(false);
+  const [visibilityEditDoc, setVisibilityEditDoc] = useState<DocumentType | null>(null);
+  const [selectedVisibility, setSelectedVisibility] = useState<DocumentVisibility>('internal');
 
   const { data: documents = [], isLoading: documentsLoading } = useQuery<DocumentType[]>({
     queryKey: ["/api/documents"],
@@ -217,6 +220,58 @@ export default function Documents() {
       toast({ title: "Update failed", description: "Failed to update document status.", variant: "destructive" });
     },
   });
+
+  const visibilityMutation = useMutation({
+    mutationFn: async ({ id, visibility }: { id: number; visibility: DocumentVisibility }) => {
+      const response = await fetch(`/api/documents/${id}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ visibility }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Update failed");
+      }
+      return response.json();
+    },
+    onSuccess: (updatedDoc) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      if (selectedDoc && selectedDoc.id === updatedDoc.id) {
+        setSelectedDoc({ ...selectedDoc, visibility: updatedDoc.visibility });
+      }
+      setVisibilityModalOpen(false);
+      setVisibilityEditDoc(null);
+      toast({ title: "Visibility updated", description: `Document visibility changed to ${getVisibilityLabel(updatedDoc.visibility)}.` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Update failed", description: error.message || "Failed to update visibility.", variant: "destructive" });
+    },
+  });
+
+  // Check if user can edit visibility (Owner or Supervisor)
+  const canEditVisibility = userRole.toUpperCase() === 'OWNER' || userRole.toUpperCase() === 'SUPERVISOR';
+  
+  // Get available visibility options based on role
+  const getVisibilityOptions = (): { value: DocumentVisibility; label: string; description: string }[] => {
+    const options = [
+      { value: 'customer_internal' as DocumentVisibility, label: 'Everyone', description: 'All team members can see this' },
+      { value: 'assigned_crew_only' as DocumentVisibility, label: 'Crew Only', description: 'Only assigned crew members' },
+      { value: 'office_only' as DocumentVisibility, label: 'Office Only', description: 'Office staff only' },
+      { value: 'internal' as DocumentVisibility, label: 'Internal', description: 'Internal team members' },
+    ];
+    // Only Owner can set owner_only
+    if (userRole.toUpperCase() === 'OWNER') {
+      options.push({ value: 'owner_only' as DocumentVisibility, label: 'Owner Only', description: 'Only visible to owners' });
+    }
+    return options;
+  };
+
+  const openVisibilityModal = (doc: DocumentType) => {
+    setVisibilityEditDoc(doc);
+    setSelectedVisibility(doc.visibility);
+    setVisibilityModalOpen(true);
+  };
 
   // Filter jobs for search (uses availableJobs which is pre-filtered for non-admins)
   const filteredJobs = useMemo(() => {
@@ -582,8 +637,18 @@ export default function Documents() {
                         <Badge variant="outline" className="text-xs">
                           {document.category}
                         </Badge>
-                        {userIsAdmin && document.visibility && (
-                          <Badge variant={getVisibilityVariant(document.visibility)} className="text-xs" data-testid={`visibility-pill-${document.id}`}>
+                        {document.visibility && (
+                          <Badge 
+                            variant={getVisibilityVariant(document.visibility)} 
+                            className={`text-xs ${canEditVisibility ? 'cursor-pointer hover:opacity-80' : ''}`}
+                            data-testid={`visibility-pill-${document.id}`}
+                            onClick={(e) => {
+                              if (canEditVisibility) {
+                                e.stopPropagation();
+                                openVisibilityModal(document);
+                              }
+                            }}
+                          >
                             {getVisibilityLabel(document.visibility)}
                           </Badge>
                         )}
@@ -933,6 +998,78 @@ export default function Documents() {
                 Download
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Visibility Edit Modal */}
+      <Dialog open={visibilityModalOpen} onOpenChange={(open) => {
+        setVisibilityModalOpen(open);
+        if (!open) {
+          setVisibilityEditDoc(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Document Visibility</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+              Choose who can see this document
+            </p>
+            <div className="space-y-2">
+              {getVisibilityOptions().map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setSelectedVisibility(option.value)}
+                  className={`w-full flex items-start gap-3 px-4 py-3 rounded-lg text-left transition-colors border ${
+                    selectedVisibility === option.value
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                  data-testid={`visibility-option-${option.value}`}
+                >
+                  <div className="flex-1">
+                    <div className="font-medium text-slate-900 dark:text-slate-100">
+                      {option.label}
+                    </div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                      {option.description}
+                    </div>
+                  </div>
+                  {selectedVisibility === option.value && (
+                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setVisibilityModalOpen(false)}
+              data-testid="button-cancel-visibility"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (visibilityEditDoc) {
+                  visibilityMutation.mutate({ id: visibilityEditDoc.id, visibility: selectedVisibility });
+                }
+              }}
+              disabled={visibilityMutation.isPending || (visibilityEditDoc?.visibility === selectedVisibility)}
+              data-testid="button-save-visibility"
+            >
+              {visibilityMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : null}
+              Save
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

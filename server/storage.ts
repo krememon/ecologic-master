@@ -807,6 +807,15 @@ export class DatabaseStorage implements IStorage {
     return document;
   }
 
+  async updateDocumentVisibility(id: number, visibility: string): Promise<Document> {
+    const [document] = await db
+      .update(documents)
+      .set({ visibility, updatedAt: new Date() })
+      .where(eq(documents.id, id))
+      .returning();
+    return document;
+  }
+
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
   }
