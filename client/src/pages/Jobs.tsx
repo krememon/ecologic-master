@@ -319,11 +319,48 @@ export default function Jobs() {
     enabled: isAuthenticated,
   });
 
-  // Fetch photos count for selected job
-  const { data: jobPhotos = [] } = useQuery<JobPhoto[]>({
+  // Fetch photos from legacy endpoint
+  const { data: legacyJobPhotos = [] } = useQuery<JobPhoto[]>({
     queryKey: [`/api/jobs/${selectedJob?.id}/photos`],
     enabled: !!selectedJob?.id,
   });
+
+  // Fetch documents for this job (to include uploaded photos via documents endpoint)
+  interface JobDocument {
+    id: number;
+    jobId: number;
+    name: string;
+    fileUrl: string;
+    category: string;
+    visibility: string;
+    createdAt: string;
+    uploadedBy: string;
+  }
+  const { data: allDocuments = [] } = useQuery<JobDocument[]>({
+    queryKey: ['/api/documents'],
+    enabled: isAuthenticated,
+  });
+
+  // Combine legacy photos with document photos for display
+  const jobDocumentPhotos = allDocuments
+    .filter(doc => doc.jobId === selectedJob?.id && doc.category === 'Photos')
+    .map(doc => ({
+      id: doc.id + 100000, // Offset to avoid ID collision
+      jobId: doc.jobId,
+      uploadedBy: doc.uploadedBy,
+      title: doc.name,
+      description: null,
+      photoUrl: doc.fileUrl,
+      location: null,
+      phase: null,
+      weather: null,
+      isPublic: doc.visibility === 'customer_internal',
+      createdAt: doc.createdAt,
+      isDocument: true, // Flag to distinguish source
+    }));
+
+  // Merge legacy photos and document photos (documents first, then legacy)
+  const jobPhotos = [...jobDocumentPhotos, ...legacyJobPhotos];
 
   // Fetch current crew assignments for crew modal (uses crewJobId, not selectedJob)
   interface CrewAssignment {
