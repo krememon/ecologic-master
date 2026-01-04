@@ -41,10 +41,13 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Secure access tokens: Generated using randomBytes(32).toString('hex'), only returned once at creation for emailing
   - Status workflow: draft → sent → viewed → signed/declined/expired/canceled
   - "Send for Signature" action available from Documents page preview modal AND signature request detail view
-  - Send action (POST /api/signature-requests/:id/send): Transitions draft→sent, records sentAt timestamp and sentByUserId, enforces RBAC and document visibility
+  - Send action (POST /api/signature-requests/:id/send): Transitions draft→sent, records sentAt timestamp and sentByUserId, enforces RBAC and document visibility, sends branded HTML email to customer with signing link
+  - **Email Notifications**: Uses nodemailer to send professional HTML emails to customers with company branding, document name, optional message, and "Review & Sign Document" CTA button. SMTP configuration via env vars (SMTP_USER, SMTP_PASS, SMTP_HOST). Email sending is non-blocking in dev (skipped if SMTP not configured).
+  - **Public Signing Flow**: Customer-facing route at /sign/:token (accessible without authentication). Public API routes at /api/public/signature-requests/:token. Automatically marks request as "viewed" on page load, displays document info/company name/message, requires agreement checkbox before signing, and updates status to "signed" on completion.
   - Delete action only available for draft status (hidden not disabled for non-drafts)
   - Status pills show proper capitalization (Draft, Sent, Viewed, etc.)
-  - Database table: signature_requests with documentId, customerName, customerEmail, message, status, accessToken, sentAt, sentByUserId
+  - **Internal UI**: Sent requests display signing link (signUrl) with copy-to-clipboard button for easy sharing. Shows sentAt timestamp for sent requests.
+  - Database table: signature_requests with documentId, customerName, customerEmail, message, status, accessToken, sentAt, sentByUserId, signUrl, viewedAt, signedAt
 - **Employee Management**: Manages employee active/inactive status, session revocation, and contact information.
 - **Onboarding**: Features an invite code system for company onboarding, supporting owner registration and new member joining, including a company rejoin flow.
 - **Subscription Management**: Integrates Stripe for subscription plans, enabling role-based access control and plan-based feature limits.
