@@ -1598,26 +1598,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/documents/:documentId', isAuthenticated, async (req: any, res) => {
     try {
+      console.log('[DELETE] Single delete request for documentId:', req.params.documentId);
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
       
       if (!company) {
+        console.log('[DELETE] Company not found for user:', userId);
         return res.status(404).json({ message: "Company not found" });
       }
       
       // Permission check: Only Admins can delete documents
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = member?.role || 'TECHNICIAN';
+      console.log('[DELETE] User role:', userRole, 'canDelete:', canDelete(userRole));
       
       if (!canDelete(userRole)) {
+        console.log('[DELETE] Permission denied for role:', userRole);
         return res.status(403).json({ message: getPermissionErrorMessage('delete') });
       }
       
       const documentId = parseInt(req.params.documentId);
+      
+      // Try to get the document first to delete the file
+      try {
+        const doc = await storage.getDocument(documentId);
+        if (doc && doc.fileUrl) {
+          const fs = await import('fs');
+          const filePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log('[DELETE] Deleted file:', filePath);
+          }
+        }
+      } catch (fileError) {
+        console.log('[DELETE] File deletion failed (continuing with DB delete):', fileError);
+      }
+      
       await storage.deleteDocument(documentId);
+      console.log('[DELETE] Document deleted successfully:', documentId);
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting document:", error);
+      console.error("[DELETE] Error deleting document:", error);
       res.status(500).json({ message: "Failed to delete document" });
     }
   });
@@ -1625,38 +1646,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk delete documents
   app.delete('/api/documents/bulk', isAuthenticated, async (req: any, res) => {
     try {
+      console.log('[DELETE] Bulk delete request, body:', JSON.stringify(req.body));
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
       
       if (!company) {
+        console.log('[DELETE] Company not found for user:', userId);
         return res.status(404).json({ message: "Company not found" });
       }
       
       // Permission check: Only Admins can delete documents
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = member?.role || 'TECHNICIAN';
+      console.log('[DELETE] User role:', userRole, 'canDelete:', canDelete(userRole));
       
       if (!canDelete(userRole)) {
+        console.log('[DELETE] Permission denied for role:', userRole);
         return res.status(403).json({ message: getPermissionErrorMessage('delete') });
       }
       
       const { documentIds } = req.body;
       
       if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+        console.log('[DELETE] Invalid documentIds:', documentIds);
         return res.status(400).json({ message: "documentIds array is required" });
       }
       
       // Parse IDs as integers
       const ids = documentIds.map((id: string | number) => parseInt(String(id), 10)).filter((id: number) => !isNaN(id));
+      console.log('[DELETE] Parsed IDs:', ids);
       
       if (ids.length === 0) {
+        console.log('[DELETE] No valid IDs after parsing');
         return res.status(400).json({ message: "No valid document IDs provided" });
       }
       
+      // Try to delete files first (but don't fail if file deletion fails)
+      try {
+        const fs = await import('fs');
+        for (const id of ids) {
+          const doc = await storage.getDocument(id);
+          if (doc && doc.fileUrl) {
+            const filePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+              console.log('[DELETE] Deleted file:', filePath);
+            }
+          }
+        }
+      } catch (fileError) {
+        console.log('[DELETE] File deletion failed (continuing with DB delete):', fileError);
+      }
+      
       const deletedCount = await storage.deleteDocumentsBulk(ids, company.id);
+      console.log('[DELETE] Bulk delete successful, count:', deletedCount);
       res.json({ deleted: deletedCount, message: `Successfully deleted ${deletedCount} document(s)` });
     } catch (error) {
-      console.error("Error bulk deleting documents:", error);
+      console.error("[DELETE] Error bulk deleting documents:", error);
       res.status(500).json({ message: "Failed to delete documents" });
     }
   });

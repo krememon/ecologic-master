@@ -257,17 +257,22 @@ export default function Documents() {
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: async (documentIds: number[]) => {
+      console.log('[DELETE] Bulk delete called with IDs:', documentIds);
       const response = await fetch("/api/documents/bulk", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ documentIds }),
       });
+      console.log('[DELETE] Bulk delete response status:', response.status);
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
+        console.log('[DELETE] Bulk delete error response:', data);
         throw new Error(data.message || "Bulk delete failed");
       }
-      return response.json();
+      const result = await response.json();
+      console.log('[DELETE] Bulk delete success:', result);
+      return result;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
@@ -276,6 +281,7 @@ export default function Documents() {
       toast({ title: "Documents deleted", description: data.message || "Selected documents have been deleted." });
     },
     onError: (error: Error) => {
+      console.error('[DELETE] Bulk delete mutation error:', error);
       toast({ title: "Delete failed", description: error.message || "You don't have permission to delete these documents.", variant: "destructive" });
     },
   });
@@ -479,7 +485,7 @@ export default function Documents() {
         </TabsList>
 
         <TabsContent value="documents" className="mt-6">
-          {/* Filter Row: Job Picker Button + Category Dropdown */}
+          {/* Filter Row: Job Picker + Category Dropdown + Select Toggle */}
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex items-center gap-2">
               <Button 
@@ -510,6 +516,24 @@ export default function Documents() {
                   ))}
                 </SelectContent>
               </Select>
+              {/* Select toggle button - only show when documents exist */}
+              {filteredDocuments.length > 0 && (
+                <Button 
+                  variant={selectMode ? "secondary" : "outline"}
+                  size="icon"
+                  onClick={() => {
+                    if (selectMode) {
+                      clearSelection();
+                    } else {
+                      setSelectMode(true);
+                    }
+                  }}
+                  data-testid="button-select-mode"
+                  title={selectMode ? 'Exit selection' : 'Select documents'}
+                >
+                  <CheckSquare className="w-4 h-4" />
+                </Button>
+              )}
             </div>
 
             {/* Selected Job Chip - show when a specific job is selected */}
@@ -532,33 +556,18 @@ export default function Documents() {
                 </Badge>
               </div>
             )}
-            {/* Toolbar: Select + Upload buttons */}
-            <div className="flex items-center gap-2">
-              {/* Select Button */}
-              {filteredDocuments.length > 0 && (
+            
+            {/* Select All row - only shown in select mode */}
+            {selectMode && filteredDocuments.length > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  {selectedIds.size} selected
+                </span>
                 <Button 
-                  variant={selectMode ? "secondary" : "outline"}
-                  onClick={() => {
-                    if (selectMode) {
-                      clearSelection();
-                    } else {
-                      setSelectMode(true);
-                    }
-                  }}
-                  data-testid="button-select-mode"
-                >
-                  <CheckSquare className="w-4 h-4 mr-2" />
-                  {selectMode ? 'Cancel' : 'Select'}
-                </Button>
-              )}
-              
-              {/* Select All Button (when in select mode) */}
-              {selectMode && filteredDocuments.length > 0 && (
-                <Button 
-                  variant="outline"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     if (allVisibleSelected) {
-                      // Deselect all visible
                       setSelectedIds(prev => {
                         const newSet = new Set(prev);
                         filteredDocuments.forEach(d => newSet.delete(d.id));
@@ -570,20 +579,10 @@ export default function Documents() {
                   }}
                   data-testid="button-select-all"
                 >
-                  {allVisibleSelected ? (
-                    <>
-                      <Square className="w-4 h-4 mr-2" />
-                      Deselect All
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Select All
-                    </>
-                  )}
+                  {allVisibleSelected ? 'Deselect All' : 'Select All'}
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
             
             <Dialog open={uploadOpen} onOpenChange={(open) => {
               setUploadOpen(open);
@@ -883,62 +882,61 @@ export default function Documents() {
           
           {/* Sticky Bottom Action Bar for Bulk Selection */}
           {selectMode && selectedIds.size > 0 && (
-            <div className="fixed bottom-20 left-0 right-0 z-50 px-4">
-              <div className="max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {selectedIds.size} selected
-                  </span>
-                  <div className="flex items-center gap-2">
+            <div className="fixed bottom-20 left-0 right-0 z-50 w-full px-4">
+              <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  {/* Left: Cancel */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearSelection}
+                    className="shrink-0"
+                    data-testid="button-cancel-selection"
+                  >
+                    Cancel
+                  </Button>
+                  
+                  {/* Center: Download */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={downloadSelected}
+                    disabled={isDownloading}
+                    className="shrink-0"
+                    data-testid="button-bulk-download"
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4 mr-1" />
+                        <span className="hidden xs:inline">Download</span>
+                        <span className="xs:ml-1">({selectedIds.size})</span>
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* Right: Delete (danger) */}
+                  {canDelete(userRole) && (
                     <Button
-                      variant="outline"
+                      variant="destructive"
                       size="sm"
-                      onClick={clearSelection}
-                      data-testid="button-cancel-selection"
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleteMutation.isPending}
+                      className="shrink-0"
+                      data-testid="button-bulk-delete"
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={downloadSelected}
-                      disabled={isDownloading}
-                      data-testid="button-bulk-download"
-                    >
-                      {isDownloading ? (
-                        <>
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                          Downloading...
-                        </>
+                      {bulkDeleteMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <>
-                          <Download className="w-3 h-3 mr-1" />
-                          Download ({selectedIds.size})
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          <span className="hidden xs:inline">Delete</span>
+                          <span className="xs:ml-1">({selectedIds.size})</span>
                         </>
                       )}
                     </Button>
-                    {canDelete(userRole) && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleBulkDelete}
-                        disabled={bulkDeleteMutation.isPending}
-                        data-testid="button-bulk-delete"
-                      >
-                        {bulkDeleteMutation.isPending ? (
-                          <>
-                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                            Deleting...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Delete ({selectedIds.size})
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
