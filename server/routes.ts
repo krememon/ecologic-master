@@ -3,7 +3,8 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
-import { setupAuth, isAuthenticated, sendSignatureRequestEmail } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./replitAuth";
+import { sendSignatureRequestEmail, sendTestEmail } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 
@@ -2347,41 +2348,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Only draft requests can be sent" });
       }
       
-      // Generate signing URL
-      const baseUrl = process.env.BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
+      // Generate signing URL using APP_BASE_URL (required for email links)
+      const baseUrl = process.env.APP_BASE_URL || process.env.BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
       const signUrl = `${baseUrl}/sign/${request.accessToken}`;
       
-      // Send email to customer
-      const emailSent = await sendSignatureRequestEmail(
-        request.customerEmail,
-        request.customerName,
-        doc.name,
-        company.name,
-        request.accessToken,
-        request.message
-      );
-      
-      if (!emailSent && process.env.SMTP_USER) {
-        // Only fail if SMTP is configured but email failed
-        return res.status(500).json({ message: "Failed to send email to customer" });
-      }
-      
-      // Update status to 'sent' with sentAt, sentByUserId, and signUrl
-      const [finalUpdated] = await db
-        .update(signatureRequests)
-        .set({
-          status: 'sent',
-          sentAt: new Date(),
-          sentByUserId: userId,
+      // Send email via Resend - no silent skipping
+      try {
+        await sendSignatureRequestEmail({
+          to: request.customerEmail,
+          customerName: request.customerName,
+          documentName: doc.name,
           signUrl: signUrl,
-          updatedAt: new Date(),
-        })
-        .where(eq(signatureRequests.id, requestId))
-        .returning();
-      
-      // Omit accessToken from response but include signUrl for internal use
-      const { accessToken: _token, ...responseData } = finalUpdated;
-      res.json(responseData);
+          message: request.message || undefined,
+          companyName: company.name,
+        });
+        
+        // Email succeeded - update status to 'sent'
+        const [finalUpdated] = await db
+          .update(signatureRequests)
+          .set({
+            status: 'sent',
+            sentAt: new Date(),
+            sentByUserId: userId,
+            signUrl: signUrl,
+            deliveryStatus: 'sent',
+            deliveryError: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(signatureRequests.id, requestId))
+          .returning();
+        
+        // Omit accessToken from response but include signUrl for internal use
+        const { accessToken: _token, ...responseData } = finalUpdated;
+        res.json(responseData);
+      } catch (emailError: any) {
+        // Email failed - keep as draft, store error
+        console.error('[Email] signature request send failed:', emailError);
+        
+        const errorMessage = emailError?.message || 'Unknown email error';
+        
+        await db
+          .update(signatureRequests)
+          .set({
+            deliveryStatus: 'failed',
+            deliveryError: errorMessage.substring(0, 500), // Truncate for storage
+            updatedAt: new Date(),
+          })
+          .where(eq(signatureRequests.id, requestId));
+        
+        return res.status(500).json({ 
+          message: "Email delivery failed. Please check your email settings.",
+          error: errorMessage
+        });
+      }
     } catch (error) {
       console.error("Error sending signature request:", error);
       res.status(500).json({ message: "Failed to send signature request" });
@@ -2529,6 +2548,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing document:", error);
       res.status(500).json({ message: "Failed to sign document" });
+    }
+  });
+
+  // ============== DEBUG ENDPOINTS (Dev Only) ==============
+
+  // POST /api/debug/test-email - Test email configuration (dev only)
+  app.post('/api/debug/test-email', isAuthenticated, async (req: any, res) => {
+    try {
+      // Only allow in development
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ message: "Not available in production" });
+      }
+      
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // Only owners can test
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (userRole !== 'OWNER') {
+        return res.status(403).json({ message: "Only owners can test email" });
+      }
+      
+      const { to } = req.body;
+      if (!to || typeof to !== 'string') {
+        return res.status(400).json({ message: "Email 'to' address is required" });
+      }
+      
+      await sendTestEmail({ to });
+      
+      res.json({ success: true, message: `Test email sent to ${to}` });
+    } catch (error: any) {
+      console.error("Test email failed:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Test email failed",
+        error: error?.message || 'Unknown error'
+      });
     }
   });
 
