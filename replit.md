@@ -52,6 +52,7 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
     - Captures signature as PNG data URL + optional signer name
     - Success confirmation screen after signing
     - Stores signatureUrl (base64) and signedName in database
+    - **Standalone Architecture**: Public signing uses a completely separate React entry point (PublicSignApp.tsx) with NO dependencies on authentication, Layout, or wouter routing. Express intercepts /sign/:token before Vite middleware: in development serves inline HTML that loads public-sign-entry.tsx via Vite; in production serves index.html where main.tsx conditionally renders PublicSignApp based on window.location.pathname. This ensures unauthenticated users can access signing without hitting the login page.
   - Delete action only available for draft status (hidden not disabled for non-drafts)
   - Status pills show proper capitalization (Draft, Sent, Viewed, Signed, etc.)
   - **Internal UI**: Shows signedAt timestamp with signer name, displays captured customer signature image in detail view. Sent requests display signing link with copy-to-clipboard button.
