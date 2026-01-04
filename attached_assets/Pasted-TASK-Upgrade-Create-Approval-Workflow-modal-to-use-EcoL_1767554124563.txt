@@ -1,0 +1,65 @@
+TASK: Upgrade “Create Approval Workflow” modal to use EcoLogic Jobs + Documents (Phase 1)
+
+CURRENT STATE
+The E-signature Approvals tab exists and the “Create First Approval” button opens a modal with:
+- Title
+- Type dropdown
+- Description
+- Document URL (optional)
+
+GOAL
+Make approvals EcoLogic-native (no external URL dependency):
+- Link approvals to a Job + an existing Document in our Documents table
+- Store customer name/email for later “send”
+- Enforce RBAC + document visibility rules (“hidden not disabled”)
+- After creating, show approvals in a list (no more empty state)
+
+UI CHANGES (Modal)
+1) Keep: Title, Type, Description
+2) Add: Related Job (searchable job picker like Documents page)
+3) Replace “Document URL” with: Related Document picker (searchable)
+   - Only show documents user is allowed to see (existing visibility rules)
+   - If a job is selected, default to showing docs for that job first
+4) Add: Customer Name + Customer Email fields
+5) Remove: Document URL input entirely
+
+DATA MODEL
+Create a new table: approvals (or approval_workflows)
+Fields:
+- id
+- orgId/companyId
+- title
+- type (estimate | change_order | authorization | other)
+- description
+- jobId (nullable)
+- documentId (nullable but preferred)
+- customerName
+- customerEmail
+- status (draft | sent | approved | declined) default 'draft'
+- createdByUserId
+- createdAt, updatedAt
+
+API
+- GET /api/approvals (returns only approvals where user can view the underlying document OR (if no documentId) where role is allowed)
+- POST /api/approvals (creates a draft approval; enforce RBAC + doc visibility)
+
+RBAC
+- Can create: Owner/Admin, Supervisor, Dispatcher, Estimator
+- Technician cannot create (hide buttons for them)
+- “Hidden not disabled” for all actions
+- Document picker must filter out docs user cannot access
+
+LIST VIEW
+After creating an approval:
+- Replace empty state with list cards/rows showing:
+  - Title
+  - Type badge
+  - Job (if any)
+  - Status pill (Draft)
+  - Created date
+- Ensure UI refresh after creation (refetch or optimistic insert)
+
+DELIVERABLES
+- Modal updated with Job + Document picker, URL removed
+- Approvals save to DB and appear in the approvals list
+- RBAC enforced, no document visibility leaks

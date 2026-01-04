@@ -512,12 +512,15 @@ export const approvalWorkflows = pgTable("approval_workflows", {
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  type: varchar("type", { length: 50 }).notNull(), // 'quote', 'design', 'scope_change', 'contract', 'custom'
-  status: varchar("status", { length: 50 }).notNull().default("draft"), // 'draft', 'pending', 'approved', 'rejected', 'expired'
-  documentUrl: varchar("document_url", { length: 500 }),
+  type: varchar("type", { length: 50 }).notNull(), // 'estimate', 'change_order', 'authorization', 'other'
+  status: varchar("status", { length: 50 }).notNull().default("draft"), // 'draft', 'sent', 'approved', 'declined'
+  documentUrl: varchar("document_url", { length: 500 }), // Legacy - kept for backwards compatibility
   documentType: varchar("document_type", { length: 100 }), // 'pdf', 'image', 'link'
   relatedJobId: integer("related_job_id").references(() => jobs.id, { onDelete: "set null" }),
+  relatedDocumentId: integer("related_document_id").references(() => documents.id, { onDelete: "set null" }),
   relatedClientId: integer("related_client_id").references(() => clients.id, { onDelete: "set null" }),
+  customerName: varchar("customer_name", { length: 255 }),
+  customerEmail: varchar("customer_email", { length: 255 }),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -563,6 +566,10 @@ export const approvalWorkflowsRelations = relations(approvalWorkflows, ({ one, m
   job: one(jobs, {
     fields: [approvalWorkflows.relatedJobId],
     references: [jobs.id],
+  }),
+  document: one(documents, {
+    fields: [approvalWorkflows.relatedDocumentId],
+    references: [documents.id],
   }),
   client: one(clients, {
     fields: [approvalWorkflows.relatedClientId],
