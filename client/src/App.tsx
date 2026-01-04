@@ -29,6 +29,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import ChoosePlan from "@/pages/ChoosePlan";
 import Employees from "@/pages/Employees";
 import JoinCompany from "@/pages/JoinCompany";
+import PublicSign from "@/pages/PublicSign";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -48,6 +49,7 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
+        <Route path="/sign/:token" component={PublicSign} />
         <Route path="/" component={Landing} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/register" component={Auth} />
@@ -70,6 +72,8 @@ function Router() {
 
   return (
     <Switch>
+      {/* Public signing page accessible to authenticated users too */}
+      <Route path="/sign/:token" component={PublicSign} />
       {/* Protected pages with Layout */}
       <Route>
         {() => (
