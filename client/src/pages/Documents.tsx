@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File, Search, ChevronDown, Building2, Briefcase } from "lucide-react";
+import { FolderOpen, FileText, Upload, Download, PenTool, X, Loader2, ExternalLink, File, Search, ChevronDown, Building2, Briefcase, CheckSquare, Square, Check } from "lucide-react";
 import ApprovalWorkflow from "@/components/ApprovalWorkflow";
 import { queryClient } from "@/lib/queryClient";
 import { DOCUMENT_CATEGORIES, WORKFLOW_CATEGORIES, DOCUMENT_STATUSES, type DocumentCategory, type DocumentStatus } from "@shared/schema";
@@ -117,6 +117,11 @@ export default function Documents() {
   const [visibilityModalOpen, setVisibilityModalOpen] = useState(false);
   const [visibilityEditDoc, setVisibilityEditDoc] = useState<DocumentType | null>(null);
   const [selectedVisibility, setSelectedVisibility] = useState<DocumentVisibility>('internal');
+  
+  // Bulk select state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { data: documents = [], isLoading: documentsLoading } = useQuery<DocumentType[]>({
     queryKey: ["/api/documents"],
@@ -249,6 +254,94 @@ export default function Documents() {
     },
   });
 
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (documentIds: number[]) => {
+      const response = await fetch("/api/documents/bulk", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ documentIds }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Bulk delete failed");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      toast({ title: "Documents deleted", description: data.message || "Selected documents have been deleted." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Delete failed", description: error.message || "You don't have permission to delete these documents.", variant: "destructive" });
+    },
+  });
+
+  // Toggle document selection
+  const toggleSelection = (id: number) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all visible documents (union with existing selection)
+  const selectAll = () => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      filteredDocuments.forEach(d => newSet.add(d.id));
+      return newSet;
+    });
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectMode(false);
+  };
+
+  // Download selected documents sequentially
+  const downloadSelected = async () => {
+    const selectedDocs = documents.filter(d => selectedIds.has(d.id));
+    if (selectedDocs.length === 0) return;
+    
+    setIsDownloading(true);
+    try {
+      for (const doc of selectedDocs) {
+        // Create a temporary anchor element for each download
+        const link = document.createElement('a');
+        link.href = doc.fileUrl;
+        link.download = doc.name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        // Small delay between downloads to prevent browser blocking
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      toast({ title: "Downloads started", description: `${selectedDocs.length} file(s) are being downloaded.` });
+    } catch (error) {
+      toast({ title: "Download failed", description: "Some files may not have been downloaded.", variant: "destructive" });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    bulkDeleteMutation.mutate(ids);
+  };
+
   // Check if user can edit visibility (Owner or Supervisor)
   const canEditVisibility = userRole.toUpperCase() === 'OWNER' || userRole.toUpperCase() === 'SUPERVISOR';
   
@@ -319,6 +412,21 @@ export default function Documents() {
     
     return result;
   }, [documents, activeCategory, jobFilter]);
+
+  // Auto-deselect items that are no longer visible due to filter changes
+  const visibleIds = useMemo(() => new Set(filteredDocuments.map(d => d.id)), [filteredDocuments]);
+  
+  // Track how many selected items are currently visible
+  const visibleSelectedCount = useMemo(() => {
+    let count = 0;
+    selectedIds.forEach(id => {
+      if (visibleIds.has(id)) count++;
+    });
+    return count;
+  }, [selectedIds, visibleIds]);
+
+  // Check if all visible documents are selected
+  const allVisibleSelected = filteredDocuments.length > 0 && visibleSelectedCount === filteredDocuments.length;
 
   const handleUpload = () => {
     if (!selectedFile) return;
@@ -424,6 +532,59 @@ export default function Documents() {
                 </Badge>
               </div>
             )}
+            {/* Toolbar: Select + Upload buttons */}
+            <div className="flex items-center gap-2">
+              {/* Select Button */}
+              {filteredDocuments.length > 0 && (
+                <Button 
+                  variant={selectMode ? "secondary" : "outline"}
+                  onClick={() => {
+                    if (selectMode) {
+                      clearSelection();
+                    } else {
+                      setSelectMode(true);
+                    }
+                  }}
+                  data-testid="button-select-mode"
+                >
+                  <CheckSquare className="w-4 h-4 mr-2" />
+                  {selectMode ? 'Cancel' : 'Select'}
+                </Button>
+              )}
+              
+              {/* Select All Button (when in select mode) */}
+              {selectMode && filteredDocuments.length > 0 && (
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    if (allVisibleSelected) {
+                      // Deselect all visible
+                      setSelectedIds(prev => {
+                        const newSet = new Set(prev);
+                        filteredDocuments.forEach(d => newSet.delete(d.id));
+                        return newSet;
+                      });
+                    } else {
+                      selectAll();
+                    }
+                  }}
+                  data-testid="button-select-all"
+                >
+                  {allVisibleSelected ? (
+                    <>
+                      <Square className="w-4 h-4 mr-2" />
+                      Deselect All
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Select All
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+            
             <Dialog open={uploadOpen} onOpenChange={(open) => {
               setUploadOpen(open);
               if (open && !userIsAdmin) {
@@ -616,19 +777,46 @@ export default function Documents() {
             </Card>
           ) : (
             <div className="mt-4 space-y-3">
-              {filteredDocuments.map((document) => (
+              {filteredDocuments.map((document) => {
+                const isSelected = selectedIds.has(document.id);
+                return (
                 <Card 
                   key={document.id} 
-                  className="w-full rounded-2xl border bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow cursor-pointer" 
+                  className={`w-full rounded-2xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer ${
+                    isSelected 
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700' 
+                      : 'bg-white dark:bg-slate-900'
+                  }`}
                   data-testid={`document-card-${document.id}`}
                   onClick={() => {
-                    setSelectedDoc(document);
-                    setIsPreviewOpen(true);
+                    if (selectMode) {
+                      toggleSelection(document.id);
+                    } else {
+                      setSelectedDoc(document);
+                      setIsPreviewOpen(true);
+                    }
                   }}
                 >
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center justify-between text-base">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {/* Checkbox in select mode */}
+                        {selectMode && (
+                          <div 
+                            className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                              isSelected 
+                                ? 'bg-blue-600 border-blue-600' 
+                                : 'border-slate-300 dark:border-slate-600'
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelection(document.id);
+                            }}
+                            data-testid={`checkbox-${document.id}`}
+                          >
+                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                        )}
                         <FileText className="h-4 w-4 flex-shrink-0" />
                         <span className="truncate">{document.name}</span>
                       </div>
@@ -688,7 +876,71 @@ export default function Documents() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              );
+              })}
+            </div>
+          )}
+          
+          {/* Sticky Bottom Action Bar for Bulk Selection */}
+          {selectMode && selectedIds.size > 0 && (
+            <div className="fixed bottom-20 left-0 right-0 z-50 px-4">
+              <div className="max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {selectedIds.size} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearSelection}
+                      data-testid="button-cancel-selection"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadSelected}
+                      disabled={isDownloading}
+                      data-testid="button-bulk-download"
+                    >
+                      {isDownloading ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Downloading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3 h-3 mr-1" />
+                          Download ({selectedIds.size})
+                        </>
+                      )}
+                    </Button>
+                    {canDelete(userRole) && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        disabled={bulkDeleteMutation.isPending}
+                        data-testid="button-bulk-delete"
+                      >
+                        {bulkDeleteMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Delete ({selectedIds.size})
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </TabsContent>
