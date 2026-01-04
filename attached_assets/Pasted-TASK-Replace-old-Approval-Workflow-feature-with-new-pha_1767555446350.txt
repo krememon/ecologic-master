@@ -1,0 +1,53 @@
+TASK: Replace old “Approval Workflow” feature with new phased E-signature plan (Phase 1)
+
+PROBLEM
+Current E-signature tab uses “Create Approval Workflow” modal (Title/Type/Description/Document URL).
+This doesn’t match the intended product flow.
+We want: pick an existing Document -> send for signature -> track status -> store signed copy later.
+
+GOAL (PHASE 1)
+1) Remove/replace the old “Approval Workflow” creation UI and data flow.
+2) Implement “Signature Requests” tracking in the E-signature tab.
+3) Add “Send for Signature” action on Documents that creates signature requests.
+
+UI CHANGES
+A) E-signature tab:
+- Rename heading to “Signature Requests”
+- Replace button text:
+  - “Create Approval” / “Create First Approval” -> “New Signature Request”
+- Clicking opens NEW modal (not the old one):
+  - Select Document (searchable picker, filter by RBAC visibility)
+  - Customer Name
+  - Customer Email
+  - Optional message
+  - Create -> saves signature_requests row with status='draft'
+
+B) Documents page:
+- Add “Send for Signature” action on each document (card action or preview modal)
+- Clicking opens same modal but pre-fills the document.
+
+REMOVE OLD MODAL
+- Delete old fields: Title, Type, Description, Document URL OR fully replace component so old UI is gone.
+- Ensure there are no leftover duplicate buttons.
+
+BACKEND
+- Create new table: signature_requests
+  id, orgId, documentId, jobId, customerName, customerEmail, message,
+  status (draft/sent/viewed/signed/declined/expired/canceled),
+  provider (none for now), providerRequestId, signUrl, signedDocumentStorageKey/url,
+  createdByUserId, createdAt, updatedAt
+
+- API:
+  GET /api/signature-requests (return only requests where user can access the underlying document per doc visibility rules)
+  POST /api/signature-requests (enforce RBAC: Owner/Admin, Supervisor, Dispatcher, Estimator can create; Technician cannot)
+
+RBAC + VISIBILITY
+- Hidden not disabled
+- Never show requests for documents user cannot access
+- Document picker must only list accessible documents
+
+DELIVERABLE
+- Old approval workflow UI is fully replaced
+- New “Signature Requests” UI works (create + list)
+- Documents page can create signature requests via “Send for Signature”
+- No RBAC regressions

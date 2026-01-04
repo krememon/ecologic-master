@@ -601,6 +601,48 @@ export const approvalHistoryRelations = relations(approvalHistory, ({ one }) => 
   }),
 }));
 
+// Signature Requests table - Phase 1 of new e-signature system
+export const signatureRequests = pgTable("signature_requests", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  documentId: integer("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "set null" }), // Derived from document's jobId
+  customerName: varchar("customer_name", { length: 255 }).notNull(),
+  customerEmail: varchar("customer_email", { length: 255 }).notNull(),
+  message: text("message"), // Optional message to include with signature request
+  status: varchar("status", { length: 50 }).notNull().default("draft"), // draft, sent, viewed, signed, declined, expired, canceled
+  provider: varchar("provider", { length: 50 }), // For future: docusign, hellosign, etc.
+  providerRequestId: varchar("provider_request_id", { length: 255 }), // External provider's request ID
+  signUrl: varchar("sign_url", { length: 500 }), // URL for customer to sign
+  signedDocumentUrl: varchar("signed_document_url", { length: 500 }), // URL of signed document copy
+  accessToken: varchar("access_token", { length: 255 }).unique(), // For secure access without login
+  viewedAt: timestamp("viewed_at"),
+  signedAt: timestamp("signed_at"),
+  expiresAt: timestamp("expires_at"),
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const signatureRequestsRelations = relations(signatureRequests, ({ one }) => ({
+  company: one(companies, {
+    fields: [signatureRequests.companyId],
+    references: [companies.id],
+  }),
+  document: one(documents, {
+    fields: [signatureRequests.documentId],
+    references: [documents.id],
+  }),
+  job: one(jobs, {
+    fields: [signatureRequests.jobId],
+    references: [jobs.id],
+  }),
+  createdBy: one(users, {
+    fields: [signatureRequests.createdByUserId],
+    references: [users.id],
+  }),
+}));
+
 // Subscriptions table for tracking detailed subscription data
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
@@ -745,6 +787,14 @@ export const insertApprovalHistorySchema = createInsertSchema(approvalHistory).o
   timestamp: true,
 });
 
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewedAt: true,
+  signedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -779,6 +829,8 @@ export type ApprovalHistory = typeof approvalHistory.$inferSelect;
 export type InsertApprovalHistory = z.infer<typeof insertApprovalHistorySchema>;
 export type ScheduleItem = typeof scheduleItems.$inferSelect;
 export type InsertScheduleItem = z.infer<typeof insertScheduleItemSchema>;
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
 
 // Finalize Job Schema - for wizard completion (job + client + schedule)
 export const finalizeJobSchema = z.object({
