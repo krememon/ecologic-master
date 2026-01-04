@@ -1,0 +1,94 @@
+TASK: Fix public signature link routing. /sign/:token must NOT redirect to EcoLogic login.
+
+CURRENT BEHAVIOR
+Opening an email link like:
+  https://eco-logic-pjpell077.replit.app/sign/<token>
+still lands on the EcoLogic auth page (Create Account / Sign In).
+
+ROOT CAUSE (one of these)
+A) Frontend auth guard redirects ALL unauthenticated routes to /auth (or login), including /sign/*
+B) Router does not match /sign/:token, so wildcard redirect sends user to /auth
+C) Backend middleware forces auth on /sign/* requests and returns login HTML
+
+GOAL
+- /sign/:token is a PUBLIC route.
+- It loads a PublicSignPage (no sidebar, no login).
+- It fetches signing data from a PUBLIC API endpoint (no auth).
+- It allows signature submission.
+
+IMPLEMENTATION (DO ALL)
+
+1) FRONTEND ROUTING — ensure /sign/:token route exists and is OUTSIDE ProtectedRoute
+- Locate the main router file (App.tsx, routes.tsx, Router.tsx etc).
+- Add this route near the top, BEFORE any protected layout/wrapper:
+
+  <Route path="/sign/:token" element={<PublicSignPage />} />
+
+- Confirm it is NOT nested inside something like:
+  <Route element={<ProtectedRoute/>}> ... </Route>
+  or an AppLayout that assumes auth.
+
+2) FRONTEND AUTH REDIRECT EXEMPTION — stop global redirects from catching /sign/*
+- Search for any logic like:
+  if (!user) navigate("/auth") or navigate("/login")
+  or ProtectedRoute component that redirects when user is null
+
+- Add a whitelist:
+  const PUBLIC_PATH_PREFIXES = ["/sign/"];
+  const isPublicPath = PUBLIC_PATH_PREFIXES.some(p => location.pathname.startsWith(p));
+
+- Then ensure redirects do NOT happen for public paths:
+  if (!user && !isPublicPath) redirect to /auth
+  else allow render.
+
+3) FRONTEND FALLBACK ROUTE — make sure wildcard does NOT steal /sign/:token
+- Find routes like:
+  <Route path="*" element={<Navigate to="/auth" />} />
+- Make sure /sign/:token is defined ABOVE it, and the wildcard does not override it.
+
+4) BACKEND — add/confirm PUBLIC read endpoint (no auth)
+- Ensure there is a route like:
+  GET /api/signature-requests/public/:token
+that does not require auth middleware.
+Return safe data:
+  { id, status, customerName, customerEmail, message, createdAt,
+    document: { id, name, category, url, mimeType },
+    job: { id, title } }
+
+5) BACKEND AUTH MIDDLEWARE EXEMPTION
+- Find requireAuth / auth middleware usage (often app.use(requireAuth) or router.use(requireAuth)).
+- Add an early bypass for public signature endpoints:
+  - /api/signature-requests/public/*
+  - /api/signature-requests/public/:token/sign (if exists)
+
+Example:
+  if (req.path.startsWith("/api/signature-requests/public/")) return next();
+
+6) SERVER STATIC ROUTING (IMPORTANT FOR SPA)
+- Ensure the server serves the React app for /sign/* (index.html), not redirecting to /auth.
+If you have logic that redirects unknown routes to /auth, add an exception:
+  if (req.path.startsWith("/sign/")) serve index.html
+
+7) CREATE/VERIFY PublicSignPage
+- Create client page:
+  client/src/pages/PublicSignPage.tsx (or similar)
+- On mount:
+  GET /api/signature-requests/public/:token
+- Render:
+  - Document title
+  - Doc preview (img/pdf)
+  - Signature pad
+  - Submit signature button
+
+TESTING
+- Open the email link in an INCOGNITO window (no session).
+Expected:
+  - It loads PublicSignPage (NOT EcoLogic login).
+  - Network shows GET /api/signature-requests/public/:token returns 200.
+  - No redirect to /auth.
+
+DELIVERABLES
+- /sign/:token stays public
+- /api/signature-requests/public/:token is public
+- No sidebar / app shell on signing page
+- No auth required

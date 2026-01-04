@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useRoute } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,11 @@ interface SignatureRequestData {
 }
 
 export default function PublicSign() {
-  const [, params] = useRoute("/sign/:token");
-  const token = params?.token || "";
+  const [location] = useLocation();
+  const token = useMemo(() => {
+    const match = location.match(/^\/sign\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }, [location]);
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);

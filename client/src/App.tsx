@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -33,10 +33,19 @@ import PublicSign from "@/pages/PublicSign";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [location] = useLocation();
   
-  // Initialize WebSocket and push notifications for authenticated users
+  // Initialize WebSocket and push notifications only for authenticated users
+  // These hooks must be called unconditionally but will no-op when not authenticated
   useWebSocket();
   usePushNotifications();
+
+  // Handle public signing route BEFORE authentication check
+  // This ensures customers can access signing page regardless of auth state
+  const isSigningRoute = location.startsWith('/sign/');
+  if (isSigningRoute) {
+    return <PublicSign />;
+  }
 
   if (isLoading) {
     return (
@@ -49,7 +58,6 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
-        <Route path="/sign/:token" component={PublicSign} />
         <Route path="/" component={Landing} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/register" component={Auth} />
@@ -60,11 +68,10 @@ function Router() {
     );
   }
 
-  // Authenticated but no company - redirect to join company (but allow public signing)
+  // Authenticated but no company - redirect to join company
   if (!user?.company) {
     return (
       <Switch>
-        <Route path="/sign/:token" component={PublicSign} />
         <Route path="/join-company" component={JoinCompany} />
         <Route>{() => <Redirect to="/join-company" />}</Route>
       </Switch>
@@ -73,8 +80,6 @@ function Router() {
 
   return (
     <Switch>
-      {/* Public signing page accessible to authenticated users too */}
-      <Route path="/sign/:token" component={PublicSign} />
       {/* Protected pages with Layout */}
       <Route>
         {() => (
