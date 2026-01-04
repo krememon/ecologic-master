@@ -1,0 +1,88 @@
+PHASE 2A — Signature Requests: Add “Send” Action (Draft → Sent)
+
+CONTEXT (EcoLogic Source of Truth)
+- We already have “Signature Requests” working:
+  - Create request modal: Document + Customer Name + Customer Email + Message (optional)
+  - Request detail view exists (shows status pill “draft”, document, customer, job, message, created date)
+  - Delete works
+- RBAC is critical: “hidden not disabled”
+- Document visibility rules apply everywhere: user must NOT see signature requests for documents they can’t access.
+- Roles: Owner/Admin, Supervisor, Dispatcher, Estimator, Technician
+  - Technician must NOT be able to create/send signature requests.
+
+GOAL
+Implement Phase 2A: allow office roles to “Send” a Signature Request.
+This does NOT send an email or integrate any provider yet.
+It simply transitions a request from:
+  draft → sent
+and stores sent timestamp.
+
+UI REQUIREMENTS
+1) On Signature Request detail view:
+   - If status === "draft" AND role is allowed:
+     - Show a primary button: “Send for Signature”
+   - If status !== "draft":
+     - Hide the Send button completely (do not disable)
+2) Delete button behavior:
+   - Keep Delete available only while status === "draft" (safer).
+   - If status !== "draft", hide Delete (do not show disabled).
+3) Status pill:
+   - Draft pill already exists; add “sent” state label (Sent).
+   - Ensure consistent casing (Draft/Sent).
+4) Loading/feedback:
+   - When user clicks Send:
+     - Show loading spinner on button
+     - Prevent double-submit
+     - On success: status pill updates immediately to “Sent”
+     - Show small toast: “Signature request sent” (even though no email yet; meaning “marked as sent”)
+     - Close modal if you are in a modal view, or keep open but refresh data
+
+BACKEND / DB REQUIREMENTS
+1) Add fields to signature_requests table:
+   - status (already exists): ensure supports "draft" and "sent"
+   - sentAt (nullable timestamp)
+   - sentByUserId (nullable) (optional but recommended)
+2) Add endpoint:
+   POST /api/signature-requests/:id/send
+   - Auth required
+   - RBAC check: only Owner/Admin, Supervisor, Dispatcher, Estimator can send
+   - Technicians forbidden (403)
+   - Visibility check: requester must be allowed to access the underlying document (existing doc visibility rules)
+   - Validation:
+     - If status != "draft", return 400 with message “Only draft requests can be sent”
+   - Update:
+     - status = "sent"
+     - sentAt = now()
+     - sentByUserId = current user id (if field added)
+   - Return updated record
+3) Ensure GET /api/signature-requests continues to filter:
+   - Only return requests for documents the user can access
+   - “Hidden not disabled”: do not return records user can’t access
+
+CLIENT INTEGRATION
+1) Add client API function to call /send endpoint.
+2) Update state after send:
+   - Either optimistic update or refetch the single request + list.
+   - Ensure approvals/signature requests list reflects updated status immediately.
+3) Add defensive handling:
+   - Show toast error if 400/403/500 occurs.
+   - If 403, do not show the button in the first place (preferred).
+
+FILES TO CHECK / LIKELY LOCATIONS
+- Client page for E-signature approvals/signature requests tab
+- SignatureRequestDetail component/modal
+- Server routes file where documents routes live (routes.ts / signatureRequests routes)
+- DB migration or schema file for signature_requests
+
+DELIVERABLES
+- “Send for Signature” button only appears for draft requests + allowed roles
+- Clicking Send updates status to “sent” and stores sentAt (and optionally sentByUserId)
+- Delete only available for drafts
+- UI refreshes correctly (list + detail)
+- No RBAC or document visibility regressions
+- No provider/email logic added yet
+
+DEBUGGING (ONLY IF NEEDED)
+- Add minimal logs on send route:
+  - requestId, userId, role, previousStatus, newStatus
+- Remove logs after confirmed working

@@ -618,6 +618,8 @@ export const signatureRequests = pgTable("signature_requests", {
   accessToken: varchar("access_token", { length: 255 }).unique(), // For secure access without login
   viewedAt: timestamp("viewed_at"),
   signedAt: timestamp("signed_at"),
+  sentAt: timestamp("sent_at"), // When the request was marked as sent
+  sentByUserId: varchar("sent_by_user_id").references(() => users.id), // Who sent the request
   expiresAt: timestamp("expires_at"),
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -639,6 +641,10 @@ export const signatureRequestsRelations = relations(signatureRequests, ({ one })
   }),
   createdBy: one(users, {
     fields: [signatureRequests.createdByUserId],
+    references: [users.id],
+  }),
+  sentBy: one(users, {
+    fields: [signatureRequests.sentByUserId],
     references: [users.id],
   }),
 }));
@@ -793,6 +799,8 @@ export const insertSignatureRequestSchema = createInsertSchema(signatureRequests
   updatedAt: true,
   viewedAt: true,
   signedAt: true,
+  sentAt: true,
+  sentByUserId: true,
 });
 
 // Types
