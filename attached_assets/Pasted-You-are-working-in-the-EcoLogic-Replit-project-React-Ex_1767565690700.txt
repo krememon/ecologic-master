@@ -1,0 +1,92 @@
+You are working in the EcoLogic Replit project (React + Express). The email “Review & Sign Document” link goes to /sign/:token, but when the recipient clicks it they still get sent to the EcoLogic login page instead of the public signing page. We need a guaranteed bypass so /sign/:token ALWAYS renders the PublicSign page without requiring authentication or company membership, even if useAuth() fails or global auth redirect logic runs.
+
+GOAL (Hard requirement):
+- Any visitor (logged out, incognito, different device) visiting /sign/:token must immediately see the public signing page (PublicSign) and never be forced to login.
+- The signing page must load the request by token from a PUBLIC backend endpoint (no auth middleware).
+- The signing page must allow submitting a signature and mark the request as signed.
+- Do not weaken security elsewhere. Only make /sign/* public and the needed /api/public/* endpoints.
+
+PHASE: “Hard Public Route Bypass” (fix routing + backend access)
+
+FRONTEND CHANGES
+1) Hard-bypass useAuth() entirely for /sign/:token
+- In src/App.tsx (or wherever Router() is), do NOT call useAuth() first.
+- Instead, detect the current path FIRST using wouter’s useLocation().
+- If the path starts with /sign/ (regex: /^\/sign\/[^/]+/), immediately return <PublicSign /> and skip ALL auth logic, websocket hook, push notification hook, Layout, etc.
+- This is critical: Public signing must not depend on isAuthenticated/isLoading/user/company.
+- Keep the existing routes, but make /sign bypass at the very top of Router() before useAuth().
+
+Example structure:
+- const [location] = useLocation();
+- if (/^\/sign\/[^/]+/.test(location)) return <PublicSign />;
+
+2) Ensure PublicSign reads the token correctly
+- In src/pages/PublicSign.tsx: read token from route params using wouter’s useRoute("/sign/:token") OR parse from location string.
+- Do NOT rely on authenticated endpoints.
+- On mount, call GET /api/public/signature-requests/:token
+- Render:
+  - document name
+  - message
+  - customer name
+  - document preview (image inline, PDF iframe/new tab as already used in Documents)
+  - signature pad (basic canvas)
+  - “Submit Signature” button
+
+3) Submitting signature
+- On submit, POST /api/public/signature-requests/:token/sign with payload:
+  - signedName (string)
+  - signatureDataUrl (base64 png) OR svg string
+- After success: show “Signed successfully” state, disable pad, show timestamp.
+- Also show “This request is already signed” if already completed.
+
+BACKEND CHANGES (Express)
+4) Create public routes that DO NOT require auth
+- In server/routes.ts (or wherever routes are defined), add:
+  - GET /api/public/signature-requests/:token
+  - POST /api/public/signature-requests/:token/sign
+- These routes must be registered BEFORE any auth-required middleware that blocks routes.
+- They must NOT require session/user/company checks.
+- Security: token must be long random (already is). Only allow access via valid token.
+
+5) Token lookup logic
+- When GET is called, find signature request by token.
+- Return 404 with clear message if not found.
+- Return “signed” fields if already signed.
+- Make sure request includes document reference and enough info to show preview.
+- If your schema uses a different column name than “token” (e.g., signing_token), fix the query accordingly.
+
+6) Signing logic
+- POST should:
+  - validate token exists
+  - validate not already signed (or allow idempotent re-submit but keep first)
+  - store signature image (data url or upload to storage if you already have document storage)
+  - store signedName + signedAt timestamp
+  - update status to “signed”
+  - return updated record
+
+7) Make sure /sign/:token works on deployed public URL
+- The server must serve the React app for /sign/* paths (like any SPA route).
+- Ensure no server-side redirect is happening for /sign/*.
+- If you have any middleware that redirects unauthenticated users, explicitly exempt:
+  - /sign/*
+  - /api/public/*
+- Add a small server log line when a request hits the public endpoints to confirm they’re used.
+
+DELIVERABLES
+- /sign/:token ALWAYS renders PublicSign when logged out (no login page).
+- GET /api/public/signature-requests/:token works from incognito and returns JSON.
+- POST /api/public/signature-requests/:token/sign works and updates DB.
+- PublicSign shows success state after signing.
+- Add minimal console logs (server + client) for debugging, then remove noisy logs once verified.
+
+TEST PLAN (do these after implementing)
+1) Create a signature request in the app, send email to yourself.
+2) Open email link in an incognito window.
+3) Confirm it opens signing page (not login).
+4) Submit signature; confirm success.
+5) Refresh page; confirm it now shows “Signed” state.
+6) Try /sign/test and confirm it shows “Document Not Found” (expected).
+
+IMPORTANT:
+- Do not break RBAC or documents visibility rules elsewhere.
+- Keep public access limited ONLY to signing by token via /sign/:token and /api/public/*.

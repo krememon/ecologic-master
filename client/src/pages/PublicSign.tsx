@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,11 +23,18 @@ interface SignatureRequestData {
 }
 
 export default function PublicSign() {
-  const [match, params] = useRoute("/sign/:token");
-  const token = params?.token ? decodeURIComponent(params.token) : "";
+  // Extract token directly from window.location.pathname for maximum reliability
+  const token = useMemo(() => {
+    const path = window.location.pathname;
+    const match = path.match(/^\/sign\/(.+)$/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]);
+    }
+    return "";
+  }, []);
   
   // Debug logging
-  console.log("[PublicSign] mounted, match:", match, "token:", token, "path:", window.location.pathname);
+  console.log("[PublicSign] COMPONENT MOUNTED - token:", token, "path:", window.location.pathname);
   const { toast } = useToast();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
