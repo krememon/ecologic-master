@@ -1808,6 +1808,265 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===================
+  // Approval Workflow Routes
+  // ===================
+  
+  // RBAC: Owner, Supervisor, Dispatcher, Estimator can create approvals (Technician cannot)
+  const canCreateApproval = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+  };
+
+  // GET /api/approvals - List approval workflows for company
+  app.get('/api/approvals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase() as UserRole;
+      
+      // Get all approval workflows for company
+      const workflows = await storage.getApprovalWorkflows(company.id);
+      
+      // For each workflow, attach related job and document info if available
+      const enrichedWorkflows = await Promise.all(workflows.map(async (workflow) => {
+        let relatedJob = null;
+        let relatedDocument = null;
+        
+        if (workflow.relatedJobId) {
+          const job = await storage.getJob(workflow.relatedJobId);
+          if (job) {
+            relatedJob = { id: job.id, title: job.title, address: job.address };
+          }
+        }
+        
+        if (workflow.relatedDocumentId) {
+          const doc = await storage.getDocument(workflow.relatedDocumentId);
+          if (doc) {
+            // Apply document visibility check - if user can't see doc, filter this workflow
+            const allowedVisibilities = getAllowedVisibilities(userRole);
+            if (userRole !== 'OWNER' && !allowedVisibilities.includes(doc.visibility as DocumentVisibility)) {
+              return null; // User cannot see this workflow due to doc visibility
+            }
+            relatedDocument = { id: doc.id, name: doc.name, fileUrl: doc.fileUrl, category: doc.category };
+          }
+        }
+        
+        // Get signatures for this workflow
+        const signatures = await storage.getApprovalSignatures(workflow.id);
+        
+        return {
+          ...workflow,
+          relatedJob,
+          relatedDocument,
+          signatures,
+        };
+      }));
+      
+      // Filter out nulls (workflows user can't see due to doc visibility)
+      const visibleWorkflows = enrichedWorkflows.filter(w => w !== null);
+      
+      res.json(visibleWorkflows);
+    } catch (error) {
+      console.error("Error fetching approval workflows:", error);
+      res.status(500).json({ message: "Failed to fetch approval workflows" });
+    }
+  });
+
+  // GET /api/approvals/:id - Get single approval workflow with details
+  app.get('/api/approvals/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const workflowId = parseInt(req.params.id);
+      const workflow = await storage.getApprovalWorkflow(workflowId);
+      
+      if (!workflow || workflow.companyId !== company.id) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+      
+      // Get related data
+      let relatedJob = null;
+      let relatedDocument = null;
+      
+      if (workflow.relatedJobId) {
+        const job = await storage.getJob(workflow.relatedJobId);
+        if (job) {
+          relatedJob = { id: job.id, title: job.title, address: job.address };
+        }
+      }
+      
+      if (workflow.relatedDocumentId) {
+        const doc = await storage.getDocument(workflow.relatedDocumentId);
+        if (doc) {
+          relatedDocument = { id: doc.id, name: doc.name, fileUrl: doc.fileUrl, category: doc.category };
+        }
+      }
+      
+      const signatures = await storage.getApprovalSignatures(workflowId);
+      const history = await storage.getApprovalHistory(workflowId);
+      
+      res.json({
+        ...workflow,
+        relatedJob,
+        relatedDocument,
+        signatures,
+        history,
+      });
+    } catch (error) {
+      console.error("Error fetching approval workflow:", error);
+      res.status(500).json({ message: "Failed to fetch approval workflow" });
+    }
+  });
+
+  // POST /api/approvals - Create new approval workflow
+  app.post('/api/approvals', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase() as UserRole;
+      
+      // RBAC check
+      if (!canCreateApproval(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to create approval workflows" });
+      }
+      
+      const { title, description, type, relatedJobId, relatedDocumentId, customerName, customerEmail } = req.body;
+      
+      if (!title || !type) {
+        return res.status(400).json({ message: "Title and type are required" });
+      }
+      
+      // Validate type
+      const validTypes = ['estimate', 'change_order', 'authorization', 'other'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ message: "Invalid approval type" });
+      }
+      
+      // If relatedDocumentId is provided, verify user can access it
+      if (relatedDocumentId) {
+        const doc = await storage.getDocument(relatedDocumentId);
+        if (!doc || doc.companyId !== company.id) {
+          return res.status(404).json({ message: "Document not found" });
+        }
+        
+        // Check doc visibility
+        const allowedVisibilities = getAllowedVisibilities(userRole);
+        if (userRole !== 'OWNER' && !allowedVisibilities.includes(doc.visibility as DocumentVisibility)) {
+          return res.status(403).json({ message: "You don't have access to this document" });
+        }
+      }
+      
+      // If relatedJobId is provided, verify it exists and belongs to company
+      if (relatedJobId) {
+        const job = await storage.getJob(relatedJobId);
+        if (!job || job.companyId !== company.id) {
+          return res.status(404).json({ message: "Job not found" });
+        }
+      }
+      
+      const workflow = await storage.createApprovalWorkflow({
+        companyId: company.id,
+        title,
+        description: description || null,
+        type,
+        status: 'draft',
+        relatedJobId: relatedJobId || null,
+        relatedDocumentId: relatedDocumentId || null,
+        customerName: customerName || null,
+        customerEmail: customerEmail || null,
+        createdBy: userId,
+      });
+      
+      // Create history entry
+      await storage.createApprovalHistory({
+        workflowId: workflow.id,
+        action: 'created',
+        description: `Approval workflow "${title}" created`,
+        performedBy: userId,
+      });
+      
+      res.status(201).json(workflow);
+    } catch (error) {
+      console.error("Error creating approval workflow:", error);
+      res.status(500).json({ message: "Failed to create approval workflow" });
+    }
+  });
+
+  // POST /api/approvals/:id/signatures - Add signature request to workflow
+  app.post('/api/approvals/:id/signatures', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateApproval(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to add signature requests" });
+      }
+      
+      const workflowId = parseInt(req.params.id);
+      const workflow = await storage.getApprovalWorkflow(workflowId);
+      
+      if (!workflow || workflow.companyId !== company.id) {
+        return res.status(404).json({ message: "Approval workflow not found" });
+      }
+      
+      const { signerName, signerEmail, signerType } = req.body;
+      
+      if (!signerName || !signerEmail || !signerType) {
+        return res.status(400).json({ message: "Signer name, email, and type are required" });
+      }
+      
+      // Generate unique access token
+      const accessToken = randomBytes(32).toString('hex');
+      
+      const signature = await storage.createApprovalSignature({
+        workflowId,
+        signerName,
+        signerEmail,
+        signerType,
+        status: 'pending',
+        accessToken,
+      });
+      
+      // Create history entry
+      await storage.createApprovalHistory({
+        workflowId,
+        action: 'signature_requested',
+        description: `Signature requested from ${signerName} (${signerEmail})`,
+        performedBy: userId,
+      });
+      
+      res.status(201).json(signature);
+    } catch (error) {
+      console.error("Error adding signature request:", error);
+      res.status(500).json({ message: "Failed to add signature request" });
+    }
+  });
+
   // Schedule routes
   app.get('/api/schedule-items', isAuthenticated, async (req: any, res) => {
     try {
