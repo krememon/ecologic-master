@@ -1,0 +1,86 @@
+TASK: Fix EMAIL_FROM handling for Resend so email sending is 100% reliable
+
+PROBLEM
+Signature request emails fail with:
+“Invalid `from` field. The email address needs to follow the `email@example.com` or `Name <email@example.com>` format.”
+
+We want this to NEVER happen again, even if env vars are misconfigured.
+
+GOAL
+- Always send emails successfully via Resend when clicking “Send for Signature”
+- Enforce valid EMAIL_FROM formatting
+- Provide a safe fallback
+- Fail loudly only if Resend itself fails
+
+REQUIREMENTS
+Use Resend only (no SMTP fallback).
+
+BACKEND CHANGES
+
+1) In the email utility (e.g. server/email.ts or server/utils/email.ts):
+
+- Read EMAIL_FROM from process.env
+- Validate format BEFORE calling Resend
+- If invalid or missing, automatically fallback to:
+  onboarding@resend.dev
+- Log a warning when fallback is used (dev only)
+
+VALID FORMATS:
+- email@example.com
+- Name <email@example.com>
+
+INVALID EXAMPLES:
+- EcoLogic signatures@domain.com
+- "EcoLogic signatures@domain.com"
+- EcoLogic@domain.com without brackets when name is included
+
+IMPLEMENTATION DETAIL
+Add a helper like:
+
+function normalizeFromAddress(rawFrom?: string) {
+  if (!rawFrom) return "onboarding@resend.dev";
+
+  const trimmed = rawFrom.trim();
+
+  const emailOnlyRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+  const nameEmailRegex = /^[^<>]+<[^\\s@]+@[^\\s@]+\\.[^\\s@]+>$/;
+
+  if (emailOnlyRegex.test(trimmed)) return trimmed;
+  if (nameEmailRegex.test(trimmed)) return trimmed;
+
+  console.warn("[Email] Invalid EMAIL_FROM, falling back to onboarding@resend.dev");
+  return "onboarding@resend.dev";
+}
+
+Then use the returned value when calling Resend.
+
+2) Update sendSignatureRequestEmail():
+- Use normalized from address
+- Do NOT throw for invalid EMAIL_FROM
+- Only throw if Resend API returns an error
+
+3) Update POST /api/signature-requests/:id/send:
+- If email send succeeds:
+  - status = "sent"
+  - sentAt = now()
+  - deliveryStatus = "sent"
+- If Resend throws:
+  - status remains "draft"
+  - deliveryStatus = "failed"
+  - return 500 with clear message
+
+FRONTEND
+- On success toast: “Email sent to {customerEmail}”
+- On failure toast: “Email delivery failed. Please try again.”
+
+LOGGING (TEMPORARY)
+Add:
+- console.log("[Email] From:", resolvedFrom)
+- console.log("[Email] To:", customerEmail)
+Remove logs after confirmed working.
+
+DELIVERABLES
+- No more “Invalid from field” errors
+- Emails send even if EMAIL_FROM env var is malformed
+- Resend is the single source of truth
+- Signature Requests move to Sent ONLY when email actually sends

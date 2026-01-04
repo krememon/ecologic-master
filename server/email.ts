@@ -2,6 +2,31 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+const DEFAULT_FROM = 'onboarding@resend.dev';
+
+function normalizeFromAddress(rawFrom?: string): string {
+  if (!rawFrom) {
+    console.warn('[Email] EMAIL_FROM not set, using fallback:', DEFAULT_FROM);
+    return DEFAULT_FROM;
+  }
+
+  const trimmed = rawFrom.trim();
+
+  const emailOnlyRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const nameEmailRegex = /^[^<>]+<[^\s@]+@[^\s@]+\.[^\s@]+>$/;
+
+  if (emailOnlyRegex.test(trimmed)) {
+    return trimmed;
+  }
+  
+  if (nameEmailRegex.test(trimmed)) {
+    return trimmed;
+  }
+
+  console.warn('[Email] Invalid EMAIL_FROM format, using fallback:', DEFAULT_FROM, '(was:', trimmed, ')');
+  return DEFAULT_FROM;
+}
+
 interface SignatureRequestEmailParams {
   to: string;
   customerName: string;
@@ -20,17 +45,15 @@ export async function sendSignatureRequestEmail({
   companyName,
 }: SignatureRequestEmailParams): Promise<void> {
   const resendApiKey = process.env.RESEND_API_KEY;
-  const emailFrom = process.env.EMAIL_FROM;
   
   if (!resendApiKey) {
     throw new Error('RESEND_API_KEY is not configured. Please add it to your secrets.');
   }
   
-  if (!emailFrom) {
-    throw new Error('EMAIL_FROM is not configured. Please add it to your secrets.');
-  }
+  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
 
-  console.log('[Email] sending via Resend to=', to);
+  console.log('[Email] From:', resolvedFrom);
+  console.log('[Email] To:', to);
 
   const messageBlock = message 
     ? `<div style="background-color: #f8f9fa; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -81,20 +104,20 @@ export async function sendSignatureRequestEmail({
 
   try {
     const { data, error } = await resend.emails.send({
-      from: emailFrom,
+      from: resolvedFrom,
       to: [to],
       subject: `Signature requested: ${documentName}`,
       html,
     });
 
     if (error) {
-      console.error('[Email] failed', error);
+      console.error('[Email] Resend API error:', error);
       throw new Error(error.message || 'Failed to send email via Resend');
     }
 
     console.log('[Email] delivered (Resend) to=', to, 'id=', data?.id);
   } catch (err: any) {
-    console.error('[Email] failed', err);
+    console.error('[Email] failed:', err?.message || err);
     throw err;
   }
 }
@@ -105,20 +128,18 @@ interface TestEmailParams {
 
 export async function sendTestEmail({ to }: TestEmailParams): Promise<void> {
   const resendApiKey = process.env.RESEND_API_KEY;
-  const emailFrom = process.env.EMAIL_FROM;
   
   if (!resendApiKey) {
     throw new Error('RESEND_API_KEY is not configured');
   }
   
-  if (!emailFrom) {
-    throw new Error('EMAIL_FROM is not configured');
-  }
+  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
 
-  console.log('[Email] sending test email via Resend to=', to);
+  console.log('[Email] Test email from:', resolvedFrom);
+  console.log('[Email] Test email to:', to);
 
   const { data, error } = await resend.emails.send({
-    from: emailFrom,
+    from: resolvedFrom,
     to: [to],
     subject: 'EcoLogic - Test Email',
     html: `
@@ -131,7 +152,7 @@ export async function sendTestEmail({ to }: TestEmailParams): Promise<void> {
   });
 
   if (error) {
-    console.error('[Email] test email failed', error);
+    console.error('[Email] test email failed:', error);
     throw new Error(error.message || 'Failed to send test email');
   }
 
