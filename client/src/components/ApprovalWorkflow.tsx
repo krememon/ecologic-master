@@ -61,6 +61,8 @@ interface SignatureRequest {
   signedAt?: string;
   signUrl?: string;
   signingUrl?: string; // Only returned on creation
+  signatureUrl?: string; // Base64 data URL of customer signature
+  signedName?: string;
   deliveryStatus?: string; // sent, failed
   deliveryError?: string;
   document?: {
@@ -690,6 +692,31 @@ export default function SignatureRequests({
                   <p className="text-slate-900 dark:text-slate-100">
                     {format(new Date(selectedRequest.sentAt), 'MMM d, yyyy HH:mm')}
                   </p>
+                </div>
+              )}
+
+              {/* Signed Date */}
+              {selectedRequest.signedAt && (
+                <div>
+                  <Label className="text-sm font-medium text-slate-600 dark:text-slate-400">Signed</Label>
+                  <p className="text-slate-900 dark:text-slate-100">
+                    {format(new Date(selectedRequest.signedAt), 'MMM d, yyyy HH:mm')}
+                    {selectedRequest.signedName && ` by ${selectedRequest.signedName}`}
+                  </p>
+                </div>
+              )}
+
+              {/* View Signature - Show for signed requests with signature data */}
+              {selectedRequest.status === 'signed' && selectedRequest.signatureUrl && (
+                <div>
+                  <Label className="text-sm font-medium text-slate-600 dark:text-slate-400">Customer Signature</Label>
+                  <div className="mt-2 border rounded-lg p-2 bg-white dark:bg-slate-800">
+                    <img 
+                      src={selectedRequest.signatureUrl} 
+                      alt="Customer Signature"
+                      className="max-w-full max-h-32 mx-auto"
+                    />
+                  </div>
                 </div>
               )}
 
