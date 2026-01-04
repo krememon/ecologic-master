@@ -43,12 +43,15 @@ import {
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
+  signatureRequests,
   type ApprovalWorkflow,
   type InsertApprovalWorkflow,
   type ApprovalSignature,
   type InsertApprovalSignature,
   type ApprovalHistory,
   type InsertApprovalHistory,
+  type SignatureRequest,
+  type InsertSignatureRequest,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -190,6 +193,14 @@ export interface IStorage {
   // Approval History operations
   createApprovalHistory(history: InsertApprovalHistory): Promise<ApprovalHistory>;
   getApprovalHistory(workflowId: number): Promise<ApprovalHistory[]>;
+  
+  // Signature Request operations
+  getSignatureRequests(companyId: number): Promise<SignatureRequest[]>;
+  getSignatureRequest(id: number): Promise<SignatureRequest | undefined>;
+  getSignatureRequestByToken(accessToken: string): Promise<SignatureRequest | undefined>;
+  createSignatureRequest(request: InsertSignatureRequest): Promise<SignatureRequest>;
+  updateSignatureRequest(id: number, request: Partial<InsertSignatureRequest>): Promise<SignatureRequest>;
+  deleteSignatureRequest(id: number): Promise<void>;
   
   // Employee management operations
   getOrgUsers(companyId: number, params?: { search?: string; role?: UserRole; status?: string; limit?: number; offset?: number }): Promise<{ users: User[]; total: number }>;
@@ -1276,6 +1287,52 @@ export class DatabaseStorage implements IStorage {
       .from(approvalHistory)
       .where(eq(approvalHistory.workflowId, workflowId))
       .orderBy(desc(approvalHistory.timestamp));
+  }
+
+  // Signature Request operations
+  async getSignatureRequests(companyId: number): Promise<SignatureRequest[]> {
+    return await db
+      .select()
+      .from(signatureRequests)
+      .where(eq(signatureRequests.companyId, companyId))
+      .orderBy(desc(signatureRequests.createdAt));
+  }
+
+  async getSignatureRequest(id: number): Promise<SignatureRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(signatureRequests)
+      .where(eq(signatureRequests.id, id));
+    return request || undefined;
+  }
+
+  async getSignatureRequestByToken(accessToken: string): Promise<SignatureRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(signatureRequests)
+      .where(eq(signatureRequests.accessToken, accessToken));
+    return request || undefined;
+  }
+
+  async createSignatureRequest(requestData: InsertSignatureRequest): Promise<SignatureRequest> {
+    const [request] = await db
+      .insert(signatureRequests)
+      .values(requestData)
+      .returning();
+    return request;
+  }
+
+  async updateSignatureRequest(id: number, requestData: Partial<InsertSignatureRequest>): Promise<SignatureRequest> {
+    const [request] = await db
+      .update(signatureRequests)
+      .set({ ...requestData, updatedAt: new Date() })
+      .where(eq(signatureRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  async deleteSignatureRequest(id: number): Promise<void> {
+    await db.delete(signatureRequests).where(eq(signatureRequests.id, id));
   }
 
   // Employee management operations
