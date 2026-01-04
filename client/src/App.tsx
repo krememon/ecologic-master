@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -29,9 +29,8 @@ import ResetPassword from "@/pages/ResetPassword";
 import ChoosePlan from "@/pages/ChoosePlan";
 import Employees from "@/pages/Employees";
 import JoinCompany from "@/pages/JoinCompany";
-import PublicSign from "@/pages/PublicSign";
 
-function AuthGatedApp() {
+function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
   
   useWebSocket();
@@ -96,20 +95,6 @@ function AuthGatedApp() {
       </Switch>
     </Layout>
   );
-}
-
-function Router() {
-  const [location] = useLocation();
-  
-  // HARD BYPASS: Check for public signing route FIRST, before ANY auth logic
-  // This must happen before useAuth() is called anywhere
-  if (/^\/sign\/[^/]+/.test(location)) {
-    console.log("[Router] PUBLIC SIGNING BYPASS - rendering PublicSign for:", location);
-    return <PublicSign />;
-  }
-
-  // All other routes go through auth-gated app
-  return <AuthGatedApp />;
 }
 
 function App() {
