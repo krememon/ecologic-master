@@ -1,0 +1,84 @@
+PHASE 2B — Signature Requests: Notify Customer with Signing Link (Email MVP)
+
+CURRENT STATE
+- Signature requests can be created and marked Sent (draft -> sent) with success toast.
+- No real notification is sent yet.
+
+GOAL
+Make “Sent” actually notify the customer:
+- Generate a public signing link (no login required)
+- Email the customer that link
+- Add a simple public signing page that previews the document
+
+DB CHANGES
+1) signature_requests add:
+- publicToken (unique, random string)
+- signUrl (optional; store the generated URL)
+- viewedAt (nullable timestamp)
+- signedAt (nullable timestamp)
+(Optional) deliveryStatus: 'pending'|'sent'|'failed' and deliveryError text
+
+BACKEND
+1) When POST /api/signature-requests/:id/send is called:
+- Validate RBAC + doc visibility (same as Phase 2A)
+- Ensure request is draft
+- Generate publicToken if missing
+- Set status='sent', sentAt=now()
+- Build signUrl like: `${APP_BASE_URL}/sign/${publicToken}`
+- Send an email to customerEmail with signUrl
+  - Subject: “Please sign: {documentName}”
+  - Body: short + button/link
+- If email send fails:
+  - Return 500 with message
+  - Do NOT leave status='sent' unless delivery succeeded (prefer rollback to draft OR set deliveryStatus='failed')
+
+2) Add public route:
+GET /api/public/signature-requests/:token
+- No auth
+- Returns minimal info needed for signing page:
+  - document name, document url/storage url, customerName, message, org/company name, status
+- If token invalid: 404
+
+3) Add public route to mark viewed:
+POST /api/public/signature-requests/:token/viewed
+- Set viewedAt if not set
+
+4) Add public route to “sign” (MVP)
+POST /api/public/signature-requests/:token/sign
+- For MVP: mark status='signed', signedAt=now()
+- Later this will be replaced by provider integration
+- Return success
+
+FRONTEND
+1) Create public page route: /sign/:token
+- On load: fetch GET /api/public/signature-requests/:token
+- Call /viewed once on first render
+- Show:
+  - Document preview (image inline, pdf iframe)
+  - Customer name/email
+  - Message (if any)
+  - Primary button: “Sign & Submit”
+- On click “Sign & Submit”:
+  - POST /api/public/signature-requests/:token/sign
+  - Show success screen: “Signed successfully”
+  - (Optional) show “You can close this tab”
+
+2) Update internal UI:
+- Once sent, show signUrl somewhere in the Signature Request detail view with a “Copy link” button (office roles only).
+
+EMAIL IMPLEMENTATION
+- Use whatever email utility exists in project (nodemailer, resend, etc).
+- Add required env vars safely.
+- Keep email template minimal and clean (plain HTML ok).
+
+RBAC / SECURITY
+- publicToken must be unguessable (crypto random)
+- public endpoints must return minimal data only (no internal ids, no private docs user shouldn’t see)
+- Ensure the document being signed is allowed to be accessed by the public link ONLY through this token (do not expose general documents endpoints).
+
+DELIVERABLES
+- Clicking Send emails the customer a signing link
+- Customer can open /sign/:token and view the document
+- Customer can click “Sign & Submit” and request becomes Signed
+- Internal UI updates status to Signed after refresh
+- No RBAC regressions

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, sendSignatureRequestEmail } from "./replitAuth";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
 
@@ -2347,23 +2347,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Only draft requests can be sent" });
       }
       
-      // Update status to 'sent' with sentAt and sentByUserId
-      const updated = await storage.updateSignatureRequest(requestId, {
-        status: 'sent',
-      });
+      // Generate signing URL
+      const baseUrl = process.env.BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
+      const signUrl = `${baseUrl}/sign/${request.accessToken}`;
       
-      // Also update sentAt and sentByUserId directly since they're not in InsertSignatureRequest
+      // Send email to customer
+      const emailSent = await sendSignatureRequestEmail(
+        request.customerEmail,
+        request.customerName,
+        doc.name,
+        company.name,
+        request.accessToken,
+        request.message
+      );
+      
+      if (!emailSent && process.env.SMTP_USER) {
+        // Only fail if SMTP is configured but email failed
+        return res.status(500).json({ message: "Failed to send email to customer" });
+      }
+      
+      // Update status to 'sent' with sentAt, sentByUserId, and signUrl
       const [finalUpdated] = await db
         .update(signatureRequests)
         .set({
+          status: 'sent',
           sentAt: new Date(),
           sentByUserId: userId,
+          signUrl: signUrl,
           updatedAt: new Date(),
         })
         .where(eq(signatureRequests.id, requestId))
         .returning();
       
-      // Omit accessToken from response
+      // Omit accessToken from response but include signUrl for internal use
       const { accessToken: _token, ...responseData } = finalUpdated;
       res.json(responseData);
     } catch (error) {
@@ -2401,6 +2417,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting signature request:", error);
       res.status(500).json({ message: "Failed to delete signature request" });
+    }
+  });
+
+  // ============== PUBLIC SIGNATURE ROUTES (No Auth) ==============
+
+  // GET /api/public/signature-requests/:token - Get signature request for public signing
+  app.get('/api/public/signature-requests/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      if (!token || token.length < 32) {
+        return res.status(404).json({ message: "Invalid token" });
+      }
+      
+      const request = await storage.getSignatureRequestByToken(token);
+      
+      if (!request) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      // Get document info
+      const doc = await storage.getDocument(request.documentId);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Get company name
+      const company = await storage.getCompany(request.companyId);
+      
+      // Return minimal info needed for signing page (no internal IDs exposed)
+      res.json({
+        customerName: request.customerName,
+        customerEmail: request.customerEmail,
+        message: request.message,
+        status: request.status,
+        documentName: doc.name,
+        documentUrl: doc.fileUrl,
+        documentCategory: doc.category,
+        companyName: company?.name || 'Unknown Company',
+        viewedAt: request.viewedAt,
+        signedAt: request.signedAt,
+      });
+    } catch (error) {
+      console.error("Error fetching public signature request:", error);
+      res.status(500).json({ message: "Failed to fetch signature request" });
+    }
+  });
+
+  // POST /api/public/signature-requests/:token/viewed - Mark request as viewed
+  app.post('/api/public/signature-requests/:token/viewed', async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const request = await storage.getSignatureRequestByToken(token);
+      
+      if (!request) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      // Only set viewedAt if not already set
+      if (!request.viewedAt) {
+        await db
+          .update(signatureRequests)
+          .set({
+            viewedAt: new Date(),
+            status: request.status === 'sent' ? 'viewed' : request.status,
+            updatedAt: new Date(),
+          })
+          .where(eq(signatureRequests.id, request.id));
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking signature request as viewed:", error);
+      res.status(500).json({ message: "Failed to update signature request" });
+    }
+  });
+
+  // POST /api/public/signature-requests/:token/sign - Sign the document (MVP)
+  app.post('/api/public/signature-requests/:token/sign', async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const request = await storage.getSignatureRequestByToken(token);
+      
+      if (!request) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      // Can only sign if status is sent or viewed
+      if (!['sent', 'viewed'].includes(request.status)) {
+        return res.status(400).json({ 
+          message: request.status === 'signed' 
+            ? "This document has already been signed" 
+            : "This document cannot be signed"
+        });
+      }
+      
+      // Mark as signed
+      await db
+        .update(signatureRequests)
+        .set({
+          status: 'signed',
+          signedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(signatureRequests.id, request.id));
+      
+      res.json({ success: true, message: "Document signed successfully" });
+    } catch (error) {
+      console.error("Error signing document:", error);
+      res.status(500).json({ message: "Failed to sign document" });
     }
   });
 

@@ -87,6 +87,69 @@ async function sendPasswordResetEmail(email: string, token: string) {
   });
 }
 
+// Send signature request email to customer
+export async function sendSignatureRequestEmail(
+  customerEmail: string,
+  customerName: string,
+  documentName: string,
+  companyName: string,
+  accessToken: string,
+  message?: string | null
+): Promise<boolean> {
+  if (!process.env.SMTP_USER) {
+    console.log('[email] SMTP not configured, skipping signature request email');
+    return true; // Return true to allow the flow to continue in dev
+  }
+  
+  const signUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/sign/${accessToken}`;
+  
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: customerEmail,
+      subject: `Please sign: ${documentName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #f8fafc; border-radius: 8px; padding: 32px; text-align: center;">
+            <h2 style="color: #1e293b; margin-bottom: 16px;">Signature Request</h2>
+            <p style="color: #64748b; margin-bottom: 8px;">Hello ${customerName},</p>
+            <p style="color: #475569; margin-bottom: 24px;">
+              <strong>${companyName}</strong> has requested your signature on the following document:
+            </p>
+            <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+              <p style="color: #1e293b; font-weight: 600; margin: 0;">${documentName}</p>
+            </div>
+            ${message ? `
+            <div style="background: white; border-radius: 8px; padding: 16px; margin-bottom: 24px; border: 1px solid #e2e8f0; text-align: left;">
+              <p style="color: #64748b; font-size: 12px; margin: 0 0 8px 0;">Message:</p>
+              <p style="color: #475569; margin: 0; white-space: pre-wrap;">${message}</p>
+            </div>
+            ` : ''}
+            <a href="${signUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-weight: 600;">
+              Review & Sign Document
+            </a>
+            <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
+              If you have questions, please contact ${companyName} directly.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+    console.log(`[email] Signature request email sent to ${customerEmail}`);
+    return true;
+  } catch (error) {
+    console.error('[email] Failed to send signature request email:', error);
+    return false;
+  }
+}
+
 export function setupAuth(app: Express) {
   // Session configuration
   const PostgresSessionStore = connectPg(session);
