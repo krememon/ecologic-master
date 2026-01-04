@@ -26,7 +26,9 @@ import {
   Eye,
   Send,
   Briefcase,
-  Trash2
+  Trash2,
+  Copy,
+  Link
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -54,6 +56,10 @@ interface SignatureRequest {
   message?: string;
   status: string;
   createdAt: string;
+  sentAt?: string;
+  viewedAt?: string;
+  signedAt?: string;
+  signUrl?: string;
   signingUrl?: string; // Only returned on creation
   document?: {
     id: number;
@@ -662,6 +668,45 @@ export default function SignatureRequests({
                   {format(new Date(selectedRequest.createdAt), 'MMM d, yyyy HH:mm')}
                 </p>
               </div>
+
+              {/* Sent Date */}
+              {selectedRequest.sentAt && (
+                <div>
+                  <Label className="text-sm font-medium text-slate-600 dark:text-slate-400">Sent</Label>
+                  <p className="text-slate-900 dark:text-slate-100">
+                    {format(new Date(selectedRequest.sentAt), 'MMM d, yyyy HH:mm')}
+                  </p>
+                </div>
+              )}
+
+              {/* Signing Link - Show for sent/viewed/signed requests */}
+              {selectedRequest.signUrl && ['sent', 'viewed', 'signed'].includes(selectedRequest.status) && (
+                <div>
+                  <Label className="text-sm font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                    <Link className="h-3 w-3" />
+                    Signing Link
+                  </Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded text-sm font-mono truncate text-slate-600 dark:text-slate-300">
+                      {selectedRequest.signUrl}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedRequest.signUrl || '');
+                        toast({
+                          title: "Link copied",
+                          description: "Signing link copied to clipboard",
+                        });
+                      }}
+                      data-testid="button-copy-sign-link"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Actions - Only show for draft requests with proper role */}
               {canCreate && selectedRequest.status === 'draft' && (
