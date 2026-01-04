@@ -117,6 +117,8 @@ export default function Documents() {
   const [visibilityModalOpen, setVisibilityModalOpen] = useState(false);
   const [visibilityEditDoc, setVisibilityEditDoc] = useState<DocumentType | null>(null);
   const [selectedVisibility, setSelectedVisibility] = useState<DocumentVisibility>('internal');
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [signatureDoc, setSignatureDoc] = useState<DocumentType | null>(null);
   
   // Bulk select state
   const [selectMode, setSelectMode] = useState(false);
@@ -1239,6 +1241,22 @@ export default function Documents() {
               )}
             </div>
             <div className="flex gap-2">
+              {/* Send for Signature - RBAC: Only shown to Owner, Supervisor, Dispatcher, Estimator */}
+              {['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole.toUpperCase()) && selectedDoc && (
+                <Button
+                  variant="outline"
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"
+                  onClick={() => {
+                    setSignatureDoc(selectedDoc);
+                    setSignatureModalOpen(true);
+                    setIsPreviewOpen(false);
+                  }}
+                  data-testid="button-send-for-signature"
+                >
+                  <PenTool className="w-4 h-4 mr-2" />
+                  Send for Signature
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setIsPreviewOpen(false)}
@@ -1327,6 +1345,31 @@ export default function Documents() {
               Save
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send for Signature Modal */}
+      <Dialog open={signatureModalOpen} onOpenChange={(open) => {
+        setSignatureModalOpen(open);
+        if (!open) {
+          setSignatureDoc(null);
+        }
+      }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Send for Signature</DialogTitle>
+          </DialogHeader>
+          {signatureDoc && (
+            <ApprovalWorkflow 
+              prefilledDocumentId={signatureDoc.id}
+              prefilledDocumentName={signatureDoc.name}
+              showCreateDialogOpen={false}
+              onClose={() => {
+                setSignatureModalOpen(false);
+                setSignatureDoc(null);
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

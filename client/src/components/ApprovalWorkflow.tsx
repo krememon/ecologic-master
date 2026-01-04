@@ -243,11 +243,82 @@ export default function SignatureRequests({
     });
   };
 
-  if (isLoading) {
+  if (isLoading && !prefilledDocumentId) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="animate-pulse text-slate-500">Loading signature requests...</div>
       </div>
+    );
+  }
+
+  // Embedded mode: When called with a prefilled document, show only the create form
+  if (prefilledDocumentId && prefilledDocumentName) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Document Info */}
+        <div className="space-y-2">
+          <Label>Document</Label>
+          <div className="flex items-center gap-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-md">
+            <FileText className="h-4 w-4 text-slate-500" />
+            <span className="text-sm font-medium">{prefilledDocumentName}</span>
+          </div>
+        </div>
+
+        {/* Customer Name */}
+        <div className="space-y-2">
+          <Label htmlFor="customerName">Customer Name *</Label>
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="customerName"
+              className="pl-10"
+              placeholder="John Smith"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              data-testid="input-customer-name"
+            />
+          </div>
+        </div>
+
+        {/* Customer Email */}
+        <div className="space-y-2">
+          <Label htmlFor="customerEmail">Customer Email *</Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="customerEmail"
+              className="pl-10"
+              type="email"
+              placeholder="john@example.com"
+              value={customerEmail}
+              onChange={(e) => setCustomerEmail(e.target.value)}
+              data-testid="input-customer-email"
+            />
+          </div>
+        </div>
+
+        {/* Optional Message */}
+        <div className="space-y-2">
+          <Label htmlFor="message">Message (Optional)</Label>
+          <Textarea
+            id="message"
+            placeholder="Include a personal message with the signature request..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            data-testid="input-message"
+            rows={3}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={createMutation.isPending} data-testid="button-create-request">
+            {createMutation.isPending ? "Creating..." : "Send for Signature"}
+          </Button>
+        </div>
+      </form>
     );
   }
 
