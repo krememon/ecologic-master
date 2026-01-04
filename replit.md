@@ -40,14 +40,22 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Automatic job inheritance: Signature requests inherit jobId from the selected document
   - Secure access tokens: Generated using randomBytes(32).toString('hex'), only returned once at creation for emailing
   - Status workflow: draft → sent → viewed → signed/declined/expired/canceled
+  - Automatic 14-day expiry: Links expire 14 days after sending
   - "Send for Signature" action available from Documents page preview modal AND signature request detail view
-  - Send action (POST /api/signature-requests/:id/send): Transitions draft→sent, records sentAt timestamp and sentByUserId, enforces RBAC and document visibility, sends branded HTML email to customer with signing link
-  - **Email Notifications**: Uses Resend to send professional HTML emails to customers with company branding, document name, optional message, and "Review & Sign Document" CTA button. Configuration via secrets (RESEND_API_KEY, EMAIL_FROM, APP_BASE_URL). Email delivery fails loudly if not configured - no silent skipping. Debug endpoint at POST /api/debug/test-email (dev only, owner only) for testing email configuration.
-  - **Public Signing Flow**: Customer-facing route at /sign/:token (accessible without authentication). Public API routes at /api/public/signature-requests/:token. Automatically marks request as "viewed" on page load, displays document info/company name/message, requires agreement checkbox before signing, and updates status to "signed" on completion.
+  - Send action (POST /api/signature-requests/:id/send): Transitions draft→sent, records sentAt timestamp and sentByUserId, sets expiresAt to 14 days, enforces RBAC and document visibility, sends branded HTML email to customer with signing link
+  - **Email Notifications**: Uses Resend to send professional HTML emails with company branding. Configuration via secrets (RESEND_API_KEY, EMAIL_FROM, APP_BASE_URL). Email_FROM is validated and falls back to onboarding@resend.dev if invalid. APP_BASE_URL is validated using URL parser - must be valid public URL (e.g., https://yourapp.replit.app).
+  - **Public Signing Flow**: Customer-facing route at /sign/:token (accessible without authentication, no login redirect). Public API routes at /api/public/signature-requests/:token. Features:
+    - Validates token exists, checks expiry (410 if expired), prevents re-signing (400 if already signed)
+    - Automatically marks request as "viewed" on page load
+    - Displays document info/company name/message with document preview (PDF iframe or image)
+    - Canvas-based signature pad for drawing signatures (touch and mouse support)
+    - Captures signature as PNG data URL + optional signer name
+    - Success confirmation screen after signing
+    - Stores signatureUrl (base64) and signedName in database
   - Delete action only available for draft status (hidden not disabled for non-drafts)
-  - Status pills show proper capitalization (Draft, Sent, Viewed, etc.)
-  - **Internal UI**: Sent requests display signing link (signUrl) with copy-to-clipboard button for easy sharing. Shows sentAt timestamp for sent requests.
-  - Database table: signature_requests with documentId, customerName, customerEmail, message, status, accessToken, sentAt, sentByUserId, signUrl, viewedAt, signedAt
+  - Status pills show proper capitalization (Draft, Sent, Viewed, Signed, etc.)
+  - **Internal UI**: Shows signedAt timestamp with signer name, displays captured customer signature image in detail view. Sent requests display signing link with copy-to-clipboard button.
+  - Database table: signature_requests with documentId, customerName, customerEmail, message, status, accessToken, sentAt, sentByUserId, signUrl, viewedAt, signedAt, expiresAt, signatureUrl, signedName
 - **Employee Management**: Manages employee active/inactive status, session revocation, and contact information.
 - **Onboarding**: Features an invite code system for company onboarding, supporting owner registration and new member joining, including a company rejoin flow.
 - **Subscription Management**: Integrates Stripe for subscription plans, enabling role-based access control and plan-based feature limits.
