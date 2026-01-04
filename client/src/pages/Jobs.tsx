@@ -258,6 +258,10 @@ export default function Jobs() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
+  const [isPhotoUploadModalOpen, setIsPhotoUploadModalOpen] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [photoVisibility, setPhotoVisibility] = useState<'customer_internal' | 'assigned_crew_only' | 'office_only' | 'owner_only'>('assigned_crew_only');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [crewJobId, setCrewJobId] = useState<number | null>(null); // Separate state for crew editing
   const [technicianSearch, setTechnicianSearch] = useState("");
@@ -592,6 +596,48 @@ export default function Jobs() {
     },
   });
 
+  // Document upload mutation (for uploads with visibility selection)
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async ({ formData }: { formData: FormData }) => {
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || 'Upload failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${selectedJob?.id}/photos`] });
+      setIsUploading(false);
+      setUploadProgress(0);
+      setIsPhotoUploadModalOpen(false);
+      setPendingUploadFile(null);
+      setPhotoVisibility('assigned_crew_only');
+      if (modalFileInputRef.current) {
+        modalFileInputRef.current.value = '';
+      }
+      toast({
+        title: "Document uploaded",
+        description: "Your file has been uploaded successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      console.error('document:upload:error', { jobId: selectedJob?.id, error });
+      setIsUploading(false);
+      setUploadProgress(0);
+      toast({
+        title: "Upload failed",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Update crew mutation (handles both add and remove)
   const updateCrewMutation = useMutation({
     mutationFn: async ({ jobId, toAdd, toRemove }: { jobId: number; toAdd: string[]; toRemove: string[] }) => {
@@ -650,7 +696,7 @@ export default function Jobs() {
     },
   });
 
-  // Validate file before upload
+  // Validate file before upload (images only - for legacy photo endpoint)
   const validateFile = (file: File): string | null => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/webp'];
     const maxSize = 15 * 1024 * 1024; // 15 MB
@@ -666,7 +712,93 @@ export default function Jobs() {
     return null;
   };
 
-  // Handle photo upload
+  // Validate file for document upload (accepts more file types)
+  const validateDocumentFile = (file: File): string | null => {
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/heic', 'image/webp', 'image/gif',
+      'application/pdf',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain', 'text/csv'
+    ];
+    const maxSize = 25 * 1024 * 1024; // 25 MB
+
+    if (!allowedTypes.includes(file.type)) {
+      return 'Invalid file type. Please upload images, PDFs, or common document files.';
+    }
+
+    if (file.size > maxSize) {
+      return 'File too large. Maximum size is 25 MB.';
+    }
+
+    return null;
+  };
+
+  // Determine category based on file type
+  const getCategoryFromMimeType = (mimeType: string): string => {
+    if (mimeType.startsWith('image/')) return 'Photos';
+    return 'Other';
+  };
+
+  // Handle file selection in modal
+  const handleModalFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validationError = validateDocumentFile(file);
+    if (validationError) {
+      toast({
+        title: "Error",
+        description: validationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPendingUploadFile(file);
+  };
+
+  // Handle document upload from modal
+  const handleDocumentUpload = () => {
+    if (!pendingUploadFile || !selectedJob) return;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const formData = new FormData();
+    formData.append('file', pendingUploadFile);
+    formData.append('name', pendingUploadFile.name);
+    formData.append('category', getCategoryFromMimeType(pendingUploadFile.type));
+    formData.append('jobId', selectedJob.id.toString());
+    formData.append('visibility', photoVisibility);
+
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return prev;
+        }
+        return prev + 10;
+      });
+    }, 100);
+
+    uploadDocumentMutation.mutate({ formData }, {
+      onSettled: () => {
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+      }
+    });
+  };
+
+  // Open upload modal
+  const openPhotoUploadModal = () => {
+    setPendingUploadFile(null);
+    setPhotoVisibility('assigned_crew_only');
+    setIsPhotoUploadModalOpen(true);
+  };
+
+  // Handle photo upload (legacy - direct upload without visibility)
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !selectedJob) return;
@@ -1005,7 +1137,7 @@ export default function Jobs() {
                       <Button 
                         size="sm" 
                         data-testid="button-upload-photo"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={openPhotoUploadModal}
                         disabled={isUploading}
                       >
                         <Camera className="h-4 w-4 mr-2" />
@@ -1055,7 +1187,7 @@ export default function Jobs() {
                             size="sm" 
                             variant="outline" 
                             data-testid="button-upload-photo"
-                            onClick={() => fileInputRef.current?.click()}
+                            onClick={openPhotoUploadModal}
                             disabled={isUploading}
                           >
                             <Camera className="h-4 w-4 mr-2" />
@@ -1078,7 +1210,7 @@ export default function Jobs() {
             </div>
           )}
           </div>
-          {/* Hidden file input for photo upload */}
+          {/* Hidden file input for photo upload (legacy) */}
           <input
             ref={fileInputRef}
             type="file"
@@ -1088,6 +1220,110 @@ export default function Jobs() {
             className="hidden"
             aria-label="Upload photo"
           />
+
+          {/* Photo Upload Modal with Visibility Selection */}
+          <Dialog open={isPhotoUploadModalOpen} onOpenChange={setIsPhotoUploadModalOpen}>
+            <DialogContent className="sm:max-w-[425px] rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>Upload Photo or Document</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                {/* File Picker */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Select File
+                  </label>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={modalFileInputRef}
+                      type="file"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                      onChange={handleModalFileSelect}
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300"
+                      data-testid="input-file-upload"
+                    />
+                    {pendingUploadFile && (
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Selected: {pendingUploadFile.name} ({(pendingUploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Visibility Dropdown */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Who can see this?
+                  </label>
+                  <Select value={photoVisibility} onValueChange={(value: any) => setPhotoVisibility(value)}>
+                    <SelectTrigger className="w-full" data-testid="select-visibility">
+                      <SelectValue placeholder="Select visibility" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="customer_internal">Everyone</SelectItem>
+                      <SelectItem value="assigned_crew_only">Assigned Crew Only</SelectItem>
+                      <SelectItem value="office_only">Office Only</SelectItem>
+                      <SelectItem value="owner_only">Owner Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {photoVisibility === 'customer_internal' && 'Visible to customers and all team members'}
+                    {photoVisibility === 'assigned_crew_only' && 'Only visible to crew assigned to this job'}
+                    {photoVisibility === 'office_only' && 'Only visible to office staff'}
+                    {photoVisibility === 'owner_only' && 'Only visible to the company owner'}
+                  </p>
+                </div>
+
+                {/* Upload Progress */}
+                {isUploading && uploadProgress > 0 && (
+                  <div className="w-full">
+                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsPhotoUploadModalOpen(false);
+                      setPendingUploadFile(null);
+                    }}
+                    disabled={isUploading}
+                    data-testid="button-cancel-upload"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleDocumentUpload}
+                    disabled={!pendingUploadFile || isUploading}
+                    data-testid="button-confirm-upload"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="h-4 w-4 mr-2" />
+                        Upload
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </DialogContent>
       </Dialog>
 
