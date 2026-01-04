@@ -20,7 +20,7 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -2302,6 +2302,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating signature request:", error);
       res.status(500).json({ message: "Failed to update signature request" });
+    }
+  });
+
+  // POST /api/signature-requests/:id/send - Send a draft signature request
+  app.post('/api/signature-requests/:id/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC check: Technician cannot send
+      if (!canCreateSignatureRequest(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to send signature requests" });
+      }
+      
+      const requestId = parseInt(req.params.id);
+      const request = await storage.getSignatureRequest(requestId);
+      
+      if (!request || request.companyId !== company.id) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      // Verify document visibility - user must have access to the underlying document
+      const doc = await storage.getDocument(request.documentId);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      const allowedVisibilities = getAllowedVisibilities(userRole);
+      const visibility = doc.visibility || 'customer_internal';
+      if (userRole !== 'OWNER' && !allowedVisibilities.includes(visibility)) {
+        return res.status(403).json({ message: "You don't have access to this document" });
+      }
+      
+      // Validation: Only draft requests can be sent
+      if (request.status !== 'draft') {
+        return res.status(400).json({ message: "Only draft requests can be sent" });
+      }
+      
+      // Update status to 'sent' with sentAt and sentByUserId
+      const updated = await storage.updateSignatureRequest(requestId, {
+        status: 'sent',
+      });
+      
+      // Also update sentAt and sentByUserId directly since they're not in InsertSignatureRequest
+      const [finalUpdated] = await db
+        .update(signatureRequests)
+        .set({
+          sentAt: new Date(),
+          sentByUserId: userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(signatureRequests.id, requestId))
+        .returning();
+      
+      // Omit accessToken from response
+      const { accessToken: _token, ...responseData } = finalUpdated;
+      res.json(responseData);
+    } catch (error) {
+      console.error("Error sending signature request:", error);
+      res.status(500).json({ message: "Failed to send signature request" });
     }
   });
 
