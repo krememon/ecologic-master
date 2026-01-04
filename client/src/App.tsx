@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -31,21 +31,15 @@ import Employees from "@/pages/Employees";
 import JoinCompany from "@/pages/JoinCompany";
 import PublicSign from "@/pages/PublicSign";
 
-function Router() {
+function AuthGatedApp() {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const [location] = useLocation();
   
   // Initialize WebSocket and push notifications only for authenticated users
-  // These hooks must be called unconditionally but will no-op when not authenticated
   useWebSocket();
   usePushNotifications();
 
-  // Handle public signing route BEFORE authentication check
-  // This ensures customers can access signing page regardless of auth state
-  const isSigningRoute = location.startsWith('/sign/');
-  if (isSigningRoute) {
-    return <PublicSign />;
-  }
+  // Debug logging
+  console.log("[AuthGatedApp] isLoading:", isLoading, "isAuth:", isAuthenticated, "hasCompany:", !!user?.company);
 
   if (isLoading) {
     return (
@@ -79,39 +73,46 @@ function Router() {
   }
 
   return (
+    <Layout>
+      <Switch>
+        <Route path="/choose-plan" component={ChoosePlan} />
+        <Route path="/" component={Home} />
+        <Route path="/jobs" component={Jobs} />
+        <Route path="/subcontractors" component={Contractors} />
+        <Route path="/clients" component={Clients} />
+        <Route path="/invoicing" component={Invoicing} />
+        <Route path="/payments" component={PaymentsPage} />
+        <Route path="/documents" component={Documents} />
+        <Route path="/messages" component={MessagesDirectory} />
+        <Route path="/messages/u/:userId">
+          {(params) => <MessageThread conversationId={params.userId} />}
+        </Route>
+        <Route path="/messages/c/:conversationId">
+          {(params) => <MessageThread conversationId={params.conversationId} />}
+        </Route>
+        <Route path="/schedule" component={AIScheduling} />
+        <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
+        <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
+        <Route path="/approvals" component={Approvals} />
+        <Route path="/employees" component={Employees} />
+        <Route path="/settings" component={Settings} />
+        <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
+  );
+}
+
+function Router() {
+  // Debug: log current path immediately
+  console.log("[Router] path:", window.location.pathname);
+
+  return (
     <Switch>
-      {/* Protected pages with Layout */}
-      <Route>
-        {() => (
-          <Layout>
-            <Switch>
-              <Route path="/choose-plan" component={ChoosePlan} />
-              <Route path="/" component={Home} />
-              <Route path="/jobs" component={Jobs} />
-              <Route path="/subcontractors" component={Contractors} />
-              <Route path="/clients" component={Clients} />
-              <Route path="/invoicing" component={Invoicing} />
-              <Route path="/payments" component={PaymentsPage} />
-              <Route path="/documents" component={Documents} />
-              <Route path="/messages" component={MessagesDirectory} />
-              <Route path="/messages/u/:userId">
-                {(params) => <MessageThread conversationId={params.userId} />}
-              </Route>
-              <Route path="/messages/c/:conversationId">
-                {(params) => <MessageThread conversationId={params.conversationId} />}
-              </Route>
-              <Route path="/schedule" component={AIScheduling} />
-              <Route path="/scheduling">{() => <Redirect to="/schedule" />}</Route>
-              <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
-              <Route path="/approvals" component={Approvals} />
-              <Route path="/employees" component={Employees} />
-              <Route path="/settings" component={Settings} />
-              <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
-              <Route component={NotFound} />
-            </Switch>
-          </Layout>
-        )}
-      </Route>
+      {/* PUBLIC: /sign/:token is handled FIRST, before any auth logic */}
+      <Route path="/sign/:token" component={PublicSign} />
+      {/* Everything else goes through auth-gated app */}
+      <Route>{() => <AuthGatedApp />}</Route>
     </Switch>
   );
 }
