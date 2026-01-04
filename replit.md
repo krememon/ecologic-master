@@ -34,6 +34,14 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Estimator: customer_internal, office_only
   - Technician: customer_internal, assigned_crew_only (limited to assigned jobs only)
   Backend enforces visibility at API level - restricted documents are completely hidden, not disabled.
+- **Signature Requests**: Electronic signature system allowing users to send documents to customers for signature. Features:
+  - RBAC enforcement: Owner, Supervisor, Dispatcher, Estimator can create requests; Technician cannot (hidden UI + 403 API response)
+  - Document visibility filtering: Users only see signature requests for documents they can access
+  - Automatic job inheritance: Signature requests inherit jobId from the selected document
+  - Secure access tokens: Generated using randomBytes(32).toString('hex'), only returned once at creation for emailing
+  - Status workflow: draft → sent → viewed → signed/declined/expired/canceled
+  - "Send for Signature" action available from Documents page preview modal
+  - Database table: signature_requests with documentId, customerName, customerEmail, message, status, accessToken
 - **Employee Management**: Manages employee active/inactive status, session revocation, and contact information.
 - **Onboarding**: Features an invite code system for company onboarding, supporting owner registration and new member joining, including a company rejoin flow.
 - **Subscription Management**: Integrates Stripe for subscription plans, enabling role-based access control and plan-based feature limits.
