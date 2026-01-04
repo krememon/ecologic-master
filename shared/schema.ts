@@ -623,6 +623,8 @@ export const signatureRequests = pgTable("signature_requests", {
   deliveryStatus: varchar("delivery_status", { length: 50 }), // sent, failed
   deliveryError: text("delivery_error"), // Error message if delivery failed
   expiresAt: timestamp("expires_at"),
+  signatureUrl: varchar("signature_url", { length: 500 }), // URL of stored signature image
+  signedName: varchar("signed_name", { length: 255 }), // Name used when signing
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

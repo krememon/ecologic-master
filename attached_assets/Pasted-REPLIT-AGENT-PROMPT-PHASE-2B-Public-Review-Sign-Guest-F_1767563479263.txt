@@ -1,0 +1,174 @@
+REPLIT AGENT PROMPT — PHASE 2B (Public “Review & Sign” Guest Flow)
+
+CONTEXT / SOURCE OF TRUTH
+We are building EcoLogic. Keep UI clean + mobile-first. Do NOT break existing Docs, RBAC, or internal signature request creation/sending.
+Current: email sends and links to /sign/:token but it redirects to EcoLogic login. We need a PUBLIC guest signing flow like DocuSign/Housecall Pro: customer clicks link → sees document → signs → done (NO EcoLogic account).
+
+PHASE 2B GOAL
+Implement a public signing experience for /sign/:token that:
+1) does NOT require login
+2) fetches signature request by token via public API
+3) shows document preview + message
+4) captures signature (draw pad) + submits
+5) marks request as SIGNED + stores signature proof
+6) shows confirmation screen
+7) updates internal EcoLogic UI (signature request list) to show Signed status after refresh
+
+IMPORTANT SECURITY RULES
+- Public endpoints must NOT expose company internal data beyond what’s needed to sign.
+- Token must be validated, and signing should be blocked if:
+  - token not found
+  - status != "sent"
+  - already signed
+  - expired (add expiresAt)
+- Do NOT require auth for /sign/:token or /api/public/* routes.
+
+--------------------------------------------
+BACKEND: DATABASE + MODELS
+1) Add fields to signature_requests table (or equivalent)
+- token (string, unique)  [should already exist; confirm]
+- status: "draft" | "sent" | "signed" | "void" (at minimum: draft/sent/signed)
+- sentAt (timestamp, nullable)
+- signedAt (timestamp, nullable)
+- expiresAt (timestamp, nullable)
+- signatureUrl (string, nullable)  // where we store the signature image proof
+- signatureStorageKey (string, nullable) // if using storage keys
+- signedName (string, nullable)  // store name used for signing (default customerName)
+- auditJson (json/text nullable)  // optional: store userAgent/ip later
+
+2) When sending email (existing /send endpoint)
+- Ensure token exists (generate if missing)
+- Ensure expiresAt is set if not set:
+  - expiresAt = now + 14 days (configurable constant)
+- status becomes "sent" ONLY if email actually sent successfully
+
+--------------------------------------------
+BACKEND: PUBLIC API ROUTES (NO AUTH)
+Create these routes in server/routes.ts (or equivalent). Place them under /api/public and ensure they bypass auth middleware.
+
+A) GET /api/public/signature-requests/:token
+Return safe payload:
+{
+  id,
+  status,
+  customerName,
+  customerEmail (optional – ok to return),
+  message,
+  createdAt,
+  sentAt,
+  expiresAt,
+  document: { id, name, category, mimeType, url }  // minimal for preview
+  relatedJob: { id, title } (optional if already stored)
+  company: { name, logoUrl? } (optional if easy; otherwise omit)
+}
+
+Validation:
+- If not found -> 404 {message:"Invalid link"}
+- If status != "sent" -> 400 {message:"This request is not available for signing"}
+- If signedAt exists or status=="signed" -> 400 {message:"Already signed"}
+- If expiresAt exists and now > expiresAt -> 410 {message:"Link expired"}
+
+NOTE: Document URL must be directly accessible for preview. If existing storage URLs require auth, generate a signed/public URL for this endpoint only.
+
+B) POST /api/public/signature-requests/:token/sign
+Body:
+{
+  signatureDataUrl: "data:image/png;base64,...",   // from canvas
+  signerName?: string
+}
+
+Validation:
+- Same token checks as GET
+- Must include signatureDataUrl
+- signatureDataUrl must start with "data:image/png;base64,"
+- Reject if too large (basic protection; e.g., > 2MB)
+
+Storage:
+- Convert dataUrl -> buffer and upload to storage (reuse existing upload helper if possible).
+- Save signatureStorageKey/signatureUrl
+- Set signedAt = now
+- Set status = "signed"
+- Set signedName = signerName || customerName
+
+Response:
+200 { ok:true }
+
+TEMP LOGS (remove after confirmed)
+console.log("[PublicSign] token", token, "status", req.status)
+console.log("[PublicSign] saving signature bytes", size)
+
+--------------------------------------------
+FRONTEND: PUBLIC SIGN PAGE (NO LOGIN)
+Create a public route/page:
+- /sign/:token
+This page must be accessible WITHOUT auth guards. If your router has a protected route wrapper, exclude /sign/* from it.
+
+UI REQUIREMENTS (mobile-first)
+Layout: centered card, plenty of spacing.
+States:
+1) Loading skeleton
+2) Error state (invalid/expired/already signed) with friendly text
+3) Ready-to-sign state
+4) Success confirmation state
+
+Ready-to-sign UI:
+- Header: “Review & Sign”
+- Show document name + category chip
+- Show related job (if available)
+- Show message text (if exists)
+- Document preview:
+  - If PDF: iframe preview (mobile friendly; if iframe issues, show “Open Document” button)
+  - If image: show image
+  - Else: show download/open link
+- Signature pad:
+  - Canvas draw area with border and “Sign here”
+  - Buttons: “Clear” (secondary), “Sign & Submit” (primary)
+- Optional signer name input:
+  - prefilled with customerName (editable)
+
+Success UI:
+- Big check icon
+- “Thanks — your signature has been recorded.”
+- “You can close this tab.”
+
+NETWORK CALLS
+On mount:
+- GET /api/public/signature-requests/:token
+On submit:
+- POST /api/public/signature-requests/:token/sign
+
+ERROR HANDLING
+- If GET returns 410 expired -> show “This link expired. Ask your contractor to resend.”
+- If already signed -> show “Already signed.”
+- If submit fails -> show toast + keep signature pad data.
+
+--------------------------------------------
+FRONTEND: INTERNAL ECOLOGIC VIEW UPDATE
+Wherever signature requests are listed in the E-signature Approvals tab:
+- Show a status pill: Draft / Sent / Signed
+- If Signed:
+  - show signedAt date
+  - show “View Signature” button (opens signatureUrl in new tab or modal)
+- After successful send or signing, ensure list refreshes (refetch or update state)
+
+--------------------------------------------
+DELIVERABLES / ACCEPTANCE TESTS
+1) Clicking “Review & Sign” in email opens /sign/:token WITHOUT redirecting to login.
+2) The /sign page loads details and previews document.
+3) Customer can draw signature and submit.
+4) After submit:
+   - status becomes SIGNED in DB
+   - signedAt populated
+   - signatureUrl stored
+   - /sign page shows confirmation
+5) Token cannot be signed twice (second attempt shows “Already signed”).
+6) Expired links show “Expired” state (set expiresAt on send).
+7) No RBAC leaks: public endpoint only returns minimal signing info.
+
+IMPLEMENTATION NOTES
+- Keep styling consistent with existing UI components (buttons, cards).
+- Keep code small and clean.
+- Add targeted logs only where needed and remove after confirmed.
+- Do not add duplicate buttons or extra legacy UI.
+
+START NOW: implement backend public endpoints + /sign/:token public page + signature storage + status updates.
