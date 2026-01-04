@@ -2117,8 +2117,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
+        // Omit accessToken from list response for security
+        const { accessToken: _token, ...requestWithoutToken } = request;
         return {
-          ...request,
+          ...requestWithoutToken,
           document: {
             id: doc.id,
             name: doc.name,
@@ -2179,8 +2181,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Omit accessToken from detail response for security
+      const { accessToken: _token, ...requestWithoutToken } = request;
       res.json({
-        ...request,
+        ...requestWithoutToken,
         document: {
           id: doc.id,
           name: doc.name,
@@ -2234,11 +2238,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate unique access token for secure signing link
       const accessToken = randomBytes(32).toString('hex');
       
-      // Create signature request
+      // Create signature request (jobId automatically inherited from document)
       const request = await storage.createSignatureRequest({
         companyId: company.id,
         documentId,
-        jobId: doc.jobId || null, // Inherit from document
+        jobId: doc.jobId || null, // Automatically inherit from document
         customerName,
         customerEmail,
         message: message || null,
@@ -2247,7 +2251,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdByUserId: userId,
       });
       
-      res.status(201).json(request);
+      // Return created request with accessToken (only returned once for email purposes)
+      // After creation, token is not exposed in list/detail endpoints
+      res.status(201).json({
+        ...request,
+        signingUrl: `/sign/${accessToken}`, // Provide full signing URL for emailing to customer
+      });
     } catch (error) {
       console.error("Error creating signature request:", error);
       res.status(500).json({ message: "Failed to create signature request" });
@@ -2287,7 +2296,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const updated = await storage.updateSignatureRequest(requestId, { status });
-      res.json(updated);
+      // Omit accessToken from response
+      const { accessToken: _token, ...responseData } = updated;
+      res.json(responseData);
     } catch (error) {
       console.error("Error updating signature request:", error);
       res.status(500).json({ message: "Failed to update signature request" });

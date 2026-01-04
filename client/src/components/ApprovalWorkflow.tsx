@@ -53,8 +53,8 @@ interface SignatureRequest {
   customerEmail: string;
   message?: string;
   status: string;
-  accessToken: string;
   createdAt: string;
+  signingUrl?: string; // Only returned on creation
   document?: {
     id: number;
     name: string;
