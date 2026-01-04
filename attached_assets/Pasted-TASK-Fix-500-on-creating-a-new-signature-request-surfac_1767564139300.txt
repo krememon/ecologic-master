@@ -1,0 +1,81 @@
+TASK: Fix 500 on creating a new signature request + surface real error
+
+PROBLEM
+UI shows: “Failed to Create 500: { message: 'Failed to create signature request' }”
+This started after Phase 2B work (public signing), likely due to schema mismatch or insert failing.
+
+GOAL
+1) Find the exact backend error causing the 500 (log it).
+2) Update DB schema (migration) and/or insert logic so create works again.
+3) Keep existing “send email” flow and public signing flow intact.
+
+STEPS
+
+A) Locate the create endpoint
+Find the route that handles creating a signature request, likely:
+POST /api/signature-requests
+(or similar)
+
+B) Add targeted error logging (TEMP)
+Inside the catch block (or right where DB insert happens), log the real error:
+console.error("[SignatureRequestCreate] failed:", err);
+If using a DB client that returns { error }, log that error object too:
+console.error("[SignatureRequestCreate] db error:", dbError);
+
+Also return error details in dev only:
+return res.status(500).json({ message: "Failed to create signature request", debug: String(err?.message || err) });
+
+(If you don’t want to leak details to client, keep debug behind NODE_ENV !== "production".)
+
+C) Ensure schema matches code
+Confirm signature_requests table has (at minimum):
+- id (pk)
+- companyId (or orgId)
+- documentId (fk)
+- customerName
+- customerEmail
+- message
+- token (unique, not null)
+- status (default 'draft')
+- createdAt
+Optional but recommended for phase 2B:
+- sentAt (nullable)
+- signedAt (nullable)
+- expiresAt (nullable)
+- signatureUrl (nullable)
+- signatureStorageKey (nullable)
+- signedName (nullable)
+
+If columns are missing, add a migration to create them with safe defaults:
+- status: text NOT NULL DEFAULT 'draft'
+- token: text NOT NULL UNIQUE
+- sentAt/signedAt/expiresAt: timestamp nullable
+- signatureUrl/signatureStorageKey/signedName: text nullable
+
+IMPORTANT: If you already store timestamps as created_at, use the existing naming convention.
+Match whatever your DB uses (camelCase vs snake_case) and update code accordingly.
+
+D) Fix the insert payload
+When creating a signature request, ALWAYS set:
+- status = 'draft'
+- token = generated secure random string (unique)
+- createdAt = now (if not auto)
+- companyId pulled from auth/session (must not be null)
+- documentId from request body (must be valid)
+
+If token generation exists, ensure it cannot be null and is unique.
+If unique constraint is causing collisions, generate with crypto random bytes (32+ chars).
+
+E) Fix response + UI behavior
+Return the created record (id, token, status, etc.) so UI can update list.
+
+F) Test
+1) Create Request -> should return 201 with record.
+2) Refresh page -> request appears with status “Draft”.
+3) Send for Signature -> status becomes “Sent”.
+4) Email link works.
+
+DELIVERABLES
+- Creating a new signature request no longer 500s
+- Server logs show no db insert errors
+- Remove TEMP debug logging after confirmed
