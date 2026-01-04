@@ -1,0 +1,95 @@
+TASK: Make Signature Request emails 100% functional using Resend (no more “SMTP not configured” skips)
+
+PROBLEM
+Logs show: “[email] SMTP not configured, skipping signature request email”
+So “Send” marks requests as sent but does NOT deliver email.
+
+GOAL
+When user clicks “Send for Signature”:
+- Email MUST be delivered to customerEmail (or return a clear error)
+- No silent skipping
+- Store delivery status (sent/failed) and sentAt
+- Keep RBAC + doc visibility rules intact
+
+DECISION
+Use Resend for transactional email (reliable, simplest on Replit).
+Do NOT use SMTP fallback.
+
+REQUIRED ENV VARS (Replit Secrets)
+- RESEND_API_KEY = <from Resend dashboard>
+- EMAIL_FROM = <verified sender like "EcoLogic <onboarding@resend.dev>" OR "signatures@yourdomain.com">
+- APP_BASE_URL = <your app base url, e.g. https://<your-repl>.replit.app or production domain>
+
+IMPORTANT: If you don’t have a verified domain yet, use Resend’s default verified sender (onboarding@resend.dev) to get working immediately.
+
+BACKEND IMPLEMENTATION
+1) Install dependency:
+   npm i resend
+
+2) Create a single email utility module (server/email.ts or similar):
+- export async function sendSignatureRequestEmail({ to, customerName, documentName, signUrl, message, companyName }) { ... }
+- It should throw an error if RESEND_API_KEY or EMAIL_FROM is missing.
+
+3) Update signature_requests “send” endpoint:
+POST /api/signature-requests/:id/send
+- RBAC: Owner/Admin, Supervisor, Dispatcher, Estimator only
+- Validate request is draft
+- Generate publicToken if missing (crypto.randomBytes(24).toString("hex"))
+- Build signUrl = `${APP_BASE_URL}/sign/${publicToken}`
+- Call sendSignatureRequestEmail(...)
+- If email succeeds:
+  - set status='sent'
+  - set sentAt=now()
+  - set signUrl
+  - set deliveryStatus='sent'
+- If email fails:
+  - DO NOT set status='sent'
+  - keep status='draft'
+  - set deliveryStatus='failed'
+  - store deliveryError (truncated)
+  - return 500 with message “Email delivery failed”
+
+4) Add targeted logs (remove later):
+- console.log("[Email] sending via Resend to=", to)
+- console.log("[Email] delivered (Resend) to=", to)
+- console.error("[Email] failed", err)
+
+EMAIL TEMPLATE (simple + professional)
+Subject:
+  "Signature requested: {documentName}"
+
+Body includes:
+- Short text: “Please review and sign the document.”
+- Button/link: signUrl
+- Optional message block if provided
+- Footer: companyName
+
+FRONTEND
+1) When Send succeeds:
+- Toast: “Email sent to {customerEmail}”
+2) When Send fails:
+- Toast error: “Email failed to send. Check email settings.”
+- Keep status as Draft in UI
+
+TESTING (must be done)
+1) Add a temporary dev-only endpoint or button to test Resend:
+POST /api/debug/test-email { to: "your email" }
+- Sends a plain test email
+- Returns success/failure
+(Remove or protect behind admin + NODE_ENV check.)
+
+2) End-to-end test:
+- Create Signature Request to your Gmail
+- Click Send
+- Confirm:
+  - Endpoint returns 200
+  - deliveryStatus becomes “sent”
+  - Email arrives in inbox/spam within 1 minute
+  - Link opens sign page
+
+DELIVERABLES
+- No SMTP skip message exists anymore
+- Resend sends emails reliably
+- “Send” fails loudly if not configured or delivery fails
+- Signature Requests show correct status + sentAt
+- RBAC + doc visibility unchanged
