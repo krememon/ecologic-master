@@ -2067,6 +2067,265 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===================
+  // Signature Request Routes (Phase 1 - New E-signature System)
+  // ===================
+  
+  // RBAC: Owner, Supervisor, Dispatcher, Estimator can create signature requests (Technician cannot)
+  const canCreateSignatureRequest = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+  };
+
+  // GET /api/signature-requests - List signature requests (filtered by document visibility)
+  app.get('/api/signature-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase() as UserRole;
+      
+      // Get all signature requests for company
+      const requests = await storage.getSignatureRequests(company.id);
+      
+      // Filter by document visibility - only show requests for documents user can access
+      const allowedVisibilities = getAllowedVisibilities(userRole);
+      
+      // Enrich with document and job info, filter by visibility
+      const enrichedRequests = await Promise.all(requests.map(async (request) => {
+        const doc = await storage.getDocument(request.documentId);
+        
+        // If document doesn't exist or user can't see it, skip this request
+        if (!doc) return null;
+        
+        // Visibility check (Owner sees all)
+        if (userRole !== 'OWNER' && !allowedVisibilities.includes(doc.visibility as DocumentVisibility)) {
+          return null;
+        }
+        
+        // Get job info if available
+        let job = null;
+        if (request.jobId) {
+          const jobData = await storage.getJob(request.jobId);
+          if (jobData) {
+            job = { id: jobData.id, title: jobData.title, address: jobData.address };
+          }
+        }
+        
+        return {
+          ...request,
+          document: {
+            id: doc.id,
+            name: doc.name,
+            fileUrl: doc.fileUrl,
+            category: doc.category,
+          },
+          job,
+        };
+      }));
+      
+      // Filter out nulls (requests user can't see)
+      const visibleRequests = enrichedRequests.filter(r => r !== null);
+      
+      res.json(visibleRequests);
+    } catch (error) {
+      console.error("Error fetching signature requests:", error);
+      res.status(500).json({ message: "Failed to fetch signature requests" });
+    }
+  });
+
+  // GET /api/signature-requests/:id - Get single signature request
+  app.get('/api/signature-requests/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase() as UserRole;
+      
+      const requestId = parseInt(req.params.id);
+      const request = await storage.getSignatureRequest(requestId);
+      
+      if (!request || request.companyId !== company.id) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      // Check document visibility
+      const doc = await storage.getDocument(request.documentId);
+      if (!doc) {
+        return res.status(404).json({ message: "Associated document not found" });
+      }
+      
+      const allowedVisibilities = getAllowedVisibilities(userRole);
+      if (userRole !== 'OWNER' && !allowedVisibilities.includes(doc.visibility as DocumentVisibility)) {
+        return res.status(403).json({ message: "You don't have access to this signature request" });
+      }
+      
+      // Get job info if available
+      let job = null;
+      if (request.jobId) {
+        const jobData = await storage.getJob(request.jobId);
+        if (jobData) {
+          job = { id: jobData.id, title: jobData.title, address: jobData.address };
+        }
+      }
+      
+      res.json({
+        ...request,
+        document: {
+          id: doc.id,
+          name: doc.name,
+          fileUrl: doc.fileUrl,
+          category: doc.category,
+        },
+        job,
+      });
+    } catch (error) {
+      console.error("Error fetching signature request:", error);
+      res.status(500).json({ message: "Failed to fetch signature request" });
+    }
+  });
+
+  // POST /api/signature-requests - Create new signature request
+  app.post('/api/signature-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase() as UserRole;
+      
+      // RBAC check
+      if (!canCreateSignatureRequest(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to create signature requests" });
+      }
+      
+      const { documentId, customerName, customerEmail, message } = req.body;
+      
+      if (!documentId || !customerName || !customerEmail) {
+        return res.status(400).json({ message: "Document, customer name, and customer email are required" });
+      }
+      
+      // Verify document exists and user can access it
+      const doc = await storage.getDocument(documentId);
+      if (!doc || doc.companyId !== company.id) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Check document visibility
+      const allowedVisibilities = getAllowedVisibilities(userRole);
+      if (userRole !== 'OWNER' && !allowedVisibilities.includes(doc.visibility as DocumentVisibility)) {
+        return res.status(403).json({ message: "You don't have access to this document" });
+      }
+      
+      // Generate unique access token for secure signing link
+      const accessToken = randomBytes(32).toString('hex');
+      
+      // Create signature request
+      const request = await storage.createSignatureRequest({
+        companyId: company.id,
+        documentId,
+        jobId: doc.jobId || null, // Inherit from document
+        customerName,
+        customerEmail,
+        message: message || null,
+        status: 'draft',
+        accessToken,
+        createdByUserId: userId,
+      });
+      
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating signature request:", error);
+      res.status(500).json({ message: "Failed to create signature request" });
+    }
+  });
+
+  // PATCH /api/signature-requests/:id - Update signature request status
+  app.patch('/api/signature-requests/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateSignatureRequest(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to update signature requests" });
+      }
+      
+      const requestId = parseInt(req.params.id);
+      const request = await storage.getSignatureRequest(requestId);
+      
+      if (!request || request.companyId !== company.id) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      const { status } = req.body;
+      
+      // Validate status
+      const validStatuses = ['draft', 'sent', 'viewed', 'signed', 'declined', 'expired', 'canceled'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+      
+      const updated = await storage.updateSignatureRequest(requestId, { status });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating signature request:", error);
+      res.status(500).json({ message: "Failed to update signature request" });
+    }
+  });
+
+  // DELETE /api/signature-requests/:id - Delete signature request
+  app.delete('/api/signature-requests/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateSignatureRequest(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to delete signature requests" });
+      }
+      
+      const requestId = parseInt(req.params.id);
+      const request = await storage.getSignatureRequest(requestId);
+      
+      if (!request || request.companyId !== company.id) {
+        return res.status(404).json({ message: "Signature request not found" });
+      }
+      
+      await storage.deleteSignatureRequest(requestId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting signature request:", error);
+      res.status(500).json({ message: "Failed to delete signature request" });
+    }
+  });
+
   // Schedule routes
   app.get('/api/schedule-items', isAuthenticated, async (req: any, res) => {
     try {
