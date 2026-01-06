@@ -1,0 +1,65 @@
+TASK: Add an "Estimates" tab inside the Job Details view on the Jobs page, using the SAME segmented tab UI style as the existing "Documents" / "E-signature Approvals" header.
+
+CONTEXT:
+- App: EcoLogic (React + Express + DB)
+- We already have job details UI (modal/panel) that shows job-specific sections.
+- We want a new job-level section called "Estimates".
+- MUST follow RBAC rules (“hidden not disabled”) and job access rules.
+- Estimates must be scoped to (companyId + jobId). App is the source of truth.
+
+UI REQUIREMENTS:
+1) In the Job Details header where we show segmented tabs (like the screenshot), add a third tab:
+   - Documents | E-signature Approvals | Estimates
+2) The tab style must match exactly:
+   - pill/segmented control
+   - active tab has the white/raised background, inactive looks muted
+3) When Estimates tab is active:
+   - Show a list view of estimates for that job:
+     - Estimate #
+     - Title (optional)
+     - Status (Draft / Sent / Approved / Declined)
+     - Total $
+     - Created date
+     - Actions: View, Edit (draft only), Duplicate, Delete (draft only)
+   - Add a primary button: “Create Estimate”
+4) Clicking “Create Estimate” opens a modal:
+   - Estimate Name/Title
+   - Customer (prefill from job if exists)
+   - Line items (simple for v1):
+     - item name, qty, unit price
+     - auto-calc line total + estimate total
+   - Save as Draft
+
+BACKEND REQUIREMENTS:
+1) Create DB tables (or migrations) for estimates:
+   - estimates:
+     - id, companyId, jobId, createdByUserId
+     - title (nullable)
+     - status (draft/sent/approved/declined)
+     - subtotal, tax, total
+     - createdAt, updatedAt
+   - estimate_line_items:
+     - id, estimateId
+     - name, qty, unitPrice, lineTotal
+2) API routes (Express):
+   - GET /api/jobs/:jobId/estimates  -> list estimates for job (auth + RBAC + company)
+   - POST /api/jobs/:jobId/estimates -> create estimate (draft)
+   - GET /api/estimates/:id -> fetch estimate + line items
+   - PATCH /api/estimates/:id -> update estimate (draft only)
+   - POST /api/estimates/:id/duplicate -> duplicates estimate + line items into new draft
+   - DELETE /api/estimates/:id -> delete estimate (draft only)
+3) Authorization:
+   - Only users who can access the job can see estimates for that job
+   - Enforce companyId match
+   - If user can’t see job, hide the Estimates tab entirely
+
+DELIVERABLES:
+- UI: Estimates tab with segmented control style matching existing tabs
+- UI: List + Create/Edit modal with line items + totals
+- Backend: DB tables + CRUD endpoints above
+- Ensure UI refreshes after create/edit/delete without hard reload
+- Add targeted server logs for estimates routes only (don’t spam):
+  - `[Estimates] list jobId=... userId=... companyId=... count=...`
+  - `[Estimates] create estimateId=... jobId=...`
+- Do NOT add duplicate buttons or new navigation pages. This lives inside Job Details.
+- Keep it “v1 simple” but clean and professional.

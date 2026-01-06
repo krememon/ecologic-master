@@ -268,7 +268,7 @@ export default function Jobs() {
   const [technicianSearch, setTechnicianSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
-  const [jobModalTab, setJobModalTab] = useState<'details' | 'estimates'>('details');
+  const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals' | 'estimates'>('documents');
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -276,7 +276,7 @@ export default function Jobs() {
   // Reset description expansion and tab when job changes
   useEffect(() => {
     setIsDescriptionExpanded(false);
-    setJobModalTab('details');
+    setJobModalTab('documents');
   }, [selectedJob?.id]);
   
   // Check if user can access estimates (Technician cannot)
@@ -982,15 +982,26 @@ export default function Jobs() {
             <div className="mt-4 mb-4" data-testid="job-tab-switcher">
               <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
                 <button
-                  onClick={() => setJobModalTab('details')}
+                  onClick={() => setJobModalTab('documents')}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                    jobModalTab === 'details'
+                    jobModalTab === 'documents'
                       ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                   }`}
-                  data-testid="tab-details"
+                  data-testid="tab-documents"
                 >
-                  Details
+                  Documents
+                </button>
+                <button
+                  onClick={() => setJobModalTab('approvals')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    jobModalTab === 'approvals'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  data-testid="tab-approvals"
+                >
+                  E-signature Approvals
                 </button>
                 {canAccessEstimates && (
                   <button
@@ -1010,7 +1021,7 @@ export default function Jobs() {
           )}
 
           {/* Tab Content */}
-          {selectedJob && jobModalTab === 'details' && (
+          {selectedJob && jobModalTab === 'documents' && (
             <div data-testid="job-sections-stack" className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
               {/* Left Column - Job Information (60%) */}
               <div className="col-span-1 lg:col-span-3">
@@ -1283,6 +1294,16 @@ export default function Jobs() {
                     </CardContent>
                   </Card>
                 )}
+              </div>
+            </div>
+          )}
+          
+          {/* E-signature Approvals Tab */}
+          {selectedJob && jobModalTab === 'approvals' && (
+            <div className="py-4" data-testid="approvals-tab-content">
+              <div className="text-center py-12 text-slate-500 dark:text-slate-400">
+                <p className="text-lg font-medium mb-2">E-signature Approvals</p>
+                <p className="text-sm">Signature requests for this job will appear here.</p>
               </div>
             </div>
           )}

@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, FileText, Trash2, Loader2 } from "lucide-react";
+import { Plus, FileText, Trash2, Loader2, MoreVertical, Eye, Edit, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +46,7 @@ function getStatusColor(status: string): string {
 export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabProps) {
   const { toast } = useToast();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([
@@ -71,6 +74,47 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
       toast({
         title: "Error",
         description: error.message || "Failed to create estimate",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteEstimateMutation = useMutation({
+    mutationFn: async (estimateId: number) => {
+      return await apiRequest("DELETE", `/api/estimates/${estimateId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
+      setEstimateToDelete(null);
+      toast({
+        title: "Estimate Deleted",
+        description: "The estimate has been deleted.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete estimate",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const duplicateEstimateMutation = useMutation({
+    mutationFn: async (estimateId: number) => {
+      return await apiRequest("POST", `/api/estimates/${estimateId}/duplicate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
+      toast({
+        title: "Estimate Duplicated",
+        description: "A copy of the estimate has been created.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to duplicate estimate",
         variant: "destructive",
       });
     },
@@ -208,10 +252,65 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
                       </p>
                     )}
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  <div className="flex items-center gap-3 flex-shrink-0">
                     <p className="font-semibold text-slate-900 dark:text-slate-100">
                       {formatCurrency(estimate.totalCents)}
                     </p>
+                    {canCreate && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid={`button-estimate-actions-${estimate.id}`}>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              toast({
+                                title: "View Estimate",
+                                description: `Viewing ${estimate.estimateNumber} - Detail view coming soon`,
+                              });
+                            }}
+                            data-testid={`action-view-estimate-${estimate.id}`}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View
+                          </DropdownMenuItem>
+                          {estimate.status === 'draft' && (
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                toast({
+                                  title: "Edit Estimate",
+                                  description: `Editing ${estimate.estimateNumber} - Edit functionality coming soon`,
+                                });
+                              }}
+                              data-testid={`action-edit-estimate-${estimate.id}`}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem 
+                            onClick={() => duplicateEstimateMutation.mutate(estimate.id)}
+                            disabled={duplicateEstimateMutation.isPending}
+                            data-testid={`action-duplicate-estimate-${estimate.id}`}
+                          >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          {estimate.status === 'draft' && (
+                            <DropdownMenuItem 
+                              onClick={() => setEstimateToDelete(estimate)}
+                              className="text-red-600 dark:text-red-400"
+                              data-testid={`action-delete-estimate-${estimate.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -376,6 +475,35 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!estimateToDelete} onOpenChange={(open) => !open && setEstimateToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Estimate</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {estimateToDelete?.estimateNumber}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => estimateToDelete && deleteEstimateMutation.mutate(estimateToDelete.id)}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="button-confirm-delete"
+            >
+              {deleteEstimateMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

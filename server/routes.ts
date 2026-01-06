@@ -2105,6 +2105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const estimates = await storage.getEstimatesByJob(jobId);
+      console.log(`[Estimates] list jobId=${jobId} userId=${userId} companyId=${company.id} count=${estimates.length}`);
       res.json(estimates);
     } catch (error) {
       console.error("Error fetching estimates:", error);
@@ -2170,6 +2171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId
       );
 
+      console.log(`[Estimates] create estimateId=${estimate.id} jobId=${jobId} companyId=${companyId}`);
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating estimate:", error);
@@ -2202,6 +2204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
 
+      console.log(`[Estimates] get estimateId=${estimateId} jobId=${estimate.jobId} companyId=${company.id}`);
       res.json(estimate);
     } catch (error) {
       console.error("Error fetching estimate:", error);
@@ -2265,6 +2268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: normalizedItems,
       });
 
+      console.log(`[Estimates] update estimateId=${estimateId} jobId=${existingEstimate.jobId} companyId=${companyId}`);
       res.json(updated);
     } catch (error) {
       console.error("Error updating estimate:", error);
@@ -2290,10 +2294,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.deleteEstimate(estimateId);
+      console.log(`[Estimates] delete estimateId=${estimateId} jobId=${estimate.jobId} companyId=${companyId}`);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting estimate:", error);
       res.status(500).json({ message: "Failed to delete estimate" });
+    }
+  });
+
+  // POST /api/estimates/:id/duplicate - Duplicate estimate + line items into new draft
+  app.post('/api/estimates/:id/duplicate', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const existingEstimate = await storage.getEstimate(estimateId);
+      if (!existingEstimate || existingEstimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      // Create duplicate with new estimate number
+      const items = existingEstimate.items?.map((item: any) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unitPriceCents: item.unitPriceCents,
+        sortOrder: item.sortOrder,
+      })) || [];
+
+      const duplicate = await storage.createEstimate(
+        {
+          jobId: existingEstimate.jobId,
+          title: `${existingEstimate.title || 'Estimate'} (Copy)`,
+          notes: existingEstimate.notes || undefined,
+          items,
+        },
+        companyId,
+        userId
+      );
+
+      console.log(`[Estimates] duplicate sourceId=${estimateId} newId=${duplicate.id} jobId=${existingEstimate.jobId} companyId=${companyId}`);
+      res.status(201).json(duplicate);
+    } catch (error) {
+      console.error("Error duplicating estimate:", error);
+      res.status(500).json({ message: "Failed to duplicate estimate" });
     }
   });
 
