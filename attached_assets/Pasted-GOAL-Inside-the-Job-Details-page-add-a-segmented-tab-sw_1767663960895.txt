@@ -1,0 +1,186 @@
+GOAL:
+Inside the Job Details page, add a segmented tab switch like the screenshot:
+[ Documents ] [ Estimates ]
+(rounded pill container, active tab = white w/ subtle shadow, inactive = gray)
+
+IMPORTANT RULES:
+- Follow “hidden not disabled”: if a role cannot access Estimates, DO NOT show the Estimates tab at all.
+- Do not add duplicate buttons or clutter the header.
+- Switching tabs must NOT require a hard reload.
+- All estimates are scoped to a Job (jobId required).
+
+------------------------------------------------------------
+1) UI: ADD JOB PAGE TABS (MATCH SCREENSHOT STYLE)
+------------------------------------------------------------
+
+On the Job Details page (the page that shows a single job):
+- Add a tab UI at the top of the main content area (or directly under the job header)
+- Tabs:
+  - Documents (default selected)
+  - Estimates
+
+Style requirements (match screenshot):
+- Outer container: light gray rounded pill background, padding
+- Active tab: white pill, subtle shadow, darker text, icon optional
+- Inactive tab: transparent/light gray, muted text
+- Smooth hover
+- Keep spacing clean
+
+Behavior:
+- Default to Documents tab
+- Clicking Estimates switches to Estimates view
+- The URL can remain the same (tab is UI state), OR you may add a query param (?tab=estimates) if easy.
+- Do NOT break existing Documents tab content.
+
+RBAC (hide tab):
+- Technician: NO Estimates tab (hidden)
+- Owner/Admin: show
+- Dispatcher: show
+- Supervisor: show (only for jobs they can access)
+- Estimator: show (only for jobs they can access)
+
+If user does not have job access, they should not be on this page anyway.
+
+------------------------------------------------------------
+2) UI: ESTIMATES TAB CONTENT
+------------------------------------------------------------
+
+Create a new component like:
+- <JobEstimatesTab jobId={job.id} />
+
+Inside Estimates tab:
+A) Header row
+- Title: "Estimates"
+- Right side button: "Create Estimate"
+
+B) List of estimates for this job
+Display a clean table or cards:
+- Estimate #
+- Title
+- Status (Draft / Sent / Accepted / Rejected)
+- Total
+- Updated date
+
+Empty state:
+- "No estimates yet"
+- Show "Create Estimate" button
+
+C) Create Estimate modal (MVP)
+Modal fields:
+- Title (required)
+- Notes (optional)
+- Line items editor (simple but usable):
+  - Item name
+  - Qty
+  - Unit Price
+  - Line total auto-calculated
+- Subtotal + Total (auto)
+Buttons:
+- Save Draft
+- Cancel
+
+After save:
+- Close modal
+- Refresh the estimates list immediately (no hard reload)
+
+------------------------------------------------------------
+3) BACKEND: DB TABLES (JOB-SCOPED)
+------------------------------------------------------------
+
+Add tables (or equivalent) to DB:
+
+TABLE: estimates
+- id (uuid)
+- company_id
+- job_id (required)
+- estimate_number (string, unique per company, ex: EST-000123)
+- title (text)
+- notes (text nullable)
+- status (enum: draft, sent, accepted, rejected) default draft
+- subtotal_cents (int)
+- total_cents (int)
+- created_by_user_id
+- created_at
+- updated_at
+
+TABLE: estimate_items
+- id (uuid)
+- estimate_id
+- name (text)
+- quantity (decimal or int)
+- unit_price_cents (int)
+- line_total_cents (int)
+- sort_order (int)
+
+------------------------------------------------------------
+4) BACKEND: API ROUTES (RBAC + JOB ACCESS ENFORCED)
+------------------------------------------------------------
+
+Add these endpoints:
+
+GET /api/jobs/:jobId/estimates
+- Returns estimates for this job
+- Enforce job access
+- Enforce role access (no Technician)
+
+POST /api/jobs/:jobId/estimates
+- Creates a draft estimate for job
+- Body includes title, notes, items
+- Server calculates totals (do not trust client totals)
+- Enforce job access + role access
+
+GET /api/estimates/:estimateId
+- Returns estimate + items
+- Enforce access via estimate.job_id and user job access
+
+PUT /api/estimates/:estimateId
+- Update title/notes/items/status (draft updates)
+- Server recalculates totals
+- Enforce access
+
+Estimate number generation:
+- Create a company counter (company_counters table or similar):
+  - estimate_counter int
+- On create, increment atomically and format:
+  - EST-000001, EST-000002, etc.
+
+------------------------------------------------------------
+5) DO NOT BREAK EXISTING FEATURES
+------------------------------------------------------------
+
+- Documents tab must keep all current functionality:
+  - category filter
+  - job picker (if present in job context)
+  - preview modal
+  - bulk select actions
+  - delete removes from Job Insights (already built)
+
+- No new global navigation items.
+- Keep UI consistent with existing EcoLogic styling.
+
+------------------------------------------------------------
+DELIVERABLES / ACCEPTANCE TESTS
+------------------------------------------------------------
+
+1) Job page shows segmented tabs like screenshot:
+- Documents (default) and Estimates (when allowed)
+
+2) Technician role:
+- Estimates tab is NOT visible anywhere (hidden)
+
+3) Allowed roles:
+- Estimates tab loads list for that job
+- Create Estimate modal works
+- Saving creates estimate + items
+- List refreshes without hard reload
+
+4) Security:
+- User cannot access estimates for jobs they don’t have access to
+- API returns 403/404 appropriately per existing patterns
+
+5) Code quality:
+- Minimal targeted logs only if needed
+- Remove noisy logs after working
+
+BUILD THIS MVP CLEANLY FIRST.
+We will add “Send/Approve/E-sign estimate” later.

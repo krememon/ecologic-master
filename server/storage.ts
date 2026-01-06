@@ -15,6 +15,9 @@ import {
   conversationParticipants,
   jobPhotos,
   scheduleItems,
+  estimates,
+  estimateItems,
+  companyCounters,
   type User,
   type UpsertUser,
   type Company,
@@ -40,6 +43,11 @@ import {
   type ScheduleItem,
   type InsertScheduleItem,
   type UserRole,
+  type Estimate,
+  type EstimateItem,
+  type EstimateWithItems,
+  type CreateEstimatePayload,
+  type UpdateEstimatePayload,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -208,6 +216,14 @@ export interface IStorage {
   updateUserRole(userId: string, companyId: number, newRole: UserRole, currentUserRole: UserRole): Promise<User>;
   updateUserStatus(userId: string, companyId: number, status: 'ACTIVE' | 'INACTIVE', currentUserRole: UserRole): Promise<User>;
   getUserJobsSummary(userId: string, companyId: number): Promise<{ total: number; scheduled: number; inProgress: number; completed: number }>;
+  
+  // Estimate operations
+  getEstimatesByJob(jobId: number): Promise<Estimate[]>;
+  getEstimate(id: number): Promise<EstimateWithItems | undefined>;
+  createEstimate(payload: CreateEstimatePayload, companyId: number, userId: string): Promise<EstimateWithItems>;
+  updateEstimate(id: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems>;
+  deleteEstimate(id: number): Promise<void>;
+  getNextEstimateNumber(companyId: number): Promise<string>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1541,6 +1557,179 @@ export class DatabaseStorage implements IStorage {
     };
 
     return summary;
+  }
+
+  // Estimate operations
+  async getEstimatesByJob(jobId: number): Promise<Estimate[]> {
+    return await db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.jobId, jobId))
+      .orderBy(desc(estimates.createdAt));
+  }
+
+  async getEstimate(id: number): Promise<EstimateWithItems | undefined> {
+    const [estimate] = await db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.id, id));
+    
+    if (!estimate) return undefined;
+
+    const items = await db
+      .select()
+      .from(estimateItems)
+      .where(eq(estimateItems.estimateId, id))
+      .orderBy(estimateItems.sortOrder);
+
+    // Get creator info
+    const [creator] = await db
+      .select({ firstName: users.firstName, lastName: users.lastName })
+      .from(users)
+      .where(eq(users.id, estimate.createdByUserId));
+
+    return {
+      ...estimate,
+      items,
+      createdBy: creator || null,
+    };
+  }
+
+  async getNextEstimateNumber(companyId: number): Promise<string> {
+    // Use atomic increment with upsert
+    const result = await db
+      .insert(companyCounters)
+      .values({ companyId, estimateCounter: 1 })
+      .onConflictDoUpdate({
+        target: companyCounters.companyId,
+        set: { estimateCounter: sql`${companyCounters.estimateCounter} + 1` },
+      })
+      .returning({ counter: companyCounters.estimateCounter });
+
+    const counter = result[0]?.counter || 1;
+    return `EST-${String(counter).padStart(6, '0')}`;
+  }
+
+  async createEstimate(
+    payload: CreateEstimatePayload,
+    companyId: number,
+    userId: string
+  ): Promise<EstimateWithItems> {
+    // Calculate totals from items
+    let subtotalCents = 0;
+    const itemsWithTotals = payload.items.map((item, index) => {
+      const quantity = parseFloat(item.quantity);
+      const lineTotalCents = Math.round(quantity * item.unitPriceCents);
+      subtotalCents += lineTotalCents;
+      return {
+        ...item,
+        quantity: item.quantity,
+        lineTotalCents,
+        sortOrder: item.sortOrder ?? index,
+      };
+    });
+
+    // Get next estimate number
+    const estimateNumber = await this.getNextEstimateNumber(companyId);
+
+    // Create estimate
+    const [estimate] = await db
+      .insert(estimates)
+      .values({
+        companyId,
+        jobId: payload.jobId,
+        estimateNumber,
+        title: payload.title,
+        notes: payload.notes || null,
+        status: "draft",
+        subtotalCents,
+        totalCents: subtotalCents, // For now, total = subtotal (no tax/discount)
+        createdByUserId: userId,
+      })
+      .returning();
+
+    // Create line items
+    const createdItems: EstimateItem[] = [];
+    for (const item of itemsWithTotals) {
+      const [createdItem] = await db
+        .insert(estimateItems)
+        .values({
+          estimateId: estimate.id,
+          name: item.name,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          lineTotalCents: item.lineTotalCents,
+          sortOrder: item.sortOrder,
+        })
+        .returning();
+      createdItems.push(createdItem);
+    }
+
+    // Get creator info
+    const [creator] = await db
+      .select({ firstName: users.firstName, lastName: users.lastName })
+      .from(users)
+      .where(eq(users.id, userId));
+
+    return {
+      ...estimate,
+      items: createdItems,
+      createdBy: creator || null,
+    };
+  }
+
+  async updateEstimate(id: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems> {
+    const updateData: any = { updatedAt: new Date() };
+    
+    if (payload.title !== undefined) updateData.title = payload.title;
+    if (payload.notes !== undefined) updateData.notes = payload.notes;
+    if (payload.status !== undefined) updateData.status = payload.status;
+
+    // If items are provided, recalculate totals
+    if (payload.items) {
+      let subtotalCents = 0;
+      const itemsWithTotals = payload.items.map((item, index) => {
+        const quantity = parseFloat(item.quantity);
+        const lineTotalCents = Math.round(quantity * item.unitPriceCents);
+        subtotalCents += lineTotalCents;
+        return {
+          ...item,
+          quantity: item.quantity,
+          lineTotalCents,
+          sortOrder: item.sortOrder ?? index,
+        };
+      });
+
+      updateData.subtotalCents = subtotalCents;
+      updateData.totalCents = subtotalCents;
+
+      // Delete existing items and create new ones
+      await db.delete(estimateItems).where(eq(estimateItems.estimateId, id));
+
+      for (const item of itemsWithTotals) {
+        await db.insert(estimateItems).values({
+          estimateId: id,
+          name: item.name,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          lineTotalCents: item.lineTotalCents,
+          sortOrder: item.sortOrder,
+        });
+      }
+    }
+
+    // Update estimate
+    await db.update(estimates).set(updateData).where(eq(estimates.id, id));
+
+    // Return updated estimate with items
+    const result = await this.getEstimate(id);
+    if (!result) throw new Error("Estimate not found after update");
+    return result;
+  }
+
+  async deleteEstimate(id: number): Promise<void> {
+    // Items are deleted via cascade
+    await db.delete(estimates).where(eq(estimates.id, id));
   }
 }
 

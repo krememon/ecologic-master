@@ -1,0 +1,145 @@
+The /sign/:token link is still loading the normal EcoLogic SPA and redirecting to login.
+
+This confirms that Express/Vite catch-all routing is still serving index.html
+for /sign routes, allowing auth logic to run.
+
+GOAL:
+Make /sign/:token serve a dedicated PUBLIC signing HTML entry
+BEFORE any Vite middleware, express.static, or SPA catch-all.
+
+DO THIS EXACTLY — NO DEVIATIONS.
+
+------------------------------------------------------------
+1) CREATE A DEDICATED PUBLIC SIGNING HTML FILE
+------------------------------------------------------------
+
+Create a new static file:
+
+/public/public-sign.html
+
+Requirements:
+- MUST NOT be index.html
+- MUST NOT load the main EcoLogic SPA bundle
+- MUST contain:
+
+<div id="public-sign-root"></div>
+
+- MUST load ONLY a public signing bundle:
+
+<script type="module" src="/public-sign.js"></script>
+
+This page is isolated and PUBLIC.
+No auth, no app shell, no redirects.
+
+------------------------------------------------------------
+2) CREATE A PUBLIC SIGNING ENTRY FILE
+------------------------------------------------------------
+
+Create a new frontend entry:
+
+/src/public-sign.tsx
+
+This file:
+- Mounts React into #public-sign-root
+- Renders ONLY <PublicSign />
+- Does NOT import:
+  - App.tsx
+  - auth providers
+  - user context
+  - RBAC logic
+  - routing guards
+
+Example responsibility:
+- Read token from window.location.pathname
+- Fetch public signing request
+- Render signing UI
+
+------------------------------------------------------------
+3) EXPRESS ROUTE — MUST BE FIRST
+------------------------------------------------------------
+
+In server startup (Express):
+
+Add this route AT THE VERY TOP — BEFORE:
+- Vite middleware
+- express.static
+- auth middleware
+- SPA catch-all
+
+Route:
+
+GET /sign/:token
+
+Behavior:
+- res.sendFile(public-sign.html)
+
+This route MUST short-circuit the SPA entirely.
+
+------------------------------------------------------------
+4) PUBLIC API ROUTES (NO AUTH)
+------------------------------------------------------------
+
+Create a dedicated public router:
+
+/api/public/signature-requests/:token
+/api/public/signature-requests/:token/sign
+
+Rules:
+- NO auth middleware
+- NO user session required
+- Token is the ONLY identifier
+
+GET behavior:
+- 404 if not found
+- 200 if pending or signed
+
+POST behavior:
+- Validate pending
+- Store signature
+- Mark signed
+- Return success
+
+------------------------------------------------------------
+5) TOKEN CONSISTENCY (CRITICAL)
+------------------------------------------------------------
+
+Use ONE token strategy ONLY.
+
+TEMP FIX (preferred):
+- Store raw token in DB
+- Lookup with exact match
+- Ensure token is saved BEFORE email is sent
+
+Add TEMP logs:
+- token length
+- last 6 chars only
+- lookup result
+
+REMOVE logs after verification.
+
+------------------------------------------------------------
+6) SPA FALLBACK MUST NOT CATCH /sign/*
+------------------------------------------------------------
+
+Ensure SPA catch-all:
+- DOES NOT intercept /sign/*
+- DOES NOT redirect public signing to login
+
+/sign/:token must NEVER load the EcoLogic app shell.
+
+------------------------------------------------------------
+ACCEPTANCE TESTS
+------------------------------------------------------------
+
+1) Open incognito window
+2) Paste https://APP_BASE_URL/sign/<valid_token>
+3) EXPECT:
+   - Public signing UI
+   - No login redirect
+   - No auth checks
+4) Invalid token → clean Not Found state
+5) Signed token → Already Signed screen
+6) All of the above without cookies or session
+
+THIS FIX IS BLOCKER PRIORITY #1.
+DO NOT CONTINUE FEATURE WORK UNTIL THIS IS STABLE.

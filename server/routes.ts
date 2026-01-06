@@ -2069,6 +2069,235 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===================
+  // Estimate Routes (Job-scoped estimates with line items)
+  // ===================
+
+  // Helper to check if user can access estimates (Technician cannot)
+  const canAccessEstimates = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+  };
+
+  // GET /api/jobs/:jobId/estimates - List estimates for a job
+  app.get('/api/jobs/:jobId/estimates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Technician cannot access estimates
+      if (!canAccessEstimates(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to view estimates" });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      const estimates = await storage.getEstimatesByJob(jobId);
+      res.json(estimates);
+    } catch (error) {
+      console.error("Error fetching estimates:", error);
+      res.status(500).json({ message: "Failed to fetch estimates" });
+    }
+  });
+
+  // POST /api/jobs/:jobId/estimates - Create a new estimate for a job
+  app.post('/api/jobs/:jobId/estimates', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== companyId) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      const { title, notes, items } = req.body;
+
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({ message: "Title is required" });
+      }
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "At least one line item is required" });
+      }
+
+      // Validate and normalize items
+      const normalizedItems = [];
+      for (const item of items) {
+        if (!item.name || typeof item.name !== 'string' || item.name.trim().length === 0) {
+          return res.status(400).json({ message: "Each item must have a name" });
+        }
+        const unitPriceCents = typeof item.unitPriceCents === 'number' 
+          ? Math.round(item.unitPriceCents) 
+          : Math.round(parseFloat(item.unitPriceCents));
+        if (isNaN(unitPriceCents) || unitPriceCents < 0) {
+          return res.status(400).json({ message: "Each item must have a valid unit price (in cents)" });
+        }
+        if (item.quantity === undefined || item.quantity === null || item.quantity === '') {
+          return res.status(400).json({ message: "Each item must have a quantity" });
+        }
+        const quantity = String(item.quantity);
+        const parsedQty = parseFloat(quantity);
+        if (isNaN(parsedQty) || parsedQty <= 0) {
+          return res.status(400).json({ message: "Each item must have a valid quantity greater than 0" });
+        }
+        normalizedItems.push({
+          name: item.name.trim(),
+          quantity,
+          unitPriceCents,
+          sortOrder: item.sortOrder,
+        });
+      }
+
+      const estimate = await storage.createEstimate(
+        { jobId, title: title.trim(), notes: notes || undefined, items: normalizedItems },
+        companyId,
+        userId
+      );
+
+      res.status(201).json(estimate);
+    } catch (error) {
+      console.error("Error creating estimate:", error);
+      res.status(500).json({ message: "Failed to create estimate" });
+    }
+  });
+
+  // GET /api/estimates/:id - Get single estimate with items
+  app.get('/api/estimates/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Technician cannot access estimates
+      if (!canAccessEstimates(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to view estimates" });
+      }
+
+      const estimateId = parseInt(req.params.id);
+      const estimate = await storage.getEstimate(estimateId);
+      
+      if (!estimate || estimate.companyId !== company.id) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      res.json(estimate);
+    } catch (error) {
+      console.error("Error fetching estimate:", error);
+      res.status(500).json({ message: "Failed to fetch estimate" });
+    }
+  });
+
+  // PUT /api/estimates/:id - Update estimate
+  app.put('/api/estimates/:id', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const existingEstimate = await storage.getEstimate(estimateId);
+      if (!existingEstimate || existingEstimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      const { title, notes, status, items } = req.body;
+      
+      // Validate and normalize items if provided
+      let normalizedItems;
+      if (items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ message: "At least one line item is required" });
+        }
+        normalizedItems = [];
+        for (const item of items) {
+          if (!item.name || typeof item.name !== 'string' || item.name.trim().length === 0) {
+            return res.status(400).json({ message: "Each item must have a name" });
+          }
+          const unitPriceCents = typeof item.unitPriceCents === 'number' 
+            ? Math.round(item.unitPriceCents) 
+            : Math.round(parseFloat(item.unitPriceCents));
+          if (isNaN(unitPriceCents) || unitPriceCents < 0) {
+            return res.status(400).json({ message: "Each item must have a valid unit price (in cents)" });
+          }
+          if (item.quantity === undefined || item.quantity === null || item.quantity === '') {
+            return res.status(400).json({ message: "Each item must have a quantity" });
+          }
+          const quantity = String(item.quantity);
+          const parsedQty = parseFloat(quantity);
+          if (isNaN(parsedQty) || parsedQty <= 0) {
+            return res.status(400).json({ message: "Each item must have a valid quantity greater than 0" });
+          }
+          normalizedItems.push({
+            id: item.id,
+            name: item.name.trim(),
+            quantity,
+            unitPriceCents,
+            sortOrder: item.sortOrder,
+          });
+        }
+      }
+
+      const updated = await storage.updateEstimate(estimateId, {
+        title: title?.trim(),
+        notes,
+        status,
+        items: normalizedItems,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating estimate:", error);
+      res.status(500).json({ message: "Failed to update estimate" });
+    }
+  });
+
+  // DELETE /api/estimates/:id - Delete estimate (draft only)
+  app.delete('/api/estimates/:id', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      // Only allow deletion of draft estimates
+      if (estimate.status !== 'draft') {
+        return res.status(400).json({ message: "Only draft estimates can be deleted" });
+      }
+
+      await storage.deleteEstimate(estimateId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting estimate:", error);
+      res.status(500).json({ message: "Failed to delete estimate" });
+    }
+  });
+
+  // ===================
   // Signature Request Routes (Phase 1 - New E-signature System)
   // ===================
   

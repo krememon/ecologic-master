@@ -18,6 +18,7 @@ import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { JobWizard } from "@/components/JobWizard";
 import { useCan } from "@/hooks/useCan";
+import JobEstimatesTab from "@/components/JobEstimatesTab";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -267,14 +268,19 @@ export default function Jobs() {
   const [technicianSearch, setTechnicianSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
+  const [jobModalTab, setJobModalTab] = useState<'details' | 'estimates'>('details');
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
 
-  // Reset description expansion when job changes
+  // Reset description expansion and tab when job changes
   useEffect(() => {
     setIsDescriptionExpanded(false);
+    setJobModalTab('details');
   }, [selectedJob?.id]);
+  
+  // Check if user can access estimates (Technician cannot)
+  const canAccessEstimates = role !== 'TECHNICIAN';
 
   // Utility function for Google Places dropdown detection using composedPath
   const isInPacContainer = (event: Event): boolean => {
@@ -970,7 +976,41 @@ export default function Jobs() {
             </div>
           
           </DialogHeader>
+          
+          {/* Segmented Tab Switcher */}
           {selectedJob && (
+            <div className="mt-4 mb-4" data-testid="job-tab-switcher">
+              <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
+                <button
+                  onClick={() => setJobModalTab('details')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    jobModalTab === 'details'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  data-testid="tab-details"
+                >
+                  Details
+                </button>
+                {canAccessEstimates && (
+                  <button
+                    onClick={() => setJobModalTab('estimates')}
+                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      jobModalTab === 'estimates'
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                    }`}
+                    data-testid="tab-estimates"
+                  >
+                    Estimates
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tab Content */}
+          {selectedJob && jobModalTab === 'details' && (
             <div data-testid="job-sections-stack" className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
               {/* Left Column - Job Information (60%) */}
               <div className="col-span-1 lg:col-span-3">
@@ -1245,6 +1285,14 @@ export default function Jobs() {
                 )}
               </div>
             </div>
+          )}
+          
+          {/* Estimates Tab */}
+          {selectedJob && jobModalTab === 'estimates' && canAccessEstimates && (
+            <JobEstimatesTab 
+              jobId={selectedJob.id} 
+              canCreate={role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR' || role === 'DISPATCHER'}
+            />
           )}
           </div>
           {/* Hidden file input for photo upload (legacy) */}

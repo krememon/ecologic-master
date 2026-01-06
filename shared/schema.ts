@@ -653,6 +653,71 @@ export const signatureRequestsRelations = relations(signatureRequests, ({ one })
   }),
 }));
 
+// Estimate status enum
+export const estimateStatusEnum = pgEnum("estimate_status", ["draft", "sent", "accepted", "rejected"]);
+
+// Estimates table - job-scoped estimates with line items
+export const estimates = pgTable("estimates", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  estimateNumber: varchar("estimate_number", { length: 50 }).notNull(), // EST-000001, unique per company
+  title: varchar("title", { length: 255 }).notNull(),
+  notes: text("notes"),
+  status: estimateStatusEnum("status").notNull().default("draft"),
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  totalCents: integer("total_cents").notNull().default(0),
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  companyEstimateNumberIdx: uniqueIndex("estimates_company_number_uniq").on(table.companyId, table.estimateNumber),
+  jobIdx: index("estimates_job_idx").on(table.jobId),
+}));
+
+// Estimate line items table
+export const estimateItems = pgTable("estimate_items", {
+  id: serial("id").primaryKey(),
+  estimateId: integer("estimate_id").notNull().references(() => estimates.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+  unitPriceCents: integer("unit_price_cents").notNull().default(0),
+  lineTotalCents: integer("line_total_cents").notNull().default(0),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+// Estimate relations
+export const estimatesRelations = relations(estimates, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [estimates.companyId],
+    references: [companies.id],
+  }),
+  job: one(jobs, {
+    fields: [estimates.jobId],
+    references: [jobs.id],
+  }),
+  createdBy: one(users, {
+    fields: [estimates.createdByUserId],
+    references: [users.id],
+  }),
+  items: many(estimateItems),
+}));
+
+export const estimateItemsRelations = relations(estimateItems, ({ one }) => ({
+  estimate: one(estimates, {
+    fields: [estimateItems.estimateId],
+    references: [estimates.id],
+  }),
+}));
+
+// Company counters table for atomic counter increments
+export const companyCounters = pgTable("company_counters", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }).unique(),
+  estimateCounter: integer("estimate_counter").notNull().default(0),
+  invoiceCounter: integer("invoice_counter").notNull().default(0),
+});
+
 // Subscriptions table for tracking detailed subscription data
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
@@ -807,6 +872,50 @@ export const insertSignatureRequestSchema = createInsertSchema(signatureRequests
   sentByUserId: true,
 });
 
+// Estimate insert schemas
+export const insertEstimateSchema = createInsertSchema(estimates).omit({
+  id: true,
+  companyId: true,
+  estimateNumber: true,
+  subtotalCents: true,
+  totalCents: true,
+  createdByUserId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEstimateItemSchema = createInsertSchema(estimateItems).omit({
+  id: true,
+  estimateId: true,
+  lineTotalCents: true,
+});
+
+// Create estimate with items schema (for API)
+export const createEstimateSchema = z.object({
+  jobId: z.number().positive("Job ID is required"),
+  title: z.string().min(1, "Title is required"),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    name: z.string().min(1, "Item name is required"),
+    quantity: z.union([z.string(), z.number()]).transform(v => String(v)),
+    unitPriceCents: z.number().int().min(0, "Unit price must be positive"),
+    sortOrder: z.number().int().optional(),
+  })).min(1, "At least one line item is required"),
+});
+
+export const updateEstimateSchema = z.object({
+  title: z.string().min(1, "Title is required").optional(),
+  notes: z.string().optional(),
+  status: z.enum(["draft", "sent", "accepted", "rejected"]).optional(),
+  items: z.array(z.object({
+    id: z.number().optional(), // Existing item ID for updates
+    name: z.string().min(1, "Item name is required"),
+    quantity: z.union([z.string(), z.number()]).transform(v => String(v)),
+    unitPriceCents: z.number().int().min(0, "Unit price must be positive"),
+    sortOrder: z.number().int().optional(),
+  })).optional(),
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -843,6 +952,19 @@ export type ScheduleItem = typeof scheduleItems.$inferSelect;
 export type InsertScheduleItem = z.infer<typeof insertScheduleItemSchema>;
 export type SignatureRequest = typeof signatureRequests.$inferSelect;
 export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
+export type Estimate = typeof estimates.$inferSelect;
+export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
+export type EstimateItem = typeof estimateItems.$inferSelect;
+export type InsertEstimateItem = z.infer<typeof insertEstimateItemSchema>;
+export type CreateEstimatePayload = z.infer<typeof createEstimateSchema>;
+export type UpdateEstimatePayload = z.infer<typeof updateEstimateSchema>;
+export type CompanyCounter = typeof companyCounters.$inferSelect;
+
+// Estimate with items type
+export interface EstimateWithItems extends Estimate {
+  items: EstimateItem[];
+  createdBy?: { firstName: string | null; lastName: string | null } | null;
+}
 
 // Finalize Job Schema - for wizard completion (job + client + schedule)
 export const finalizeJobSchema = z.object({
