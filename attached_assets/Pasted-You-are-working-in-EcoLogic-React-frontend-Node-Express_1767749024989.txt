@@ -1,0 +1,52 @@
+You are working in EcoLogic (React frontend + Node/Express backend). The agent previously added an “Estimates” tab INSIDE the Job Details modal (Documents | E-signature Approvals | Estimates). That is NOT what I want.
+
+GOAL:
+Add an Estimates section on the MAIN Jobs page (/jobs) — the “Jobs Management / All Jobs” screen — so that users can switch between “Jobs” and “Estimates” at the top of that page (like a tab switcher). The Estimates view must be accessible BEFORE opening any job modal.
+
+UI REQUIREMENTS (MAIN /jobs page):
+1) Add a tab switcher at the top of the Jobs page content:
+   - Tabs: “Jobs” and “Estimates”
+   - Default tab: “Jobs” (keep current list exactly as-is)
+2) When “Estimates” is selected:
+   - Show header row: “Estimates” on left, and a blue “+ Create Estimate” button on right (same styling as existing create buttons).
+   - Show a list of estimate cards (same card style as Jobs list):
+     - Title (estimate title)
+     - Status pill (“Active” for now)
+     - “Updated <date>”
+     - Amount on right formatted like $1,234.56 (NEVER show $NaN)
+     - 3-dot menu icon on far right (can be non-functional placeholder)
+   - Clicking an estimate card should open the existing Estimate modal / view if it exists; if not, open a read-only modal showing the estimate fields (title, customer, email, notes, line items, tax, totals).
+
+DATA REQUIREMENTS:
+3) Estimates must be stored in the database and linked to a jobId (existing schema/routes may already exist).
+4) The main /jobs Estimates tab should fetch and display:
+   - ALL estimates for jobs the user can access (respect RBAC + job access rules).
+   - If no estimates exist, show a clean empty state: “No estimates yet” + “Create an estimate to get started.”
+5) Fix the $NaN issue:
+   - Ensure totals are computed safely.
+   - If subtotal/total is missing, display “$0.00” not NaN.
+   - Amount should come from computed total (sum of line items + tax) and be formatted.
+
+RBAC / VISIBILITY:
+6) Follow the existing “hidden not disabled” rule:
+   - Only show the “Estimates” tab if the user has access to at least one job (normal).
+   - Only show the “+ Create Estimate” button if the user role allows creating estimates (Owner/Admin/Supervisor/Estimator/Dispatcher).
+   - Techs can view estimates only for jobs they are assigned to (same job access logic).
+7) Do NOT show locked estimates or estimates from jobs the user can’t access.
+
+IMPLEMENTATION NOTES:
+8) Keep the existing Job Details modal Estimates tab intact — do not delete it.
+9) Reuse as much existing code as possible:
+   - If JobEstimatesTab exists, create a new component for the main page (e.g., JobsEstimatesIndexTab) that uses shared estimate card + modal logic.
+10) Make sure switching tabs does NOT refetch jobs unnecessarily and does NOT break the Jobs list.
+
+DELIVERABLES:
+- Update /client/src/pages/Jobs.tsx to include the new Jobs/Estimates main-page tab switcher and rendering.
+- Add any needed API endpoint(s) like GET /api/estimates (scoped by access) if not already present.
+- Fix $NaN formatting and total calculation in estimate list cards.
+- Add minimal loading + error states (spinner or skeleton, and a simple “Failed to load estimates” message).
+
+After implementing, tell me:
+- Which files changed
+- What endpoint the main Estimates tab uses
+- Where total is calculated and formatted

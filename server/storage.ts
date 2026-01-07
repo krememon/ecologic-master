@@ -219,6 +219,7 @@ export interface IStorage {
   
   // Estimate operations
   getEstimatesByJob(jobId: number): Promise<Estimate[]>;
+  getEstimatesByCompany(companyId: number): Promise<Estimate[]>;
   getEstimate(id: number): Promise<EstimateWithItems | undefined>;
   createEstimate(payload: CreateEstimatePayload, companyId: number, userId: string): Promise<EstimateWithItems>;
   updateEstimate(id: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems>;
@@ -1566,6 +1567,14 @@ export class DatabaseStorage implements IStorage {
       .from(estimates)
       .where(eq(estimates.jobId, jobId))
       .orderBy(desc(estimates.createdAt));
+  }
+
+  async getEstimatesByCompany(companyId: number): Promise<Estimate[]> {
+    return await db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.companyId, companyId))
+      .orderBy(desc(estimates.updatedAt));
   }
 
   async getEstimate(id: number): Promise<EstimateWithItems | undefined> {

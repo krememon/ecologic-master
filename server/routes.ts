@@ -2078,6 +2078,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
   };
 
+  // GET /api/estimates - List all estimates for the company (main page view)
+  app.get('/api/estimates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Technician cannot access estimates
+      if (!canAccessEstimates(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to view estimates" });
+      }
+
+      const allEstimates = await storage.getEstimatesByCompany(company.id);
+      console.log(`[Estimates] listAll userId=${userId} companyId=${company.id} count=${allEstimates.length}`);
+      res.json(allEstimates);
+    } catch (error) {
+      console.error("Error fetching all estimates:", error);
+      res.status(500).json({ message: "Failed to fetch estimates" });
+    }
+  });
+
   // GET /api/jobs/:jobId/estimates - List estimates for a job
   app.get('/api/jobs/:jobId/estimates', isAuthenticated, async (req: any, res) => {
     try {

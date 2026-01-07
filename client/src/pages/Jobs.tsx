@@ -14,7 +14,7 @@ import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camer
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertJobSchema, type InsertJob, type Job, type Client } from "@shared/schema";
+import { insertJobSchema, type InsertJob, type Job, type Client, type Estimate } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { JobWizard } from "@/components/JobWizard";
 import { useCan } from "@/hooks/useCan";
@@ -269,6 +269,7 @@ export default function Jobs() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
   const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals' | 'estimates'>('documents');
+  const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>('jobs');
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -323,6 +324,12 @@ export default function Jobs() {
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
+  });
+
+  // Fetch all estimates for the main page tab (only if user can access estimates)
+  const { data: allEstimates = [], isLoading: estimatesLoading, error: estimatesError } = useQuery<Estimate[]>({
+    queryKey: ["/api/estimates"],
+    enabled: isAuthenticated && canAccessEstimates && mainPageTab === 'estimates',
   });
 
   // Fetch photos from legacy endpoint
@@ -1433,29 +1440,149 @@ export default function Jobs() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Jobs
-        </h3>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create New Job
-        </Button>
+      {/* Main Page Tab Switcher: Jobs | Estimates (Estimates hidden from Technicians) */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Button
+            variant={mainPageTab === 'jobs' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setMainPageTab('jobs')}
+            data-testid="tab-main-jobs"
+          >
+            Jobs
+          </Button>
+          {canAccessEstimates && (
+            <Button
+              variant={mainPageTab === 'estimates' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setMainPageTab('estimates')}
+              data-testid="tab-main-estimates"
+            >
+              Estimates
+            </Button>
+          )}
+        </div>
+        {mainPageTab === 'jobs' && (
+          <Button onClick={() => setIsDialogOpen(true)} data-testid="button-create-job">
+            <Plus className="w-4 h-4 mr-2" />
+            Create New Job
+          </Button>
+        )}
       </div>
 
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <Input
-          placeholder="Search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-          data-testid="input-search-jobs"
-        />
-      </div>
+      {/* ESTIMATES TAB CONTENT */}
+      {mainPageTab === 'estimates' && canAccessEstimates && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Estimates
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Create estimates from job details
+            </p>
+          </div>
+          {estimatesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : estimatesError ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <p className="text-red-600">Failed to load estimates</p>
+              </CardContent>
+            </Card>
+          ) : allEstimates.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <DollarSign className="h-12 w-12 text-slate-400 mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No estimates yet</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-center">
+                  Create estimates from individual job pages.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {allEstimates.map((estimate) => {
+                const job = jobs.find(j => j.id === estimate.jobId);
+                return (
+                  <Card 
+                    key={estimate.id} 
+                    className="hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      if (job) {
+                        setSelectedJob(job);
+                        setJobModalTab('estimates');
+                      }
+                    }}
+                    data-testid={`card-estimate-${estimate.id}`}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="flex items-center gap-2 text-base truncate">
+                            <DollarSign className="h-5 w-5 text-green-600 flex-shrink-0" />
+                            {estimate.title || estimate.estimateNumber}
+                          </CardTitle>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            {estimate.estimateNumber}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant={estimate.status === 'draft' ? 'secondary' : estimate.status === 'sent' ? 'default' : 'outline'}
+                          className="ml-2 capitalize"
+                        >
+                          {estimate.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-2">
+                      {job && (
+                        <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400">
+                          <Building2 className="h-3 w-3" />
+                          <span className="truncate">{job.title}</span>
+                        </div>
+                      )}
+                      {estimate.customerName && (
+                        <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400">
+                          <User className="h-3 w-3" />
+                          <span className="truncate">{estimate.customerName}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <span className="text-sm text-slate-500">Total</span>
+                        <span className="font-semibold text-green-600">
+                          ${((estimate.totalCents || 0) / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {estimate.updatedAt ? format(new Date(estimate.updatedAt), 'MMM d, yyyy') : ''}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
-      {jobs.length === 0 ? (
+      {/* JOBS TAB CONTENT */}
+      {mainPageTab === 'jobs' && (
+        <>
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+              data-testid="input-search-jobs"
+            />
+          </div>
+
+          {jobs.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-slate-400 mb-4" />
@@ -1629,6 +1756,8 @@ export default function Jobs() {
             </Card>
           ))}
         </div>
+      )}
+        </>
       )}
 
       {/* Delete Confirmation Modal - Single Source of Truth */}
