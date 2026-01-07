@@ -1,0 +1,75 @@
+TASK: Add an “Estimates” button/tab inside the Job page header tabs (same style as the screenshot: “Documents” + “E-signature Approvals”), and build the Estimates modal.
+
+GOAL:
+Inside the Job Details view on the Jobs page, we already have that segmented/pill header tab UI (Documents | E-signature Approvals). Add a 3rd option called **Estimates** that matches the exact same look/spacing/pill style.
+
+UI REQUIREMENTS (MUST MATCH SCREENSHOT):
+1) In the Job Details header where the pill tabs are:
+   - Documents | E-signature Approvals
+   Add:
+   - Documents | E-signature Approvals | Estimates
+2) It must look identical to the existing tabs:
+   - same rounded pill shape
+   - same padding
+   - same icon style (folder icon for Documents, keep consistent)
+   - active tab has the “selected” pill background, inactive is plain text
+
+BEHAVIOR:
+- When user clicks **Estimates** tab, show an Estimates section for THIS JOB only (jobId).
+- In the Estimates section, add a primary button: **Create Estimate**
+- Clicking **Create Estimate** opens a modal (this is the modal I want “like this”):
+  - clean modal layout, same styling as our other modals (rounded, modern, spaced)
+  - fields:
+    1) Estimate Title (text)
+    2) Customer Name (prefill from job if available)
+    3) Customer Email (prefill if available)
+    4) Line Items (simple v1 list):
+       - Item name
+       - Qty
+       - Unit price
+       - Auto line total
+       - Add line item button
+    5) Totals section:
+       - Subtotal (auto)
+       - Tax (optional input % or $)
+       - Total (auto)
+  - Buttons: Cancel | Save Draft
+- After Save Draft:
+  - modal closes
+  - estimates list refreshes instantly (no page refresh)
+  - show toast “Estimate saved”
+
+ESTIMATES LIST (inside the Estimates tab):
+- Table/list showing estimates for the job:
+  - Estimate #
+  - Title
+  - Status (Draft / Sent / Approved / Declined)
+  - Total
+  - Created date
+- Row actions (v1):
+  - View (opens the same modal in read mode)
+  - Edit (draft only)
+  - Delete (draft only, confirm)
+
+BACKEND + DATABASE (DO THIS TOO):
+- Create DB tables:
+  - estimates: id, companyId, jobId, createdByUserId, title, status, subtotal, tax, total, createdAt, updatedAt
+  - estimate_line_items: id, estimateId, name, qty, unitPrice, lineTotal
+- API routes:
+  - GET /api/jobs/:jobId/estimates
+  - POST /api/jobs/:jobId/estimates
+  - GET /api/estimates/:id
+  - PATCH /api/estimates/:id (draft only)
+  - DELETE /api/estimates/:id (draft only)
+- Auth/RBAC:
+  - Only users who can access the job can see the Estimates tab + estimates data
+  - If user can’t access job, HIDE the tab completely (hidden not disabled)
+  - Enforce companyId match on every query
+
+IMPORTANT:
+- Do NOT create a new page in the sidebar.
+- This must live inside the Job page / Job Details view alongside the existing tabs.
+- Keep styling consistent with EcoLogic UI.
+- Add minimal targeted logs only for estimates endpoints:
+  - [Estimates] list jobId=... count=...
+  - [Estimates] create estimateId=... jobId=...

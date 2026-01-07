@@ -1632,6 +1632,10 @@ export class DatabaseStorage implements IStorage {
     // Get next estimate number
     const estimateNumber = await this.getNextEstimateNumber(companyId);
 
+    // Calculate total with tax
+    const taxCents = payload.taxCents || 0;
+    const totalCents = subtotalCents + taxCents;
+
     // Create estimate
     const [estimate] = await db
       .insert(estimates)
@@ -1640,10 +1644,13 @@ export class DatabaseStorage implements IStorage {
         jobId: payload.jobId,
         estimateNumber,
         title: payload.title,
+        customerName: payload.customerName || null,
+        customerEmail: payload.customerEmail || null,
         notes: payload.notes || null,
         status: "draft",
         subtotalCents,
-        totalCents: subtotalCents, // For now, total = subtotal (no tax/discount)
+        taxCents,
+        totalCents,
         createdByUserId: userId,
       })
       .returning();

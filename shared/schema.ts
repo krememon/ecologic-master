@@ -663,9 +663,12 @@ export const estimates = pgTable("estimates", {
   jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
   estimateNumber: varchar("estimate_number", { length: 50 }).notNull(), // EST-000001, unique per company
   title: varchar("title", { length: 255 }).notNull(),
+  customerName: varchar("customer_name", { length: 255 }),
+  customerEmail: varchar("customer_email", { length: 255 }),
   notes: text("notes"),
   status: estimateStatusEnum("status").notNull().default("draft"),
   subtotalCents: integer("subtotal_cents").notNull().default(0),
+  taxCents: integer("tax_cents").notNull().default(0),
   totalCents: integer("total_cents").notNull().default(0),
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -878,6 +881,7 @@ export const insertEstimateSchema = createInsertSchema(estimates).omit({
   companyId: true,
   estimateNumber: true,
   subtotalCents: true,
+  taxCents: true,
   totalCents: true,
   createdByUserId: true,
   createdAt: true,
@@ -894,7 +898,10 @@ export const insertEstimateItemSchema = createInsertSchema(estimateItems).omit({
 export const createEstimateSchema = z.object({
   jobId: z.number().positive("Job ID is required"),
   title: z.string().min(1, "Title is required"),
+  customerName: z.string().optional(),
+  customerEmail: z.string().email().optional().or(z.literal('')),
   notes: z.string().optional(),
+  taxCents: z.number().int().min(0).optional().default(0),
   items: z.array(z.object({
     name: z.string().min(1, "Item name is required"),
     quantity: z.union([z.string(), z.number()]).transform(v => String(v)),

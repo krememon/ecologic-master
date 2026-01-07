@@ -2127,7 +2127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const { title, notes, items } = req.body;
+      const { title, notes, items, customerName, customerEmail, taxCents } = req.body;
 
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
         return res.status(400).json({ message: "Title is required" });
@@ -2135,6 +2135,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!items || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ message: "At least one line item is required" });
+      }
+
+      // Parse and validate taxCents
+      let parsedTaxCents = 0;
+      if (taxCents !== undefined && taxCents !== null && taxCents !== '') {
+        parsedTaxCents = typeof taxCents === 'number' 
+          ? Math.round(taxCents) 
+          : Math.round(parseFloat(taxCents));
+        if (isNaN(parsedTaxCents) || parsedTaxCents < 0) {
+          parsedTaxCents = 0;
+        }
       }
 
       // Validate and normalize items
@@ -2166,7 +2177,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const estimate = await storage.createEstimate(
-        { jobId, title: title.trim(), notes: notes || undefined, items: normalizedItems },
+        { 
+          jobId, 
+          title: title.trim(), 
+          notes: notes || undefined, 
+          customerName: customerName?.trim() || undefined,
+          customerEmail: customerEmail?.trim() || undefined,
+          taxCents: parsedTaxCents,
+          items: normalizedItems 
+        },
         companyId,
         userId
       );
