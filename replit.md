@@ -64,12 +64,13 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Timezone Handling**: Robust timezone conversion utilities ensure correct date/time display and storage.
 - **Development Tools**: Includes development-only debug endpoints for WebSocket and database state inspection.
 - **Estimates System**: Job-scoped estimate creation with line items editor. Features:
-  - Database tables: estimates, estimate_items, company_counters (for atomic estimate number generation)
+  - Database tables: estimates (with customerName, customerEmail, taxCents fields), estimate_items, company_counters (for atomic estimate number generation)
   - Estimate numbers unique per company in EST-000001 format via atomic counter increment
-  - All monetary values stored as cents (unitPriceCents, totalCents)
+  - All monetary values stored as cents (unitPriceCents, taxCents, subtotalCents, totalCents where total = subtotal + tax)
+  - Create modal includes: Title, Customer Name, Customer Email, Notes, Line Items (name, qty, unit price, auto line total), Subtotal/Tax/Total section
   - RBAC: Owner/Supervisor/Dispatcher/Estimator can create/manage via requirePerm('estimates.create'); Technician cannot access (tab hidden, routes blocked with 403)
   - Job Details page has 3 segmented tabs: Documents | E-signature Approvals | Estimates
-  - Action dropdown menu: View (coming soon), Edit (draft only, coming soon), Duplicate (functional), Delete (draft only, functional)
+  - Action dropdown menu: View (coming soon), Edit (draft only, coming soon), Duplicate (functional - copies all fields including customer info and tax), Delete (draft only, functional)
   - Server logging: All estimate routes log with [Estimates] prefix for debugging
   - Validation: Quantity must not be empty, unitPriceCents accepts decimals and rounds to integer cents
 
