@@ -1,0 +1,57 @@
+GOAL
+Inside the Job page, there must be a switchable tab bar with at least:
+- Overview (or existing tab)
+- Documents (existing if present)
+- Estimates (NEW)
+
+When the user clicks “Estimates”, it shows an Estimates panel and ONLY inside that panel there is a visible primary button: “+ Create Estimate”.
+
+IMPORTANT
+- This is NOT a separate page route. It must be a tab inside the Job page UI.
+- The “+ Create Estimate” button must only render when the Estimates tab is active.
+- Match the styling/spacing of our current tabs (like the screenshot: two pill tabs with soft border and active state).
+- Respect RBAC (“hidden not disabled”). If user cannot create estimates (we will add rules later), hide the button with a single boolean for now (default true).
+
+IMPLEMENTATION REQUIREMENTS
+1) Find the Job page component (ex: JobDetails, JobPage, JobModal, JobDetailsModal, etc).
+2) Implement the tab UI using our existing UI system:
+   - If we use shadcn/ui already, use <Tabs>, <TabsList>, <TabsTrigger>, <TabsContent>.
+   - If we already have a custom Tabs component for Documents/E-signature, REUSE that same component/style so it looks identical.
+3) Add a new tab trigger labeled “Estimates”.
+4) Add <TabsContent value="estimates"> that contains:
+   - Header row (left: “Estimates” title, right: “+ Create Estimate” button)
+   - A placeholder empty state below:
+     - Icon optional
+     - Text: “No estimates yet”
+     - Subtext: “Create your first estimate for this job.”
+5) Wire up a modal that opens when clicking “+ Create Estimate”:
+   - Minimal fields for now:
+     - Estimate Title (text)
+     - Notes (textarea)
+     - Total Amount (number)
+   - Buttons: Cancel, Create
+   - On Create: for now just console.log the payload + close modal + show a toast “Estimate created” (no backend required yet).
+   - The modal must be clean and consistent with the rest of EcoLogic modals.
+
+STATE + RELIABILITY (this is the part you MUST get right)
+- The tab selection must actually switch content (no broken state).
+- The “+ Create Estimate” button must not appear on other tabs.
+- Make sure no duplicate “Create Job” or other top-right header buttons are added.
+- If we already have a Job page header, do NOT put the Create Estimate button in the global header. Put it INSIDE the Estimates tab content only.
+
+FILES / WHERE TO EDIT
+- Update the Job page component where the Documents tab currently lives (or where job details are displayed).
+- If there is a dedicated component for the document approvals tab, do not break it.
+
+DELIVERABLES
+- Working tab switcher with new “Estimates” tab
+- “+ Create Estimate” button visible only in Estimates tab
+- Create Estimate modal opens and closes correctly
+- Clean placeholder empty state in Estimates tab
+- No UI regressions in Documents / Approvals
+
+AFTER YOU FINISH
+Reply with:
+- Which files you changed
+- The component name where tabs are implemented
+- Any TODO comments you added for future backend integration
