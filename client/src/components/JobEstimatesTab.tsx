@@ -48,7 +48,10 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [title, setTitle] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [taxInput, setTaxInput] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { name: "", quantity: "1", unitPriceCents: 0 }
   ]);
@@ -58,7 +61,7 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
   });
 
   const createEstimateMutation = useMutation({
-    mutationFn: async (data: { title: string; notes?: string; items: LineItem[] }) => {
+    mutationFn: async (data: { title: string; customerName?: string; customerEmail?: string; notes?: string; taxCents: number; items: LineItem[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
@@ -122,7 +125,10 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
 
   const resetForm = () => {
     setTitle("");
+    setCustomerName("");
+    setCustomerEmail("");
     setNotes("");
+    setTaxInput("");
     setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
   };
 
@@ -155,6 +161,15 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
     return lineItems.reduce((sum, item) => sum + calculateLineTotal(item), 0);
   };
 
+  const calculateTaxCents = (): number => {
+    const taxValue = parseFloat(taxInput) || 0;
+    return Math.round(taxValue * 100);
+  };
+
+  const calculateTotal = (): number => {
+    return calculateSubtotal() + calculateTaxCents();
+  };
+
   const handleSubmit = () => {
     if (!title.trim()) {
       toast({
@@ -177,7 +192,10 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
 
     createEstimateMutation.mutate({
       title: title.trim(),
+      customerName: customerName.trim() || undefined,
+      customerEmail: customerEmail.trim() || undefined,
       notes: notes.trim() || undefined,
+      taxCents: calculateTaxCents(),
       items: validItems,
     });
   };
@@ -339,6 +357,31 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
               />
             </div>
 
+            {/* Customer Info */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="customer-name">Customer Name</Label>
+                <Input
+                  id="customer-name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Customer name"
+                  data-testid="input-customer-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customer-email">Customer Email</Label>
+                <Input
+                  id="customer-email"
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="customer@example.com"
+                  data-testid="input-customer-email"
+                />
+              </div>
+            </div>
+
             {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="estimate-notes">Notes (optional)</Label>
@@ -435,12 +478,34 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
                 ))}
               </div>
 
-              {/* Subtotal */}
-              <div className="flex justify-end pt-3 border-t">
-                <div className="text-right">
-                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4">Total:</span>
-                  <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              {/* Totals Section */}
+              <div className="pt-3 border-t space-y-2">
+                <div className="flex justify-end items-center">
+                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4 w-20 text-right">Subtotal:</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 w-24 text-right">
                     {formatCurrency(calculateSubtotal())}
+                  </span>
+                </div>
+                <div className="flex justify-end items-center">
+                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4 w-20 text-right">Tax:</span>
+                  <div className="relative w-24">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <Input
+                      type="number"
+                      value={taxInput}
+                      onChange={(e) => setTaxInput(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="pl-6 h-8 text-sm"
+                      data-testid="input-tax"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end items-center pt-2 border-t">
+                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4 w-20 text-right">Total:</span>
+                  <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 w-24 text-right">
+                    {formatCurrency(calculateTotal())}
                   </span>
                 </div>
               </div>

@@ -2346,7 +2346,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         {
           jobId: existingEstimate.jobId,
           title: `${existingEstimate.title || 'Estimate'} (Copy)`,
+          customerName: (existingEstimate as any).customerName || undefined,
+          customerEmail: (existingEstimate as any).customerEmail || undefined,
           notes: existingEstimate.notes || undefined,
+          taxCents: (existingEstimate as any).taxCents || 0,
           items,
         },
         companyId,
