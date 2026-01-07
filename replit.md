@@ -73,7 +73,16 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Action dropdown menu: View (coming soon), Edit (draft only, coming soon), Duplicate (functional - copies all fields including customer info and tax), Delete (draft only, functional)
   - Server logging: All estimate routes log with [Estimates] prefix for debugging
   - Validation: Quantity must not be empty, unitPriceCents accepts decimals and rounds to integer cents
-  - **Main Page Tab Switcher**: Jobs page (/jobs) has top-level Jobs | Estimates tab switcher. Estimates tab shows company-wide estimate grid with estimate number, title, status badge, job reference, customer name, total, and updated date. Clicking an estimate card opens the associated job modal on the estimates tab. Technicians cannot see the Estimates tab (RBAC enforced). Query optimization: GET /api/estimates only fetches when user is on estimates tab and has permission.
+  - **Main Page Tab Switcher**: Jobs page (/jobs) styled like Documents page with Tabs component. Features:
+    - Header: "Jobs & Estimates" title with subtitle
+    - Segmented tabs using shadcn Tabs component (Jobs | Estimates icons + labels)
+    - Estimates tab has filter row: Job picker dropdown + Status dropdown (All/Draft/Sent/Approved/Declined)
+    - "Create Estimate" button opens job picker modal, then opens job modal on estimates tab
+    - Estimate cards show: number, title, status badge, job reference, customer name, total, updated date
+    - Selected job chip with clear button when filtering by specific job
+    - Empty states for no estimates and no matching filters
+    - Technicians cannot see Estimates tab (RBAC enforced)
+    - Query optimization: GET /api/estimates only fetches when estimates tab active and permitted
 
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)

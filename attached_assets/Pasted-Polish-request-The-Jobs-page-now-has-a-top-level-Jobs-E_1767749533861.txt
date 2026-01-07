@@ -1,0 +1,57 @@
+Polish request: The Jobs page now has a top-level “Jobs | Estimates” switch and Estimates works. I want the Estimates view to LOOK and FEEL like the Documents page layout (Documents & Approvals page).
+
+REFERENCE:
+Match the visual structure of Documents page:
+- big title + subtitle
+- segmented tab/pill switcher style
+- filter row with dropdowns
+- big primary CTA button spanning full width (mobile) / prominent (desktop)
+- consistent spacing, rounded corners, and typography
+
+GOAL:
+When the user switches to “Estimates” on /jobs, render an Estimates layout that mirrors the Documents page style.
+
+UI SPEC (Estimates tab on /jobs):
+1) Title area:
+   - H1: “Estimates”
+   - Subtitle: “Create and manage estimates across all jobs”
+   - Use same font sizes, weights, and spacing as Documents page header.
+
+2) Tab styling:
+   - The Jobs | Estimates switch should use the same segmented control / pill style as Documents | E-signature Approvals.
+   - Make the active tab look identical to Documents active pill.
+
+3) Filter row (like Documents page):
+   Add a row beneath the tabs with:
+   - Left dropdown: “All jobs” (job picker like Documents page job dropdown)
+   - Middle dropdown: “All statuses” (Active/Sent/Approved/Declined — even if backend only supports Active for now, the filter can still work client-side)
+   - Right icon button: a “select”/bulk icon placeholder (same style as Documents page bulk select button). It can be disabled/hidden for now, but the button should exist visually.
+
+   Behavior:
+   - “All jobs” filters the estimates list by jobId
+   - “All statuses” filters by estimate.status (default Active if missing)
+
+4) Primary CTA:
+   - Replace the small “+ Create Estimate” button with a big primary button like “Upload Document”
+   - Text: “Create Estimate”
+   - Same height, rounded corners, icon placement, and full-width style on mobile.
+   - Keep RBAC: only show this button if user can create estimates.
+
+5) Estimates list:
+   - Keep existing estimate card list and click behavior.
+   - Ensure spacing/margins match Documents page card spacing.
+   - Add empty state similar to Documents empty state when no estimates match filters.
+
+6) Do NOT break anything:
+   - Do not remove existing job modal Estimates tab.
+   - Do not change API contract.
+   - Do not regress RBAC/hidden-not-disabled rules.
+
+IMPLEMENTATION:
+- Reuse the same UI components/styles used by Documents page wherever possible (same container classes, header component, dropdown component, segmented control, primary button styles).
+- If Documents page has shared components (like SegmentedTabs, PageHeader, FiltersRow, PrimaryButton), reuse them instead of duplicating.
+- If not shared yet, refactor lightly: extract shared components used by both Documents and Estimates to keep styling consistent.
+
+DELIVERABLES:
+- Update the Jobs page Estimates view to match Documents page layout.
+- List the files changed and what shared components were reused/extracted.

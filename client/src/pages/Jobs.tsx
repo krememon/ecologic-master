@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -271,6 +272,15 @@ export default function Jobs() {
   const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals' | 'estimates'>('documents');
   const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>('jobs');
   
+  // Estimates tab filters
+  const [estimatesJobFilter, setEstimatesJobFilter] = useState<'all' | number>('all');
+  const [estimatesStatusFilter, setEstimatesStatusFilter] = useState<'all' | string>('all');
+  const [estimatesJobPickerOpen, setEstimatesJobPickerOpen] = useState(false);
+  const [estimatesJobSearchQuery, setEstimatesJobSearchQuery] = useState('');
+  const [createEstimateJobPickerOpen, setCreateEstimateJobPickerOpen] = useState(false);
+  const [createEstimateJobSearchQuery, setCreateEstimateJobSearchQuery] = useState('');
+  const [selectedJobForEstimate, setSelectedJobForEstimate] = useState<JobWithClient | null>(null);
+  
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
 
@@ -282,6 +292,13 @@ export default function Jobs() {
   
   // Check if user can access estimates (Technician cannot)
   const canAccessEstimates = role !== 'TECHNICIAN';
+  
+  // Defensive: reset main page tab to 'jobs' if user cannot access estimates
+  useEffect(() => {
+    if (!canAccessEstimates && mainPageTab === 'estimates') {
+      setMainPageTab('jobs');
+    }
+  }, [canAccessEstimates, mainPageTab]);
 
   // Utility function for Google Places dropdown detection using composedPath
   const isInPacContainer = (event: Event): boolean => {
@@ -331,6 +348,50 @@ export default function Jobs() {
     queryKey: ["/api/estimates"],
     enabled: isAuthenticated && canAccessEstimates && mainPageTab === 'estimates',
   });
+
+  // Filter estimates based on job and status filters
+  const filteredEstimates = useMemo(() => {
+    let result = allEstimates;
+    
+    // Filter by job
+    if (estimatesJobFilter !== 'all') {
+      result = result.filter(est => est.jobId === estimatesJobFilter);
+    }
+    
+    // Filter by status
+    if (estimatesStatusFilter !== 'all') {
+      result = result.filter(est => est.status === estimatesStatusFilter);
+    }
+    
+    return result;
+  }, [allEstimates, estimatesJobFilter, estimatesStatusFilter]);
+
+  // Filter jobs for estimates job picker
+  const estimatesFilteredJobs = useMemo(() => {
+    const query = estimatesJobSearchQuery.trim().toLowerCase();
+    if (!query) return jobs.slice(0, 100);
+    return jobs.filter(job => {
+      const searchFields = [job.title, job.clientName, job.location].filter(Boolean).map(f => f!.toLowerCase());
+      return searchFields.some(field => field.includes(query));
+    }).slice(0, 100);
+  }, [jobs, estimatesJobSearchQuery]);
+
+  // Filter jobs for create estimate job picker
+  const createEstimateFilteredJobs = useMemo(() => {
+    const query = createEstimateJobSearchQuery.trim().toLowerCase();
+    if (!query) return jobs.slice(0, 100);
+    return jobs.filter(job => {
+      const searchFields = [job.title, job.clientName, job.location].filter(Boolean).map(f => f!.toLowerCase());
+      return searchFields.some(field => field.includes(query));
+    }).slice(0, 100);
+  }, [jobs, createEstimateJobSearchQuery]);
+
+  // Get selected job label for filter dropdown
+  const selectedJobForFilterLabel = useMemo(() => {
+    if (estimatesJobFilter === 'all') return 'All jobs';
+    const job = jobs.find(j => j.id === estimatesJobFilter);
+    return job?.title || 'Unknown job';
+  }, [estimatesJobFilter, jobs]);
 
   // Fetch photos from legacy endpoint
   const { data: legacyJobPhotos = [] } = useQuery<JobPhoto[]>({
@@ -898,10 +959,10 @@ export default function Jobs() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Jobs Management</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage all your construction projects and track their progress</p>
+    <div className="w-full max-w-md mx-auto px-4 pb-24">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Jobs & Estimates</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage projects and create estimates for your clients</p>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1440,47 +1501,87 @@ export default function Jobs() {
         </DialogContent>
       </Dialog>
 
-      {/* Main Page Tab Switcher: Jobs | Estimates (Estimates hidden from Technicians) */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Button
-            variant={mainPageTab === 'jobs' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setMainPageTab('jobs')}
-            data-testid="tab-main-jobs"
-          >
+      {/* Main Page Tabs: Jobs | Estimates (styled like Documents page) */}
+      <Tabs value={mainPageTab} onValueChange={(value) => setMainPageTab(value as 'jobs' | 'estimates')} className="w-full">
+        <TabsList className={canAccessEstimates ? "grid w-full grid-cols-2" : "grid w-full grid-cols-1"}>
+          <TabsTrigger value="jobs" className="flex items-center gap-2" data-testid="tab-main-jobs">
+            <Building2 className="h-4 w-4" />
             Jobs
-          </Button>
+          </TabsTrigger>
           {canAccessEstimates && (
-            <Button
-              variant={mainPageTab === 'estimates' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setMainPageTab('estimates')}
-              data-testid="tab-main-estimates"
-            >
+            <TabsTrigger value="estimates" className="flex items-center gap-2" data-testid="tab-main-estimates">
+              <DollarSign className="h-4 w-4" />
               Estimates
-            </Button>
+            </TabsTrigger>
           )}
-        </div>
-        {mainPageTab === 'jobs' && (
-          <Button onClick={() => setIsDialogOpen(true)} data-testid="button-create-job">
-            <Plus className="w-4 h-4 mr-2" />
-            Create New Job
-          </Button>
-        )}
-      </div>
+        </TabsList>
 
-      {/* ESTIMATES TAB CONTENT */}
-      {mainPageTab === 'estimates' && canAccessEstimates && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Estimates
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Create estimates from job details
-            </p>
+        {/* ESTIMATES TAB CONTENT - RBAC guarded */}
+        {canAccessEstimates && (
+        <TabsContent value="estimates" className="mt-6">
+          {/* Filter Row: Job Picker + Status Dropdown */}
+          <div className="flex flex-col gap-3 mb-6">
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1 justify-between"
+                onClick={() => setEstimatesJobPickerOpen(true)}
+                data-testid="button-estimates-job-picker"
+              >
+                <span className="truncate">{selectedJobForFilterLabel}</span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+              </Button>
+              <Select value={estimatesStatusFilter === 'all' ? 'all' : estimatesStatusFilter} onValueChange={(v) => setEstimatesStatusFilter(v)}>
+                <SelectTrigger className="flex-1 min-w-0" data-testid="filter-estimates-status">
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {estimatesStatusFilter === 'all' ? 'All statuses' : estimatesStatusFilter.charAt(0).toUpperCase() + estimatesStatusFilter.slice(1)}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="declined">Declined</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Selected Job Chip */}
+            {estimatesJobFilter !== 'all' && (
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant="secondary" 
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm"
+                  data-testid="chip-selected-estimate-job"
+                >
+                  <Building2 className="h-3 w-3" />
+                  <span className="truncate max-w-[200px]">Job: {selectedJobForFilterLabel}</span>
+                  <button 
+                    onClick={() => setEstimatesJobFilter('all')}
+                    className="ml-1 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full p-0.5"
+                    data-testid="button-clear-estimate-job-filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              </div>
+            )}
+            
+            {/* Create Estimate Button (prominent like Documents upload button) */}
+            {canAccessEstimates && (
+              <Button 
+                className="w-full"
+                onClick={() => setCreateEstimateJobPickerOpen(true)}
+                data-testid="button-create-estimate"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Estimate
+              </Button>
+            )}
           </div>
+
+          {/* Estimates List */}
           {estimatesLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -1491,19 +1592,23 @@ export default function Jobs() {
                 <p className="text-red-600">Failed to load estimates</p>
               </CardContent>
             </Card>
-          ) : allEstimates.length === 0 ? (
+          ) : filteredEstimates.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <DollarSign className="h-12 w-12 text-slate-400 mb-4" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No estimates yet</h3>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                  {allEstimates.length === 0 ? 'No estimates yet' : 'No estimates match filters'}
+                </h3>
                 <p className="text-slate-600 dark:text-slate-400 text-center">
-                  Create estimates from individual job pages.
+                  {allEstimates.length === 0 
+                    ? 'Click "Create Estimate" to get started.' 
+                    : 'Try adjusting your filters.'}
                 </p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {allEstimates.map((estimate) => {
+              {filteredEstimates.map((estimate) => {
                 const job = jobs.find(j => j.id === estimate.jobId);
                 return (
                   <Card 
@@ -1564,22 +1669,27 @@ export default function Jobs() {
               })}
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+        )}
 
-      {/* JOBS TAB CONTENT */}
-      {mainPageTab === 'jobs' && (
-        <>
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-jobs"
-            />
+        {/* JOBS TAB CONTENT */}
+        <TabsContent value="jobs" className="mt-6">
+          {/* Create Job + Search */}
+          <div className="flex flex-col gap-3 mb-6">
+            <Button className="w-full" onClick={() => setIsDialogOpen(true)} data-testid="button-create-job">
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Job
+            </Button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-jobs"
+              />
+            </div>
           </div>
 
           {jobs.length === 0 ? (
@@ -1757,8 +1867,114 @@ export default function Jobs() {
           ))}
         </div>
       )}
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Estimates Job Picker Dialog (for filtering) */}
+      <Dialog open={estimatesJobPickerOpen} onOpenChange={setEstimatesJobPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Filter by Job</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search jobs..."
+                value={estimatesJobSearchQuery}
+                onChange={(e) => setEstimatesJobSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-estimates-filter-jobs"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                onClick={() => {
+                  setEstimatesJobFilter('all');
+                  setEstimatesJobPickerOpen(false);
+                  setEstimatesJobSearchQuery('');
+                }}
+                data-testid="button-filter-all-jobs"
+              >
+                <Building2 className="h-4 w-4 text-slate-500" />
+                <span className="font-medium">All jobs</span>
+              </button>
+              {estimatesFilteredJobs.map((job) => (
+                <button
+                  key={job.id}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                  onClick={() => {
+                    setEstimatesJobFilter(job.id);
+                    setEstimatesJobPickerOpen(false);
+                    setEstimatesJobSearchQuery('');
+                  }}
+                  data-testid={`button-filter-job-${job.id}`}
+                >
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{job.title}</p>
+                    {job.clientName && (
+                      <p className="text-sm text-slate-500 truncate">{job.clientName}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Estimate Job Picker Dialog */}
+      <Dialog open={createEstimateJobPickerOpen} onOpenChange={setCreateEstimateJobPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select a Job</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-500 mb-4">Choose a job to create an estimate for</p>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search jobs..."
+                value={createEstimateJobSearchQuery}
+                onChange={(e) => setCreateEstimateJobSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-create-estimate-jobs"
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {createEstimateFilteredJobs.length === 0 ? (
+                <p className="text-center text-slate-500 py-4">No jobs found</p>
+              ) : (
+                createEstimateFilteredJobs.map((job) => (
+                  <button
+                    key={job.id}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                    onClick={() => {
+                      setSelectedJobForEstimate(job);
+                      setCreateEstimateJobPickerOpen(false);
+                      setCreateEstimateJobSearchQuery('');
+                      // Open the job modal with estimates tab
+                      setSelectedJob(job);
+                      setJobModalTab('estimates');
+                    }}
+                    data-testid={`button-select-job-for-estimate-${job.id}`}
+                  >
+                    <Building2 className="h-4 w-4 text-slate-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{job.title}</p>
+                      {job.clientName && (
+                        <p className="text-sm text-slate-500 truncate">{job.clientName}</p>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Modal - Single Source of Truth */}
       <AlertDialog open={!!jobToDelete} onOpenChange={(open) => !open && setJobToDelete(null)}>
