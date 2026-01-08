@@ -124,6 +124,24 @@ export const clients = pgTable("clients", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Customers table - for estimate recipients
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  firstName: varchar("first_name", { length: 100 }).notNull(),
+  lastName: varchar("last_name", { length: 100 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  address: text("address"),
+  companyName: varchar("company_name", { length: 255 }),
+  companyNumber: varchar("company_number", { length: 100 }),
+  jobTitle: varchar("job_title", { length: 100 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  companyIdx: index("customers_company_idx").on(table.companyId),
+}));
+
 // Subcontractors table
 export const subcontractors = pgTable("subcontractors", {
   id: serial("id").primaryKey(),
@@ -661,10 +679,13 @@ export const estimates = pgTable("estimates", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
   estimateNumber: varchar("estimate_number", { length: 50 }).notNull(), // EST-000001, unique per company
   title: varchar("title", { length: 255 }).notNull(),
-  customerName: varchar("customer_name", { length: 255 }),
-  customerEmail: varchar("customer_email", { length: 255 }),
+  customerName: varchar("customer_name", { length: 255 }), // Snapshot field for history
+  customerEmail: varchar("customer_email", { length: 255 }), // Snapshot field for history
+  customerPhone: varchar("customer_phone", { length: 50 }), // Snapshot field for history
+  customerAddress: text("customer_address"), // Snapshot field for history
   notes: text("notes"),
   status: estimateStatusEnum("status").notNull().default("draft"),
   subtotalCents: integer("subtotal_cents").notNull().default(0),
@@ -699,11 +720,24 @@ export const estimatesRelations = relations(estimates, ({ one, many }) => ({
     fields: [estimates.jobId],
     references: [jobs.id],
   }),
+  customer: one(customers, {
+    fields: [estimates.customerId],
+    references: [customers.id],
+  }),
   createdBy: one(users, {
     fields: [estimates.createdByUserId],
     references: [users.id],
   }),
   items: many(estimateItems),
+}));
+
+// Customer relations
+export const customersRelations = relations(customers, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [customers.companyId],
+    references: [companies.id],
+  }),
+  estimates: many(estimates),
 }));
 
 export const estimateItemsRelations = relations(estimateItems, ({ one }) => ({
@@ -748,6 +782,13 @@ export const insertCompanySchema = createInsertSchema(companies).omit({
 });
 
 export const insertClientSchema = createInsertSchema(clients).omit({
+  id: true,
+  companyId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
   companyId: true,
   createdAt: true,
@@ -898,8 +939,11 @@ export const insertEstimateItemSchema = createInsertSchema(estimateItems).omit({
 export const createEstimateSchema = z.object({
   jobId: z.number().positive("Job ID is required"),
   title: z.string().min(1, "Title is required"),
+  customerId: z.number().positive().optional(),
   customerName: z.string().optional(),
   customerEmail: z.string().email().optional().or(z.literal('')),
+  customerPhone: z.string().optional(),
+  customerAddress: z.string().optional(),
   notes: z.string().optional(),
   taxCents: z.number().int().min(0).optional().default(0),
   items: z.array(z.object({
@@ -930,6 +974,8 @@ export type Company = typeof companies.$inferSelect;
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
+export type Customer = typeof customers.$inferSelect;
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Subcontractor = typeof subcontractors.$inferSelect;
 export type InsertSubcontractor = z.infer<typeof insertSubcontractorSchema>;
 export type Job = typeof jobs.$inferSelect;

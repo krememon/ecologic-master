@@ -21,7 +21,7 @@ import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -2069,6 +2069,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===================
+  // Customer Routes
+  // ===================
+
+  // Helper to check if user can create customers (Technician cannot)
+  const canCreateCustomers = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+  };
+
+  // GET /api/customers - List all customers for the company
+  app.get('/api/customers', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const customers = await storage.getCustomers(company.id);
+      console.log(`[Customers] list userId=${userId} companyId=${company.id} count=${customers.length}`);
+      res.json(customers);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      res.status(500).json({ message: "Failed to fetch customers" });
+    }
+  });
+
+  // POST /api/customers - Create a new customer
+  app.post('/api/customers', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Technician cannot create customers
+      if (!canCreateCustomers(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to create customers" });
+      }
+
+      // Validate request body
+      const parseResult = insertCustomerSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: parseResult.error.flatten().fieldErrors 
+        });
+      }
+
+      const customer = await storage.createCustomer({
+        ...parseResult.data,
+        companyId: company.id,
+      });
+
+      console.log(`[Customers] create customerId=${customer.id} companyId=${company.id} name=${customer.firstName} ${customer.lastName}`);
+      res.status(201).json(customer);
+    } catch (error) {
+      console.error("Error creating customer:", error);
+      res.status(500).json({ message: "Failed to create customer" });
+    }
+  });
+
+  // ===================
   // Estimate Routes (Job-scoped estimates with line items)
   // ===================
 
@@ -2154,7 +2223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const { title, notes, items, customerName, customerEmail, taxCents } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents } = req.body;
 
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
         return res.status(400).json({ message: "Title is required" });
@@ -2208,8 +2277,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobId, 
           title: title.trim(), 
           notes: notes || undefined, 
+          customerId: customerId ? parseInt(customerId) : undefined,
           customerName: customerName?.trim() || undefined,
           customerEmail: customerEmail?.trim() || undefined,
+          customerPhone: customerPhone?.trim() || undefined,
+          customerAddress: customerAddress?.trim() || undefined,
           taxCents: parsedTaxCents,
           items: normalizedItems 
         },

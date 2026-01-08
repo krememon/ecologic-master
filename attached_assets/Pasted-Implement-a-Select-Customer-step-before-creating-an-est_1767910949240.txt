@@ -1,0 +1,78 @@
+Implement a “Select Customer” step before creating an estimate.
+
+CURRENT:
+- On /jobs → Estimates tab, “Create Estimate” currently opens the estimate creation modal directly.
+- There is no customer picker flow.
+
+GOAL:
+When user clicks “Create Estimate”, open a “Select Customer” modal/screen first (like iOS style):
+- Title: “SELECT CUSTOMER”
+- Left: “Cancel”
+- Right: “+” icon to add a new customer
+- Search bar: “Search by name”
+- List of customers below (tap to select)
+After selecting a customer (or creating one), transition into the existing Create Estimate modal with customer fields pre-filled.
+
+UI DETAILS (Select Customer):
+1) Header row:
+   - Cancel (left)
+   - SELECT CUSTOMER (center)
+   - + icon button (right) → opens Add Customer form
+2) Search input with magnifier, placeholder “Search by name”
+3) Customer list:
+   - Each row: avatar circle placeholder + “First Last”
+   - Filter as user types
+4) Tapping a customer:
+   - Close Select Customer
+   - Open Create Estimate modal and set:
+     - customerName = “First Last”
+     - customerEmail, phone, address (if present)
+     - company fields if present
+
+ADD CUSTOMER FLOW:
+5) Clicking the + icon opens an “Add Customer” modal/screen (stacked on top of Select Customer, iOS feel).
+6) Fields required:
+   - First Name (required)
+   - Last Name (required)
+   - Email
+   - Phone Number
+   - Address (single textarea or structured fields if already available; keep consistent with current app)
+7) Optional Company section (collapsed by default with a toggle “Has a company?” or “Add company info”):
+   - Company Name
+   - Company Number
+   - Job Title
+8) Save button:
+   - Validates first/last required
+   - Creates customer in DB via API
+   - On success:
+     - return to Select Customer list
+     - auto-select the newly created customer
+     - proceed into Create Estimate modal pre-filled
+
+DATA / BACKEND:
+9) Create a customers table + API if not existing:
+   - customers: id, companyId (tenant), firstName, lastName, email, phone, address, companyName, companyNumber, jobTitle, createdAt, updatedAt
+10) Endpoints:
+   - GET /api/customers (scoped to company; RBAC: any logged-in company member can view customers)
+   - POST /api/customers (RBAC: Owner/Admin/Dispatcher/Supervisor/Estimator can create; Tech can NOT create)
+11) In estimate creation, store customerId on the estimate record (preferred) and also store snapshot fields (customerName/email/phone/address) for history safety.
+
+RBAC / UX:
+12) Follow “hidden not disabled”:
+   - If user cannot create customers, hide the + icon on Select Customer.
+13) Keep Create Estimate permissions unchanged (only roles allowed see Create Estimate button).
+14) Loading states:
+   - While fetching customers show a simple spinner/skeleton.
+   - If no customers: show empty state “No customers yet” + if allowed, show “+ Add Customer”.
+
+IMPLEMENTATION NOTES:
+15) Keep existing Create Estimate modal as-is as much as possible; just change entry flow:
+   Create Estimate button -> SelectCustomerModal -> then opens CreateEstimateModal with selected customer.
+16) Use existing modal components/styles; match the clean iOS-ish layout shown.
+17) Do not break existing estimate creation via job modal (if it exists). Apply the same new flow there too if it uses the same Create Estimate button.
+
+DELIVERABLES:
+- Files changed (frontend + backend)
+- DB schema/migration changes
+- New API routes
+- Where customer selection state is stored and how it feeds into Create Estimate modal

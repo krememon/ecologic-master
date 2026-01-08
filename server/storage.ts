@@ -4,6 +4,7 @@ import {
   companies,
   companyMembers,
   clients,
+  customers,
   subcontractors,
   jobs,
   jobAssignments,
@@ -24,6 +25,8 @@ import {
   type InsertCompany,
   type Client,
   type InsertClient,
+  type Customer,
+  type InsertCustomer,
   type Subcontractor,
   type InsertSubcontractor,
   type Job,
@@ -225,6 +228,11 @@ export interface IStorage {
   updateEstimate(id: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems>;
   deleteEstimate(id: number): Promise<void>;
   getNextEstimateNumber(companyId: number): Promise<string>;
+  
+  // Customer operations
+  getCustomers(companyId: number): Promise<Customer[]>;
+  getCustomer(id: number): Promise<Customer | undefined>;
+  createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1651,10 +1659,13 @@ export class DatabaseStorage implements IStorage {
       .values({
         companyId,
         jobId: payload.jobId,
+        customerId: payload.customerId || null,
         estimateNumber,
         title: payload.title,
         customerName: payload.customerName || null,
         customerEmail: payload.customerEmail || null,
+        customerPhone: payload.customerPhone || null,
+        customerAddress: payload.customerAddress || null,
         notes: payload.notes || null,
         status: "draft",
         subtotalCents,
@@ -1746,6 +1757,31 @@ export class DatabaseStorage implements IStorage {
   async deleteEstimate(id: number): Promise<void> {
     // Items are deleted via cascade
     await db.delete(estimates).where(eq(estimates.id, id));
+  }
+
+  // Customer operations
+  async getCustomers(companyId: number): Promise<Customer[]> {
+    return db
+      .select()
+      .from(customers)
+      .where(eq(customers.companyId, companyId))
+      .orderBy(customers.firstName, customers.lastName);
+  }
+
+  async getCustomer(id: number): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, id));
+    return customer || undefined;
+  }
+
+  async createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer> {
+    const [created] = await db
+      .insert(customers)
+      .values(customer)
+      .returning();
+    return created;
   }
 }
 

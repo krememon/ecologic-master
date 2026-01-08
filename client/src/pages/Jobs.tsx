@@ -15,11 +15,12 @@ import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camer
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertJobSchema, type InsertJob, type Job, type Client, type Estimate } from "@shared/schema";
+import { insertJobSchema, type InsertJob, type Job, type Client, type Estimate, type Customer } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { JobWizard } from "@/components/JobWizard";
 import { useCan } from "@/hooks/useCan";
 import JobEstimatesTab from "@/components/JobEstimatesTab";
+import { SelectCustomerModal } from "@/components/CustomerModals";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -280,6 +281,10 @@ export default function Jobs() {
   const [createEstimateJobPickerOpen, setCreateEstimateJobPickerOpen] = useState(false);
   const [createEstimateJobSearchQuery, setCreateEstimateJobSearchQuery] = useState('');
   const [selectedJobForEstimate, setSelectedJobForEstimate] = useState<JobWithClient | null>(null);
+  
+  // Customer selection for estimates
+  const [selectCustomerModalOpen, setSelectCustomerModalOpen] = useState(false);
+  const [selectedCustomerForEstimate, setSelectedCustomerForEstimate] = useState<Customer | null>(null);
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -1381,6 +1386,8 @@ export default function Jobs() {
             <JobEstimatesTab 
               jobId={selectedJob.id} 
               canCreate={role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR' || role === 'DISPATCHER'}
+              selectedCustomer={selectedCustomerForEstimate}
+              onCustomerUsed={() => setSelectedCustomerForEstimate(null)}
             />
           )}
           </div>
@@ -1572,7 +1579,7 @@ export default function Jobs() {
             {canAccessEstimates && (
               <Button 
                 className="w-full"
-                onClick={() => setCreateEstimateJobPickerOpen(true)}
+                onClick={() => setSelectCustomerModalOpen(true)}
                 data-testid="button-create-estimate"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1925,8 +1932,30 @@ export default function Jobs() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Estimate Job Picker Dialog */}
-      <Dialog open={createEstimateJobPickerOpen} onOpenChange={setCreateEstimateJobPickerOpen}>
+      {/* Select Customer Modal (Step 1 of Create Estimate flow) */}
+      <SelectCustomerModal
+        open={selectCustomerModalOpen}
+        onOpenChange={(open) => {
+          setSelectCustomerModalOpen(open);
+          if (!open) {
+            setSelectedCustomerForEstimate(null);
+          }
+        }}
+        onSelectCustomer={(customer) => {
+          setSelectedCustomerForEstimate(customer);
+          setSelectCustomerModalOpen(false);
+          setCreateEstimateJobPickerOpen(true);
+        }}
+        canCreateCustomer={canAccessEstimates}
+      />
+
+      {/* Create Estimate Job Picker Dialog (Step 2 of Create Estimate flow) */}
+      <Dialog open={createEstimateJobPickerOpen} onOpenChange={(open) => {
+        setCreateEstimateJobPickerOpen(open);
+        if (!open) {
+          setSelectedCustomerForEstimate(null);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Select a Job</DialogTitle>

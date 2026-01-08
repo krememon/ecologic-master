@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Plus, FileText, Trash2, Loader2, MoreVertical, Eye, Edit, Copy } from "
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Estimate, EstimateItem } from "@shared/schema";
+import type { Estimate, EstimateItem, Customer } from "@shared/schema";
 
 interface LineItem {
   name: string;
@@ -24,6 +24,8 @@ interface LineItem {
 interface JobEstimatesTabProps {
   jobId: number;
   canCreate: boolean;
+  selectedCustomer?: Customer | null;
+  onCustomerUsed?: () => void;
 }
 
 function formatCurrency(cents: number): string {
@@ -43,25 +45,41 @@ function getStatusColor(status: string): string {
   }
 }
 
-export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabProps) {
+export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer, onCustomerUsed }: JobEstimatesTabProps) {
   const { toast } = useToast();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
   const [title, setTitle] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [customerId, setCustomerId] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [taxInput, setTaxInput] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { name: "", quantity: "1", unitPriceCents: 0 }
   ]);
 
+  // Auto-open create modal with customer pre-filled when selectedCustomer is provided
+  useEffect(() => {
+    if (selectedCustomer) {
+      setCustomerId(selectedCustomer.id);
+      setCustomerName(`${selectedCustomer.firstName} ${selectedCustomer.lastName}`);
+      setCustomerEmail(selectedCustomer.email || "");
+      setCustomerPhone(selectedCustomer.phone || "");
+      setCustomerAddress(selectedCustomer.address || "");
+      setIsCreateModalOpen(true);
+      onCustomerUsed?.();
+    }
+  }, [selectedCustomer, onCustomerUsed]);
+
   const { data: estimates = [], isLoading } = useQuery<Estimate[]>({
     queryKey: ['/api/jobs', jobId, 'estimates'],
   });
 
   const createEstimateMutation = useMutation({
-    mutationFn: async (data: { title: string; customerName?: string; customerEmail?: string; notes?: string; taxCents: number; items: LineItem[] }) => {
+    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; items: LineItem[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
@@ -127,6 +145,9 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
     setTitle("");
     setCustomerName("");
     setCustomerEmail("");
+    setCustomerPhone("");
+    setCustomerAddress("");
+    setCustomerId(null);
     setNotes("");
     setTaxInput("");
     setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
@@ -192,8 +213,11 @@ export default function JobEstimatesTab({ jobId, canCreate }: JobEstimatesTabPro
 
     createEstimateMutation.mutate({
       title: title.trim(),
+      customerId: customerId || undefined,
       customerName: customerName.trim() || undefined,
       customerEmail: customerEmail.trim() || undefined,
+      customerPhone: customerPhone.trim() || undefined,
+      customerAddress: customerAddress.trim() || undefined,
       notes: notes.trim() || undefined,
       taxCents: calculateTaxCents(),
       items: validItems,
