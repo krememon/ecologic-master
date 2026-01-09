@@ -278,9 +278,6 @@ export default function Jobs() {
   const [estimatesStatusFilter, setEstimatesStatusFilter] = useState<'all' | string>('all');
   const [estimatesJobPickerOpen, setEstimatesJobPickerOpen] = useState(false);
   const [estimatesJobSearchQuery, setEstimatesJobSearchQuery] = useState('');
-  const [createEstimateJobPickerOpen, setCreateEstimateJobPickerOpen] = useState(false);
-  const [createEstimateJobSearchQuery, setCreateEstimateJobSearchQuery] = useState('');
-  const [selectedJobForEstimate, setSelectedJobForEstimate] = useState<JobWithClient | null>(null);
   
   // Customer selection for estimates
   const [selectCustomerModalOpen, setSelectCustomerModalOpen] = useState(false);
@@ -383,16 +380,6 @@ export default function Jobs() {
       return searchFields.some(field => field.includes(query));
     }).slice(0, 100);
   }, [jobs, estimatesJobSearchQuery]);
-
-  // Filter jobs for create estimate job picker
-  const createEstimateFilteredJobs = useMemo(() => {
-    const query = createEstimateJobSearchQuery.trim().toLowerCase();
-    if (!query) return jobs.slice(0, 100);
-    return jobs.filter(job => {
-      const searchFields = [job.title, job.clientName, job.location].filter(Boolean).map(f => f!.toLowerCase());
-      return searchFields.some(field => field.includes(query));
-    }).slice(0, 100);
-  }, [jobs, createEstimateJobSearchQuery]);
 
   // Get selected job label for filter dropdown
   const selectedJobForFilterLabel = useMemo(() => {
@@ -1933,65 +1920,9 @@ export default function Jobs() {
         onSelectCustomer={(customer) => {
           setSelectedCustomerForEstimate(customer);
           setSelectCustomerModalOpen(false);
-          setCreateEstimateJobPickerOpen(true);
         }}
         canCreateCustomer={canAccessEstimates}
       />
-
-      {/* Create Estimate Job Picker Dialog (Step 2 of Create Estimate flow) */}
-      <Dialog open={createEstimateJobPickerOpen} onOpenChange={(open) => {
-        setCreateEstimateJobPickerOpen(open);
-        if (!open) {
-          setSelectedCustomerForEstimate(null);
-        }
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Select a Job</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-slate-500 mb-4">Choose a job to create an estimate for</p>
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search jobs..."
-                value={createEstimateJobSearchQuery}
-                onChange={(e) => setCreateEstimateJobSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-create-estimate-jobs"
-              />
-            </div>
-            <div className="max-h-64 overflow-y-auto space-y-1">
-              {createEstimateFilteredJobs.length === 0 ? (
-                <p className="text-center text-slate-500 py-4">No jobs found</p>
-              ) : (
-                createEstimateFilteredJobs.map((job) => (
-                  <button
-                    key={job.id}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                    onClick={() => {
-                      setSelectedJobForEstimate(job);
-                      setCreateEstimateJobPickerOpen(false);
-                      setCreateEstimateJobSearchQuery('');
-                      // Open NewEstimateSheet with the selected job
-                      setIsNewEstimateSheetOpen(true);
-                    }}
-                    data-testid={`button-select-job-for-estimate-${job.id}`}
-                  >
-                    <Building2 className="h-4 w-4 text-slate-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{job.title}</p>
-                      {job.clientName && (
-                        <p className="text-sm text-slate-500 truncate">{job.clientName}</p>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation Modal - Single Source of Truth */}
       <AlertDialog open={!!jobToDelete} onOpenChange={(open) => !open && setJobToDelete(null)}>
