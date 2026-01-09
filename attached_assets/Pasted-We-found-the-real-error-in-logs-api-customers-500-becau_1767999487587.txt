@@ -1,0 +1,58 @@
+We found the real error in logs:
+
+- /api/customers 500 because column "company_name" does not exist
+- /api/estimates 500 because column "customer_phone" does not exist
+
+Fix the DATABASE SCHEMA to match what the code is selecting.
+Do NOT hack around it by removing fields unless absolutely necessary.
+
+STEP 1 — Inspect current schema
+Run SQL introspection:
+- \d customers
+- \d estimates
+(or query information_schema.columns) and report existing columns.
+
+STEP 2 — Add missing columns safely (SQL migrations)
+Run SQL to add the missing columns:
+
+-- customers table missing company_name (and likely others)
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS company_name TEXT,
+  ADD COLUMN IF NOT EXISTS company_number TEXT,
+  ADD COLUMN IF NOT EXISTS job_title TEXT;
+
+-- if we store phone/email/address, ensure these exist too
+ALTER TABLE customers
+  ADD COLUMN IF NOT EXISTS phone TEXT,
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS address TEXT;
+
+-- estimates table missing customer_phone (code expects it)
+-- Decide the correct approach:
+-- Prefer: estimates should JOIN customers rather than store customer_phone,
+-- BUT to stop the 500 immediately, add the column the code expects:
+ALTER TABLE estimates
+  ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
+If code also expects customer_email/customer_name on estimates, add them only if needed,
+otherwise update the estimates query to JOIN customers to fetch phone/email/name.
+
+STEP 3 — Fix the estimates query properly (preferred)
+In server/storage.ts (getEstimatesByCompany) and/or server/routes.ts /api/estimates:
+- Stop selecting estimates.customer_phone if it’s not truly stored there.
+- Instead LEFT JOIN customers on estimates.customer_id and select:
+  customers.phone as customer_phone
+  customers.email as customer_email
+  customers.first_name, customers.last_name, customers.company_name
+
+Return a consistent shape to the frontend.
+
+STEP 4 — Retest
+- Hit GET /api/customers -> should return 200
+- Hit GET /api/estimates -> should return 200
+- Confirm Select Customer modal now loads company customers.
+
+DELIVERABLES
+- Paste the updated table schemas (column list)
+- Paste the updated SQL you ran
+- List the exact files changed for the JOIN fix (if you did it)
