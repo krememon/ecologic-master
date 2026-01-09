@@ -19,7 +19,6 @@ import { insertJobSchema, type InsertJob, type Job, type Client, type Estimate, 
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { JobWizard } from "@/components/JobWizard";
 import { useCan } from "@/hooks/useCan";
-import JobEstimatesTab from "@/components/JobEstimatesTab";
 import { SelectCustomerModal } from "@/components/CustomerModals";
 
 interface JobWithClient extends Job {
@@ -270,7 +269,7 @@ export default function Jobs() {
   const [technicianSearch, setTechnicianSearch] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
-  const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals' | 'estimates'>('documents');
+  const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals'>('documents');
   const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>('jobs');
   
   // Estimates tab filters
@@ -1076,19 +1075,6 @@ export default function Jobs() {
                 >
                   E-signature Approvals
                 </button>
-                {canAccessEstimates && (
-                  <button
-                    onClick={() => setJobModalTab('estimates')}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                      jobModalTab === 'estimates'
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                    data-testid="tab-estimates"
-                  >
-                    Estimates
-                  </button>
-                )}
               </div>
             </div>
           )}
@@ -1380,16 +1366,6 @@ export default function Jobs() {
               </div>
             </div>
           )}
-          
-          {/* Estimates Tab */}
-          {selectedJob && jobModalTab === 'estimates' && canAccessEstimates && (
-            <JobEstimatesTab 
-              jobId={selectedJob.id} 
-              canCreate={role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR' || role === 'DISPATCHER'}
-              selectedCustomer={selectedCustomerForEstimate}
-              onCustomerUsed={() => setSelectedCustomerForEstimate(null)}
-            />
-          )}
           </div>
           {/* Hidden file input for photo upload (legacy) */}
           <input
@@ -1624,7 +1600,7 @@ export default function Jobs() {
                     onClick={() => {
                       if (job) {
                         setSelectedJob(job);
-                        setJobModalTab('estimates');
+                        setJobModalTab('documents');
                       }
                     }}
                     data-testid={`card-estimate-${estimate.id}`}
@@ -1984,9 +1960,8 @@ export default function Jobs() {
                       setSelectedJobForEstimate(job);
                       setCreateEstimateJobPickerOpen(false);
                       setCreateEstimateJobSearchQuery('');
-                      // Open the job modal with estimates tab
-                      setSelectedJob(job);
-                      setJobModalTab('estimates');
+                      // Open the customer selection modal for creating estimate
+                      setSelectCustomerModalOpen(true);
                     }}
                     data-testid={`button-select-job-for-estimate-${job.id}`}
                   >
