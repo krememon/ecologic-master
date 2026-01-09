@@ -1,0 +1,82 @@
+Fix and improve the “SELECT CUSTOMER” modal behavior.
+
+CURRENT PROBLEMS
+- The search bar does not properly filter real customers.
+- Newly added customers are not always searchable.
+- When the user taps “Add customer”, the modal feels empty until typing.
+
+GOAL
+The “SELECT CUSTOMER” modal should behave like a proper client picker:
+- When opened, it immediately shows a list of existing customers.
+- The search bar filters that same list in real time.
+- Newly added customers appear instantly and are searchable.
+
+REQUIRED BEHAVIOR
+
+A) CUSTOMER LIST VISIBILITY
+1) When the “SELECT CUSTOMER” modal opens:
+   - If customers exist → show the FULL customer list immediately
+   - Do NOT require typing to see results
+2) If there are no customers yet:
+   - Show empty state: “No customers yet”
+   - Show “+ Add Customer” button
+
+B) SEARCH FUNCTIONALITY
+- Search input filters the EXISTING customers list in real time
+- Case-insensitive
+- Matches against:
+  - First name
+  - Last name
+  - Full name (first + last)
+  - Email
+  - Phone number (strip non-digits before compare)
+- If searchQuery is empty → show ALL customers
+- If searchQuery has text but no matches → show:
+  - “No results found”
+  - Subtext: “Try a different search”
+
+C) SINGLE SOURCE OF TRUTH (VERY IMPORTANT)
+- Customers must live in ONE state array:
+  const [customers, setCustomers] = useState<Customer[]>([])
+- This array must be used by:
+  - The customer list
+  - The search filter
+  - The Create Customer flow
+
+D) CREATE CUSTOMER FLOW
+- When “+ Add Customer” is used:
+  - Save the new customer into `customers`
+  - Immediately select that customer
+  - Close the Create Customer modal
+  - Close the Select Customer modal
+  - Update the main New Estimate screen row:
+    “Add customer” → “First Last”
+
+E) SELECTION BEHAVIOR
+- Clicking a customer row:
+  - Sets selectedCustomer
+  - Closes the Select Customer modal
+  - Updates the New Estimate screen UI
+
+IMPLEMENTATION DETAILS
+- Add state:
+  const [searchQuery, setSearchQuery] = useState("")
+- Use useMemo for filtering:
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery) return customers
+    // filter logic here
+  }, [customers, searchQuery])
+
+- Customer rows should be fully clickable
+- Highlight selected customer if reopening the modal (optional but recommended)
+
+DO NOT BREAK
+- Cancel / X closes modal cleanly
+- Create Customer modal still works
+- New Estimate sheet state remains intact
+
+DELIVERABLES
+- Customer list shows immediately when “Add customer” is pressed
+- Search filters that same list live
+- Newly added customers appear instantly and are searchable
+- Report which files were updated

@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -130,18 +131,60 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
   });
 
   // Fetch customers
-  const { data: apiCustomers = [] } = useQuery<Customer[]>({
+  const { data: apiCustomers = [], isLoading: customersLoading } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
   });
 
-  // Filter customers by search
-  const filteredCustomers = apiCustomers.filter((c) => {
-    const searchLower = customerSearch.toLowerCase();
-    const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
-    return fullName.includes(searchLower) || 
-           (c.email || '').toLowerCase().includes(searchLower) ||
-           (c.phone || '').includes(customerSearch);
+  // Create customer mutation
+  const createCustomerMutation = useMutation({
+    mutationFn: async (customerData: { firstName: string; lastName: string; email?: string; phone?: string; address?: string }) => {
+      const response = await apiRequest('POST', '/api/customers', customerData);
+      return response.json();
+    },
+    onSuccess: (newCustomer: Customer) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setSelectedCustomer(newCustomer);
+      setAddCustomerModalOpen(false);
+      setCustomerModalOpen(false);
+      setNewCustomer({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        address: "",
+        companyName: "",
+        companyNumber: "",
+        jobTitle: "",
+        showCompany: false
+      });
+      toast({ title: "Customer added", description: "Customer has been created successfully." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create customer.", variant: "destructive" });
+    }
   });
+
+  // Filter customers by search using useMemo
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch.trim()) return apiCustomers;
+    
+    const searchLower = customerSearch.toLowerCase().trim();
+    const searchDigits = customerSearch.replace(/\D/g, '');
+    
+    return apiCustomers.filter((c) => {
+      const firstName = (c.firstName || '').toLowerCase();
+      const lastName = (c.lastName || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const email = (c.email || '').toLowerCase();
+      const phoneDigits = (c.phone || '').replace(/\D/g, '');
+      
+      return firstName.includes(searchLower) ||
+             lastName.includes(searchLower) ||
+             fullName.includes(searchLower) ||
+             email.includes(searchLower) ||
+             (searchDigits && phoneDigits.includes(searchDigits));
+    });
+  }, [apiCustomers, customerSearch]);
 
   const resetForm = () => {
     setTitle("");
@@ -379,7 +422,6 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
               <button
                 className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 onClick={() => {
-                  setCustomerModalOpen(false);
                   setAddCustomerModalOpen(true);
                 }}
                 data-testid="button-add-new-customer"
@@ -390,35 +432,55 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
                 <span className="font-medium text-blue-600 dark:text-blue-400">+ Add Customer</span>
               </button>
 
-              {filteredCustomers.map((customer) => (
-                <button
-                  key={customer.id}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                  onClick={() => {
-                    setSelectedCustomer(customer);
-                    setCustomerModalOpen(false);
-                    setCustomerSearch("");
-                  }}
-                  data-testid={`button-select-customer-${customer.id}`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                    <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">
-                      {`${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed'}
-                    </p>
-                    {customer.email && (
-                      <p className="text-sm text-slate-500 truncate">{customer.email}</p>
-                    )}
-                  </div>
-                  {selectedCustomer?.id === customer.id && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                      <span className="text-white text-xs">✓</span>
+              {customersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                </div>
+              ) : apiCustomers.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <User className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                  <p className="font-medium">No customers yet</p>
+                  <p className="text-sm">Add your first customer above</p>
+                </div>
+              ) : filteredCustomers.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <Search className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                  <p className="font-medium">No results found</p>
+                  <p className="text-sm">Try a different search</p>
+                </div>
+              ) : (
+                filteredCustomers.map((customer) => (
+                  <button
+                    key={customer.id}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
+                      selectedCustomer?.id === customer.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
+                    onClick={() => {
+                      setSelectedCustomer(customer);
+                      setCustomerModalOpen(false);
+                      setCustomerSearch("");
+                    }}
+                    data-testid={`button-select-customer-${customer.id}`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                      <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                     </div>
-                  )}
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {`${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed'}
+                      </p>
+                      {customer.email && (
+                        <p className="text-sm text-slate-500 truncate">{customer.email}</p>
+                      )}
+                    </div>
+                    {selectedCustomer?.id === customer.id && (
+                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           </ScrollArea>
         </DialogContent>
@@ -488,36 +550,17 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
             </Button>
             <Button
               onClick={() => {
-                setSelectedCustomer({
-                  id: Date.now(),
-                  companyId: 0,
+                createCustomerMutation.mutate({
                   firstName: newCustomer.firstName,
                   lastName: newCustomer.lastName,
-                  email: newCustomer.email || null,
-                  phone: newCustomer.phone || null,
-                  address: newCustomer.address || null,
-                  companyName: newCustomer.companyName || null,
-                  companyNumber: newCustomer.companyNumber || null,
-                  jobTitle: newCustomer.jobTitle || null,
-                  createdAt: new Date(),
-                  updatedAt: new Date()
+                  email: newCustomer.email || undefined,
+                  phone: newCustomer.phone || undefined,
+                  address: newCustomer.address || undefined
                 });
-                setNewCustomer({
-                  firstName: "",
-                  lastName: "",
-                  email: "",
-                  phone: "",
-                  address: "",
-                  companyName: "",
-                  companyNumber: "",
-                  jobTitle: "",
-                  showCompany: false
-                });
-                setAddCustomerModalOpen(false);
               }}
-              disabled={!newCustomer.firstName || !newCustomer.lastName}
+              disabled={!newCustomer.firstName || !newCustomer.lastName || createCustomerMutation.isPending}
             >
-              Add Customer
+              {createCustomerMutation.isPending ? 'Adding...' : 'Add Customer'}
             </Button>
           </DialogFooter>
         </DialogContent>
