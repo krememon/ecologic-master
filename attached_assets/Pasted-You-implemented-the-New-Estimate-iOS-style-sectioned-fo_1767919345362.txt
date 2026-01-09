@@ -1,0 +1,50 @@
+You implemented the “New Estimate” iOS-style sectioned form perfectly — BUT you placed it in the Job Insights path/component.
+
+I need you to MOVE that exact UI so it is ONLY accessible by clicking the “Create Estimate” button inside the Estimates tab.
+
+REQUIREMENTS (must follow exactly)
+1) The Estimates tab should show a big primary button:
+   - “+ Create Estimate” (like my screenshot)
+   - This button lives inside the Estimates tab content (not Job Insights, not global header)
+
+2) When user clicks “+ Create Estimate”:
+   - Open the “New Estimate” screen as a MODAL / sheet / full-height panel (mobile friendly)
+   - The modal header should match the screenshot:
+     - Left: Cancel
+     - Center: New Estimate
+     - Right: Save (primary)
+   - Under that header: the sectioned list UI you already built:
+     - TITLE -> Add title
+     - CUSTOMER INFO -> Add customer
+     - ESTIMATE -> Add line items
+     - SCHEDULE -> Add schedule
+     - DISPATCH TO -> My employees
+     - ESTIMATE FIELDS -> Estimate fields
+     - JOB TAGS -> Add job tags
+
+3) Job Insights MUST NOT render this estimate creation UI at all.
+   - Remove it from any JobInsights component/route.
+   - Job Insights should stay focused on documents/insights only.
+
+4) Reuse the same components you already created:
+   - If you built a NewEstimateForm component, keep it.
+   - Just relocate it to the Estimates tab flow and wire it to the Create Estimate button.
+
+IMPLEMENTATION DETAILS
+- In the Job page tab component where “Create Estimate” button exists:
+  - add state: const [isNewEstimateOpen, setIsNewEstimateOpen] = useState(false)
+  - clicking Create Estimate => setIsNewEstimateOpen(true)
+  - Cancel / X => setIsNewEstimateOpen(false)
+  - Save => for now console.log the estimate payload + toast “Estimate saved” + close modal
+
+- Modal style:
+  - Use the same modal system as the rest of EcoLogic (Dialog/Sheet).
+  - On mobile it should feel like a full-screen sheet.
+  - Ensure scrolling works inside the modal.
+
+DELIVERABLES
+- Estimates tab shows “+ Create Estimate”
+- Clicking it opens the New Estimate UI (modal/sheet)
+- New Estimate UI is removed from Job Insights entirely
+- No routing changes; no new pages; no regressions to Docs/E-sign approvals
+- Tell me exactly which files you moved/edited and where the NewEstimate component now lives

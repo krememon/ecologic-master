@@ -66,8 +66,8 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const { toast } = useToast();
   const canEditEstimate = canCreate;
 
-  // View mode: 'list' shows existing estimates, 'create' shows the iOS-style form
-  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  // Modal state for new estimate form
+  const [isNewEstimateOpen, setIsNewEstimateOpen] = useState(false);
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
 
   // Form state for creating estimates
@@ -135,7 +135,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   useEffect(() => {
     if (externalSelectedCustomer) {
       setSelectedCustomer(externalSelectedCustomer);
-      setViewMode('create');
+      setIsNewEstimateOpen(true);
       onCustomerUsed?.();
     }
   }, [externalSelectedCustomer, onCustomerUsed]);
@@ -169,7 +169,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
-      setViewMode('list');
+      setIsNewEstimateOpen(false);
       resetForm();
       toast({
         title: "Estimate Created",
@@ -431,47 +431,45 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     );
   }
 
-  // LIST VIEW - Shows existing estimates
-  if (viewMode === 'list') {
-    return (
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Estimates</h3>
-          {canCreate && (
-            <Button
-              size="sm"
-              onClick={() => setViewMode('create')}
-              data-testid="button-create-estimate"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create Estimate
-            </Button>
-          )}
-        </div>
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Estimates</h3>
+        {canCreate && (
+          <Button
+            size="sm"
+            onClick={() => setIsNewEstimateOpen(true)}
+            data-testid="button-create-estimate"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Create Estimate
+          </Button>
+        )}
+      </div>
 
-        {/* Estimates List */}
-        {estimates.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center py-12 text-center">
-              <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-                <FileText className="h-7 w-7 text-slate-400" />
-              </div>
-              <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No estimates yet</h4>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Create an estimate for this job</p>
-              {canCreate && (
-                <Button
-                  size="sm"
-                  onClick={() => setViewMode('create')}
-                  data-testid="button-create-estimate-empty"
-                >
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Create Estimate
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
+      {/* Estimates List */}
+      {estimates.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center py-12 text-center">
+            <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+              <FileText className="h-7 w-7 text-slate-400" />
+            </div>
+            <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No estimates yet</h4>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Create an estimate for this job</p>
+            {canCreate && (
+              <Button
+                size="sm"
+                onClick={() => setIsNewEstimateOpen(true)}
+                data-testid="button-create-estimate-empty"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Create Estimate
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
           <div className="space-y-3">
             {estimates.map((estimate) => (
               <Card key={estimate.id} className="hover:shadow-sm transition-shadow" data-testid={`card-estimate-${estimate.id}`}>
@@ -586,105 +584,107 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    );
-  }
 
-  // CREATE VIEW - iOS-style sectioned form
-  return (
-    <div className="min-h-0 overflow-y-auto -mx-4 sm:-mx-6">
-      {/* Header with back button and save */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
-        <button 
-          onClick={() => { setViewMode('list'); resetForm(); }}
-          className="text-sm text-blue-500 font-medium"
-          data-testid="button-cancel-create"
-        >
-          Cancel
-        </button>
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Estimate</h3>
-        <Button
-          size="sm"
-          onClick={handleSubmitEstimate}
-          disabled={createEstimateMutation.isPending}
-          data-testid="button-save-estimate"
-        >
-          {createEstimateMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            'Save'
-          )}
-        </Button>
-      </div>
+      {/* NEW ESTIMATE Modal - Full Screen Sheet */}
+      <Dialog open={isNewEstimateOpen} onOpenChange={(open) => { if (!open) { setIsNewEstimateOpen(false); resetForm(); } }}>
+        <DialogContent className="w-full max-w-lg h-[90vh] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+          {/* Header with Cancel, Title, Save */}
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+            <button 
+              onClick={() => { setIsNewEstimateOpen(false); resetForm(); }}
+              className="text-sm text-blue-500 font-medium"
+              data-testid="button-cancel-create"
+            >
+              Cancel
+            </button>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Estimate</h3>
+            <Button
+              size="sm"
+              onClick={handleSubmitEstimate}
+              disabled={createEstimateMutation.isPending}
+              data-testid="button-save-estimate"
+            >
+              {createEstimateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </div>
 
-      {/* TITLE Section */}
-      <SectionHeader title="Title" />
-      <InfoRow
-        icon={FileText}
-        label="Add title"
-        value={title || undefined}
-        onClick={() => setTitleModalOpen(true)}
-        testId="row-add-title"
-      />
+          {/* Scrollable Form Content */}
+          <div className="flex-1 overflow-y-auto">
+            {/* TITLE Section */}
+            <SectionHeader title="Title" />
+            <InfoRow
+              icon={FileText}
+              label="Add title"
+              value={title || undefined}
+              onClick={() => setTitleModalOpen(true)}
+              testId="row-add-title"
+            />
 
-      {/* CUSTOMER INFO Section */}
-      <SectionHeader title="Customer Info" />
-      <InfoRow
-        icon={User}
-        label="Add customer"
-        value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
-        onClick={() => setCustomerModalOpen(true)}
-        testId="row-add-customer"
-      />
+            {/* CUSTOMER INFO Section */}
+            <SectionHeader title="Customer Info" />
+            <InfoRow
+              icon={User}
+              label="Add customer"
+              value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
+              onClick={() => setCustomerModalOpen(true)}
+              testId="row-add-customer"
+            />
 
-      {/* ESTIMATE Section */}
-      <SectionHeader title="Estimate" />
-      <InfoRow
-        icon={List}
-        label="Add line items"
-        value={lineItems.filter(i => i.name.trim()).length > 0 ? `${lineItems.filter(i => i.name.trim()).length} items` : undefined}
-        onClick={() => setLineItemsModalOpen(true)}
-        testId="row-add-line-items"
-      />
+            {/* ESTIMATE Section */}
+            <SectionHeader title="Estimate" />
+            <InfoRow
+              icon={List}
+              label="Add line items"
+              value={lineItems.filter(i => i.name.trim()).length > 0 ? `${lineItems.filter(i => i.name.trim()).length} items` : undefined}
+              onClick={() => setLineItemsModalOpen(true)}
+              testId="row-add-line-items"
+            />
 
-      {/* SCHEDULE Section */}
-      <SectionHeader title="Schedule" />
-      <InfoRow
-        icon={Calendar}
-        label="Add schedule"
-        value={schedule.date ? `${schedule.date}${schedule.time ? ` at ${schedule.time}` : ''}` : undefined}
-        onClick={() => setScheduleModalOpen(true)}
-        testId="row-add-schedule"
-      />
+            {/* SCHEDULE Section */}
+            <SectionHeader title="Schedule" />
+            <InfoRow
+              icon={Calendar}
+              label="Add schedule"
+              value={schedule.date ? `${schedule.date}${schedule.time ? ` at ${schedule.time}` : ''}` : undefined}
+              onClick={() => setScheduleModalOpen(true)}
+              testId="row-add-schedule"
+            />
 
-      {/* DISPATCH TO Section */}
-      <SectionHeader title="Dispatch To" />
-      <InfoRow
-        icon={Users}
-        label="My employees"
-        value={assignedEmployees.length > 0 ? `${assignedEmployees.length} selected` : undefined}
-        onClick={() => setEmployeesModalOpen(true)}
-        testId="row-my-employees"
-      />
+            {/* DISPATCH TO Section */}
+            <SectionHeader title="Dispatch To" />
+            <InfoRow
+              icon={Users}
+              label="My employees"
+              value={assignedEmployees.length > 0 ? `${assignedEmployees.length} selected` : undefined}
+              onClick={() => setEmployeesModalOpen(true)}
+              testId="row-my-employees"
+            />
 
-      {/* ESTIMATE FIELDS Section */}
-      <SectionHeader title="Estimate Fields" />
-      <InfoRow
-        icon={SlidersHorizontal}
-        label="Estimate fields"
-        onClick={() => setEstimateFieldsModalOpen(true)}
-        testId="row-estimate-fields"
-      />
+            {/* ESTIMATE FIELDS Section */}
+            <SectionHeader title="Estimate Fields" />
+            <InfoRow
+              icon={SlidersHorizontal}
+              label="Estimate fields"
+              onClick={() => setEstimateFieldsModalOpen(true)}
+              testId="row-estimate-fields"
+            />
 
-      {/* JOB TAGS Section */}
-      <SectionHeader title="Job Tags" />
-      <InfoRow
-        icon={Tag}
-        label="Add job tags"
-        value={tags.length > 0 ? `${tags.length} tags` : undefined}
-        onClick={() => setTagsModalOpen(true)}
-        testId="row-add-job-tags"
-      />
+            {/* JOB TAGS Section */}
+            <SectionHeader title="Job Tags" />
+            <InfoRow
+              icon={Tag}
+              label="Add job tags"
+              value={tags.length > 0 ? `${tags.length} tags` : undefined}
+              onClick={() => setTagsModalOpen(true)}
+              testId="row-add-job-tags"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* TITLE Modal */}
       <Dialog open={titleModalOpen} onOpenChange={setTitleModalOpen}>
