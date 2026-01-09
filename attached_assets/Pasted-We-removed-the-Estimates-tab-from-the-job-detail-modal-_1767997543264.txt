@@ -1,0 +1,63 @@
+We removed the Estimates tab from the job detail modal successfully. Good.
+
+NOW UPDATE the MAIN PAGE “+ Create Estimate” button (on the Jobs & Estimates page) so it opens the FULL “New Estimate” creation flow — NOT just the Add Customer modal.
+
+GOAL
+Clicking “+ Create Estimate” should open a full-screen modal/sheet titled “New Estimate” with:
+- Header: Cancel (left), New Estimate (center), Save (right)
+- A sectioned list UI (iOS style) with these rows:
+  TITLE
+    - “Add title”
+  CUSTOMER INFO
+    - “Add customer”
+  ESTIMATE
+    - “Add line items”
+  SCHEDULE
+    - “Add schedule”
+  DISPATCH TO
+    - “My employees”
+  ESTIMATE FIELDS
+    - “Estimate fields”
+  JOB TAGS
+    - “Add job tags”
+
+Each row must be clickable and open the appropriate sub-modal:
+- Add title -> small modal/input (title text)
+- Add customer -> SELECT CUSTOMER modal (search + list + “+ Add Customer”)
+- Add line items -> line items editor modal (desc/qty/price + total)
+- Add schedule -> schedule modal (date/time)
+- My employees -> employee multi-select modal
+- Estimate fields -> placeholder settings modal
+- Add job tags -> tags modal (chips)
+
+IMPORTANT
+- The Create Estimate button should NOT directly open “Add customer” anymore.
+- It must always open the “New Estimate” sheet first, then customer selection is only when the user taps the “Add customer” row.
+- Keep everything mobile-first and consistent with our app styling.
+
+STATE / BEHAVIOR
+- Keep local state in the New Estimate component:
+  - title, selectedCustomer, customers, lineItems, schedule, assignedEmployees, estimateFields, tags
+- Save button:
+  - For now just console.log({ ...allFields }) + toast “Estimate saved” + close the sheet
+- Cancel button:
+  - Close sheet without saving
+
+IMPLEMENTATION
+1) Locate the main Jobs & Estimates page where the big “+ Create Estimate” button exists (likely client/src/pages/Jobs.tsx).
+2) Replace its onClick handler:
+   - setIsNewEstimateOpen(true)
+   - DO NOT open customer modal directly.
+3) Mount <NewEstimateSheet open={isOpen} onOpenChange={...} />
+   - Reuse the existing components you already built if possible:
+     - JobEstimatesTab.tsx or NewEstimateModal/NewEstimateForm
+   - If existing component is job-specific, refactor into a shared component:
+     - client/src/components/NewEstimateSheet.tsx
+   - Ensure it works from the main page context (not job modal context).
+
+DELIVERABLES
+- Clicking “+ Create Estimate” opens the full “New Estimate” sheet with all sections/rows
+- The old behavior (jumping straight to Add Customer) is removed
+- Each row opens/closes its sub-modal
+- Save/Cancel works
+- Report the files changed

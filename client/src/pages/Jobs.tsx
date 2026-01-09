@@ -20,6 +20,7 @@ import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { JobWizard } from "@/components/JobWizard";
 import { useCan } from "@/hooks/useCan";
 import { SelectCustomerModal } from "@/components/CustomerModals";
+import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -284,6 +285,9 @@ export default function Jobs() {
   // Customer selection for estimates
   const [selectCustomerModalOpen, setSelectCustomerModalOpen] = useState(false);
   const [selectedCustomerForEstimate, setSelectedCustomerForEstimate] = useState<Customer | null>(null);
+  
+  // New Estimate Sheet state
+  const [isNewEstimateSheetOpen, setIsNewEstimateSheetOpen] = useState(false);
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -1555,7 +1559,7 @@ export default function Jobs() {
             {canAccessEstimates && (
               <Button 
                 className="w-full"
-                onClick={() => setSelectCustomerModalOpen(true)}
+                onClick={() => setIsNewEstimateSheetOpen(true)}
                 data-testid="button-create-estimate"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1908,7 +1912,14 @@ export default function Jobs() {
         </DialogContent>
       </Dialog>
 
-      {/* Select Customer Modal (Step 1 of Create Estimate flow) */}
+      {/* New Estimate Sheet (Full creation flow) */}
+      <NewEstimateSheet
+        open={isNewEstimateSheetOpen}
+        onOpenChange={setIsNewEstimateSheetOpen}
+        selectedJob={selectedJobForEstimate}
+      />
+
+      {/* Select Customer Modal (legacy - kept for other flows) */}
       <SelectCustomerModal
         open={selectCustomerModalOpen}
         onOpenChange={(open) => {
