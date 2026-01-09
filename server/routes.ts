@@ -2223,7 +2223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds } = req.body;
 
       if (!title || typeof title !== 'string' || title.trim().length === 0) {
         return res.status(400).json({ message: "Title is required" });
@@ -2283,6 +2283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customerPhone: customerPhone?.trim() || undefined,
           customerAddress: customerAddress?.trim() || undefined,
           taxCents: parsedTaxCents,
+          assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
           items: normalizedItems 
         },
         companyId,
@@ -2391,6 +2392,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating estimate:", error);
       res.status(500).json({ message: "Failed to update estimate" });
+    }
+  });
+
+  // PATCH /api/estimates/:id/assignees - Update assigned employees on an estimate
+  app.patch('/api/estimates/:id/assignees', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const existingEstimate = await storage.getEstimate(estimateId);
+      if (!existingEstimate || existingEstimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      const { employeeIds } = req.body;
+      
+      if (!Array.isArray(employeeIds)) {
+        return res.status(400).json({ message: "employeeIds must be an array" });
+      }
+
+      const updated = await storage.updateEstimate(estimateId, {
+        assignedEmployeeIds: employeeIds,
+      });
+
+      console.log(`[Estimates] update assignees estimateId=${estimateId} count=${employeeIds.length}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating estimate assignees:", error);
+      res.status(500).json({ message: "Failed to update estimate assignees" });
     }
   });
 

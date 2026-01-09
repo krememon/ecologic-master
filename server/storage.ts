@@ -1671,6 +1671,7 @@ export class DatabaseStorage implements IStorage {
         subtotalCents,
         taxCents,
         totalCents,
+        assignedEmployeeIds: payload.assignedEmployeeIds || [],
         createdByUserId: userId,
       })
       .returning();
@@ -1711,6 +1712,7 @@ export class DatabaseStorage implements IStorage {
     if (payload.title !== undefined) updateData.title = payload.title;
     if (payload.notes !== undefined) updateData.notes = payload.notes;
     if (payload.status !== undefined) updateData.status = payload.status;
+    if (payload.assignedEmployeeIds !== undefined) updateData.assignedEmployeeIds = payload.assignedEmployeeIds;
 
     // If items are provided, recalculate totals
     if (payload.items) {

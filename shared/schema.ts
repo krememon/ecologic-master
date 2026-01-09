@@ -947,6 +947,7 @@ export const createEstimateSchema = z.object({
   customerAddress: z.string().optional(),
   notes: z.string().optional(),
   taxCents: z.number().int().min(0).optional().default(0),
+  assignedEmployeeIds: z.array(z.string()).optional().default([]),
   items: z.array(z.object({
     name: z.string().min(1, "Item name is required"),
     quantity: z.union([z.string(), z.number()]).transform(v => String(v)),
@@ -959,6 +960,7 @@ export const updateEstimateSchema = z.object({
   title: z.string().min(1, "Title is required").optional(),
   notes: z.string().optional(),
   status: z.enum(["draft", "sent", "accepted", "rejected"]).optional(),
+  assignedEmployeeIds: z.array(z.string()).optional(),
   items: z.array(z.object({
     id: z.number().optional(), // Existing item ID for updates
     name: z.string().min(1, "Item name is required"),
