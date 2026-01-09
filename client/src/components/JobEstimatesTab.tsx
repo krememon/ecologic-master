@@ -164,7 +164,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Create estimate mutation
   const createEstimateMutation = useMutation({
-    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; items: LineItem[] }) => {
+    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; items: LineItem[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
@@ -256,18 +256,16 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       customerAddress: selectedCustomer?.address || undefined,
       notes: notes.trim() || undefined,
       taxCents: calculateTaxCents(),
+      assignedEmployeeIds: assignedEmployees,
       items: validItems,
     });
   };
 
-  // Mock employees for demo
-  const mockEmployees = [
-    { id: "1", name: "John Smith" },
-    { id: "2", name: "Sarah Johnson" },
-    { id: "3", name: "Mike Davis" },
-    { id: "4", name: "Emily Brown" },
-    { id: "5", name: "Chris Wilson" }
-  ];
+  // Fetch company employees for assignment
+  const { data: employeesData } = useQuery<{ users: { id: string; firstName: string | null; lastName: string | null; email: string | null; role: string }[]; total: number }>({
+    queryKey: ['/api/org/users'],
+  });
+  const companyEmployees = employeesData?.users || [];
 
   // Customer create mutation
   const createCustomerMutation = useMutation({
@@ -1111,32 +1109,44 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
       {/* EMPLOYEES Modal */}
       <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
+        <DialogContent className="w-[95vw] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Select Employees</DialogTitle>
           </DialogHeader>
 
-          <div className="py-2">
-            {mockEmployees.map((employee) => (
-              <div
-                key={employee.id}
-                className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0"
-              >
-                <Checkbox
-                  id={`employee-${employee.id}`}
-                  checked={assignedEmployees.includes(employee.id)}
-                  onCheckedChange={() => toggleEmployee(employee.id)}
-                  data-testid={`checkbox-employee-${employee.id}`}
-                />
-                <Label
-                  htmlFor={`employee-${employee.id}`}
-                  className="text-sm font-normal cursor-pointer flex-1"
-                >
-                  {employee.name}
-                </Label>
+          <ScrollArea className="flex-1 min-h-0 max-h-[50vh]">
+            {companyEmployees.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                No employees found
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="py-2">
+                {companyEmployees.map((employee) => {
+                  const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed';
+                  return (
+                    <div
+                      key={employee.id}
+                      className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0"
+                    >
+                      <Checkbox
+                        id={`employee-${employee.id}`}
+                        checked={assignedEmployees.includes(employee.id)}
+                        onCheckedChange={() => toggleEmployee(employee.id)}
+                        data-testid={`checkbox-employee-${employee.id}`}
+                      />
+                      <Label
+                        htmlFor={`employee-${employee.id}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        <span className="block">{employeeName}</span>
+                        <span className="text-xs text-slate-500">{employee.role}</span>
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
 
           <DialogFooter>
             <Button onClick={() => setEmployeesModalOpen(false)} data-testid="button-done-employees">

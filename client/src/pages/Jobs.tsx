@@ -1559,7 +1559,7 @@ export default function Jobs() {
             {canAccessEstimates && (
               <Button 
                 className="w-full"
-                onClick={() => setIsNewEstimateSheetOpen(true)}
+                onClick={() => setCreateEstimateJobPickerOpen(true)}
                 data-testid="button-create-estimate"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1915,7 +1915,17 @@ export default function Jobs() {
       {/* New Estimate Sheet (Full creation flow) */}
       <NewEstimateSheet
         open={isNewEstimateSheetOpen}
-        onOpenChange={setIsNewEstimateSheetOpen}
+        onOpenChange={(open) => {
+          setIsNewEstimateSheetOpen(open);
+          if (!open) {
+            setSelectedJobForEstimate(null);
+          }
+        }}
+        jobId={selectedJobForEstimate?.id}
+        onEstimateCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+          setSelectedJobForEstimate(null);
+        }}
       />
 
       {/* Select Customer Modal (legacy - kept for other flows) */}
@@ -1970,8 +1980,8 @@ export default function Jobs() {
                       setSelectedJobForEstimate(job);
                       setCreateEstimateJobPickerOpen(false);
                       setCreateEstimateJobSearchQuery('');
-                      // Open the customer selection modal for creating estimate
-                      setSelectCustomerModalOpen(true);
+                      // Open NewEstimateSheet with the selected job
+                      setIsNewEstimateSheetOpen(true);
                     }}
                     data-testid={`button-select-job-for-estimate-${job.id}`}
                   >

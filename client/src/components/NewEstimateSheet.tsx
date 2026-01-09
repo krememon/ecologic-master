@@ -46,6 +46,8 @@ interface EstimateFieldsData {
 interface NewEstimateSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  jobId?: number;
+  onEstimateCreated?: () => void;
 }
 
 function formatCurrency(cents: number): string {
@@ -92,7 +94,7 @@ function InfoRow({
   );
 }
 
-export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) {
+export function NewEstimateSheet({ open, onOpenChange, jobId, onEstimateCreated }: NewEstimateSheetProps) {
   const { toast } = useToast();
 
   // Form state
@@ -182,6 +184,41 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
     }
   });
 
+  // Create estimate mutation
+  const createEstimateMutation = useMutation({
+    mutationFn: async (data: {
+      title: string;
+      notes?: string;
+      customerId?: number;
+      customerName?: string;
+      customerEmail?: string;
+      customerPhone?: string;
+      customerAddress?: string;
+      taxCents: number;
+      assignedEmployeeIds: string[];
+      items: { name: string; quantity: string; unitPriceCents: number }[];
+    }) => {
+      if (!jobId) throw new Error("No job selected");
+      const response = await apiRequest('POST', `/api/jobs/${jobId}/estimates`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      resetForm();
+      onOpenChange(false);
+      toast({ title: "Estimate created", description: "Your estimate has been saved successfully." });
+      onEstimateCreated?.();
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to create estimate.", 
+        variant: "destructive" 
+      });
+    }
+  });
+
   // Filter customers by search using useMemo
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return apiCustomers;
@@ -256,19 +293,57 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
   };
 
   const handleSave = () => {
-    console.log({
-      title,
-      notes,
-      customer: selectedCustomer,
-      lineItems,
-      schedule,
-      assignedEmployees,
-      estimateFields,
-      tags
-    });
-    toast({ title: "Estimate saved", description: "Your estimate has been created." });
-    resetForm();
-    onOpenChange(false);
+    // Validation
+    if (!title.trim()) {
+      toast({ title: "Missing title", description: "Please enter a title for the estimate.", variant: "destructive" });
+      return;
+    }
+    
+    const validItems = lineItems.filter(item => item.name.trim());
+    if (validItems.length === 0) {
+      toast({ title: "Missing items", description: "Please add at least one line item.", variant: "destructive" });
+      return;
+    }
+
+    // If jobId is provided, create estimate via API
+    if (jobId) {
+      const taxRate = parseFloat(estimateFields.taxRate) || 0;
+      const subtotal = calculateSubtotal();
+      const taxCents = Math.round(subtotal * (taxRate / 100));
+
+      createEstimateMutation.mutate({
+        title: title.trim(),
+        notes: notes || undefined,
+        customerId: selectedCustomer?.id,
+        customerName: selectedCustomer ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim() : undefined,
+        customerEmail: selectedCustomer?.email || undefined,
+        customerPhone: selectedCustomer?.phone || undefined,
+        customerAddress: selectedCustomer?.address || undefined,
+        taxCents,
+        assignedEmployeeIds: assignedEmployees,
+        items: validItems.map((item, index) => ({
+          name: item.name.trim(),
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          sortOrder: index,
+        })),
+      });
+    } else {
+      // No jobId - just show confirmation (legacy behavior for standalone mode)
+      console.log('Estimate data (no jobId):', {
+        title,
+        notes,
+        customer: selectedCustomer,
+        lineItems: validItems,
+        schedule,
+        assignedEmployees,
+        estimateFields,
+        tags
+      });
+      toast({ title: "Estimate saved", description: "Your estimate has been created." });
+      resetForm();
+      onOpenChange(false);
+    }
   };
 
   // Line item helpers
@@ -329,9 +404,10 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
             <Button
               size="sm"
               onClick={handleSave}
+              disabled={createEstimateMutation.isPending}
               data-testid="button-save-estimate"
             >
-              Save
+              {createEstimateMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
           </div>
 
