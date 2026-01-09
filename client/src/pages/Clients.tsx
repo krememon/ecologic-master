@@ -109,7 +109,15 @@ export default function Clients() {
   });
 
   // Fetch customers (unified data source)
-  const { customers, isLoading: customersLoading } = useCompanyCustomers();
+  const { customers, isLoading: customersLoading, error: customersError } = useCompanyCustomers();
+  
+  // Debug logging
+  console.log("[ClientsPage] customers fetch result:", { 
+    customersLoading, 
+    customersError: customersError?.message,
+    customersLength: customers.length,
+    customers 
+  });
 
   // Function to toggle job history expansion
   const toggleClientJobs = (clientId: number) => {
