@@ -1,0 +1,81 @@
+Fix the “Assign Employees” flow in the New Estimate screen.
+
+CURRENT UX
+In New Estimate -> DISPATCH TO -> “My employees” row exists, but it does not properly list company employees or save selections.
+
+GOAL
+When user taps “My employees”:
+1) Open a modal/sheet (mobile friendly)
+2) Show FULL list of employees associated with the user’s company
+3) Each employee has a checkbox
+4) User can select multiple employees
+5) User taps “Save” -> selections persist and are shown back on the New Estimate screen
+
+DATA RULES
+- Employees must be company-scoped: only employees in the current user’s company
+- This must follow RBAC “hidden not disabled” later; for now allow the user to assign.
+
+BACKEND (create if missing)
+A) Add endpoint to fetch company employees:
+- GET /api/employees (or /api/users?company=true if that’s your existing pattern)
+Return:
+[
+  { id, firstName, lastName, email, role, avatarUrl? }
+]
+Scope by companyId = req.user.companyId
+
+B) Add endpoint to save assignments for estimates (if estimates table exists):
+- Add column on estimates: assigned_employee_ids JSONB (or TEXT storing JSON array)
+OR create join table estimate_assignments (estimate_id, employee_id)
+For speed right now, use JSONB on estimates.
+
+Routes:
+- PATCH /api/estimates/:id/assignees
+  body: { employeeIds: string[] }
+  -> saves to DB
+
+IMPORTANT: If estimate isn’t created yet (draft modal):
+- Store selected employeeIds in frontend state first.
+- When user hits Save on the main “New Estimate” screen and estimate is created, include employeeIds in the create payload.
+- If you already have POST /api/estimates, add employeeIds to it and persist.
+
+FRONTEND
+1) Create modal component:
+- client/src/components/AssignEmployeesModal.tsx
+Props:
+- open, onOpenChange
+- employees (list)
+- selectedEmployeeIds (string[])
+- onSave(newIds)
+
+2) Fetch employees on open:
+- When modal opens, call GET /api/employees
+- Show loading spinner
+- If error: “Failed to load employees” + Retry
+
+3) UI requirements
+- Header: Cancel (left) “Assign Employees” (center) Save (right)
+- List rows:
+  - avatar circle (or icon)
+  - name + email/role
+  - checkbox right side
+- Save button commits selection (calls onSave)
+
+4) Persist + display
+- In New Estimate main screen, after selection:
+  - Update the DISPATCH TO row subtitle to show:
+    - “2 employees selected” or list first names “Mike, Joe +1”
+- When the estimate is saved (main Save button):
+  - ensure selectedEmployeeIds are persisted to estimate record
+
+JOB ASSIGNMENT (for later but set up now)
+- When an estimate is converted to a job OR linked to a job:
+  - the selected employees should be used as the job’s assigned crew.
+For now just store on estimate.
+
+DELIVERABLES
+- “My employees” opens modal with full company employee list
+- Checkboxes allow multi-select
+- Save persists selection in New Estimate state
+- Saving the estimate stores employeeIds in DB (create or patch)
+- Report files changed + DB schema change

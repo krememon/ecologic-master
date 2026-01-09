@@ -1,0 +1,64 @@
+Update the “Assign Employees” flow so employees are assigned to the ESTIMATE (not a job).
+
+GOAL
+In New Estimate -> DISPATCH TO -> “My employees”:
+- Tap row opens a modal/sheet
+- Shows full list of employees associated with the user’s company
+- Each row has a checkbox (multi-select)
+- User taps Save
+- Selected employees are saved to the ESTIMATE and shown back on the New Estimate screen
+
+BACKEND (must support saving on estimate)
+1) Company employees list
+- Ensure an endpoint exists:
+  GET /api/employees
+  -> returns employees scoped to req.user.companyId:
+     [{ id, firstName, lastName, email, role, avatarUrl? }]
+
+2) Persist assignment on estimates
+Use one of these (pick simplest that matches existing DB style):
+
+Option A (fast): JSON column on estimates
+- Add column:
+  estimates.assigned_employee_ids JSONB DEFAULT '[]'
+(or TEXT storing JSON string if JSONB is hard)
+
+Option B (normalized): estimate_assignees join table
+- estimate_id, employee_id
+
+Implement API:
+- PATCH /api/estimates/:id/assignees
+  body: { employeeIds: string[] }
+  -> updates the estimate’s assigned employees
+
+IMPORTANT: If the estimate does not exist yet (draft “New Estimate” screen)
+- Store selectedEmployeeIds in frontend state
+- When the user clicks the main “Save” on New Estimate:
+  - include employeeIds in the create estimate payload (POST /api/estimates)
+  - persist them in DB as part of the create
+
+FRONTEND
+1) Create AssignEmployeesModal.tsx (or similar) with:
+- open, onOpenChange
+- employees list
+- selectedEmployeeIds
+- onSave(newIds)
+
+2) Modal UI
+- Header: Cancel | Assign Employees | Save
+- Search input optional (nice to have)
+- List:
+  - Name + email/role
+  - Checkbox right
+- Save closes modal and updates state
+
+3) Display selection back in New Estimate row
+- Change “My employees” row subtitle to:
+  - “No employees selected” OR
+  - “2 selected” OR “Mike, Joe +1”
+
+DELIVERABLES
+- Modal shows full company employee list
+- Checkboxes multi-select
+- Save persists selection to the estimate (draft state + DB on estimate save)
+- Confirm which table/column you used and which API routes were added/updated

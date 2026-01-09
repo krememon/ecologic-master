@@ -691,6 +691,7 @@ export const estimates = pgTable("estimates", {
   subtotalCents: integer("subtotal_cents").notNull().default(0),
   taxCents: integer("tax_cents").notNull().default(0),
   totalCents: integer("total_cents").notNull().default(0),
+  assignedEmployeeIds: jsonb("assigned_employee_ids").default([]),
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
