@@ -103,12 +103,7 @@ export default function Clients() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: clients = [], isLoading: clientsLoading } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
-    enabled: isAuthenticated,
-  });
-
-  // Fetch customers (unified data source)
+  // Unified data source - customers only (clients migrated to customers table)
   const { customers, isLoading: customersLoading, error: customersError } = useCompanyCustomers();
   
   // Debug logging
@@ -334,7 +329,7 @@ export default function Clients() {
     }
   };
 
-  if (isLoading || !isAuthenticated || clientsLoading || customersLoading) {
+  if (isLoading || !isAuthenticated || customersLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
@@ -601,10 +596,10 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* Combined Count and Add Button */}
+      {/* Client Count and Add Button */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Clients & Customers ({clients.length + customers.length})
+          All Clients ({customers.length})
         </h3>
         <Button onClick={() => setIsDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
@@ -612,8 +607,8 @@ export default function Clients() {
         </Button>
       </div>
 
-      {/* Clients & Customers List */}
-      {clients.length === 0 && customers.length === 0 ? (
+      {/* Clients List (from unified customers table) */}
+      {customers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <UserCheck className="h-12 w-12 text-slate-400 mb-4" />
@@ -629,131 +624,6 @@ export default function Clients() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {clients.map((client: any) => (
-            <Card key={client.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Building className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                    {client.name}
-                  </CardTitle>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditClient(client)}>
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Edit Client
-                      </DropdownMenuItem>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Client
-                          </DropdownMenuItem>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Client</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete {client.name}? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteClientMutation.mutate(client.id)}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {client.email && (
-                  <a 
-                    href={`mailto:${client.email}`}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
-                  >
-                    <Mail className="h-4 w-4" />
-                    {client.email}
-                  </a>
-                )}
-                {client.phone && (
-                  <a 
-                    href={`tel:${client.phone}`}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
-                  >
-                    <Phone className="h-4 w-4" />
-                    {client.phone}
-                  </a>
-                )}
-                {client.address && (
-                  <button
-                    onClick={() => {
-                      const address = encodeURIComponent(client.address);
-                      // Try to open with device's default maps app
-                      if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
-                        // iOS - opens in Apple Maps by default, or user's preferred maps app
-                        window.open(`maps://maps.apple.com/?q=${address}`, '_self');
-                      } else if (navigator.userAgent.includes('Android')) {
-                        // Android - opens in default maps app (Google Maps, Waze, etc.)
-                        window.open(`geo:0,0?q=${address}`, '_self');
-                      } else {
-                        // Desktop/other - fallback to Google Maps
-                        window.open(`https://maps.google.com/?q=${address}`, '_blank');
-                      }
-                    }}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left"
-                  >
-                    <MapPin className="h-4 w-4" />
-                    {client.address}
-                  </button>
-                )}
-                {client.notes && (
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                    {client.notes}
-                  </p>
-                )}
-                
-                {/* Jobs History Section */}
-                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <button
-                    onClick={() => toggleClientJobs(client.id)}
-                    className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 w-full text-left"
-                  >
-                    {expandedClientJobs.has(client.id) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                    <Briefcase className="h-4 w-4" />
-                    <span className="font-medium">Jobs History</span>
-                  </button>
-                  
-                  {expandedClientJobs.has(client.id) && (
-                    <ClientJobsHistory clientId={client.id} />
-                  )}
-                </div>
-                
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-xs text-slate-500">
-                    Added {new Date(client.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          
-          {/* Customers from /api/customers (unified source) */}
           {customers.map((customer) => (
             <Card key={`customer-${customer.id}`} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
               <CardHeader className="pb-2">

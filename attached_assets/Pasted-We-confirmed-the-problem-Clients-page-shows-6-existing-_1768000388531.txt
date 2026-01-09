@@ -1,0 +1,53 @@
+We confirmed the problem:
+
+- Clients page shows 6 existing clients (Tina B, Gina S, Linda Graziano, etc.)
+- Select Customer modal (GET /api/customers) only shows the newly created customer (Jon Doe)
+
+So we have TWO datasets:
+- old “clients” source used by Clients page
+- new “customers” table used by estimates picker
+
+We must UNIFY so both UIs show the same company-wide list.
+
+DO THIS IN ORDER:
+
+1) Identify where the 6 existing clients come from
+- Find the endpoint Clients page calls (network tab or code):
+  likely GET /api/clients OR GET /api/company includes clients OR a “clients” table.
+- Identify the DB table name and columns for those existing clients.
+
+2) CHOOSE UNIFICATION STRATEGY (Do Option A by default)
+
+OPTION A (preferred): migrate old clients -> customers
+- Write a one-time SQL migration that inserts any old client records into customers
+  for the same company_id, mapping fields:
+  name -> first_name/last_name OR full_name
+  phone/email/address -> customers columns
+- Avoid duplicates:
+  match on (company_id + email) OR (company_id + phone) OR (company_id + first+last+address)
+- After migration:
+  - Update Clients page to fetch GET /api/customers (NOT old /api/clients)
+  - Update Select Customer modal already uses /api/customers (keep)
+  - Confirm both show the same list (should now include the previous 6 + Jon Doe)
+
+OPTION B (temporary quick fix): combine responses
+- Update GET /api/customers to also fetch old clients and merge into one list in code:
+  return res.json({ customers: mergedUniqueList })
+- This immediately makes Select Customer show the previous clients even before migration
+- Still plan to migrate later
+
+3) Logging + verification (required)
+- Log counts:
+  console.log("[customers] count", customers.length)
+  console.log("[old clients] count", oldClients.length)
+  console.log("[merged] count", merged.length)
+- Verify in UI:
+  - Select Customer modal shows Tina B / Gina S / Linda Graziano etc.
+  - Clients page shows the same set (plus Jon Doe)
+  - Search works across all
+
+DELIVERABLES
+- Tell me the old table/endpoint name that contained the “previous clients”
+- Tell me which strategy you implemented (A or B)
+- Paste the SQL you used if you migrated
+- Confirm the customer picker now shows the previous clients
