@@ -16,6 +16,15 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
 
+interface Employee {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  role: string;
+  profileImageUrl?: string | null;
+}
+
 interface LineItem {
   name: string;
   quantity: string;
@@ -135,6 +144,15 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
     queryKey: ['/api/customers'],
   });
 
+  // Fetch company employees
+  const { data: employeesData, isLoading: employeesLoading } = useQuery<{ users: Employee[]; total: number }>({
+    queryKey: ['/api/org/users'],
+  });
+  const allEmployees = employeesData?.users || [];
+
+  // Employee search
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
   // Create customer mutation
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: { firstName: string; lastName: string; email?: string; phone?: string; address?: string }) => {
@@ -185,6 +203,45 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
              (searchDigits && phoneDigits.includes(searchDigits));
     });
   }, [apiCustomers, customerSearch]);
+
+  // Filter employees by search
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch.trim()) return allEmployees;
+    
+    const searchLower = employeeSearch.toLowerCase().trim();
+    
+    return allEmployees.filter((emp) => {
+      const firstName = (emp.firstName || '').toLowerCase();
+      const lastName = (emp.lastName || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const email = (emp.email || '').toLowerCase();
+      const role = (emp.role || '').toLowerCase();
+      
+      return firstName.includes(searchLower) ||
+             lastName.includes(searchLower) ||
+             fullName.includes(searchLower) ||
+             email.includes(searchLower) ||
+             role.includes(searchLower);
+    });
+  }, [allEmployees, employeeSearch]);
+
+  // Helper to format employee name
+  const formatEmployeeName = (employee: Employee) => {
+    return `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed';
+  };
+
+  // Get display text for selected employees
+  const getEmployeesDisplayText = () => {
+    if (assignedEmployees.length === 0) return undefined;
+    const selectedEmps = allEmployees.filter(emp => assignedEmployees.includes(emp.id));
+    if (selectedEmps.length === 0) return `${assignedEmployees.length} selected`;
+    if (selectedEmps.length === 1) return formatEmployeeName(selectedEmps[0]);
+    if (selectedEmps.length === 2) {
+      return selectedEmps.map(e => e.firstName || 'Unknown').join(', ');
+    }
+    const first = selectedEmps[0].firstName || 'Unknown';
+    return `${first} +${selectedEmps.length - 1}`;
+  };
 
   const resetForm = () => {
     setTitle("");
@@ -319,7 +376,7 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
             <InfoRow
               icon={Users}
               label="My employees"
-              value={assignedEmployees.length > 0 ? `${assignedEmployees.length} selected` : undefined}
+              value={getEmployeesDisplayText()}
               onClick={() => setEmployeesModalOpen(true)}
               testId="row-my-employees"
             />
@@ -697,22 +754,86 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
       </Dialog>
 
       {/* EMPLOYEES Modal */}
-      <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
+      <Dialog open={employeesModalOpen} onOpenChange={(open) => {
+        setEmployeesModalOpen(open);
+        if (!open) setEmployeeSearch("");
+      }}>
+        <DialogContent className="w-[95vw] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Assign Employees</DialogTitle>
           </DialogHeader>
 
-          <div className="py-4">
-            <p className="text-center text-slate-500 dark:text-slate-400">
-              Employee assignment will be available soon.
-            </p>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search employees..."
+              value={employeeSearch}
+              onChange={(e) => setEmployeeSearch(e.target.value)}
+              className="pl-10"
+            />
           </div>
 
-          <DialogFooter>
-            <Button onClick={() => setEmployeesModalOpen(false)}>
-              Done
-            </Button>
+          <ScrollArea className="flex-1 min-h-0 max-h-[50vh]">
+            {employeesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : filteredEmployees.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                {employeeSearch ? 'No employees match your search' : 'No employees found'}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredEmployees.map((employee) => {
+                  const isSelected = assignedEmployees.includes(employee.id);
+                  return (
+                    <button
+                      key={employee.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setAssignedEmployees(assignedEmployees.filter(id => id !== employee.id));
+                        } else {
+                          setAssignedEmployees([...assignedEmployees, employee.id]);
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => {}}
+                        className="pointer-events-none"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                          {formatEmployeeName(employee)}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          {employee.email || employee.role}
+                        </div>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        {employee.role}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+
+          <DialogFooter className="pt-2 border-t">
+            <div className="flex justify-between items-center w-full">
+              <span className="text-sm text-slate-500">
+                {assignedEmployees.length} selected
+              </span>
+              <Button onClick={() => {
+                setEmployeesModalOpen(false);
+                setEmployeeSearch("");
+              }}>
+                Save
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
