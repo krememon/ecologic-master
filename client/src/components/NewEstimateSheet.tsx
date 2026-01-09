@@ -46,7 +46,6 @@ interface EstimateFieldsData {
 interface NewEstimateSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  jobId?: number;
   onEstimateCreated?: () => void;
 }
 
@@ -94,7 +93,7 @@ function InfoRow({
   );
 }
 
-export function NewEstimateSheet({ open, onOpenChange, jobId, onEstimateCreated }: NewEstimateSheetProps) {
+export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewEstimateSheetProps) {
   const { toast } = useToast();
 
   // Form state
@@ -184,7 +183,7 @@ export function NewEstimateSheet({ open, onOpenChange, jobId, onEstimateCreated 
     }
   });
 
-  // Create estimate mutation
+  // Create estimate mutation - uses standalone /api/estimates endpoint
   const createEstimateMutation = useMutation({
     mutationFn: async (data: {
       title: string;
@@ -198,12 +197,10 @@ export function NewEstimateSheet({ open, onOpenChange, jobId, onEstimateCreated 
       assignedEmployeeIds: string[];
       items: { name: string; quantity: string; unitPriceCents: number }[];
     }) => {
-      if (!jobId) throw new Error("No job selected");
-      const response = await apiRequest('POST', `/api/jobs/${jobId}/estimates`, data);
+      const response = await apiRequest('POST', '/api/estimates', data);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       resetForm();
       onOpenChange(false);
@@ -305,45 +302,28 @@ export function NewEstimateSheet({ open, onOpenChange, jobId, onEstimateCreated 
       return;
     }
 
-    // If jobId is provided, create estimate via API
-    if (jobId) {
-      const taxRate = parseFloat(estimateFields.taxRate) || 0;
-      const subtotal = calculateSubtotal();
-      const taxCents = Math.round(subtotal * (taxRate / 100));
+    // Create estimate via standalone API (no job required)
+    const taxRate = parseFloat(estimateFields.taxRate) || 0;
+    const subtotal = calculateSubtotal();
+    const taxCents = Math.round(subtotal * (taxRate / 100));
 
-      createEstimateMutation.mutate({
-        title: title.trim(),
-        notes: notes || undefined,
-        customerId: selectedCustomer?.id,
-        customerName: selectedCustomer ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim() : undefined,
-        customerEmail: selectedCustomer?.email || undefined,
-        customerPhone: selectedCustomer?.phone || undefined,
-        customerAddress: selectedCustomer?.address || undefined,
-        taxCents,
-        assignedEmployeeIds: assignedEmployees,
-        items: validItems.map((item, index) => ({
-          name: item.name.trim(),
-          quantity: item.quantity,
-          unitPriceCents: item.unitPriceCents,
-          sortOrder: index,
-        })),
-      });
-    } else {
-      // No jobId - just show confirmation (legacy behavior for standalone mode)
-      console.log('Estimate data (no jobId):', {
-        title,
-        notes,
-        customer: selectedCustomer,
-        lineItems: validItems,
-        schedule,
-        assignedEmployees,
-        estimateFields,
-        tags
-      });
-      toast({ title: "Estimate saved", description: "Your estimate has been created." });
-      resetForm();
-      onOpenChange(false);
-    }
+    createEstimateMutation.mutate({
+      title: title.trim(),
+      notes: notes || undefined,
+      customerId: selectedCustomer?.id,
+      customerName: selectedCustomer ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim() : undefined,
+      customerEmail: selectedCustomer?.email || undefined,
+      customerPhone: selectedCustomer?.phone || undefined,
+      customerAddress: selectedCustomer?.address || undefined,
+      taxCents,
+      assignedEmployeeIds: assignedEmployees,
+      items: validItems.map((item, index) => ({
+        name: item.name.trim(),
+        quantity: item.quantity,
+        unitPriceCents: item.unitPriceCents,
+        sortOrder: index,
+      })),
+    });
   };
 
   // Line item helpers

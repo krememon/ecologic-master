@@ -2298,6 +2298,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/estimates - Create a standalone estimate (no job required)
+  app.post('/api/estimates', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId } = req.body;
+
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({ message: "Title is required" });
+      }
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "At least one line item is required" });
+      }
+
+      // If jobId provided, verify it belongs to company
+      let validatedJobId: number | null = null;
+      if (jobId) {
+        const job = await storage.getJob(jobId);
+        if (!job || job.companyId !== companyId) {
+          return res.status(404).json({ message: "Job not found" });
+        }
+        validatedJobId = jobId;
+      }
+
+      // Parse and validate taxCents
+      let parsedTaxCents = 0;
+      if (taxCents !== undefined && taxCents !== null && taxCents !== '') {
+        parsedTaxCents = typeof taxCents === 'number' 
+          ? Math.round(taxCents) 
+          : Math.round(parseFloat(taxCents));
+        if (isNaN(parsedTaxCents) || parsedTaxCents < 0) {
+          parsedTaxCents = 0;
+        }
+      }
+
+      // Validate and normalize items
+      const normalizedItems = [];
+      for (const item of items) {
+        if (!item.name || typeof item.name !== 'string' || item.name.trim().length === 0) {
+          return res.status(400).json({ message: "Each item must have a name" });
+        }
+        const unitPriceCents = typeof item.unitPriceCents === 'number' 
+          ? Math.round(item.unitPriceCents) 
+          : Math.round(parseFloat(item.unitPriceCents));
+        if (isNaN(unitPriceCents) || unitPriceCents < 0) {
+          return res.status(400).json({ message: "Each item must have a valid unit price (in cents)" });
+        }
+        if (item.quantity === undefined || item.quantity === null || item.quantity === '') {
+          return res.status(400).json({ message: "Each item must have a quantity" });
+        }
+        const quantity = String(item.quantity);
+        const parsedQty = parseFloat(quantity);
+        if (isNaN(parsedQty) || parsedQty <= 0) {
+          return res.status(400).json({ message: "Each item must have a valid quantity greater than 0" });
+        }
+        normalizedItems.push({
+          name: item.name.trim(),
+          quantity,
+          unitPriceCents,
+          sortOrder: item.sortOrder,
+        });
+      }
+
+      const estimate = await storage.createEstimate(
+        { 
+          jobId: validatedJobId, 
+          title: title.trim(), 
+          notes: notes || undefined, 
+          customerId: customerId ? parseInt(customerId) : undefined,
+          customerName: customerName?.trim() || undefined,
+          customerEmail: customerEmail?.trim() || undefined,
+          customerPhone: customerPhone?.trim() || undefined,
+          customerAddress: customerAddress?.trim() || undefined,
+          taxCents: parsedTaxCents,
+          assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
+          items: normalizedItems 
+        },
+        companyId,
+        userId
+      );
+
+      console.log(`[Estimates] create standalone estimateId=${estimate.id} jobId=${validatedJobId || 'none'} companyId=${companyId}`);
+      res.status(201).json(estimate);
+    } catch (error) {
+      console.error("Error creating standalone estimate:", error);
+      res.status(500).json({ message: "Failed to create estimate" });
+    }
+  });
+
   // GET /api/estimates/:id - Get single estimate with items
   app.get('/api/estimates/:id', isAuthenticated, async (req: any, res) => {
     try {

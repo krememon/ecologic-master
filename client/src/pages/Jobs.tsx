@@ -1559,7 +1559,7 @@ export default function Jobs() {
             {canAccessEstimates && (
               <Button 
                 className="w-full"
-                onClick={() => setCreateEstimateJobPickerOpen(true)}
+                onClick={() => setIsNewEstimateSheetOpen(true)}
                 data-testid="button-create-estimate"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1915,16 +1915,9 @@ export default function Jobs() {
       {/* New Estimate Sheet (Full creation flow) */}
       <NewEstimateSheet
         open={isNewEstimateSheetOpen}
-        onOpenChange={(open) => {
-          setIsNewEstimateSheetOpen(open);
-          if (!open) {
-            setSelectedJobForEstimate(null);
-          }
-        }}
-        jobId={selectedJobForEstimate?.id}
+        onOpenChange={setIsNewEstimateSheetOpen}
         onEstimateCreated={() => {
           queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
-          setSelectedJobForEstimate(null);
         }}
       />
 

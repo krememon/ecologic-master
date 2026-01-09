@@ -936,9 +936,9 @@ export const insertEstimateItemSchema = createInsertSchema(estimateItems).omit({
   lineTotalCents: true,
 });
 
-// Create estimate with items schema (for API)
+// Create estimate with items schema (for API) - jobId is optional for standalone estimates
 export const createEstimateSchema = z.object({
-  jobId: z.number().positive("Job ID is required"),
+  jobId: z.number().positive().optional().nullable(),
   title: z.string().min(1, "Title is required"),
   customerId: z.number().positive().optional(),
   customerName: z.string().optional(),
