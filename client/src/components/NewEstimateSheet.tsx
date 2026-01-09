@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Loader2, Search, X, Building2
+  Plus, Trash2, Search, X
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Customer, Job } from "@shared/schema";
+import type { Customer } from "@shared/schema";
 
 interface LineItem {
   name: string;
@@ -36,8 +36,6 @@ interface EstimateFieldsData {
 interface NewEstimateSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  selectedJob?: Job | null;
-  onJobSelect?: () => void;
 }
 
 function formatCurrency(cents: number): string {
@@ -84,7 +82,7 @@ function InfoRow({
   );
 }
 
-export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect }: NewEstimateSheetProps) {
+export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) {
   const { toast } = useToast();
 
   // Form state
@@ -114,7 +112,6 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [estimateFieldsModalOpen, setEstimateFieldsModalOpen] = useState(false);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
-  const [jobPickerModalOpen, setJobPickerModalOpen] = useState(false);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -137,11 +134,6 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
     queryKey: ['/api/customers'],
   });
 
-  // Fetch jobs for job picker
-  const { data: jobs = [] } = useQuery<Job[]>({
-    queryKey: ['/api/jobs'],
-  });
-
   // Filter customers by search
   const filteredCustomers = apiCustomers.filter((c) => {
     const searchLower = customerSearch.toLowerCase();
@@ -150,15 +142,6 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
            (c.email || '').toLowerCase().includes(searchLower) ||
            (c.phone || '').includes(customerSearch);
   });
-
-  // Local job state for this sheet
-  const [localSelectedJob, setLocalSelectedJob] = useState<Job | null>(selectedJob || null);
-
-  useEffect(() => {
-    if (selectedJob) {
-      setLocalSelectedJob(selectedJob);
-    }
-  }, [selectedJob]);
 
   const resetForm = () => {
     setTitle("");
@@ -170,12 +153,10 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
     setTags([]);
     setNewTagInput("");
-    setLocalSelectedJob(selectedJob || null);
   };
 
   const handleSave = () => {
     console.log({
-      jobId: localSelectedJob?.id,
       title,
       notes,
       customer: selectedCustomer,
@@ -232,13 +213,6 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
     setTags(tags.filter(t => t !== tagToRemove));
   };
 
-  // Job search for picker
-  const [jobSearchQuery, setJobSearchQuery] = useState("");
-  const filteredJobs = jobs.filter((job) => {
-    const searchLower = jobSearchQuery.toLowerCase();
-    return job.title.toLowerCase().includes(searchLower);
-  });
-
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => { if (!o) { resetForm(); } onOpenChange(o); }}>
@@ -262,15 +236,6 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <SectionHeader title="Job" />
-            <InfoRow
-              icon={Building2}
-              label="Select job"
-              value={localSelectedJob?.title}
-              onClick={() => setJobPickerModalOpen(true)}
-              testId="row-select-job"
-            />
-
             <SectionHeader title="Title" />
             <InfoRow
               icon={List}
@@ -333,71 +298,6 @@ export function NewEstimateSheet({ open, onOpenChange, selectedJob, onJobSelect 
               testId="row-add-job-tags"
             />
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* JOB PICKER Modal */}
-      <Dialog open={jobPickerModalOpen} onOpenChange={setJobPickerModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <button 
-              onClick={() => setJobPickerModalOpen(false)}
-              className="text-sm text-blue-500 font-medium"
-            >
-              Cancel
-            </button>
-            <DialogTitle className="text-base font-semibold">SELECT JOB</DialogTitle>
-            <button 
-              onClick={() => setJobPickerModalOpen(false)}
-              className="text-slate-400 hover:text-slate-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="p-4 border-b">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search jobs"
-                value={jobSearchQuery}
-                onChange={(e) => setJobSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-jobs"
-              />
-            </div>
-          </div>
-
-          <ScrollArea className="max-h-64">
-            <div className="py-2">
-              {filteredJobs.length === 0 ? (
-                <p className="text-center text-slate-500 py-4">No jobs found</p>
-              ) : (
-                filteredJobs.map((job) => (
-                  <button
-                    key={job.id}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    onClick={() => {
-                      setLocalSelectedJob(job);
-                      setJobPickerModalOpen(false);
-                      setJobSearchQuery("");
-                    }}
-                    data-testid={`button-select-job-${job.id}`}
-                  >
-                    <Building2 className="h-4 w-4 text-slate-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{job.title}</p>
-                    </div>
-                    {localSelectedJob?.id === job.id && (
-                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                        <span className="text-white text-xs">✓</span>
-                      </div>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          </ScrollArea>
         </DialogContent>
       </Dialog>
 

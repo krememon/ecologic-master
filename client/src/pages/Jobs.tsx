@@ -1916,7 +1916,6 @@ export default function Jobs() {
       <NewEstimateSheet
         open={isNewEstimateSheetOpen}
         onOpenChange={setIsNewEstimateSheetOpen}
-        selectedJob={selectedJobForEstimate}
       />
 
       {/* Select Customer Modal (legacy - kept for other flows) */}
