@@ -2,23 +2,40 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Plus, FileText, Trash2, Loader2, MoreVertical, Eye, Edit, Copy } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
+  Plus, Trash2, Loader2, Search, X, Building2, FileText, MoreVertical, Eye, Edit, Copy
+} from "lucide-react";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Estimate, EstimateItem, Customer } from "@shared/schema";
+import type { Customer, Estimate } from "@shared/schema";
 
 interface LineItem {
   name: string;
   quantity: string;
   unitPriceCents: number;
+}
+
+interface ScheduleData {
+  date: string;
+  time: string;
+}
+
+interface EstimateFieldsData {
+  showSubtotal: boolean;
+  showTax: boolean;
+  taxRate: string;
+  validDays: string;
 }
 
 interface JobEstimatesTabProps {
@@ -45,46 +62,114 @@ function getStatusColor(status: string): string {
   }
 }
 
-export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer, onCustomerUsed }: JobEstimatesTabProps) {
+export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: externalSelectedCustomer, onCustomerUsed }: JobEstimatesTabProps) {
   const { toast } = useToast();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const canEditEstimate = canCreate;
+
+  // View mode: 'list' shows existing estimates, 'create' shows the iOS-style form
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
+
+  // Form state for creating estimates
   const [title, setTitle] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerAddress, setCustomerAddress] = useState("");
-  const [customerId, setCustomerId] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
-  const [taxInput, setTaxInput] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { name: "", quantity: "1", unitPriceCents: 0 }
   ]);
+  const [schedule, setSchedule] = useState<ScheduleData>({ date: "", time: "" });
+  const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
+  const [estimateFields, setEstimateFields] = useState<EstimateFieldsData>({
+    showSubtotal: true,
+    showTax: true,
+    taxRate: "0",
+    validDays: "30"
+  });
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState("");
 
-  // Auto-open create modal with customer pre-filled when selectedCustomer is provided
-  useEffect(() => {
-    if (selectedCustomer) {
-      setCustomerId(selectedCustomer.id);
-      setCustomerName(`${selectedCustomer.firstName} ${selectedCustomer.lastName}`);
-      setCustomerEmail(selectedCustomer.email || "");
-      setCustomerPhone(selectedCustomer.phone || "");
-      setCustomerAddress(selectedCustomer.address || "");
-      setIsCreateModalOpen(true);
-      onCustomerUsed?.();
-    }
-  }, [selectedCustomer, onCustomerUsed]);
+  // Modal states
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+  const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
+  const [estimateFieldsModalOpen, setEstimateFieldsModalOpen] = useState(false);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [titleModalOpen, setTitleModalOpen] = useState(false);
 
-  const { data: estimates = [], isLoading } = useQuery<Estimate[]>({
+  // Customer search
+  const [customerSearch, setCustomerSearch] = useState("");
+
+  // New customer form
+  const [newCustomer, setNewCustomer] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    address: "",
+    companyName: "",
+    companyNumber: "",
+    jobTitle: "",
+    showCompany: false
+  });
+
+  // Fetch existing estimates for this job
+  const { data: estimates = [], isLoading: estimatesLoading } = useQuery<Estimate[]>({
     queryKey: ['/api/jobs', jobId, 'estimates'],
   });
 
+  // Fetch customers from API
+  const { data: apiCustomers = [] } = useQuery<Customer[]>({
+    queryKey: ['/api/customers'],
+  });
+
+  useEffect(() => {
+    if (apiCustomers.length > 0) {
+      setCustomers(apiCustomers);
+    }
+  }, [apiCustomers]);
+
+  // Handle external customer selection (from Jobs.tsx flow)
+  useEffect(() => {
+    if (externalSelectedCustomer) {
+      setSelectedCustomer(externalSelectedCustomer);
+      setViewMode('create');
+      onCustomerUsed?.();
+    }
+  }, [externalSelectedCustomer, onCustomerUsed]);
+
+  // Reset form to defaults
+  const resetForm = () => {
+    setTitle("");
+    setNotes("");
+    setSelectedCustomer(null);
+    setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
+    setSchedule({ date: "", time: "" });
+    setAssignedEmployees([]);
+    setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
+    setTags([]);
+  };
+
+  // Calculate tax based on settings
+  const calculateTaxCents = (): number => {
+    const rate = parseFloat(estimateFields.taxRate) || 0;
+    const subtotal = lineItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      return sum + Math.round(qty * item.unitPriceCents);
+    }, 0);
+    return Math.round(subtotal * (rate / 100));
+  };
+
+  // Create estimate mutation
   const createEstimateMutation = useMutation({
     mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; items: LineItem[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
-      setIsCreateModalOpen(false);
+      setViewMode('list');
       resetForm();
       toast({
         title: "Estimate Created",
@@ -141,18 +226,106 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer, on
     },
   });
 
-  const resetForm = () => {
-    setTitle("");
-    setCustomerName("");
-    setCustomerEmail("");
-    setCustomerPhone("");
-    setCustomerAddress("");
-    setCustomerId(null);
-    setNotes("");
-    setTaxInput("");
-    setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
+  // Submit estimate
+  const handleSubmitEstimate = () => {
+    if (!title.trim()) {
+      toast({
+        title: "Error",
+        description: "Title is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validItems = lineItems.filter(item => item.name.trim());
+    if (validItems.length === 0) {
+      toast({
+        title: "Error",
+        description: "At least one line item with a name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createEstimateMutation.mutate({
+      title: title.trim(),
+      customerId: selectedCustomer?.id || undefined,
+      customerName: selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined,
+      customerEmail: selectedCustomer?.email || undefined,
+      customerPhone: selectedCustomer?.phone || undefined,
+      customerAddress: selectedCustomer?.address || undefined,
+      notes: notes.trim() || undefined,
+      taxCents: calculateTaxCents(),
+      items: validItems,
+    });
   };
 
+  // Mock employees for demo
+  const mockEmployees = [
+    { id: "1", name: "John Smith" },
+    { id: "2", name: "Sarah Johnson" },
+    { id: "3", name: "Mike Davis" },
+    { id: "4", name: "Emily Brown" },
+    { id: "5", name: "Chris Wilson" }
+  ];
+
+  // Customer create mutation
+  const createCustomerMutation = useMutation({
+    mutationFn: async (data: typeof newCustomer) => {
+      const response = await apiRequest("POST", "/api/customers", {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        address: data.address || undefined,
+        companyName: data.showCompany ? data.companyName || undefined : undefined,
+        companyNumber: data.showCompany ? data.companyNumber || undefined : undefined,
+        jobTitle: data.showCompany ? data.jobTitle || undefined : undefined,
+      });
+      return response.json();
+    },
+    onSuccess: (data: Customer) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      setCustomers(prev => [...prev, data]);
+      setSelectedCustomer(data);
+      setAddCustomerModalOpen(false);
+      setCustomerModalOpen(false);
+      resetNewCustomerForm();
+      toast({
+        title: "Customer Added",
+        description: `${data.firstName} ${data.lastName} has been added.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create customer",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetNewCustomerForm = () => {
+    setNewCustomer({
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      companyName: "",
+      companyNumber: "",
+      jobTitle: "",
+      showCompany: false
+    });
+  };
+
+  // Filter customers by search
+  const filteredCustomers = customers.filter(c => {
+    const fullName = `${c.firstName} ${c.lastName}`.toLowerCase();
+    return fullName.includes(customerSearch.toLowerCase());
+  });
+
+  // Line item helpers
   const addLineItem = () => {
     setLineItems([...lineItems, { name: "", quantity: "1", unitPriceCents: 0 }]);
   };
@@ -182,49 +355,75 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer, on
     return lineItems.reduce((sum, item) => sum + calculateLineTotal(item), 0);
   };
 
-  const calculateTaxCents = (): number => {
-    const taxValue = parseFloat(taxInput) || 0;
-    return Math.round(taxValue * 100);
-  };
-
-  const calculateTotal = (): number => {
-    return calculateSubtotal() + calculateTaxCents();
-  };
-
-  const handleSubmit = () => {
-    if (!title.trim()) {
-      toast({
-        title: "Error",
-        description: "Title is required",
-        variant: "destructive",
-      });
-      return;
+  // Tag helpers
+  const addTag = () => {
+    if (newTagInput.trim() && !tags.includes(newTagInput.trim())) {
+      setTags([...tags, newTagInput.trim()]);
+      setNewTagInput("");
     }
-
-    const validItems = lineItems.filter(item => item.name.trim());
-    if (validItems.length === 0) {
-      toast({
-        title: "Error",
-        description: "At least one line item with a name is required",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createEstimateMutation.mutate({
-      title: title.trim(),
-      customerId: customerId || undefined,
-      customerName: customerName.trim() || undefined,
-      customerEmail: customerEmail.trim() || undefined,
-      customerPhone: customerPhone.trim() || undefined,
-      customerAddress: customerAddress.trim() || undefined,
-      notes: notes.trim() || undefined,
-      taxCents: calculateTaxCents(),
-      items: validItems,
-    });
   };
 
-  if (isLoading) {
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter(t => t !== tagToRemove));
+  };
+
+  // Toggle employee selection
+  const toggleEmployee = (employeeId: string) => {
+    if (assignedEmployees.includes(employeeId)) {
+      setAssignedEmployees(assignedEmployees.filter(id => id !== employeeId));
+    } else {
+      setAssignedEmployees([...assignedEmployees, employeeId]);
+    }
+  };
+
+  // Section Header Component
+  const SectionHeader = ({ title }: { title: string }) => (
+    <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2">
+      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+        {title}
+      </span>
+    </div>
+  );
+
+  // Information Row Component
+  const InfoRow = ({ 
+    icon: Icon, 
+    label, 
+    value, 
+    onClick,
+    testId
+  }: { 
+    icon: typeof User; 
+    label: string; 
+    value?: string;
+    onClick: () => void;
+    testId: string;
+  }) => (
+    <button
+      onClick={canEditEstimate ? onClick : undefined}
+      disabled={!canEditEstimate}
+      className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      data-testid={testId}
+    >
+      <div className="flex items-center gap-3">
+        <Icon className="h-5 w-5 text-slate-400" />
+        <span className="text-sm text-slate-700 dark:text-slate-300">
+          {value || label}
+        </span>
+      </div>
+      {canEditEstimate && (
+        <ChevronRight className="h-5 w-5 text-slate-300 dark:text-slate-600" />
+      )}
+    </button>
+  );
+
+  // Customer initials helper
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  };
+
+  // Show loading state
+  if (estimatesLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
@@ -232,367 +431,848 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer, on
     );
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Estimates</h3>
-        {canCreate && (
-          <Button
-            size="sm"
-            onClick={() => setIsCreateModalOpen(true)}
-            data-testid="button-create-estimate"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Create Estimate
-          </Button>
-        )}
-      </div>
+  // LIST VIEW - Shows existing estimates
+  if (viewMode === 'list') {
+    return (
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Estimates</h3>
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => setViewMode('create')}
+              data-testid="button-create-estimate"
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Create Estimate
+            </Button>
+          )}
+        </div>
 
-      {/* Estimates List */}
-      {estimates.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-              <FileText className="h-7 w-7 text-slate-400" />
-            </div>
-            <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No estimates yet</h4>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Create an estimate for this job</p>
-            {canCreate && (
-              <Button
-                size="sm"
-                onClick={() => setIsCreateModalOpen(true)}
-                data-testid="button-create-estimate-empty"
-              >
-                <Plus className="h-4 w-4 mr-1.5" />
-                Create Estimate
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {estimates.map((estimate) => (
-            <Card key={estimate.id} className="hover:shadow-sm transition-shadow" data-testid={`card-estimate-${estimate.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-mono text-slate-500 dark:text-slate-400">
-                        {estimate.estimateNumber}
-                      </span>
-                      <Badge className={`text-xs ${getStatusColor(estimate.status)}`}>
-                        {estimate.status.charAt(0).toUpperCase() + estimate.status.slice(1)}
-                      </Badge>
+        {/* Estimates List */}
+        {estimates.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center py-12 text-center">
+              <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                <FileText className="h-7 w-7 text-slate-400" />
+              </div>
+              <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No estimates yet</h4>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Create an estimate for this job</p>
+              {canCreate && (
+                <Button
+                  size="sm"
+                  onClick={() => setViewMode('create')}
+                  data-testid="button-create-estimate-empty"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Create Estimate
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {estimates.map((estimate) => (
+              <Card key={estimate.id} className="hover:shadow-sm transition-shadow" data-testid={`card-estimate-${estimate.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-mono text-slate-500 dark:text-slate-400">
+                          {estimate.estimateNumber}
+                        </span>
+                        <Badge className={`text-xs ${getStatusColor(estimate.status)}`}>
+                          {estimate.status.charAt(0).toUpperCase() + estimate.status.slice(1)}
+                        </Badge>
+                      </div>
+                      <h4 className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                        {estimate.title}
+                      </h4>
+                      {estimate.updatedAt && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Updated {format(new Date(estimate.updatedAt), 'MMM d, yyyy')}
+                        </p>
+                      )}
                     </div>
-                    <h4 className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                      {estimate.title}
-                    </h4>
-                    {estimate.updatedAt && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Updated {format(new Date(estimate.updatedAt), 'MMM d, yyyy')}
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <p className="font-semibold text-slate-900 dark:text-slate-100">
+                        {formatCurrency(estimate.totalCents)}
                       </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">
-                      {formatCurrency(estimate.totalCents)}
-                    </p>
-                    {canCreate && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid={`button-estimate-actions-${estimate.id}`}>
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              toast({
-                                title: "View Estimate",
-                                description: `Viewing ${estimate.estimateNumber} - Detail view coming soon`,
-                              });
-                            }}
-                            data-testid={`action-view-estimate-${estimate.id}`}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View
-                          </DropdownMenuItem>
-                          {estimate.status === 'draft' && (
+                      {canCreate && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid={`button-estimate-actions-${estimate.id}`}>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
                             <DropdownMenuItem 
                               onClick={() => {
                                 toast({
-                                  title: "Edit Estimate",
-                                  description: `Editing ${estimate.estimateNumber} - Edit functionality coming soon`,
+                                  title: "View Estimate",
+                                  description: `Viewing ${estimate.estimateNumber} - Detail view coming soon`,
                                 });
                               }}
-                              data-testid={`action-edit-estimate-${estimate.id}`}
+                              data-testid={`action-view-estimate-${estimate.id}`}
                             >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
+                              <Eye className="h-4 w-4 mr-2" />
+                              View
                             </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem 
-                            onClick={() => duplicateEstimateMutation.mutate(estimate.id)}
-                            disabled={duplicateEstimateMutation.isPending}
-                            data-testid={`action-duplicate-estimate-${estimate.id}`}
-                          >
-                            <Copy className="h-4 w-4 mr-2" />
-                            Duplicate
-                          </DropdownMenuItem>
-                          {estimate.status === 'draft' && (
+                            {estimate.status === 'draft' && (
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  toast({
+                                    title: "Edit Estimate",
+                                    description: `Editing ${estimate.estimateNumber} - Edit functionality coming soon`,
+                                  });
+                                }}
+                                data-testid={`action-edit-estimate-${estimate.id}`}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
-                              onClick={() => setEstimateToDelete(estimate)}
-                              className="text-red-600 dark:text-red-400"
-                              data-testid={`action-delete-estimate-${estimate.id}`}
+                              onClick={() => duplicateEstimateMutation.mutate(estimate.id)}
+                              disabled={duplicateEstimateMutation.isPending}
+                              data-testid={`action-duplicate-estimate-${estimate.id}`}
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicate
                             </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                            {estimate.status === 'draft' && (
+                              <DropdownMenuItem 
+                                onClick={() => setEstimateToDelete(estimate)}
+                                className="text-red-600 dark:text-red-400"
+                                data-testid={`action-delete-estimate-${estimate.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
-      {/* Create Estimate Modal */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!estimateToDelete} onOpenChange={(open) => !open && setEstimateToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Estimate</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {estimateToDelete?.estimateNumber}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => estimateToDelete && deleteEstimateMutation.mutate(estimateToDelete.id)}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleteEstimateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
+
+  // CREATE VIEW - iOS-style sectioned form
+  return (
+    <div className="min-h-0 overflow-y-auto -mx-4 sm:-mx-6">
+      {/* Header with back button and save */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+        <button 
+          onClick={() => { setViewMode('list'); resetForm(); }}
+          className="text-sm text-blue-500 font-medium"
+          data-testid="button-cancel-create"
+        >
+          Cancel
+        </button>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Estimate</h3>
+        <Button
+          size="sm"
+          onClick={handleSubmitEstimate}
+          disabled={createEstimateMutation.isPending}
+          data-testid="button-save-estimate"
+        >
+          {createEstimateMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            'Save'
+          )}
+        </Button>
+      </div>
+
+      {/* TITLE Section */}
+      <SectionHeader title="Title" />
+      <InfoRow
+        icon={FileText}
+        label="Add title"
+        value={title || undefined}
+        onClick={() => setTitleModalOpen(true)}
+        testId="row-add-title"
+      />
+
+      {/* CUSTOMER INFO Section */}
+      <SectionHeader title="Customer Info" />
+      <InfoRow
+        icon={User}
+        label="Add customer"
+        value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
+        onClick={() => setCustomerModalOpen(true)}
+        testId="row-add-customer"
+      />
+
+      {/* ESTIMATE Section */}
+      <SectionHeader title="Estimate" />
+      <InfoRow
+        icon={List}
+        label="Add line items"
+        value={lineItems.filter(i => i.name.trim()).length > 0 ? `${lineItems.filter(i => i.name.trim()).length} items` : undefined}
+        onClick={() => setLineItemsModalOpen(true)}
+        testId="row-add-line-items"
+      />
+
+      {/* SCHEDULE Section */}
+      <SectionHeader title="Schedule" />
+      <InfoRow
+        icon={Calendar}
+        label="Add schedule"
+        value={schedule.date ? `${schedule.date}${schedule.time ? ` at ${schedule.time}` : ''}` : undefined}
+        onClick={() => setScheduleModalOpen(true)}
+        testId="row-add-schedule"
+      />
+
+      {/* DISPATCH TO Section */}
+      <SectionHeader title="Dispatch To" />
+      <InfoRow
+        icon={Users}
+        label="My employees"
+        value={assignedEmployees.length > 0 ? `${assignedEmployees.length} selected` : undefined}
+        onClick={() => setEmployeesModalOpen(true)}
+        testId="row-my-employees"
+      />
+
+      {/* ESTIMATE FIELDS Section */}
+      <SectionHeader title="Estimate Fields" />
+      <InfoRow
+        icon={SlidersHorizontal}
+        label="Estimate fields"
+        onClick={() => setEstimateFieldsModalOpen(true)}
+        testId="row-estimate-fields"
+      />
+
+      {/* JOB TAGS Section */}
+      <SectionHeader title="Job Tags" />
+      <InfoRow
+        icon={Tag}
+        label="Add job tags"
+        value={tags.length > 0 ? `${tags.length} tags` : undefined}
+        onClick={() => setTagsModalOpen(true)}
+        testId="row-add-job-tags"
+      />
+
+      {/* TITLE Modal */}
+      <Dialog open={titleModalOpen} onOpenChange={setTitleModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Estimate</DialogTitle>
+            <DialogTitle>Estimate Title</DialogTitle>
           </DialogHeader>
-          
-          <div className="space-y-5 py-4">
-            {/* Title */}
+
+          <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="estimate-title">Title *</Label>
+              <Label htmlFor="estimateTitle">Title *</Label>
               <Input
-                id="estimate-title"
+                id="estimateTitle"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Kitchen Renovation Estimate"
                 data-testid="input-estimate-title"
               />
             </div>
-
-            {/* Customer Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="customer-name">Customer Name</Label>
-                <Input
-                  id="customer-name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer name"
-                  data-testid="input-customer-name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customer-email">Customer Email</Label>
-                <Input
-                  id="customer-email"
-                  type="email"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  placeholder="customer@example.com"
-                  data-testid="input-customer-email"
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
             <div className="space-y-2">
-              <Label htmlFor="estimate-notes">Notes (optional)</Label>
+              <Label htmlFor="estimateNotes">Notes (optional)</Label>
               <Textarea
-                id="estimate-notes"
+                id="estimateNotes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Additional notes or terms..."
-                rows={2}
+                rows={3}
                 data-testid="input-estimate-notes"
               />
             </div>
+          </div>
 
-            {/* Line Items */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Line Items *</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addLineItem}
-                  data-testid="button-add-line-item"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Item
-                </Button>
+          <DialogFooter>
+            <Button onClick={() => setTitleModalOpen(false)} data-testid="button-done-title">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SELECT CUSTOMER Modal */}
+      <Dialog open={customerModalOpen} onOpenChange={setCustomerModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <button 
+              onClick={() => setCustomerModalOpen(false)}
+              className="text-sm text-blue-500 font-medium"
+              data-testid="button-cancel-customer"
+            >
+              Cancel
+            </button>
+            <DialogTitle className="text-base font-semibold">SELECT CUSTOMER</DialogTitle>
+            <button 
+              onClick={() => setCustomerModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600"
+              data-testid="button-close-customer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="p-4 border-b">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by name"
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-customer"
+              />
+            </div>
+          </div>
+
+          {/* Customer List */}
+          <ScrollArea className="max-h-64">
+            {filteredCustomers.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-sm text-slate-500">No customers yet</p>
               </div>
-
-              <div className="space-y-3">
-                {/* Header Row */}
-                <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 px-1">
-                  <div className="col-span-5">Item Name</div>
-                  <div className="col-span-2">Qty</div>
-                  <div className="col-span-2">Unit Price</div>
-                  <div className="col-span-2 text-right">Total</div>
-                  <div className="col-span-1"></div>
-                </div>
-
-                {/* Line Items */}
-                {lineItems.map((item, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-5">
-                      <Input
-                        value={item.name}
-                        onChange={(e) => updateLineItem(index, 'name', e.target.value)}
-                        placeholder="Item name"
-                        data-testid={`input-item-name-${index}`}
-                      />
+            ) : (
+              <div>
+                {filteredCustomers.map((customer) => (
+                  <button
+                    key={customer.id}
+                    onClick={() => {
+                      setSelectedCustomer(customer);
+                      setCustomerModalOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800"
+                    data-testid={`customer-row-${customer.id}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                        {getInitials(customer.firstName, customer.lastName)}
+                      </span>
                     </div>
-                    <div className="col-span-2">
-                      <Input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                        placeholder="1"
-                        min="0"
-                        step="0.01"
-                        data-testid={`input-item-qty-${index}`}
-                      />
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {customer.firstName} {customer.lastName}
+                      </p>
+                      {customer.email && (
+                        <p className="text-xs text-slate-500">{customer.email}</p>
+                      )}
                     </div>
-                    <div className="col-span-2">
-                      <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                        <Input
-                          type="number"
-                          value={(item.unitPriceCents / 100).toFixed(2)}
-                          onChange={(e) => updateLineItem(index, 'unitPriceCents', e.target.value)}
-                          placeholder="0.00"
-                          min="0"
-                          step="0.01"
-                          className="pl-6"
-                          data-testid={`input-item-price-${index}`}
-                        />
-                      </div>
-                    </div>
-                    <div className="col-span-2 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {formatCurrency(calculateLineTotal(item))}
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLineItem(index)}
-                        disabled={lineItems.length === 1}
-                        className="h-8 w-8"
-                        data-testid={`button-remove-item-${index}`}
-                      >
-                        <Trash2 className="h-4 w-4 text-slate-400" />
-                      </Button>
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
+            )}
+          </ScrollArea>
 
-              {/* Totals Section */}
-              <div className="pt-3 border-t space-y-2">
-                <div className="flex justify-end items-center">
-                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4 w-20 text-right">Subtotal:</span>
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 w-24 text-right">
-                    {formatCurrency(calculateSubtotal())}
-                  </span>
-                </div>
-                <div className="flex justify-end items-center">
-                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4 w-20 text-right">Tax:</span>
-                  <div className="relative w-24">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                    <Input
-                      type="number"
-                      value={taxInput}
-                      onChange={(e) => setTaxInput(e.target.value)}
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="pl-6 h-8 text-sm"
-                      data-testid="input-tax"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end items-center pt-2 border-t">
-                  <span className="text-sm text-slate-500 dark:text-slate-400 mr-4 w-20 text-right">Total:</span>
-                  <span className="text-lg font-semibold text-slate-900 dark:text-slate-100 w-24 text-right">
-                    {formatCurrency(calculateTotal())}
-                  </span>
-                </div>
+          {/* Add Customer Button */}
+          {canEditEstimate && (
+            <div className="p-4 border-t">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setAddCustomerModalOpen(true)}
+                data-testid="button-add-customer"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Customer
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ADD CUSTOMER Modal */}
+      <Dialog open={addCustomerModalOpen} onOpenChange={setAddCustomerModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Customer</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                  id="firstName"
+                  value={newCustomer.firstName}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, firstName: e.target.value })}
+                  placeholder="First name"
+                  data-testid="input-customer-first-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  value={newCustomer.lastName}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, lastName: e.target.value })}
+                  placeholder="Last name"
+                  data-testid="input-customer-last-name"
+                />
               </div>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={newCustomer.email}
+                onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                placeholder="customer@example.com"
+                data-testid="input-customer-email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                value={newCustomer.phone}
+                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                placeholder="(555) 123-4567"
+                data-testid="input-customer-phone"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={newCustomer.address}
+                onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                placeholder="123 Main St, City, State"
+                data-testid="input-customer-address"
+              />
+            </div>
+
+            {/* Company Section Toggle */}
+            <div className="flex items-center gap-2 pt-2">
+              <Checkbox
+                id="showCompany"
+                checked={newCustomer.showCompany}
+                onCheckedChange={(checked) => setNewCustomer({ ...newCustomer, showCompany: checked === true })}
+                data-testid="checkbox-show-company"
+              />
+              <Label htmlFor="showCompany" className="text-sm font-normal cursor-pointer flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Add Company Information
+              </Label>
+            </div>
+
+            {/* Company Fields */}
+            {newCustomer.showCompany && (
+              <div className="space-y-4 pl-6 border-l-2 border-slate-200 dark:border-slate-700">
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input
+                    id="companyName"
+                    value={newCustomer.companyName}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, companyName: e.target.value })}
+                    placeholder="Acme Inc."
+                    data-testid="input-company-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="companyNumber">Company Number</Label>
+                  <Input
+                    id="companyNumber"
+                    value={newCustomer.companyNumber}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, companyNumber: e.target.value })}
+                    placeholder="123456"
+                    data-testid="input-company-number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="jobTitle">Job Title</Label>
+                  <Input
+                    id="jobTitle"
+                    value={newCustomer.jobTitle}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, jobTitle: e.target.value })}
+                    placeholder="Project Manager"
+                    data-testid="input-job-title"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => {
-                setIsCreateModalOpen(false);
-                resetForm();
+                setAddCustomerModalOpen(false);
+                resetNewCustomerForm();
               }}
-              data-testid="button-cancel-estimate"
+              data-testid="button-cancel-add-customer"
             >
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
-              disabled={createEstimateMutation.isPending}
-              data-testid="button-save-estimate"
+              onClick={() => {
+                if (!newCustomer.firstName.trim() || !newCustomer.lastName.trim()) {
+                  toast({
+                    title: "Error",
+                    description: "First and last name are required",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                createCustomerMutation.mutate(newCustomer);
+              }}
+              disabled={createCustomerMutation.isPending}
+              data-testid="button-save-customer"
             >
-              {createEstimateMutation.isPending ? (
+              {createCustomerMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Saving...
                 </>
               ) : (
-                'Save Draft'
+                'Save Customer'
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!estimateToDelete} onOpenChange={(open) => !open && setEstimateToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Estimate</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {estimateToDelete?.estimateNumber}? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => estimateToDelete && deleteEstimateMutation.mutate(estimateToDelete.id)}
-              className="bg-red-600 hover:bg-red-700"
-              data-testid="button-confirm-delete"
+      {/* LINE ITEMS Modal */}
+      <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Line Items</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Header Row */}
+            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 px-1">
+              <div className="col-span-5">Description</div>
+              <div className="col-span-2">Qty</div>
+              <div className="col-span-2">Price</div>
+              <div className="col-span-2 text-right">Total</div>
+              <div className="col-span-1"></div>
+            </div>
+
+            {/* Line Items */}
+            {lineItems.map((item, index) => (
+              <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-5">
+                  <Input
+                    value={item.name}
+                    onChange={(e) => updateLineItem(index, 'name', e.target.value)}
+                    placeholder="Item description"
+                    data-testid={`input-line-item-name-${index}`}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Input
+                    type="number"
+                    value={item.quantity}
+                    onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                    placeholder="1"
+                    min="0"
+                    step="0.01"
+                    data-testid={`input-line-item-qty-${index}`}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <Input
+                      type="number"
+                      value={(item.unitPriceCents / 100).toFixed(2)}
+                      onChange={(e) => updateLineItem(index, 'unitPriceCents', e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="pl-6"
+                      data-testid={`input-line-item-price-${index}`}
+                    />
+                  </div>
+                </div>
+                <div className="col-span-2 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {formatCurrency(calculateLineTotal(item))}
+                </div>
+                <div className="col-span-1 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeLineItem(index)}
+                    disabled={lineItems.length === 1}
+                    className="h-8 w-8"
+                    data-testid={`button-remove-line-item-${index}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-slate-400" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addLineItem}
+              data-testid="button-add-line-item"
             >
-              {deleteEstimateMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <Plus className="h-4 w-4 mr-1" />
+              Add Item
+            </Button>
+
+            {/* Subtotal */}
+            <div className="pt-3 border-t flex justify-end items-center">
+              <span className="text-sm text-slate-500 mr-4">Subtotal:</span>
+              <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                {formatCurrency(calculateSubtotal())}
+              </span>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setLineItemsModalOpen(false)} data-testid="button-done-line-items">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SCHEDULE Modal */}
+      <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="scheduleDate">Date</Label>
+              <Input
+                id="scheduleDate"
+                type="date"
+                value={schedule.date}
+                onChange={(e) => setSchedule({ ...schedule, date: e.target.value })}
+                data-testid="input-schedule-date"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="scheduleTime">Time</Label>
+              <Input
+                id="scheduleTime"
+                type="time"
+                value={schedule.time}
+                onChange={(e) => setSchedule({ ...schedule, time: e.target.value })}
+                data-testid="input-schedule-time"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setScheduleModalOpen(false)} data-testid="button-done-schedule">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EMPLOYEES Modal */}
+      <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Employees</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2">
+            {mockEmployees.map((employee) => (
+              <div
+                key={employee.id}
+                className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0"
+              >
+                <Checkbox
+                  id={`employee-${employee.id}`}
+                  checked={assignedEmployees.includes(employee.id)}
+                  onCheckedChange={() => toggleEmployee(employee.id)}
+                  data-testid={`checkbox-employee-${employee.id}`}
+                />
+                <Label
+                  htmlFor={`employee-${employee.id}`}
+                  className="text-sm font-normal cursor-pointer flex-1"
+                >
+                  {employee.name}
+                </Label>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setEmployeesModalOpen(false)} data-testid="button-done-employees">
+              Done ({assignedEmployees.length} selected)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ESTIMATE FIELDS Modal */}
+      <Dialog open={estimateFieldsModalOpen} onOpenChange={setEstimateFieldsModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Estimate Fields</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between py-2">
+              <Label htmlFor="showSubtotal" className="font-normal">Show Subtotal</Label>
+              <Checkbox
+                id="showSubtotal"
+                checked={estimateFields.showSubtotal}
+                onCheckedChange={(checked) => setEstimateFields({ ...estimateFields, showSubtotal: checked === true })}
+                data-testid="checkbox-show-subtotal"
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <Label htmlFor="showTax" className="font-normal">Show Tax</Label>
+              <Checkbox
+                id="showTax"
+                checked={estimateFields.showTax}
+                onCheckedChange={(checked) => setEstimateFields({ ...estimateFields, showTax: checked === true })}
+                data-testid="checkbox-show-tax"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="taxRate">Tax Rate (%)</Label>
+              <Input
+                id="taxRate"
+                type="number"
+                value={estimateFields.taxRate}
+                onChange={(e) => setEstimateFields({ ...estimateFields, taxRate: e.target.value })}
+                placeholder="0"
+                min="0"
+                step="0.01"
+                data-testid="input-tax-rate"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="validDays">Valid For (days)</Label>
+              <Input
+                id="validDays"
+                type="number"
+                value={estimateFields.validDays}
+                onChange={(e) => setEstimateFields({ ...estimateFields, validDays: e.target.value })}
+                placeholder="30"
+                min="1"
+                data-testid="input-valid-days"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setEstimateFieldsModalOpen(false)} data-testid="button-done-estimate-fields">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* TAGS Modal */}
+      <Dialog open={tagsModalOpen} onOpenChange={setTagsModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Job Tags</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Existing Tags */}
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="px-3 py-1 text-sm gap-1"
+                  >
+                    {tag}
+                    <button
+                      onClick={() => removeTag(tag)}
+                      className="ml-1 hover:text-red-500"
+                      data-testid={`button-remove-tag-${tag}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            {/* Add Tag Input */}
+            <div className="flex gap-2">
+              <Input
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                placeholder="Enter tag name"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
+                data-testid="input-new-tag"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addTag}
+                disabled={!newTagInput.trim()}
+                data-testid="button-add-tag"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setTagsModalOpen(false)} data-testid="button-done-tags">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

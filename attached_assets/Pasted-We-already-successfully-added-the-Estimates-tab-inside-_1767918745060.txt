@@ -1,0 +1,88 @@
+We already successfully added the “Estimates” tab inside the Job page and the tab switching works.
+
+NOW I need you to redesign the Estimates tab content to look like the SECOND reference image I provided:
+- Gray section headers (CATEGORY TITLES)
+- Under each header: white “information bar” rows (list items) with an icon on the left, label text, and a right chevron.
+- Each row is clickable and opens either a modal or a slide-over panel to fill that section in.
+
+DO NOT change routing. This is still inside the Job page tab.
+
+UI LAYOUT (match the reference image)
+Inside Estimates tab show a vertically stacked form with these sections + rows:
+
+1) CUSTOMER INFO
+   - Row: “Add customer” (icon: user)
+     -> opens Select Customer modal (like the FIRST image)
+
+2) ESTIMATE (or INVOICE section in reference — but name it ESTIMATE)
+   - Row: “Add line items” (icon: list)
+     -> opens Line Items editor modal
+
+3) SCHEDULE
+   - Row: “Add schedule” (icon: calendar)
+     -> opens Schedule modal (date/time inputs)
+
+4) DISPATCH TO
+   - Row: “My employees” (icon: users)
+     -> opens Crew picker modal (multi-select employees)
+
+5) ESTIMATE FIELDS
+   - Row: “Estimate Fields” (icon: grid/sliders)
+     -> opens modal with common estimate settings/fields (simple placeholders OK)
+
+6) JOB TAGS
+   - Row: “Add job tags” (icon: tag)
+     -> opens modal to add/remove tags
+
+VISUAL REQUIREMENTS
+- Section headers: full-width light gray background, centered all-caps text (like the image).
+- Rows: full-width white cards/rows, subtle border or divider lines, left icon, label text, right chevron.
+- Mobile-first spacing. Make it feel like a native iOS list form.
+- Keep everything clean; no clutter; no extra buttons at the top except what belongs in the tab.
+
+FUNCTIONAL REQUIREMENTS
+A) “Add customer” row:
+   - Opens a “SELECT CUSTOMER” modal matching the FIRST image:
+     - Top bar: “Cancel” (left), title “SELECT CUSTOMER” center, close “X” on right
+     - Search input: “Search by name”
+     - Empty state: “No customers yet”
+     - Button: “+ Add Customer”
+   - If customers exist, list them and allow click-to-select.
+   - On select: close modal and update the CUSTOMER INFO row to show selected customer name instead of “Add customer”.
+
+B) “+ Add Customer”:
+   - Opens a Create Customer modal with fields:
+     - First name, Last name, Email, Phone number, Address
+     - Optional Company section:
+       - Company name, Company number, Job title
+   - On save: add to customers list (local state for now), auto-select that customer, close modal.
+
+C) Other rows can be “placeholder modals” for now but must open/close properly:
+   - Add line items: simple list editor (description, qty, price) and total calculation can be basic.
+   - Add schedule: date + time inputs
+   - My employees: multi-select list with checkboxes
+   - Estimate Fields: a few toggles/inputs (placeholders ok)
+   - Job tags: add/remove tags (chips)
+
+STATE + DATA (no backend required yet)
+- Use local component state for:
+  - selectedCustomer
+  - customers list
+  - line items
+  - schedule
+  - assignedEmployees
+  - estimateFields
+  - tags
+- No API calls yet. Just keep it all in state so UI proves the flow.
+
+IMPORTANT RULES
+- Do not add any new global header buttons.
+- Do not break the existing Documents / Approvals tabs.
+- Keep RBAC “hidden not disabled” ready: create a boolean like canEditEstimate = true; if false, hide the chevrons and disable opening modals (or hide the rows entirely — your choice, but default canEditEstimate=true).
+- Make sure the tab content scrolls properly on mobile.
+
+DELIVERABLES
+- Estimates tab now matches the iOS-style sectioned “information bars” layout.
+- Each row opens a modal/slide-over.
+- Customer select flow works end-to-end with search + add customer + auto-select.
+- Report back which files were changed and what components were created.
