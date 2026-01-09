@@ -1,7 +1,7 @@
 # EcoLogic Construction Management Platform
 
 ## Overview
-EcoLogic is a professional construction management platform for trade contractors, aiming to unify job management, subcontractor coordination, client communication, and invoicing. It features AI-powered scheduling and seeks to streamline construction workflows, enhance project oversight, and improve communication among all stakeholders. This modern, real-time, and PWA-enabled web application is designed to redefine construction project management through advanced technology and user-centric design.
+EcoLogic is a professional construction management platform for trade contractors, designed to unify job management, subcontractor coordination, client communication, and invoicing. It aims to streamline construction workflows, enhance project oversight, and improve communication among all stakeholders through a modern, real-time, and PWA-enabled web application with AI-powered scheduling. The project's vision is to redefine construction project management using advanced technology and user-centric design.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -12,83 +12,30 @@ User Flow: Automatic login and dashboard redirect after account creation
 Logo: Custom water drop with leaf logo positioned above EcoLogic title
 
 ## System Architecture
-EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite, Tailwind CSS with shadcn/ui, TanStack Query, Wouter, React Hook Form) for the frontend and Node.js with Express.js (TypeScript) and PostgreSQL with Drizzle ORM for the backend.
+EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite, Tailwind CSS with shadcn/ui, TanStack Query, Wouter, React Hook Form) for the frontend and Node.js with Express.js (TypeScript) and PostgreSQL with Drizzle ORM for the backend.
 
 **UI/UX**:
 - Responsive design with PWA support and dark mode.
-- Accessible components primarily from Radix UI.
-- Custom "EcoLogic" branding with a water drop and leaf logo.
+- Accessible components primarily from Radix UI, incorporating custom "EcoLogic" branding and logo.
 
 **Technical Implementations**:
 - **Authentication**: Supports Replit Auth, email/password, and social logins (Google) with robust session management and atomic session revocation.
 - **Data Management**: PostgreSQL with Drizzle ORM for type-safe operations, implementing multi-tenancy and role-based access control (RBAC).
 - **AI Integration**: Leverages OpenAI API (GPT-4o) for project scoping, material estimation, smart scheduling, and OCR-based invoice scanning. Integrates OpenWeather API for job planning.
-- **Real-time Capabilities**: Utilizes a WebSocket server for live messaging, notifications, and instant job status updates, complemented by service worker-based push notifications. WebSocket communication includes room-based subscriptions, delivery acknowledgments, and client-side optimistic updates.
-- **Messaging System**: Comprehensive two-pane messaging interface for direct 1:1 conversations using a server-side "get or create then redirect" pattern. Features instant navigation, deterministic conversation creation via pairKey upsert, real-time delivery via WebSocket with tempId reconciliation (prevents disappearing messages), read receipts, unread counts, searchable user lists with owner visibility (case-insensitive status filtering), day-based message grouping, and iMessage-style swipe-to-reveal timestamps (horizontal drag gesture reveals all timestamps on right side with smooth animations). Uses merge pattern instead of cache invalidation for optimistic updates. **iOS-Style Inbox**: Redesigned conversation list matches Apple Messages aesthetic with no avatars, tiny blue dot unread indicator, message previews (text or synthesized attachment labels like "Photo", "3 Photos", "2 Videos", "4 Attachments"), iOS-style time formatting (5:44 PM, Yesterday, M/D/YY), and comprehensive attachment preview synthesis that counts and categorizes all attachments by MIME type. **All-Coworkers View**: Inbox displays ALL active coworkers in company including owners (not just those with existing threads) via LEFT JOIN through companyMembers table with case-insensitive status filtering (UPPER(status) = 'ACTIVE'), with "Start a conversation" placeholder for users without messages. Clicking any coworker automatically creates thread via /api/messages/threads/ensure endpoint. **Store-and-Forward Delivery**: Production-ready message delivery that does NOT require both users to be online simultaneously. Both inbox (MessagesDirectory) and message thread (MessageThread) implement aggressive polling (refetchOnMount: "always", refetchOnWindowFocus: true, refetchOnReconnect: true, 5-second polling intervals, staleTime: 0) ensuring messages appear within 5 seconds even if recipient is offline, in different tab, or WebSocket is disconnected. Messages persist to database via atomic transactions before WebSocket notification, guaranteeing triple redundancy: (1) real-time WebSocket for instant delivery, (2) 5-second polling for missed events, (3) tab focus refetch when user returns. Backend has NO presence filtering—all queries fetch from database regardless of online status. **Guaranteed Delivery**: Atomic database transactions ensure message creation and conversation.updatedAt update happen together, driving instant iOS-style inbox resorting where conversations with new messages immediately move to the top. Database index on updatedAt desc ensures optimal sorting performance. **Data Integrity**: Three-layer protection ensures 1:1 conversation invariants: (1) Unique database constraint on (conversation_id, user_id) prevents duplicate participants, (2) Application-level validation in getOrCreateConversation enforces 2-participant limit, (3) PostgreSQL trigger automatically created at server startup rejects any insert exceeding 2 participants in 1:1 conversations.
-- **Database Initialization**: Automated constraint enforcement system (server/db-init.ts) runs at startup to ensure critical database triggers exist in all environments. Creates PostgreSQL trigger to enforce 2-participant limit for 1:1 conversations, with persistent migration SQL files in database/migrations/ directory for reference.
-- **File Management**: Handles job photos and documents, with provisions for cloud storage integration.
-- **Document Visibility System**: Role-based document visibility with 5 levels: customer_internal (everyone), assigned_crew_only, office_only, internal, owner_only. Each role has specific allowed visibilities:
-  - Owner: sees all documents (bypass)
-  - Supervisor: customer_internal, assigned_crew_only, internal, office_only
-  - Dispatcher: customer_internal, office_only, internal
-  - Estimator: customer_internal, office_only
-  - Technician: customer_internal, assigned_crew_only (limited to assigned jobs only)
-  Backend enforces visibility at API level - restricted documents are completely hidden, not disabled.
-- **Signature Requests**: Electronic signature system allowing users to send documents to customers for signature. Features:
-  - RBAC enforcement: Owner, Supervisor, Dispatcher, Estimator can create/send requests; Technician cannot (hidden UI + 403 API response)
-  - Document visibility filtering: Users only see signature requests for documents they can access
-  - Automatic job inheritance: Signature requests inherit jobId from the selected document
-  - Secure access tokens: Generated using randomBytes(32).toString('hex'), only returned once at creation for emailing
-  - Status workflow: draft → sent → viewed → signed/declined/expired/canceled
-  - Automatic 14-day expiry: Links expire 14 days after sending
-  - "Send for Signature" action available from Documents page preview modal AND signature request detail view
-  - Send action (POST /api/signature-requests/:id/send): Transitions draft→sent, records sentAt timestamp and sentByUserId, sets expiresAt to 14 days, enforces RBAC and document visibility, sends branded HTML email to customer with signing link
-  - **Email Notifications**: Uses Resend to send professional HTML emails with company branding. Configuration via secrets (RESEND_API_KEY, EMAIL_FROM, APP_BASE_URL). Email_FROM is validated and falls back to onboarding@resend.dev if invalid. APP_BASE_URL is validated using URL parser - must be valid public URL (e.g., https://yourapp.replit.app).
-  - **Public Signing Flow**: Customer-facing route at /sign/:token (accessible without authentication, no login redirect). Public API routes at /api/public/signature-requests/:token. Features:
-    - Validates token exists, checks expiry (410 if expired), prevents re-signing (400 if already signed)
-    - Automatically marks request as "viewed" on page load
-    - Displays document info/company name/message with document preview (PDF iframe or image)
-    - Canvas-based signature pad for drawing signatures (touch and mouse support)
-    - Captures signature as PNG data URL + optional signer name
-    - Success confirmation screen after signing
-    - Stores signatureUrl (base64) and signedName in database
-    - **Standalone Architecture**: Public signing uses a completely separate React entry point (PublicSignApp.tsx) with NO dependencies on authentication, Layout, or wouter routing. Express intercepts /sign/:token before Vite middleware: in development serves inline HTML that loads public-sign-entry.tsx via Vite; in production serves index.html where main.tsx conditionally renders PublicSignApp based on window.location.pathname. This ensures unauthenticated users can access signing without hitting the login page.
-  - Delete action only available for draft status (hidden not disabled for non-drafts)
-  - Status pills show proper capitalization (Draft, Sent, Viewed, Signed, etc.)
-  - **Internal UI**: Shows signedAt timestamp with signer name, displays captured customer signature image in detail view. Sent requests display signing link with copy-to-clipboard button.
-  - Database table: signature_requests with documentId, customerName, customerEmail, message, status, accessToken, sentAt, sentByUserId, signUrl, viewedAt, signedAt, expiresAt, signatureUrl, signedName
+- **Real-time Capabilities**: Utilizes a WebSocket server for live messaging, notifications, and instant job status updates, complemented by service worker-based push notifications. Features include room-based subscriptions, delivery acknowledgments, and client-side optimistic updates.
+- **Messaging System**: A comprehensive two-pane messaging interface with 1:1 conversations, instant navigation, real-time delivery via WebSocket, read receipts, unread counts, and day-based message grouping. It features an iOS-style inbox with message previews, attachment synthesis, and guaranteed delivery mechanisms ensuring messages are delivered even if recipients are offline. It also includes an "All-Coworkers View" for easy conversation initiation.
+- **Database Initialization**: Automated constraint enforcement system runs at startup, creating PostgreSQL triggers to enforce business logic, such as the 2-participant limit for 1:1 conversations.
+- **File Management**: Handles job photos and documents, with cloud storage integration.
+- **Document Visibility System**: Implements a role-based document visibility model with five levels (customer_internal, assigned_crew_only, office_only, internal, owner_only), enforced at the API level.
+- **Signature Requests**: An electronic signature system allowing users to send documents to customers for signing. Features RBAC enforcement, document visibility filtering, automatic job inheritance, secure access tokens, and a status workflow (draft → sent → viewed → signed/declined/expired/canceled). It includes branded HTML email notifications via Resend and a standalone public signing flow accessible without authentication.
 - **Employee Management**: Manages employee active/inactive status, session revocation, and contact information.
-- **Onboarding**: Features an invite code system for company onboarding, supporting owner registration and new member joining, including a company rejoin flow.
+- **Onboarding**: Features an invite code system for company onboarding, supporting owner registration, new member joining, and company rejoin flows.
 - **Subscription Management**: Integrates Stripe for subscription plans, enabling role-based access control and plan-based feature limits.
 - **Atomic Operations**: Critical workflows are implemented as atomic transactions.
 - **Timezone Handling**: Robust timezone conversion utilities ensure correct date/time display and storage.
-- **Development Tools**: Includes development-only debug endpoints for WebSocket and database state inspection.
-- **Estimates System**: Job-scoped estimate creation with line items editor. Features:
-  - Database tables: estimates (with customerName, customerEmail, taxCents fields), estimate_items, company_counters (for atomic estimate number generation)
-  - Estimate numbers unique per company in EST-000001 format via atomic counter increment
-  - All monetary values stored as cents (unitPriceCents, taxCents, subtotalCents, totalCents where total = subtotal + tax)
-  - Create modal includes: Title, Customer Name, Customer Email, Notes, Line Items (name, qty, unit price, auto line total), Subtotal/Tax/Total section
-  - RBAC: Owner/Supervisor/Dispatcher/Estimator can create/manage via requirePerm('estimates.create'); Technician cannot access (tab hidden, routes blocked with 403)
-  - Job Details page has 3 segmented tabs: Documents | E-signature Approvals | Estimates
-  - Action dropdown menu: View (coming soon), Edit (draft only, coming soon), Duplicate (functional - copies all fields including customer info and tax), Delete (draft only, functional)
-  - Server logging: All estimate routes log with [Estimates] prefix for debugging
-  - Validation: Quantity must not be empty, unitPriceCents accepts decimals and rounds to integer cents
-  - **Main Page Tab Switcher**: Jobs page (/jobs) styled like Documents page with Tabs component. Features:
-    - Header: "Jobs & Estimates" title with subtitle
-    - Segmented tabs using shadcn Tabs component (Jobs | Estimates icons + labels)
-    - Estimates tab has filter row: Job picker dropdown + Status dropdown (All/Draft/Sent/Approved/Declined)
-    - "Create Estimate" button opens SelectCustomerModal → job picker → estimate modal with customer pre-filled
-    - Estimate cards show: number, title, status badge, job reference, customer name, total, updated date
-    - Selected job chip with clear button when filtering by specific job
-    - Empty states for no estimates and no matching filters
-    - Technicians cannot see Estimates tab (RBAC enforced)
-    - Query optimization: GET /api/estimates only fetches when estimates tab active and permitted
-  - **Customer Management**: Customers table for estimate recipients with:
-    - Database: customers table with firstName, lastName, email, phone, address, companyName, companyNumber, jobTitle
-    - API: GET/POST /api/customers with RBAC (Technician cannot create)
-    - SelectCustomerModal: iOS-style customer picker with search, avatar initials, and Add Customer button (hidden for Technicians)
-    - AddCustomerModal: First/last name (required), email, phone, address, optional company section with toggle
-    - Estimate creation stores customerId + snapshot fields (customerName, customerEmail, customerPhone, customerAddress) for history safety
+- **Estimates System**: Provides job-scoped estimate creation with a line item editor. Features unique estimate numbers generated via atomic counters, monetary values stored in cents, RBAC for creation and management, and integration with the Job Details page. The Estimates tab includes filtering by job and status, a "Create Estimate" button, and displays estimate cards.
+- **Customer Management**: Manages customer data for estimate recipients, including firstName, lastName, email, phone, and address. Features an iOS-style customer picker with search and an "Add Customer" modal, with RBAC applied to customer creation.
+- **Estimate Builder**: Redesigned iOS-style sectioned form for creating estimates within the Job Details page, offering "list" and "create" view modes. It uses gray section headers and white information rows that open modals or slide-over panels for editing various estimate details, with RBAC controlling editability.
 
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)
@@ -96,7 +43,7 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Authentication**: Passport.js strategies, Replit Auth, Google OAuth
 - **AI**: OpenAI API
 - **Weather**: OpenWeather API
-- **Email**: Nodemailer
+- **Email**: Nodemailer, Resend
 - **File Uploads**: Multer
 - **WebSockets**: `ws` library
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI, Framer Motion
