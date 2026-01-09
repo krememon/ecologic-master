@@ -131,7 +131,7 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
   });
 
   // Fetch customers
-  const { data: apiCustomers = [], isLoading: customersLoading } = useQuery<Customer[]>({
+  const { data: apiCustomers = [], isLoading: customersLoading, error: customersError, refetch: refetchCustomers } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
   });
 
@@ -435,6 +435,19 @@ export function NewEstimateSheet({ open, onOpenChange }: NewEstimateSheetProps) 
               {customersLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                </div>
+              ) : customersError ? (
+                <div className="text-center py-8 text-slate-500">
+                  <X className="h-8 w-8 mx-auto mb-2 text-red-400" />
+                  <p className="font-medium text-red-600">Failed to load customers</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2"
+                    onClick={() => refetchCustomers()}
+                  >
+                    Retry
+                  </Button>
                 </div>
               ) : apiCustomers.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">

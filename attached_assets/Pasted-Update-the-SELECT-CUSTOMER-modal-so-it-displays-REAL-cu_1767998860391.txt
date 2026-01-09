@@ -1,0 +1,69 @@
+Update the “SELECT CUSTOMER” modal so it displays REAL customers that are associated with the user’s COMPANY (shared company-wide list), not just local temporary customers.
+
+CURRENT ISSUE
+- The customer picker shows “No customers yet” because it only uses local state customers created inside the estimate flow.
+- We need it to pull from the company’s customers in the database.
+
+GOAL
+When opening “SELECT CUSTOMER”:
+- Fetch and display the company’s customers (shared list)
+- Search filters that company list
+- Selecting a customer sets it on the estimate
+- “+ Add Customer” creates a new company customer (saved to DB) and immediately appears in the list
+
+BACKEND REQUIREMENTS (create if missing)
+1) Create Customers table/model if not already:
+   - id
+   - companyId (required)  ✅ this is what scopes customers to the company
+   - firstName
+   - lastName
+   - email (optional)
+   - phone (optional)
+   - address (optional)
+   - companyName (optional)
+   - companyNumber (optional)
+   - jobTitle (optional)
+   - createdAt
+
+2) API routes (company-scoped, RBAC later):
+   - GET /api/customers
+     - returns customers where companyId = req.user.companyId
+     - order by createdAt desc (or lastName)
+   - POST /api/customers
+     - creates customer with companyId = req.user.companyId
+     - returns created customer
+
+FRONTEND REQUIREMENTS
+A) When the Select Customer modal opens:
+- call GET /api/customers
+- show a loading state while fetching
+- then render the list
+- if 0 customers, show the empty state
+
+B) Search must filter the fetched company customers list:
+- first/last/full name/email/phone (case-insensitive)
+- if query empty, show all customers
+
+C) Add Customer:
+- The “+ Add Customer” flow must call POST /api/customers
+- On success:
+  - Optimistically insert the returned customer into the list
+  - Auto-select it
+  - Close Create Customer modal
+  - Close Select Customer modal
+  - Update the “Add customer” row to show the selected customer name
+
+IMPORTANT
+- Do NOT keep a separate local-only customers array as the source of truth anymore.
+- The source of truth is the company customer list from GET /api/customers.
+- If you want caching: store it in a hook like useCompanyCustomers() and refetch on add.
+
+ERROR HANDLING
+- If GET fails: show “Failed to load customers” + a Retry button
+- If POST fails: show toast “Could not create customer”
+
+DELIVERABLES
+- Customer picker displays real company customers
+- Search works on company customers
+- Add Customer saves to DB and appears instantly in list
+- Provide files changed and the new API routes
