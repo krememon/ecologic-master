@@ -1,0 +1,51 @@
+The Select Customer modal now shows “Failed to load customers”. We need to debug and FIX the API call.
+
+DO THIS IN ORDER (no skipping):
+
+1) Identify the exact request being made from the frontend:
+   - Find the fetch/axios call in the SelectCustomer modal/hook.
+   - Print the exact URL path used (ex: /api/customers, /api/clients, etc).
+
+2) Add real error logging (temporarily) so we can see why it fails:
+   - In the frontend catch block, log:
+     console.error("Failed to load customers", { status, message, body })
+   - If using fetch:
+     - log res.status
+     - log await res.text() when !res.ok
+   - Show the response text in the console (not UI).
+
+3) Verify the backend route exists and matches the frontend path:
+   - If frontend calls GET /api/customers, backend MUST have GET /api/customers.
+   - If our server is mounted under a prefix (ex: /api/v1), update frontend to match.
+   - Fix any mismatch (most common cause is 404).
+
+4) Verify authentication / company context:
+   - If backend requires auth middleware, confirm the request includes credentials:
+     - fetch(..., { credentials: "include" })
+   - If using tokens, ensure Authorization header is present.
+   - If failing with 401/403, return a clearer error and fix credentials.
+
+5) Implement GET /api/customers properly (if missing):
+   - It must scope by company:
+     companyId = req.user.companyId (or equivalent)
+   - Return JSON array: { customers: [...] } OR just [...] (but match what frontend expects)
+
+6) Confirm DB/model exists:
+   - If customers table/model does not exist yet, create it (companyId required).
+   - If we already have “clients” table, use that instead and rename endpoints consistently.
+   - Do NOT create duplicate “customers” + “clients” resources.
+
+7) Update frontend to match response shape:
+   - If backend returns { customers }, frontend must read data.customers.
+   - If backend returns array, frontend uses data directly.
+   - Make this consistent.
+
+8) After fix, test:
+   - Open Select Customer modal -> list loads
+   - Search filters list
+   - Retry button works if network fails
+
+DELIVERABLES
+- Tell me the actual error you found (status code + response text)
+- Tell me which endpoint you implemented/changed
+- Tell me which files you edited (frontend + backend)
