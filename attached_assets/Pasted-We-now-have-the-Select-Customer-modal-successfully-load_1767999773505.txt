@@ -1,0 +1,68 @@
+We now have the Select Customer modal successfully loading and adding customers.
+
+NEW REQUIREMENT:
+We must unify “Customer” and “Client Cards” so they are the SAME dataset.
+
+GOAL
+- The “Client Cards” UI must display ALL company customers from /api/customers.
+- When a customer is created from the Select Customer modal (“+ Add Customer”), it must automatically appear in Client Cards immediately (no refresh).
+- All clients shown in Client Cards must also be shown in the Select Customer list.
+
+IMPORTANT: Single source of truth
+- Stop having separate “clients” and “customers” lists in different places.
+- Standardize on ONE resource: company customers.
+
+IMPLEMENTATION PLAN
+
+1) Create a shared hook/store for company customers
+Create:
+  client/src/hooks/useCompanyCustomers.ts
+(or similar)
+This hook should:
+- fetch GET /api/customers
+- expose:
+  customers
+  isLoading
+  error
+  refetchCustomers()
+  addCustomerOptimistic(newCustomer) OR createCustomer(payload) that POSTs and updates state
+
+Use React Query if we already have it; otherwise use a simple shared context:
+- CompanyCustomersProvider in client/src/context/CompanyCustomersContext.tsx
+- Wrap app/provider at a high level (App.tsx or layout) so multiple screens share the same state.
+
+2) Update Client Cards page/component to use company customers
+Find the Client Cards component/page (whatever renders client cards).
+Replace its data source with:
+- customers from useCompanyCustomers()
+Render cards for all customers:
+- Name (first + last)
+- subtitle: email or phone
+- optional: address/company_name
+
+3) Update Select Customer modal to use the SAME shared customers state
+- Remove local “customers” state inside the modal if it exists.
+- Use customers from useCompanyCustomers()
+- Search filters this shared list.
+
+4) Make “+ Add Customer” update shared state
+When POST /api/customers succeeds:
+- Update the shared customers list immediately (optimistic insert or refetch)
+- Close create modal
+- The new customer must appear:
+  - in Select Customer list
+  - in Client Cards list (automatically)
+
+5) Confirm full sync both ways
+- If Client Cards had an “Add Client” button, it must POST /api/customers too.
+- No duplicate tables (do not create separate clients table).
+- If there is an old /api/clients endpoint, either:
+  A) deprecate it and switch to /api/customers everywhere
+  OR
+  B) alias /api/clients to /api/customers temporarily, but keep ONE DB table.
+
+DELIVERABLES
+- Client Cards now displays all company customers
+- Adding a customer from the picker instantly updates Client Cards
+- Selecting customer still works
+- List files changed (hook/context + ClientCards component + SelectCustomerModal)

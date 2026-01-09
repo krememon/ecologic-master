@@ -2080,10 +2080,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/customers - List all customers for the company
   app.get('/api/customers', isAuthenticated, async (req: any, res) => {
-    console.log("[DEBUG] GET /api/customers hit", { user: req.user ? "exists" : "undefined", userId: req.user?.claims?.sub });
     try {
       const userId = getUserId(req.user);
-      console.log("[DEBUG] GET /api/customers userId resolved:", userId);
       const company = await storage.getUserCompany(userId);
       
       if (!company) {

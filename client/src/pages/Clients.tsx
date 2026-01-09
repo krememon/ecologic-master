@@ -12,13 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertClientSchema, type Client, type Job } from "@shared/schema";
+import { insertClientSchema, type Client, type Job, type Customer } from "@shared/schema";
 import { z } from "zod";
-import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
 import LocationInput from "@/components/LocationInput";
+import { useCompanyCustomers } from "@/hooks/useCompanyCustomers";
 
 type ClientFormData = z.infer<typeof insertClientSchema>;
 
@@ -106,6 +107,9 @@ export default function Clients() {
     queryKey: ["/api/clients"],
     enabled: isAuthenticated,
   });
+
+  // Fetch customers (unified data source)
+  const { customers, isLoading: customersLoading } = useCompanyCustomers();
 
   // Function to toggle job history expansion
   const toggleClientJobs = (clientId: number) => {
@@ -322,13 +326,18 @@ export default function Clients() {
     }
   };
 
-  if (isLoading || !isAuthenticated || clientsLoading) {
+  if (isLoading || !isAuthenticated || clientsLoading || customersLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
     );
   }
+
+  // Helper to format customer name
+  const formatCustomerName = (customer: Customer) => {
+    return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed';
+  };
 
   return (
     <div className="space-y-6">
@@ -584,10 +593,10 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* Client Count and Add Button */}
+      {/* Combined Count and Add Button */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Clients ({clients.length})
+          All Clients & Customers ({clients.length + customers.length})
         </h3>
         <Button onClick={() => setIsDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
@@ -595,8 +604,8 @@ export default function Clients() {
         </Button>
       </div>
 
-      {/* Clients List */}
-      {clients.length === 0 ? (
+      {/* Clients & Customers List */}
+      {clients.length === 0 && customers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <UserCheck className="h-12 w-12 text-slate-400 mb-4" />
@@ -730,6 +739,74 @@ export default function Clients() {
                 <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
                   <p className="text-xs text-slate-500">
                     Added {new Date(client.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          
+          {/* Customers from /api/customers (unified source) */}
+          {customers.map((customer) => (
+            <Card key={`customer-${customer.id}`} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    {formatCustomerName(customer)}
+                  </CardTitle>
+                  {customer.companyName && (
+                    <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                      {customer.companyName}
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {customer.email && (
+                  <a 
+                    href={`mailto:${customer.email}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
+                    <Mail className="h-4 w-4" />
+                    {customer.email}
+                  </a>
+                )}
+                {customer.phone && (
+                  <a 
+                    href={`tel:${customer.phone}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
+                    <Phone className="h-4 w-4" />
+                    {customer.phone}
+                  </a>
+                )}
+                {customer.address && (
+                  <button
+                    onClick={() => {
+                      const address = encodeURIComponent(customer.address || '');
+                      if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
+                        window.open(`maps://maps.apple.com/?q=${address}`, '_self');
+                      } else if (navigator.userAgent.includes('Android')) {
+                        window.open(`geo:0,0?q=${address}`, '_self');
+                      } else {
+                        window.open(`https://maps.google.com/?q=${address}`, '_blank');
+                      }
+                    }}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    {customer.address}
+                  </button>
+                )}
+                {customer.jobTitle && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                    {customer.jobTitle}
+                  </p>
+                )}
+                
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-slate-500">
+                    Customer • Added {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
               </CardContent>
