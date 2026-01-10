@@ -48,7 +48,7 @@ export default function IndustryOnboarding() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
       queryClient.invalidateQueries({ queryKey: ["/api/service-catalog"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       setLocation("/");
     },
   });
