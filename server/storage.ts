@@ -18,6 +18,7 @@ import {
   scheduleItems,
   estimates,
   estimateItems,
+  estimateAttachments,
   companyCounters,
   serviceCatalogItems,
   type User,
@@ -50,6 +51,8 @@ import {
   type Estimate,
   type EstimateItem,
   type EstimateWithItems,
+  type EstimateAttachment,
+  type InsertEstimateAttachment,
   type CreateEstimatePayload,
   type UpdateEstimatePayload,
   type ServiceCatalogItem,
@@ -244,6 +247,14 @@ export interface IStorage {
   createServiceCatalogItem(item: InsertServiceCatalogItem): Promise<ServiceCatalogItem>;
   updateServiceCatalogItem(id: number, item: Partial<InsertServiceCatalogItem>): Promise<ServiceCatalogItem>;
   deleteServiceCatalogItem(id: number): Promise<void>;
+  
+  // Estimate attachment operations
+  getEstimateAttachments(estimateId: number): Promise<EstimateAttachment[]>;
+  createEstimateAttachment(attachment: InsertEstimateAttachment): Promise<EstimateAttachment>;
+  deleteEstimateAttachment(id: number): Promise<void>;
+  
+  // Estimate approval operations
+  approveEstimate(id: number, userId: string, signatureDataUrl: string): Promise<Estimate>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1623,6 +1634,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(estimateItems.estimateId, id))
       .orderBy(estimateItems.sortOrder);
 
+    // Get attachments
+    const attachments = await db
+      .select()
+      .from(estimateAttachments)
+      .where(eq(estimateAttachments.estimateId, id))
+      .orderBy(desc(estimateAttachments.createdAt));
+
     // Get creator info
     const [creator] = await db
       .select({ firstName: users.firstName, lastName: users.lastName })
@@ -1632,6 +1650,7 @@ export class DatabaseStorage implements IStorage {
     return {
       ...estimate,
       items,
+      attachments,
       createdBy: creator || null,
     };
   }
@@ -1855,6 +1874,43 @@ export class DatabaseStorage implements IStorage {
 
   async deleteServiceCatalogItem(id: number): Promise<void> {
     await db.delete(serviceCatalogItems).where(eq(serviceCatalogItems.id, id));
+  }
+
+  // Estimate attachment operations
+  async getEstimateAttachments(estimateId: number): Promise<EstimateAttachment[]> {
+    return await db
+      .select()
+      .from(estimateAttachments)
+      .where(eq(estimateAttachments.estimateId, estimateId))
+      .orderBy(desc(estimateAttachments.createdAt));
+  }
+
+  async createEstimateAttachment(attachment: InsertEstimateAttachment): Promise<EstimateAttachment> {
+    const [created] = await db
+      .insert(estimateAttachments)
+      .values(attachment)
+      .returning();
+    return created;
+  }
+
+  async deleteEstimateAttachment(id: number): Promise<void> {
+    await db.delete(estimateAttachments).where(eq(estimateAttachments.id, id));
+  }
+
+  // Estimate approval operations
+  async approveEstimate(id: number, userId: string, signatureDataUrl: string): Promise<Estimate> {
+    const [updated] = await db
+      .update(estimates)
+      .set({
+        status: "approved",
+        approvedAt: new Date(),
+        approvedByUserId: userId,
+        signatureDataUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(estimates.id, id))
+      .returning();
+    return updated;
   }
 }
 

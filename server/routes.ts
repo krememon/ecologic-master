@@ -2716,6 +2716,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/estimates/:id/attachments - Upload attachment to estimate
+  app.post('/api/estimates/:id/attachments', isAuthenticated, requirePerm('estimates.create'), uploadMiddleware.single('file'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      // Store file URL (using the uploads path)
+      const fileUrl = `/uploads/${req.file.filename}`;
+      
+      const attachment = await storage.createEstimateAttachment({
+        estimateId,
+        companyId,
+        uploadedByUserId: userId,
+        fileUrl,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype,
+      });
+
+      console.log(`[Estimates] attachment uploaded estimateId=${estimateId} fileName=${req.file.originalname}`);
+      res.status(201).json(attachment);
+    } catch (error) {
+      console.error("Error uploading estimate attachment:", error);
+      res.status(500).json({ message: "Failed to upload attachment" });
+    }
+  });
+
+  // DELETE /api/estimates/:id/attachments/:attachmentId - Delete attachment
+  app.delete('/api/estimates/:id/attachments/:attachmentId', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      const attachmentId = parseInt(req.params.attachmentId);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      await storage.deleteEstimateAttachment(attachmentId);
+      console.log(`[Estimates] attachment deleted estimateId=${estimateId} attachmentId=${attachmentId}`);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting estimate attachment:", error);
+      res.status(500).json({ message: "Failed to delete attachment" });
+    }
+  });
+
+  // PATCH /api/estimates/:id/approve - Approve estimate with signature
+  app.patch('/api/estimates/:id/approve', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      // Verify status is draft
+      if (estimate.status !== 'draft') {
+        return res.status(400).json({ message: "Only draft estimates can be approved" });
+      }
+
+      const { signatureDataUrl, approvedTotalCents } = req.body;
+      
+      if (!signatureDataUrl || typeof signatureDataUrl !== 'string') {
+        return res.status(400).json({ message: "Signature is required" });
+      }
+
+      // Verify total matches (within 1 cent tolerance)
+      if (approvedTotalCents !== undefined) {
+        const diff = Math.abs(approvedTotalCents - estimate.totalCents);
+        if (diff > 1) {
+          return res.status(400).json({ message: "Approved total does not match estimate total" });
+        }
+      }
+
+      const approved = await storage.approveEstimate(estimateId, userId, signatureDataUrl);
+      
+      console.log(`[Estimates] approved estimateId=${estimateId} userId=${userId} totalCents=${estimate.totalCents}`);
+      res.json(approved);
+    } catch (error) {
+      console.error("Error approving estimate:", error);
+      res.status(500).json({ message: "Failed to approve estimate" });
+    }
+  });
+
   // POST /api/estimates/:id/duplicate - Duplicate estimate + line items into new draft
   app.post('/api/estimates/:id/duplicate', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
