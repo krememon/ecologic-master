@@ -1709,8 +1709,12 @@ export class DatabaseStorage implements IStorage {
         .values({
           estimateId: estimate.id,
           name: item.name,
+          description: item.description || null,
+          taskCode: item.taskCode || null,
           quantity: item.quantity,
           unitPriceCents: item.unitPriceCents,
+          unit: item.unit || 'each',
+          taxable: item.taxable ?? false,
           lineTotalCents: item.lineTotalCents,
           sortOrder: item.sortOrder,
         })
@@ -1764,8 +1768,12 @@ export class DatabaseStorage implements IStorage {
         await db.insert(estimateItems).values({
           estimateId: id,
           name: item.name,
+          description: item.description || null,
+          taskCode: item.taskCode || null,
           quantity: item.quantity,
           unitPriceCents: item.unitPriceCents,
+          unit: item.unit || 'each',
+          taxable: item.taxable ?? false,
           lineTotalCents: item.lineTotalCents,
           sortOrder: item.sortOrder,
         });

@@ -248,7 +248,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   });
 
   // Submit estimate
-  const handleSubmitEstimate = () => {
+  const handleSubmitEstimate = async () => {
     const validItems = lineItems.filter(item => item.name.trim());
     if (validItems.length === 0) {
       toast({
@@ -257,6 +257,26 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
         variant: "destructive",
       });
       return;
+    }
+
+    // Save items to price book if requested
+    const itemsToSave = validItems.filter(item => item.saveToPriceBook);
+    for (const item of itemsToSave) {
+      try {
+        await apiRequest('POST', '/api/service-catalog', {
+          name: item.name.trim(),
+          description: item.description || null,
+          defaultPriceCents: item.unitPriceCents,
+          unit: item.unit,
+          taskCode: item.taskCode || null,
+          taxable: item.taxable,
+        });
+      } catch {
+        // Silently ignore price book errors to not block estimate creation
+      }
+    }
+    if (itemsToSave.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
     }
 
     // Auto-generate title from customer name
@@ -275,7 +295,16 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       taxCents: calculateTaxCents(),
       assignedEmployeeIds: assignedEmployees,
       jobType: jobType || undefined,
-      items: validItems,
+      items: validItems.map((item, index) => ({
+        name: item.name.trim(),
+        description: item.description.trim() || null,
+        taskCode: item.taskCode.trim() || null,
+        quantity: item.quantity,
+        unitPriceCents: item.unitPriceCents,
+        unit: item.unit,
+        taxable: item.taxable,
+        sortOrder: index,
+      })),
     });
   };
 

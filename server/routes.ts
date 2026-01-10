@@ -2428,8 +2428,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         normalizedItems.push({
           name: item.name.trim(),
+          description: item.description?.trim() || null,
+          taskCode: item.taskCode?.trim() || null,
           quantity,
           unitPriceCents,
+          unit: item.unit?.trim() || 'each',
+          taxable: item.taxable ?? false,
           sortOrder: item.sortOrder,
         });
       }
@@ -2522,8 +2526,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         normalizedItems.push({
           name: item.name.trim(),
+          description: item.description?.trim() || null,
+          taskCode: item.taskCode?.trim() || null,
           quantity,
           unitPriceCents,
+          unit: item.unit?.trim() || 'each',
+          taxable: item.taxable ?? false,
           sortOrder: item.sortOrder,
         });
       }

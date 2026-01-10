@@ -710,8 +710,12 @@ export const estimateItems = pgTable("estimate_items", {
   id: serial("id").primaryKey(),
   estimateId: integer("estimate_id").notNull().references(() => estimates.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  taskCode: varchar("task_code", { length: 50 }),
   quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
   unitPriceCents: integer("unit_price_cents").notNull().default(0),
+  unit: varchar("unit", { length: 50 }).notNull().default("each"),
+  taxable: boolean("taxable").notNull().default(false),
   lineTotalCents: integer("line_total_cents").notNull().default(0),
   sortOrder: integer("sort_order").notNull().default(0),
 });
@@ -983,8 +987,12 @@ export const createEstimateSchema = z.object({
   assignedEmployeeIds: z.array(z.string()).optional().default([]),
   items: z.array(z.object({
     name: z.string().min(1, "Item name is required"),
+    description: z.string().nullable().optional(),
+    taskCode: z.string().nullable().optional(),
     quantity: z.union([z.string(), z.number()]).transform(v => String(v)),
     unitPriceCents: z.number().int().min(0, "Unit price must be positive"),
+    unit: z.string().optional().default("each"),
+    taxable: z.boolean().optional().default(false),
     sortOrder: z.number().int().optional(),
   })).min(1, "At least one line item is required"),
 });
@@ -997,8 +1005,12 @@ export const updateEstimateSchema = z.object({
   items: z.array(z.object({
     id: z.number().optional(), // Existing item ID for updates
     name: z.string().min(1, "Item name is required"),
+    description: z.string().nullable().optional(),
+    taskCode: z.string().nullable().optional(),
     quantity: z.union([z.string(), z.number()]).transform(v => String(v)),
     unitPriceCents: z.number().int().min(0, "Unit price must be positive"),
+    unit: z.string().optional().default("each"),
+    taxable: z.boolean().optional().default(false),
     sortOrder: z.number().int().optional(),
   })).optional(),
 });
