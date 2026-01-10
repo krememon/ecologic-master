@@ -768,8 +768,10 @@ export const serviceCatalogItems = pgTable("service_catalog_items", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   defaultPriceCents: integer("default_price_cents").notNull().default(0),
-  unit: varchar("unit", { length: 50 }).notNull().default("each"), // each, hour, ft, job
+  unit: varchar("unit", { length: 50 }).notNull().default("each"), // each, hour, ft, sq_ft, job, day
   category: varchar("category", { length: 100 }),
+  taskCode: varchar("task_code", { length: 50 }),
+  taxable: boolean("taxable").notNull().default(false),
   isPreset: boolean("is_preset").default(false),
   presetIndustry: varchar("preset_industry", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),

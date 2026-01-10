@@ -1,0 +1,62 @@
+Update the line item creation UI to match the “New service line item” options shown in the reference image.
+
+IMPORTANT CONTEXT
+We have two related concepts:
+1) Price Book Item (template): reusable service/item stored company-wide
+2) Estimate Line Item (instance): a line item added to a specific estimate (has qty, taxable, total)
+
+We need the UI fields like Housecall Pro, but we must model them correctly.
+
+PART A — PRICE BOOK “Add Item” modal changes
+On /customize/price-book, update the “Add Item” modal to include these fields:
+- Service name (required)  -> maps to price_book_items.name
+- Description (optional)   -> price_book_items.description
+- Task code (optional)     -> price_book_items.task_code (NEW column)
+- Service price (required) -> price_book_items.price
+- Unit (required)          -> price_book_items.unit (dropdown)
+- Taxable (toggle)         -> price_book_items.taxable (NEW column boolean)
+- Category (optional)      -> keep existing category
+
+Remove/Do not show:
+- Quantity (templates don’t need qty; assume 1 when used)
+- Total line item price display (not needed for templates)
+
+UI style:
+- Keep your existing modal style, but add toggle + task code field.
+- Validate required fields (name, price, unit).
+
+DB changes (required)
+Add columns to price_book_items:
+- task_code TEXT NULL
+- taxable BOOLEAN NOT NULL DEFAULT false
+
+Update API:
+- GET /api/price-book-items returns these fields
+- POST /api/price-book-items accepts and stores these fields
+- PATCH /api/price-book-items/:id updates these fields
+
+PART B — ESTIMATE “Add line items” editor changes (the Housecall Pro behavior)
+In the New Estimate flow, when creating/editing an estimate line item, the modal/screen should include:
+- Service name
+- Description
+- Task code
+- Service price
+- Quantity (default 1)
+- Unit (dropdown)
+- Taxable toggle
+- Total line item price (auto-calculated = price * qty, plus tax if taxable AND company tax rate exists; if no tax system yet, just show price*qty)
+- “Save to price book” toggle:
+   - If enabled, on Save also create/update a price_book_item template for this company
+   - If disabled, it only adds to the estimate
+
+Data model for estimate line items
+If estimate line items are stored as JSON:
+Store fields per line item:
+{ name, description, taskCode, unit, price, quantity, taxable }
+
+DELIVERABLES
+- Price Book Add/Edit modal now includes: name, description, task code, price, unit, taxable, category
+- DB + API updated accordingly
+- Estimate line item modal includes quantity, total calculation, taxable, save-to-price-book toggle
+- No regressions in existing price book list and editing
+- List files changed + SQL migration

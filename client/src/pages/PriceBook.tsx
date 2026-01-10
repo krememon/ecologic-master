@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Edit2, Trash2, Loader2, DollarSign, ChevronLeft, Search, Settings2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import type { ServiceCatalogItem } from "@shared/schema";
@@ -37,6 +38,8 @@ export default function PriceBook() {
     defaultPriceCents: 0,
     unit: "each",
     category: "",
+    taskCode: "",
+    taxable: false,
   });
 
   const { data: catalogItems = [], isLoading } = useQuery<ServiceCatalogItem[]>({
@@ -97,6 +100,8 @@ export default function PriceBook() {
       defaultPriceCents: 0,
       unit: "each",
       category: "",
+      taskCode: "",
+      taxable: false,
     });
   };
 
@@ -114,6 +119,8 @@ export default function PriceBook() {
       defaultPriceCents: item.defaultPriceCents,
       unit: item.unit,
       category: item.category || "",
+      taskCode: (item as any).taskCode || "",
+      taxable: (item as any).taxable ?? false,
     });
     setIsDialogOpen(true);
   };
@@ -344,13 +351,35 @@ export default function PriceBook() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Input
-                id="category"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="e.g., Inspections, Repairs"
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="e.g., Inspections, Repairs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="taskCode">Task Code</Label>
+                <Input
+                  id="taskCode"
+                  value={formData.taskCode}
+                  onChange={(e) => setFormData({ ...formData, taskCode: e.target.value })}
+                  placeholder="e.g., SVC-001"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label htmlFor="taxable" className="font-medium">Taxable</Label>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Apply tax to this item</p>
+              </div>
+              <Switch
+                id="taxable"
+                checked={formData.taxable}
+                onCheckedChange={(checked) => setFormData({ ...formData, taxable: checked })}
               />
             </div>
           </div>
