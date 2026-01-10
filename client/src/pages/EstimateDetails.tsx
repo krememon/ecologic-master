@@ -45,9 +45,11 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [hasSignature, setHasSignature] = useState(false);
 
   const { data: estimate, isLoading, error } = useQuery<EstimateWithItems>({
-    queryKey: ['/api/estimates', estimateId],
+    queryKey: [`/api/estimates/${estimateId}`],
     enabled: !!estimateId,
   });
+  
+  console.log("[EstimateDetails] estimate response", estimate);
 
   const uploadAttachmentMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -62,7 +64,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/estimates', estimateId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
       toast({ title: "Attachment uploaded" });
     },
     onError: () => {
@@ -75,7 +77,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       await apiRequest('DELETE', `/api/estimates/${estimateId}/attachments/${attachmentId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/estimates', estimateId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
       toast({ title: "Attachment deleted" });
     },
   });
@@ -89,7 +91,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/estimates', estimateId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       setIsSignatureModalOpen(false);
       toast({ title: "Estimate approved!" });

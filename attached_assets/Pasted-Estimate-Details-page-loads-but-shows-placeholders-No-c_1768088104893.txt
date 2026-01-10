@@ -1,0 +1,86 @@
+Estimate Details page loads but shows placeholders:
+- “No customer assigned”
+- “No line items”
+even though the estimate card clearly has customer + total.
+
+This is a data shape / endpoint mismatch. Fix it so Estimate Details displays the saved estimate data.
+
+DO THIS IN ORDER:
+
+1) Inspect what the estimate actually stores
+Look at the estimate row in DB OR log the object returned by GET /api/estimates (list) for one estimate.
+We already know it contains fields like:
+- customerId (ex: 5)
+- customerName
+- customerEmail
+- totalCents / total
+- jobType (“Repair”)
+- assigned_employee_ids (array)
+- line items (may be JSON or another table)
+
+2) Fix GET /api/estimates/:id to return a complete object
+Implement/adjust endpoint:
+GET /api/estimates/:id
+Return a “hydrated” estimate JSON that includes:
+{
+  id,
+  status,
+  estimateNumber,
+  createdAt,
+  totalCents,
+  subtotalCents,
+  jobType,
+  schedule, // if stored
+  customer: {
+    id,
+    firstName,
+    lastName,
+    email,
+    phone,
+    address
+  },
+  lineItems: [
+    { name, description, taskCode, unit, priceCents, quantity, taxable }
+  ],
+  attachments: [
+    { id, fileUrl, fileName, fileType, createdAt }
+  ]
+}
+
+Rules:
+- customer should be resolved using estimate.customer_id -> customers table (LEFT JOIN)
+- lineItems should come from wherever we store them:
+  - If estimates.line_items JSONB exists -> parse and return as lineItems
+  - If separate table exists -> query and return
+- attachments should query estimate_attachments table
+
+3) Update the Estimate Details frontend to use the returned shape
+Right now it’s likely expecting different keys like:
+estimate.customer or estimate.customerName or estimate.items
+Make it consistent:
+- Customer card shows:
+  customer.firstName + lastName (or fallback to estimate.customerName)
+  email/phone optional
+- Line Items card shows:
+  if lineItems.length > 0:
+    show list and totals
+  else show “No line items”
+- Add a debug log temporarily:
+  console.log("[EstimateDetails] estimate response", data)
+
+4) Ensure the details page is fetching the correct ID
+Confirm route param id is used:
+GET /api/estimates/${id}
+(not a hardcoded id, not company endpoint)
+
+5) Regression test
+- Create an estimate with:
+  customer, 1+ line items, job type
+- Open the estimate card -> details page must show:
+  customer name, line item count/list, and correct total
+- Remove debug logs afterwards
+
+DELIVERABLES
+- Paste the exact JSON returned by GET /api/estimates/:id after fix (just one example)
+- List files changed (route + storage + detail page)
+- Confirm details page now shows customer + line items for an existing estimate
