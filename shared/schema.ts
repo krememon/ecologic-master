@@ -972,6 +972,7 @@ export const createEstimateSchema = z.object({
   customerPhone: z.string().optional(),
   customerAddress: z.string().optional(),
   notes: z.string().optional(),
+  jobType: z.string().optional(),
   taxCents: z.number().int().min(0).optional().default(0),
   assignedEmployeeIds: z.array(z.string()).optional().default([]),
   items: z.array(z.object({

@@ -1677,6 +1677,7 @@ export class DatabaseStorage implements IStorage {
         customerPhone: payload.customerPhone || null,
         customerAddress: payload.customerAddress || null,
         notes: payload.notes || null,
+        jobType: payload.jobType || null,
         status: "draft",
         subtotalCents,
         taxCents,

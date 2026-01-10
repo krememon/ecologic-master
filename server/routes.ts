@@ -2315,7 +2315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobType } = req.body;
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -2378,6 +2378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customerAddress: customerAddress?.trim() || undefined,
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
+          jobType: jobType?.trim() || undefined,
           items: normalizedItems 
         },
         companyId,
@@ -2398,7 +2399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId, jobType } = req.body;
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -2471,6 +2472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customerAddress: customerAddress?.trim() || undefined,
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
+          jobType: jobType?.trim() || undefined,
           items: normalizedItems 
         },
         companyId,
