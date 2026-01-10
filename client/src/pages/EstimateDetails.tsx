@@ -552,7 +552,15 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
         <DialogContent className="max-w-4xl max-h-[90vh] p-0">
           <DialogHeader className="p-4 pb-0">
             <DialogTitle className="flex items-center justify-between">
-              <span className="truncate pr-4">{previewAttachment?.fileName}</span>
+              <span className="truncate pr-8">{previewAttachment?.fileName}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-3 right-3 h-8 w-8"
+                onClick={() => setPreviewAttachment(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </DialogTitle>
           </DialogHeader>
           <div className="p-4 flex items-center justify-center">
