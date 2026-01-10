@@ -112,6 +112,7 @@ export interface IStorage {
   getCompanyByInviteCode(inviteCode: string): Promise<Company | undefined>;
   rotateInviteCode(companyId: number, newCode: string): Promise<Company>;
   getCompanyMember(companyId: number, userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined>;
+  getCompanyMemberByUserId(userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined>;
   
   // Crew assignment operations
   getJobCrewAssignments(jobId: number): Promise<any[]>;
@@ -471,6 +472,19 @@ export class DatabaseStorage implements IStorage {
           eq(companyMembers.userId, userId)
         )
       )
+      .limit(1);
+    return member;
+  }
+
+  async getCompanyMemberByUserId(userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined> {
+    const [member] = await db
+      .select({
+        userId: companyMembers.userId,
+        companyId: companyMembers.companyId,
+        role: companyMembers.role,
+      })
+      .from(companyMembers)
+      .where(eq(companyMembers.userId, userId))
       .limit(1);
     return member;
   }
