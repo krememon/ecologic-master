@@ -1,0 +1,98 @@
+Implement Owner onboarding step: Industry selection that seeds Price Book presets.
+
+GOAL
+After an owner registers/creates their company, show an onboarding screen:
+“What industry are you in?”
+This selection determines preset Price Book line items that are created for the company.
+Users can later edit/delete any items; full control.
+
+UI (match Housecall Pro style)
+- Full-screen modal/page shown only once for owners
+- Title: “What industry are you in?”
+- Subtitle: “Select an industry to preload a starter price book. You can fully edit or delete items anytime.”
+- Grid of selectable tiles with icon + label
+- Single-select with visible selected state
+- Button: “Continue” (disabled until selection)
+
+INDUSTRY OPTIONS (start with these)
+- Plumbing
+- Heating & Air Conditioning (HVAC)
+- Electrical
+- Handyman
+- General Contractor
+- Home Cleaning
+- Carpet Cleaning
+- Landscaping & Lawn
+- Appliances
+- Pest Control
+- Window & Exterior Cleaning
+- Automotive
+- Other
+
+BACKEND: Company field
+1) Add company.industry (TEXT nullable)
+2) Add company.onboarding_completed (BOOLEAN default false) OR reuse existing flag if you have one
+
+BACKEND: Price book preset support
+Assuming table price_book_items exists:
+- Ensure price_book_items has company_id, name, description, price, unit, category
+Add optional columns if missing:
+- is_preset BOOLEAN default false
+- preset_industry TEXT nullable
+(These help future reset, but not required.)
+
+API endpoints
+A) PATCH /api/company/industry
+Body: { industry: string }
+- Validate industry is one of allowed list
+- Update company.industry
+- If company has 0 price_book_items:
+   - Seed preset items for that industry into price_book_items
+   - Mark inserted items is_preset=true and preset_industry=industry
+- Mark onboarding_completed=true
+Return: { success: true, industry }
+
+B) GET /api/company
+Ensure it returns industry + onboarding_completed so frontend can decide whether to show onboarding.
+
+FRONTEND: when to show onboarding
+- On app load after auth:
+  - If user.role === "owner" AND company.onboarding_completed === false:
+      redirect to /onboarding/industry (or open modal)
+- Otherwise proceed normally
+
+SEED DATA
+Create a preset map (server-side) like:
+const PRESETS = {
+  Plumbing: [
+    { name: "Service Call", price: 0, unit: "job", category: "General" },
+    { name: "Diagnostic", price: 0, unit: "job", category: "General" },
+    { name: "Replace Toilet", price: 0, unit: "job", category: "Fixtures" },
+    { name: "Replace Faucet", price: 0, unit: "job", category: "Fixtures" },
+    { name: "Drain Cleaning", price: 0, unit: "job", category: "Drain" },
+    { name: "Water Heater Install", price: 0, unit: "job", category: "Water Heater" },
+  ],
+  HVAC: [
+    { name: "Service Call", price: 0, unit: "job", category: "General" },
+    { name: "Diagnostic", price: 0, unit: "job", category: "General" },
+    { name: "AC Tune-up", price: 0, unit: "job", category: "Maintenance" },
+    { name: "Filter Replacement", price: 0, unit: "each", category: "Maintenance" },
+  ],
+  ...
+}
+
+IMPORTANT:
+- Use price=0 if you don’t want to assume numbers yet; users can edit.
+- Or seed reasonable defaults if you prefer later.
+- Users MUST be able to edit/delete any preset item (no lock).
+
+PRICE BOOK UX
+- Price book page should show these items immediately after onboarding
+- CRUD stays unchanged (full control)
+
+DELIVERABLES
+- Owner onboarding industry selection UI exists and shows only once
+- Industry saved to company
+- Price book seeded once (only when empty)
+- Users can edit/delete seeded items normally
+- List all files changed + DB migrations + endpoints

@@ -370,7 +370,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const company = await storage.getUserCompany(userId);
       
       if (company) {
-        res.json(company);
+        res.json({
+          ...company,
+          industry: company.industry || null,
+          onboardingCompleted: company.onboardingCompleted ?? false,
+        });
       } else {
         res.status(404).json({ message: "No company found" });
       }
@@ -526,6 +530,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error updating company profile:', error);
       res.status(500).json({ error: 'Failed to update company profile' });
+    }
+  });
+
+  // Set company industry and seed price book presets (Owner only - onboarding)
+  app.patch('/api/company/industry', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (member.role !== 'OWNER') {
+        return res.status(403).json({ error: 'Only owners can set company industry' });
+      }
+      
+      const { industry } = req.body;
+      
+      const { INDUSTRIES, INDUSTRY_PRESETS } = await import('./industryPresets');
+      
+      if (!industry || !INDUSTRIES.includes(industry)) {
+        return res.status(400).json({ error: 'Invalid industry selection' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+      
+      // Check if price book is empty before seeding
+      const existingItems = await storage.getServiceCatalogItems(member.companyId);
+      
+      if (existingItems.length === 0) {
+        // Seed preset items for this industry
+        const presets = INDUSTRY_PRESETS[industry] || [];
+        for (const preset of presets) {
+          await storage.createServiceCatalogItem({
+            companyId: member.companyId,
+            name: preset.name,
+            description: preset.description || null,
+            defaultPriceCents: preset.defaultPriceCents,
+            unit: preset.unit,
+            category: preset.category || null,
+            isPreset: true,
+            presetIndustry: industry,
+          });
+        }
+      }
+      
+      // Update company with industry and mark onboarding completed
+      const updatedCompany = await storage.updateCompany(member.companyId, {
+        industry,
+        onboardingCompleted: true,
+      });
+      
+      res.json({ 
+        success: true, 
+        industry: updatedCompany.industry,
+        itemsSeeded: existingItems.length === 0 ? (INDUSTRY_PRESETS[industry]?.length || 0) : 0
+      });
+    } catch (error: any) {
+      console.error('Error setting company industry:', error);
+      res.status(500).json({ error: 'Failed to set company industry' });
     }
   });
 

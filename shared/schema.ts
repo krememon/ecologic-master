@@ -90,6 +90,8 @@ export const companies = pgTable("companies", {
   logo: varchar("logo"),
   licenseNumber: varchar("license_number"),
   defaultFooterText: text("default_footer_text"),
+  industry: varchar("industry", { length: 100 }),
+  onboardingCompleted: boolean("onboarding_completed").default(false),
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),
   ownerId: varchar("owner_id").notNull().references(() => users.id),
@@ -768,6 +770,8 @@ export const serviceCatalogItems = pgTable("service_catalog_items", {
   defaultPriceCents: integer("default_price_cents").notNull().default(0),
   unit: varchar("unit", { length: 50 }).notNull().default("each"), // each, hour, ft, job
   category: varchar("category", { length: 100 }),
+  isPreset: boolean("is_preset").default(false),
+  presetIndustry: varchar("preset_industry", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
