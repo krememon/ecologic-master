@@ -31,6 +31,7 @@ import Employees from "@/pages/Employees";
 import JoinCompany from "@/pages/JoinCompany";
 import Customize from "@/pages/Customize";
 import PriceBook from "@/pages/PriceBook";
+import CompanyProfile from "@/pages/CompanyProfile";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -93,6 +94,7 @@ function Router() {
         <Route path="/employees" component={Employees} />
         <Route path="/settings" component={Settings} />
         <Route path="/customize" component={Customize} />
+        <Route path="/customize/company-profile" component={CompanyProfile} />
         <Route path="/customize/price-book" component={PriceBook} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route component={NotFound} />

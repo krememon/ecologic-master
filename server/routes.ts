@@ -437,6 +437,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get company profile (Owner only)
+  app.get('/api/company/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+      
+      res.json({
+        name: company.name,
+        logo: company.logo,
+        phone: company.phone,
+        email: company.email,
+        addressLine1: company.addressLine1,
+        addressLine2: company.addressLine2,
+        city: company.city,
+        state: company.state,
+        postalCode: company.postalCode,
+        country: company.country,
+        licenseNumber: company.licenseNumber,
+        defaultFooterText: company.defaultFooterText,
+      });
+    } catch (error: any) {
+      console.error('Error fetching company profile:', error);
+      res.status(500).json({ error: 'Failed to fetch company profile' });
+    }
+  });
+
+  // Update company profile (Owner only)
+  app.patch('/api/company/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const { name, logo, phone, email, addressLine1, addressLine2, city, state, postalCode, country, licenseNumber, defaultFooterText } = req.body;
+      
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: 'Company name is required' });
+      }
+      
+      const updatedCompany = await storage.updateCompany(member.companyId, {
+        name: name.trim(),
+        logo: logo || null,
+        phone: phone || null,
+        email: email || null,
+        addressLine1: addressLine1 || null,
+        addressLine2: addressLine2 || null,
+        city: city || null,
+        state: state || null,
+        postalCode: postalCode || null,
+        country: country || null,
+        licenseNumber: licenseNumber || null,
+        defaultFooterText: defaultFooterText || null,
+      });
+      
+      res.json({
+        name: updatedCompany.name,
+        logo: updatedCompany.logo,
+        phone: updatedCompany.phone,
+        email: updatedCompany.email,
+        addressLine1: updatedCompany.addressLine1,
+        addressLine2: updatedCompany.addressLine2,
+        city: updatedCompany.city,
+        state: updatedCompany.state,
+        postalCode: updatedCompany.postalCode,
+        country: updatedCompany.country,
+        licenseNumber: updatedCompany.licenseNumber,
+        defaultFooterText: updatedCompany.defaultFooterText,
+      });
+    } catch (error: any) {
+      console.error('Error updating company profile:', error);
+      res.status(500).json({ error: 'Failed to update company profile' });
+    }
+  });
+
   // Employee management routes
   // List employees in organization (Owner/Supervisor only)
   app.get('/api/org/users', requirePerm('users.view'), async (req: any, res) => {

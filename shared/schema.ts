@@ -88,6 +88,8 @@ export const companies = pgTable("companies", {
   inviteCodeVersion: integer("invite_code_version").default(0).notNull(),
   inviteCodeRotatedAt: timestamp("invite_code_rotated_at").defaultNow(),
   logo: varchar("logo"),
+  licenseNumber: varchar("license_number"),
+  defaultFooterText: text("default_footer_text"),
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),
   ownerId: varchar("owner_id").notNull().references(() => users.id),

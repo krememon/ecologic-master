@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2 } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2 } from "lucide-react";
 
 export default function Customize() {
   const { isLoading: authLoading } = useAuth();
@@ -30,6 +30,12 @@ export default function Customize() {
   }
 
   const menuItems = [
+    {
+      icon: Building2,
+      title: "Company profile",
+      description: "Manage your company's identity and branding",
+      href: "/customize/company-profile",
+    },
     {
       icon: BookOpen,
       title: "Price book",

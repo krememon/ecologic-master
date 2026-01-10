@@ -1,0 +1,84 @@
+Add a new “Company Profile” section under Customize.
+
+OVERVIEW
+Company Profile is the business identity layer.
+It controls company-wide info used across:
+- Estimates
+- Invoices
+- E-signatures
+- Document footers
+
+This page is Owner-only.
+
+NAV / ENTRY
+- On /customize page, add a new card:
+  Title: “Company profile”
+  Subtitle: “Manage your company’s identity and branding”
+  Icon: building or briefcase
+- Tapping it navigates to /customize/company-profile
+
+RBAC (IMPORTANT)
+- Only Owner can see this card
+- Hidden, not disabled
+- If a non-owner manually navigates to the route, show “Not authorized” or redirect
+
+PAGE LAYOUT
+- Header: “Company Profile”
+- Subtext: “This information appears on estimates, invoices, and customer documents”
+- Use a clean form layout (stacked fields, mobile-friendly)
+- Save button pinned at top right or bottom (consistent with other Customize pages)
+
+FIELDS (REQUIRED)
+1) Company Name (text, required)
+2) Company Logo
+   - Upload image (png/jpg)
+   - Show preview
+   - Store file in existing storage system
+   - Save logo URL to DB
+3) Phone (text)
+4) Email (text)
+5) Address (multiline text or structured fields)
+6) License Number (text)
+7) Default Footer Text (multiline textarea)
+   - Example hint:
+     “Licensed & insured. Thank you for your business.”
+
+BACKEND
+- Extend or reuse existing company table
+- Fields to store:
+  company_name
+  logo_url
+  phone
+  email
+  address
+  license_number
+  default_footer_text
+
+API
+- GET /api/company/profile
+  -> returns company profile for req.user.companyId
+- PATCH /api/company/profile
+  -> updates company profile (owner-only)
+
+VALIDATION
+- Company name required
+- Logo optional
+- All other fields optional
+
+INTEGRATION (IMPORTANT)
+- Default footer text should be usable later in:
+  - Estimates footer
+  - Invoices footer
+- Do NOT auto-inject yet if that’s too much; just store it cleanly
+
+UX DETAILS
+- Show success toast on save (“Company profile updated”)
+- Disable Save button unless changes were made
+- Preserve existing data on refresh
+
+DELIVERABLES
+- Company Profile card appears under Customize
+- Owner-only access enforced
+- Form saves and reloads correctly
+- Logo upload works and persists
+- List files changed + API routes added
