@@ -689,6 +689,7 @@ export const estimates = pgTable("estimates", {
   customerPhone: varchar("customer_phone", { length: 50 }), // Snapshot field for history
   customerAddress: text("customer_address"), // Snapshot field for history
   notes: text("notes"),
+  jobType: varchar("job_type", { length: 100 }),
   status: estimateStatusEnum("status").notNull().default("draft"),
   subtotalCents: integer("subtotal_cents").notNull().default(0),
   taxCents: integer("tax_cents").notNull().default(0),
