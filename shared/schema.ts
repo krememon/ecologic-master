@@ -678,11 +678,11 @@ export const signatureRequestsRelations = relations(signatureRequests, ({ one })
 // Estimate status enum
 export const estimateStatusEnum = pgEnum("estimate_status", ["draft", "sent", "accepted", "rejected"]);
 
-// Estimates table - job-scoped estimates with line items
+// Estimates table - job-scoped estimates with line items (job_id optional for standalone estimates)
 export const estimates = pgTable("estimates", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
-  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }), // Nullable for standalone estimates
   customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
   estimateNumber: varchar("estimate_number", { length: 50 }).notNull(), // EST-000001, unique per company
   title: varchar("title", { length: 255 }).notNull(),

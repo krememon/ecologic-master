@@ -1,0 +1,64 @@
+Saving a New Estimate fails with:
+500: {"message":"Failed to create estimate"}
+
+We must fix the backend so POST /api/estimates always succeeds with the current New Estimate payload.
+
+DO NOT GUESS. DO THIS IN ORDER:
+
+1) Capture the exact payload being sent
+In the frontend save handler for New Estimate, add:
+console.log("[CreateEstimate] payload", payload)
+Also log the response text when failing:
+const text = await res.text(); console.error("[CreateEstimate] failed", res.status, text)
+
+2) Add detailed server logging for POST /api/estimates
+In the POST /api/estimates route, before the DB insert:
+console.log("[POST /api/estimates] body", req.body)
+Wrap insert in try/catch and log the real error:
+console.error("[POST /api/estimates] error", err)
+
+Also return the real error in development:
+res.status(500).json({ message: "Failed to create estimate", error: String(err) })
+
+3) Fix schema drift (most likely cause)
+Compare req.body fields vs DB columns.
+New Estimate now includes fields like:
+- customer_id
+- job_type
+- scheduled_at (or schedule object)
+- assigned_employee_ids (array)
+- line_items (array)
+- tags (array)
+- notes/message (optional)
+Make sure the estimates table has matching columns OR the insert maps correctly.
+
+Minimum required DB support (choose the simplest approach):
+Option A (recommended for speed): store complex fields as JSONB on estimates:
+- line_items JSONB NOT NULL DEFAULT '[]'
+- tags JSONB NOT NULL DEFAULT '[]'
+- assigned_employee_ids JSONB NOT NULL DEFAULT '[]'
+- schedule JSONB NULL (or scheduled_at TIMESTAMP)
+- job_type TEXT NULL
+- customer_id (TEXT/INT FK depending on customers table)
+
+If any of those columns are missing, add them with SQL migrations (IF NOT EXISTS).
+
+4) Ensure create logic does not require missing fields
+- If title was removed, do NOT require title.
+- Generate title server-side if needed:
+  title = `${customerName} – Estimate` OR `Estimate #<id>`
+- If customer_id is required, validate it and return 400 with clear message.
+
+5) Ensure company scoping is correct
+- The estimate must save with company_id = req.user.companyId
+- If companyId is undefined, return 401/400 with clear message (do not 500)
+
+6) After fix, verify:
+- Create estimate with customer + 1 line item + schedule + job_type + (optional) assigned employees
+- Response returns 201 with created estimate object
+- Estimates list page reloads and shows the new estimate
+
+DELIVERABLES
+- Paste the real server error string that caused the 500
+- List the DB columns you added/changed
+- Confirm POST /api/estimates now returns 201 and the UI toast is gone

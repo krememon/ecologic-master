@@ -1682,7 +1682,7 @@ export class DatabaseStorage implements IStorage {
       .insert(estimates)
       .values({
         companyId,
-        jobId: payload.jobId,
+        jobId: payload.jobId || null, // Nullable for standalone estimates
         customerId: payload.customerId || null,
         estimateNumber,
         title: payload.title,
