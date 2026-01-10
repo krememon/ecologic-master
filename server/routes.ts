@@ -4457,6 +4457,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // =============================================================================
+  // Service Catalog API (Owner/Supervisor only)
+  // =============================================================================
+
+  // GET /api/service-catalog - List all service catalog items for the company
+  app.get('/api/service-catalog', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      // Only Owner and Supervisor can view service catalog
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const items = await storage.getServiceCatalogItems(member.companyId);
+      res.json(items);
+    } catch (error: any) {
+      console.error('Error fetching service catalog:', error);
+      res.status(500).json({ error: 'Failed to fetch service catalog' });
+    }
+  });
+
+  // POST /api/service-catalog - Create a new service catalog item
+  app.post('/api/service-catalog', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+
+      // Only Owner and Supervisor can manage service catalog
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const { name, description, defaultPriceCents, unit, category } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: 'Name is required' });
+      }
+
+      const item = await storage.createServiceCatalogItem({
+        companyId: member.companyId,
+        name,
+        description: description || null,
+        defaultPriceCents: defaultPriceCents || 0,
+        unit: unit || 'each',
+        category: category || null,
+      });
+
+      res.status(201).json(item);
+    } catch (error: any) {
+      console.error('Error creating service catalog item:', error);
+      res.status(500).json({ error: 'Failed to create service catalog item' });
+    }
+  });
+
+  // PATCH /api/service-catalog/:id - Update a service catalog item
+  app.patch('/api/service-catalog/:id', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const itemId = parseInt(req.params.id);
+      const existing = await storage.getServiceCatalogItem(itemId);
+      if (!existing || existing.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      const { name, description, defaultPriceCents, unit, category } = req.body;
+      const updated = await storage.updateServiceCatalogItem(itemId, {
+        name,
+        description,
+        defaultPriceCents,
+        unit,
+        category,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating service catalog item:', error);
+      res.status(500).json({ error: 'Failed to update service catalog item' });
+    }
+  });
+
+  // DELETE /api/service-catalog/:id - Delete a service catalog item
+  app.delete('/api/service-catalog/:id', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const itemId = parseInt(req.params.id);
+      const existing = await storage.getServiceCatalogItem(itemId);
+      if (!existing || existing.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      await storage.deleteServiceCatalogItem(itemId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting service catalog item:', error);
+      res.status(500).json({ error: 'Failed to delete service catalog item' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

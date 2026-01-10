@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon } from "lucide-react";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -151,6 +151,21 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
             <span>{t('navigation.settings')}</span>
           </button>
         </Link>
+
+        {/* Customize Button - Only for Owner/Supervisor */}
+        {can('customize.manage') && (
+          <Link href="/customize">
+            <button className={cn(
+              "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors mt-1",
+              location === "/customize"
+                ? "bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+            )}>
+              <Wrench className="w-4 h-4" />
+              <span>Customize</span>
+            </button>
+          </Link>
+        )}
 
         {/* Logout Button */}
         <button 

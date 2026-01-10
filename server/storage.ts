@@ -19,6 +19,7 @@ import {
   estimates,
   estimateItems,
   companyCounters,
+  serviceCatalogItems,
   type User,
   type UpsertUser,
   type Company,
@@ -51,6 +52,8 @@ import {
   type EstimateWithItems,
   type CreateEstimatePayload,
   type UpdateEstimatePayload,
+  type ServiceCatalogItem,
+  type InsertServiceCatalogItem,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -233,6 +236,13 @@ export interface IStorage {
   getCustomers(companyId: number): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer>;
+  
+  // Service catalog operations
+  getServiceCatalogItems(companyId: number): Promise<ServiceCatalogItem[]>;
+  getServiceCatalogItem(id: number): Promise<ServiceCatalogItem | undefined>;
+  createServiceCatalogItem(item: InsertServiceCatalogItem): Promise<ServiceCatalogItem>;
+  updateServiceCatalogItem(id: number, item: Partial<InsertServiceCatalogItem>): Promise<ServiceCatalogItem>;
+  deleteServiceCatalogItem(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1784,6 +1794,44 @@ export class DatabaseStorage implements IStorage {
       .values(customer)
       .returning();
     return created;
+  }
+
+  // Service catalog operations
+  async getServiceCatalogItems(companyId: number): Promise<ServiceCatalogItem[]> {
+    return db
+      .select()
+      .from(serviceCatalogItems)
+      .where(eq(serviceCatalogItems.companyId, companyId))
+      .orderBy(serviceCatalogItems.name);
+  }
+
+  async getServiceCatalogItem(id: number): Promise<ServiceCatalogItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(serviceCatalogItems)
+      .where(eq(serviceCatalogItems.id, id));
+    return item || undefined;
+  }
+
+  async createServiceCatalogItem(item: InsertServiceCatalogItem): Promise<ServiceCatalogItem> {
+    const [created] = await db
+      .insert(serviceCatalogItems)
+      .values(item)
+      .returning();
+    return created;
+  }
+
+  async updateServiceCatalogItem(id: number, item: Partial<InsertServiceCatalogItem>): Promise<ServiceCatalogItem> {
+    const [updated] = await db
+      .update(serviceCatalogItems)
+      .set({ ...item, updatedAt: new Date() })
+      .where(eq(serviceCatalogItems.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteServiceCatalogItem(id: number): Promise<void> {
+    await db.delete(serviceCatalogItems).where(eq(serviceCatalogItems.id, id));
   }
 }
 

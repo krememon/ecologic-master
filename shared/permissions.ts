@@ -22,7 +22,8 @@ export type Permission =
   | "clients.manage"
   | "invoicing.manage"
   | "documents.view"
-  | "documents.manage";
+  | "documents.manage"
+  | "customize.manage";     // manage service catalog, templates
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   OWNER: [
@@ -47,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "invoicing.manage",
     "documents.view",
     "documents.manage",
+    "customize.manage",
   ],
   SUPERVISOR: [
     "org.view",
@@ -69,6 +71,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "invoicing.manage",
     "documents.view",
     "documents.manage",
+    "customize.manage",
   ],
   TECHNICIAN: [
     "jobs.view.assigned",

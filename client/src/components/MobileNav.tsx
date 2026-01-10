@@ -15,7 +15,8 @@ import {
   Settings,
   LogOut,
   Brain,
-  UsersIcon
+  UsersIcon,
+  Wrench
 } from "lucide-react";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
@@ -166,6 +167,23 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                 })}
               </div>
               
+              {/* Customize Button - Only for Owner/Supervisor */}
+              {can('customize.manage') && (
+                <div className="mt-4">
+                  <Link href="/customize" onClick={handleNavItemClick}>
+                    <div className={cn(
+                      "flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105",
+                      location === "/customize"
+                        ? "bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-sm"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm"
+                    )}>
+                      <Wrench className="w-5 h-5 transition-transform duration-200" />
+                      <span className="transition-all duration-200">Customize</span>
+                    </div>
+                  </Link>
+                </div>
+              )}
+
               {/* Logout Button */}
               <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button 

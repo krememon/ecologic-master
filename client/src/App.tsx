@@ -29,6 +29,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import ChoosePlan from "@/pages/ChoosePlan";
 import Employees from "@/pages/Employees";
 import JoinCompany from "@/pages/JoinCompany";
+import Customize from "@/pages/Customize";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -90,6 +91,7 @@ function Router() {
         <Route path="/approvals" component={Approvals} />
         <Route path="/employees" component={Employees} />
         <Route path="/settings" component={Settings} />
+        <Route path="/customize" component={Customize} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route component={NotFound} />
       </Switch>
