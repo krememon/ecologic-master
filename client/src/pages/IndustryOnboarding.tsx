@@ -45,11 +45,14 @@ export default function IndustryOnboarding() {
       const res = await apiRequest("PATCH", "/api/company/industry", { industry });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company"] });
       queryClient.invalidateQueries({ queryKey: ["/api/service-catalog"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      setLocation("/");
+      // Wait for auth user refetch to complete before navigating
+      // This ensures onboardingCompleted is updated in state before routing
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+      console.log("Industry saved, redirecting to /customize/price-book");
+      setLocation("/customize/price-book");
     },
   });
 
