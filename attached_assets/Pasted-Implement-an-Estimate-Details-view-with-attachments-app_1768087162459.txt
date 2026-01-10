@@ -1,0 +1,107 @@
+Implement an Estimate Details view with attachments + approval + signature capture.
+
+CURRENT STATE
+- Estimates list renders estimate cards (status Draft, total, customer)
+- Clicking a card currently does nothing (or does not open details)
+
+GOALS
+1) Clicking an estimate card opens an Estimate Details screen/modal
+2) Estimate Details shows:
+   - Customer
+   - Status (Draft/Approved)
+   - Total
+   - Job type (if set)
+   - Line items list (name, qty, unit, price, subtotal)
+   - Schedule (if set)
+   - Assigned employees (if set)
+3) Attachments:
+   - Add “Attachments” section
+   - Allow uploading photos (and later PDFs)
+   - Show thumbnails list
+4) Approve flow:
+   - In Draft status, show an “Approve” button
+   - On click: confirmation dialog:
+     “Approve this estimate for $XXX.XX?”
+     Buttons: Cancel / Approve
+   - If confirmed -> open signature modal with a signature pad (scribble)
+   - After user signs and taps “Save Signature”:
+     - Save signature image data
+     - Set estimate status to “approved”
+     - Show success toast
+     - UI updates: status pill becomes “Approved”
+   - If estimate already approved:
+     - hide Approve button (or replace with “Approved” disabled)
+
+DATA MODEL / BACKEND
+A) Estimate attachments table
+Create table: estimate_attachments
+- id
+- estimate_id (FK)
+- company_id
+- uploaded_by_user_id
+- file_url
+- file_name
+- file_type (mime)
+- created_at
+
+API routes:
+- GET /api/estimates/:id
+  returns estimate + attachments array
+- POST /api/estimates/:id/attachments
+  accepts file upload, stores in existing storage, inserts row, returns attachment
+- PATCH /api/estimates/:id/approve
+  body: { signatureDataUrl: string, approvedTotalCents: number }
+  server must:
+   - verify estimate belongs to company
+   - verify status is draft before approving
+   - verify approvedTotalCents matches current estimate total (or within 1 cent)
+   - set status='approved'
+   - store signature_data_url (or store file_url if you upload the signature image)
+   - set approved_at timestamp, approved_by_user_id
+
+If estimates table missing fields, add:
+- status (already exists)
+- approved_at TIMESTAMP NULL
+- approved_by_user_id TEXT NULL
+- signature_data_url TEXT NULL (or signature_file_url TEXT)
+
+B) Ensure company scoping
+All endpoints must enforce companyId from req.user.companyId.
+
+FRONTEND
+1) Card click -> navigate to /estimates/:id OR open modal (prefer route so it’s shareable internally)
+- Implement EstimateDetailsPage.tsx (or modal)
+- Load estimate via GET /api/estimates/:id
+- Show skeleton/loading, error state
+
+2) Attachments UI
+- “Add attachment” button (camera/upload)
+- Use existing upload component/pattern from Documents module if available (reuse!)
+- After upload, append to attachments list immediately
+- Thumbnails for images; clicking opens preview modal
+
+3) Approve + signature UI
+- Add Approve button in Estimate Details when status === 'draft'
+- Confirmation dialog shows exact formatted total from estimate
+- Signature modal:
+  - Use a signature pad library if already available, otherwise implement simple canvas signature capture
+  - Buttons: Clear, Cancel, Save
+  - On Save: get dataURL, call PATCH /api/estimates/:id/approve
+
+4) UI update
+After approval success:
+- refetch estimate OR optimistic update status to approved
+- status pill changes to “Approved”
+- Approve button disappears
+
+RBAC / VISIBILITY
+- Owner/Admin/Estimator can approve (for now)
+- Technician can view but not approve
+Use hidden-not-disabled: if user cannot approve, hide the Approve button.
+
+DELIVERABLES
+- Clicking estimate card opens details with all info
+- Attachments upload works and persists
+- Approve -> confirm amount -> signature scribble -> status becomes Approved
+- No regressions to existing Documents module
+- List files changed + DB migrations + API routes

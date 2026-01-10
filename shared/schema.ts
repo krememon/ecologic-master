@@ -676,7 +676,7 @@ export const signatureRequestsRelations = relations(signatureRequests, ({ one })
 }));
 
 // Estimate status enum
-export const estimateStatusEnum = pgEnum("estimate_status", ["draft", "sent", "accepted", "rejected"]);
+export const estimateStatusEnum = pgEnum("estimate_status", ["draft", "sent", "accepted", "rejected", "approved"]);
 
 // Estimates table - job-scoped estimates with line items (job_id optional for standalone estimates)
 export const estimates = pgTable("estimates", {
@@ -700,6 +700,12 @@ export const estimates = pgTable("estimates", {
   createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  // Approval fields
+  approvedAt: timestamp("approved_at"),
+  approvedByUserId: varchar("approved_by_user_id").references(() => users.id),
+  signatureDataUrl: text("signature_data_url"),
+  scheduledDate: timestamp("scheduled_date"),
+  scheduledTime: varchar("scheduled_time", { length: 10 }),
 }, (table) => ({
   companyEstimateNumberIdx: uniqueIndex("estimates_company_number_uniq").on(table.companyId, table.estimateNumber),
   jobIdx: index("estimates_job_idx").on(table.jobId),
@@ -738,7 +744,12 @@ export const estimatesRelations = relations(estimates, ({ one, many }) => ({
     fields: [estimates.createdByUserId],
     references: [users.id],
   }),
+  approvedBy: one(users, {
+    fields: [estimates.approvedByUserId],
+    references: [users.id],
+  }),
   items: many(estimateItems),
+  attachments: many(estimateAttachments),
 }));
 
 // Customer relations
@@ -754,6 +765,35 @@ export const estimateItemsRelations = relations(estimateItems, ({ one }) => ({
   estimate: one(estimates, {
     fields: [estimateItems.estimateId],
     references: [estimates.id],
+  }),
+}));
+
+// Estimate attachments table
+export const estimateAttachments = pgTable("estimate_attachments", {
+  id: serial("id").primaryKey(),
+  estimateId: integer("estimate_id").notNull().references(() => estimates.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  uploadedByUserId: varchar("uploaded_by_user_id").notNull().references(() => users.id),
+  fileUrl: text("file_url").notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  fileType: varchar("file_type", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  estimateIdx: index("estimate_attachments_estimate_idx").on(table.estimateId),
+}));
+
+export const estimateAttachmentsRelations = relations(estimateAttachments, ({ one }) => ({
+  estimate: one(estimates, {
+    fields: [estimateAttachments.estimateId],
+    references: [estimates.id],
+  }),
+  company: one(companies, {
+    fields: [estimateAttachments.companyId],
+    references: [companies.id],
+  }),
+  uploadedBy: one(users, {
+    fields: [estimateAttachments.uploadedByUserId],
+    references: [users.id],
   }),
 }));
 
@@ -1062,10 +1102,13 @@ export type UpdateEstimatePayload = z.infer<typeof updateEstimateSchema>;
 export type CompanyCounter = typeof companyCounters.$inferSelect;
 export type ServiceCatalogItem = typeof serviceCatalogItems.$inferSelect;
 export type InsertServiceCatalogItem = typeof serviceCatalogItems.$inferInsert;
+export type EstimateAttachment = typeof estimateAttachments.$inferSelect;
+export type InsertEstimateAttachment = typeof estimateAttachments.$inferInsert;
 
-// Estimate with items type
+// Estimate with items and attachments type
 export interface EstimateWithItems extends Estimate {
   items: EstimateItem[];
+  attachments?: EstimateAttachment[];
   createdBy?: { firstName: string | null; lastName: string | null } | null;
 }
 
