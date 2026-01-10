@@ -33,6 +33,7 @@ import Customize from "@/pages/Customize";
 import PriceBook from "@/pages/PriceBook";
 import CompanyProfile from "@/pages/CompanyProfile";
 import IndustryOnboarding from "@/pages/IndustryOnboarding";
+import EstimateDetails from "@/pages/EstimateDetails";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -107,6 +108,9 @@ function Router() {
         <Route path="/customize" component={Customize} />
         <Route path="/customize/company-profile" component={CompanyProfile} />
         <Route path="/customize/price-book" component={PriceBook} />
+        <Route path="/estimates/:id">
+          {(params) => <EstimateDetails estimateId={params.id} />}
+        </Route>
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route component={NotFound} />
       </Switch>

@@ -2717,7 +2717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/estimates/:id/attachments - Upload attachment to estimate
-  app.post('/api/estimates/:id/attachments', isAuthenticated, requirePerm('estimates.create'), uploadMiddleware.single('file'), async (req: any, res) => {
+  app.post('/api/estimates/:id/attachments', isAuthenticated, requirePerm('estimates.create'), upload.single('file'), async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
       const companyId = req.companyId;

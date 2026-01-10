@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -99,6 +100,7 @@ function getStatusColor(status: string): string {
 
 export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: externalSelectedCustomer, onCustomerUsed }: JobEstimatesTabProps) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const canEditEstimate = canCreate;
 
   // Modal state for new estimate form
@@ -565,7 +567,12 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       ) : (
           <div className="space-y-3">
             {estimates.map((estimate) => (
-              <Card key={estimate.id} className="hover:shadow-sm transition-shadow" data-testid={`card-estimate-${estimate.id}`}>
+              <Card 
+                key={estimate.id} 
+                className="hover:shadow-sm transition-shadow cursor-pointer" 
+                data-testid={`card-estimate-${estimate.id}`}
+                onClick={() => navigate(`/estimates/${estimate.id}`)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
@@ -593,18 +600,19 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                       {canCreate && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" data-testid={`button-estimate-actions-${estimate.id}`}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0" 
+                              data-testid={`button-estimate-actions-${estimate.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem 
-                              onClick={() => {
-                                toast({
-                                  title: "View Estimate",
-                                  description: `Viewing ${estimate.estimateNumber} - Detail view coming soon`,
-                                });
-                              }}
+                              onClick={() => navigate(`/estimates/${estimate.id}`)}
                               data-testid={`action-view-estimate-${estimate.id}`}
                             >
                               <Eye className="h-4 w-4 mr-2" />
