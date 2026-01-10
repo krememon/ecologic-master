@@ -2317,8 +2317,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds } = req.body;
 
-      if (!title || typeof title !== 'string' || title.trim().length === 0) {
-        return res.status(400).json({ message: "Title is required" });
+      // Auto-generate title if not provided
+      let estimateTitle = title?.trim();
+      if (!estimateTitle) {
+        estimateTitle = customerName?.trim() ? `${customerName.trim()} – Estimate` : "Estimate";
       }
 
       if (!items || !Array.isArray(items) || items.length === 0) {
@@ -2367,7 +2369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const estimate = await storage.createEstimate(
         { 
           jobId, 
-          title: title.trim(), 
+          title: estimateTitle, 
           notes: notes || undefined, 
           customerId: customerId ? parseInt(customerId) : undefined,
           customerName: customerName?.trim() || undefined,
@@ -2398,8 +2400,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId } = req.body;
 
-      if (!title || typeof title !== 'string' || title.trim().length === 0) {
-        return res.status(400).json({ message: "Title is required" });
+      // Auto-generate title if not provided
+      let estimateTitle = title?.trim();
+      if (!estimateTitle) {
+        estimateTitle = customerName?.trim() ? `${customerName.trim()} – Estimate` : "Estimate";
       }
 
       if (!items || !Array.isArray(items) || items.length === 0) {
@@ -2458,7 +2462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const estimate = await storage.createEstimate(
         { 
           jobId: validatedJobId, 
-          title: title.trim(), 
+          title: estimateTitle, 
           notes: notes || undefined, 
           customerId: customerId ? parseInt(customerId) : undefined,
           customerName: customerName?.trim() || undefined,

@@ -71,7 +71,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const [estimateToDelete, setEstimateToDelete] = useState<Estimate | null>(null);
 
   // Form state for creating estimates
-  const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -97,7 +96,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [estimateFieldsModalOpen, setEstimateFieldsModalOpen] = useState(false);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
-  const [titleModalOpen, setTitleModalOpen] = useState(false);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -142,7 +140,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Reset form to defaults
   const resetForm = () => {
-    setTitle("");
     setNotes("");
     setSelectedCustomer(null);
     setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
@@ -228,15 +225,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Submit estimate
   const handleSubmitEstimate = () => {
-    if (!title.trim()) {
-      toast({
-        title: "Error",
-        description: "Title is required",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const validItems = lineItems.filter(item => item.name.trim());
     if (validItems.length === 0) {
       toast({
@@ -247,8 +235,13 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       return;
     }
 
+    // Auto-generate title from customer name
+    const autoTitle = selectedCustomer 
+      ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''} – Estimate`.trim()
+      : "Estimate";
+
     createEstimateMutation.mutate({
-      title: title.trim(),
+      title: autoTitle,
       customerId: selectedCustomer?.id || undefined,
       customerName: selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined,
       customerEmail: selectedCustomer?.email || undefined,
@@ -612,16 +605,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
           {/* Scrollable Form Content */}
           <div className="flex-1 overflow-y-auto">
-            {/* TITLE Section */}
-            <SectionHeader title="Title" />
-            <InfoRow
-              icon={FileText}
-              label="Add title"
-              value={title || undefined}
-              onClick={() => setTitleModalOpen(true)}
-              testId="row-add-title"
-            />
-
             {/* CUSTOMER INFO Section */}
             <SectionHeader title="Customer Info" />
             <InfoRow
@@ -681,45 +664,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
               testId="row-add-job-tags"
             />
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* TITLE Modal */}
-      <Dialog open={titleModalOpen} onOpenChange={setTitleModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Estimate Title</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="estimateTitle">Title *</Label>
-              <Input
-                id="estimateTitle"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Kitchen Renovation Estimate"
-                data-testid="input-estimate-title"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="estimateNotes">Notes (optional)</Label>
-              <Textarea
-                id="estimateNotes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Additional notes or terms..."
-                rows={3}
-                data-testid="input-estimate-notes"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={() => setTitleModalOpen(false)} data-testid="button-done-title">
-              Done
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
