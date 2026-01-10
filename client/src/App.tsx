@@ -32,6 +32,7 @@ import JoinCompany from "@/pages/JoinCompany";
 import Customize from "@/pages/Customize";
 import PriceBook from "@/pages/PriceBook";
 import CompanyProfile from "@/pages/CompanyProfile";
+import IndustryOnboarding from "@/pages/IndustryOnboarding";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -65,6 +66,16 @@ function Router() {
       <Switch>
         <Route path="/join-company" component={JoinCompany} />
         <Route>{() => <Redirect to="/join-company" />}</Route>
+      </Switch>
+    );
+  }
+
+  // Check if owner needs to complete industry onboarding
+  if (user.role === 'OWNER' && user.company?.onboardingCompleted === false) {
+    return (
+      <Switch>
+        <Route path="/onboarding/industry" component={IndustryOnboarding} />
+        <Route>{() => <Redirect to="/onboarding/industry" />}</Route>
       </Switch>
     );
   }

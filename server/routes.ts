@@ -223,7 +223,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: company.name,
           logo: company.logo,
           primaryColor: company.primaryColor,
-          secondaryColor: company.secondaryColor
+          secondaryColor: company.secondaryColor,
+          onboardingCompleted: company.onboardingCompleted ?? false
         } : null
       };
       
