@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Search, X
+  Plus, Trash2, Search, X, ArrowLeft, Check
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
@@ -42,6 +42,21 @@ interface EstimateFieldsData {
   taxRate: string;
   validDays: string;
 }
+
+const JOB_TYPES = [
+  "Diagnostic",
+  "Maintenance",
+  "Install",
+  "Repair",
+  "Emergency Service",
+  "Service Call",
+  "Replacement",
+  "Inspection",
+  "Cleaning",
+  "Commissioning",
+  "Warranty Work",
+  "Recall",
+] as const;
 
 interface NewEstimateSheetProps {
   open: boolean;
@@ -112,6 +127,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   });
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
+  const [jobType, setJobType] = useState<string | null>(null);
 
   // Modal states
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -119,7 +135,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
-  const [estimateFieldsModalOpen, setEstimateFieldsModalOpen] = useState(false);
+  const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
 
   // Customer search
@@ -193,6 +209,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       customerAddress?: string;
       taxCents: number;
       assignedEmployeeIds: string[];
+      jobType?: string;
       items: { name: string; quantity: string; unitPriceCents: number }[];
     }) => {
       const response = await apiRequest('POST', '/api/estimates', data);
@@ -284,6 +301,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
     setTags([]);
     setNewTagInput("");
+    setJobType(null);
   };
 
   const handleSave = () => {
@@ -314,6 +332,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       customerAddress: selectedCustomer?.address || undefined,
       taxCents,
       assignedEmployeeIds: assignedEmployees,
+      jobType: jobType || undefined,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
         quantity: item.quantity,
@@ -425,12 +444,13 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               testId="row-my-employees"
             />
 
-            <SectionHeader title="Estimate Fields" />
+            <SectionHeader title="Job Type" />
             <InfoRow
               icon={SlidersHorizontal}
-              label="Estimate fields"
-              onClick={() => setEstimateFieldsModalOpen(true)}
-              testId="row-estimate-fields"
+              label="Choose job type"
+              value={jobType || undefined}
+              onClick={() => setJobTypeModalOpen(true)}
+              testId="row-job-type"
             />
 
             <SectionHeader title="Job Tags" />
@@ -843,65 +863,41 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
         </DialogContent>
       </Dialog>
 
-      {/* ESTIMATE FIELDS Modal */}
-      <Dialog open={estimateFieldsModalOpen} onOpenChange={setEstimateFieldsModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Estimate Fields</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="showSubtotal">Show Subtotal</Label>
-              <Checkbox
-                id="showSubtotal"
-                checked={estimateFields.showSubtotal}
-                onCheckedChange={(checked) => 
-                  setEstimateFields({ ...estimateFields, showSubtotal: !!checked })
-                }
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="showTax">Show Tax</Label>
-              <Checkbox
-                id="showTax"
-                checked={estimateFields.showTax}
-                onCheckedChange={(checked) => 
-                  setEstimateFields({ ...estimateFields, showTax: !!checked })
-                }
-              />
-            </div>
-            {estimateFields.showTax && (
-              <div className="space-y-2">
-                <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                <Input
-                  id="taxRate"
-                  type="number"
-                  value={estimateFields.taxRate}
-                  onChange={(e) => setEstimateFields({ ...estimateFields, taxRate: e.target.value })}
-                  min="0"
-                  max="100"
-                  step="0.1"
-                />
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="validDays">Valid for (days)</Label>
-              <Input
-                id="validDays"
-                type="number"
-                value={estimateFields.validDays}
-                onChange={(e) => setEstimateFields({ ...estimateFields, validDays: e.target.value })}
-                min="1"
-              />
-            </div>
+      {/* JOB TYPE Picker Modal */}
+      <Dialog open={jobTypeModalOpen} onOpenChange={setJobTypeModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
+          <div className="flex items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => setJobTypeModalOpen(false)}
+              className="mr-3 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              data-testid="button-back-job-type"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <DialogTitle className="flex-1 text-center text-base font-semibold">Job type</DialogTitle>
+            <div className="w-8" />
           </div>
 
-          <DialogFooter>
-            <Button onClick={() => setEstimateFieldsModalOpen(false)}>
-              Done
-            </Button>
-          </DialogFooter>
+          <ScrollArea className="max-h-96">
+            <div className="py-2">
+              {JOB_TYPES.map((type) => (
+                <button
+                  key={type}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  onClick={() => {
+                    setJobType(type);
+                    setJobTypeModalOpen(false);
+                  }}
+                  data-testid={`job-type-${type.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  <span className="text-slate-900 dark:text-slate-100">{type}</span>
+                  {jobType === type && (
+                    <Check className="h-5 w-5 text-blue-500" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
