@@ -1,0 +1,164 @@
+Perfect — you’re very close, this is now mostly wiring + UX polish. I’ll break this into exact, concrete fixes so you (or the agent) can implement without guesswork.
+
+1️⃣ Move Approve Estimate button to the top (correct UX)
+Where it should live
+
+Place the Approve Estimate CTA directly under the header, before any cards:
+
+←  Daniel Kelly – Estimate        [Draft]
+
+[ Approve Estimate  $350.00 ]
+
+Customer
+Job Type
+Assigned Employees
+Line Items
+Attachments
+
+Why this is correct
+
+Approval is the primary action
+
+Matches Housecall / ServiceTitan flow
+
+Prevents scrolling just to approve
+
+Keeps financial action above content
+
+Implementation (UI logic)
+
+Rules
+
+Show button ONLY when status = draft
+
+Hide or replace with badge when approved
+
+Button label includes total
+
+Button text
+
+Approve Estimate • $350.00
+
+Click flow (unchanged, just relocated)
+
+Tap Approve Estimate
+
+Confirmation modal:
+
+“Are you sure you want to approve this estimate for $350.00?”
+
+Continue → Signature modal
+
+Signature saved → status = approved
+
+Button disappears → status pill updates
+
+2️⃣ Assigned Employees not showing actual people (this is a data issue, not UI)
+
+Right now the card says:
+
+“1 employee(s) assigned”
+
+That means:
+
+The estimate knows there are assignees
+
+But the UI does not resolve IDs → people
+
+What’s likely happening
+
+You are storing:
+
+assigned_employee_ids: string[]
+
+
+But not joining them to org users when rendering.
+
+3️⃣ Correct behavior for Assigned Employees section
+What it SHOULD show
+
+Instead of:
+
+1 employee(s) assigned
+
+
+It should show:
+
+Assigned Employees
+• Peter Pellegrino
+
+
+(or avatar + name later)
+
+Backend (already mostly done)
+
+You already fetch:
+
+GET /api/org/users
+
+
+You just need to map IDs → user objects
+
+Frontend logic (important)
+
+When rendering the estimate:
+
+const assignedUsers = orgUsers.filter(user =>
+  estimate.assignedEmployeeIds.includes(user.id)
+);
+
+
+Then render:
+
+If assignedUsers.length === 0
+
+No employees assigned
+
+
+Else
+
+Peter Pellegrino
+
+
+(later: avatar bubbles)
+
+UX detail (important)
+
+If only 1 assigned employee, show name directly
+If 2–3, show names
+If 4+, show:
+
+Peter, James, Kevin +2 more
+
+4️⃣ Where this data should come from (sanity check)
+
+Your estimate record already contains:
+
+assigned_employee_ids: ["email_1759891365699_aezdh46d8"]
+
+
+So this is NOT a DB issue — it’s purely:
+
+“We are not resolving IDs → people on the detail page”
+
+5️⃣ Final checklist (tell the agent this verbatim)
+
+If you want to paste a clean instruction to the Replit agent, use this:
+
+Estimate Detail Fixes
+
+Move the “Approve Estimate” button to the top of the Estimate Detail page, directly under the header
+
+Only show the approve button when estimate.status === "draft"
+
+Button label should include the total amount (ex: “Approve Estimate • $350.00”)
+
+Update the Assigned Employees card to display actual employee names instead of a count
+
+Resolve assigned_employee_ids by matching them against org users from /api/org/users
+
+If no employees are assigned, show “No employees assigned”
+
+If employees are assigned, list their names (1–3 names visible)
+
+Keep existing approval confirmation + signature flow unchanged

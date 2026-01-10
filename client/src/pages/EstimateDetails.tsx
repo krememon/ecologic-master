@@ -48,8 +48,23 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     queryKey: [`/api/estimates/${estimateId}`],
     enabled: !!estimateId,
   });
+
+  const { data: orgUsersData } = useQuery<{ users: Array<{ id: string; firstName: string | null; lastName: string | null; email: string }> }>({
+    queryKey: ['/api/org/users'],
+  });
   
-  console.log("[EstimateDetails] estimate response", estimate);
+  const orgUsers = orgUsersData?.users || [];
+  
+  const assignedEmployees = estimate?.assignedEmployeeIds && Array.isArray(estimate.assignedEmployeeIds)
+    ? orgUsers.filter(user => (estimate.assignedEmployeeIds as string[]).includes(user.id))
+    : [];
+  
+  const formatEmployeeNames = (employees: typeof assignedEmployees): string => {
+    if (employees.length === 0) return '';
+    const names = employees.map(e => `${e.firstName || ''} ${e.lastName || ''}`.trim() || e.email);
+    if (names.length <= 3) return names.join(', ');
+    return `${names.slice(0, 3).join(', ')} +${names.length - 3} more`;
+  };
 
   const uploadAttachmentMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -212,7 +227,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/jobs')}>
             <ArrowLeft className="h-5 w-5" />
@@ -226,6 +241,17 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           {estimate.status}
         </Badge>
       </div>
+
+      {canApprove && (
+        <Button 
+          onClick={handleApproveClick} 
+          className="w-full mb-6 bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
+          disabled={approveMutation.isPending}
+        >
+          <CheckCircle className="h-5 w-5 mr-2" />
+          Approve Estimate • {formatCurrency(estimate.totalCents)}
+        </Button>
+      )}
 
       <div className="space-y-6">
         <Card>
@@ -284,21 +310,27 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           </Card>
         )}
 
-        {estimate.assignedEmployeeIds && Array.isArray(estimate.assignedEmployeeIds) && estimate.assignedEmployeeIds.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Assigned Employees
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                {estimate.assignedEmployeeIds.length} employee(s) assigned
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Assigned Employees
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {assignedEmployees.length > 0 ? (
+              <ul className="space-y-1">
+                {assignedEmployees.map((emp) => (
+                  <li key={emp.id} className="text-sm">
+                    {`${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground">No employees assigned</p>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -404,25 +436,6 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             )}
           </CardContent>
         </Card>
-
-        {canApprove && (
-          <Card className="border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">Ready to Approve?</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Total: {formatCurrency(estimate.totalCents)}
-                  </p>
-                </div>
-                <Button onClick={handleApproveClick} className="bg-green-600 hover:bg-green-700">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Approve Estimate
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {estimate.status === 'approved' && estimate.signatureDataUrl && (
           <Card>
