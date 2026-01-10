@@ -32,6 +32,7 @@ export default function PriceBook() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ServiceCatalogItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [priceDisplay, setPriceDisplay] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -103,6 +104,7 @@ export default function PriceBook() {
       taskCode: "",
       taxable: false,
     });
+    setPriceDisplay("");
   };
 
   const openCreateDialog = () => {
@@ -122,6 +124,7 @@ export default function PriceBook() {
       taskCode: (item as any).taskCode || "",
       taxable: (item as any).taxable ?? false,
     });
+    setPriceDisplay((item.defaultPriceCents / 100).toFixed(2));
     setIsDialogOpen(true);
   };
 
@@ -146,9 +149,25 @@ export default function PriceBook() {
   };
 
   const handlePriceChange = (value: string) => {
+    // Allow only digits and single decimal point
     const cleanValue = value.replace(/[^0-9.]/g, '');
-    const dollars = parseFloat(cleanValue) || 0;
+    // Prevent multiple decimal points
+    const parts = cleanValue.split('.');
+    const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
+    setPriceDisplay(sanitized);
+    const dollars = parseFloat(sanitized) || 0;
     setFormData({ ...formData, defaultPriceCents: Math.round(dollars * 100) });
+  };
+
+  const handlePriceBlur = () => {
+    const dollars = formData.defaultPriceCents / 100;
+    setPriceDisplay(dollars.toFixed(2));
+  };
+
+  const handlePriceFocus = () => {
+    // Show raw numeric value without formatting
+    const dollars = formData.defaultPriceCents / 100;
+    setPriceDisplay(dollars === 0 ? "" : String(dollars));
   };
 
   if (authLoading) {
@@ -326,8 +345,10 @@ export default function PriceBook() {
                     id="price"
                     type="text"
                     className="pl-9"
-                    value={(formData.defaultPriceCents / 100).toFixed(2)}
+                    value={priceDisplay}
                     onChange={(e) => handlePriceChange(e.target.value)}
+                    onBlur={handlePriceBlur}
+                    onFocus={handlePriceFocus}
                     placeholder="0.00"
                   />
                 </div>

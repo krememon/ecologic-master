@@ -28,9 +28,21 @@ interface LineItem {
   taskCode: string;
   quantity: string;
   unitPriceCents: number;
+  priceDisplay: string;
   unit: string;
   taxable: boolean;
   saveToPriceBook: boolean;
+}
+
+interface EstimateItemPayload {
+  name: string;
+  description: string | null;
+  taskCode: string | null;
+  quantity: string;
+  unitPriceCents: number;
+  unit: string;
+  taxable: boolean;
+  sortOrder: number;
 }
 
 interface ScheduleData {
@@ -97,7 +109,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }
+    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }
   ]);
   const [schedule, setSchedule] = useState<ScheduleData>({ date: "", time: "" });
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
@@ -165,7 +177,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const resetForm = () => {
     setNotes("");
     setSelectedCustomer(null);
-    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
     setSchedule({ date: "", time: "" });
     setAssignedEmployees([]);
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
@@ -185,7 +197,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Create estimate mutation
   const createEstimateMutation = useMutation({
-    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; jobType?: string; items: LineItem[] }) => {
+    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; jobType?: string; items: EstimateItemPayload[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
@@ -372,7 +384,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -390,6 +402,32 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     } else {
       updated[index][field] = value as string;
     }
+    setLineItems(updated);
+  };
+
+  const handlePriceChange = (index: number, value: string) => {
+    // Allow only digits and single decimal point
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    const parts = cleanValue.split('.');
+    const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
+    
+    const updated = [...lineItems];
+    updated[index].priceDisplay = sanitized;
+    updated[index].unitPriceCents = Math.round((parseFloat(sanitized) || 0) * 100);
+    setLineItems(updated);
+  };
+
+  const handlePriceBlur = (index: number) => {
+    const updated = [...lineItems];
+    const dollars = updated[index].unitPriceCents / 100;
+    updated[index].priceDisplay = dollars.toFixed(2);
+    setLineItems(updated);
+  };
+
+  const handlePriceFocus = (index: number) => {
+    const updated = [...lineItems];
+    const dollars = updated[index].unitPriceCents / 100;
+    updated[index].priceDisplay = dollars === 0 ? "" : String(dollars);
     setLineItems(updated);
   };
 
@@ -1049,11 +1087,12 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                   <div>
                     <Label className="text-xs">Unit Price ($)</Label>
                     <Input
-                      type="number"
-                      value={(item.unitPriceCents / 100).toFixed(2)}
-                      onChange={(e) => updateLineItem(index, 'unitPriceCents', e.target.value)}
-                      min="0"
-                      step="0.01"
+                      type="text"
+                      value={item.priceDisplay}
+                      onChange={(e) => handlePriceChange(index, e.target.value)}
+                      onBlur={() => handlePriceBlur(index)}
+                      onFocus={() => handlePriceFocus(index)}
+                      placeholder="0.00"
                       data-testid={`input-line-item-price-${index}`}
                     />
                   </div>
