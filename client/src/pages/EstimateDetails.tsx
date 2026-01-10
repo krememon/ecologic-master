@@ -43,6 +43,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<EstimateAttachment | null>(null);
 
   const { data: estimate, isLoading, error } = useQuery<EstimateWithItems>({
     queryKey: [`/api/estimates/${estimateId}`],
@@ -407,15 +408,25 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             {estimate.attachments && estimate.attachments.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {estimate.attachments.map((attachment: EstimateAttachment) => (
-                  <div key={attachment.id} className="relative group">
+                  <div 
+                    key={attachment.id} 
+                    className="relative group cursor-pointer"
+                    onClick={() => {
+                      if (attachment.fileType.startsWith('image/')) {
+                        setPreviewAttachment(attachment);
+                      } else {
+                        window.open(attachment.fileUrl, '_blank');
+                      }
+                    }}
+                  >
                     {attachment.fileType.startsWith('image/') ? (
                       <img
                         src={attachment.fileUrl}
                         alt={attachment.fileName}
-                        className="w-full h-24 object-cover rounded-lg border"
+                        className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
                       />
                     ) : (
-                      <div className="w-full h-24 bg-slate-100 dark:bg-slate-800 rounded-lg border flex items-center justify-center">
+                      <div className="w-full h-24 bg-slate-100 dark:bg-slate-800 rounded-lg border flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                         <FileText className="h-8 w-8 text-muted-foreground" />
                       </div>
                     )}
@@ -424,7 +435,10 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                       variant="destructive"
                       size="icon"
                       className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => deleteAttachmentMutation.mutate(attachment.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteAttachmentMutation.mutate(attachment.id);
+                      }}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -529,6 +543,36 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               className="bg-green-600 hover:bg-green-700"
             >
               {approveMutation.isPending ? "Saving..." : "Save Signature"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+          <DialogHeader className="p-4 pb-0">
+            <DialogTitle className="flex items-center justify-between">
+              <span className="truncate pr-4">{previewAttachment?.fileName}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-4 flex items-center justify-center">
+            {previewAttachment && (
+              <img
+                src={previewAttachment.fileUrl}
+                alt={previewAttachment.fileName}
+                className="max-h-[70vh] max-w-full object-contain rounded"
+              />
+            )}
+          </div>
+          <DialogFooter className="p-4 pt-0">
+            <Button
+              variant="outline"
+              onClick={() => window.open(previewAttachment?.fileUrl, '_blank')}
+            >
+              Open in New Tab
+            </Button>
+            <Button onClick={() => setPreviewAttachment(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
