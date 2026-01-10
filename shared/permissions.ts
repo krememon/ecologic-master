@@ -71,7 +71,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "invoicing.manage",
     "documents.view",
     "documents.manage",
-    "customize.manage",
   ],
   TECHNICIAN: [
     "jobs.view.assigned",

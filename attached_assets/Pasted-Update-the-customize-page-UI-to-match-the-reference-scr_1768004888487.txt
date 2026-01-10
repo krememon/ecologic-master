@@ -1,0 +1,58 @@
+Update the /customize page UI to match the reference screenshot:
+
+DESIGN GOAL (match screenshot)
+- Big page header: “Customize”
+- Subtitle: “Manage templates and settings for your company”
+- Below, show a clean iOS-style settings list (card container) with tappable rows.
+- Each row has:
+  - Left icon
+  - Title (ex: “Price book”)
+  - Right chevron
+- The list sits inside a rounded card with subtle border/shadow like the screenshot.
+
+RBAC (IMPORTANT)
+- ONLY Owner can see Customize.
+- Use “hidden not disabled”:
+  - If user is not Owner, do not show the Customize menu item
+  - If user manually navigates to /customize, show a simple “Not authorized” page (or redirect back)
+
+NAV STRUCTURE
+Customize page should be a simple menu of sub-pages, starting with:
+1) Price book (this is our Service Catalog / Line Items manager)
+   - clicking row navigates to /customize/price-book (or /customize/service-catalog)
+   - Keep naming consistent, but label in UI should be “Price book” like screenshot.
+
+PRICE BOOK PAGE (Service Catalog)
+- This page is where owner can create/edit “line item templates”
+- Simple UI:
+  - Top right: “+ Add Item”
+  - Search bar: “Search items…”
+  - List of items (name + price + unit)
+  - Edit icon on row or row click -> Edit modal
+  - Add modal fields:
+    - Name (required)
+    - Description (optional)
+    - Price (required)
+    - Unit dropdown (each, hour, ft, job)
+    - Category (optional)
+  - Save persists company-wide (DB) and refreshes list
+
+BACKEND (company-scoped)
+- Use ONE company-scoped table for price book items (if not already created):
+  price_book_items:
+    id, company_id, name, description, price, unit, category, created_at, updated_at
+- API:
+  GET /api/price-book-items
+  POST /api/price-book-items
+  PATCH /api/price-book-items/:id
+(scope by req.user.companyId)
+
+INTEGRATION TODO (do not implement unless quick)
+- In estimate “Add line items”, add “Add from Price book” later.
+- For now just build Price book CRUD correctly.
+
+DELIVERABLES
+- /customize page matches screenshot styling with “Price book” row
+- Owner-only visibility + route guard
+- /customize/price-book page works with CRUD and DB persistence
+- List files changed + endpoints created
