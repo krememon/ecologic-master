@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import type { Customer, Estimate } from "@shared/schema";
 
 interface LineItem {
@@ -126,6 +127,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
   const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
+  const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
@@ -387,8 +389,17 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
   };
 
+  const addLineItemFromPriceBook = (item: LineItem) => {
+    // Filter out empty placeholder items and add the new item
+    const existingItems = lineItems.filter(i => i.name.trim());
+    setLineItems([...existingItems, item]);
+  };
+
   const removeLineItem = (index: number) => {
-    if (lineItems.length > 1) {
+    const nonEmptyItems = lineItems.filter(i => i.name.trim());
+    if (nonEmptyItems.length > 1 || (nonEmptyItems.length === 1 && !lineItems[index].name.trim())) {
+      setLineItems(lineItems.filter((_, i) => i !== index));
+    } else if (nonEmptyItems.length === 1) {
       setLineItems(lineItems.filter((_, i) => i !== index));
     }
   };
@@ -715,7 +726,14 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
               icon={List}
               label="Add line items"
               value={lineItems.filter(i => i.name.trim()).length > 0 ? `${lineItems.filter(i => i.name.trim()).length} items` : undefined}
-              onClick={() => setLineItemsModalOpen(true)}
+              onClick={() => {
+                const hasItems = lineItems.filter(i => i.name.trim()).length > 0;
+                if (hasItems) {
+                  setLineItemsModalOpen(true);
+                } else {
+                  setPriceBookPickerOpen(true);
+                }
+              }}
               testId="row-add-line-items"
             />
 
@@ -1124,12 +1142,15 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             <Button
               type="button"
               variant="outline"
-              onClick={addLineItem}
+              onClick={() => {
+                setLineItemsModalOpen(false);
+                setPriceBookPickerOpen(true);
+              }}
               className="w-full"
               data-testid="button-add-line-item"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Line Item
+              Add from Price Book
             </Button>
 
             <div className="pt-4 border-t">
@@ -1147,6 +1168,14 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* PRICE BOOK PICKER Modal */}
+      <PriceBookPickerModal
+        open={priceBookPickerOpen}
+        onOpenChange={setPriceBookPickerOpen}
+        onAddItem={addLineItemFromPriceBook}
+        existingItems={lineItems}
+      />
 
       {/* SCHEDULE Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>

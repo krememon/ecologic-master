@@ -16,6 +16,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import type { Customer } from "@shared/schema";
 
 interface Employee {
@@ -141,6 +142,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
   const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
+  const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
@@ -379,8 +381,18 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
   };
 
+  const addLineItemFromPriceBook = (item: LineItem) => {
+    // Filter out empty placeholder items and add the new item
+    const existingItems = lineItems.filter(i => i.name.trim());
+    setLineItems([...existingItems, item]);
+  };
+
   const removeLineItem = (index: number) => {
-    if (lineItems.length > 1) {
+    const nonEmptyItems = lineItems.filter(i => i.name.trim());
+    if (nonEmptyItems.length > 1 || (nonEmptyItems.length === 1 && !lineItems[index].name.trim())) {
+      setLineItems(lineItems.filter((_, i) => i !== index));
+    } else if (nonEmptyItems.length === 1) {
+      // Keep at least one item but allow removing
       setLineItems(lineItems.filter((_, i) => i !== index));
     }
   };
@@ -482,7 +494,14 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               icon={List}
               label="Add line items"
               value={lineItems.filter(i => i.name.trim()).length > 0 ? `${lineItems.filter(i => i.name.trim()).length} items` : undefined}
-              onClick={() => setLineItemsModalOpen(true)}
+              onClick={() => {
+                const hasItems = lineItems.filter(i => i.name.trim()).length > 0;
+                if (hasItems) {
+                  setLineItemsModalOpen(true);
+                } else {
+                  setPriceBookPickerOpen(true);
+                }
+              }}
               testId="row-add-line-items"
             />
 
@@ -833,11 +852,14 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
 
             <Button
               variant="outline"
-              onClick={addLineItem}
+              onClick={() => {
+                setLineItemsModalOpen(false);
+                setPriceBookPickerOpen(true);
+              }}
               className="w-full"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Add Line Item
+              Add from Price Book
             </Button>
 
             <div className="pt-4 border-t">
@@ -855,6 +877,14 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* PRICE BOOK PICKER Modal */}
+      <PriceBookPickerModal
+        open={priceBookPickerOpen}
+        onOpenChange={setPriceBookPickerOpen}
+        onAddItem={addLineItemFromPriceBook}
+        existingItems={lineItems}
+      />
 
       {/* SCHEDULE Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>

@@ -1,0 +1,69 @@
+Update the Estimate “Add line items” flow so it pulls from the company Price Book.
+
+GOAL UX
+When user taps “Add line items” in a New Estimate:
+1) Open a picker/modal titled “Add Line Items”
+2) Immediately display all Price Book items for the company (no empty state unless truly empty)
+3) User can tap any item to add it to the estimate
+4) Provide an option “+ Create new line item”
+   - After creating it, it is automatically added to:
+     A) the estimate line items
+     B) the company Price Book (saved to DB)
+   - The newly created item should also appear in the picker list instantly
+
+DATA RULES
+- Price Book = templates (company-scoped)
+- Estimate line items = instances stored on the estimate (with qty, taxable, etc.)
+- Adding from Price Book should copy fields into estimate line item:
+  { name, description, taskCode, unit, price, quantity=1, taxable }
+
+BACKEND
+1) Ensure Price Book API is working:
+- GET /api/price-book-items -> returns company items
+- POST /api/price-book-items -> creates item in company
+- PATCH optional
+
+2) Estimates create/update must store line items
+- If estimate line items are stored in JSON on estimates, keep that.
+- Ensure save estimate includes updated lineItems array.
+
+FRONTEND IMPLEMENTATION
+A) Replace current “Add line items” editor entry
+- When “Add line items” is clicked, open <PriceBookPickerModal />
+
+B) PriceBookPickerModal UI
+- Header: Cancel | Add Line Items | Done
+- Search bar “Search price book…”
+- List of price book items (name, price, unit, maybe category)
+- Each row clickable:
+   onClick -> add to estimate lineItems and show toast “Added”
+- Keep the modal open so user can add multiple items quickly
+
+- A clear button at top or bottom:
+  “+ Create new line item”
+  -> opens CreateLineItemModal
+
+C) CreateLineItemModal behavior
+- Use the same “New service line item” fields we implemented:
+  name, description, task code, price, unit, taxable, category
+  (quantity can be part of estimate line item; default 1)
+- On Save:
+  1) POST /api/price-book-items (always save to price book)
+  2) Take returned item and:
+     - add it to the estimate lineItems as an instance (qty=1)
+     - insert it into the picker’s list immediately (no refresh required)
+  3) Close Create modal, return to picker
+
+EMPTY STATE
+If there are no price book items yet:
+- Show “No items in your price book yet”
+- Show primary button “+ Create your first item”
+- Creating it should immediately populate list and add to estimate
+
+DELIVERABLES
+- Estimate “Add line items” shows company price book items
+- Can add multiple items quickly
+- “Create new line item” saves to price book AND adds to estimate
+- Picker list updates instantly with new item
+- No regressions to saving estimate
+- List files changed
