@@ -756,6 +756,29 @@ export const companyCounters = pgTable("company_counters", {
   invoiceCounter: integer("invoice_counter").notNull().default(0),
 });
 
+// Service catalog items - reusable line item templates for estimates
+export const serviceCatalogItems = pgTable("service_catalog_items", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  defaultPriceCents: integer("default_price_cents").notNull().default(0),
+  unit: varchar("unit", { length: 50 }).notNull().default("each"), // each, hour, ft, job
+  category: varchar("category", { length: 100 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  companyIdx: index("service_catalog_company_idx").on(table.companyId),
+}));
+
+// Service catalog relations
+export const serviceCatalogItemsRelations = relations(serviceCatalogItems, ({ one }) => ({
+  company: one(companies, {
+    fields: [serviceCatalogItems.companyId],
+    references: [companies.id],
+  }),
+}));
+
 // Subscriptions table for tracking detailed subscription data
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
@@ -1015,6 +1038,8 @@ export type InsertEstimateItem = z.infer<typeof insertEstimateItemSchema>;
 export type CreateEstimatePayload = z.infer<typeof createEstimateSchema>;
 export type UpdateEstimatePayload = z.infer<typeof updateEstimateSchema>;
 export type CompanyCounter = typeof companyCounters.$inferSelect;
+export type ServiceCatalogItem = typeof serviceCatalogItems.$inferSelect;
+export type InsertServiceCatalogItem = typeof serviceCatalogItems.$inferInsert;
 
 // Estimate with items type
 export interface EstimateWithItems extends Estimate {

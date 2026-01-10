@@ -1,0 +1,80 @@
+Add a new menu item called “Customize” directly above the “Sign Out” button in the app menu.
+
+GOAL UX
+- In the same menu/list where “Sign Out” appears (see screenshot), insert:
+  “Customize” (with a settings/slider icon)
+  placed immediately above “Sign Out”
+- Clicking “Customize” navigates to a new page: /customize
+
+CUSTOMIZE PAGE REQUIREMENTS
+1) Create a new page: Customize
+- Header: “Customize”
+- Under header, add a tab switcher with at least:
+  - “Service Catalog” (active by default)
+
+2) Service Catalog tab
+This is where company admins can create/edit reusable line items (services/materials) used in estimates.
+
+UI SPEC (simple + clean)
+- Top right button: “+ Add Service”
+- Search input: “Search services…”
+- List of service cards/rows showing:
+  - Name
+  - Description (optional)
+  - Default price
+  - Unit (each/hour/etc)
+  - Category (optional)
+  - Edit button (pencil) on each row
+- Clicking Edit opens modal pre-filled
+- Add Service opens same modal empty
+
+MODAL FIELDS
+- Name (required)
+- Description (optional)
+- Price (number, required)
+- Unit (dropdown: each, hour, ft, job)
+- Category (optional)
+Buttons: Cancel / Save
+
+DATA MODEL (company-scoped)
+We need these stored per company so all users share them:
+Table: service_catalog_items (or estimate_line_item_templates)
+Columns:
+- id
+- company_id (required)
+- name (required)
+- description (nullable)
+- default_price (numeric)
+- unit (text)
+- category (nullable)
+- created_at, updated_at
+
+API ROUTES
+- GET /api/service-catalog
+  -> returns items for req.user.companyId
+- POST /api/service-catalog
+  -> create item for req.user.companyId
+- PATCH /api/service-catalog/:id
+  -> update item (must belong to same company)
+(Optional: DELETE later)
+
+RBAC
+- For now: allow Owner/Admin only to see “Customize”
+  - Hide it for Technician/Estimator/etc (hidden not disabled)
+- If role system exists, use it. If not, add a simple guard placeholder:
+  const canCustomize = user.role === "owner" || user.role === "admin"
+  If false, don’t show the menu item.
+
+INTEGRATION (IMPORTANT)
+- In the Estimate “Add line items” editor:
+  Add a button “Add from Service Catalog”
+  -> opens a picker listing service catalog items
+  -> selecting one adds it into the estimate’s line items
+(If that is too much for now, create a TODO but at minimum store catalog items and show CRUD UI.)
+
+DELIVERABLES
+- “Customize” menu item appears above Sign Out
+- /customize page exists with tab “Service Catalog”
+- Service catalog CRUD works (create + edit at minimum)
+- Data is company-scoped in DB
+- List files changed and new API routes
