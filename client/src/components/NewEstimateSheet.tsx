@@ -850,17 +850,27 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               </div>
             ))}
 
-            <Button
-              variant="outline"
-              onClick={() => {
-                setLineItemsModalOpen(false);
-                setPriceBookPickerOpen(true);
-              }}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add from Price Book
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setLineItemsModalOpen(false);
+                  setPriceBookPickerOpen(true);
+                }}
+                className="flex-1"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                From Price Book
+              </Button>
+              <Button
+                variant="outline"
+                onClick={addLineItem}
+                className="flex-1"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Custom Item
+              </Button>
+            </div>
 
             <div className="pt-4 border-t">
               <div className="flex justify-between text-base font-semibold">

@@ -396,10 +396,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   };
 
   const removeLineItem = (index: number) => {
-    const nonEmptyItems = lineItems.filter(i => i.name.trim());
-    if (nonEmptyItems.length > 1 || (nonEmptyItems.length === 1 && !lineItems[index].name.trim())) {
-      setLineItems(lineItems.filter((_, i) => i !== index));
-    } else if (nonEmptyItems.length === 1) {
+    if (lineItems.length > 1) {
       setLineItems(lineItems.filter((_, i) => i !== index));
     }
   };
@@ -1139,19 +1136,31 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
               </div>
             ))}
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setLineItemsModalOpen(false);
-                setPriceBookPickerOpen(true);
-              }}
-              className="w-full"
-              data-testid="button-add-line-item"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add from Price Book
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setLineItemsModalOpen(false);
+                  setPriceBookPickerOpen(true);
+                }}
+                className="flex-1"
+                data-testid="button-add-from-price-book"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                From Price Book
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addLineItem}
+                className="flex-1"
+                data-testid="button-add-line-item"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Custom Item
+              </Button>
+            </div>
 
             <div className="pt-4 border-t">
               <div className="flex justify-between text-base font-semibold">
