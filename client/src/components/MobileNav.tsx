@@ -167,7 +167,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                 })}
               </div>
               
-              {/* Customize Button - Only for Owner/Supervisor */}
+              {/* Customize Button - Only for Owner */}
               {can('customize.manage') && (
                 <div className="mt-4">
                   <Link href="/customize" onClick={handleNavItemClick}>

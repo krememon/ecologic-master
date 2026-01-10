@@ -152,7 +152,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
           </button>
         </Link>
 
-        {/* Customize Button - Only for Owner/Supervisor */}
+        {/* Customize Button - Only for Owner */}
         {can('customize.manage') && (
           <Link href="/customize">
             <button className={cn(
