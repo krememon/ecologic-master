@@ -1589,10 +1589,8 @@ export default function Jobs() {
                     key={estimate.id} 
                     className="hover:shadow-md transition-shadow cursor-pointer"
                     onClick={() => {
-                      if (job) {
-                        setSelectedJob(job);
-                        setJobModalTab('documents');
-                      }
+                      console.log("Estimate card clicked", estimate.id);
+                      setLocation(`/estimates/${estimate.id}`);
                     }}
                     data-testid={`card-estimate-${estimate.id}`}
                   >
