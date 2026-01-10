@@ -282,7 +282,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           </Card>
         )}
 
-        {estimate.assignedEmployeeIds && (estimate.assignedEmployeeIds as string[]).length > 0 && (
+        {estimate.assignedEmployeeIds && Array.isArray(estimate.assignedEmployeeIds) && estimate.assignedEmployeeIds.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -292,7 +292,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                {(estimate.assignedEmployeeIds as string[]).length} employee(s) assigned
+                {estimate.assignedEmployeeIds.length} employee(s) assigned
               </p>
             </CardContent>
           </Card>
