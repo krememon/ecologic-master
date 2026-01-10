@@ -13,8 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Loader2, Search, X, Building2, FileText, MoreVertical, Eye, Edit, Copy, ArrowLeft, Check
+  Plus, Trash2, Loader2, Search, X, Building2, FileText, MoreVertical, Eye, Edit, Copy, ArrowLeft, Check, DollarSign
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,8 +24,13 @@ import type { Customer, Estimate } from "@shared/schema";
 
 interface LineItem {
   name: string;
+  description: string;
+  taskCode: string;
   quantity: string;
   unitPriceCents: number;
+  unit: string;
+  taxable: boolean;
+  saveToPriceBook: boolean;
 }
 
 interface ScheduleData {
@@ -90,7 +97,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { name: "", quantity: "1", unitPriceCents: 0 }
+    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }
   ]);
   const [schedule, setSchedule] = useState<ScheduleData>({ date: "", time: "" });
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
@@ -158,7 +165,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
   const resetForm = () => {
     setNotes("");
     setSelectedCustomer(null);
-    setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
+    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }]);
     setSchedule({ date: "", time: "" });
     setAssignedEmployees([]);
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
@@ -336,7 +343,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", quantity: "1", unitPriceCents: 0 }]);
+    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -345,10 +352,12 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
     const updated = [...lineItems];
     if (field === 'unitPriceCents') {
-      updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(value) * 100) || 0;
+      updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(String(value)) * 100) || 0;
+    } else if (field === 'taxable' || field === 'saveToPriceBook') {
+      updated[index][field] = value as boolean;
     } else {
       updated[index][field] = value as string;
     }
@@ -933,73 +942,113 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
       {/* LINE ITEMS Modal */}
       <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Line Items</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Header Row */}
-            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 px-1">
-              <div className="col-span-5">Description</div>
-              <div className="col-span-2">Qty</div>
-              <div className="col-span-2">Price</div>
-              <div className="col-span-2 text-right">Total</div>
-              <div className="col-span-1"></div>
-            </div>
-
-            {/* Line Items */}
+          <div className="flex-1 overflow-y-auto space-y-4 py-2">
             {lineItems.map((item, index) => (
-              <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-5">
-                  <Input
-                    value={item.name}
-                    onChange={(e) => updateLineItem(index, 'name', e.target.value)}
-                    placeholder="Item description"
-                    data-testid={`input-line-item-name-${index}`}
-                  />
+              <div key={index} className="p-3 border rounded-lg space-y-3 bg-slate-50 dark:bg-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Item {index + 1}
+                  </span>
+                  {lineItems.length > 1 && (
+                    <button
+                      onClick={() => removeLineItem(index)}
+                      className="text-red-500 hover:text-red-700"
+                      data-testid={`button-remove-line-item-${index}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                <div className="col-span-2">
-                  <Input
-                    type="number"
-                    value={item.quantity}
-                    onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                    placeholder="1"
-                    min="0"
-                    step="0.01"
-                    data-testid={`input-line-item-qty-${index}`}
-                  />
+                <Input
+                  placeholder="Name *"
+                  value={item.name}
+                  onChange={(e) => updateLineItem(index, 'name', e.target.value)}
+                  data-testid={`input-line-item-name-${index}`}
+                />
+                <Textarea
+                  placeholder="Description (optional)"
+                  value={item.description}
+                  onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                  rows={2}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Task Code</Label>
+                    <Input
+                      placeholder="e.g., SVC-001"
+                      value={item.taskCode}
+                      onChange={(e) => updateLineItem(index, 'taskCode', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unit</Label>
+                    <Select
+                      value={item.unit}
+                      onValueChange={(value) => updateLineItem(index, 'unit', value)}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="each">Each</SelectItem>
+                        <SelectItem value="hour">Hour</SelectItem>
+                        <SelectItem value="ft">Foot</SelectItem>
+                        <SelectItem value="sq_ft">Sq Ft</SelectItem>
+                        <SelectItem value="job">Job</SelectItem>
+                        <SelectItem value="day">Day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Quantity</Label>
+                    <Input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                      min="0"
+                      step="1"
+                      data-testid={`input-line-item-qty-${index}`}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unit Price ($)</Label>
                     <Input
                       type="number"
                       value={(item.unitPriceCents / 100).toFixed(2)}
                       onChange={(e) => updateLineItem(index, 'unitPriceCents', e.target.value)}
-                      placeholder="0.00"
                       min="0"
                       step="0.01"
-                      className="pl-6"
                       data-testid={`input-line-item-price-${index}`}
                     />
                   </div>
                 </div>
-                <div className="col-span-2 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {formatCurrency(calculateLineTotal(item))}
+                <div className="flex items-center justify-between py-1">
+                  <Label className="text-sm font-normal">Taxable</Label>
+                  <Switch
+                    checked={item.taxable}
+                    onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
+                  />
                 </div>
-                <div className="col-span-1 flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeLineItem(index)}
-                    disabled={lineItems.length === 1}
-                    className="h-8 w-8"
-                    data-testid={`button-remove-line-item-${index}`}
-                  >
-                    <Trash2 className="h-4 w-4 text-slate-400" />
-                  </Button>
+                <div className="flex items-center justify-between py-1 border-t pt-2">
+                  <div>
+                    <Label className="text-sm font-normal">Save to Price Book</Label>
+                    <p className="text-xs text-slate-500">Add as reusable template</p>
+                  </div>
+                  <Switch
+                    checked={item.saveToPriceBook}
+                    onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
+                  <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
                 </div>
               </div>
             ))}
@@ -1007,20 +1056,19 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             <Button
               type="button"
               variant="outline"
-              size="sm"
               onClick={addLineItem}
+              className="w-full"
               data-testid="button-add-line-item"
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Add Item
+              <Plus className="h-4 w-4 mr-2" />
+              Add Line Item
             </Button>
 
-            {/* Subtotal */}
-            <div className="pt-3 border-t flex justify-end items-center">
-              <span className="text-sm text-slate-500 mr-4">Subtotal:</span>
-              <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                {formatCurrency(calculateSubtotal())}
-              </span>
+            <div className="pt-4 border-t">
+              <div className="flex justify-between text-base font-semibold">
+                <span>Subtotal</span>
+                <span>{formatCurrency(calculateSubtotal())}</span>
+              </div>
             </div>
           </div>
 

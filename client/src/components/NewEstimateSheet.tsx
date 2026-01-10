@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Search, X, ArrowLeft, Check
+  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
 
@@ -27,8 +29,13 @@ interface Employee {
 
 interface LineItem {
   name: string;
+  description: string;
+  taskCode: string;
   quantity: string;
   unitPriceCents: number;
+  unit: string;
+  taxable: boolean;
+  saveToPriceBook: boolean;
 }
 
 interface ScheduleData {
@@ -115,7 +122,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [notes, setNotes] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { name: "", quantity: "1", unitPriceCents: 0 }
+    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }
   ]);
   const [schedule, setSchedule] = useState<ScheduleData>({ date: "", time: "" });
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
@@ -295,7 +302,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const resetForm = () => {
     setNotes("");
     setSelectedCustomer(null);
-    setLineItems([{ name: "", quantity: "1", unitPriceCents: 0 }]);
+    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }]);
     setSchedule({ date: "", time: "" });
     setAssignedEmployees([]);
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
@@ -304,12 +311,32 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setJobType(null);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validation
     const validItems = lineItems.filter(item => item.name.trim());
     if (validItems.length === 0) {
       toast({ title: "Missing items", description: "Please add at least one line item.", variant: "destructive" });
       return;
+    }
+
+    // Save items to price book if requested
+    const itemsToSave = validItems.filter(item => item.saveToPriceBook);
+    for (const item of itemsToSave) {
+      try {
+        await apiRequest('POST', '/api/service-catalog', {
+          name: item.name.trim(),
+          description: item.description || null,
+          defaultPriceCents: item.unitPriceCents,
+          unit: item.unit,
+          taskCode: item.taskCode || null,
+          taxable: item.taxable,
+        });
+      } catch {
+        // Silently ignore price book errors to not block estimate creation
+      }
+    }
+    if (itemsToSave.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
     }
 
     // Auto-generate title from customer name
@@ -344,7 +371,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", quantity: "1", unitPriceCents: 0 }]);
+    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, unit: "each", taxable: false, saveToPriceBook: false }]);
   };
 
   const removeLineItem = (index: number) => {
@@ -353,10 +380,12 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
     const updated = [...lineItems];
     if (field === 'unitPriceCents') {
-      updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(value) * 100) || 0;
+      updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(String(value)) * 100) || 0;
+    } else if (field === 'taxable' || field === 'saveToPriceBook') {
+      updated[index][field] = value as boolean;
     } else {
       updated[index][field] = value as string;
     }
@@ -663,7 +692,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
 
       {/* LINE ITEMS Modal */}
       <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
-        <DialogContent className="w-[95vw] max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="w-[95vw] max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Line Items</DialogTitle>
           </DialogHeader>
@@ -685,10 +714,45 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
                   )}
                 </div>
                 <Input
-                  placeholder="Description"
+                  placeholder="Name *"
                   value={item.name}
                   onChange={(e) => updateLineItem(index, 'name', e.target.value)}
                 />
+                <Textarea
+                  placeholder="Description (optional)"
+                  value={item.description}
+                  onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                  rows={2}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Task Code</Label>
+                    <Input
+                      placeholder="e.g., SVC-001"
+                      value={item.taskCode}
+                      onChange={(e) => updateLineItem(index, 'taskCode', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unit</Label>
+                    <Select
+                      value={item.unit}
+                      onValueChange={(value) => updateLineItem(index, 'unit', value)}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="each">Each</SelectItem>
+                        <SelectItem value="hour">Hour</SelectItem>
+                        <SelectItem value="ft">Foot</SelectItem>
+                        <SelectItem value="sq_ft">Sq Ft</SelectItem>
+                        <SelectItem value="job">Job</SelectItem>
+                        <SelectItem value="day">Day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs">Quantity</Label>
@@ -711,8 +775,26 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
                     />
                   </div>
                 </div>
-                <div className="text-right text-sm font-medium">
-                  Total: {formatCurrency(calculateLineTotal(item))}
+                <div className="flex items-center justify-between py-1">
+                  <Label className="text-sm font-normal">Taxable</Label>
+                  <Switch
+                    checked={item.taxable}
+                    onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-1 border-t pt-2">
+                  <div>
+                    <Label className="text-sm font-normal">Save to Price Book</Label>
+                    <p className="text-xs text-slate-500">Add as reusable template</p>
+                  </div>
+                  <Switch
+                    checked={item.saveToPriceBook}
+                    onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
+                  <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
                 </div>
               </div>
             ))}
