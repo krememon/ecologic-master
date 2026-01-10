@@ -297,8 +297,8 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       jobType: jobType || undefined,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
-        description: item.description.trim() || null,
-        taskCode: item.taskCode.trim() || null,
+        description: item.description?.trim() || null,
+        taskCode: item.taskCode?.trim() || null,
         quantity: item.quantity,
         unitPriceCents: item.unitPriceCents,
         unit: item.unit,
