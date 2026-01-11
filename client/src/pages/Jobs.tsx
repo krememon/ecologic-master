@@ -1953,9 +1953,6 @@ export default function Jobs() {
                       </div>
                     )}
                   </div>
-                  <Badge variant={job.status === 'active' ? 'default' : 'secondary'} className="ml-2">
-                    {job.status}
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
