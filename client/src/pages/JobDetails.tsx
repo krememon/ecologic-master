@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users } from "lucide-react";
@@ -78,16 +77,6 @@ interface JobDocument {
   fileType: string;
   visibility: string;
   createdAt: string;
-}
-
-function getStatusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
-    case 'active': return 'default';
-    case 'pending': return 'secondary';
-    case 'completed': return 'outline';
-    case 'cancelled': return 'destructive';
-    default: return 'secondary';
-  }
 }
 
 export default function JobDetails({ jobId }: JobDetailsProps) {
@@ -268,9 +257,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               <Trash2 className="h-4 w-4" />
             </Button>
           )}
-          <Badge variant={getStatusBadgeVariant(job.status)} className="text-sm capitalize">
-            {job.status}
-          </Badge>
         </div>
       </div>
 
