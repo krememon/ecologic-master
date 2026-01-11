@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -280,6 +280,11 @@ export default function Jobs() {
   const [estimatesStatusFilter, setEstimatesStatusFilter] = useState<'all' | string>('all');
   const [estimatesCustomerPickerOpen, setEstimatesCustomerPickerOpen] = useState(false);
   const [estimatesCustomerSearchQuery, setEstimatesCustomerSearchQuery] = useState('');
+  
+  // Bulk selection mode for estimates
+  const [isEstimateSelectionMode, setIsEstimateSelectionMode] = useState(false);
+  const [selectedEstimateIds, setSelectedEstimateIds] = useState<Set<number>>(new Set());
+  const [estimateDeleteConfirmOpen, setEstimateDeleteConfirmOpen] = useState(false);
   
   // Customer selection for estimates
   const [selectCustomerModalOpen, setSelectCustomerModalOpen] = useState(false);
@@ -822,6 +827,60 @@ export default function Jobs() {
       });
     },
   });
+
+  // Bulk delete estimates mutation
+  const bulkDeleteEstimatesMutation = useMutation({
+    mutationFn: async (estimateIds: number[]) => {
+      const results = await Promise.all(
+        estimateIds.map(async (id) => {
+          try {
+            const res = await apiRequest("DELETE", `/api/estimates/${id}`);
+            return { id, success: res.status === 204 || res.ok };
+          } catch {
+            return { id, success: false };
+          }
+        })
+      );
+      return results;
+    },
+    onSuccess: (results) => {
+      const successCount = results.filter(r => r.success).length;
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      setSelectedEstimateIds(new Set());
+      setIsEstimateSelectionMode(false);
+      setEstimateDeleteConfirmOpen(false);
+      toast({
+        title: "Estimates deleted",
+        description: `Successfully deleted ${successCount} estimate${successCount !== 1 ? 's' : ''}.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete some estimates.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle estimate selection
+  const toggleEstimateSelection = (estimateId: number) => {
+    setSelectedEstimateIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(estimateId)) {
+        newSet.delete(estimateId);
+      } else {
+        newSet.add(estimateId);
+      }
+      return newSet;
+    });
+  };
+
+  // Exit estimate selection mode
+  const exitEstimateSelectionMode = () => {
+    setIsEstimateSelectionMode(false);
+    setSelectedEstimateIds(new Set());
+  };
 
   // Validate file before upload (images only - for legacy photo endpoint)
   const validateFile = (file: File): string | null => {
@@ -1514,19 +1573,24 @@ export default function Jobs() {
         {/* ESTIMATES TAB CONTENT - RBAC guarded */}
         {canAccessEstimates && (
         <TabsContent value="estimates" className="mt-6">
-          {/* Filter Row: Customer Picker + Status Dropdown */}
+          {/* Filter Row: Customer Picker + Status Dropdown + Select Button */}
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
                 className="flex-1 justify-between"
                 onClick={() => setEstimatesCustomerPickerOpen(true)}
+                disabled={isEstimateSelectionMode}
                 data-testid="button-estimates-customer-picker"
               >
                 <span className="truncate">{selectedCustomerForFilterLabel}</span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
-              <Select value={estimatesStatusFilter === 'all' ? 'all' : estimatesStatusFilter} onValueChange={(v) => setEstimatesStatusFilter(v)}>
+              <Select 
+                value={estimatesStatusFilter === 'all' ? 'all' : estimatesStatusFilter} 
+                onValueChange={(v) => setEstimatesStatusFilter(v)}
+                disabled={isEstimateSelectionMode}
+              >
                 <SelectTrigger className="flex-1 min-w-0" data-testid="filter-estimates-status">
                   <span className="min-w-0 flex-1 truncate text-left">
                     {estimatesStatusFilter === 'all' ? 'All statuses' : estimatesStatusFilter.charAt(0).toUpperCase() + estimatesStatusFilter.slice(1)}
@@ -1540,6 +1604,29 @@ export default function Jobs() {
                   <SelectItem value="declined">Declined</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Select / Cancel button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (isEstimateSelectionMode) {
+                    exitEstimateSelectionMode();
+                  } else {
+                    setIsEstimateSelectionMode(true);
+                  }
+                }}
+                className="shrink-0"
+                data-testid="button-estimates-select-mode"
+              >
+                {isEstimateSelectionMode ? (
+                  "Cancel"
+                ) : (
+                  <>
+                    <CheckSquare className="h-4 w-4 mr-1" />
+                    Select
+                  </>
+                )}
+              </Button>
             </div>
 
             {/* Selected Customer Chip */}
@@ -1602,32 +1689,52 @@ export default function Jobs() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <>
+            <div className={`grid gap-4 md:grid-cols-2 lg:grid-cols-3 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
               {filteredEstimates.map((estimate) => {
                 const job = jobs.find(j => j.id === estimate.jobId);
+                const isSelected = selectedEstimateIds.has(estimate.id);
                 return (
                   <Card 
                     key={estimate.id} 
-                    className="hover:shadow-md transition-shadow cursor-pointer"
+                    className={`hover:shadow-md transition-all cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-950 ring-2 ring-blue-400' : ''}`}
                     onClick={() => {
-                      console.log("Estimate card clicked", estimate.id);
-                      setLocation(`/estimates/${estimate.id}`);
+                      if (isEstimateSelectionMode) {
+                        toggleEstimateSelection(estimate.id);
+                      } else {
+                        console.log("Estimate card clicked", estimate.id);
+                        setLocation(`/estimates/${estimate.id}`);
+                      }
                     }}
                     data-testid={`card-estimate-${estimate.id}`}
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="flex items-center gap-2 text-base truncate">
-                            <DollarSign className="h-5 w-5 text-green-600 flex-shrink-0" />
-                            {estimate.title || estimate.estimateNumber}
-                          </CardTitle>
-                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 truncate">
-                            {estimate.estimateNumber}
-                          </p>
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {/* Checkbox in selection mode */}
+                          {isEstimateSelectionMode && (
+                            <div 
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                                isSelected 
+                                  ? 'bg-blue-600 border-blue-600' 
+                                  : 'border-slate-300 dark:border-slate-600'
+                              }`}
+                            >
+                              {isSelected && <Check className="h-3 w-3 text-white" />}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="flex items-center gap-2 text-base truncate">
+                              <DollarSign className="h-5 w-5 text-green-600 flex-shrink-0" />
+                              {estimate.title || estimate.estimateNumber}
+                            </CardTitle>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 truncate">
+                              {estimate.estimateNumber}
+                            </p>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 ml-2">
-                          {canShareEstimates && (
+                          {!isEstimateSelectionMode && canShareEstimates && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1682,6 +1789,26 @@ export default function Jobs() {
                 );
               })}
             </div>
+            
+            {/* Sticky Action Bar when items are selected */}
+            {isEstimateSelectionMode && selectedEstimateIds.size > 0 && (
+              <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 shadow-lg px-4 py-3 flex items-center justify-between z-50">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {selectedEstimateIds.size} selected
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setEstimateDeleteConfirmOpen(true)}
+                  disabled={selectedEstimateIds.size === 0}
+                  data-testid="button-bulk-delete-estimates"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              </div>
+            )}
+            </>
           )}
         </TabsContent>
         )}
@@ -1978,6 +2105,40 @@ export default function Jobs() {
         }}
         canCreateCustomer={canAccessEstimates}
       />
+
+      {/* Bulk Delete Estimates Confirmation Dialog */}
+      <AlertDialog open={estimateDeleteConfirmOpen} onOpenChange={setEstimateDeleteConfirmOpen}>
+        <AlertDialogContent className="sm:max-w-[400px] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete estimates?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You are about to permanently delete {selectedEstimateIds.size} estimate{selectedEstimateIds.size !== 1 ? 's' : ''}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setEstimateDeleteConfirmOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                bulkDeleteEstimatesMutation.mutate(Array.from(selectedEstimateIds));
+              }}
+              disabled={bulkDeleteEstimatesMutation.isPending}
+            >
+              {bulkDeleteEstimatesMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Modal - Single Source of Truth */}
       <AlertDialog open={!!jobToDelete} onOpenChange={(open) => !open && setJobToDelete(null)}>

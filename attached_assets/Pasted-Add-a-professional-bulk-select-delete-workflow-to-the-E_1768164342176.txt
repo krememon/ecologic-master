@@ -1,0 +1,89 @@
+Add a professional bulk select + delete workflow to the Estimates tab.
+
+GOAL
+Allow users to select one or multiple estimates and delete them in bulk,
+without cluttering the default UI.
+
+DEFAULT STATE (IMPORTANT)
+- Estimates page should look EXACTLY the same as it does now on load
+- NO checkboxes visible by default
+- NO delete buttons visible by default
+
+ENTRY POINT (SELECT MODE)
+- Add a subtle “Select” button on the right side of the filter row
+  (same row as “All customers” / “All statuses”)
+- Button style:
+    - Text button or ghost button
+    - Label: “Select”
+    - Small checkmark or checkbox icon
+- This button must feel secondary (not as prominent as Create Estimate)
+
+WHEN “SELECT” IS CLICKED
+- Enter “Selection Mode”
+- Changes:
+    1. A checkbox appears on the LEFT of each estimate card
+    2. The “Select” button changes to “Cancel”
+    3. Estimate cards become selectable (checkbox OR clicking card toggles selection)
+- Selected cards show:
+    - Light blue background
+    - Clear checkmark state
+
+SELECTION ACTION BAR (BOTTOM)
+- When at least ONE estimate is selected:
+    - Show a sticky action bar at the bottom of the screen
+    - Action bar includes:
+        - “X selected” (left side)
+        - “Delete” button (right side, red/destructive)
+- Delete button should be disabled until ≥1 selected
+
+DELETE CONFIRMATION
+- Clicking Delete opens a confirmation modal:
+    Title: “Delete estimates?”
+    Body text:
+      “You are about to permanently delete X estimate(s).
+       This action cannot be undone.”
+    Buttons:
+      - Cancel (secondary)
+      - Delete (red, destructive)
+
+BACKEND BEHAVIOR
+- Implement bulk delete endpoint OR loop existing delete endpoint:
+    DELETE /api/estimates/:id
+- Ensure:
+    - Only estimates belonging to the user’s company can be deleted
+    - RBAC respected (Owner/Admin only if that rule exists)
+- After deletion:
+    - Remove estimates from UI immediately
+    - Exit selection mode automatically
+
+EXITING SELECTION MODE
+- Clicking “Cancel”:
+    - Clears all selections
+    - Hides checkboxes
+    - Removes bottom action bar
+    - Restores default UI
+
+EDGE CASES
+- If all estimates are deleted:
+    - Show empty state normally
+- If user refreshes mid-selection:
+    - Reset to default (non-selection) state
+
+DESIGN REQUIREMENTS
+- Must match existing EcoLogic spacing, fonts, and colors
+- No visual overlap with Create Estimate button
+- No regressions to:
+    - Share
+    - PDF generation
+    - Approval flow
+    - Filtering
+
+FILES TO TOUCH
+- Estimates list component
+- Estimate card component
+- API delete handler (if bulk helper added)
+
+DELIVERABLES
+- Select mode works smoothly
+- Bulk delete works correctly
+- UI remains clean and professional
