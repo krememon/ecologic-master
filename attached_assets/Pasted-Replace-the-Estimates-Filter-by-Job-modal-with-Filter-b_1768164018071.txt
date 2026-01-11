@@ -1,0 +1,65 @@
+Replace the Estimates “Filter by Job” modal with “Filter by Customer”.
+
+CURRENT
+In the Estimates tab, the filter modal lets users search and select a Job to filter estimates.
+We want to remove job-based filtering and instead filter estimates by CUSTOMER.
+
+GOAL UX
+- Button label changes from “All jobs” to “All customers”
+- Clicking opens a modal titled “Filter by Customer”
+- Search input placeholder: “Search customers…”
+- List items show:
+    - Customer full name (bold)
+    - Customer email (smaller, muted text underneath)
+- First option: “All customers” (resets filter)
+- Selecting a customer filters the estimates list to only that customer’s estimates
+
+DATA / FILTERING LOGIC
+We already have:
+- GET /api/customers
+- Estimates include customerId and/or customerName
+
+Implement filtering using ONE of the following (either is acceptable):
+Option A (frontend filter – preferred if simpler):
+- Load estimates list (already loaded)
+- Load customers list
+- When customer selected:
+    setSelectedCustomerId(customer.id)
+    display only estimates where estimate.customerId === selectedCustomerId
+
+Option B (backend filter):
+- Add optional query param:
+    GET /api/estimates?customerId=5
+- Backend returns only estimates matching customerId + companyId
+- Frontend refetches when filter changes
+
+Ensure filtering is fast and correct.
+
+SEARCH BEHAVIOR
+- Search should be case-insensitive
+- Search should match:
+    - First name
+    - Last name
+    - Full name
+    - Email
+- Results update live as the user types
+
+EDGE CASES
+- Some estimates may have customerId = null (legacy / standalone estimates)
+    - These should ONLY appear when “All customers” is selected
+    - They should NEVER appear when a specific customer is selected
+
+UI DETAILS
+- Filter chip / dropdown on Estimates page should display:
+    - “All customers” OR “Linda Graziano”
+- Modal closes automatically after selection
+- Status filter (“All statuses”) remains unchanged
+- No regressions to create estimate, share, or PDF flows
+
+DELIVERABLES
+- Job filter fully removed from Estimates
+- Customer filter fully functional
+- Searching “Linda” shows Linda Graziano
+- Selecting Linda shows ONLY her estimates
+- Email appears under customer name in the list
+- List files changed

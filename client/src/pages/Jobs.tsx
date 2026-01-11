@@ -276,10 +276,10 @@ export default function Jobs() {
   const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>('jobs');
   
   // Estimates tab filters
-  const [estimatesJobFilter, setEstimatesJobFilter] = useState<'all' | number>('all');
+  const [estimatesCustomerFilter, setEstimatesCustomerFilter] = useState<'all' | number>('all');
   const [estimatesStatusFilter, setEstimatesStatusFilter] = useState<'all' | string>('all');
-  const [estimatesJobPickerOpen, setEstimatesJobPickerOpen] = useState(false);
-  const [estimatesJobSearchQuery, setEstimatesJobSearchQuery] = useState('');
+  const [estimatesCustomerPickerOpen, setEstimatesCustomerPickerOpen] = useState(false);
+  const [estimatesCustomerSearchQuery, setEstimatesCustomerSearchQuery] = useState('');
   
   // Customer selection for estimates
   const [selectCustomerModalOpen, setSelectCustomerModalOpen] = useState(false);
@@ -365,13 +365,19 @@ export default function Jobs() {
     enabled: isAuthenticated && canAccessEstimates && mainPageTab === 'estimates',
   });
 
-  // Filter estimates based on job and status filters
+  // Fetch customers for filtering
+  const { data: allCustomers = [] } = useQuery<Customer[]>({
+    queryKey: ['/api/customers'],
+    enabled: isAuthenticated && canAccessEstimates,
+  });
+
+  // Filter estimates based on customer and status filters
   const filteredEstimates = useMemo(() => {
     let result = allEstimates;
     
-    // Filter by job
-    if (estimatesJobFilter !== 'all') {
-      result = result.filter(est => est.jobId === estimatesJobFilter);
+    // Filter by customer
+    if (estimatesCustomerFilter !== 'all') {
+      result = result.filter(est => est.customerId === estimatesCustomerFilter);
     }
     
     // Filter by status
@@ -380,24 +386,28 @@ export default function Jobs() {
     }
     
     return result;
-  }, [allEstimates, estimatesJobFilter, estimatesStatusFilter]);
+  }, [allEstimates, estimatesCustomerFilter, estimatesStatusFilter]);
 
-  // Filter jobs for estimates job picker
-  const estimatesFilteredJobs = useMemo(() => {
-    const query = estimatesJobSearchQuery.trim().toLowerCase();
-    if (!query) return jobs.slice(0, 100);
-    return jobs.filter(job => {
-      const searchFields = [job.title, job.clientName, job.location].filter(Boolean).map(f => f!.toLowerCase());
-      return searchFields.some(field => field.includes(query));
+  // Filter customers for estimates customer picker (case-insensitive search by name or email)
+  const estimatesFilteredCustomers = useMemo(() => {
+    const query = estimatesCustomerSearchQuery.trim().toLowerCase();
+    if (!query) return allCustomers.slice(0, 100);
+    return allCustomers.filter(customer => {
+      const firstName = (customer.firstName || '').toLowerCase();
+      const lastName = (customer.lastName || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`;
+      const email = (customer.email || '').toLowerCase();
+      return firstName.includes(query) || lastName.includes(query) || fullName.includes(query) || email.includes(query);
     }).slice(0, 100);
-  }, [jobs, estimatesJobSearchQuery]);
+  }, [allCustomers, estimatesCustomerSearchQuery]);
 
-  // Get selected job label for filter dropdown
-  const selectedJobForFilterLabel = useMemo(() => {
-    if (estimatesJobFilter === 'all') return 'All jobs';
-    const job = jobs.find(j => j.id === estimatesJobFilter);
-    return job?.title || 'Unknown job';
-  }, [estimatesJobFilter, jobs]);
+  // Get selected customer label for filter dropdown
+  const selectedCustomerForFilterLabel = useMemo(() => {
+    if (estimatesCustomerFilter === 'all') return 'All customers';
+    const customer = allCustomers.find(c => c.id === estimatesCustomerFilter);
+    if (!customer) return 'Unknown customer';
+    return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.email || 'Unknown';
+  }, [estimatesCustomerFilter, allCustomers]);
 
   // Fetch photos from legacy endpoint
   const { data: legacyJobPhotos = [] } = useQuery<JobPhoto[]>({
@@ -1504,16 +1514,16 @@ export default function Jobs() {
         {/* ESTIMATES TAB CONTENT - RBAC guarded */}
         {canAccessEstimates && (
         <TabsContent value="estimates" className="mt-6">
-          {/* Filter Row: Job Picker + Status Dropdown */}
+          {/* Filter Row: Customer Picker + Status Dropdown */}
           <div className="flex flex-col gap-3 mb-6">
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 
                 className="flex-1 justify-between"
-                onClick={() => setEstimatesJobPickerOpen(true)}
-                data-testid="button-estimates-job-picker"
+                onClick={() => setEstimatesCustomerPickerOpen(true)}
+                data-testid="button-estimates-customer-picker"
               >
-                <span className="truncate">{selectedJobForFilterLabel}</span>
+                <span className="truncate">{selectedCustomerForFilterLabel}</span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
               <Select value={estimatesStatusFilter === 'all' ? 'all' : estimatesStatusFilter} onValueChange={(v) => setEstimatesStatusFilter(v)}>
@@ -1532,20 +1542,20 @@ export default function Jobs() {
               </Select>
             </div>
 
-            {/* Selected Job Chip */}
-            {estimatesJobFilter !== 'all' && (
+            {/* Selected Customer Chip */}
+            {estimatesCustomerFilter !== 'all' && (
               <div className="flex items-center gap-2">
                 <Badge 
                   variant="secondary" 
                   className="flex items-center gap-1 px-3 py-1.5 text-sm"
-                  data-testid="chip-selected-estimate-job"
+                  data-testid="chip-selected-estimate-customer"
                 >
-                  <Building2 className="h-3 w-3" />
-                  <span className="truncate max-w-[200px]">Job: {selectedJobForFilterLabel}</span>
+                  <User className="h-3 w-3" />
+                  <span className="truncate max-w-[200px]">{selectedCustomerForFilterLabel}</span>
                   <button 
-                    onClick={() => setEstimatesJobFilter('all')}
+                    onClick={() => setEstimatesCustomerFilter('all')}
                     className="ml-1 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-full p-0.5"
-                    data-testid="button-clear-estimate-job-filter"
+                    data-testid="button-clear-estimate-customer-filter"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1874,56 +1884,59 @@ export default function Jobs() {
         </TabsContent>
       </Tabs>
 
-      {/* Estimates Job Picker Dialog (for filtering) */}
-      <Dialog open={estimatesJobPickerOpen} onOpenChange={setEstimatesJobPickerOpen}>
+      {/* Estimates Customer Picker Dialog (for filtering) */}
+      <Dialog open={estimatesCustomerPickerOpen} onOpenChange={setEstimatesCustomerPickerOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Filter by Job</DialogTitle>
+            <DialogTitle>Filter by Customer</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search jobs..."
-                value={estimatesJobSearchQuery}
-                onChange={(e) => setEstimatesJobSearchQuery(e.target.value)}
+                placeholder="Search customers..."
+                value={estimatesCustomerSearchQuery}
+                onChange={(e) => setEstimatesCustomerSearchQuery(e.target.value)}
                 className="pl-10"
-                data-testid="input-search-estimates-filter-jobs"
+                data-testid="input-search-estimates-filter-customers"
               />
             </div>
             <div className="max-h-64 overflow-y-auto space-y-1">
               <button
                 className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
                 onClick={() => {
-                  setEstimatesJobFilter('all');
-                  setEstimatesJobPickerOpen(false);
-                  setEstimatesJobSearchQuery('');
+                  setEstimatesCustomerFilter('all');
+                  setEstimatesCustomerPickerOpen(false);
+                  setEstimatesCustomerSearchQuery('');
                 }}
-                data-testid="button-filter-all-jobs"
+                data-testid="button-filter-all-customers"
               >
-                <Building2 className="h-4 w-4 text-slate-500" />
-                <span className="font-medium">All jobs</span>
+                <User className="h-4 w-4 text-slate-500" />
+                <span className="font-medium">All customers</span>
               </button>
-              {estimatesFilteredJobs.map((job) => (
-                <button
-                  key={job.id}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                  onClick={() => {
-                    setEstimatesJobFilter(job.id);
-                    setEstimatesJobPickerOpen(false);
-                    setEstimatesJobSearchQuery('');
-                  }}
-                  data-testid={`button-filter-job-${job.id}`}
-                >
-                  <Building2 className="h-4 w-4 text-slate-500" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{job.title}</p>
-                    {job.clientName && (
-                      <p className="text-sm text-slate-500 truncate">{job.clientName}</p>
-                    )}
-                  </div>
-                </button>
-              ))}
+              {estimatesFilteredCustomers.map((customer) => {
+                const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+                return (
+                  <button
+                    key={customer.id}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                    onClick={() => {
+                      setEstimatesCustomerFilter(customer.id);
+                      setEstimatesCustomerPickerOpen(false);
+                      setEstimatesCustomerSearchQuery('');
+                    }}
+                    data-testid={`button-filter-customer-${customer.id}`}
+                  >
+                    <User className="h-4 w-4 text-slate-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{fullName || 'No name'}</p>
+                      {customer.email && (
+                        <p className="text-sm text-slate-500 truncate">{customer.email}</p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </DialogContent>
