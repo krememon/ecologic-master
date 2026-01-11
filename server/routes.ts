@@ -3258,7 +3258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     console.log("[ShareEmail] ENV", {
       hasResendKey: !!process.env.RESEND_API_KEY,
-      fromEmail: process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL,
+      fromEmail: process.env.RESEND_FROM_EMAIL,
     });
     
     try {
@@ -3336,7 +3336,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send email using Resend
       const resend = new Resend(process.env.RESEND_API_KEY);
       
-      const fromEmail = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || 'noreply@resend.dev';
+      // Must use proper email format like "Name <email@domain.com>"
+      const fromEmail = process.env.RESEND_FROM_EMAIL;
+      if (!fromEmail) {
+        console.error("[ShareEmail] RESEND_FROM_EMAIL not configured");
+        return res.status(503).json({ 
+          success: false, 
+          message: "Email sender not configured. Please set RESEND_FROM_EMAIL.",
+          code: "EMAIL_NOT_CONFIGURED"
+        });
+      }
+      
       const emailSubject = subject || `Estimate ${estimate.estimateNumber} from ${company?.name || 'Our Company'}`;
       const emailBody = message || `Please find attached the estimate for your review.`;
 
@@ -3347,7 +3357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pdfSize: pdfBuffer.length 
       });
 
-      const result = await resend.emails.send({
+      const { data, error } = await resend.emails.send({
         from: fromEmail,
         to: toEmail,
         subject: emailSubject,
@@ -3368,9 +3378,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ],
       });
 
-      console.log("[ShareEmail] Resend result", result);
+      if (error) {
+        console.error("[ShareEmail] Resend error", error);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Failed to send email", 
+          error: error.message || error 
+        });
+      }
+
+      console.log("[ShareEmail] Resend result", { id: data?.id });
       console.log(`[ShareEmail] Email sent estimateId=${estimateId} toEmail=${toEmail}`);
-      res.json({ success: true, message: "Email sent successfully" });
+      res.json({ success: true, message: "Email sent successfully", id: data?.id });
     } catch (error: any) {
       console.error("Error sending estimate email:", error);
       if (error.message?.includes('API key')) {
