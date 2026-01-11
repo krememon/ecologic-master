@@ -1,0 +1,58 @@
+The PDF generates successfully, and “Open” shows it correctly, BUT the Generate Estimate PDF screen does NOT display the document immediately (shows a placeholder icon).
+
+This is a preview rendering/state update issue. Fix so the preview shows immediately after generation.
+
+REQUIREMENTS
+- As soon as POST /api/estimates/:id/share/pdf returns pdfUrl, the preview area must render the document automatically.
+- No user action (no “Open” click) should be required to see the preview.
+- If preview cannot be embedded on iOS, show a clear fallback message + “Open” button, but still attempt preview first.
+
+IMPLEMENTATION (do in this order)
+
+1) Ensure the component stores the returned URL in state
+const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+const [isPreviewLoading, setIsPreviewLoading] = useState(false)
+const [previewError, setPreviewError] = useState<string | null>(null)
+
+When Generate succeeds:
+setPdfUrl(returnedPdfUrl)
+setIsPreviewLoading(true)
+setPreviewError(null)
+
+2) Render a REAL preview (not an icon placeholder)
+Inside the preview card:
+- If pdfUrl exists:
+  render an <iframe> using a viewer fragment:
+    const viewerUrl = `${pdfUrl}#view=Fit`
+  <iframe
+    key={viewerUrl}              // IMPORTANT: forces reload when URL changes
+    src={viewerUrl}
+    className="w-full h-full"
+    style={{ border: 0 }}
+    onLoad={() => setIsPreviewLoading(false)}
+    onError={() => { setIsPreviewLoading(false); setPreviewError("Preview not supported"); }}
+  />
+
+- If isPreviewLoading: show skeleton overlay “Loading preview…”
+- If previewError: show “Preview not available” + Open button
+
+IMPORTANT:
+Do NOT use <img src={pdfUrl}> for preview (PDF cannot render in img).
+
+3) Make the preview container fixed height
+Set the preview container to something like:
+h-[55vh] on mobile
+so it has space to render the page.
+
+4) Debug log (temporary)
+After setting pdfUrl, log:
+console.log("[SharePDF] pdfUrl set:", returnedPdfUrl)
+
+5) Confirm immediate display
+After Generate PDF is clicked:
+- preview area shows the PDF within 1–2 seconds without any other click.
+
+DELIVERABLES
+- Generate PDF => preview displays immediately on the Generate Estimate page
+- “Open” still works
+- If iOS embed fails, fallback message appears (but not the generic placeholder)
