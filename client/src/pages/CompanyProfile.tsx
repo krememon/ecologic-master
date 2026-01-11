@@ -94,8 +94,11 @@ export default function CompanyProfile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast({ title: "Invalid file", description: "Please select an image file", variant: "destructive" });
+    console.log("[CompanyLogo] selected file", file.name, file.type, file.size);
+
+    // Validate type is PNG or JPG
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      toast({ title: "Invalid file", description: "Please select a PNG or JPG image", variant: "destructive" });
       return;
     }
 
@@ -109,19 +112,28 @@ export default function CompanyProfile() {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
       
+      console.log("[CompanyLogo] uploading to /api/upload...");
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formDataUpload,
         credentials: 'include',
       });
       
-      if (!res.ok) throw new Error('Upload failed');
+      const responseText = await res.text();
+      console.log("[CompanyLogo] response", res.status, responseText);
       
-      const { url } = await res.json();
+      if (!res.ok) {
+        const errorData = JSON.parse(responseText);
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const { url } = JSON.parse(responseText);
+      console.log("[CompanyLogo] got url:", url);
       handleChange('logo', url);
       toast({ title: "Success", description: "Logo uploaded" });
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to upload logo", variant: "destructive" });
+    } catch (error: any) {
+      console.error("[CompanyLogo] error:", error);
+      toast({ title: "Error", description: error.message || "Failed to upload logo", variant: "destructive" });
     } finally {
       setIsUploading(false);
     }
@@ -225,7 +237,7 @@ export default function CompanyProfile() {
                     type="file"
                     ref={fileInputRef}
                     onChange={handleLogoUpload}
-                    accept="image/*"
+                    accept="image/png,image/jpeg"
                     className="hidden"
                   />
                   <Button

@@ -192,6 +192,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }, express.static('uploads'));
 
+  // General file upload endpoint (for logos, etc.)
+  app.post('/api/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      console.log('[Upload] File received:', file.originalname, file.mimetype, file.size);
+
+      // Generate a unique filename with original extension
+      const ext = path.extname(file.originalname) || '.png';
+      const newFilename = `${file.filename}${ext}`;
+      const newPath = path.join('uploads', newFilename);
+      
+      // Rename to include extension
+      fs.renameSync(file.path, newPath);
+
+      const url = `/uploads/${newFilename}`;
+      console.log('[Upload] File saved:', url);
+      
+      res.json({ url });
+    } catch (error) {
+      console.error('[Upload] Error:', error);
+      res.status(500).json({ error: 'Failed to upload file' });
+    }
+  });
+
   // Auth middleware
   await setupAuth(app);
 

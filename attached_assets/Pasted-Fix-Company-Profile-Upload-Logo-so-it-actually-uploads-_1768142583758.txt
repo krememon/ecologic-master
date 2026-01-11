@@ -1,0 +1,76 @@
+Fix Company Profile “Upload Logo” so it actually uploads, saves, and displays the company logo.
+
+CURRENT
+On Company Profile page, clicking “Upload Logo” does not work (no upload or no logo appears).
+
+GOAL
+Owner can upload a PNG/JPG (<=5MB). After upload:
+- company.logoUrl is saved in DB
+- logo preview updates immediately in UI
+- persists after refresh
+
+DO THIS IN ORDER:
+
+1) FRONTEND: verify file picker works
+In CompanyProfile page:
+- Ensure Upload Logo button triggers a hidden <input type="file" accept="image/png,image/jpeg" />
+- Clicking button should open file picker
+- On change, log:
+  console.log("[CompanyLogo] selected file", file.name, file.type, file.size)
+
+2) FRONTEND: upload flow
+After selecting file:
+- Validate type is png/jpg and size <= 5MB
+- POST multipart/form-data to backend:
+  POST /api/company/logo
+  form field name: "file"
+
+Show progress state:
+- disable upload button
+- show “Uploading…”
+
+On success:
+- response returns { logoUrl }
+- update local company state immediately so preview changes without refresh
+
+3) BACKEND: upload endpoint
+Add route:
+POST /api/company/logo
+- Auth required
+- Get companyId from req.user.companyId
+- Parse multipart form-data (use multer or existing upload middleware)
+- Store file in your existing storage system (same as documents/attachments)
+- Return a public URL usable by the browser: { logoUrl }
+
+4) BACKEND: persist to DB
+Update company record:
+- company.logoUrl = returned file url
+(If the column doesn’t exist, add it.)
+
+DB migration:
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT;
+
+5) FRONTEND: display logo
+In Company Profile UI:
+- If company.logoUrl exists:
+   render <img src={company.logoUrl} ... />
+- else show placeholder.
+- Make sure the img fits nicely (square, contain, rounded).
+
+6) IMPORTANT: serving the file
+If logoUrl is under /uploads/..., ensure Express serves that directory publicly:
+app.use("/uploads", express.static(...))
+(or whatever your storage uses)
+Test by opening logoUrl in a new tab.
+
+7) DEBUGGING REQUIREMENT
+If anything fails:
+- Frontend must toast the actual error text from the response
+- Backend must console.error the full error
+
+DELIVERABLES
+- Upload Logo opens picker
+- Upload succeeds and returns logoUrl
+- Logo appears instantly in Company Profile preview
+- Refresh page and logo still shows
+- Provide files changed + endpoint + DB migration
