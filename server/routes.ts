@@ -25,7 +25,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -1444,6 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignedEmployeeIds,
         notes,
         jobType,
+        lineItems,
       } = req.body;
       
       // Customer is required
@@ -1525,6 +1526,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .update(jobs)
             .set({ assignedTo: assignedEmployeeIds[0] })
             .where(eq(jobs.id, createdJob.id));
+        }
+        
+        // Insert line items if provided
+        if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
+          const validLineItems = lineItems.filter((item: any) => item.name && item.name.trim());
+          for (let i = 0; i < validLineItems.length; i++) {
+            const item = validLineItems[i];
+            const quantity = parseFloat(item.quantity) || 1;
+            const unitPriceCents = parseInt(item.unitPriceCents) || 0;
+            const lineTotalCents = Math.round(quantity * unitPriceCents);
+            
+            await tx.insert(jobLineItems).values({
+              jobId: createdJob.id,
+              name: item.name.trim(),
+              description: item.description || null,
+              taskCode: item.taskCode || null,
+              quantity: quantity.toString(),
+              unitPriceCents,
+              unit: item.unit || 'each',
+              taxable: item.taxable || false,
+              lineTotalCents,
+              sortOrder: i,
+            });
+          }
         }
         
         return createdJob;
