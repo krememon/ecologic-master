@@ -1416,6 +1416,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New simplified job creation endpoint - accepts partial data
+  app.post('/api/jobs/create', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ code: 'COMPANY_NOT_FOUND', message: "Company not found" });
+      }
+      
+      const {
+        title,
+        description,
+        location,
+        city,
+        postalCode,
+        locationLat,
+        locationLng,
+        locationPlaceId,
+        priority,
+        customerId,
+        customerName,
+        scheduleDate,
+        scheduleStartTime,
+        scheduleEndTime,
+        assignedEmployeeIds,
+        notes, // internal notes stored in jobs.notes field
+      } = req.body;
+      
+      // Customer is required
+      if (!customerId) {
+        return res.status(400).json({ code: 'CUSTOMER_REQUIRED', message: "Customer is required" });
+      }
+      
+      // Verify customer exists and belongs to company
+      const customer = await storage.getCustomer(customerId);
+      if (!customer || customer.companyId !== company.id) {
+        return res.status(404).json({ code: 'CUSTOMER_NOT_FOUND', message: "Customer not found" });
+      }
+      
+      // Create job with minimal required fields
+      const jobTitle = title || `Job for ${customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim()}`;
+      
+      const job = await db.transaction(async (tx) => {
+        // Create the job
+        // Note: jobs.clientId references the old 'clients' table, but NewJobSheet uses 'customers'
+        // We only set clientName (text field) to store the customer name for display
+        const [createdJob] = await tx
+          .insert(jobs)
+          .values({
+            title: jobTitle,
+            description: description || null,
+            location: location || null,
+            city: city || null,
+            postalCode: postalCode || null,
+            locationLat: locationLat || null,
+            locationLng: locationLng || null,
+            locationPlaceId: locationPlaceId || null,
+            priority: priority || 'medium',
+            status: 'pending',
+            companyId: company.id,
+            clientName: customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+            notes: notes || null,
+          } as any)
+          .returning();
+        
+        // Create schedule item if schedule data is provided
+        if (scheduleDate) {
+          let startDateTime: Date;
+          let endDateTime: Date;
+          
+          if (scheduleStartTime) {
+            startDateTime = new Date(`${scheduleDate}T${scheduleStartTime}`);
+          } else {
+            startDateTime = new Date(`${scheduleDate}T09:00:00`);
+          }
+          
+          if (scheduleEndTime) {
+            endDateTime = new Date(`${scheduleDate}T${scheduleEndTime}`);
+          } else {
+            // Default to 1 hour after start
+            endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
+          }
+          
+          if (isFinite(+startDateTime) && isFinite(+endDateTime)) {
+            await tx
+              .insert(scheduleItems)
+              .values({
+                jobId: createdJob.id,
+                companyId: company.id,
+                startDateTime,
+                endDateTime,
+                location: location || null,
+                notes: null,
+                subcontractorId: null,
+                status: "scheduled",
+              });
+          }
+        }
+        
+        // Assign technicians if provided
+        if (assignedEmployeeIds && assignedEmployeeIds.length > 0) {
+          // For now, assign the first technician to the job's assignedTo field
+          await tx
+            .update(jobs)
+            .set({ assignedTo: assignedEmployeeIds[0] })
+            .where(eq(jobs.id, createdJob.id));
+        }
+        
+        return createdJob;
+      });
+      
+      res.status(201).json(job);
+    } catch (error) {
+      console.error("Error creating job:", error);
+      res.status(500).json({ message: "Failed to create job" });
+    }
+  });
+
   // Update job (PATCH)
   app.patch('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
     try {

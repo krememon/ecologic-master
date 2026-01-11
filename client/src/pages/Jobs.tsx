@@ -17,7 +17,7 @@ import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertJobSchema, type InsertJob, type Job, type Client, type Estimate, type Customer } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
-import { JobWizard } from "@/components/JobWizard";
+import { NewJobSheet } from "@/components/NewJobSheet";
 import { useCan } from "@/hooks/useCan";
 import { SelectCustomerModal } from "@/components/CustomerModals";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
@@ -1068,11 +1068,13 @@ export default function Jobs() {
         <p className="text-slate-600 dark:text-slate-400">Manage projects and create estimates for your clients</p>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="job-wizard w-[min(92vw,900px)] h-[min(92vh,680px)] p-0 rounded-2xl overflow-hidden shadow-xl" onInteractOutside={handleInteractOutside}>
-          <JobWizard onComplete={createJobMutation.mutate} isLoading={createJobMutation.isPending} />
-        </DialogContent>
-      </Dialog>
+      <NewJobSheet 
+        open={isDialogOpen} 
+        onOpenChange={setIsDialogOpen}
+        onJobCreated={(newJob) => {
+          setSelectedJob(newJob);
+        }}
+      />
 
       {/* Edit Job Dialog */}
       <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
