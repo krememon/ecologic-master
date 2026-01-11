@@ -1,20 +1,23 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ChevronLeft, Settings2, Upload, X, Building2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/slider";
+import { Loader2, ChevronLeft, Settings2, Upload, X, Building2, Crop } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 
 interface CompanyProfileData {
   name: string;
   logo: string | null;
-  logoFitMode: "contain" | "cover" | "stretch";
   phone: string | null;
   email: string | null;
   addressLine1: string | null;
@@ -27,6 +30,48 @@ interface CompanyProfileData {
   defaultFooterText: string | null;
 }
 
+async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
+  const image = new Image();
+  image.crossOrigin = 'anonymous';
+  
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = reject;
+    image.src = imageSrc;
+  });
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2d context');
+
+  const outputSize = 512;
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    outputSize,
+    outputSize
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Canvas is empty'));
+      },
+      'image/png',
+      1
+    );
+  });
+}
+
 export default function CompanyProfile() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -37,7 +82,6 @@ export default function CompanyProfile() {
   const [formData, setFormData] = useState<CompanyProfileData>({
     name: "",
     logo: null,
-    logoFitMode: "contain",
     phone: null,
     email: null,
     addressLine1: null,
@@ -49,6 +93,12 @@ export default function CompanyProfile() {
     licenseNumber: null,
     defaultFooterText: null,
   });
+
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const { data: profile, isLoading } = useQuery<CompanyProfileData>({
     queryKey: ['/api/company/profile'],
@@ -92,11 +142,10 @@ export default function CompanyProfile() {
     updateMutation.mutate(formData);
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate type is PNG or JPG
     if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
       toast({ title: "Invalid file", description: "Please select a PNG or JPG image", variant: "destructive" });
       return;
@@ -107,10 +156,30 @@ export default function CompanyProfile() {
       return;
     }
 
+    const objectUrl = URL.createObjectURL(file);
+    setImageToCrop(objectUrl);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCropModalOpen(true);
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleSaveCrop = async () => {
+    if (!imageToCrop || !croppedAreaPixels) return;
+
     setIsUploading(true);
     try {
+      const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
+      
       const formDataUpload = new FormData();
-      formDataUpload.append('file', file);
+      formDataUpload.append('file', croppedBlob, 'company-logo.png');
       
       const res = await fetch('/api/company/logo', {
         method: 'POST',
@@ -126,16 +195,34 @@ export default function CompanyProfile() {
       }
       
       const { logoUrl } = JSON.parse(responseText);
-      // Update form data immediately with cache buster
       setFormData(prev => ({ ...prev, logo: `${logoUrl}?v=${Date.now()}` }));
-      // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/company/profile'] });
       queryClient.invalidateQueries({ queryKey: ['/api/company'] });
-      toast({ title: "Success", description: "Logo uploaded and saved" });
+      toast({ title: "Success", description: "Logo saved" });
+      setCropModalOpen(false);
+      setImageToCrop(null);
     } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to upload logo", variant: "destructive" });
+      toast({ title: "Error", description: error.message || "Failed to save logo", variant: "destructive" });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleCancelCrop = () => {
+    setCropModalOpen(false);
+    if (imageToCrop) {
+      URL.revokeObjectURL(imageToCrop);
+    }
+    setImageToCrop(null);
+  };
+
+  const handleEditCrop = () => {
+    if (formData.logo) {
+      const logoUrl = formData.logo.split('?')[0];
+      setImageToCrop(logoUrl);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCropModalOpen(true);
     }
   };
 
@@ -218,10 +305,7 @@ export default function CompanyProfile() {
                       <img 
                         src={formData.logo} 
                         alt="Company logo" 
-                        className="w-full h-full"
-                        style={{ 
-                          objectFit: formData.logoFitMode === 'stretch' ? 'fill' : formData.logoFitMode 
-                        }}
+                        className="w-full h-full object-cover"
                       />
                     </div>
                     <button
@@ -237,78 +321,38 @@ export default function CompanyProfile() {
                     <Building2 className="h-8 w-8 text-slate-400" />
                   </div>
                 )}
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleLogoUpload}
-                      accept="image/png,image/jpeg"
-                      className="hidden"
-                    />
+                <div className="flex-1 space-y-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Logo
+                  </Button>
+                  {formData.logo && (
                     <Button
                       type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleEditCrop}
+                      className="text-teal-600 hover:text-teal-700"
                     >
-                      {isUploading ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Upload className="h-4 w-4 mr-2" />
-                      )}
-                      Upload Logo
+                      <Crop className="h-4 w-4 mr-1" />
+                      Edit / Crop
                     </Button>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                      PNG or JPG, max 5MB
-                    </p>
-                  </div>
-                  
-                  {formData.logo && (
-                    <div className="space-y-2">
-                      <Label className="text-sm">Logo Fit</Label>
-                      <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => handleChange('logoFitMode', 'contain')}
-                          className={`flex-1 px-3 py-1.5 text-sm font-medium transition-colors ${
-                            formData.logoFitMode === 'contain' 
-                              ? 'bg-teal-600 text-white' 
-                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                          }`}
-                        >
-                          Contain
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleChange('logoFitMode', 'cover')}
-                          className={`flex-1 px-3 py-1.5 text-sm font-medium border-l border-slate-200 dark:border-slate-700 transition-colors ${
-                            formData.logoFitMode === 'cover' 
-                              ? 'bg-teal-600 text-white' 
-                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                          }`}
-                        >
-                          Cover
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleChange('logoFitMode', 'stretch')}
-                          className={`flex-1 px-3 py-1.5 text-sm font-medium border-l border-slate-200 dark:border-slate-700 transition-colors ${
-                            formData.logoFitMode === 'stretch' 
-                              ? 'bg-teal-600 text-white' 
-                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-                          }`}
-                        >
-                          Stretch
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {formData.logoFitMode === 'contain' && 'Shows entire logo with padding if needed (recommended)'}
-                        {formData.logoFitMode === 'cover' && 'Fills the area, may crop edges'}
-                        {formData.logoFitMode === 'stretch' && 'Stretches to fill exactly'}
-                      </p>
-                    </div>
                   )}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    PNG or JPG, max 5MB. Logo will be cropped to a square.
+                  </p>
                 </div>
               </div>
             </div>
@@ -420,6 +464,70 @@ export default function CompanyProfile() {
           </div>
         </form>
       )}
+
+      <Dialog open={cropModalOpen} onOpenChange={(open) => !open && handleCancelCrop()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Crop Logo</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="relative w-full h-72 bg-slate-900 rounded-lg overflow-hidden">
+              {imageToCrop && (
+                <Cropper
+                  image={imageToCrop}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  onZoomChange={setZoom}
+                  cropShape="rect"
+                  showGrid={true}
+                />
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-sm">Zoom</Label>
+              <Slider
+                value={[zoom]}
+                onValueChange={([value]) => setZoom(value)}
+                min={1}
+                max={3}
+                step={0.1}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancelCrop}
+                disabled={isUploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveCrop}
+                disabled={isUploading}
+                className="bg-teal-600 hover:bg-teal-700"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

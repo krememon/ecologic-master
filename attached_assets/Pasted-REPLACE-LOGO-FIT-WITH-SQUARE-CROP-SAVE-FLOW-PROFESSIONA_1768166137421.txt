@@ -1,0 +1,79 @@
+REPLACE “LOGO FIT” WITH SQUARE CROP + SAVE FLOW (PROFESSIONAL)
+
+CURRENT PROBLEM
+- The “Logo Fit” contain/cover/stretch UI is not what I want.
+- I want a proper cropping experience: upload -> crop -> save.
+- Crop must be SQUARE (not circle) and must save successfully + persist on refresh and on documents.
+
+GOAL
+When user uploads a logo:
+1) Open a “Crop Logo” modal automatically
+2) User can crop the image inside a SQUARE crop box
+3) User clicks “Save Crop”
+4) App uploads the cropped image and saves company.logoUrl in DB
+5) UI preview updates immediately + persists after refresh
+6) No crashing, no broken states
+
+UI/UX REQUIREMENTS
+- Square preview container stays (rounded corners okay), NO circle.
+- Remove the “Logo Fit” segmented buttons entirely.
+- Add a small “Edit / Crop” link/button next to the logo preview to re-crop later.
+- Modal layout:
+  Title: “Crop Logo”
+  Crop area (large)
+  Buttons: Cancel | Save
+  Optional: Zoom slider (nice to have)
+- Show loading state on Save and disable buttons while saving.
+
+CROP RULES
+- Crop aspect ratio must be 1:1 (square).
+- Export cropped result as PNG (preferred) or JPEG.
+- Export size should be clean and consistent (ex: 512x512) so it looks sharp on docs.
+
+IMPLEMENTATION (DO THIS WAY)
+FRONTEND
+- Use a cropper library with square crop support (choose ONE):
+  - react-easy-crop (recommended), OR
+  - react-image-crop
+- Flow:
+  A) User selects file in Upload Logo
+  B) Create object URL and open Crop Logo modal with the selected image
+  C) User crops
+  D) On Save:
+     - Render cropped area to a canvas
+     - Convert to Blob (image/png) (or jpeg)
+     - Upload cropped blob via FormData to backend:
+       formData.append("file", croppedBlob, "company-logo.png")
+       POST /api/company/logo
+     - Backend returns { logoUrl }
+     - Save company.logoUrl in DB (either in same endpoint or via PATCH company endpoint)
+     - Update UI state immediately
+
+BACKEND
+- Reuse the existing /api/company/logo upload endpoint
+- Ensure it accepts multipart/form-data field name "file"
+- Save image to storage, return public logoUrl
+- Update company.logoUrl in DB (same request is fine)
+- MUST NOT crash on error; return JSON error.
+
+REMOVE OLD “LOGO FIT” DATA
+- Remove company.logoFitMode usage if it exists (or ignore it).
+- Ensure all logo rendering just uses the final cropped company.logoUrl.
+
+PERSISTENCE + RENDERING
+- On Company Profile load, show company.logoUrl in the square preview.
+- Anywhere the company logo is rendered (estimates/invoices/customer docs), it should use company.logoUrl (already-cropped square).
+
+TESTS (MUST PASS)
+- Upload image -> crop modal opens
+- Crop -> Save -> logo updates immediately
+- Refresh page -> logo persists
+- Click “Edit/Crop” -> re-crop works and saves new logoUrl
+- Bad file type or too large -> clean error message, no crash
+- Server never crashes during upload/crop
+
+DELIVERABLES
+- Square crop modal with Save/Cancel
+- Cropped image upload + DB save
+- UI preview + persistence
+- Remove the Logo Fit contain/cover/stretch UI completely
