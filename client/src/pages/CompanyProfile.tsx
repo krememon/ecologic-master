@@ -14,6 +14,7 @@ import { useCan } from "@/hooks/useCan";
 interface CompanyProfileData {
   name: string;
   logo: string | null;
+  logoFitMode: "contain" | "cover" | "stretch";
   phone: string | null;
   email: string | null;
   addressLine1: string | null;
@@ -36,6 +37,7 @@ export default function CompanyProfile() {
   const [formData, setFormData] = useState<CompanyProfileData>({
     name: "",
     logo: null,
+    logoFitMode: "contain",
     phone: null,
     email: null,
     addressLine1: null,
@@ -212,11 +214,16 @@ export default function CompanyProfile() {
               <div className="flex items-start gap-4">
                 {formData.logo ? (
                   <div className="relative">
-                    <img 
-                      src={formData.logo} 
-                      alt="Company logo" 
-                      className="w-24 h-24 object-contain rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900"
-                    />
+                    <div className="w-32 h-32 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 overflow-hidden">
+                      <img 
+                        src={formData.logo} 
+                        alt="Company logo" 
+                        className="w-full h-full"
+                        style={{ 
+                          objectFit: formData.logoFitMode === 'stretch' ? 'fill' : formData.logoFitMode 
+                        }}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={removeLogo}
@@ -226,34 +233,82 @@ export default function CompanyProfile() {
                     </button>
                   </div>
                 ) : (
-                  <div className="w-24 h-24 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                  <div className="w-32 h-32 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center bg-slate-100 dark:bg-slate-900">
                     <Building2 className="h-8 w-8 text-slate-400" />
                   </div>
                 )}
-                <div className="flex-1">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleLogoUpload}
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                    )}
-                    Upload Logo
-                  </Button>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                    PNG or JPG, max 5MB
-                  </p>
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleLogoUpload}
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
+                      Upload Logo
+                    </Button>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                      PNG or JPG, max 5MB
+                    </p>
+                  </div>
+                  
+                  {formData.logo && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">Logo Fit</Label>
+                      <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => handleChange('logoFitMode', 'contain')}
+                          className={`flex-1 px-3 py-1.5 text-sm font-medium transition-colors ${
+                            formData.logoFitMode === 'contain' 
+                              ? 'bg-teal-600 text-white' 
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          Contain
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleChange('logoFitMode', 'cover')}
+                          className={`flex-1 px-3 py-1.5 text-sm font-medium border-l border-slate-200 dark:border-slate-700 transition-colors ${
+                            formData.logoFitMode === 'cover' 
+                              ? 'bg-teal-600 text-white' 
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          Cover
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleChange('logoFitMode', 'stretch')}
+                          className={`flex-1 px-3 py-1.5 text-sm font-medium border-l border-slate-200 dark:border-slate-700 transition-colors ${
+                            formData.logoFitMode === 'stretch' 
+                              ? 'bg-teal-600 text-white' 
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          Stretch
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {formData.logoFitMode === 'contain' && 'Shows entire logo with padding if needed (recommended)'}
+                        {formData.logoFitMode === 'cover' && 'Fills the area, may crop edges'}
+                        {formData.logoFitMode === 'stretch' && 'Stretches to fill exactly'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

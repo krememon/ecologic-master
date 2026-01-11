@@ -88,6 +88,7 @@ export const companies = pgTable("companies", {
   inviteCodeVersion: integer("invite_code_version").default(0).notNull(),
   inviteCodeRotatedAt: timestamp("invite_code_rotated_at").defaultNow(),
   logo: varchar("logo"),
+  logoFitMode: varchar("logo_fit_mode").default("contain"), // contain, cover, stretch
   licenseNumber: varchar("license_number"),
   defaultFooterText: text("default_footer_text"),
   industry: varchar("industry", { length: 100 }),

@@ -1,0 +1,57 @@
+ADD “FIT” SELECTION FOR COMPANY LOGO (SQUARE, NOT CIRCLE)
+
+CONTEXT
+- Logo upload now works and saves correctly.
+- Next: after uploading a logo, user must be able to choose how the logo “fits” inside the preview/printed documents.
+- IMPORTANT: Do NOT use a circular crop UI. The logo display must be SQUARE/RECTANGULAR and look professional.
+
+GOAL
+When a user uploads a logo, they can choose a “Fit Mode”:
+1) Contain (recommended): show entire logo, no cropping (may have padding)
+2) Cover: fills the square, crops edges if needed
+3) Stretch (optional): fills square exactly (not recommended but available)
+
+UI REQUIREMENTS
+- The preview area must be a SQUARE container (ex: 120x120 or 140x140), with rounded corners (small radius), not a circle.
+- Add a labeled control under/next to Upload Logo:
+  Label: “Logo Fit”
+  Control: segmented buttons or dropdown with options: Contain / Cover / Stretch
+- Live preview updates instantly when changing the fit mode.
+- This should look clean and consistent with the rest of the Company Profile UI.
+
+DATA / PERSISTENCE
+- Store the selected fit mode on the company record:
+  company.logoFitMode = "contain" | "cover" | "stretch"
+- Default should be "contain".
+- Persist to DB so it stays after refresh and is used anywhere the logo is rendered (estimates, invoices, customer docs).
+- When company data loads, set the UI to the saved fit mode.
+
+IMPLEMENTATION DETAILS
+FRONTEND
+- Update the logo preview <img> styles based on logoFitMode:
+  contain  -> object-fit: contain;
+  cover    -> object-fit: cover;
+  stretch  -> object-fit: fill; (or object-fit: fill + width/height 100%)
+- Ensure the image fills the square container: width: 100%; height: 100%;
+- Add subtle background behind the square preview (light gray) so transparent logos look good.
+- Keep the “Upload Logo” button as-is.
+
+BACKEND
+- Update company schema/model to include logoFitMode (string).
+- Update the company update route to accept and save logoFitMode.
+- If missing, default to "contain".
+
+DOCUMENT RENDERING
+- Anywhere the company logo is shown (estimate PDF/preview, invoice, customer docs), apply the same fit mode styling so it matches what user chose.
+
+TESTS
+- Upload new logo -> defaults to Contain
+- Switch to Cover -> preview crops and persists after refresh
+- Switch to Stretch -> preview stretches and persists after refresh
+- Fit mode applies on Estimates/Invoices/Docs logo rendering
+
+DELIVERABLES
+- Square logo preview (no circle)
+- Fit mode selector UI
+- Persisted company.logoFitMode
+- Consistent rendering across app

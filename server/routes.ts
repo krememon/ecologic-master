@@ -577,6 +577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         name: company.name,
         logo: company.logo,
+        logoFitMode: company.logoFitMode || 'contain',
         phone: company.phone,
         email: company.email,
         addressLine1: company.addressLine1,
@@ -607,7 +608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
       
-      const { name, logo, phone, email, addressLine1, addressLine2, city, state, postalCode, country, licenseNumber, defaultFooterText } = req.body;
+      const { name, logo, logoFitMode, phone, email, addressLine1, addressLine2, city, state, postalCode, country, licenseNumber, defaultFooterText } = req.body;
       
       if (!name || !name.trim()) {
         return res.status(400).json({ error: 'Company name is required' });
@@ -616,6 +617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedCompany = await storage.updateCompany(member.companyId, {
         name: name.trim(),
         logo: logo || null,
+        logoFitMode: logoFitMode || 'contain',
         phone: phone || null,
         email: email || null,
         addressLine1: addressLine1 || null,
