@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink, Maximize2 } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink, Maximize2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ShareEstimateModalProps {
@@ -35,12 +35,40 @@ export function ShareEstimateModal({
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
   const [subject, setSubject] = useState(`Estimate ${estimateNumber} from ${companyName}`);
   const [message, setMessage] = useState(
     `Hi${customerFirstName ? ` ${customerFirstName}` : ""},\n\nThank you for choosing ${companyName}. Please see attached estimate.\n\nBest regards,\n${companyName}`
   );
+
+  // Fetch existing PDF when modal opens
+  useEffect(() => {
+    if (open && !pdfUrl) {
+      setLoadingExisting(true);
+      fetch(`/api/estimates/${estimateId}/share/pdf/latest`, { credentials: 'include' })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            if (data.pdfUrl) {
+              setPdfUrl(data.pdfUrl);
+              setPdfFileName(data.fileName);
+              setPreviewImageUrl(data.previewImageUrl || null);
+              setPreviewLoading(true);
+              setPreviewError(false);
+              console.log("[SharePDF] Loaded existing PDF:", data);
+            }
+          }
+        })
+        .catch((err) => {
+          console.log("[SharePDF] No existing PDF found:", err);
+        })
+        .finally(() => {
+          setLoadingExisting(false);
+        });
+    }
+  }, [open, estimateId]);
 
   const generatePdfMutation = useMutation({
     mutationFn: async () => {
@@ -105,10 +133,8 @@ export function ShareEstimateModal({
   });
 
   const handleClose = () => {
+    // Only reset step and email fields, keep PDF state so it persists on reopen
     setStep(1);
-    setPdfUrl(null);
-    setPdfFileName(null);
-    setPreviewImageUrl(null);
     setPreviewLoading(false);
     setPreviewError(false);
     setToEmail(customerEmail || "");
@@ -117,6 +143,10 @@ export function ShareEstimateModal({
       `Hi${customerFirstName ? ` ${customerFirstName}` : ""},\n\nThank you for choosing ${companyName}. Please see attached estimate.\n\nBest regards,\n${companyName}`
     );
     onOpenChange(false);
+  };
+
+  const handleRegenerate = () => {
+    generatePdfMutation.mutate();
   };
 
   const handleGeneratePdf = () => {
@@ -163,7 +193,12 @@ export function ShareEstimateModal({
 
         {step === 1 && (
           <div className="py-4">
-            {!pdfUrl ? (
+            {loadingExisting ? (
+              <div className="text-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
+                <p className="text-sm text-slate-500">Checking for existing PDF...</p>
+              </div>
+            ) : !pdfUrl ? (
               <div className="text-center">
                 <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
@@ -195,6 +230,18 @@ export function ShareEstimateModal({
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                       {pdfFileName}
                     </span>
+                    <button
+                      onClick={handleRegenerate}
+                      disabled={generatePdfMutation.isPending}
+                      className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline flex items-center gap-1"
+                    >
+                      {generatePdfMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      Regenerate
+                    </button>
                   </div>
                   <div className="flex items-center gap-1">
                     <Button

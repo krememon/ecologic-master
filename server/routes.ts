@@ -3210,6 +3210,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/estimates/:id/share/pdf/latest - Get the latest generated PDF for an estimate
+  app.get('/api/estimates/:id/share/pdf/latest', requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      // Get the latest PDF document for this estimate
+      const latestDoc = await storage.getLatestEstimateDocument(estimateId, companyId);
+      
+      if (!latestDoc) {
+        return res.status(404).json({ pdfUrl: null, message: "No PDF found for this estimate" });
+      }
+
+      // Check if preview image exists
+      const previewFileName = latestDoc.fileName.replace('.pdf', '_preview.png');
+      const previewPath = path.join('uploads', previewFileName);
+      const previewImageUrl = fs.existsSync(previewPath) ? `/uploads/${previewFileName}` : null;
+
+      res.json({
+        pdfUrl: latestDoc.fileUrl,
+        fileName: latestDoc.fileName,
+        previewImageUrl,
+        documentId: latestDoc.id,
+        createdAt: latestDoc.createdAt,
+      });
+    } catch (error) {
+      console.error("Error fetching latest PDF:", error);
+      res.status(500).json({ message: "Failed to fetch latest PDF" });
+    }
+  });
+
   // POST /api/estimates/:id/share/email - Send estimate PDF via email
   // Use requirePerm to ensure companyId is set on request
   app.post('/api/estimates/:id/share/email', requirePerm('estimates.create'), async (req: any, res) => {
