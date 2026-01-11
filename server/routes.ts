@@ -2898,15 +2898,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // POST /api/estimates/:id/share/pdf - Generate PDF for estimate
-  app.post('/api/estimates/:id/share/pdf', isAuthenticated, async (req: any, res) => {
+  // Use requirePerm to ensure companyId is set on request
+  app.post('/api/estimates/:id/share/pdf', requirePerm('estimates.create'), async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
       const estimateId = parseInt(req.params.id);
       
-      // RBAC check with owner fallback
+      console.log("[SharePDF] start", { estimateId, userId, companyId, userRole: req.userRole });
+      
+      // RBAC check with owner fallback (requirePerm already validates estimates.create permission)
       const canShare = await canUserShareEstimate(userId, companyId);
       if (!canShare) {
+        console.log("[SharePDF] permission denied", { userId, companyId });
         return res.status(403).json({ message: "You don't have permission to share estimates" });
       }
       
@@ -3169,7 +3173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/estimates/:id/share/email - Send estimate PDF via email
-  app.post('/api/estimates/:id/share/email', isAuthenticated, async (req: any, res) => {
+  // Use requirePerm to ensure companyId is set on request
+  app.post('/api/estimates/:id/share/email', requirePerm('estimates.create'), async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
