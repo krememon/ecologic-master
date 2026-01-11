@@ -3081,205 +3081,399 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fs.mkdirSync('uploads', { recursive: true });
       }
 
-      const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+      const doc = new PDFDocument({ margin: 48, size: 'LETTER' });
       const writeStream = fs.createWriteStream(filePath);
       doc.pipe(writeStream);
 
-      // Header with company info
-      let yPos = 50;
+      // Page constants
+      const PAGE_WIDTH = 612;
+      const PAGE_HEIGHT = 792;
+      const MARGIN = 48;
+      const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
+      const LOGO_SIZE = 80;
+      const HEADER_BOX_WIDTH = 180;
       
-      // Company logo (if available)
-      if (company.logo) {
-        try {
-          const logoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
-          if (fs.existsSync(logoPath)) {
-            doc.image(logoPath, 50, yPos, { width: 80 });
-            yPos += 60;
-          }
-        } catch (e) {
-          console.log('Logo not found, skipping');
-        }
-      }
-
-      // Company name
-      doc.fontSize(20).font('Helvetica-Bold').text(company.name, 50, yPos);
-      yPos += 25;
-
-      // Company contact info
-      doc.fontSize(10).font('Helvetica');
-      if (company.addressLine1) {
-        let addressLine = company.addressLine1;
-        if (company.addressLine2) addressLine += ', ' + company.addressLine2;
-        doc.text(addressLine, 50, yPos);
-        yPos += 12;
-      }
-      if (company.city || company.state || company.postalCode) {
-        const cityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(', ');
-        doc.text(cityLine, 50, yPos);
-        yPos += 12;
-      }
-      if (company.phone) {
-        doc.text(`Phone: ${company.phone}`, 50, yPos);
-        yPos += 12;
-      }
-      if (company.email) {
-        doc.text(`Email: ${company.email}`, 50, yPos);
-        yPos += 12;
-      }
-      if (company.licenseNumber) {
-        doc.text(`License: ${company.licenseNumber}`, 50, yPos);
-        yPos += 12;
-      }
-
-      yPos += 20;
-
-      // Estimate title and number
-      doc.fontSize(16).font('Helvetica-Bold').text('ESTIMATE', 50, yPos);
-      yPos += 20;
-      doc.fontSize(12).font('Helvetica').text(`Estimate #: ${estimate.estimateNumber}`, 50, yPos);
-      yPos += 15;
+      // Colors
+      const GRAY_LIGHT = '#F5F5F5';
+      const GRAY_TEXT = '#666666';
+      const GRAY_BORDER = '#E0E0E0';
+      const BLACK = '#000000';
+      
+      // Calculate totals
+      const subtotal = (estimate.subtotalCents || 0) / 100;
+      const tax = ((estimate as any).taxCents || 0) / 100;
+      const total = (estimate.totalCents || 0) / 100;
       
       // Service date
       const serviceDate = estimate.scheduledDate 
         ? new Date(estimate.scheduledDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
         : new Date(estimate.createdAt!).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-      doc.text(`Date: ${serviceDate}`, 50, yPos);
-      yPos += 15;
 
-      // Customer info
-      if (customer || estimate.customerName) {
-        yPos += 10;
-        doc.fontSize(12).font('Helvetica-Bold').text('Bill To:', 50, yPos);
-        yPos += 15;
-        doc.fontSize(10).font('Helvetica');
+      // Customer info preparation
+      const custName = customer ? `${customer.firstName} ${customer.lastName}` : estimate.customerName || '';
+      const custEmail = customer?.email || (estimate as any).customerEmail || '';
+      const custPhone = customer?.phone || (estimate as any).customerPhone || '';
+      const custAddress = customer?.address || (estimate as any).customerAddress || '';
+
+      // Table column positions
+      const COL_SERVICE = MARGIN;
+      const COL_QTY = 340;
+      const COL_PRICE = 400;
+      const COL_AMOUNT = 490;
+      const TABLE_ROW_HEIGHT = 20;
+
+      // ========== HELPER FUNCTIONS ==========
+      
+      const drawHeader = (y: number): number => {
+        let leftY = y;
+        let rightBoxTop = y;
         
-        const custName = customer ? `${customer.firstName} ${customer.lastName}` : estimate.customerName;
+        // LEFT SIDE: Logo + Company Info
+        const leftColumnWidth = CONTENT_WIDTH - HEADER_BOX_WIDTH - 20;
+        
+        // Logo
+        if (company.logo) {
+          try {
+            const logoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
+            if (fs.existsSync(logoPath)) {
+              doc.image(logoPath, MARGIN, leftY, { width: LOGO_SIZE, height: LOGO_SIZE });
+              leftY += LOGO_SIZE + 8;
+            }
+          } catch (e) {
+            console.log('Logo not found, skipping');
+          }
+        }
+        
+        // Company name
+        doc.fontSize(16).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text(company.name, MARGIN, leftY, { width: leftColumnWidth });
+        leftY += 20;
+        
+        // Company contact info
+        doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+        if (company.addressLine1) {
+          let addressLine = company.addressLine1;
+          if (company.addressLine2) addressLine += ', ' + company.addressLine2;
+          doc.text(addressLine, MARGIN, leftY, { width: leftColumnWidth });
+          leftY += 13;
+        }
+        if (company.city || company.state || company.postalCode) {
+          const cityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(', ');
+          doc.text(cityLine, MARGIN, leftY, { width: leftColumnWidth });
+          leftY += 13;
+        }
+        if (company.phone) {
+          doc.text(company.phone, MARGIN, leftY, { width: leftColumnWidth });
+          leftY += 13;
+        }
+        if (company.email) {
+          doc.text(company.email, MARGIN, leftY, { width: leftColumnWidth });
+          leftY += 13;
+        }
+        if (company.licenseNumber) {
+          doc.text(`License: ${company.licenseNumber}`, MARGIN, leftY, { width: leftColumnWidth });
+          leftY += 13;
+        }
+        
+        // RIGHT SIDE: Estimate Info Box
+        const boxX = PAGE_WIDTH - MARGIN - HEADER_BOX_WIDTH;
+        const boxPadding = 12;
+        const boxHeight = 85;
+        
+        // Draw box background and border
+        doc.rect(boxX, rightBoxTop, HEADER_BOX_WIDTH, boxHeight)
+           .fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
+        
+        let boxY = rightBoxTop + boxPadding;
+        
+        // ESTIMATE label
+        doc.fontSize(18).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text('ESTIMATE', boxX + boxPadding, boxY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+        boxY += 22;
+        
+        // Estimate number
+        doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text(`#${estimate.estimateNumber}`, boxX + boxPadding, boxY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+        boxY += 16;
+        
+        // Date
+        doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text(`Date: ${serviceDate}`, boxX + boxPadding, boxY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+        boxY += 14;
+        
+        // Total
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text(`Total: $${total.toFixed(2)}`, boxX + boxPadding, boxY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+        
+        // Return the bottom of the header
+        return Math.max(leftY, rightBoxTop + boxHeight) + 25;
+      };
+      
+      const drawBillTo = (y: number): number => {
+        // Only show if there's customer info
+        if (!custName && !custEmail && !custPhone && !custAddress) {
+          return y;
+        }
+        
+        // Section label
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text('BILL TO', MARGIN, y);
+        y += 15;
+        
+        // Customer details
+        doc.fontSize(10).font('Helvetica').fillColor(BLACK);
         if (custName) {
-          doc.text(custName, 50, yPos);
-          yPos += 12;
+          doc.text(custName, MARGIN, y, { width: 250 });
+          y += 14;
         }
         
-        const custEmail = customer?.email || (estimate as any).customerEmail;
+        doc.fillColor(GRAY_TEXT);
         if (custEmail) {
-          doc.text(custEmail, 50, yPos);
-          yPos += 12;
+          doc.text(custEmail, MARGIN, y, { width: 250 });
+          y += 13;
         }
-        
-        const custPhone = customer?.phone || (estimate as any).customerPhone;
         if (custPhone) {
-          doc.text(custPhone, 50, yPos);
-          yPos += 12;
+          doc.text(custPhone, MARGIN, y, { width: 250 });
+          y += 13;
         }
-        
-        const custAddress = customer?.address || (estimate as any).customerAddress;
         if (custAddress) {
-          doc.text(custAddress, 50, yPos);
-          yPos += 12;
-        }
-      }
-
-      yPos += 20;
-
-      // Line items table header
-      const tableTop = yPos;
-      const colService = 50;
-      const colQty = 330;
-      const colPrice = 400;
-      const colAmount = 480;
-      
-      doc.fontSize(10).font('Helvetica-Bold');
-      doc.text('Service/Item', colService, tableTop);
-      doc.text('Qty', colQty, tableTop);
-      doc.text('Unit Price', colPrice, tableTop);
-      doc.text('Amount', colAmount, tableTop);
-      
-      yPos = tableTop + 15;
-      doc.moveTo(50, yPos).lineTo(550, yPos).stroke();
-      yPos += 10;
-
-      // Line items
-      doc.fontSize(10).font('Helvetica');
-      const items = estimate.items || [];
-      for (const item of items) {
-        // Check if we need a new page
-        if (yPos > 700) {
-          doc.addPage();
-          yPos = 50;
+          doc.text(custAddress, MARGIN, y, { width: 250 });
+          y += 13;
         }
         
+        return y + 20;
+      };
+      
+      const drawTableHeader = (y: number): number => {
+        // Gray background for header row
+        doc.rect(MARGIN, y, CONTENT_WIDTH, 22).fill(GRAY_LIGHT);
+        
+        const textY = y + 6;
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text('SERVICE / ITEM', COL_SERVICE + 8, textY);
+        doc.text('QTY', COL_QTY, textY, { width: 50, align: 'center' });
+        doc.text('UNIT PRICE', COL_PRICE, textY, { width: 70, align: 'right' });
+        doc.text('AMOUNT', COL_AMOUNT, textY, { width: 70, align: 'right' });
+        
+        return y + 22;
+      };
+      
+      // Calculate row height without drawing (for pagination checks)
+      // Uses fixed math to avoid font state mutations
+      const calculateRowHeight = (item: any): number => {
+        // Save current font state
+        const savedFontSize = (doc as any)._fontSize || 10;
+        
+        doc.fontSize(10).font('Helvetica');
+        const nameHeight = doc.heightOfString(item.name || '', { width: 260 });
+        let rowHeight = Math.max(nameHeight + 8, TABLE_ROW_HEIGHT);
+        
+        if (item.description) {
+          doc.fontSize(9);
+          const descHeight = doc.heightOfString(item.description, { width: 250 });
+          rowHeight += descHeight + 4;
+        }
+        
+        // Restore font state
+        doc.fontSize(savedFontSize).font('Helvetica');
+        
+        return rowHeight;
+      };
+      
+      // Calculate totals section height (fixed math, no font mutation)
+      const calculateTotalsHeight = (): number => {
+        // 15 padding + 16 subtotal line + 8 divider + 20 total line + 30 bottom margin
+        let height = 15 + 16 + 8 + 20 + 30;
+        if (tax > 0) height += 16; // extra tax line
+        return height;
+      };
+      
+      // Reserved footer space (accounts for divider + footer text)
+      const FOOTER_RESERVED = company.defaultFooterText ? 50 : 10;
+      const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN - FOOTER_RESERVED;
+      
+      const drawTableRow = (item: any, y: number, isAlt: boolean): number => {
         const qty = parseFloat(String(item.quantity)) || 1;
         const unitPrice = (item.unitPriceCents || 0) / 100;
         const amount = qty * unitPrice;
         
-        doc.text(item.name, colService, yPos, { width: 270 });
-        doc.text(qty.toString(), colQty, yPos);
-        doc.text(`$${unitPrice.toFixed(2)}`, colPrice, yPos);
-        doc.text(`$${amount.toFixed(2)}`, colAmount, yPos);
+        // Calculate row height based on content
+        const rowHeight = calculateRowHeight(item);
+        doc.fontSize(10).font('Helvetica');
+        const nameHeight = doc.heightOfString(item.name || '', { width: 260 });
         
-        yPos += 15;
-        if (item.description) {
-          doc.fontSize(9).fillColor('#666666').text(item.description, colService + 10, yPos, { width: 260 });
-          yPos += 12;
-          doc.fontSize(10).fillColor('#000000');
+        // Alternating row background
+        if (isAlt) {
+          doc.rect(MARGIN, y, CONTENT_WIDTH, rowHeight).fill('#FAFAFA');
         }
-      }
-
-      // Totals
-      yPos += 20;
-      doc.moveTo(350, yPos).lineTo(550, yPos).stroke();
-      yPos += 10;
+        
+        // Row divider
+        doc.strokeColor(GRAY_BORDER).lineWidth(0.5);
+        doc.moveTo(MARGIN, y + rowHeight).lineTo(PAGE_WIDTH - MARGIN, y + rowHeight).stroke();
+        
+        // Item name
+        const textY = y + 6;
+        doc.fontSize(10).font('Helvetica').fillColor(BLACK);
+        doc.text(item.name || '', COL_SERVICE + 8, textY, { width: 260 });
+        
+        // Quantity, price, amount
+        doc.text(qty.toString(), COL_QTY, textY, { width: 50, align: 'center' });
+        doc.text(`$${unitPrice.toFixed(2)}`, COL_PRICE, textY, { width: 70, align: 'right' });
+        doc.text(`$${amount.toFixed(2)}`, COL_AMOUNT, textY, { width: 70, align: 'right' });
+        
+        // Description (if present)
+        if (item.description) {
+          const descY = textY + nameHeight + 4;
+          doc.fontSize(9).fillColor(GRAY_TEXT);
+          doc.text(item.description, COL_SERVICE + 16, descY, { width: 250 });
+        }
+        
+        return y + rowHeight;
+      };
       
-      const subtotal = (estimate.subtotalCents || 0) / 100;
-      const tax = ((estimate as any).taxCents || 0) / 100;
-      const total = (estimate.totalCents || 0) / 100;
+      const drawTotals = (y: number): number => {
+        y += 15;
+        const totalsX = COL_PRICE;
+        const valueX = COL_AMOUNT;
+        
+        // Subtotal
+        doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text('Subtotal', totalsX, y, { width: 70, align: 'right' });
+        doc.fillColor(BLACK);
+        doc.text(`$${subtotal.toFixed(2)}`, valueX, y, { width: 70, align: 'right' });
+        y += 16;
+        
+        // Tax (if applicable)
+        if (tax > 0) {
+          doc.fillColor(GRAY_TEXT);
+          doc.text('Tax', totalsX, y, { width: 70, align: 'right' });
+          doc.fillColor(BLACK);
+          doc.text(`$${tax.toFixed(2)}`, valueX, y, { width: 70, align: 'right' });
+          y += 16;
+        }
+        
+        // Divider line before total
+        doc.strokeColor(GRAY_BORDER).lineWidth(1);
+        doc.moveTo(totalsX, y).lineTo(PAGE_WIDTH - MARGIN, y).stroke();
+        y += 8;
+        
+        // Total (bold, larger)
+        doc.fontSize(14).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text('Total', totalsX, y, { width: 70, align: 'right' });
+        doc.text(`$${total.toFixed(2)}`, valueX, y, { width: 70, align: 'right' });
+        
+        return y + 30;
+      };
       
-      doc.font('Helvetica').text('Subtotal:', 400, yPos);
-      doc.text(`$${subtotal.toFixed(2)}`, colAmount, yPos);
-      yPos += 15;
+      const SIGNATURE_HEIGHT = 130; // Label + date text + signature image
       
-      if (tax > 0) {
-        doc.text('Tax:', 400, yPos);
-        doc.text(`$${tax.toFixed(2)}`, colAmount, yPos);
-        yPos += 15;
-      }
-      
-      doc.font('Helvetica-Bold').fontSize(12);
-      doc.text('Total:', 400, yPos);
-      doc.text(`$${total.toFixed(2)}`, colAmount, yPos);
-      yPos += 25;
-
-      // Signature if approved
-      if (estimate.status === 'approved' && estimate.signatureDataUrl) {
-        yPos += 20;
-        doc.fontSize(10).font('Helvetica-Bold').text('Customer Approval', 50, yPos);
-        yPos += 15;
-        doc.fontSize(9).font('Helvetica');
+      const drawSignature = (y: number): number => {
+        if (estimate.status !== 'approved' || !estimate.signatureDataUrl) {
+          return y;
+        }
+        
+        // Check if signature section fits on current page
+        if (y + SIGNATURE_HEIGHT > USABLE_HEIGHT) {
+          doc.addPage();
+          y = MARGIN;
+        }
+        
+        y += 20;
+        
+        // Section label
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text('Customer Approval', MARGIN, y);
+        y += 18;
+        
+        // Signed date text
         const approvedDate = estimate.approvedAt 
           ? new Date(estimate.approvedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
           : 'N/A';
-        doc.text(`Signed on ${approvedDate} for $${total.toFixed(2)}`, 50, yPos);
-        yPos += 15;
+        doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text(`Signed on ${approvedDate} for $${total.toFixed(2)}`, MARGIN, y);
+        y += 18;
         
-        // Add signature image
+        // Signature image
         try {
           if (estimate.signatureDataUrl.startsWith('data:image')) {
             const base64Data = estimate.signatureDataUrl.split(',')[1];
             const signatureBuffer = Buffer.from(base64Data, 'base64');
-            doc.image(signatureBuffer, 50, yPos, { width: 150 });
-            yPos += 60;
+            doc.image(signatureBuffer, MARGIN, y, { width: 180, height: 60 });
+            y += 70;
           }
         } catch (e) {
           console.log('Could not render signature:', e);
         }
-      }
+        
+        return y;
+      };
+      
+      const drawFooter = () => {
+        if (!company.defaultFooterText) return;
+        
+        const footerY = PAGE_HEIGHT - MARGIN - 30;
+        
+        // Thin divider line
+        doc.strokeColor(GRAY_BORDER).lineWidth(0.5);
+        doc.moveTo(MARGIN, footerY).lineTo(PAGE_WIDTH - MARGIN, footerY).stroke();
+        
+        // Footer text
+        doc.fontSize(8).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text(company.defaultFooterText, MARGIN, footerY + 10, { 
+          width: CONTENT_WIDTH, 
+          align: 'center' 
+        });
+      };
 
-      // Footer
-      if (company.defaultFooterText) {
-        // Position footer near bottom
-        const footerY = Math.max(yPos + 30, 680);
-        doc.fontSize(9).font('Helvetica').fillColor('#666666');
-        doc.text(company.defaultFooterText, 50, footerY, { width: 500, align: 'center' });
+      // ========== RENDER PDF ==========
+      
+      let yPos = MARGIN;
+      
+      // Draw header
+      yPos = drawHeader(yPos);
+      
+      // Draw bill to section
+      yPos = drawBillTo(yPos);
+      
+      // Draw items table
+      const items = estimate.items || [];
+      
+      // Table header
+      yPos = drawTableHeader(yPos);
+      
+      // Table rows
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        
+        // Calculate height BEFORE checking pagination
+        const rowHeight = calculateRowHeight(item);
+        
+        // Check if row fits on current page (with margin for footer)
+        if (yPos + rowHeight > USABLE_HEIGHT) {
+          doc.addPage();
+          yPos = MARGIN;
+          // Repeat table header on new page
+          yPos = drawTableHeader(yPos);
+        }
+        
+        yPos = drawTableRow(item, yPos, i % 2 === 1);
       }
+      
+      // Check if totals section fits on current page
+      const totalsHeight = calculateTotalsHeight();
+      if (yPos + totalsHeight > USABLE_HEIGHT) {
+        doc.addPage();
+        yPos = MARGIN;
+      }
+      
+      // Draw totals
+      yPos = drawTotals(yPos);
+      
+      // Draw signature (if approved)
+      yPos = drawSignature(yPos);
+      
+      // Draw footer on last page
+      drawFooter();
 
       doc.end();
 
