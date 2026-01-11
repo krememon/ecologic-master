@@ -10,11 +10,32 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   User, Calendar, Users, MapPin, ChevronRight, 
-  Plus, Search, X, StickyNote, Wrench, Check
+  Plus, Search, X, StickyNote, Wrench, Check, List, Trash2, DollarSign
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import LocationInput from "@/components/LocationInput";
+import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import type { Customer } from "@shared/schema";
+
+interface LineItem {
+  name: string;
+  description: string;
+  taskCode: string;
+  quantity: string;
+  unitPriceCents: number;
+  priceDisplay: string;
+  unit: string;
+  taxable: boolean;
+  saveToPriceBook: boolean;
+}
+
+function formatCurrency(cents: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(cents / 100);
+}
 
 interface Employee {
   id: string;
@@ -111,6 +132,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [jobType, setJobType] = useState<string | null>(null);
+  const [lineItems, setLineItems] = useState<LineItem[]>([
+    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }
+  ]);
 
   // Modal states
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -120,6 +144,8 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
+  const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
+  const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -209,6 +235,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
       assignedEmployeeIds?: string[];
       notes?: string;
       jobType?: string;
+      lineItems?: { name: string; description?: string; taskCode?: string; quantity: string; unitPriceCents: number; unit: string; taxable: boolean; }[];
     }) => {
       const response = await apiRequest('POST', '/api/jobs/create', data);
       return response.json();
@@ -249,6 +276,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     setAssignedEmployees([]);
     setNotes("");
     setJobType(null);
+    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
     setCustomerSearch("");
     setEmployeeSearch("");
   };
@@ -260,6 +288,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     }
 
     const customerName = `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''}`.trim();
+    
+    // Filter and prepare line items for submission
+    const validItems = lineItems.filter(item => item.name.trim());
 
     createJobMutation.mutate({
       title: title || `Job for ${customerName}`,
@@ -279,6 +310,15 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
       assignedEmployeeIds: assignedEmployees.length > 0 ? assignedEmployees : undefined,
       notes: notes || undefined,
       jobType: jobType || undefined,
+      lineItems: validItems.length > 0 ? validItems.map(item => ({
+        name: item.name.trim(),
+        description: item.description?.trim() || undefined,
+        taskCode: item.taskCode?.trim() || undefined,
+        quantity: item.quantity,
+        unitPriceCents: item.unitPriceCents,
+        unit: item.unit,
+        taxable: item.taxable,
+      })) : undefined,
     });
   };
 
@@ -297,6 +337,81 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     setAssignedEmployees(prev => 
       prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
     );
+  };
+
+  // Line item helpers
+  const addLineItem = () => {
+    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
+  };
+
+  const addLineItemFromPriceBook = (item: LineItem) => {
+    const existingItems = lineItems.filter(i => i.name.trim());
+    setLineItems([...existingItems, item]);
+  };
+
+  const removeLineItem = (index: number) => {
+    const nonEmptyItems = lineItems.filter(i => i.name.trim());
+    if (nonEmptyItems.length > 1 || (nonEmptyItems.length === 1 && !lineItems[index].name.trim())) {
+      setLineItems(lineItems.filter((_, i) => i !== index));
+    } else if (nonEmptyItems.length === 1) {
+      setLineItems(lineItems.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
+    const updated = [...lineItems];
+    if (field === 'unitPriceCents') {
+      updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(String(value)) * 100) || 0;
+    } else if (field === 'taxable' || field === 'saveToPriceBook') {
+      updated[index][field] = value as boolean;
+    } else {
+      updated[index][field] = value as string;
+    }
+    setLineItems(updated);
+  };
+
+  const handlePriceChange = (index: number, value: string) => {
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    const parts = cleanValue.split('.');
+    const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
+    
+    const updated = [...lineItems];
+    updated[index].priceDisplay = sanitized;
+    updated[index].unitPriceCents = Math.round((parseFloat(sanitized) || 0) * 100);
+    setLineItems(updated);
+  };
+
+  const handlePriceBlur = (index: number) => {
+    const updated = [...lineItems];
+    const dollars = updated[index].unitPriceCents / 100;
+    updated[index].priceDisplay = dollars.toFixed(2);
+    setLineItems(updated);
+  };
+
+  const handlePriceFocus = (index: number) => {
+    const updated = [...lineItems];
+    const dollars = updated[index].unitPriceCents / 100;
+    updated[index].priceDisplay = dollars === 0 ? "" : String(dollars);
+    setLineItems(updated);
+  };
+
+  const calculateLineTotal = (item: LineItem): number => {
+    const qty = parseFloat(item.quantity) || 0;
+    return Math.round(qty * item.unitPriceCents);
+  };
+
+  const calculateSubtotal = (): number => {
+    return lineItems.reduce((sum, item) => sum + calculateLineTotal(item), 0);
+  };
+
+  const getLineItemsSummary = () => {
+    const validItems = lineItems.filter(i => i.name.trim());
+    if (validItems.length === 0) return undefined;
+    const subtotal = calculateSubtotal();
+    if (subtotal > 0) {
+      return `${validItems.length} item${validItems.length > 1 ? 's' : ''} • ${formatCurrency(subtotal)}`;
+    }
+    return `${validItems.length} item${validItems.length > 1 ? 's' : ''}`;
   };
 
   const canSave = !!selectedCustomer;
@@ -369,6 +484,15 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
               value={getEmployeesDisplayText()}
               onClick={() => setEmployeesModalOpen(true)}
               testId="row-assign-technicians"
+            />
+
+            <SectionHeader title="Line Items" />
+            <InfoRow
+              icon={List}
+              label="Add line items"
+              value={getLineItemsSummary()}
+              onClick={() => setLineItemsModalOpen(true)}
+              testId="row-add-line-items"
             />
 
             <SectionHeader title="Notes" />
@@ -749,6 +873,162 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* LINE ITEMS Modal */}
+      <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
+        <DialogContent className="w-[95vw] max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Line Items</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-4 py-2">
+            {lineItems.map((item, index) => (
+              <div key={index} className="p-3 border rounded-lg space-y-3 bg-slate-50 dark:bg-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                    Item {index + 1}
+                  </span>
+                  {lineItems.length > 1 && (
+                    <button
+                      onClick={() => removeLineItem(index)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <Input
+                  placeholder="Name *"
+                  value={item.name}
+                  onChange={(e) => updateLineItem(index, 'name', e.target.value)}
+                />
+                <Textarea
+                  placeholder="Description (optional)"
+                  value={item.description}
+                  onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                  rows={2}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Task Code</Label>
+                    <Input
+                      placeholder="e.g., SVC-001"
+                      value={item.taskCode}
+                      onChange={(e) => updateLineItem(index, 'taskCode', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unit</Label>
+                    <Select
+                      value={item.unit}
+                      onValueChange={(value) => updateLineItem(index, 'unit', value)}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="each">Each</SelectItem>
+                        <SelectItem value="hour">Hour</SelectItem>
+                        <SelectItem value="ft">Foot</SelectItem>
+                        <SelectItem value="sq_ft">Sq Ft</SelectItem>
+                        <SelectItem value="job">Job</SelectItem>
+                        <SelectItem value="day">Day</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Quantity</Label>
+                    <Input
+                      type="number"
+                      value={item.quantity}
+                      onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                      min="0"
+                      step="1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unit Price ($)</Label>
+                    <Input
+                      type="text"
+                      value={item.priceDisplay}
+                      onChange={(e) => handlePriceChange(index, e.target.value)}
+                      onBlur={() => handlePriceBlur(index)}
+                      onFocus={() => handlePriceFocus(index)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <Label className="text-sm font-normal">Taxable</Label>
+                  <Switch
+                    checked={item.taxable}
+                    onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-1 border-t pt-2">
+                  <div>
+                    <Label className="text-sm font-normal">Save to Price Book</Label>
+                    <p className="text-xs text-slate-500">Add as reusable template</p>
+                  </div>
+                  <Switch
+                    checked={item.saveToPriceBook}
+                    onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
+                  <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setLineItemsModalOpen(false);
+                  setPriceBookPickerOpen(true);
+                }}
+                className="flex-1"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                From Price Book
+              </Button>
+              <Button
+                variant="outline"
+                onClick={addLineItem}
+                className="flex-1"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Custom Item
+              </Button>
+            </div>
+
+            <div className="pt-4 border-t">
+              <div className="flex justify-between text-base font-semibold">
+                <span>Subtotal</span>
+                <span>{formatCurrency(calculateSubtotal())}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button onClick={() => setLineItemsModalOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PRICE BOOK PICKER Modal */}
+      <PriceBookPickerModal
+        open={priceBookPickerOpen}
+        onOpenChange={setPriceBookPickerOpen}
+        onAddItem={addLineItemFromPriceBook}
+        existingItems={lineItems}
+      />
     </>
   );
 }
