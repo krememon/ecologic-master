@@ -2722,7 +2722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/estimates/:id - Delete estimate (draft only)
+  // DELETE /api/estimates/:id - Delete estimate (any status allowed)
   app.delete('/api/estimates/:id', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
       const companyId = req.companyId;
@@ -2734,13 +2734,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
 
-      // Only allow deletion of draft estimates
-      if (estimate.status !== 'draft') {
-        return res.status(400).json({ message: "Only draft estimates can be deleted" });
+      // Delete related attachments first
+      const attachments = await storage.getEstimateAttachments(estimateId);
+      for (const attachment of attachments) {
+        await storage.deleteEstimateAttachment(attachment.id);
+        // Try to delete file from disk
+        if (attachment.fileUrl) {
+          const filePath = attachment.fileUrl.startsWith('/') ? attachment.fileUrl.substring(1) : attachment.fileUrl;
+          if (fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+          }
+        }
+      }
+
+      // Delete related documents (PDFs)
+      const documents = await storage.getEstimateDocuments(estimateId, companyId);
+      for (const doc of documents) {
+        await storage.deleteEstimateDocument(doc.id);
+        // Try to delete file from disk
+        if (doc.fileUrl) {
+          const filePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.substring(1) : doc.fileUrl;
+          if (fs.existsSync(filePath)) {
+            try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+          }
+          // Also delete preview image if exists
+          const previewPath = filePath.replace('.pdf', '_preview.png');
+          if (fs.existsSync(previewPath)) {
+            try { fs.unlinkSync(previewPath); } catch (e) { /* ignore */ }
+          }
+        }
       }
 
       await storage.deleteEstimate(estimateId);
-      console.log(`[Estimates] delete estimateId=${estimateId} jobId=${estimate.jobId} companyId=${companyId}`);
+      console.log(`[Estimates] delete estimateId=${estimateId} status=${estimate.status} jobId=${estimate.jobId} companyId=${companyId}`);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting estimate:", error);

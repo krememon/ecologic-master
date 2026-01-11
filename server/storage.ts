@@ -260,6 +260,7 @@ export interface IStorage {
   getEstimateDocuments(estimateId: number, companyId: number): Promise<EstimateDocument[]>;
   getLatestEstimateDocument(estimateId: number, companyId: number): Promise<EstimateDocument | undefined>;
   createEstimateDocument(doc: InsertEstimateDocument): Promise<EstimateDocument>;
+  deleteEstimateDocument(id: number): Promise<void>;
   
   // Estimate approval operations
   approveEstimate(id: number, userId: string, signatureDataUrl: string): Promise<Estimate>;
@@ -1936,6 +1937,10 @@ export class DatabaseStorage implements IStorage {
       .values(doc)
       .returning();
     return created;
+  }
+
+  async deleteEstimateDocument(id: number): Promise<void> {
+    await db.delete(estimateDocuments).where(eq(estimateDocuments.id, id));
   }
 
   // Estimate approval operations

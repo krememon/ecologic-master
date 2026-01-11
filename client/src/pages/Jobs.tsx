@@ -2140,8 +2140,7 @@ export default function Jobs() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete estimates?</AlertDialogTitle>
             <AlertDialogDescription>
-              You are about to permanently delete {selectedEstimateIds.size} estimate{selectedEstimateIds.size !== 1 ? 's' : ''}.
-              This action cannot be undone.
+              This will permanently delete the selected {selectedEstimateIds.size} estimate{selectedEstimateIds.size !== 1 ? 's' : ''} and all associated documents. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
