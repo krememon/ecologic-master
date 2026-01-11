@@ -459,7 +459,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => { if (!o) { resetForm(); } onOpenChange(o); }}>
-        <DialogContent className="w-full max-w-lg h-[90vh] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogContent className="w-full max-w-lg h-[90vh] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden" hideCloseButton>
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
             <button 
               onClick={() => { resetForm(); onOpenChange(false); }}
