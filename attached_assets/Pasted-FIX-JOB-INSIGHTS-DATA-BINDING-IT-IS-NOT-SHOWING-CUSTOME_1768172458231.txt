@@ -1,0 +1,75 @@
+FIX JOB INSIGHTS DATA BINDING — IT IS NOT SHOWING CUSTOMER / ASSIGNED EMPLOYEES / TOTALS
+
+SYMPTOM
+Job Insights UI now renders, but it shows:
+- Customer: “No customer assigned” even when the job clearly has a customer
+- Assigned Employees: “No employees assigned” when job has assignees
+- Line items show, but Total is blank / not calculated
+This indicates broken data mapping or missing relation hydration after the UI refactor.
+
+GOAL
+Job Insights must display correct information again:
+- Customer name/email/phone/address
+- Assigned employees list
+- Line items + correct subtotal/total
+- Attachments/documents (if any)
+No UI placeholders should appear when data exists.
+
+DO THIS IN ORDER
+
+1) CONFIRM JOB DATA SHAPE (DO NOT GUESS)
+- In the Job Insights fetch call, temporarily log the job response:
+  console.log("[JobInsights] job payload", job)
+- Identify actual fields returned:
+  - customerId? customer? customerName?
+  - assignedEmployeeIds? assignedEmployees?
+  - lineItems array shape
+  - totals fields (subtotal/total)
+
+2) FIX BACKEND: RETURN FULL RELATIONS NEEDED BY JOB INSIGHTS
+If Job Insights needs customer + assigned employees:
+- Update the job “get by id” endpoint (or the endpoint used by Job Insights) to include:
+  - customer object (name, email, phone, address)
+  - assigned employees array (id, name, role, avatar if exists)
+  - lineItems array
+  - computed totals (subtotal/total) OR ensure they can be computed reliably client-side
+
+IMPORTANT:
+- Do not rely on the frontend to separately fetch customer/employees if we can include them here.
+- Keep RBAC: only return what the current user is allowed to see.
+
+3) FIX FRONTEND: MAP TO REAL FIELD NAMES
+- Update the Customer section to read from the correct place:
+  - If backend returns customer: use job.customer
+  - If backend returns customerId only: fetch customer and populate state OR change backend to include customer.
+- Update Assigned Employees section:
+  - Use job.assignedEmployees if present
+  - If only IDs exist, hydrate them (prefer backend include)
+
+4) TOTALS MUST ALWAYS DISPLAY
+- Ensure Total is computed even if the backend doesn’t store it:
+  subtotal = sum(lineItems[i].quantity * lineItems[i].unitPrice)
+  total = subtotal + tax (if tax exists, otherwise total=subtotal)
+- Display $0.00 if no items, not blank.
+- Make sure the UI uses the correct line item fields:
+  quantity vs qty
+  unitPrice vs price
+  amount vs total
+
+5) DO NOT BREAK EXISTING JOBS
+- Jobs created before the refactor might have:
+  - customerId but no customer object
+  - assignedEmployeeIds but no expanded array
+  - totals not stored
+Make Job Insights resilient:
+- If relation missing, hydrate it or show fallback (but ONLY if truly missing).
+
+6) QUICK VALIDATION
+- Open a job that has a customer -> Customer section must show real values
+- Open a job with assigned employees -> list must show
+- Line items present -> total must show as currency
+- If no line items -> show Total $0.00
+
+DELIVERABLE
+- Job Insights correctly displays customer, assigned employees, and totals with proper data wiring.
+- Remove temporary logs after confirming.

@@ -26,7 +26,12 @@ import { ShareEstimateModal } from "@/components/ShareEstimateModal";
 import { Share2 } from "lucide-react";
 
 interface JobWithClient extends Job {
-  client?: Client | null;
+  client?: {
+    id: number;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
 }
 
 interface JobPhoto {
@@ -483,7 +488,7 @@ export default function Jobs() {
     enabled: !!crewJobId && isAdmin,
   });
   
-  // Fetch crew for Job Insights modal display (read-only)
+  // Fetch crew for Job Insights modal display (read-only, available to all users)
   const { data: selectedJobCrew = [] } = useQuery<CrewAssignment[]>({
     queryKey: ['/api/jobs', selectedJob?.id, 'crew'],
     queryFn: async () => {
@@ -491,7 +496,7 @@ export default function Jobs() {
       if (!res.ok) throw new Error('Failed to fetch crew');
       return res.json();
     },
-    enabled: !!selectedJob?.id && isAdmin,
+    enabled: !!selectedJob?.id,
   });
 
   // Fetch line items for selected job
@@ -1227,6 +1232,12 @@ export default function Jobs() {
                       <p className="font-medium" data-testid="text-job-client-detail">
                         {selectedJob.clientName || selectedJob.client?.name}
                       </p>
+                      {selectedJob.client?.email && (
+                        <p className="text-sm text-muted-foreground">{selectedJob.client.email}</p>
+                      )}
+                      {selectedJob.client?.phone && (
+                        <p className="text-sm text-muted-foreground">{selectedJob.client.phone}</p>
+                      )}
                       {selectedJob.location && (
                         <a 
                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
@@ -1361,15 +1372,15 @@ export default function Jobs() {
                           <p className="font-medium">${(item.lineTotalCents / 100).toFixed(2)}</p>
                         </div>
                       ))}
-                      <Separator />
-                      <div className="flex justify-between font-bold text-lg pt-2">
-                        <span>Total</span>
-                        <span>${(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
-                      </div>
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">No line items</p>
+                    <p className="text-muted-foreground text-center py-2">No line items</p>
                   )}
+                  <Separator className="my-3" />
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span>${(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
+                  </div>
                 </CardContent>
               </Card>
 
