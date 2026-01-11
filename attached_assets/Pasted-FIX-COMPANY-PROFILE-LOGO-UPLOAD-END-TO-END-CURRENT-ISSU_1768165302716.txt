@@ -1,0 +1,77 @@
+FIX COMPANY PROFILE LOGO UPLOAD (END-TO-END)
+
+CURRENT ISSUE
+- “Upload Logo” does not actually upload images
+- No logo preview appears
+- Logo does not persist after refresh
+
+GOAL (THIS MUST WORK EXACTLY)
+Owner/Admin uploads PNG or JPG (max 5MB).
+After upload:
+- File is uploaded to existing storage
+- company.logoUrl is saved in the database
+- Logo preview updates immediately in UI
+- Logo persists after refresh / re-login
+
+DO THESE STEPS IN THIS ORDER
+
+1) FRONTEND – FILE PICKER
+- Ensure “Upload Logo” button triggers a hidden <input type="file">
+- accept="image/png,image/jpeg"
+- On file select, log:
+  console.log("[CompanyLogo] selected", { name, type, size })
+
+VALIDATION (FRONTEND)
+- Reject if type is not image/png or image/jpeg
+- Reject if size > 5MB
+- Show toast error and stop if invalid
+
+2) FRONTEND – UPLOAD REQUEST
+- Create FormData
+- formData.append("file", file)
+- POST to /api/company/logo
+- Show loading state while uploading
+- On success, receive { logoUrl }
+
+3) BACKEND – UPLOAD ENDPOINT
+- Create or fix POST /api/company/logo
+- Use multipart/form-data (multer or existing middleware)
+- Validate:
+  - PNG/JPG only
+  - Max 5MB
+- Upload file to existing storage system
+- Return public { logoUrl }
+
+4) BACKEND – SAVE TO COMPANY
+- Save returned logoUrl to company.logoUrl in database
+- Ensure correct company is updated (current user’s company)
+- Return updated company or logoUrl
+
+5) FRONTEND – UI UPDATE
+- Immediately update company state with logoUrl
+- Display logo preview inside dashed preview box
+- Use object-fit: contain
+- Append cache-buster to image src (?v=Date.now())
+
+6) PERSISTENCE
+- On page load, fetch company data
+- If company.logoUrl exists, display logo automatically
+
+7) RBAC
+- Only Owner/Admin can upload/change logo
+- Other roles can view logo but not upload
+
+8) ERROR HANDLING
+- Upload failure → show clear error toast
+- Backend errors must return readable messages
+
+FINAL CHECKS (DO NOT SKIP)
+- PNG upload works
+- JPG upload works
+- >5MB blocked
+- Wrong file type blocked
+- Logo shows immediately
+- Refresh page → logo still shows
+- Non-admin cannot upload
+
+REMOVE ALL DEBUG LOGS AFTER CONFIRMING SUCCESS

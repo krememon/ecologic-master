@@ -94,8 +94,6 @@ export default function CompanyProfile() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    console.log("[CompanyLogo] selected file", file.name, file.type, file.size);
-
     // Validate type is PNG or JPG
     if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
       toast({ title: "Invalid file", description: "Please select a PNG or JPG image", variant: "destructive" });
@@ -112,27 +110,27 @@ export default function CompanyProfile() {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
       
-      console.log("[CompanyLogo] uploading to /api/upload...");
-      const res = await fetch('/api/upload', {
+      const res = await fetch('/api/company/logo', {
         method: 'POST',
         body: formDataUpload,
         credentials: 'include',
       });
       
       const responseText = await res.text();
-      console.log("[CompanyLogo] response", res.status, responseText);
       
       if (!res.ok) {
         const errorData = JSON.parse(responseText);
         throw new Error(errorData.error || 'Upload failed');
       }
       
-      const { url } = JSON.parse(responseText);
-      console.log("[CompanyLogo] got url:", url);
-      handleChange('logo', url);
-      toast({ title: "Success", description: "Logo uploaded" });
+      const { logoUrl } = JSON.parse(responseText);
+      // Update form data immediately with cache buster
+      setFormData(prev => ({ ...prev, logo: `${logoUrl}?v=${Date.now()}` }));
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/company/profile'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/company'] });
+      toast({ title: "Success", description: "Logo uploaded and saved" });
     } catch (error: any) {
-      console.error("[CompanyLogo] error:", error);
       toast({ title: "Error", description: error.message || "Failed to upload logo", variant: "destructive" });
     } finally {
       setIsUploading(false);

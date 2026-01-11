@@ -220,6 +220,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Company logo upload endpoint - uploads file AND saves to company record
+  app.post('/api/company/logo', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const file = req.file;
+      
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      // Validate file type
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      if (!allowedTypes.includes(file.mimetype)) {
+        // Clean up uploaded file
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        return res.status(400).json({ error: 'Invalid file type. Only PNG and JPG are allowed.' });
+      }
+
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+      }
+
+      // Get user's company
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      // Check if user is Owner/Admin
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member || !['OWNER', 'SUPERVISOR'].includes(member.role.toUpperCase())) {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        return res.status(403).json({ error: 'Only Owner or Admin can upload company logo' });
+      }
+
+      console.log('[CompanyLogo] File received:', file.originalname, file.mimetype, file.size);
+
+      // Generate a unique filename with original extension
+      const ext = path.extname(file.originalname) || '.png';
+      const newFilename = `company_${company.id}_logo_${Date.now()}${ext}`;
+      const newPath = path.join('uploads', newFilename);
+      
+      // Rename to include extension
+      fs.renameSync(file.path, newPath);
+
+      const logoUrl = `/uploads/${newFilename}`;
+      console.log('[CompanyLogo] File saved:', logoUrl);
+
+      // Delete old logo file if exists
+      if (company.logo) {
+        const oldLogoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
+        if (fs.existsSync(oldLogoPath)) {
+          try { fs.unlinkSync(oldLogoPath); } catch (e) { /* ignore */ }
+        }
+      }
+
+      // Update company with new logo URL
+      await storage.updateCompany(company.id, { logo: logoUrl });
+      console.log('[CompanyLogo] Company updated with new logo:', logoUrl);
+      
+      res.json({ logoUrl });
+    } catch (error) {
+      console.error('[CompanyLogo] Error:', error);
+      res.status(500).json({ error: 'Failed to upload logo' });
+    }
+  });
+
   // Auth middleware
   await setupAuth(app);
 
