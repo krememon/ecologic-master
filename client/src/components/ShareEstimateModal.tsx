@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink, X, Maximize2 } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink, Maximize2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ShareEstimateModalProps {
@@ -33,7 +33,6 @@ export function ShareEstimateModal({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   
@@ -110,7 +109,6 @@ export function ShareEstimateModal({
     setPdfUrl(null);
     setPdfFileName(null);
     setPreviewImageUrl(null);
-    setIsPdfViewerOpen(false);
     setPreviewLoading(false);
     setPreviewError(false);
     setToEmail(customerEmail || "");
@@ -222,7 +220,7 @@ export function ShareEstimateModal({
                 <div 
                   className="relative rounded-lg overflow-hidden cursor-pointer group bg-slate-100 dark:bg-slate-800 p-4 shadow-inner" 
                   style={{ height: '55vh' }}
-                  onClick={() => setIsPdfViewerOpen(true)}
+                  onClick={() => window.open(`${pdfUrl}#view=Fit`, "_blank")}
                 >
                   <div className="bg-white dark:bg-slate-900 rounded shadow-lg mx-auto h-full overflow-hidden">
                     {previewImageUrl ? (
@@ -362,72 +360,6 @@ export function ShareEstimateModal({
         </DialogFooter>
       </DialogContent>
 
-      {/* Full-screen PDF Viewer */}
-      <Dialog open={isPdfViewerOpen} onOpenChange={setIsPdfViewerOpen}>
-        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-white dark:bg-slate-950 shrink-0">
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px] sm:max-w-none">
-                {pdfFileName}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.open(pdfUrl!, "_blank")}
-                className="h-8 px-2"
-                title="Open PDF"
-              >
-                <ExternalLink className="h-4 w-4" />
-                <span className="hidden sm:inline ml-1 text-xs">Open PDF</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                asChild
-                className="h-8 px-2"
-                title="Download"
-              >
-                <a href={pdfUrl!} download={pdfFileName}>
-                  <Download className="h-4 w-4" />
-                </a>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsPdfViewerOpen(false)}
-                className="h-8 px-2"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div 
-            className="flex-1 overflow-auto bg-slate-200 dark:bg-slate-800"
-            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
-          >
-            {previewImageUrl ? (
-              <div className="p-4 min-h-full flex items-start justify-center">
-                <img
-                  src={previewImageUrl}
-                  alt="Estimate Full View"
-                  className="max-w-full h-auto bg-white shadow-xl rounded"
-                  style={{ maxHeight: 'none' }}
-                />
-              </div>
-            ) : (
-              <iframe
-                src={`${pdfUrl}#view=Fit`}
-                title="Estimate PDF Full View"
-                className="w-full h-full"
-                style={{ border: 0 }}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }
