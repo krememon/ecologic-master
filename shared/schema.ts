@@ -190,6 +190,29 @@ export const jobs = pgTable("jobs", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Job line items table (mirrors estimate_items structure)
+export const jobLineItems = pgTable("job_line_items", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  taskCode: varchar("task_code", { length: 50 }),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+  unitPriceCents: integer("unit_price_cents").notNull().default(0),
+  unit: varchar("unit", { length: 50 }).notNull().default("each"),
+  taxable: boolean("taxable").notNull().default(false),
+  lineTotalCents: integer("line_total_cents").notNull().default(0),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+// Job line items relations
+export const jobLineItemsRelations = relations(jobLineItems, ({ one }) => ({
+  job: one(jobs, {
+    fields: [jobLineItems.jobId],
+    references: [jobs.id],
+  }),
+}));
+
 // Job assignments table (many-to-many relationship between jobs and subcontractors)
 export const jobAssignments = pgTable("job_assignments", {
   id: serial("id").primaryKey(),

@@ -1,0 +1,50 @@
+ADD “LINE ITEMS” TO NEW JOB CREATION (MATCH ESTIMATES EXACTLY)
+
+CONTEXT
+- New Job creation is now a single-screen form (Customer, Location, Job Type, Schedule, Assigned To, Notes).
+- Estimates already have a working Line Items experience (add service/item, qty, unit price, amount, etc).
+- We need the SAME Line Items feature inside Job creation.
+
+GOAL
+Add a “LINE ITEMS” section to New Job creation that behaves exactly like the Estimates Line Items:
+- Same UI components
+- Same add/edit/remove flow
+- Same calculations (qty x unit price = amount, subtotal, etc if present)
+- Works on mobile exactly like Estimates
+
+UI REQUIREMENTS
+- Add a new header section: “LINE ITEMS”
+- Add a row under it similar to the others:
+  Icon + label + chevron
+  Label: “Add line items” (or “Line items”)
+- Tapping it opens the SAME Line Items editor screen/modal used in Estimates
+- When line items exist, the row should show a small summary:
+  - “3 items • $1,250.00” (count + subtotal)
+  - If no pricing, at least show “3 items”
+
+DATA / BACKEND REQUIREMENTS
+- Jobs must store line items on the Job record (not on Estimate).
+- Reuse the SAME line item shape/schema used by Estimates (single source of truth).
+- Update Job create endpoint to accept lineItems (and totals if your system stores them).
+- Ensure saving a Job persists lineItems and they come back on refresh.
+- Ensure existing jobs without lineItems still work (default empty array).
+
+IMPORTANT LOGIC
+- Save button should create a Job with whatever has been filled out:
+  - Customer required
+  - Line items optional (but supported)
+- No crashes if lineItems is empty or missing.
+
+RBAC
+- Roles that can create jobs can add/edit job line items.
+- Techs who only view jobs should see the job line items later (respect existing RBAC patterns).
+
+TESTS (MUST PASS)
+- Create Job with 0 line items -> saves fine
+- Create Job with multiple line items -> totals display + persists
+- Refresh Job -> line items still present
+- Edit line items before saving job -> updates correctly
+- No duplication or mismatch between Estimate line items vs Job line items
+
+DELIVERABLE
+- New Job form now includes a Line Items section identical to Estimates behavior.
