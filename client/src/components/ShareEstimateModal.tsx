@@ -130,6 +130,11 @@ export function ShareEstimateModal({
 
   const isEmailValid = toEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail);
 
+  const getPdfViewerUrl = (url: string | null) => {
+    if (!url) return '';
+    return url.includes('#') ? url : `${url}#view=Fit`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className={pdfUrl && step === 1 ? "max-w-2xl" : "max-w-md"}>
@@ -216,9 +221,10 @@ export function ShareEstimateModal({
                   onClick={() => setIsPdfViewerOpen(true)}
                 >
                   <iframe
-                    src={pdfUrl}
+                    src={getPdfViewerUrl(pdfUrl)}
                     title="Estimate PDF Preview"
                     className="w-full h-full pointer-events-none"
+                    style={{ border: 0 }}
                     onError={() => setIframeError(true)}
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
@@ -366,9 +372,10 @@ export function ShareEstimateModal({
           <div className="flex-1 bg-slate-100 dark:bg-slate-900" style={{ height: 'calc(95vh - 56px)' }}>
             {pdfUrl && (
               <iframe
-                src={pdfUrl}
+                src={getPdfViewerUrl(pdfUrl)}
                 title="Estimate PDF Full View"
-                className="w-full h-full border-0"
+                className="w-full h-full"
+                style={{ border: 0 }}
               />
             )}
           </div>
