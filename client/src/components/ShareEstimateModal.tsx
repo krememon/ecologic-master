@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Check, Loader2, Download, ArrowRight, ArrowLeft } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ShareEstimateModalProps {
@@ -32,6 +32,7 @@ export function ShareEstimateModal({
   const [step, setStep] = useState<1 | 2>(1);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
+  const [iframeError, setIframeError] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
   const [subject, setSubject] = useState(`Estimate ${estimateNumber} from ${companyName}`);
@@ -100,6 +101,7 @@ export function ShareEstimateModal({
     setStep(1);
     setPdfUrl(null);
     setPdfFileName(null);
+    setIframeError(false);
     setToEmail(customerEmail || "");
     setSubject(`Estimate ${estimateNumber} from ${companyName}`);
     setMessage(
@@ -128,7 +130,7 @@ export function ShareEstimateModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className={pdfUrl && step === 1 ? "max-w-2xl" : "max-w-md"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {step === 1 ? (
@@ -151,7 +153,7 @@ export function ShareEstimateModal({
         </DialogHeader>
 
         {step === 1 && (
-          <div className="py-6">
+          <div className="py-4">
             {!pdfUrl ? (
               <div className="text-center">
                 <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
@@ -177,25 +179,51 @@ export function ShareEstimateModal({
                 </Button>
               </div>
             ) : (
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {pdfFileName}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.open(pdfUrl, "_blank")}
+                      className="h-8 px-2"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      className="h-8 px-2"
+                    >
+                      <a href={pdfUrl} download={pdfFileName}>
+                        <Download className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  </div>
                 </div>
-                <p className="font-medium text-slate-900 dark:text-slate-100 mb-2">
-                  PDF Ready
-                </p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                  {pdfFileName}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(pdfUrl, "_blank")}
-                  className="mb-4"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Preview PDF
-                </Button>
+                <div className="border rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900" style={{ height: '55vh' }}>
+                  <iframe
+                    src={pdfUrl}
+                    title="Estimate PDF Preview"
+                    className="w-full h-full"
+                    onError={() => setIframeError(true)}
+                  />
+                </div>
+                {iframeError && (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-slate-500 mb-2">Preview not supported on this device</p>
+                    <Button variant="outline" size="sm" onClick={() => window.open(pdfUrl, "_blank")}>
+                      Open PDF
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
