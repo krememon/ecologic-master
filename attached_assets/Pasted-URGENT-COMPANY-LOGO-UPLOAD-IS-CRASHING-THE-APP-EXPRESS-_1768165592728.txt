@@ -1,0 +1,71 @@
+URGENT: COMPANY LOGO UPLOAD IS CRASHING THE APP (EXPRESS)
+
+SYMPTOM
+- As soon as I upload a logo, the entire app crashes.
+- Crash stack trace shows Express router/index.js lines (process_params / next / handle)
+- Node v20.x
+This means our upload endpoint or middleware is throwing an uncaught error.
+
+GOAL
+- Uploading a PNG/JPG logo (<=5MB) must NEVER crash the server.
+- If upload fails, return a clean JSON error + keep server running.
+- After success: store file, save company.logoUrl, UI shows preview immediately, persists after refresh.
+
+DO THIS IN ORDER
+
+1) FIND THE EXACT CRASHING ROUTE
+- Locate the route that is hit when uploading the logo (ex: POST /api/company/logo or similar).
+- Reproduce once and read the FULL server console error (the real error is above that Express stack).
+- Add TEMP logs right inside that route BEFORE any middleware runs:
+  console.log("[LogoUpload] route hit")
+  console.log("[LogoUpload] headers content-type:", req.headers["content-type"])
+
+2) FIX THE MOST COMMON MULTER/UPLOAD CRASHES
+- Ensure we use multer correctly:
+  - The frontend sends FormData with field name "file"
+  - Backend MUST use upload.single("file")
+- If current backend uses a different field name, align them (prefer "file").
+
+- Ensure upload destination exists (if local storage):
+  - Create /uploads (or whatever folder) if missing before saving
+  - Use fs.mkdirSync(dir, { recursive: true })
+
+- Ensure file size/type validation does NOT throw uncaught:
+  - Implement multer limits: { fileSize: 5 * 1024 * 1024 }
+  - Implement fileFilter for image/png and image/jpeg
+  - If invalid, reject gracefully (do NOT crash)
+
+3) ADD A GLOBAL EXPRESS ERROR HANDLER (REQUIRED)
+Add this at the end of backend app setup AFTER routes:
+  app.use((err, req, res, next) => {
+    console.error("[SERVER ERROR]", err);
+    if (res.headersSent) return next(err);
+    res.status(err.status || 500).json({ error: err.message || "Server error" });
+  });
+
+4) HANDLE MULTER ERRORS CLEANLY IN THE LOGO ROUTE
+Wrap the upload middleware so Multer errors return JSON instead of crashing:
+- Catch multer.MulterError and return 400 with a readable message.
+- Catch any other error and return 500.
+
+Example behavior:
+- Too large -> 400 { error: "File too large (max 5MB)" }
+- Wrong type -> 400 { error: "Only PNG or JPG allowed" }
+
+5) AFTER CRASH IS FIXED, COMPLETE THE FEATURE
+- Upload succeeds -> returns { logoUrl }
+- Save logoUrl into company.logoUrl in DB
+- Return updated company (or logoUrl)
+- Frontend updates preview immediately and persists on refresh
+- Append cache-buster to image src to prevent stale caching
+
+6) VERIFICATION TESTS (MUST PASS)
+- Upload valid PNG under 5MB -> success, no crash
+- Upload valid JPG under 5MB -> success, no crash
+- Upload >5MB -> clean 400 error JSON, no crash
+- Upload invalid file type -> clean 400 error JSON, no crash
+- Refresh page -> logo still shows
+
+IMPORTANT
+- Do not leave server in a state where one bad upload kills the app.
+- Remove TEMP logs after confirming success, but keep the global error handler.

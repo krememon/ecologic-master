@@ -70,6 +70,22 @@ const upload = multer({
   },
 });
 
+// Logo-specific multer with stricter limits
+const logoUpload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit for logos
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG and JPG files are allowed'));
+    }
+  },
+});
+
 // Utility function to extract user ID consistently from different auth methods
 function getUserId(user: any): string {
   if (user.claims && user.claims.sub) {
@@ -224,27 +240,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Company logo upload endpoint - uploads file AND saves to company record
-  app.post('/api/company/logo', isAuthenticated, upload.single('file'), async (req: any, res) => {
+  app.post('/api/company/logo', isAuthenticated, (req: any, res, next) => {
+    // Wrap multer to handle errors gracefully
+    logoUpload.single('file')(req, res, (err: any) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+        }
+        if (err.message) {
+          return res.status(400).json({ error: err.message });
+        }
+        return res.status(400).json({ error: 'Upload failed' });
+      }
+      next();
+    });
+  }, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
       const file = req.file;
       
       if (!file) {
         return res.status(400).json({ error: 'No file uploaded' });
-      }
-
-      // Validate file type
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-      if (!allowedTypes.includes(file.mimetype)) {
-        // Clean up uploaded file
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        return res.status(400).json({ error: 'Invalid file type. Only PNG and JPG are allowed.' });
-      }
-
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-        return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
       }
 
       // Get user's company
