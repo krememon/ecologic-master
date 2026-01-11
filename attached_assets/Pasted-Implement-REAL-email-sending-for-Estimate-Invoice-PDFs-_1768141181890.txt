@@ -1,0 +1,65 @@
+Implement REAL email sending for Estimate/Invoice PDFs from EcoLogic.
+
+We already have a Delivery screen (To / Subject / Message / Send) and we can generate a PDF.
+Now Send must actually email the PDF attachment.
+
+PROVIDER: Use Resend (preferred)
+- Add npm dependency: resend
+- Use env secret: RESEND_API_KEY
+- Use a verified sender: RESEND_FROM_EMAIL (ex: "EcoLogic <onboarding@resend.dev>" for testing, later use custom domain)
+
+BACKEND CHANGES
+1) Create a new service: server/services/email.ts
+- export async function sendEmailWithPdfAttachment({ to, subject, htmlOrText, pdfUrl, fileName })
+
+Implementation:
+- Fetch the PDF bytes from pdfUrl (server-side fetch)
+- Convert to base64
+- Send email via Resend with attachment:
+  attachments: [{ filename: fileName, content: base64 }]
+- Use RESEND_FROM_EMAIL as the sender
+
+2) Add endpoint for sending estimate PDFs:
+POST /api/estimates/:id/share/email
+Body: { toEmail, subject, message, pdfUrl, fileName }
+Behavior:
+- Validate email format
+- Verify estimate belongs to companyId
+- Call sendEmailWithPdfAttachment()
+- Return { success: true }
+
+3) Add endpoint for sending invoice PDFs (for later, but do now if easy):
+POST /api/invoices/:id/share/email
+(same behavior)
+
+4) Error handling:
+- If RESEND_API_KEY missing:
+  return 500 with clear message: "Email not configured (missing RESEND_API_KEY)"
+- If fetch(pdfUrl) fails:
+  return 500 "Failed to fetch PDF for attachment"
+- Log errors server-side
+
+FRONTEND CHANGES
+5) Delivery screen Send button:
+- On click:
+  - disable button + show spinner "Sending..."
+  - call POST /api/estimates/:id/share/email with the form fields
+  - on success: toast "Sent"
+  - close modal / show success state
+  - on error: toast with returned message
+
+DEFAULTS
+- Prefill To with customer email if available
+- Prefill Subject: "Estimate <EST_NUMBER> from <Company Name>"
+- Prefill message:
+  "Hi <Customer Name>,\n\nThank you for choosing <Company Name>. Please see attached estimate.\n"
+
+REPLIT SECRETS (REQUIRED)
+Add these to Replit Secrets:
+- RESEND_API_KEY=xxxxx
+- RESEND_FROM_EMAIL="EcoLogic <onboarding@resend.dev>"  (use Resend default testing sender first)
+
+DELIVERABLES
+- Clicking Send actually delivers an email with the PDF attached
+- Clear error if email not configured
+- List files changed and where to set Replit secrets
