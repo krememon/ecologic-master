@@ -1,0 +1,100 @@
+REDESIGN ESTIMATE PDF TEMPLATE TO LOOK CLEAN + PROFESSIONAL
+
+CONTEXT
+- After adding Company Profile fields (logo/name/address/email/phone), the generated Estimate PDF looks messy.
+- Logo overlaps text and spacing/alignment is inconsistent.
+- We want a modern, aesthetically pleasing layout similar to Housecall Pro (clean header, strong hierarchy, good whitespace).
+
+GOAL
+Update the Estimate PDF rendering so it looks polished and consistent:
+- No overlap ever (logo/text/signature)
+- Consistent typography + spacing
+- Clean sections: header, bill-to, estimate meta, line items, totals, approval/signature
+- Works for short and long item lists (multi-page)
+- Looks great when printed
+
+DESIGN SPEC (FOLLOW THIS EXACTLY)
+
+1) PAGE + TYPOGRAPHY
+- Page: Letter 8.5x11, margins 40–48px (or equivalent)
+- Font: clean sans-serif (Helvetica / Inter if available in your PDF lib)
+- Use consistent sizes:
+  - Title “Estimate”: 20–24 bold
+  - Section labels: 10–11 uppercase or semi-bold
+  - Body text: 10–11 regular
+  - Total: 16–18 bold
+
+2) HEADER (NO MESSY STACKING)
+LEFT SIDE:
+- Square logo 72–90px
+- Company name below logo (bold 14–16)
+- Company contact lines under name (small 10–11):
+  address line(s), phone, email
+RIGHT SIDE (IN A LIGHT BORDER BOX):
+- “ESTIMATE” label + estimate number
+- “SERVICE DATE” (or “DATE”) + value
+- “TOTAL” + value
+This right box must be aligned to the top-right and never collide with the logo area.
+
+3) CUSTOMER / BILL TO SECTION
+- Below header with clear spacing
+- Left column: “BILL TO” (label) then customer name + contact + address
+- Right column: optional “CONTACT US” or company contact summary (like Housecall Pro)
+Keep it clean and aligned (grid / two-column layout).
+
+4) LINE ITEMS TABLE (CLEAN TABLE)
+- Full width table
+- Header row with light gray background:
+  Service/Item | Qty | Unit Price | Amount
+- Use consistent alignment:
+  - Service left aligned
+  - Qty centered
+  - Prices right aligned
+- Add subtle row dividers
+- If an item has a description, show it as a smaller gray text line under the item name (indented).
+
+5) TOTALS AREA
+- Right aligned totals block under the table:
+  Subtotal
+  Tax (if applicable)
+  Total (bold, larger)
+- Add spacing so it doesn’t feel cramped
+
+6) CUSTOMER APPROVAL + SIGNATURE (CLEAN)
+- Near bottom of last page:
+  “Customer Approval” label
+  “Signed on {date} for ${total}”
+  Signature image beneath with fixed max height (ex: 60px) and max width (ex: 220px)
+- Ensure signature never overlaps other content; push to next page if needed.
+
+7) FOOTER (OPTIONAL BUT NICE)
+- Thin divider line
+- Company name left
+- Website or short note centered/right (only if we have it)
+Keep subtle.
+
+IMPLEMENTATION REQUIREMENTS
+- This must work with multi-page PDFs:
+  - Repeat table header on each new page
+  - Totals/signature appear on last page only
+  - If table runs long, totals/signature start on a new page cleanly
+- Never allow logo or text overlap:
+  - Use fixed header height + layout boxes
+  - Respect max image sizes and wrap text properly
+- If company logo is missing, replace with a placeholder spacing (don’t break layout).
+
+WHERE TO CHANGE
+- Find the Estimate PDF generation code (server route that generates PDF OR shared PDF template file).
+- Refactor it into clear layout sections: drawHeader(), drawBillTo(), drawItemsTable(), drawTotals(), drawSignature().
+- Keep data the same; only improve rendering.
+
+DELIVERABLES
+- Updated PDF template that visually matches the clean Housecall Pro style example
+- No overlap, good spacing, consistent alignment
+- Works for long item lists and prints cleanly
+
+TEST CASES
+1) With logo + long company name + full address -> no overlap
+2) Without logo -> still clean
+3) 1 line item -> looks premium and not empty
+4) 15+ line items -> multi-page with repeated table header and totals/signature on final page
