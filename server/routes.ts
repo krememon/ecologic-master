@@ -3454,6 +3454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       yPos = drawTableHeader(yPos);
       
       // Table rows
+      const TABLE_HEADER_HEIGHT = 22;
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         
@@ -3466,6 +3467,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           yPos = MARGIN;
           // Repeat table header on new page
           yPos = drawTableHeader(yPos);
+        }
+        
+        // Safety check: if row is taller than entire page usable area, 
+        // just render it starting from current position (avoids infinite loop)
+        // The row may overflow, but this is the best we can do for extremely long content
+        if (rowHeight > USABLE_HEIGHT - MARGIN - TABLE_HEADER_HEIGHT) {
+          console.log(`[PDF] Warning: Item "${item.name?.substring(0, 30)}..." is very tall (${rowHeight}px), may overflow page`);
         }
         
         yPos = drawTableRow(item, yPos, i % 2 === 1);
