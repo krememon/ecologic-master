@@ -184,6 +184,7 @@ export const jobs = pgTable("jobs", {
   locationLng: decimal("location_lng", { precision: 11, scale: 8 }),
   locationPlaceId: varchar("location_place_id"),
   notes: text("notes"),
+  jobType: varchar("job_type", { length: 100 }), // Same job types as estimates
   assignedTo: varchar("assigned_to").references(() => users.id), // Assigned user/technician
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

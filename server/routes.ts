@@ -1442,7 +1442,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scheduleStartTime,
         scheduleEndTime,
         assignedEmployeeIds,
-        notes, // internal notes stored in jobs.notes field
+        notes,
+        jobType,
       } = req.body;
       
       // Customer is required
@@ -1479,6 +1480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             companyId: company.id,
             clientName: customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
             notes: notes || null,
+            jobType: jobType || null,
           } as any)
           .returning();
         

@@ -1202,6 +1202,16 @@ export default function Jobs() {
                         </div>
                       )}
                       
+                      {/* Job Type */}
+                      {selectedJob.jobType && (
+                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
+                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Job Type:</dt>
+                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={selectedJob.jobType} data-testid="text-job-type-detail">
+                            {selectedJob.jobType}
+                          </dd>
+                        </div>
+                      )}
+                      
                       {/* Assigned Crew (Read-only display) */}
                       <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
                         <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned Crew:</dt>

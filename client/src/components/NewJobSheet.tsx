@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   User, Calendar, Users, MapPin, ChevronRight, 
-  Plus, Search, X, StickyNote
+  Plus, Search, X, StickyNote, Wrench, Check
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import LocationInput from "@/components/LocationInput";
@@ -36,6 +36,21 @@ interface NewJobSheetProps {
   onOpenChange: (open: boolean) => void;
   onJobCreated?: (job: any) => void;
 }
+
+const JOB_TYPES = [
+  "Diagnostic",
+  "Maintenance",
+  "Install",
+  "Repair",
+  "Emergency Service",
+  "Service Call",
+  "Replacement",
+  "Inspection",
+  "Cleaning",
+  "Commissioning",
+  "Warranty Work",
+  "Recall",
+] as const;
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -95,6 +110,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
   const [schedule, setSchedule] = useState<ScheduleData>({ date: "", startTime: "", endTime: "" });
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [jobType, setJobType] = useState<string | null>(null);
 
   // Modal states
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -103,6 +119,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -191,6 +208,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
       scheduleEndTime?: string;
       assignedEmployeeIds?: string[];
       notes?: string;
+      jobType?: string;
     }) => {
       const response = await apiRequest('POST', '/api/jobs/create', data);
       return response.json();
@@ -230,6 +248,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     setSchedule({ date: "", startTime: "", endTime: "" });
     setAssignedEmployees([]);
     setNotes("");
+    setJobType(null);
     setCustomerSearch("");
     setEmployeeSearch("");
   };
@@ -259,6 +278,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
       scheduleEndTime: schedule.endTime || undefined,
       assignedEmployeeIds: assignedEmployees.length > 0 ? assignedEmployees : undefined,
       notes: notes || undefined,
+      jobType: jobType || undefined,
     });
   };
 
@@ -322,6 +342,15 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
               value={location || undefined}
               onClick={() => setLocationModalOpen(true)}
               testId="row-add-location"
+            />
+
+            <SectionHeader title="Job Type" />
+            <InfoRow
+              icon={Wrench}
+              label="Choose job type"
+              value={jobType || undefined}
+              onClick={() => setJobTypeModalOpen(true)}
+              testId="row-job-type"
             />
 
             <SectionHeader title="Schedule" />
@@ -680,6 +709,44 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
           <div className="flex justify-end pt-4">
             <Button onClick={() => setNotesModalOpen(false)}>Done</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* JOB TYPE Picker Modal */}
+      <Dialog open={jobTypeModalOpen} onOpenChange={setJobTypeModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
+          <div className="flex items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => setJobTypeModalOpen(false)}
+              className="text-sm text-blue-500 font-medium"
+            >
+              Cancel
+            </button>
+            <DialogTitle className="flex-1 text-center text-base font-semibold">
+              JOB TYPE
+            </DialogTitle>
+            <div className="w-12" />
+          </div>
+
+          <ScrollArea className="max-h-[60vh]">
+            <div className="py-2">
+              {JOB_TYPES.map((type) => (
+                <button
+                  key={type}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  onClick={() => {
+                    setJobType(type);
+                    setJobTypeModalOpen(false);
+                  }}
+                >
+                  <span className="text-slate-900 dark:text-slate-100">{type}</span>
+                  {jobType === type && (
+                    <Check className="h-5 w-5 text-blue-500" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </>
