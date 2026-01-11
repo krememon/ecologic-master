@@ -3250,6 +3250,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/estimates/:id/share/email - Send estimate PDF via email
   // Use requirePerm to ensure companyId is set on request
   app.post('/api/estimates/:id/share/email', requirePerm('estimates.create'), async (req: any, res) => {
+    console.log("[ShareEmail] HIT", {
+      estimateId: req.params.id,
+      userId: req.user?.id,
+      companyId: req.companyId,
+      body: req.body,
+    });
+    console.log("[ShareEmail] ENV", {
+      hasResendKey: !!process.env.RESEND_API_KEY,
+      fromEmail: process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL,
+    });
+    
     try {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
@@ -3258,6 +3269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // RBAC check with owner fallback (same as PDF generation)
       const canShare = await canUserShareEstimate(userId, companyId);
       if (!canShare) {
+        console.log("[ShareEmail] RBAC denied", { userId, companyId });
         return res.status(403).json({ message: "You don't have permission to share estimates" });
       }
       
@@ -3328,7 +3340,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const emailSubject = subject || `Estimate ${estimate.estimateNumber} from ${company?.name || 'Our Company'}`;
       const emailBody = message || `Please find attached the estimate for your review.`;
 
-      await resend.emails.send({
+      console.log("[ShareEmail] calling Resend now", { 
+        fromEmail, 
+        toEmail, 
+        subject: emailSubject,
+        pdfSize: pdfBuffer.length 
+      });
+
+      const result = await resend.emails.send({
         from: fromEmail,
         to: toEmail,
         subject: emailSubject,
@@ -3349,7 +3368,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ],
       });
 
-      console.log(`[Estimates] Email sent estimateId=${estimateId} toEmail=${toEmail}`);
+      console.log("[ShareEmail] Resend result", result);
+      console.log(`[ShareEmail] Email sent estimateId=${estimateId} toEmail=${toEmail}`);
       res.json({ success: true, message: "Email sent successfully" });
     } catch (error: any) {
       console.error("Error sending estimate email:", error);

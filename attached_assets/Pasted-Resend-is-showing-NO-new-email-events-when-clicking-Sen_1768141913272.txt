@@ -1,0 +1,56 @@
+Resend is showing NO new email events when clicking Send.
+We need to confirm the backend endpoint is being hit and whether resend.emails.send is being called.
+
+1) FRONTEND: log + show response
+In the Send button handler (Delivery screen):
+- console.log("[ShareEmail] sending payload", payload)
+- const res = await fetch(`/api/estimates/${estimateId}/share/email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  })
+- const text = await res.text()
+- console.log("[ShareEmail] response", res.status, text)
+- if (!res.ok) show toast with text
+This ensures we see if the request is even succeeding.
+
+2) BACKEND: add hard logs to confirm route is hit
+In POST /api/estimates/:id/share/email, at the FIRST line:
+console.log("[ShareEmail] HIT", {
+  estimateId: req.params.id,
+  userId: req.user?.id,
+  companyId: req.user?.companyId,
+})
+
+Then log env presence (do NOT print the key):
+console.log("[ShareEmail] ENV", {
+  hasResendKey: !!process.env.RESEND_API_KEY,
+  from: process.env.RESEND_FROM_EMAIL,
+})
+
+Then right before calling Resend:
+console.log("[ShareEmail] calling Resend now")
+
+Then after call:
+console.log("[ShareEmail] Resend result", { data, error })
+
+3) Ensure the route is registered
+Confirm this route exists in server/routes.ts and is not behind a wrong middleware path.
+
+4) Remove any permission block temporarily for testing
+If it checks role, temporarily allow all authenticated users to send while debugging.
+(We can tighten it after it works.)
+
+5) If PDF fetch happens before send, log and guard it
+If you fetch the PDF bytes:
+console.log("[ShareEmail] fetching PDF", pdfUrl)
+Wrap fetch in try/catch and if it fails return 500 with the error message.
+DO NOT silently continue.
+
+DELIVERABLE
+Paste the server logs from pressing Send once:
+- the “[ShareEmail] HIT” line
+- the “[ShareEmail] ENV” line
+- the “[ShareEmail] calling Resend now” line (or confirm it never appears)
+- the “Resend result” line

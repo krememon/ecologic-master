@@ -99,13 +99,15 @@ export function ShareEstimateModal({
 
   const sendEmailMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/estimates/${estimateId}/share/email`, {
-        toEmail,
-        subject,
-        message,
-        pdfUrl,
-      });
-      return response.json();
+      const payload = { toEmail, subject, message, pdfUrl };
+      console.log("[ShareEmail] sending payload", payload);
+      const response = await apiRequest("POST", `/api/estimates/${estimateId}/share/email`, payload);
+      const text = await response.text();
+      console.log("[ShareEmail] response", response.status, text);
+      if (!response.ok) {
+        throw new Error(text || "Failed to send email");
+      }
+      return JSON.parse(text);
     },
     onSuccess: () => {
       toast({
