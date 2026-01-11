@@ -797,6 +797,34 @@ export const estimateAttachmentsRelations = relations(estimateAttachments, ({ on
   }),
 }));
 
+export const estimateDocuments = pgTable("estimate_documents", {
+  id: serial("id").primaryKey(),
+  estimateId: integer("estimate_id").notNull().references(() => estimates.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull().default("pdf"),
+  fileUrl: text("file_url").notNull(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  estimateIdx: index("estimate_documents_estimate_idx").on(table.estimateId),
+}));
+
+export const estimateDocumentsRelations = relations(estimateDocuments, ({ one }) => ({
+  estimate: one(estimates, {
+    fields: [estimateDocuments.estimateId],
+    references: [estimates.id],
+  }),
+  company: one(companies, {
+    fields: [estimateDocuments.companyId],
+    references: [companies.id],
+  }),
+  createdBy: one(users, {
+    fields: [estimateDocuments.createdByUserId],
+    references: [users.id],
+  }),
+}));
+
 // Company counters table for atomic counter increments
 export const companyCounters = pgTable("company_counters", {
   id: serial("id").primaryKey(),
@@ -1104,6 +1132,8 @@ export type ServiceCatalogItem = typeof serviceCatalogItems.$inferSelect;
 export type InsertServiceCatalogItem = typeof serviceCatalogItems.$inferInsert;
 export type EstimateAttachment = typeof estimateAttachments.$inferSelect;
 export type InsertEstimateAttachment = typeof estimateAttachments.$inferInsert;
+export type EstimateDocument = typeof estimateDocuments.$inferSelect;
+export type InsertEstimateDocument = typeof estimateDocuments.$inferInsert;
 
 // Estimate with items and attachments type
 export interface EstimateWithItems extends Estimate {

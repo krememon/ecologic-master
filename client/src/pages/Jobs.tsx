@@ -21,6 +21,8 @@ import { JobWizard } from "@/components/JobWizard";
 import { useCan } from "@/hooks/useCan";
 import { SelectCustomerModal } from "@/components/CustomerModals";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
+import { ShareEstimateModal } from "@/components/ShareEstimateModal";
+import { Share2 } from "lucide-react";
 
 interface JobWithClient extends Job {
   client?: Client | null;
@@ -285,9 +287,18 @@ export default function Jobs() {
   
   // New Estimate Sheet state
   const [isNewEstimateSheetOpen, setIsNewEstimateSheetOpen] = useState(false);
+  const [shareEstimateData, setShareEstimateData] = useState<{
+    id: number;
+    estimateNumber: string;
+    customerEmail?: string | null;
+    customerFirstName?: string | null;
+  } | null>(null);
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
+  
+  // RBAC: Owner, Supervisor, Estimator can share estimates
+  const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
 
   // Reset description expansion and tab when job changes
   useEffect(() => {
@@ -1605,12 +1616,33 @@ export default function Jobs() {
                             {estimate.estimateNumber}
                           </p>
                         </div>
-                        <Badge 
-                          variant={estimate.status === 'draft' ? 'secondary' : estimate.status === 'sent' ? 'default' : 'outline'}
-                          className="ml-2 capitalize"
-                        >
-                          {estimate.status}
-                        </Badge>
+                        <div className="flex items-center gap-1 ml-2">
+                          {canShareEstimates && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareEstimateData({
+                                  id: estimate.id,
+                                  estimateNumber: estimate.estimateNumber,
+                                  customerEmail: estimate.customerEmail,
+                                  customerFirstName: estimate.customerName?.split(' ')[0] || null,
+                                });
+                              }}
+                              title="Share Estimate"
+                            >
+                              <Share2 className="h-4 w-4 text-slate-500 hover:text-slate-700" />
+                            </Button>
+                          )}
+                          <Badge 
+                            variant={estimate.status === 'draft' ? 'secondary' : estimate.status === 'sent' ? 'default' : 'outline'}
+                            className="capitalize"
+                          >
+                            {estimate.status}
+                          </Badge>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-2">
@@ -1905,6 +1937,18 @@ export default function Jobs() {
           queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
         }}
       />
+
+      {/* Share Estimate Modal */}
+      {shareEstimateData && (
+        <ShareEstimateModal
+          open={!!shareEstimateData}
+          onOpenChange={(open) => !open && setShareEstimateData(null)}
+          estimateId={shareEstimateData.id}
+          estimateNumber={shareEstimateData.estimateNumber}
+          customerEmail={shareEstimateData.customerEmail}
+          customerFirstName={shareEstimateData.customerFirstName}
+        />
+      )}
 
       {/* Select Customer Modal (legacy - kept for other flows) */}
       <SelectCustomerModal

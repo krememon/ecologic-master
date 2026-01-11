@@ -1,0 +1,92 @@
+Add “Share” to Estimates so users can generate a PDF estimate and email it.
+
+GOAL UX (match reference)
+1) On each Estimate card (in the list), add a Share button/icon.
+2) When Share is pressed:
+   - Open a Share Estimate flow (modal or page)
+   - Step 1: Generate/preview PDF (or show a “Document ready” screen with Next)
+   - Step 2: Delivery screen
+       - To: email input (prefill with customer email if available)
+       - Subject prefilled: “Estimate <EST_NUMBER> from <Company Name>”
+       - Message prefilled:
+         “Hi <Customer First Name>,
+          Thank you for choosing <Company Name>. Please see attached estimate.”
+       - Send button
+   - On Send: email the PDF to that address and show success toast.
+
+RBAC
+- Only Owner/Admin/Estimator can Share.
+- Technicians can view estimate but hide Share button (hidden not disabled).
+
+BACKEND: PDF generation
+Implement endpoint:
+POST /api/estimates/:id/share/pdf
+- Auth required; company-scoped
+- Fetch estimate details + company profile + line items + customer info
+- Generate a PDF that visually matches the reference layout:
+  - Company logo + Company name
+  - Estimate number (EST-000004 style)
+  - Service date (use scheduled date if set; otherwise created date)
+  - Customer info + “Contact us” company info (address/phone/email)
+  - Line items table: service, qty, unit price, amount
+  - Subtotal + Total
+  - If estimate is approved: show “Signed on <date> for $<total>” + signature image
+  - Footer text from company profile
+Return:
+{ pdfUrl, fileName } 
+(Also allow returning raw PDF bytes if easier, but URL is preferred.)
+
+Storage
+- Save the generated PDF to your existing file storage (same system used for documents/attachments).
+- Create DB table to track exports (recommended):
+  estimate_documents:
+    id, estimate_id, company_id, type ('pdf'), file_url, file_name, created_at
+- Reuse the latest PDF if one already exists and estimate hasn’t changed (optional; can skip for now).
+
+PDF library
+- Use a server-side PDF generator (pdfkit is fine).
+- Keep it simple: clean typography, table lines, logo image.
+
+BACKEND: Email sending
+Implement endpoint:
+POST /api/estimates/:id/share/email
+Body:
+{ toEmail, subject, message, pdfUrl }
+
+Server should:
+- Validate toEmail
+- Fetch pdf bytes from storage (or read from saved file path)
+- Send email with attachment
+
+Email provider
+- Use nodemailer with SMTP credentials from env vars:
+  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+- In development, if SMTP is not configured, do NOT fail silently:
+  - return a clear error “Email not configured”
+  - OR log the email payload + provide a “preview link” for the PDF
+(Prefer a real SMTP path + clear error if missing.)
+
+FRONTEND: Share flow UI
+Create components:
+- ShareEstimateModal (stepper)
+  Step 1: “Generate Estimate PDF”
+    - Button: “Generate”
+    - After success: show “Estimate_000004.pdf ready” + “Next”
+    - Optional: show a small PDF preview (iframe) if easy
+  Step 2: “Delivery”
+    - To email input (prefill with customer email)
+    - Subject input (prefill)
+    - Message textarea (prefill)
+    - Send button
+- On Send: call POST /api/estimates/:id/share/email
+
+Estimates list: add Share button on cards
+- Put Share icon/button on the estimate card (top right, near status)
+- Clicking Share should NOT trigger opening estimate details (stopPropagation)
+
+DELIVERABLES
+- Share button appears on estimate cards for allowed roles
+- Stepper flow works: generate PDF -> delivery screen -> send email
+- PDF is stored and can be re-opened
+- Email sends with attached PDF (or shows clear “Email not configured” error)
+- Provide files changed + DB migrations + env vars needed for SMTP

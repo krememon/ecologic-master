@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2 } from "lucide-react";
 import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
+import { ShareEstimateModal } from "@/components/ShareEstimateModal";
+import { useCan } from "@/hooks/useCan";
 
 interface EstimateDetailsProps {
   estimateId: string;
@@ -38,12 +40,17 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { role } = useCan();
   
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<EstimateAttachment | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  
+  // RBAC: Owner, Supervisor, Estimator can share estimates
+  const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
 
   const { data: estimate, isLoading, error } = useQuery<EstimateWithItems>({
     queryKey: [`/api/estimates/${estimateId}`],
@@ -238,9 +245,17 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             <p className="text-sm text-muted-foreground">{estimate.estimateNumber}</p>
           </div>
         </div>
-        <Badge variant={getStatusBadgeVariant(estimate.status)} className="text-sm capitalize">
-          {estimate.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {canShareEstimates && (
+            <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Share
+            </Button>
+          )}
+          <Badge variant={getStatusBadgeVariant(estimate.status)} className="text-sm capitalize">
+            {estimate.status}
+          </Badge>
+        </div>
       </div>
 
       {canApprove && (
@@ -585,6 +600,18 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Share Estimate Modal */}
+      {estimate && (
+        <ShareEstimateModal
+          open={isShareModalOpen}
+          onOpenChange={setIsShareModalOpen}
+          estimateId={estimate.id}
+          estimateNumber={estimate.estimateNumber}
+          customerEmail={estimate.customerEmail}
+          customerFirstName={estimate.customerName?.split(' ')[0] || null}
+        />
+      )}
     </div>
   );
 }

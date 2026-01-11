@@ -20,6 +20,8 @@ import path from "path";
 import fs from "fs";
 import express from "express";
 import OpenAI from "openai";
+import PDFDocument from "pdfkit";
+import { Resend } from "resend";
 import { aiScheduler } from "./ai-scheduler";
 import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests } from "../shared/schema";
 import { z } from "zod";
@@ -2857,6 +2859,404 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error duplicating estimate:", error);
       res.status(500).json({ message: "Failed to duplicate estimate" });
+    }
+  });
+
+  // ===================
+  // Estimate Share (PDF Generation & Email) Routes
+  // ===================
+  
+  // RBAC: Owner, Supervisor, Estimator can share estimates (Technician, Dispatcher cannot)
+  const canShareEstimate = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'ESTIMATOR'].includes(upperRole);
+  };
+
+  // POST /api/estimates/:id/share/pdf - Generate PDF for estimate
+  app.post('/api/estimates/:id/share/pdf', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // RBAC check
+      const member = await storage.getCompanyMember(companyId, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (!canShareEstimate(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to share estimates" });
+      }
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      // Get company profile
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      // Get customer info if available
+      let customer = null;
+      if (estimate.customerId) {
+        customer = await storage.getCustomer(estimate.customerId);
+      }
+
+      // Generate PDF
+      const fileName = `Estimate_${estimate.estimateNumber.replace(/-/g, '_')}.pdf`;
+      const filePath = path.join('uploads', fileName);
+      
+      // Ensure uploads directory exists
+      if (!fs.existsSync('uploads')) {
+        fs.mkdirSync('uploads', { recursive: true });
+      }
+
+      const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+      const writeStream = fs.createWriteStream(filePath);
+      doc.pipe(writeStream);
+
+      // Header with company info
+      let yPos = 50;
+      
+      // Company logo (if available)
+      if (company.logo) {
+        try {
+          const logoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
+          if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 50, yPos, { width: 80 });
+            yPos += 60;
+          }
+        } catch (e) {
+          console.log('Logo not found, skipping');
+        }
+      }
+
+      // Company name
+      doc.fontSize(20).font('Helvetica-Bold').text(company.name, 50, yPos);
+      yPos += 25;
+
+      // Company contact info
+      doc.fontSize(10).font('Helvetica');
+      if (company.addressLine1) {
+        let addressLine = company.addressLine1;
+        if (company.addressLine2) addressLine += ', ' + company.addressLine2;
+        doc.text(addressLine, 50, yPos);
+        yPos += 12;
+      }
+      if (company.city || company.state || company.postalCode) {
+        const cityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(', ');
+        doc.text(cityLine, 50, yPos);
+        yPos += 12;
+      }
+      if (company.phone) {
+        doc.text(`Phone: ${company.phone}`, 50, yPos);
+        yPos += 12;
+      }
+      if (company.email) {
+        doc.text(`Email: ${company.email}`, 50, yPos);
+        yPos += 12;
+      }
+      if (company.licenseNumber) {
+        doc.text(`License: ${company.licenseNumber}`, 50, yPos);
+        yPos += 12;
+      }
+
+      yPos += 20;
+
+      // Estimate title and number
+      doc.fontSize(16).font('Helvetica-Bold').text('ESTIMATE', 50, yPos);
+      yPos += 20;
+      doc.fontSize(12).font('Helvetica').text(`Estimate #: ${estimate.estimateNumber}`, 50, yPos);
+      yPos += 15;
+      
+      // Service date
+      const serviceDate = estimate.scheduledDate 
+        ? new Date(estimate.scheduledDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        : new Date(estimate.createdAt!).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      doc.text(`Date: ${serviceDate}`, 50, yPos);
+      yPos += 15;
+
+      // Customer info
+      if (customer || estimate.customerName) {
+        yPos += 10;
+        doc.fontSize(12).font('Helvetica-Bold').text('Bill To:', 50, yPos);
+        yPos += 15;
+        doc.fontSize(10).font('Helvetica');
+        
+        const custName = customer ? `${customer.firstName} ${customer.lastName}` : estimate.customerName;
+        if (custName) {
+          doc.text(custName, 50, yPos);
+          yPos += 12;
+        }
+        
+        const custEmail = customer?.email || (estimate as any).customerEmail;
+        if (custEmail) {
+          doc.text(custEmail, 50, yPos);
+          yPos += 12;
+        }
+        
+        const custPhone = customer?.phone || (estimate as any).customerPhone;
+        if (custPhone) {
+          doc.text(custPhone, 50, yPos);
+          yPos += 12;
+        }
+        
+        const custAddress = customer?.address || (estimate as any).customerAddress;
+        if (custAddress) {
+          doc.text(custAddress, 50, yPos);
+          yPos += 12;
+        }
+      }
+
+      yPos += 20;
+
+      // Line items table header
+      const tableTop = yPos;
+      const colService = 50;
+      const colQty = 330;
+      const colPrice = 400;
+      const colAmount = 480;
+      
+      doc.fontSize(10).font('Helvetica-Bold');
+      doc.text('Service/Item', colService, tableTop);
+      doc.text('Qty', colQty, tableTop);
+      doc.text('Unit Price', colPrice, tableTop);
+      doc.text('Amount', colAmount, tableTop);
+      
+      yPos = tableTop + 15;
+      doc.moveTo(50, yPos).lineTo(550, yPos).stroke();
+      yPos += 10;
+
+      // Line items
+      doc.fontSize(10).font('Helvetica');
+      const items = estimate.items || [];
+      for (const item of items) {
+        // Check if we need a new page
+        if (yPos > 700) {
+          doc.addPage();
+          yPos = 50;
+        }
+        
+        const qty = parseFloat(String(item.quantity)) || 1;
+        const unitPrice = (item.unitPriceCents || 0) / 100;
+        const amount = qty * unitPrice;
+        
+        doc.text(item.name, colService, yPos, { width: 270 });
+        doc.text(qty.toString(), colQty, yPos);
+        doc.text(`$${unitPrice.toFixed(2)}`, colPrice, yPos);
+        doc.text(`$${amount.toFixed(2)}`, colAmount, yPos);
+        
+        yPos += 15;
+        if (item.description) {
+          doc.fontSize(9).fillColor('#666666').text(item.description, colService + 10, yPos, { width: 260 });
+          yPos += 12;
+          doc.fontSize(10).fillColor('#000000');
+        }
+      }
+
+      // Totals
+      yPos += 20;
+      doc.moveTo(350, yPos).lineTo(550, yPos).stroke();
+      yPos += 10;
+      
+      const subtotal = (estimate.subtotalCents || 0) / 100;
+      const tax = ((estimate as any).taxCents || 0) / 100;
+      const total = (estimate.totalCents || 0) / 100;
+      
+      doc.font('Helvetica').text('Subtotal:', 400, yPos);
+      doc.text(`$${subtotal.toFixed(2)}`, colAmount, yPos);
+      yPos += 15;
+      
+      if (tax > 0) {
+        doc.text('Tax:', 400, yPos);
+        doc.text(`$${tax.toFixed(2)}`, colAmount, yPos);
+        yPos += 15;
+      }
+      
+      doc.font('Helvetica-Bold').fontSize(12);
+      doc.text('Total:', 400, yPos);
+      doc.text(`$${total.toFixed(2)}`, colAmount, yPos);
+      yPos += 25;
+
+      // Signature if approved
+      if (estimate.status === 'approved' && estimate.signatureDataUrl) {
+        yPos += 20;
+        doc.fontSize(10).font('Helvetica-Bold').text('Customer Approval', 50, yPos);
+        yPos += 15;
+        doc.fontSize(9).font('Helvetica');
+        const approvedDate = estimate.approvedAt 
+          ? new Date(estimate.approvedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+          : 'N/A';
+        doc.text(`Signed on ${approvedDate} for $${total.toFixed(2)}`, 50, yPos);
+        yPos += 15;
+        
+        // Add signature image
+        try {
+          if (estimate.signatureDataUrl.startsWith('data:image')) {
+            const base64Data = estimate.signatureDataUrl.split(',')[1];
+            const signatureBuffer = Buffer.from(base64Data, 'base64');
+            doc.image(signatureBuffer, 50, yPos, { width: 150 });
+            yPos += 60;
+          }
+        } catch (e) {
+          console.log('Could not render signature:', e);
+        }
+      }
+
+      // Footer
+      if (company.defaultFooterText) {
+        // Position footer near bottom
+        const footerY = Math.max(yPos + 30, 680);
+        doc.fontSize(9).font('Helvetica').fillColor('#666666');
+        doc.text(company.defaultFooterText, 50, footerY, { width: 500, align: 'center' });
+      }
+
+      doc.end();
+
+      // Wait for PDF to finish writing
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+
+      // Store in estimate_documents table
+      const fileUrl = `/uploads/${fileName}`;
+      const estimateDoc = await storage.createEstimateDocument({
+        estimateId,
+        companyId,
+        type: 'pdf',
+        fileUrl,
+        fileName,
+        createdByUserId: userId,
+      });
+
+      console.log(`[Estimates] PDF generated estimateId=${estimateId} fileName=${fileName} docId=${estimateDoc.id}`);
+      res.json({ 
+        pdfUrl: fileUrl, 
+        fileName, 
+        documentId: estimateDoc.id 
+      });
+    } catch (error) {
+      console.error("Error generating estimate PDF:", error);
+      res.status(500).json({ message: "Failed to generate PDF" });
+    }
+  });
+
+  // POST /api/estimates/:id/share/email - Send estimate PDF via email
+  app.post('/api/estimates/:id/share/email', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // RBAC check
+      const member = await storage.getCompanyMember(companyId, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      if (!canShareEstimate(userRole)) {
+        return res.status(403).json({ message: "You don't have permission to share estimates" });
+      }
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+
+      const { toEmail, subject, message, pdfUrl } = req.body;
+      
+      if (!toEmail || !pdfUrl) {
+        return res.status(400).json({ message: "Email address and PDF URL are required" });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(toEmail)) {
+        return res.status(400).json({ message: "Invalid email address" });
+      }
+
+      // Verify the pdfUrl belongs to this company's estimate documents
+      const estimateDocs = await storage.getEstimateDocuments(estimateId, companyId);
+      const matchingDoc = estimateDocs.find(doc => doc.fileUrl === pdfUrl);
+      if (!matchingDoc) {
+        console.warn(`[Estimates] Unauthorized PDF access attempt: ${pdfUrl} for estimate ${estimateId} company ${companyId}`);
+        return res.status(403).json({ message: "Invalid PDF document for this estimate" });
+      }
+
+      // Check if Resend is configured
+      if (!process.env.RESEND_API_KEY) {
+        return res.status(503).json({ 
+          message: "Email not configured. Please configure RESEND_API_KEY to send emails.",
+          code: "EMAIL_NOT_CONFIGURED"
+        });
+      }
+
+      // Read PDF file with path traversal protection
+      const uploadsDir = path.resolve('uploads');
+      const rawPath = pdfUrl.startsWith('/') ? pdfUrl.substring(1) : pdfUrl;
+      const resolvedPath = path.resolve(rawPath);
+      
+      // Ensure the resolved path is within the uploads directory
+      if (!resolvedPath.startsWith(uploadsDir + path.sep) && resolvedPath !== uploadsDir) {
+        console.warn(`[Estimates] Path traversal attempt blocked: ${pdfUrl}`);
+        return res.status(400).json({ message: "Invalid PDF path" });
+      }
+      
+      // Also verify the path starts with uploads/ prefix
+      if (!rawPath.startsWith('uploads/') && !rawPath.startsWith('uploads\\')) {
+        return res.status(400).json({ message: "Invalid PDF path" });
+      }
+      
+      if (!fs.existsSync(resolvedPath)) {
+        return res.status(400).json({ message: "PDF file not found. Please generate the PDF first." });
+      }
+      
+      const pdfBuffer = fs.readFileSync(resolvedPath);
+      const pdfFileName = path.basename(resolvedPath);
+
+      // Get company for branding
+      const company = await storage.getCompany(companyId);
+
+      // Send email using Resend
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      
+      const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev';
+      const emailSubject = subject || `Estimate ${estimate.estimateNumber} from ${company?.name || 'Our Company'}`;
+      const emailBody = message || `Please find attached the estimate for your review.`;
+
+      await resend.emails.send({
+        from: fromEmail,
+        to: toEmail,
+        subject: emailSubject,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">${company?.name || 'Estimate'}</h2>
+            <p style="color: #555; white-space: pre-line;">${emailBody}</p>
+            <p style="color: #777; font-size: 12px; margin-top: 30px;">
+              This estimate is attached as a PDF document.
+            </p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: pdfFileName,
+            content: pdfBuffer,
+          },
+        ],
+      });
+
+      console.log(`[Estimates] Email sent estimateId=${estimateId} toEmail=${toEmail}`);
+      res.json({ success: true, message: "Email sent successfully" });
+    } catch (error: any) {
+      console.error("Error sending estimate email:", error);
+      if (error.message?.includes('API key')) {
+        return res.status(503).json({ 
+          message: "Email service configuration error. Please check RESEND_API_KEY.",
+          code: "EMAIL_NOT_CONFIGURED"
+        });
+      }
+      res.status(500).json({ message: "Failed to send email" });
     }
   });
 

@@ -19,6 +19,7 @@ import {
   estimates,
   estimateItems,
   estimateAttachments,
+  estimateDocuments,
   companyCounters,
   serviceCatalogItems,
   type User,
@@ -53,6 +54,8 @@ import {
   type EstimateWithItems,
   type EstimateAttachment,
   type InsertEstimateAttachment,
+  type EstimateDocument,
+  type InsertEstimateDocument,
   type CreateEstimatePayload,
   type UpdateEstimatePayload,
   type ServiceCatalogItem,
@@ -252,6 +255,11 @@ export interface IStorage {
   getEstimateAttachments(estimateId: number): Promise<EstimateAttachment[]>;
   createEstimateAttachment(attachment: InsertEstimateAttachment): Promise<EstimateAttachment>;
   deleteEstimateAttachment(id: number): Promise<void>;
+  
+  // Estimate document operations
+  getEstimateDocuments(estimateId: number, companyId: number): Promise<EstimateDocument[]>;
+  getLatestEstimateDocument(estimateId: number, companyId: number): Promise<EstimateDocument | undefined>;
+  createEstimateDocument(doc: InsertEstimateDocument): Promise<EstimateDocument>;
   
   // Estimate approval operations
   approveEstimate(id: number, userId: string, signatureDataUrl: string): Promise<Estimate>;
@@ -1895,6 +1903,39 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEstimateAttachment(id: number): Promise<void> {
     await db.delete(estimateAttachments).where(eq(estimateAttachments.id, id));
+  }
+
+  // Estimate document operations
+  async getEstimateDocuments(estimateId: number, companyId: number): Promise<EstimateDocument[]> {
+    return await db
+      .select()
+      .from(estimateDocuments)
+      .where(and(
+        eq(estimateDocuments.estimateId, estimateId),
+        eq(estimateDocuments.companyId, companyId)
+      ))
+      .orderBy(desc(estimateDocuments.createdAt));
+  }
+
+  async getLatestEstimateDocument(estimateId: number, companyId: number): Promise<EstimateDocument | undefined> {
+    const [doc] = await db
+      .select()
+      .from(estimateDocuments)
+      .where(and(
+        eq(estimateDocuments.estimateId, estimateId),
+        eq(estimateDocuments.companyId, companyId)
+      ))
+      .orderBy(desc(estimateDocuments.createdAt))
+      .limit(1);
+    return doc;
+  }
+
+  async createEstimateDocument(doc: InsertEstimateDocument): Promise<EstimateDocument> {
+    const [created] = await db
+      .insert(estimateDocuments)
+      .values(doc)
+      .returning();
+    return created;
   }
 
   // Estimate approval operations
