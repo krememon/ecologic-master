@@ -1927,7 +1927,7 @@ export default function Jobs() {
                   <div className="flex-1">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                      {job.title}
+                      {job.clientName || job.client?.name || 'Unassigned Job'}
                     </CardTitle>
                     <div className="flex items-center gap-1 mt-1 text-sm text-slate-600 dark:text-slate-400">
                       <Wrench className="h-3 w-3" />
