@@ -2867,9 +2867,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===================
   
   // RBAC: Owner, Supervisor, Estimator can share estimates (Technician, Dispatcher cannot)
-  const canShareEstimate = (role: string): boolean => {
+  const canShareEstimateRole = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'ESTIMATOR'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR', 'ESTIMATOR', 'ADMIN'].includes(upperRole);
+  };
+
+  // Helper to check if user can share estimates (includes owner fallback)
+  const canUserShareEstimate = async (userId: string, companyId: number): Promise<boolean> => {
+    // Check company member role
+    const member = await storage.getCompanyMember(companyId, userId);
+    console.log("[SharePDF] permission check", {
+      userId,
+      companyId,
+      memberRole: member?.role,
+      memberExists: !!member
+    });
+    
+    if (member?.role && canShareEstimateRole(member.role)) {
+      return true;
+    }
+    
+    // Fallback: Check if user is the company owner (createdByUserId)
+    const company = await storage.getCompany(companyId);
+    if (company?.createdByUserId === userId) {
+      console.log("[SharePDF] User is company owner (createdByUserId match), allowing share");
+      return true;
+    }
+    
+    return false;
   };
 
   // POST /api/estimates/:id/share/pdf - Generate PDF for estimate
@@ -2879,10 +2904,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = req.companyId;
       const estimateId = parseInt(req.params.id);
       
-      // RBAC check
-      const member = await storage.getCompanyMember(companyId, userId);
-      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      if (!canShareEstimate(userRole)) {
+      // RBAC check with owner fallback
+      const canShare = await canUserShareEstimate(userId, companyId);
+      if (!canShare) {
         return res.status(403).json({ message: "You don't have permission to share estimates" });
       }
       
@@ -3151,10 +3175,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = req.companyId;
       const estimateId = parseInt(req.params.id);
       
-      // RBAC check
-      const member = await storage.getCompanyMember(companyId, userId);
-      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      if (!canShareEstimate(userRole)) {
+      // RBAC check with owner fallback (same as PDF generation)
+      const canShare = await canUserShareEstimate(userId, companyId);
+      if (!canShare) {
         return res.status(403).json({ message: "You don't have permission to share estimates" });
       }
       
