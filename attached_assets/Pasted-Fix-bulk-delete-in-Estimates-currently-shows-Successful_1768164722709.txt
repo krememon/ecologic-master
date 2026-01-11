@@ -1,0 +1,83 @@
+Fix bulk delete in Estimates: currently shows “Successfully deleted 0 estimates” and deletes nothing.
+
+GOAL
+When user selects estimates and presses Delete:
+- the selected estimates are actually deleted in the DB
+- the list refreshes/removes them immediately
+- toast shows the correct number deleted
+- if any deletion fails, show an error toast (do not show success)
+
+DO THIS IN ORDER
+
+1) CONFIRM SELECTION STATE IS REAL
+In selection mode:
+- Ensure selected IDs are stored in state:
+  const [selectedEstimateIds, setSelectedEstimateIds] = useState<number[]>([])
+- When checkbox/card clicked, it MUST toggle that estimate.id into this array.
+- Add temporary debug:
+  console.log("[EstimatesSelect] selected ids:", selectedEstimateIds)
+
+2) FIX DELETE HANDLER (most likely bug)
+In the Delete button handler:
+- If selectedEstimateIds.length === 0:
+    show toast “Select at least one estimate”
+    return
+- Add debug:
+    console.log("[EstimatesDelete] deleting ids:", selectedEstimateIds)
+
+Then run deletes properly:
+Option A (preferred): create a bulk endpoint
+POST /api/estimates/bulk-delete
+Body: { ids: number[] }
+Backend deletes all where companyId matches and id IN ids.
+Return: { deletedCount }
+
+Option B (acceptable): loop with Promise.all
+const results = await Promise.allSettled(
+  selectedEstimateIds.map((id) =>
+    fetch(`/api/estimates/${id}`, { method:"DELETE", credentials:"include" })
+  )
+)
+
+- Count successes where response ok
+- If any failed, show error toast with how many failed and do not show “deleted X” unless successes > 0
+
+3) BACKEND: MAKE SURE DELETE ENDPOINT EXISTS + WORKS
+Verify:
+DELETE /api/estimates/:id
+- checks companyId
+- deletes estimate
+- returns 200 { success:true }
+
+If endpoint doesn’t exist or returns 404, implement it.
+
+If you implement bulk endpoint (recommended):
+POST /api/estimates/bulk-delete
+- validate ids array
+- delete from estimates where company_id = companyId AND id = ANY(ids)
+- return deletedCount
+
+4) UI UPDATE AFTER DELETE
+After successful deletion:
+- Remove deleted ids from local list immediately (optimistic):
+  setEstimates(prev => prev.filter(e => !deletedIds.includes(e.id)))
+OR refetch GET /api/estimates
+- Clear selection state:
+  setSelectedEstimateIds([])
+- Exit selection mode
+- Toast:
+  “Successfully deleted X estimates.”
+
+IMPORTANT:
+Do NOT show success toast if X === 0.
+If X === 0, show error toast with reason.
+
+5) STOP PROPAGATION
+Make sure clicking checkbox does not open estimate details:
+onClick={(e)=>{ e.stopPropagation(); toggleSelect(id); }}
+
+DELIVERABLES
+- Selecting 2 estimates and deleting removes them from DB and UI
+- Toast shows correct number deleted
+- If delete fails, user sees an error toast with real message
+- Remove temporary debug logs after confirmed

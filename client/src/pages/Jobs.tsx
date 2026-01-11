@@ -831,13 +831,22 @@ export default function Jobs() {
   // Bulk delete estimates mutation
   const bulkDeleteEstimatesMutation = useMutation({
     mutationFn: async (estimateIds: number[]) => {
+      console.log("[EstimatesDelete] deleting ids:", estimateIds);
       const results = await Promise.all(
         estimateIds.map(async (id) => {
           try {
-            const res = await apiRequest("DELETE", `/api/estimates/${id}`);
-            return { id, success: res.status === 204 || res.ok };
-          } catch {
-            return { id, success: false };
+            const res = await fetch(`/api/estimates/${id}`, { 
+              method: "DELETE", 
+              credentials: "include" 
+            });
+            if (res.status === 204 || res.ok) {
+              return { id, success: true, error: null };
+            } else {
+              const data = await res.json().catch(() => ({ message: "Delete failed" }));
+              return { id, success: false, error: data.message || "Delete failed" };
+            }
+          } catch (err: any) {
+            return { id, success: false, error: err.message || "Network error" };
           }
         })
       );
@@ -845,19 +854,38 @@ export default function Jobs() {
     },
     onSuccess: (results) => {
       const successCount = results.filter(r => r.success).length;
+      const failedResults = results.filter(r => !r.success);
+      
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       setSelectedEstimateIds(new Set());
       setIsEstimateSelectionMode(false);
       setEstimateDeleteConfirmOpen(false);
-      toast({
-        title: "Estimates deleted",
-        description: `Successfully deleted ${successCount} estimate${successCount !== 1 ? 's' : ''}.`,
-      });
+      
+      if (successCount > 0 && failedResults.length === 0) {
+        toast({
+          title: "Estimates deleted",
+          description: `Successfully deleted ${successCount} estimate${successCount !== 1 ? 's' : ''}.`,
+        });
+      } else if (successCount > 0 && failedResults.length > 0) {
+        toast({
+          title: "Partially deleted",
+          description: `Deleted ${successCount}, but ${failedResults.length} failed: ${failedResults[0].error}`,
+          variant: "destructive",
+        });
+      } else {
+        const firstError = failedResults[0]?.error || "Unknown error";
+        toast({
+          title: "Delete failed",
+          description: firstError,
+          variant: "destructive",
+        });
+      }
     },
     onError: () => {
+      setEstimateDeleteConfirmOpen(false);
       toast({
         title: "Error",
-        description: "Failed to delete some estimates.",
+        description: "Failed to delete estimates.",
         variant: "destructive",
       });
     },
