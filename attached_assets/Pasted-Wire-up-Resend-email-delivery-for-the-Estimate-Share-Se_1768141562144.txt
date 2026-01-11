@@ -1,0 +1,76 @@
+Wire up Resend email delivery for the Estimate Share “Send” step (with PDF attachment).
+
+We already added Replit Secrets:
+- RESEND_API_KEY
+- RESEND_FROM_EMAIL
+
+GOAL
+From the Estimate “Share” flow delivery screen:
+- User enters To / Subject / Message
+- Click Send
+- Recipient receives an email with the generated estimate PDF attached
+
+BACKEND
+1) Install Resend SDK:
+npm i resend
+
+2) Create server/service for sending:
+server/services/resendEmail.ts
+Export:
+async function sendEstimateEmailWithPdf({
+  toEmail,
+  subject,
+  message,
+  pdfUrl,
+  fileName,
+}: { ... })
+
+Implementation:
+- Read RESEND_API_KEY + RESEND_FROM_EMAIL from process.env
+- If missing, throw clear error
+- Fetch the PDF bytes from pdfUrl (server-side fetch)
+- Convert to base64
+- Send via Resend:
+  from: RESEND_FROM_EMAIL
+  to: [toEmail]
+  subject
+  text: message (and optionally html)
+  attachments: [{ filename: fileName, content: base64 }]
+
+3) Add endpoint:
+POST /api/estimates/:id/share/email
+Body:
+{ toEmail, subject, message, pdfUrl, fileName }
+
+Server must:
+- Validate toEmail
+- Ensure estimate belongs to req.user.companyId
+- Call sendEstimateEmailWithPdf()
+- Return { success: true }
+
+Log for debugging:
+console.log("[ShareEmail] sending", { estimateId, toEmail, fileName })
+console.log("[ShareEmail] pdfUrl", pdfUrl)
+
+4) Error handling
+- Return 500 with message like:
+  "Email not configured" OR "Failed to fetch PDF" OR actual resend error
+- Do NOT silently succeed.
+
+FRONTEND
+5) In the Delivery screen Send button handler:
+- Disable button while sending
+- POST to /api/estimates/:id/share/email with the form values
+- On success: toast “Sent” and close modal
+- On error: show toast with returned message
+
+DEFAULTS
+- Prefill To with customer email if available
+- Subject: `Estimate ${estimateNumber} from ${companyName}`
+- Message:
+  `Hi ${customerName},\n\nThank you for choosing ${companyName}. Please see attached estimate.\n`
+
+DELIVERABLES
+- Clicking Send actually sends the email through Resend
+- PDF arrives as an attachment
+- Resend dashboard shows the email event

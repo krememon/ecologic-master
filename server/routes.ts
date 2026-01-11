@@ -3324,7 +3324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send email using Resend
       const resend = new Resend(process.env.RESEND_API_KEY);
       
-      const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev';
+      const fromEmail = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || 'noreply@resend.dev';
       const emailSubject = subject || `Estimate ${estimate.estimateNumber} from ${company?.name || 'Our Company'}`;
       const emailBody = message || `Please find attached the estimate for your review.`;
 
