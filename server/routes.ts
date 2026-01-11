@@ -22,6 +22,8 @@ import express from "express";
 import OpenAI from "openai";
 import PDFDocument from "pdfkit";
 import { Resend } from "resend";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
 import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests } from "../shared/schema";
 import { z } from "zod";
@@ -3149,6 +3151,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         writeStream.on('error', reject);
       });
 
+      // Generate PNG preview of page 1
+      let previewImageUrl: string | null = null;
+      try {
+        const pdfBuffer = fs.readFileSync(filePath);
+        const pdfData = new Uint8Array(pdfBuffer);
+        const pdfDoc = await pdfjs.getDocument({ data: pdfData }).promise;
+        const page = await pdfDoc.getPage(1);
+        
+        // Scale for good preview quality (1.5x)
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+        
+        // Create canvas
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const context = canvas.getContext('2d');
+        
+        // Render page to canvas
+        await page.render({
+          canvasContext: context as any,
+          viewport: viewport,
+        }).promise;
+        
+        // Save as PNG
+        const previewFileName = fileName.replace('.pdf', '_preview.png');
+        const previewPath = path.join('uploads', previewFileName);
+        const pngBuffer = canvas.toBuffer('image/png');
+        fs.writeFileSync(previewPath, pngBuffer);
+        
+        previewImageUrl = `/uploads/${previewFileName}`;
+        console.log(`[Estimates] Preview generated: ${previewFileName}`);
+      } catch (previewError) {
+        console.error('[Estimates] Failed to generate preview image:', previewError);
+        // Continue without preview - not a critical failure
+      }
+
       // Store in estimate_documents table
       const fileUrl = `/uploads/${fileName}`;
       const estimateDoc = await storage.createEstimateDocument({
@@ -3163,6 +3200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[Estimates] PDF generated estimateId=${estimateId} fileName=${fileName} docId=${estimateDoc.id}`);
       res.json({ 
         pdfUrl: fileUrl, 
+        previewImageUrl,
         fileName, 
         documentId: estimateDoc.id 
       });

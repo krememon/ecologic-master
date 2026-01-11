@@ -32,7 +32,7 @@ export function ShareEstimateModal({
   const [step, setStep] = useState<1 | 2>(1);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
-  const [iframeError, setIframeError] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
@@ -49,6 +49,7 @@ export function ShareEstimateModal({
     onSuccess: (data) => {
       setPdfUrl(data.pdfUrl);
       setPdfFileName(data.fileName);
+      setPreviewImageUrl(data.previewImageUrl || null);
       toast({
         title: "PDF Generated",
         description: `${data.fileName} is ready to send.`,
@@ -102,7 +103,7 @@ export function ShareEstimateModal({
     setStep(1);
     setPdfUrl(null);
     setPdfFileName(null);
-    setIframeError(false);
+    setPreviewImageUrl(null);
     setIsPdfViewerOpen(false);
     setToEmail(customerEmail || "");
     setSubject(`Estimate ${estimateNumber} from ${companyName}`);
@@ -129,11 +130,6 @@ export function ShareEstimateModal({
   };
 
   const isEmailValid = toEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail);
-
-  const getPdfViewerUrl = (url: string | null) => {
-    if (!url) return '';
-    return url.includes('#') ? url : `${url}#view=Fit`;
-  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -216,34 +212,33 @@ export function ShareEstimateModal({
                   </div>
                 </div>
                 <div 
-                  className="relative border rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900 cursor-pointer group" 
-                  style={{ height: '55vh' }}
+                  className="relative rounded-lg overflow-hidden cursor-pointer group bg-slate-100 dark:bg-slate-800 p-4 shadow-inner" 
+                  style={{ maxHeight: '55vh' }}
                   onClick={() => setIsPdfViewerOpen(true)}
                 >
-                  <iframe
-                    src={getPdfViewerUrl(pdfUrl)}
-                    title="Estimate PDF Preview"
-                    className="w-full h-full pointer-events-none"
-                    style={{ border: 0 }}
-                    onError={() => setIframeError(true)}
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <div className="bg-white dark:bg-slate-900 rounded shadow-lg mx-auto" style={{ maxHeight: 'calc(55vh - 32px)', overflow: 'hidden' }}>
+                    {previewImageUrl ? (
+                      <img
+                        src={previewImageUrl}
+                        alt="Estimate Preview"
+                        className="w-full h-auto object-contain"
+                        style={{ maxHeight: 'calc(55vh - 32px)' }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-64 text-slate-400">
+                        <FileText className="h-16 w-16" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center pointer-events-none">
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-800 rounded-full p-3 shadow-lg">
                       <Maximize2 className="h-5 w-5 text-slate-700 dark:text-slate-300" />
                     </div>
                   </div>
-                  <div className="absolute bottom-2 left-2 text-xs text-slate-500 bg-white/80 dark:bg-slate-800/80 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute bottom-6 left-6 text-xs text-slate-500 bg-white/90 dark:bg-slate-800/90 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                     Tap to enlarge
                   </div>
                 </div>
-                {iframeError && (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-slate-500 mb-2">Preview not supported on this device</p>
-                    <Button variant="outline" size="sm" onClick={() => window.open(pdfUrl, "_blank")}>
-                      Open PDF
-                    </Button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -330,11 +325,11 @@ export function ShareEstimateModal({
 
       {/* Full-screen PDF Viewer */}
       <Dialog open={isPdfViewerOpen} onOpenChange={setIsPdfViewerOpen}>
-        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-white dark:bg-slate-950">
+        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-white dark:bg-slate-950 shrink-0">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px] sm:max-w-none">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px] sm:max-w-none">
                 {pdfFileName}
               </span>
             </div>
@@ -344,9 +339,10 @@ export function ShareEstimateModal({
                 size="sm"
                 onClick={() => window.open(pdfUrl!, "_blank")}
                 className="h-8 px-2"
-                title="Open in new tab"
+                title="Open PDF"
               >
                 <ExternalLink className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1 text-xs">Open PDF</span>
               </Button>
               <Button
                 variant="ghost"
@@ -369,15 +365,35 @@ export function ShareEstimateModal({
               </Button>
             </div>
           </div>
-          <div className="flex-1 bg-slate-100 dark:bg-slate-900" style={{ height: 'calc(95vh - 56px)' }}>
-            {pdfUrl && (
-              <iframe
-                src={getPdfViewerUrl(pdfUrl)}
-                title="Estimate PDF Full View"
-                className="w-full h-full"
-                style={{ border: 0 }}
-              />
-            )}
+          <div 
+            className="flex-1 overflow-auto bg-slate-200 dark:bg-slate-800 p-4"
+            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+          >
+            <div className="min-h-full flex items-start justify-center">
+              {previewImageUrl ? (
+                <img
+                  src={previewImageUrl}
+                  alt="Estimate Full View"
+                  className="max-w-full h-auto bg-white shadow-xl rounded"
+                  style={{ maxHeight: 'none' }}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-400">
+                  <div className="text-center">
+                    <FileText className="h-20 w-20 mx-auto mb-4" />
+                    <p>Preview not available</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mt-4"
+                      onClick={() => window.open(pdfUrl!, "_blank")}
+                    >
+                      Open PDF
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
