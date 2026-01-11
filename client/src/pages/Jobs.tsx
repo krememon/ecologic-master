@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -32,6 +32,7 @@ interface JobWithClient extends Job {
     email: string | null;
     phone: string | null;
   } | null;
+  primaryLineItem?: string | null;
 }
 
 interface JobPhoto {
@@ -1928,30 +1929,12 @@ export default function Jobs() {
                       <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                       {job.title}
                     </CardTitle>
-                    {(job.clientName || job.client?.name) ? (
-                      <div className="flex items-center gap-1 mt-1 text-sm text-slate-600 dark:text-slate-400">
-                        <User className="h-3 w-3" />
-                        {job.client?.id ? (
-                          <button
-                            className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocation('/clients');
-                            }}
-                            data-testid="button-job-client-name"
-                          >
-                            {job.clientName || job.client?.name}
-                          </button>
-                        ) : (
-                          <span data-testid="text-job-client-name">{job.clientName}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 mt-1 text-sm text-slate-400">
-                        <User className="h-3 w-3" />
-                        <span>—</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 mt-1 text-sm text-slate-600 dark:text-slate-400">
+                      <Wrench className="h-3 w-3" />
+                      <span data-testid="text-job-primary-line-item">
+                        {job.primaryLineItem || 'No line items yet'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardHeader>

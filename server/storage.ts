@@ -7,6 +7,7 @@ import {
   customers,
   subcontractors,
   jobs,
+  jobLineItems,
   jobAssignments,
   crewAssignments,
   invoices,
@@ -647,7 +648,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getJobs(companyId: number): Promise<any[]> {
-    return await db
+    const jobsList = await db
       .select({
         id: jobs.id,
         title: jobs.title,
@@ -680,6 +681,30 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(clients, eq(jobs.clientId, clients.id))
       .where(eq(jobs.companyId, companyId))
       .orderBy(desc(jobs.createdAt));
+    
+    // Fetch first line item for each job
+    const jobIds = jobsList.map(j => j.id);
+    if (jobIds.length === 0) return jobsList;
+    
+    const allLineItems = await db
+      .select()
+      .from(jobLineItems)
+      .where(inArray(jobLineItems.jobId, jobIds))
+      .orderBy(jobLineItems.sortOrder);
+    
+    // Group by job and get first item
+    const firstLineItemByJob: Record<number, string> = {};
+    for (const item of allLineItems) {
+      if (!firstLineItemByJob[item.jobId]) {
+        firstLineItemByJob[item.jobId] = item.name;
+      }
+    }
+    
+    // Merge primary line item into jobs
+    return jobsList.map(job => ({
+      ...job,
+      primaryLineItem: firstLineItemByJob[job.id] || null,
+    }));
   }
 
   async getJob(id: number): Promise<any> {
