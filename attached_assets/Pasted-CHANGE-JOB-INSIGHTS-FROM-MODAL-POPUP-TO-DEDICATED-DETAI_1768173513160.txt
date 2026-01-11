@@ -1,0 +1,62 @@
+CHANGE JOB INSIGHTS FROM MODAL/POPUP TO DEDICATED DETAIL PAGE (LIKE ESTIMATES)
+
+CONTEXT
+- Estimates open as a dedicated detail page layout and look perfectly centered.
+- Jobs currently open in a popup/modal, causing layout/centering inconsistencies.
+- We want Job detail to behave like Estimate detail: a “separate page-ish” experience with the same layout system.
+
+GOAL
+When a user clicks a job, navigate to a dedicated Job Detail page route (not a modal).
+The Job detail page must use the SAME layout wrapper and header structure as Estimate detail, so it looks identical in spacing, centering, and polish.
+
+REQUIREMENTS
+
+1) ROUTING / NAVIGATION
+- Add a route like:
+  /jobs/:jobId
+- Clicking a job card/row should navigate to /jobs/:jobId (instead of opening a modal).
+- Support back navigation properly (browser back + in-app back).
+
+2) PAGE LAYOUT (REUSE ESTIMATE DETAIL LAYOUT)
+- The Job detail page must reuse the exact same “Detail Page” layout wrapper used by the Estimate detail page.
+- Same centered column width, same padding, same header alignment, same scroll behavior.
+- No modal overlay, no weird gutters.
+
+3) JOB DETAIL PAGE CONTENT (SAME UI YOU BUILT, JUST ON A PAGE)
+- Keep the new clean section cards:
+  - Customer
+  - Job Type
+  - Assigned Employees
+  - Line Items (with totals)
+  - Attachments/Documents
+- Keep the segmented tabs:
+  - Documents
+  - E-signature Approvals
+- Ensure everything displays correctly and matches RBAC rules.
+
+4) HEADER (LIKE ESTIMATES)
+- Left: Back arrow (or “Back”) like estimate detail
+- Title: “Job for {Customer}”
+- Status pill
+- Right: Edit (and delete if allowed)
+- No close “X” since this is now a page
+
+5) EDIT FLOW
+- Edit should navigate to:
+  /jobs/:jobId/edit
+  OR open an edit drawer/page consistent with how estimates handle editing
+- Do NOT open edit in a modal if estimate edit is page-based.
+
+6) OPTIONAL: KEEP MODAL AS “QUICK VIEW” (ONLY IF EASY)
+- If we want later, we can keep the modal for quick peek,
+  but the default primary experience must be the dedicated page.
+
+7) NO REGRESSIONS
+- Documents upload, approvals, line items display must still work
+- RBAC must still hide unauthorized actions/content
+- Deep link: visiting /jobs/:jobId directly must load correctly
+
+DELIVERABLES
+- Jobs open as a dedicated detail page (like estimates)
+- Centering/spacing matches estimate detail automatically
+- Job page replaces the popup experience

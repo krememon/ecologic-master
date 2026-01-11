@@ -34,6 +34,7 @@ import PriceBook from "@/pages/PriceBook";
 import CompanyProfile from "@/pages/CompanyProfile";
 import IndustryOnboarding from "@/pages/IndustryOnboarding";
 import EstimateDetails from "@/pages/EstimateDetails";
+import JobDetails from "@/pages/JobDetails";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -110,6 +111,9 @@ function Router() {
         <Route path="/customize/price-book" component={PriceBook} />
         <Route path="/estimates/:id">
           {(params) => <EstimateDetails estimateId={params.id} />}
+        </Route>
+        <Route path="/jobs/:id">
+          {(params) => <JobDetails jobId={params.id} />}
         </Route>
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route component={NotFound} />

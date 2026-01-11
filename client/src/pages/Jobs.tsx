@@ -1917,8 +1917,8 @@ export default function Jobs() {
                 if (isInPacContainer(e.nativeEvent)) {
                   return;
                 }
-                // existing behavior (open detail / close)
-                setSelectedJob(job);
+                // Navigate to job detail page
+                setLocation(`/jobs/${job.id}`);
               }}
             >
               <CardHeader className="pb-3">
@@ -2002,7 +2002,7 @@ export default function Jobs() {
                       className="h-8 w-8 p-0 text-green-500 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedJob(job);
+                        setLocation(`/jobs/${job.id}`);
                       }}
                       data-testid={`button-view-job-${job.id}`}
                     >

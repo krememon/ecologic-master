@@ -1252,6 +1252,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single job by ID
+  app.get('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const job = await storage.getJob(jobId);
+      
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      // Get client info if available
+      let client = null;
+      if (job.clientId) {
+        client = await storage.getClient(job.clientId);
+      }
+      
+      res.json({
+        ...job,
+        clientName: client?.name || null,
+        client: client ? {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          phone: client.phone
+        } : null
+      });
+    } catch (error) {
+      console.error("Error fetching job:", error);
+      res.status(500).json({ message: "Failed to fetch job" });
+    }
+  });
+
   app.get('/api/clients/:clientId/jobs', isAuthenticated, async (req: any, res) => {
     try {
       const clientId = parseInt(req.params.clientId);

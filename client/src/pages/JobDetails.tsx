@@ -1,0 +1,597 @@
+import { useState, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useCan } from "@/hooks/useCan";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users } from "lucide-react";
+import { format } from "date-fns";
+import type { Job, Client } from "@shared/schema";
+
+interface JobDetailsProps {
+  jobId: string;
+}
+
+interface JobWithClient extends Job {
+  client?: {
+    id: number;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  } | null;
+}
+
+interface CrewAssignment {
+  id: number;
+  jobId: number;
+  userId: string;
+  companyId: number;
+  assignedAt: string;
+  user: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    profileImageUrl: string | null;
+  };
+}
+
+interface JobLineItem {
+  id: number;
+  jobId: number;
+  name: string;
+  description: string | null;
+  taskCode: string | null;
+  quantity: string;
+  unitPriceCents: number;
+  unit: string;
+  taxable: boolean;
+  lineTotalCents: number;
+  sortOrder: number;
+}
+
+interface JobPhoto {
+  id: number;
+  jobId: number;
+  uploadedBy: string;
+  title: string | null;
+  description: string | null;
+  photoUrl: string;
+  location: string | null;
+  phase: string | null;
+  weather: string | null;
+  isPublic: boolean;
+  createdAt: string;
+}
+
+interface JobDocument {
+  id: number;
+  jobId: number;
+  fileName: string;
+  fileUrl: string;
+  fileType: string;
+  visibility: string;
+  createdAt: string;
+}
+
+function getStatusBadgeVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  switch (status) {
+    case 'active': return 'default';
+    case 'pending': return 'secondary';
+    case 'completed': return 'outline';
+    case 'cancelled': return 'destructive';
+    default: return 'secondary';
+  }
+}
+
+export default function JobDetails({ jobId }: JobDetailsProps) {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { role } = useCan();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [activeTab, setActiveTab] = useState<'documents' | 'approvals'>('documents');
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
+
+  const { data: job, isLoading, error } = useQuery<JobWithClient>({
+    queryKey: [`/api/jobs/${jobId}`],
+    enabled: !!jobId && isAuthenticated,
+  });
+
+  const { data: crewAssignments = [] } = useQuery<CrewAssignment[]>({
+    queryKey: ['/api/jobs', jobId, 'crew'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/crew`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch crew');
+      return res.json();
+    },
+    enabled: !!jobId && isAuthenticated,
+  });
+
+  const { data: lineItems = [] } = useQuery<JobLineItem[]>({
+    queryKey: ['/api/jobs', jobId, 'line-items'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/line-items`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch line items');
+      return res.json();
+    },
+    enabled: !!jobId && isAuthenticated,
+  });
+
+  const { data: legacyPhotos = [] } = useQuery<JobPhoto[]>({
+    queryKey: [`/api/jobs/${jobId}/photos`],
+    enabled: !!jobId && isAuthenticated,
+  });
+
+  const { data: jobDocuments = [] } = useQuery<JobDocument[]>({
+    queryKey: [`/api/jobs/${jobId}/documents`],
+    enabled: !!jobId && isAuthenticated,
+  });
+
+  const jobDocumentPhotos = jobDocuments
+    .filter(doc => doc.fileType?.startsWith('image/'))
+    .map(doc => ({
+      id: doc.id,
+      jobId: doc.jobId,
+      uploadedBy: '',
+      title: doc.fileName,
+      description: null,
+      photoUrl: doc.fileUrl,
+      location: null,
+      phase: null,
+      weather: null,
+      isPublic: doc.visibility === 'customer_internal',
+      createdAt: doc.createdAt,
+      isDocument: true,
+    }));
+
+  const jobPhotos = [...jobDocumentPhotos, ...legacyPhotos];
+
+  const deleteJobMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest('DELETE', `/api/jobs/${jobId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "Job deleted successfully" });
+      navigate('/jobs');
+    },
+    onError: () => {
+      toast({ title: "Failed to delete job", variant: "destructive" });
+    },
+  });
+
+  const uploadPhotoMutation = useMutation({
+    mutationFn: async ({ formData }: { formData: FormData }) => {
+      const res = await fetch(`/api/jobs/${jobId}/documents`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}/documents`] });
+      toast({ title: "Photo uploaded successfully" });
+      setIsUploading(false);
+      setUploadProgress(0);
+    },
+    onError: () => {
+      toast({ title: "Failed to upload photo", variant: "destructive" });
+      setIsUploading(false);
+      setUploadProgress(0);
+    },
+  });
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    setUploadProgress(30);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('jobId', jobId);
+    formData.append('visibility', 'assigned_crew_only');
+    
+    setUploadProgress(60);
+    uploadPhotoMutation.mutate({ formData });
+  };
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-slate-200 rounded w-1/4"></div>
+          <div className="h-64 bg-slate-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !job) {
+    return (
+      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <div className="text-center py-12">
+          <h2 className="text-xl font-semibold mb-2">Job not found</h2>
+          <Button onClick={() => navigate('/jobs')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Jobs
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const customerName = job.clientName || job.client?.name;
+
+  return (
+    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      {/* Header - like Estimates */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs')}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">
+              {customerName ? `Job for ${customerName}` : job.title}
+            </h1>
+            {customerName && job.title && (
+              <p className="text-sm text-muted-foreground">{job.title}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          <Badge variant={getStatusBadgeVariant(job.status)} className="text-sm capitalize">
+            {job.status}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Tab Switcher */}
+      <div className="mb-6" data-testid="job-tab-switcher">
+        <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
+          <button
+            onClick={() => setActiveTab('documents')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              activeTab === 'documents'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Documents
+          </button>
+          <button
+            onClick={() => setActiveTab('approvals')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              activeTab === 'approvals'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            E-signature Approvals
+          </button>
+        </div>
+      </div>
+
+      {/* Documents Tab */}
+      {activeTab === 'documents' && (
+        <div className="space-y-6">
+          {/* Customer Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Customer
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {customerName ? (
+                <div className="space-y-1">
+                  <p className="font-medium">{customerName}</p>
+                  {job.client?.email && (
+                    <p className="text-sm text-muted-foreground">{job.client.email}</p>
+                  )}
+                  {job.client?.phone && (
+                    <p className="text-sm text-muted-foreground">{job.client.phone}</p>
+                  )}
+                  {job.location && (
+                    <a 
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {job.location}
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No customer assigned</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Job Type Card */}
+          {job.jobType && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Job Type
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>{job.jobType}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Schedule Card */}
+          {(job.startDate || job.endDate) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1">
+                  {job.startDate && (
+                    <p>{format(new Date(job.startDate), 'EEEE, MMMM d, yyyy')}</p>
+                  )}
+                  {job.endDate && job.startDate !== job.endDate && (
+                    <p className="text-sm text-muted-foreground">
+                      to {format(new Date(job.endDate), 'MMMM d, yyyy')}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Assigned Employees Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Assigned Employees
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {crewAssignments.length > 0 ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex -space-x-2 flex-shrink-0">
+                    {crewAssignments.slice(0, 4).map((assignment) => {
+                      const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
+                      const initials = (assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '') || assignment.user.email[0].toUpperCase();
+                      return assignment.user.profileImageUrl ? (
+                        <img
+                          key={assignment.userId}
+                          src={assignment.user.profileImageUrl}
+                          alt={name}
+                          title={name}
+                          className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 object-cover"
+                        />
+                      ) : (
+                        <div
+                          key={assignment.userId}
+                          title={name}
+                          className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300"
+                        >
+                          {initials}
+                        </div>
+                      );
+                    })}
+                    {crewAssignments.length > 4 && (
+                      <div className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-medium">
+                        +{crewAssignments.length - 4}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    {crewAssignments.map(a => 
+                      `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || a.user.email.split('@')[0]
+                    ).slice(0, 3).join(', ')}
+                    {crewAssignments.length > 3 && ` +${crewAssignments.length - 3} more`}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">No employees assigned</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Line Items Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <List className="h-5 w-5" />
+                Line Items
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {lineItems.length > 0 ? (
+                <div className="space-y-3">
+                  {lineItems.map((item) => (
+                    <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
+                      <div className="flex-1">
+                        <p className="font-medium">{item.name}</p>
+                        {item.description && (
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
+                        </p>
+                      </div>
+                      <p className="font-medium">${(item.lineTotalCents / 100).toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-2">No line items</p>
+              )}
+              <Separator className="my-3" />
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total</span>
+                <span>${(lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Notes Card */}
+          {job.description && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p 
+                  className={`text-sm leading-relaxed ${
+                    !isDescriptionExpanded ? 'line-clamp-3' : ''
+                  }`}
+                >
+                  {job.description}
+                </p>
+                {job.description.length > 150 && (
+                  <button 
+                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                    className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+                  >
+                    {isDescriptionExpanded ? 'Show less' : 'Read more'}
+                  </button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Attachments Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Paperclip className="h-5 w-5" />
+                  Attachments
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isUploading ? 'Uploading...' : 'Upload'}
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isUploading && uploadProgress > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {jobPhotos.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {jobPhotos.map((photo) => (
+                    <div key={photo.id} className="relative group cursor-pointer">
+                      <img
+                        src={photo.photoUrl}
+                        alt={photo.title || "Job attachment"}
+                        className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
+                      />
+                      <p className="text-xs truncate mt-1">{photo.title || 'Photo'}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No attachments</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* E-signature Approvals Tab */}
+      {activeTab === 'approvals' && (
+        <Card>
+          <CardContent className="flex flex-col items-center py-12">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-lg font-medium mb-2">E-signature Approvals</p>
+            <p className="text-sm text-muted-foreground text-center">
+              Signature requests for this job will appear here.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoUpload}
+        className="hidden"
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Job</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this job? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteJobMutation.mutate()}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
