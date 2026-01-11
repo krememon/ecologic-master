@@ -11,7 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1115,30 +1116,33 @@ export default function Jobs() {
         </DialogContent>
       </Dialog>
 
-      {/* Job Detail Modal with Photo Feed */}
+      {/* Job Detail Modal - Estimate-style layout */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden px-5 pb-3 sm:px-6 sm:pb-4 rounded-3xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
-          <div className="pt-6 sm:pt-8">
-          <DialogHeader className="space-y-0">
-            {/* Header Container with flex-wrap */}
-            <div data-testid="job-header" className="flex flex-wrap items-start gap-x-2 gap-y-1 mb-2 sm:mb-2">
-              {/* Title + Status Badge Group */}
-              <div className="flex flex-wrap items-center gap-2 min-w-0">
-                <DialogTitle className="text-xl font-semibold leading-tight truncate [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]">
-                  {selectedJob?.title}
-                </DialogTitle>
-                {selectedJob && (
-                  <Badge 
-                    variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
-                    className="text-sm px-2.5 py-0.5 flex-shrink-0"
-                  >
-                    {selectedJob.status}
-                  </Badge>
-                )}
+        <DialogContent className="w-[98vw] max-w-3xl h-[95vh] overflow-y-auto overflow-x-hidden p-0 rounded-2xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+          {/* Clean Header - matches Estimate detail */}
+          <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 sm:px-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setSelectedJob(null)}
+                  className="flex-shrink-0"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+                <div className="min-w-0">
+                  <h1 className="text-xl font-bold truncate" data-testid="job-header">
+                    {selectedJob?.clientName || selectedJob?.client?.name 
+                      ? `Job for ${selectedJob?.clientName || selectedJob?.client?.name}`
+                      : selectedJob?.title}
+                  </h1>
+                  {selectedJob?.title && (selectedJob?.clientName || selectedJob?.client?.name) && (
+                    <p className="text-sm text-muted-foreground truncate">{selectedJob.title}</p>
+                  )}
+                </div>
               </div>
-              
-              {/* Action Buttons - compact */}
-              <div className="ml-auto flex items-center gap-1.5 shrink-0 pr-1 sm:pr-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
@@ -1148,11 +1152,10 @@ export default function Jobs() {
                       setSelectedJob(null);
                     }
                   }}
-                  className="h-6 w-6 p-0.5"
-                  aria-label="Edit job"
                   data-testid="button-edit-job"
                 >
-                  <Edit className="h-3.5 w-3.5" />
+                  <Edit className="h-4 w-4 mr-1.5" />
+                  Edit
                 </Button>
                 <Button
                   size="sm"
@@ -1163,20 +1166,23 @@ export default function Jobs() {
                       setSelectedJob(null);
                     }
                   }}
-                  className="h-6 w-6 p-0.5"
-                  aria-label="Delete job"
                   data-testid="button-delete-job"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
+                {selectedJob && (
+                  <Badge 
+                    variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
+                    className="text-sm capitalize"
+                  >
+                    {selectedJob.status}
+                  </Badge>
+                )}
               </div>
             </div>
-          
-          </DialogHeader>
-          
-          {/* Segmented Tab Switcher */}
-          {selectedJob && (
-            <div className="mt-4 mb-4" data-testid="job-tab-switcher">
+            
+            {/* Segmented Tab Switcher */}
+            <div className="mt-4" data-testid="job-tab-switcher">
               <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
                 <button
                   onClick={() => setJobModalTab('documents')}
@@ -1202,345 +1208,271 @@ export default function Jobs() {
                 </button>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Tab Content */}
+          {/* Tab Content - Card-based sections like Estimates */}
           {selectedJob && jobModalTab === 'documents' && (
-            <div data-testid="job-sections-stack" className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
-              {/* Left Column - Job Information (60%) */}
-              <div className="col-span-1 lg:col-span-3">
-                <Card data-testid="job-info-card" className="mb-0">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Job Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    {/* Definition list with label:value rows */}
-                    <dl className="divide-y divide-slate-200 dark:divide-slate-700">
-                      {/* Client */}
-                      {(selectedJob.clientName || selectedJob.client?.name) && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Client:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={selectedJob.clientName || selectedJob.client?.name || ''} data-testid="text-job-client-detail">
-                            {selectedJob.clientName || selectedJob.client?.name}
-                          </dd>
-                        </div>
-                      )}
-                      
-                      {/* Job Type */}
-                      {selectedJob.jobType && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Job Type:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={selectedJob.jobType} data-testid="text-job-type-detail">
-                            {selectedJob.jobType}
-                          </dd>
-                        </div>
-                      )}
-                      
-                      {/* Assigned Crew (Read-only display) */}
-                      <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                        <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Assigned Crew:</dt>
-                        <dd className="flex items-center gap-2" data-testid="text-job-assigned">
-                          {selectedJobCrew.length === 0 ? (
-                            <span className="italic text-slate-500">Unassigned</span>
-                          ) : (
-                            <>
-                              {/* Avatar bubbles - show up to 3 */}
-                              <div className="flex -space-x-2 flex-shrink-0">
-                                {selectedJobCrew.slice(0, 3).map((assignment) => {
-                                  const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
-                                  const initials = (assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '') || assignment.user.email[0].toUpperCase();
-                                  return assignment.user.profileImageUrl ? (
-                                    <img
-                                      key={assignment.userId}
-                                      src={assignment.user.profileImageUrl}
-                                      alt={name}
-                                      title={name}
-                                      className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 object-cover"
-                                    />
-                                  ) : (
-                                    <div
-                                      key={assignment.userId}
-                                      title={name}
-                                      className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300"
-                                    >
-                                      {initials}
-                                    </div>
-                                  );
-                                })}
-                                {selectedJobCrew.length > 3 && (
-                                  <div className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-medium text-slate-700 dark:text-slate-200">
-                                    +{selectedJobCrew.length - 3}
-                                  </div>
-                                )}
-                              </div>
-                              {/* Names for small crews */}
-                              {selectedJobCrew.length <= 2 && (
-                                <span className="min-w-0 truncate text-sm text-slate-700 dark:text-slate-300">
-                                  {selectedJobCrew.map(a => 
-                                    `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || a.user.email.split('@')[0]
-                                  ).join(', ')}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </dd>
-                      </div>
-                      
-                      {/* Address */}
+            <div className="p-4 sm:p-6 space-y-4" data-testid="job-sections-stack">
+              {/* Customer Card */}
+              <Card data-testid="job-customer-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <User className="h-5 w-5" />
+                    Customer
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(selectedJob.clientName || selectedJob.client?.name) ? (
+                    <div className="space-y-1">
+                      <p className="font-medium" data-testid="text-job-client-detail">
+                        {selectedJob.clientName || selectedJob.client?.name}
+                      </p>
                       {selectedJob.location && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Address:</dt>
-                          <dd className="truncate">
-                            <a 
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                              title={`View ${selectedJob.location} on map`}
-                              data-testid="link-job-location-detail"
-                            >
-                              {selectedJob.location}
-                            </a>
-                          </dd>
-                        </div>
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedJob.location)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          data-testid="link-job-location-detail"
+                        >
+                          {selectedJob.location}
+                        </a>
                       )}
-                      
-                      {/* Priority */}
-                      {selectedJob.priority && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Priority:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 capitalize truncate" title={selectedJob.priority}>
-                            {selectedJob.priority}
-                          </dd>
-                        </div>
-                      )}
-                      
-                      {/* Created */}
-                      {selectedJob.createdAt && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Created:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={format(new Date(selectedJob.createdAt), 'PPpp')}>
-                            {format(new Date(selectedJob.createdAt), 'MMM d, yyyy')}
-                          </dd>
-                        </div>
-                      )}
-                      
-                      {/* Estimated Cost */}
-                      {selectedJob.estimatedCost && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Estimated Cost:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={`$${Number(selectedJob.estimatedCost).toLocaleString()}`}>
-                            ${Number(selectedJob.estimatedCost).toLocaleString()}
-                          </dd>
-                        </div>
-                      )}
-                      
-                      {/* Start Date */}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No customer assigned</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Job Type Card */}
+              {selectedJob.jobType && (
+                <Card data-testid="job-type-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileText className="h-5 w-5" />
+                      Job Type
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p data-testid="text-job-type-detail">{selectedJob.jobType}</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Schedule Card */}
+              {(selectedJob.startDate || selectedJob.endDate) && (
+                <Card data-testid="job-schedule-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Calendar className="h-5 w-5" />
+                      Schedule
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1">
                       {selectedJob.startDate && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Start Date:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={new Date(selectedJob.startDate).toLocaleDateString()}>
-                            {new Date(selectedJob.startDate).toLocaleDateString()}
-                          </dd>
-                        </div>
+                        <p>{format(new Date(selectedJob.startDate), 'EEEE, MMMM d, yyyy')}</p>
                       )}
-                      
-                      {/* End Date */}
-                      {selectedJob.endDate && (
-                        <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 py-2">
-                          <dt className="font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">End Date:</dt>
-                          <dd className="text-slate-900 dark:text-slate-100 truncate" title={new Date(selectedJob.endDate).toLocaleDateString()}>
-                            {new Date(selectedJob.endDate).toLocaleDateString()}
-                          </dd>
-                        </div>
+                      {selectedJob.endDate && selectedJob.startDate !== selectedJob.endDate && (
+                        <p className="text-sm text-muted-foreground">
+                          to {format(new Date(selectedJob.endDate), 'MMMM d, yyyy')}
+                        </p>
                       )}
-                    </dl>
-                    
-                    {/* Description Section */}
-                    {selectedJob.description && (
-                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Description</h4>
-                        <div>
-                          <p 
-                            className={`text-sm text-slate-600 dark:text-slate-400 leading-relaxed ${
-                              !isDescriptionExpanded 
-                                ? 'line-clamp-3 overflow-hidden' 
-                                : ''
-                            }`}
-                            style={!isDescriptionExpanded ? {
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden'
-                            } : undefined}
-                          >
-                            {selectedJob.description}
-                          </p>
-                          {selectedJob.description.length > 100 && (
-                            <button 
-                              onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                              className="text-sm text-blue-600 hover:text-blue-800 mt-2 underline"
-                              data-testid="button-toggle-description"
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Assigned Employees Card */}
+              <Card data-testid="job-crew-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Users className="h-5 w-5" />
+                    Assigned Employees
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedJobCrew.length > 0 ? (
+                    <div className="flex items-center gap-3" data-testid="text-job-assigned">
+                      <div className="flex -space-x-2 flex-shrink-0">
+                        {selectedJobCrew.slice(0, 4).map((assignment) => {
+                          const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
+                          const initials = (assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '') || assignment.user.email[0].toUpperCase();
+                          return assignment.user.profileImageUrl ? (
+                            <img
+                              key={assignment.userId}
+                              src={assignment.user.profileImageUrl}
+                              alt={name}
+                              title={name}
+                              className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 object-cover"
+                            />
+                          ) : (
+                            <div
+                              key={assignment.userId}
+                              title={name}
+                              className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300"
                             >
-                              {isDescriptionExpanded ? 'Show less' : 'Read more'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Line Items Section */}
-                    {selectedJobLineItems.length > 0 && (
-                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                          <FileText className="h-4 w-4" />
-                          Line Items ({selectedJobLineItems.length})
-                        </h4>
-                        <div className="space-y-2">
-                          {selectedJobLineItems.map((item) => (
-                            <div key={item.id} className="flex justify-between items-start p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
-                                {item.description && (
-                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{item.description}</p>
-                                )}
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                  {item.quantity} × {item.unit} @ ${(item.unitPriceCents / 100).toFixed(2)}
-                                </p>
-                              </div>
-                              <div className="text-right ml-3 flex-shrink-0">
-                                <p className="font-semibold text-slate-900 dark:text-slate-100">
-                                  ${(item.lineTotalCents / 100).toFixed(2)}
-                                </p>
-                                {item.taxable && (
-                                  <span className="text-xs text-slate-500">+ tax</span>
-                                )}
-                              </div>
+                              {initials}
                             </div>
-                          ))}
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700 mt-3">
-                            <span className="font-medium text-slate-700 dark:text-slate-300">Total</span>
-                            <span className="font-semibold text-lg text-slate-900 dark:text-slate-100">
-                              ${(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}
-                            </span>
+                          );
+                        })}
+                        {selectedJobCrew.length > 4 && (
+                          <div className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-medium">
+                            +{selectedJobCrew.length - 4}
                           </div>
-                        </div>
+                        )}
                       </div>
+                      <div className="text-sm">
+                        {selectedJobCrew.map(a => 
+                          `${a.user.firstName || ''} ${a.user.lastName || ''}`.trim() || a.user.email.split('@')[0]
+                        ).slice(0, 3).join(', ')}
+                        {selectedJobCrew.length > 3 && ` +${selectedJobCrew.length - 3} more`}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No employees assigned</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Line Items Card */}
+              <Card data-testid="job-line-items-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <List className="h-5 w-5" />
+                    Line Items
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedJobLineItems.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedJobLineItems.map((item) => (
+                        <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
+                          <div className="flex-1">
+                            <p className="font-medium">{item.name}</p>
+                            {item.description && (
+                              <p className="text-sm text-muted-foreground">{item.description}</p>
+                            )}
+                            <p className="text-sm text-muted-foreground">
+                              {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
+                            </p>
+                          </div>
+                          <p className="font-medium">${(item.lineTotalCents / 100).toFixed(2)}</p>
+                        </div>
+                      ))}
+                      <Separator />
+                      <div className="flex justify-between font-bold text-lg pt-2">
+                        <span>Total</span>
+                        <span>${(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No line items</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Description Card */}
+              {selectedJob.description && (
+                <Card data-testid="job-description-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileText className="h-5 w-5" />
+                      Notes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p 
+                      className={`text-sm leading-relaxed ${
+                        !isDescriptionExpanded ? 'line-clamp-3' : ''
+                      }`}
+                    >
+                      {selectedJob.description}
+                    </p>
+                    {selectedJob.description.length > 150 && (
+                      <button 
+                        onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                        className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+                        data-testid="button-toggle-description"
+                      >
+                        {isDescriptionExpanded ? 'Show less' : 'Read more'}
+                      </button>
                     )}
                   </CardContent>
                 </Card>
-              </div>
+              )}
 
-              {/* Right Column - Photos (40%) */}
-              <div className="col-span-1 lg:col-span-2">
-                {jobPhotos.length === 0 ? (
-                  <Card data-testid="job-photos-card" className="mt-0">
-                    <CardContent className="flex flex-col items-center py-4 sm:py-5 text-center">
-                      <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                        <Camera className="h-5 w-5 text-slate-400" />
+              {/* Attachments/Photos Card - Estimate style */}
+              <Card data-testid="job-photos-card">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-base">
+                      <Camera className="h-5 w-5" />
+                      Attachments
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openPhotoUploadModal}
+                      disabled={isUploading}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {isUploading ? 'Uploading...' : 'Upload'}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isUploading && uploadProgress > 0 && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>Uploading...</span>
+                        <span>{uploadProgress}%</span>
                       </div>
-                      <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-1">No Photos Yet</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Document job progress with photos</p>
-                      {isUploading && uploadProgress > 0 && (
-                        <div className="w-full mb-3">
-                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
-                            <span>Uploading photo...</span>
-                            <span>{uploadProgress}%</span>
-                          </div>
-                          <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-blue-600 transition-all duration-300"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <Button 
-                        size="sm" 
-                        data-testid="button-upload-photo"
-                        onClick={openPhotoUploadModal}
-                        disabled={isUploading}
-                      >
-                        <Camera className="h-4 w-4 mr-2" />
-                        {isUploading ? 'Uploading...' : 'Upload First Photo'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card data-testid="job-photos-card" className="mt-0">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <Camera className="h-5 w-5" />
-                          Job Site Photos
-                        </CardTitle>
-                        <Badge variant="secondary" className="text-sm px-2 py-1">
-                          {jobPhotos.length}
-                        </Badge>
+                      <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-600 transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
                       </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="space-y-4">
-                        {/* Photo Grid */}
-                        <div className="grid grid-cols-3 gap-3">
-                          {jobPhotos.slice(0, 6).map((photo) => (
-                            <div key={photo.id} className="relative group">
-                              <img
-                                src={photo.photoUrl}
-                                alt={photo.title || "Job site photo"}
-                                className="w-full h-20 object-cover rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={() => {
-                                  // TODO: Open full JobPhotoFeed modal
-                                }}
-                              />
-                              {photo.location && (
-                                <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
-                                  {photo.location}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                    </div>
+                  )}
+                  {jobPhotos.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {jobPhotos.map((photo) => (
+                        <div key={photo.id} className="relative group cursor-pointer">
+                          <img
+                            src={photo.photoUrl}
+                            alt={photo.title || "Job attachment"}
+                            className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
+                          />
+                          <p className="text-xs truncate mt-1">{photo.title || 'Photo'}</p>
                         </div>
-                        
-                        {/* Action Buttons */}
-                        <div className="flex items-center justify-between pt-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            data-testid="button-upload-photo"
-                            onClick={openPhotoUploadModal}
-                            disabled={isUploading}
-                          >
-                            <Camera className="h-4 w-4 mr-2" />
-                            {isUploading ? 'Uploading...' : 'Upload Photo'}
-                          </Button>
-                          {jobPhotos.length > 6 && (
-                            <button 
-                              className="text-sm text-blue-600 hover:text-blue-800 underline"
-                              data-testid="button-view-all-photos"
-                            >
-                              View all {jobPhotos.length} photos
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">No attachments</p>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
           
           {/* E-signature Approvals Tab */}
           {selectedJob && jobModalTab === 'approvals' && (
-            <div className="py-4" data-testid="approvals-tab-content">
-              <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-                <p className="text-lg font-medium mb-2">E-signature Approvals</p>
-                <p className="text-sm">Signature requests for this job will appear here.</p>
-              </div>
+            <div className="p-4 sm:p-6" data-testid="approvals-tab-content">
+              <Card>
+                <CardContent className="flex flex-col items-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium mb-2">E-signature Approvals</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Signature requests for this job will appear here.
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           )}
-          </div>
+
           {/* Hidden file input for photo upload (legacy) */}
           <input
             ref={fileInputRef}

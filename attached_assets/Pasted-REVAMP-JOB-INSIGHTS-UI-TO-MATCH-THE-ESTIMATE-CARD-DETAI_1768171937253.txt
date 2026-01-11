@@ -1,0 +1,104 @@
+REVAMP “JOB INSIGHTS” UI TO MATCH THE ESTIMATE CARD DETAIL VIEW STYLE
+
+CONTEXT
+- When clicking an Estimate card, the detail view looks clean and modern (better header, spacing, section cards).
+- Job Insights (job detail/modal) currently looks outdated and inconsistent with Estimates.
+- We need Job Insights to visually and structurally match the Estimate detail view style.
+
+GOAL
+Refactor Job Insights UI (the view that opens when you click a job) to look and feel like the Estimate card detail screen:
+- Same modern header style
+- Same section/card layout
+- Same spacing/typography
+- Clean actions (edit/delete/close) without clutter
+- Mobile-first and polished
+
+DO NOT BREAK FUNCTIONALITY OR RBAC.
+
+---
+
+### 1) HEADER (MATCH ESTIMATE DETAIL)
+- Title: “Job for {Customer Name}” (or “{Customer Name}” + “Job” subtitle)
+- Status pill next to title (pending/active/completed etc.)
+- Right-side action icons (same style as estimate detail):
+  - Edit
+  - Delete (only if allowed)
+  - Close (X)
+- Ensure icons are aligned and not floating randomly.
+
+---
+
+### 2) BODY LAYOUT (SECTION CARDS LIKE ESTIMATES)
+Use the same “card section” components used in Estimate detail (reuse existing components/styles):
+Order of sections:
+
+A) Customer
+- Name, email, phone, address (clean, not cramped)
+- If customer is missing data, don’t show empty lines
+
+B) Job Type
+- Show selected job type value
+
+C) Schedule
+- Date/time window + optional assigned tech summary
+
+D) Assigned Employees
+- Show avatars or names (match the style used elsewhere)
+- Show “Unassigned” state cleanly
+
+E) Line Items
+- Must look like estimate line items section:
+  - Item name left, amount right
+  - Small secondary line: qty × unit price / unit
+  - Subtotal + Total at bottom
+- If no line items: show “No line items yet” with a clean empty state
+
+F) Attachments / Documents
+- This section should match the look/spacing of estimate attachments/documents
+- Upload button aligned cleanly
+- Respect the existing document visibility/RBAC rules
+
+G) Activity (optional, if already exists)
+- Show recent actions in a simple list
+
+---
+
+### 3) REMOVE OUTDATED “JOB INFORMATION” BLOCK STYLE
+- Replace the old “Job Information” block and separators with the new Estimate-style card sections.
+- Avoid heavy divider lines; use whitespace and subtle borders/shadows like the estimate detail view.
+
+---
+
+### 4) CONSISTENT ACTIONS + RBAC
+- Edit button only if role can edit
+- Delete only if role can delete
+- Hide (not disable) actions user cannot perform
+- Technicians should only see job content they’re allowed to see
+
+---
+
+### 5) RESPONSIVE / MOBILE POLISH
+- Ensure the layout looks perfect on phone width:
+  - No overflow
+  - No tiny fonts
+  - Cards stack naturally
+  - Buttons don’t collide
+- Keep spacing consistent with Estimate detail view.
+
+---
+
+### 6) KEEP ALL CURRENT BEHAVIOR WORKING
+- Clicking Job opens Job Insights
+- Tabs (Documents / E-signature Approvals) should either:
+  A) be restyled to match Estimate detail tabs
+  OR
+  B) be replaced with Estimate-style segmented tabs (preferred)
+- Upload photo / attachments should still work
+- Line items totals must remain accurate
+
+---
+
+DELIVERABLES
+- Job Insights UI matches Estimate detail look & feel
+- Same visual system (header + cards + spacing)
+- No regression in job data display, uploads, RBAC, or actions
