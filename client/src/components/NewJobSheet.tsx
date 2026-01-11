@@ -450,6 +450,22 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
               testId="row-select-customer"
             />
 
+            <SectionHeader title="Line Items" />
+            <InfoRow
+              icon={List}
+              label="Add line items"
+              value={getLineItemsSummary()}
+              onClick={() => {
+                const hasItems = lineItems.filter(i => i.name.trim()).length > 0;
+                if (hasItems) {
+                  setLineItemsModalOpen(true);
+                } else {
+                  setPriceBookPickerOpen(true);
+                }
+              }}
+              testId="row-add-line-items"
+            />
+
             <SectionHeader title="Location" />
             <InfoRow
               icon={MapPin}
@@ -484,15 +500,6 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
               value={getEmployeesDisplayText()}
               onClick={() => setEmployeesModalOpen(true)}
               testId="row-assign-technicians"
-            />
-
-            <SectionHeader title="Line Items" />
-            <InfoRow
-              icon={List}
-              label="Add line items"
-              value={getLineItemsSummary()}
-              onClick={() => setLineItemsModalOpen(true)}
-              testId="row-add-line-items"
             />
 
             <SectionHeader title="Notes" />

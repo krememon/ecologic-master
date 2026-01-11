@@ -1,0 +1,66 @@
+FIX JOB LINE ITEMS: CONNECT TO PRICE BOOK LIKE ESTIMATES + MOVE TO 2ND POSITION
+
+CONTEXT
+- We added Line Items to New Job, but it is not functioning like Estimates.
+- Estimates Line Items correctly connect to Price Book (search, pick items, create custom item).
+- We want Jobs Line Items to reuse that exact flow and UI.
+- Also: In the New Job screen layout, Line Items must appear as the SECOND section (right after Customer).
+
+GOALS
+#1 PRICE BOOK INTEGRATION (MATCH ESTIMATES EXACTLY)
+- The Job “Line Items” row must open the SAME modal/screen used by Estimates:
+  - “Add Line Items” modal with:
+    - Search price book
+    - List of price book items
+    - Ability to add/select
+    - “Create new line item” option
+    - Done button returns selected items
+- Do NOT use a different “Item 1” manual form as the primary flow.
+- The output (selected items) must match the same line item object structure Estimates uses.
+- Save selected line items onto the Job record.
+
+#2 MOVE LINE ITEMS TO SECOND POSITION
+- On New Job screen, reorder sections so it is:
+  1) CUSTOMER (required)
+  2) LINE ITEMS (price book connected)
+  3) LOCATION
+  4) JOB TYPE
+  5) SCHEDULE
+  6) ASSIGNED TO
+  7) NOTES
+- Keep styling consistent with the rest of the rows (icon + label + chevron).
+
+IMPLEMENTATION REQUIREMENTS
+FRONTEND
+- Reuse the exact component(s) and route/modal used by Estimates line items.
+- If Estimates uses a shared component (ex: LineItemsPickerModal or AddLineItemsModal), import and use it directly in Jobs.
+- Ensure Job Line Items row shows a summary after selection:
+  - “{count} items • ${subtotal}” (if subtotal exists)
+  - Otherwise “{count} items”
+- Ensure the “Done” button returns the selected items back to the New Job page and updates local state.
+
+BACKEND
+- Jobs create endpoint must accept lineItems array (same structure as estimates line items).
+- Persist lineItems on the job record.
+- Ensure GET job returns the lineItems.
+- Do NOT break existing jobs without lineItems (default empty).
+
+PRICE BOOK SOURCE OF TRUTH
+- Jobs line items must query the same price book API/data source used by Estimates.
+- Searching and listing must behave identically.
+
+BUG PREVENTION
+- Do not duplicate price book logic.
+- Do not create a separate “jobLineItems” schema if estimates already has a “lineItems” schema—reuse it.
+
+TESTS (MUST PASS)
+- Open New Job -> Line Items is second section under Customer
+- Tap Line Items -> opens the same “Add Line Items” (price book search/list) modal as Estimates
+- Select “Toilet Reset” from price book -> Done -> summary shows on New Job page
+- Save Job -> refresh -> line items persist and match the selected price book items
+- Create new custom line item -> appears in job line items and persists
+- No crashes and no UI overlap on mobile
+
+DELIVERABLES
+- Job Line Items uses Price Book exactly like Estimates
+- Line Items appears as the second section in New Job layout
