@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ArrowRight, ArrowLeft, ExternalLink, X, Maximize2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ShareEstimateModalProps {
@@ -33,6 +33,7 @@ export function ShareEstimateModal({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
   const [iframeError, setIframeError] = useState(false);
+  const [isPdfViewerOpen, setIsPdfViewerOpen] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
   const [subject, setSubject] = useState(`Estimate ${estimateNumber} from ${companyName}`);
@@ -102,6 +103,7 @@ export function ShareEstimateModal({
     setPdfUrl(null);
     setPdfFileName(null);
     setIframeError(false);
+    setIsPdfViewerOpen(false);
     setToEmail(customerEmail || "");
     setSubject(`Estimate ${estimateNumber} from ${companyName}`);
     setMessage(
@@ -208,13 +210,25 @@ export function ShareEstimateModal({
                     </Button>
                   </div>
                 </div>
-                <div className="border rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900" style={{ height: '55vh' }}>
+                <div 
+                  className="relative border rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900 cursor-pointer group" 
+                  style={{ height: '55vh' }}
+                  onClick={() => setIsPdfViewerOpen(true)}
+                >
                   <iframe
                     src={pdfUrl}
                     title="Estimate PDF Preview"
-                    className="w-full h-full"
+                    className="w-full h-full pointer-events-none"
                     onError={() => setIframeError(true)}
                   />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-800 rounded-full p-3 shadow-lg">
+                      <Maximize2 className="h-5 w-5 text-slate-700 dark:text-slate-300" />
+                    </div>
+                  </div>
+                  <div className="absolute bottom-2 left-2 text-xs text-slate-500 bg-white/80 dark:bg-slate-800/80 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                    Tap to enlarge
+                  </div>
                 </div>
                 {iframeError && (
                   <div className="text-center py-4">
@@ -307,6 +321,59 @@ export function ShareEstimateModal({
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Full-screen PDF Viewer */}
+      <Dialog open={isPdfViewerOpen} onOpenChange={setIsPdfViewerOpen}>
+        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-white dark:bg-slate-950">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[200px] sm:max-w-none">
+                {pdfFileName}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => window.open(pdfUrl!, "_blank")}
+                className="h-8 px-2"
+                title="Open in new tab"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="h-8 px-2"
+                title="Download"
+              >
+                <a href={pdfUrl!} download={pdfFileName}>
+                  <Download className="h-4 w-4" />
+                </a>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPdfViewerOpen(false)}
+                className="h-8 px-2"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex-1 bg-slate-100 dark:bg-slate-900" style={{ height: 'calc(95vh - 56px)' }}>
+            {pdfUrl && (
+              <iframe
+                src={pdfUrl}
+                title="Estimate PDF Full View"
+                className="w-full h-full border-0"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
