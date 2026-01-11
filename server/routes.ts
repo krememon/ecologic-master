@@ -220,6 +220,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auth middleware
+  await setupAuth(app);
+
   // Company logo upload endpoint - uploads file AND saves to company record
   app.post('/api/company/logo', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
@@ -258,8 +261,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Only Owner or Admin can upload company logo' });
       }
 
-      console.log('[CompanyLogo] File received:', file.originalname, file.mimetype, file.size);
-
       // Generate a unique filename with original extension
       const ext = path.extname(file.originalname) || '.png';
       const newFilename = `company_${company.id}_logo_${Date.now()}${ext}`;
@@ -269,7 +270,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       fs.renameSync(file.path, newPath);
 
       const logoUrl = `/uploads/${newFilename}`;
-      console.log('[CompanyLogo] File saved:', logoUrl);
 
       // Delete old logo file if exists
       if (company.logo) {
@@ -281,7 +281,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update company with new logo URL
       await storage.updateCompany(company.id, { logo: logoUrl });
-      console.log('[CompanyLogo] Company updated with new logo:', logoUrl);
       
       res.json({ logoUrl });
     } catch (error) {
@@ -289,9 +288,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to upload logo' });
     }
   });
-
-  // Auth middleware
-  await setupAuth(app);
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
