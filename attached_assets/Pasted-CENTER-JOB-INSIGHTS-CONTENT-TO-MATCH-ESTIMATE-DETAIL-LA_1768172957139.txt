@@ -1,0 +1,66 @@
+CENTER JOB INSIGHTS CONTENT TO MATCH ESTIMATE DETAIL LAYOUT
+
+PROBLEM
+- Job Insights content is not centered in the frame.
+- Section cards (Customer, Job Type, Line Items, Attachments, etc.) are left-aligned and feel off.
+- Estimate detail view uses a centered content column that looks correct.
+- Job Insights must visually match that same centered layout.
+
+GOAL
+Ensure ALL Job Insights content is properly centered in the viewport:
+- Cards are centered horizontally
+- Consistent left/right margins
+- Same max-width and alignment as Estimate detail view
+- Mobile remains full-width and unaffected
+
+DO THIS (DO NOT HACK)
+
+1) IDENTIFY ESTIMATE DETAIL CONTAINER
+- Locate the main layout container used by the Estimate detail view.
+- Identify:
+  - max-width value
+  - horizontal padding
+  - centering method (margin: auto / flex / grid)
+
+2) APPLY SAME CONTAINER TO JOB INSIGHTS
+- Wrap Job Insights content in the SAME container component OR reuse the same layout wrapper.
+- Example behavior (conceptually):
+  - max-width: ~720px–900px (match Estimate)
+  - margin-left: auto
+  - margin-right: auto
+  - padding: 16–24px
+
+IMPORTANT:
+- Do NOT center individual cards manually.
+- Do NOT add per-card margin hacks.
+- Center the PARENT content container.
+
+3) RESPONSIVE RULES
+- Desktop / large screens:
+  - Content centered with max-width
+- Tablet:
+  - Same centered behavior
+- Mobile:
+  - Full-width (max-width removed or naturally constrained)
+  - Maintain existing mobile padding
+
+4) HEADER ALIGNMENT
+- Ensure Job Insights header (title + edit/close buttons) aligns with the centered content column.
+- Header text should line up vertically with cards below (same left edge).
+
+5) VERIFY ALL SECTIONS
+Ensure these sections are centered consistently:
+- Customer
+- Job Type
+- Assigned Employees
+- Line Items
+- Attachments
+- Any future sections
+
+6) REGRESSION CHECK
+- Estimate detail view must remain unchanged
+- No clipping, overflow, or horizontal scroll
+- No visual jump when resizing window
+
+DELIVERABLE
+- Job Insights content perfectly centered and visually matching Estimate detail layout.
