@@ -1,0 +1,121 @@
+REWORK JOB CREATION FLOW – REMOVE 3-STEP PROCESS, USE SINGLE EXPANDABLE FORM (LIKE ESTIMATES)
+
+CONTEXT
+- Jobs currently use a 3-step creation flow.
+- This no longer fits the app after recent changes to Estimates, Documents, and Company Profile.
+- Estimates creation already works well and feels clean.
+- We want Job creation to feel exactly like creating an Estimate.
+
+GOAL
+Completely REMOVE the 3-step Job creation process and replace it with a single-screen Job creation UI using expandable sections (accordion-style), matching the UX shown in the reference screenshot.
+
+NO MULTI-STEP FLOW. NO NEXT/BACK BUTTONS.
+
+---
+
+### NEW JOB CREATION UX (REQUIRED)
+
+Page Title:
+- "New Job"
+
+Header:
+- Left: X (Cancel / close without saving)
+- Right: Save (disabled until required fields are filled)
+
+Layout:
+- Vertical list of expandable sections
+- Each section has:
+  - Icon
+  - Label
+  - "+" button to expand/edit
+- Collapsed by default
+- Expanding a section does NOT navigate away from the page
+
+---
+
+### SECTIONS (IN THIS ORDER)
+
+1) Job Template (optional)
+- Allows pre-filling job data if selected
+- If unused, ignore silently
+
+2) Customer (REQUIRED)
+- Select existing customer OR add new customer
+- Must block Save until customer is selected
+- Reuse the SAME customer picker used in Estimates
+
+3) Schedule (optional)
+- Date
+- Time window
+- Assigned technician(s)
+- This should later connect to calendar, but for now store data only
+
+4) Line Items (optional at creation)
+- Same line item component used in Estimates
+- Services/materials with qty and price
+- Can be empty at job creation
+
+5) Job Fields (optional)
+- Custom fields (job type, priority, etc.)
+- Respect existing job field definitions
+
+6) Checklists (optional)
+- Select or attach checklists
+- Stored on job record
+
+7) Job Tags (optional)
+- Multi-select tags
+- Used for filtering later
+
+8) Private Notes (internal only)
+- Visible only to office/admin roles
+- Not customer-facing
+
+9) Lead Source (optional)
+- Track where the job came from
+
+---
+
+### SAVE BEHAVIOR
+
+- Save button creates the Job immediately
+- Do NOT force user to complete all sections
+- Only hard requirement is Customer
+- After Save:
+  - Redirect to Job Detail page
+  - Job Overview tab is shown first
+- No confirmation modal needed unless there are unsaved changes
+
+---
+
+### TECH REQUIREMENTS
+
+FRONTEND
+- Delete or bypass the existing 3-step Job creation components
+- Reuse existing Estimate creation patterns/components where possible
+- Use accordion/expandable card components
+- Save button state:
+  - Disabled until required fields valid
+  - Loading state while saving
+
+BACKEND
+- Ensure Job create endpoint accepts partial data
+- Job record can be created with minimal fields and updated later
+- Do NOT require line items, schedule, or tags at creation
+
+RBAC
+- Respect existing role permissions
+- Only roles allowed to create jobs see this page
+
+---
+
+### DELIVERABLES
+
+- Old 3-step Job creation flow fully removed
+- New single-screen Job creation matching provided screenshot
+- Consistent UX with Estimate creation
+- No regressions to existing Jobs, Estimates, or Documents
+
+IMPORTANT
+- This is a UX replacement, not a data model rewrite
+- Preserve existing job data and routes
