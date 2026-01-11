@@ -1,0 +1,62 @@
+FIX JOB INSIGHTS LAYOUT — REUSE THE EXACT ESTIMATE DETAIL PAGE CONTAINER (NO CUSTOM CENTERING)
+
+CURRENT PROBLEM
+- Job Insights is now “centered” incorrectly:
+  - cards appear narrow with huge side gutters
+  - header/actions don’t line up with the card column
+  - overall layout does NOT match how the Estimate detail page is centered
+- We want Job Insights to look EXACTLY like the Estimate detail page: same column width, same padding, same alignment.
+
+GOAL
+Make Job Insights use the identical layout system as Estimate detail:
+- Same parent container component
+- Same max width rules
+- Same responsive behavior
+- Header and content share the same left/right edges
+
+IMPORTANT RULES (DO NOT VIOLATE)
+- Do NOT invent new maxWidth numbers.
+- Do NOT add per-card “margin-left/right auto” hacks.
+- Do NOT center individual cards.
+- ONLY acceptable solution: reuse the same wrapper/container used by the Estimate detail page.
+
+IMPLEMENTATION STEPS
+
+1) FIND THE ESTIMATE DETAIL WRAPPER
+- Locate the component/layout wrapper used by the Estimate detail view (the screen/modal that looks perfect).
+- Identify the exact component responsible for the centered column (ex: <DetailLayout />, <PageContainer />, <CenteredContent />, etc).
+- That wrapper must control:
+  - max-width
+  - padding
+  - centering
+  - responsive breakpoints
+
+2) APPLY THAT SAME WRAPPER TO JOB INSIGHTS
+- Wrap the entire Job Insights content in that SAME wrapper component.
+- Ensure BOTH:
+  A) the header area (title, status pill, edit button, close icon)
+  B) the body area (cards)
+  are inside the same wrapper so edges line up.
+
+3) REMOVE THE BROKEN CENTERING
+- Remove any new CSS that was added to “center” Job Insights:
+  - remove maxWidth overrides
+  - remove margin:auto on cards
+  - remove special modal padding that conflicts
+- Job Insights should inherit the same spacing rules as Estimate detail.
+
+4) WIDTH BEHAVIOR MUST MATCH ESTIMATES
+- Desktop: centered column identical width to Estimate detail
+- Mobile: full width with the same padding as Estimate detail
+- No giant side gutters beyond what Estimates has
+
+5) VERIFY WITH A SIDE-BY-SIDE CHECK
+- Open Estimate detail and Job Insights.
+- Confirm:
+  - Header left edge matches card left edge on both
+  - Card widths match between both views
+  - Spacing above/between sections matches
+  - No weird extra padding inside modal
+
+DELIVERABLE
+- Job Insights layout is visually indistinguishable from Estimate detail layout in terms of centering, column width, padding, and alignment.

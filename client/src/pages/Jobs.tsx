@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -1123,10 +1123,10 @@ export default function Jobs() {
 
       {/* Job Detail Modal - Estimate-style layout */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
-        <DialogContent className="w-[98vw] max-w-3xl h-[95vh] overflow-y-auto overflow-x-hidden p-0 rounded-2xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
+        <DialogContent className="w-[98vw] max-w-4xl h-[95vh] overflow-y-auto overflow-x-hidden p-0 rounded-2xl border-0 shadow-2xl" onInteractOutside={handleInteractOutside}>
           {/* Clean Header - matches Estimate detail */}
           <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 md:px-6">
-            <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <Button 
                   variant="ghost" 
@@ -1187,7 +1187,7 @@ export default function Jobs() {
             </div>
             
             {/* Segmented Tab Switcher */}
-            <div className="mt-4 max-w-4xl mx-auto" data-testid="job-tab-switcher">
+            <div className="mt-4" data-testid="job-tab-switcher">
               <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
                 <button
                   onClick={() => setJobModalTab('documents')}
@@ -1217,11 +1217,11 @@ export default function Jobs() {
 
           {/* Tab Content - Card-based sections like Estimates */}
           {selectedJob && jobModalTab === 'documents' && (
-            <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4" data-testid="job-sections-stack">
+            <div className="p-4 md:p-6 space-y-6" data-testid="job-sections-stack">
               {/* Customer Card */}
               <Card data-testid="job-customer-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5" />
                     Customer
                   </CardTitle>
@@ -1259,8 +1259,8 @@ export default function Jobs() {
               {/* Job Type Card */}
               {selectedJob.jobType && (
                 <Card data-testid="job-type-card">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
                       <FileText className="h-5 w-5" />
                       Job Type
                     </CardTitle>
@@ -1274,8 +1274,8 @@ export default function Jobs() {
               {/* Schedule Card */}
               {(selectedJob.startDate || selectedJob.endDate) && (
                 <Card data-testid="job-schedule-card">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
                       <Calendar className="h-5 w-5" />
                       Schedule
                     </CardTitle>
@@ -1297,8 +1297,8 @@ export default function Jobs() {
 
               {/* Assigned Employees Card */}
               <Card data-testid="job-crew-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
                     Assigned Employees
                   </CardTitle>
@@ -1349,8 +1349,8 @@ export default function Jobs() {
 
               {/* Line Items Card */}
               <Card data-testid="job-line-items-card">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <List className="h-5 w-5" />
                     Line Items
                   </CardTitle>
@@ -1387,8 +1387,8 @@ export default function Jobs() {
               {/* Description Card */}
               {selectedJob.description && (
                 <Card data-testid="job-description-card">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
                       <FileText className="h-5 w-5" />
                       Notes
                     </CardTitle>
@@ -1416,10 +1416,10 @@ export default function Jobs() {
 
               {/* Attachments/Photos Card - Estimate style */}
               <Card data-testid="job-photos-card">
-                <CardHeader className="pb-2">
+                <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-base">
-                      <Camera className="h-5 w-5" />
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="h-5 w-5" />
                       Attachments
                     </div>
                     <Button
@@ -1471,7 +1471,7 @@ export default function Jobs() {
           
           {/* E-signature Approvals Tab */}
           {selectedJob && jobModalTab === 'approvals' && (
-            <div className="p-4 md:p-6 max-w-4xl mx-auto" data-testid="approvals-tab-content">
+            <div className="p-4 md:p-6" data-testid="approvals-tab-content">
               <Card>
                 <CardContent className="flex flex-col items-center py-12">
                   <FileText className="h-12 w-12 text-muted-foreground mb-4" />
