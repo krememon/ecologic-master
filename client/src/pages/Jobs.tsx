@@ -492,6 +492,30 @@ export default function Jobs() {
     },
     enabled: !!selectedJob?.id && isAdmin,
   });
+
+  // Fetch line items for selected job
+  interface JobLineItem {
+    id: number;
+    jobId: number;
+    name: string;
+    description: string | null;
+    taskCode: string | null;
+    quantity: string;
+    unitPriceCents: number;
+    unit: string;
+    taxable: boolean;
+    lineTotalCents: number;
+    sortOrder: number;
+  }
+  const { data: selectedJobLineItems = [] } = useQuery<JobLineItem[]>({
+    queryKey: ['/api/jobs', selectedJob?.id, 'line-items'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${selectedJob?.id}/line-items`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch line items');
+      return res.json();
+    },
+    enabled: !!selectedJob?.id,
+  });
   
   // Get set of already assigned user IDs
   const assignedUserIds = new Set(crewAssignments.map(a => a.userId));
@@ -1361,6 +1385,45 @@ export default function Jobs() {
                               {isDescriptionExpanded ? 'Show less' : 'Read more'}
                             </button>
                           )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Line Items Section */}
+                    {selectedJobLineItems.length > 0 && (
+                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Line Items ({selectedJobLineItems.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedJobLineItems.map((item) => (
+                            <div key={item.id} className="flex justify-between items-start p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
+                                {item.description && (
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{item.description}</p>
+                                )}
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                  {item.quantity} × {item.unit} @ ${(item.unitPriceCents / 100).toFixed(2)}
+                                </p>
+                              </div>
+                              <div className="text-right ml-3 flex-shrink-0">
+                                <p className="font-semibold text-slate-900 dark:text-slate-100">
+                                  ${(item.lineTotalCents / 100).toFixed(2)}
+                                </p>
+                                {item.taxable && (
+                                  <span className="text-xs text-slate-500">+ tax</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700 mt-3">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">Total</span>
+                            <span className="font-semibold text-lg text-slate-900 dark:text-slate-100">
+                              ${(selectedJobLineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )}

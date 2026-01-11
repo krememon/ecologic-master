@@ -1819,6 +1819,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get job line items
+  app.get('/api/jobs/:jobId/line-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
+      
+      res.json(lineItems);
+    } catch (error) {
+      console.error("Error fetching job line items:", error);
+      res.status(500).json({ message: "Failed to fetch job line items" });
+    }
+  });
+
   // Job Photos routes
   app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
     try {
