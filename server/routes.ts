@@ -3259,37 +3259,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Calculate row height without drawing (for pagination checks)
-      // Uses fixed math to avoid font state mutations
+      // Uses doc.save()/restore() to prevent font state leakage
       const calculateRowHeight = (item: any): number => {
-        // Save current font state
-        const savedFontSize = (doc as any)._fontSize || 10;
+        doc.save();
         
         doc.fontSize(10).font('Helvetica');
         const nameHeight = doc.heightOfString(item.name || '', { width: 260 });
-        let rowHeight = Math.max(nameHeight + 8, TABLE_ROW_HEIGHT);
+        let rowHeight = Math.max(nameHeight + 10, TABLE_ROW_HEIGHT); // +10 for padding
         
         if (item.description) {
           doc.fontSize(9);
           const descHeight = doc.heightOfString(item.description, { width: 250 });
-          rowHeight += descHeight + 4;
+          rowHeight += descHeight + 6; // +6 for spacing
         }
         
-        // Restore font state
-        doc.fontSize(savedFontSize).font('Helvetica');
+        doc.restore();
         
         return rowHeight;
       };
       
-      // Calculate totals section height (fixed math, no font mutation)
+      // Calculate totals section height using actual text metrics
       const calculateTotalsHeight = (): number => {
-        // 15 padding + 16 subtotal line + 8 divider + 20 total line + 30 bottom margin
-        let height = 15 + 16 + 8 + 20 + 30;
-        if (tax > 0) height += 16; // extra tax line
+        doc.save();
+        
+        // Subtotal line (font size 10)
+        doc.fontSize(10).font('Helvetica');
+        let height = 20; // padding + subtotal line height
+        
+        // Tax line if applicable
+        if (tax > 0) {
+          height += 18;
+        }
+        
+        // Divider + total line (font size 14 bold)
+        doc.fontSize(14).font('Helvetica-Bold');
+        height += 10 + 24 + 35; // divider gap + total line + bottom margin
+        
+        doc.restore();
+        
         return height;
       };
       
-      // Reserved footer space (accounts for divider + footer text)
-      const FOOTER_RESERVED = company.defaultFooterText ? 50 : 10;
+      // Reserved footer space (accounts for divider + footer text + margin)
+      const FOOTER_RESERVED = company.defaultFooterText ? 60 : 15;
       const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN - FOOTER_RESERVED;
       
       const drawTableRow = (item: any, y: number, isAlt: boolean): number => {
