@@ -1,0 +1,82 @@
+FIX JOB ATTACHMENT / PHOTO UPLOAD — CURRENTLY FAILS WITH “FAILED TO UPLOAD PHOTO”
+
+SYMPTOM
+- On Job Detail page, clicking Upload in Attachments shows toast:
+  “Failed to upload photo”
+- Upload does not complete.
+
+GOAL
+- Job attachments upload must work end-to-end:
+  - Select image/file -> upload -> stored -> saved to job -> appears in attachments list immediately
+- No server crashes.
+- Good error message if something fails.
+
+DO THIS IN ORDER
+
+1) FIND EXACT FRONTEND UPLOAD HANDLER
+- Locate the Attachments section in Job Detail.
+- Find the function called on Upload click.
+- Add TEMP logs:
+  console.log("[JobUpload] jobId:", jobId)
+  console.log("[JobUpload] file:", { name: file?.name, type: file?.type, size: file?.size })
+
+2) CONFIRM JOB ID IS CORRECT
+Common bug after refactor:
+- jobId is undefined or using old modal prop
+- Must use route param jobId from /jobs/:jobId
+Fix:
+- Ensure upload handler uses the correct jobId from route params or loaded job object.
+
+3) CONFIRM ENDPOINT + FIELD NAME MATCH BACKEND
+- Confirm which endpoint Jobs attachments should use, ex:
+  POST /api/jobs/:jobId/attachments
+  OR POST /api/documents/upload (with jobId in body)
+- Confirm FormData key:
+  - Backend often expects "file"
+  - If frontend uses "photo" or "attachment", multer will reject.
+Set:
+  formData.append("file", file)
+
+4) BACKEND: ENSURE ROUTE EXISTS + RETURNS JSON
+- Verify the upload route exists and is mounted.
+- Ensure it:
+  - accepts multipart/form-data
+  - stores file in existing storage
+  - creates a document/attachment record linked to the job (jobId)
+  - returns the created attachment/document in JSON
+
+5) PERMISSIONS / RBAC
+- Ensure the role viewing the job can upload attachments (Owner/Admin/Supervisor/Dispatcher, and optionally Technician if assigned).
+- If forbidden, return 403 with message:
+  “You don’t have permission to upload to this job.”
+
+6) HANDLE ERRORS CLEANLY (NO GENERIC TOAST)
+- On frontend, show actual server error message when available:
+  - file too large
+  - unsupported type
+  - unauthorized
+  - missing jobId
+- On backend, catch multer errors and return 400 JSON.
+
+7) UI REFRESH AFTER UPLOAD
+- After successful upload:
+  - update attachments list immediately (optimistic append OR refetch attachments)
+- Ensure the new attachment appears without refreshing the page.
+
+8) VALIDATION (SANE DEFAULTS)
+- Allow images (png/jpg) and pdf at minimum
+- Enforce max size (ex: 10MB) consistently front+back
+- Show clear toast messages when blocked
+
+TESTS (MUST PASS)
+- Upload JPG -> appears in attachments list
+- Upload PNG -> appears in attachments list
+- Upload PDF -> appears in attachments list (if allowed)
+- Upload too large -> clean error
+- Upload as allowed role -> success
+- Upload as disallowed role -> clean “no permission” error
+- No server crash
+
+DELIVERABLE
+- Job attachments upload works reliably and shows uploaded files immediately in the Job Detail Attachments section.
+- Remove TEMP logs after confirmed.

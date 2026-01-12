@@ -1943,6 +1943,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Job Documents routes (for attachments on job detail page)
+  app.get('/api/jobs/:jobId/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      // Get documents for this job
+      const allDocs = await storage.getDocuments(company.id);
+      const jobDocs = allDocs.filter(doc => doc.jobId === jobId);
+      
+      res.json(jobDocs);
+    } catch (error) {
+      console.error("Error fetching job documents:", error);
+      res.status(500).json({ message: "Failed to fetch job documents" });
+    }
+  });
+
+  app.post('/api/jobs/:jobId/documents', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      
+      // Move file to permanent location
+      const fileName = `${Date.now()}-${file.originalname}`;
+      const filePath = path.join('uploads', fileName);
+      fs.renameSync(file.path, filePath);
+      
+      const visibility = req.body.visibility || 'assigned_crew_only';
+      
+      const documentData = {
+        companyId: company.id,
+        jobId,
+        fileName: file.originalname,
+        fileUrl: `/uploads/${fileName}`,
+        fileType: file.mimetype,
+        fileSize: file.size,
+        visibility,
+        uploadedBy: userId,
+        category: 'attachment',
+        status: 'active',
+      };
+      
+      const document = await storage.createDocument(documentData);
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Error uploading job document:", error);
+      res.status(500).json({ message: "Failed to upload document" });
+    }
+  });
+
   // Document routes
   app.get('/api/documents', isAuthenticated, async (req: any, res) => {
     try {
