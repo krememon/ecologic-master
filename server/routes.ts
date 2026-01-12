@@ -1275,6 +1275,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         client = await storage.getClient(job.clientId);
       }
       
+      // Get schedule item for this job if exists
+      const scheduleItemsList = await storage.getScheduleItemsByJob(jobId);
+      const scheduleItem = scheduleItemsList.length > 0 ? scheduleItemsList[0] : null;
+      let scheduleDate = null;
+      let scheduleStartTime = null;
+      let scheduleEndTime = null;
+      
+      if (scheduleItem) {
+        const startDt = new Date(scheduleItem.startDateTime);
+        const endDt = new Date(scheduleItem.endDateTime);
+        scheduleDate = startDt.toISOString().split('T')[0];
+        scheduleStartTime = startDt.toTimeString().slice(0, 5);
+        scheduleEndTime = endDt.toTimeString().slice(0, 5);
+      }
+      
       res.json({
         ...job,
         clientName: client?.name || job.clientName || null,
@@ -1283,7 +1298,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: client.name,
           email: client.email,
           phone: client.phone
-        } : null
+        } : null,
+        scheduleDate,
+        scheduleStartTime,
+        scheduleEndTime,
       });
     } catch (error) {
       console.error("Error fetching job:", error);
@@ -1518,6 +1536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             priority: priority || 'medium',
             status: 'pending',
             companyId: company.id,
+            customerId: customerId,
             clientName: customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
             notes: notes || null,
             jobType: jobType || null,

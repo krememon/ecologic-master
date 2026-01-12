@@ -1,0 +1,102 @@
+FIX JOB EDIT SCREEN PREFILL + JOB DETAIL DISPLAY — ENSURE ALL FIELDS DISPLAY CORRECTLY
+
+SYMPTOM
+- Job Edit screen is NOT showing existing job data:
+  - customer name not displayed (shows “Select customer”)
+  - line items not displayed (shows “Add line items”)
+  - assigned technicians not displayed (shows “Assign technicians”)
+  - schedule not displayed (shows “Add schedule”)
+  - notes not displayed
+- Job detail page shows some data, but edit form is not hydrated from the job record.
+
+GOAL
+When opening /jobs/:jobId/edit, ALL existing job data must prefill correctly and display in the edit rows exactly like the New Job screen does after selection.
+
+FIELDS THAT MUST PREFILL
+1) Customer (required)
+- show selected customer name
+- keep customerId in state
+
+2) Line Items
+- show summary (count + subtotal) and open editor with existing items loaded
+- items must be the same structure as estimates pricebook items
+
+3) Location
+- show address already saved (e.g., “3 Ida Lane”)
+
+4) Job Type
+- show chosen job type (e.g., “Install”)
+
+5) Schedule
+- show existing schedule date/time window (not placeholder)
+
+6) Assigned To
+- show assigned employees/technicians (names/avatars)
+
+7) Notes
+- show existing notes text if any
+
+IMPLEMENTATION (DO THIS IN ORDER)
+
+STEP 1: LOG THE JOB PAYLOAD ON EDIT PAGE
+- In JobEditPage after fetch, log:
+  console.log("[JobEdit] job payload", job)
+- Identify actual field names returned by backend:
+  - customerId vs customer
+  - lineItems vs items
+  - assignedEmployeeIds vs assignedEmployees
+  - schedule fields (scheduledAt, start/end, etc)
+  - notes field name
+
+STEP 2: HYDRATE FORM STATE ON LOAD
+- The edit form must set its initial state from the job payload after fetch.
+- Ensure this happens only when job is loaded (useEffect with job dependency).
+Example conceptually:
+  setForm({
+    customerId: job.customerId,
+    customer: job.customer || fetchedCustomer,
+    lineItems: job.lineItems || [],
+    location: job.location || job.address,
+    jobType: job.jobType,
+    schedule: job.schedule,
+    assignedEmployeeIds: job.assignedEmployeeIds || job.assignedEmployees?.map(e=>e.id),
+    notes: job.notes || ""
+  })
+
+STEP 3: ENSURE BACKEND RETURNS WHAT EDIT PAGE NEEDS
+- If backend currently returns only IDs, update GET /api/jobs/:jobId to include:
+  - customer object (name/address) OR provide a secondary fetch to load it
+  - assignedEmployees array OR ensure IDs map to employees list
+  - lineItems array with name/qty/unitPrice/unit
+  - schedule data
+- Avoid multiple fetches if possible; prefer backend hydration.
+
+STEP 4: FIX DISPLAY ROWS ON EDIT SCREEN
+- Each row should show the saved value instead of placeholder:
+  - Customer row text = customer.name
+  - Line items row text = “{count} items • $subtotal”
+  - Assigned row text = “Estimator Test, Phone Tester” (etc)
+  - Schedule row text = formatted date/time (ex: “Jan 12, 9–11am”)
+  - Notes row text = first line preview or “Add notes”
+
+STEP 5: LINE ITEMS EDITOR MUST LOAD EXISTING ITEMS
+- When opening the pricebook line items modal from Job Edit:
+  - pass existing selected line items into the modal so they appear selected
+  - Done returns updated array back into job edit state
+- Ensure calculations still work (subtotal/total).
+
+STEP 6: SAVE UPDATES PROPERLY
+- Save button on edit page must PATCH /api/jobs/:jobId with updated fields.
+- After saving, navigate back to job detail page and refresh data.
+
+TESTS (MUST PASS)
+- Open job detail -> shows correct customer, job type, line items, assigned employees
+- Click Edit -> edit screen prefilled with ALL data (no placeholders)
+- Change line items -> save -> detail reflects changes
+- Change assigned techs -> save -> detail reflects changes
+- Add schedule -> save -> detail reflects changes
+- Refresh browser -> still correct
+
+DELIVERABLE
+- Job Edit screen displays and edits existing job data correctly (customer, line items, assigned, schedule, notes).
+- Job detail and edit are consistent and use the same source of truth.

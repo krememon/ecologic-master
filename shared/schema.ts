@@ -168,6 +168,7 @@ export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   clientId: integer("client_id").references(() => clients.id),
+  customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
   clientName: varchar("client_name", { length: 255 }),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
