@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X } from "lucide-react";
 import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
 
@@ -91,6 +92,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
 
@@ -520,7 +522,11 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               {jobPhotos.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {jobPhotos.map((photo) => (
-                    <div key={photo.id} className="relative group cursor-pointer">
+                    <div 
+                      key={photo.id} 
+                      className="relative group cursor-pointer"
+                      onClick={() => setPreviewImage({ url: photo.photoUrl, title: photo.title || 'Photo' })}
+                    >
                       <img
                         src={photo.photoUrl}
                         alt={photo.title || "Job attachment"}
@@ -580,6 +586,34 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Image Preview Modal */}
+      <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-black/95 border-none">
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {previewImage && (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                className="max-w-full max-h-[80vh] object-contain rounded"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '';
+                  (e.target as HTMLImageElement).alt = 'Failed to load preview';
+                }}
+              />
+              {previewImage.title && (
+                <p className="text-white/70 text-sm mt-4 text-center">{previewImage.title}</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

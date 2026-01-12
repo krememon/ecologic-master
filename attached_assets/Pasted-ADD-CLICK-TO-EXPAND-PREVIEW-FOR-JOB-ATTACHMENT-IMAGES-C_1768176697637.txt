@@ -1,0 +1,56 @@
+ADD CLICK-TO-EXPAND PREVIEW FOR JOB ATTACHMENT IMAGES
+
+CONTEXT
+- Job Detail -> Attachments now successfully uploads and displays image thumbnails.
+- Next: When user clicks an image thumbnail, it should open a larger preview.
+
+GOAL
+- Clicking an attachment image thumbnail opens a preview modal/lightbox showing the full image.
+- Modal should be clean and consistent with existing Documents preview behavior in the app.
+
+UI REQUIREMENTS
+- Thumbnail card remains the same in Attachments section.
+- On click:
+  - Open modal overlay
+  - Center the image
+  - Allow close via:
+    - X button
+    - clicking outside (optional)
+    - Escape key (desktop)
+- Image should scale nicely:
+  - max-width: 90vw
+  - max-height: 80–90vh
+  - object-fit: contain
+- If filename exists, show it subtly (optional).
+- No page navigation required.
+
+IMPLEMENTATION (PREFERRED: REUSE EXISTING PREVIEW MODAL)
+1) Check if we already have a document preview modal used in Documents page:
+   - images inline preview
+   - PDFs iframe/new tab behavior
+2) Reuse that same modal component for attachments preview:
+   - If attachment is image -> show inline in modal
+   - If attachment is PDF -> open in new tab OR show iframe (match existing behavior)
+
+DATA
+- Use the attachment’s URL/path already stored (document.url / document.path / publicUrl).
+- Ensure the modal uses the public URL that loads correctly.
+
+EDGE CASES
+- Non-image attachment:
+  - If PDF, follow existing PDF preview behavior
+  - If unknown type, show a “Download” button instead of preview
+- Broken URL:
+  - Show “Failed to load preview” message, don’t crash.
+
+RBAC
+- Respect existing visibility rules (only preview attachments user can see)
+
+TESTS
+- Upload image -> thumbnail appears -> click -> full-size preview modal opens
+- Close modal works
+- Mobile: pinch zoom not required but image should be large and readable
+- PDF (if allowed): preview behavior matches Documents page
+
+DELIVERABLE
+- Attachments thumbnails are clickable and open a larger preview modal like Documents.
