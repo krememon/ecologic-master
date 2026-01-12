@@ -2004,14 +2004,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const documentData = {
         companyId: company.id,
         jobId,
-        fileName: file.originalname,
+        name: file.originalname || `Attachment-${Date.now()}`,
         fileUrl: `/uploads/${fileName}`,
-        fileType: file.mimetype,
+        type: file.mimetype,
         fileSize: file.size,
         visibility,
         uploadedBy: userId,
-        category: 'attachment',
-        status: 'active',
+        category: 'Photos',
+        status: 'Draft',
       };
       
       const document = await storage.createDocument(documentData);

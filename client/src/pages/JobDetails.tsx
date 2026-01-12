@@ -72,9 +72,9 @@ interface JobPhoto {
 interface JobDocument {
   id: number;
   jobId: number;
-  fileName: string;
+  name: string;
   fileUrl: string;
-  fileType: string;
+  type: string | null;
   visibility: string;
   createdAt: string;
 }
@@ -130,12 +130,12 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   });
 
   const jobDocumentPhotos = jobDocuments
-    .filter(doc => doc.fileType?.startsWith('image/'))
+    .filter(doc => doc.type?.startsWith('image/'))
     .map(doc => ({
       id: doc.id,
       jobId: doc.jobId,
       uploadedBy: '',
-      title: doc.fileName,
+      title: doc.name,
       description: null,
       photoUrl: doc.fileUrl,
       location: null,
