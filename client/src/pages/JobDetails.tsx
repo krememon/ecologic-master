@@ -92,7 +92,8 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; id?: number } | null>(null);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<{ id: number; title: string } | null>(null);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
 
@@ -202,6 +203,24 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     setUploadProgress(60);
     uploadPhotoMutation.mutate({ formData });
   };
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: async (documentId: number) => {
+      await apiRequest('DELETE', `/api/documents/${documentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}/documents`] });
+      toast({ title: "Attachment deleted" });
+      setAttachmentToDelete(null);
+      if (previewImage?.id === attachmentToDelete?.id) {
+        setPreviewImage(null);
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to delete attachment", variant: "destructive" });
+      setAttachmentToDelete(null);
+    },
+  });
 
   if (authLoading || isLoading) {
     return (
@@ -525,14 +544,29 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                     <div 
                       key={photo.id} 
                       className="relative group cursor-pointer"
-                      onClick={() => setPreviewImage({ url: photo.photoUrl, title: photo.title || 'Photo' })}
                     >
-                      <img
-                        src={photo.photoUrl}
-                        alt={photo.title || "Job attachment"}
-                        className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
-                      />
-                      <p className="text-xs truncate mt-1">{photo.title || 'Photo'}</p>
+                      <div 
+                        onClick={() => setPreviewImage({ url: photo.photoUrl, title: photo.title || 'Photo', id: photo.id })}
+                      >
+                        <img
+                          src={photo.photoUrl}
+                          alt={photo.title || "Job attachment"}
+                          className="w-full h-24 object-cover rounded-lg border hover:opacity-90 transition-opacity"
+                        />
+                        <p className="text-xs truncate mt-1">{photo.title || 'Photo'}</p>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAttachmentToDelete({ id: photo.id, title: photo.title || 'Photo' });
+                          }}
+                          className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 md:opacity-0 md:group-hover:opacity-100"
+                          title="Delete attachment"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -589,31 +623,54 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
 
       {/* Image Preview Modal */}
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-black/95 border-none">
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-white dark:bg-slate-900 border rounded-xl shadow-xl">
           <button
             onClick={() => setPreviewImage(null)}
-            className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            className="absolute top-3 right-3 z-50 p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
           {previewImage && (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
-              <img
-                src={previewImage.url}
-                alt={previewImage.title}
-                className="max-w-full max-h-[80vh] object-contain rounded"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '';
-                  (e.target as HTMLImageElement).alt = 'Failed to load preview';
-                }}
-              />
+            <div className="flex flex-col items-center justify-center p-6">
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2 w-full flex items-center justify-center">
+                <img
+                  src={previewImage.url}
+                  alt={previewImage.title}
+                  className="max-w-full max-h-[70vh] object-contain rounded"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '';
+                    (e.target as HTMLImageElement).alt = 'Failed to load preview';
+                  }}
+                />
+              </div>
               {previewImage.title && (
-                <p className="text-white/70 text-sm mt-4 text-center">{previewImage.title}</p>
+                <p className="text-slate-600 dark:text-slate-400 text-sm mt-4 text-center">{previewImage.title}</p>
               )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Attachment Confirmation Dialog */}
+      <AlertDialog open={!!attachmentToDelete} onOpenChange={(open) => !open && setAttachmentToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Attachment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete this attachment? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => attachmentToDelete && deleteAttachmentMutation.mutate(attachmentToDelete.id)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

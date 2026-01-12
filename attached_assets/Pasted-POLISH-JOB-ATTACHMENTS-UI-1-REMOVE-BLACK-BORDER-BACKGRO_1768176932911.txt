@@ -1,0 +1,84 @@
+POLISH JOB ATTACHMENTS UI:
+1) REMOVE BLACK BORDER/BACKGROUND IN IMAGE PREVIEW
+2) ADD HOVER “X” DELETE ON THUMBNAILS
+
+CONTEXT
+- Clicking an attachment opens an image preview modal.
+- Current preview has an ugly black border/background around the image.
+- We also need an easy way to delete attachments directly from the thumbnails list.
+
+GOALS
+1) Preview modal should look clean and modern (no heavy black frame).
+2) Each attachment thumbnail should show a small “X” on hover to delete.
+
+-----------------------------------------
+1) REMOVE BLACK BORDER/BACKGROUND (PREVIEW MODAL)
+CURRENT
+- Modal uses a black overlay/container behind the image creating a thick black border.
+
+GOAL
+- Keep a subtle overlay on the page (dim background is fine),
+  but the modal content itself should be clean:
+  - white or light neutral modal surface
+  - image displayed without a black “frame”
+  - image centered with object-fit: contain
+
+IMPLEMENTATION
+- Change modal layout to:
+  - Overlay: rgba(0,0,0,0.45) (background dim)
+  - Modal panel: white (or app’s card color), rounded corners
+  - Inside panel:
+    - image container with padding
+    - image max sizes:
+      max-width: 90vw
+      max-height: 80vh
+      object-fit: contain
+- Remove any black background on the image container itself.
+- If you want contrast for transparent PNGs, use a VERY light checker or light gray background, not black.
+
+-----------------------------------------
+2) THUMBNAIL HOVER DELETE “X”
+GOAL
+- On each attachment thumbnail card, show a small “X” delete button on hover (top-right).
+- Clicking X deletes that attachment and removes it from UI immediately.
+
+UI RULES
+- Only show the X on hover (desktop) to keep it clean.
+- On mobile (no hover):
+  - show a small “…” menu or always-visible tiny trash icon
+  OR support long-press to reveal delete (pick simplest).
+
+RBAC
+- Only roles allowed to delete documents/attachments can see the X.
+- Others can still preview but cannot delete.
+
+DELETE BEHAVIOR (IMPORTANT)
+- Clicking the X:
+  - opens a confirm dialog:
+    “Delete this attachment? This cannot be undone.”
+    Buttons: Cancel / Delete
+  - On confirm:
+    - call DELETE endpoint (existing documents delete route)
+    - on success:
+      - remove from attachments list immediately (UI refresh)
+      - if preview modal is open for that attachment, close it
+  - On failure:
+      show toast with server error message
+
+BACKEND
+- Reuse existing document delete endpoint used in Documents page.
+- Ensure it deletes:
+  - DB record
+  - stored file (if your system supports)
+- Ensure job attachments list refreshes after deletion.
+
+TESTS
+- Hover on thumbnail -> X appears
+- Click X -> confirm -> attachment deletes and disappears
+- Deleting does not break other attachments
+- Users without permission do not see the X
+- Preview modal shows clean layout with no black border
+
+DELIVERABLE
+- Clean preview modal (no black frame)
+- Hover-to-delete X on thumbnails with confirm + working delete
