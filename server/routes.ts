@@ -1277,7 +1277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         ...job,
-        clientName: client?.name || null,
+        clientName: client?.name || job.clientName || null,
         client: client ? {
           id: client.id,
           name: client.name,
