@@ -1269,11 +1269,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
       
-      // Get client info if available
+      // Get client info if available (legacy clients table)
       let client = null;
       if (job.clientId) {
         client = await storage.getClient(job.clientId);
       }
+      
+      // Get customer info if available (customers table - used by NewJobSheet)
+      let customer = null;
+      if (job.customerId) {
+        customer = await storage.getCustomer(job.customerId);
+      }
+      
+      // Get line items for this job
+      const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
+      
+      // Get crew assignments for this job
+      const crewAssignments = await storage.getJobCrewAssignments(jobId);
+      const assignedEmployeeIds = crewAssignments.map(c => c.userId);
+      const assignedEmployees = crewAssignments.map(c => ({
+        id: c.userId,
+        firstName: c.user?.firstName || null,
+        lastName: c.user?.lastName || null,
+        email: c.user?.email || null,
+        profileImageUrl: c.user?.profileImageUrl || null,
+      }));
       
       // Get schedule item for this job if exists
       const scheduleItemsList = await storage.getScheduleItemsByJob(jobId);
@@ -1299,6 +1319,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: client.email,
           phone: client.phone
         } : null,
+        customer: customer ? {
+          id: customer.id,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          email: customer.email,
+          phone: customer.phone,
+          address: customer.address,
+        } : null,
+        lineItems,
+        assignedEmployeeIds,
+        assignedEmployees,
         scheduleDate,
         scheduleStartTime,
         scheduleEndTime,

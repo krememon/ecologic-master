@@ -1,0 +1,93 @@
+MAKE EDIT JOB PREFILL MATCH JOB DETAIL EXACTLY (SINGLE SOURCE OF TRUTH)
+
+PROBLEM
+- Job Detail shows correct data:
+  customer, assigned employees, line items, etc.
+- Edit Job screen does NOT match:
+  customer shows placeholder, line items empty, assigned techs empty.
+- This is a prefill/state mapping issue.
+
+GOAL
+Edit Job screen must display the same values as Job Detail for ALL fields:
+- Customer
+- Line Items
+- Assigned Employees/Technicians
+- Schedule
+- Notes
+- Location
+- Job Type
+
+RULE #1 (IMPORTANT)
+- Do not use a different job payload for Edit vs Detail.
+- The Edit screen must load the SAME job data shape used on Job Detail.
+- If Job Detail already has a loaded job object in state/store, reuse it.
+
+IMPLEMENTATION PLAN (DO IN ORDER)
+
+1) IDENTIFY DATA DIFFERENCE
+- Add TEMP logs on BOTH screens:
+  Job Detail:
+    console.log("[JobDetail] job", job)
+  Job Edit:
+    console.log("[JobEdit] job", job)
+- Confirm whether Edit is receiving:
+  - only jobId + basic fields
+  - missing customer object
+  - missing assignedEmployees array
+  - missing lineItems array
+
+2) FIX BACKEND RESPONSE CONSISTENCY
+- Ensure GET /api/jobs/:jobId returns a fully hydrated job:
+  - customer: { id, name, email, phone, address }
+  - lineItems: [{ name, quantity, unitPrice, unit, ... }]
+  - assignedEmployees: [{ id, name, avatarInitials }]
+  - schedule: { startAt, endAt } OR scheduledAt
+  - notes
+- Job Detail and Job Edit must call the same endpoint.
+
+3) PREFILL EDIT STATE FROM JOB OBJECT
+- When Edit page loads job:
+  - Set selectedCustomer state from job.customer (not just customerId)
+  - Set lineItems state from job.lineItems
+  - Set assigned state from job.assignedEmployees OR assignedEmployeeIds
+  - Set schedule state from job.schedule/scheduledAt
+  - Set notes state from job.notes
+- The UI rows must render from these states (not placeholders).
+
+4) CUSTOMER ROW DISPLAY FIX
+- Customer row should show:
+  job.customer.name
+- If customer exists but row still says “Select customer”:
+  - the row is rendering from the wrong state variable (fix it)
+- Ensure customerId and customer object are both populated so selection modal opens correctly.
+
+5) LINE ITEMS ROW + MODAL PREFILL FIX
+- Line items row should show summary:
+  “{count} items • ${subtotal}”
+- When opening “Add Line Items” modal:
+  - pass existing lineItems so they appear selected
+- Ensure job lineItems use the same structure as estimates lineItems (or map them once on load).
+
+6) ASSIGNED TECHNICIANS ROW FIX
+- Assigned row should show:
+  “Estimator Test, Phone Tester” (or whatever is assigned)
+- Ensure edit uses the correct field:
+  assignedEmployees vs assignedTechnicians vs assignedEmployeeIds
+- If job has assignedEmployees but edit row uses assignedTechnicians, map it.
+
+7) SAVE SHOULD NOT WIPE FIELDS
+- Ensure PATCH /api/jobs/:jobId sends all fields (or merges correctly).
+- Prevent accidental overwrites like:
+  customerId becoming null
+  lineItems becoming []
+  assignedEmployeeIds becoming []
+- Only update fields the user changed OR send the full hydrated payload.
+
+TESTS (MUST PASS)
+- Open job detail -> note customer, assigned employees, line items
+- Click Edit -> edit screen shows the SAME customer, assigned, line items immediately (no placeholders)
+- Save without changes -> nothing disappears
+- Change one field -> only that field updates
+
+DELIVERABLE
+- Edit Job screen always matches Job Detail values and never shows placeholders when data exists.

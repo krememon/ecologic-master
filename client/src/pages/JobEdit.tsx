@@ -8,32 +8,12 @@ interface JobEditProps {
   jobId: string;
 }
 
-interface JobLineItem {
-  id: number;
-  name: string;
-  description: string | null;
-  taskCode: string | null;
-  quantity: string;
-  unitPriceCents: number;
-  unit: string;
-  taxable: boolean;
-}
-
 export default function JobEdit({ jobId }: JobEditProps) {
   const [, navigate] = useLocation();
   
+  // GET /api/jobs/:id now returns fully hydrated job with customer, lineItems, assignedEmployeeIds
   const { data: job, isLoading, error } = useQuery<any>({
     queryKey: [`/api/jobs/${jobId}`],
-  });
-
-  const { data: lineItems = [] } = useQuery<JobLineItem[]>({
-    queryKey: [`/api/jobs/${jobId}/line-items`],
-    enabled: !!jobId,
-  });
-
-  const { data: crewAssignments = [] } = useQuery<any[]>({
-    queryKey: [`/api/jobs/${jobId}/crew`],
-    enabled: !!jobId,
   });
 
   if (isLoading) {
@@ -61,12 +41,7 @@ export default function JobEdit({ jobId }: JobEditProps) {
     );
   }
 
-  const jobWithLineItems = {
-    ...job,
-    lineItems: lineItems,
-    assignedEmployeeIds: crewAssignments.map((c: any) => c.userId),
-  };
-
+  // Job is now fully hydrated from API with customer, lineItems, assignedEmployeeIds
   return (
     <NewJobSheet
       open={true}
@@ -75,7 +50,7 @@ export default function JobEdit({ jobId }: JobEditProps) {
           navigate(`/jobs/${jobId}`);
         }
       }}
-      initialJob={jobWithLineItems}
+      initialJob={job}
       isEditMode={true}
       onJobUpdated={() => {
         navigate(`/jobs/${jobId}`);

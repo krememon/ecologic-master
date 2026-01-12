@@ -229,8 +229,20 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
         setAssignedEmployees(initialJob.assignedEmployeeIds);
       }
       
-      // Set customer if available
-      if (initialJob.customerId && apiCustomers.length > 0) {
+      // Set customer if available - use hydrated customer object directly from API
+      if (initialJob.customer) {
+        setSelectedCustomer({
+          id: initialJob.customer.id,
+          firstName: initialJob.customer.firstName || null,
+          lastName: initialJob.customer.lastName || null,
+          email: initialJob.customer.email || null,
+          phone: initialJob.customer.phone || null,
+          address: initialJob.customer.address || null,
+          companyId: 0, // Not needed for display
+          createdAt: null,
+        } as Customer);
+      } else if (initialJob.customerId && apiCustomers.length > 0) {
+        // Fallback: look up in apiCustomers if customer object not provided
         const customer = apiCustomers.find(c => c.id === initialJob.customerId);
         if (customer) {
           setSelectedCustomer(customer);
