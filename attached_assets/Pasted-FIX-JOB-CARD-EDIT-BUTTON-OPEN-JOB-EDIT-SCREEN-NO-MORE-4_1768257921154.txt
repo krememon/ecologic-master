@@ -1,0 +1,73 @@
+FIX JOB CARD “EDIT” BUTTON — OPEN JOB EDIT SCREEN (NO MORE 404)
+
+PROBLEM
+- Clicking the Edit button on a Job card leads to a 404 Page Not Found.
+- That means the Edit button is navigating to a route that is not registered in the router.
+
+GOAL
+- Clicking Edit on a Job card must open the Job Edit screen (same UI as the “New Job” screen),
+  with all fields pre-filled from the selected job:
+  - Customer
+  - Line Items (pricebook-connected)
+  - Location
+  - Job Type
+  - Schedule
+  - Assigned To (employees)
+  - Notes
+- Saving updates the existing job and returns user to the Job Detail page (or Jobs list, whichever is current UX).
+
+IMPLEMENTATION (DO THIS IN ORDER)
+
+1) IDENTIFY CURRENT EDIT NAVIGATION
+- Locate the Job Card component Edit button onClick.
+- Find the route it navigates to (ex: /jobs/:id/edit or /job/edit/:id, etc).
+- Confirm that route currently does NOT exist and triggers the 404.
+
+2) CREATE/REGISTER THE EDIT ROUTE
+- Add a proper route to the app router:
+  Route: /jobs/:jobId/edit
+- Ensure it is added to the same router config where Estimates routes live.
+
+3) BUILD JOB EDIT PAGE USING THE SAME COMPONENT AS NEW JOB
+- DO NOT build a separate edit UI from scratch.
+- Reuse the New Job form component and make it support “edit mode”.
+- When in edit mode:
+  - Fetch job by jobId
+  - Pre-fill all fields
+  - Save performs UPDATE instead of CREATE
+
+4) PREFILL DATA CORRECTLY
+- Customer: selected customer shown (and can be changed if allowed)
+- Line Items: load existing job.lineItems into the line items editor
+- Location: load job.location/address
+- Job Type: load job.jobType
+- Schedule: load job.schedule fields
+- Assigned To: load assigned employees
+- Notes: load job.notes
+
+5) SAVE BEHAVIOR
+- Save button updates the job:
+  PUT/PATCH /api/jobs/:jobId
+- On success:
+  - Navigate back to /jobs/:jobId (Job Detail page) OR close edit if using inline
+  - Ensure Job Detail refreshes with updated info
+- Handle errors cleanly with toast messages.
+
+6) MAKE JOB CARD EDIT BUTTON USE THIS ROUTE
+- Update Job card Edit button to navigate to:
+  /jobs/${jobId}/edit
+- Confirm no more 404.
+
+7) RBAC
+- Only show Edit button for roles that can edit jobs.
+- Users without permission should not see the edit button (hidden, not disabled).
+
+TESTS
+- Click Edit on job card -> opens edit screen (no 404)
+- Existing job fields are pre-filled correctly
+- Update customer/job type/line items -> Save -> reflected on Job Detail page
+- Back navigation works
+- No regressions in New Job creation flow
+
+DELIVERABLE
+- Job card Edit button opens functional Job Edit screen and updates the job successfully.

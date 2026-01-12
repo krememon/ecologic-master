@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,9 @@ interface NewJobSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onJobCreated?: (job: any) => void;
+  initialJob?: any;
+  isEditMode?: boolean;
+  onJobUpdated?: (job: any) => void;
 }
 
 const JOB_TYPES = [
@@ -114,8 +117,9 @@ function InfoRow({
 }
 
 
-export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetProps) {
+export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEditMode = false, onJobUpdated }: NewJobSheetProps) {
   const { toast } = useToast();
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Form state
   const [title, setTitle] = useState("");
@@ -196,6 +200,69 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     });
   }, [allEmployees, employeeSearch]);
 
+  // Hydrate form state from initialJob when in edit mode
+  useEffect(() => {
+    if (isEditMode && initialJob && open && !isInitialized) {
+      setTitle(initialJob.title || "");
+      setDescription(initialJob.description || "");
+      setLocation(initialJob.location || "");
+      setCity(initialJob.city || "");
+      setPostalCode(initialJob.postalCode || "");
+      setLocationLat(initialJob.locationLat || undefined);
+      setLocationLng(initialJob.locationLng || undefined);
+      setLocationPlaceId(initialJob.locationPlaceId || "");
+      setPriority(initialJob.priority || "medium");
+      setNotes(initialJob.notes || "");
+      setJobType(initialJob.jobType || null);
+      
+      // Set schedule if available
+      if (initialJob.scheduleDate || initialJob.scheduleStartTime || initialJob.scheduleEndTime) {
+        setSchedule({
+          date: initialJob.scheduleDate || "",
+          startTime: initialJob.scheduleStartTime || "",
+          endTime: initialJob.scheduleEndTime || "",
+        });
+      }
+      
+      // Set assigned employees if available
+      if (initialJob.assignedEmployeeIds && Array.isArray(initialJob.assignedEmployeeIds)) {
+        setAssignedEmployees(initialJob.assignedEmployeeIds);
+      }
+      
+      // Set customer if available
+      if (initialJob.customerId && apiCustomers.length > 0) {
+        const customer = apiCustomers.find(c => c.id === initialJob.customerId);
+        if (customer) {
+          setSelectedCustomer(customer);
+        }
+      }
+      
+      // Set line items if available
+      if (initialJob.lineItems && Array.isArray(initialJob.lineItems) && initialJob.lineItems.length > 0) {
+        setLineItems(initialJob.lineItems.map((item: any) => ({
+          name: item.name || "",
+          description: item.description || "",
+          taskCode: item.taskCode || "",
+          quantity: item.quantity?.toString() || "1",
+          unitPriceCents: item.unitPriceCents || 0,
+          priceDisplay: formatCurrency(item.unitPriceCents || 0),
+          unit: item.unit || "each",
+          taxable: item.taxable || false,
+          saveToPriceBook: false,
+        })));
+      }
+      
+      setIsInitialized(true);
+    }
+  }, [isEditMode, initialJob, open, isInitialized, apiCustomers]);
+
+  // Reset initialization when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setIsInitialized(false);
+    }
+  }, [open]);
+
   // Create customer mutation
   const createCustomerMutation = useMutation({
     mutationFn: async (customerData: { firstName: string; lastName: string; email?: string; phone?: string; address?: string }) => {
@@ -261,6 +328,53 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     }
   });
 
+  // Update job mutation for edit mode
+  const updateJobMutation = useMutation({
+    mutationFn: async (data: {
+      title: string;
+      description?: string;
+      location?: string;
+      city?: string;
+      postalCode?: string;
+      locationLat?: number;
+      locationLng?: number;
+      locationPlaceId?: string;
+      priority?: string;
+      customerId?: number;
+      customerName?: string;
+      scheduleDate?: string;
+      scheduleStartTime?: string;
+      scheduleEndTime?: string;
+      assignedEmployeeIds?: string[];
+      notes?: string;
+      jobType?: string;
+      lineItems?: { name: string; description?: string; taskCode?: string; quantity: string; unitPriceCents: number; unit: string; taxable: boolean; }[];
+    }) => {
+      const response = await apiRequest('PATCH', `/api/jobs/${initialJob?.id}`, data);
+      return response.json();
+    },
+    onSuccess: (updatedJob) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', initialJob?.id?.toString()] });
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${initialJob?.id}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/schedule-items')
+      });
+      resetForm();
+      onOpenChange(false);
+      if (onJobUpdated) {
+        onJobUpdated(updatedJob);
+      }
+      toast({ title: "Job updated", description: "Your job has been updated successfully." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to update job", variant: "destructive" });
+    }
+  });
+
   const resetForm = () => {
     setTitle("");
     setDescription("");
@@ -292,7 +406,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
     // Filter and prepare line items for submission
     const validItems = lineItems.filter(item => item.name.trim());
 
-    createJobMutation.mutate({
+    const jobData = {
       title: title || `Job for ${customerName}`,
       description: description || undefined,
       location: location || undefined,
@@ -319,7 +433,13 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
         unit: item.unit,
         taxable: item.taxable,
       })) : undefined,
-    });
+    };
+
+    if (isEditMode) {
+      updateJobMutation.mutate(jobData);
+    } else {
+      createJobMutation.mutate(jobData);
+    }
   };
 
   const getEmployeesDisplayText = () => {
@@ -428,14 +548,16 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated }: NewJobSheetPro
             >
               Cancel
             </button>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Job</h3>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {isEditMode ? 'Edit Job' : 'New Job'}
+            </h3>
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={!canSave || createJobMutation.isPending}
+              disabled={!canSave || createJobMutation.isPending || updateJobMutation.isPending}
               data-testid="button-save-job"
             >
-              {createJobMutation.isPending ? 'Saving...' : 'Save'}
+              {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
             </Button>
           </div>
 
