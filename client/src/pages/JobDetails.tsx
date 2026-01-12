@@ -238,11 +238,8 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">
-              {customerName ? `Job for ${customerName}` : job.title}
+              {customerName || 'Untitled Job'}
             </h1>
-            {customerName && job.title && (
-              <p className="text-sm text-muted-foreground">{job.title}</p>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -299,23 +296,28 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </CardHeader>
             <CardContent>
               {customerName ? (
-                <div className="space-y-1">
-                  <p className="font-medium">{customerName}</p>
-                  {job.client?.email && (
-                    <p className="text-sm text-muted-foreground">{job.client.email}</p>
-                  )}
-                  {job.client?.phone && (
-                    <p className="text-sm text-muted-foreground">{job.client.phone}</p>
-                  )}
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-medium">{customerName}</p>
+                    {job.client?.email && (
+                      <p className="text-sm text-muted-foreground">{job.client.email}</p>
+                    )}
+                    {job.client?.phone && (
+                      <p className="text-sm text-muted-foreground">{job.client.phone}</p>
+                    )}
+                  </div>
                   {job.location && (
-                    <a 
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      {job.location}
-                    </a>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Address</p>
+                      <a 
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        {job.location}
+                      </a>
+                    </div>
                   )}
                 </div>
               ) : (
