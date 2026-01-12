@@ -1661,20 +1661,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      // Validate request body with partial zod schema (all fields optional for updates)
-      const updateJobSchema = insertJobSchema.partial();
-      const validationResult = updateJobSchema.safeParse(req.body);
-      if (!validationResult.success) {
-        return res.status(400).json({ 
-          message: "Validation error", 
-          errors: validationResult.error.errors 
-        });
+      const jobId = parseInt(req.params.id);
+      
+      // Verify job exists and belongs to company
+      const existingJob = await storage.getJob(jobId);
+      if (!existingJob || existingJob.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
       }
       
-      const jobId = parseInt(req.params.id);
-      const job = await storage.updateJob(jobId, validationResult.data);
+      const {
+        title,
+        description,
+        location,
+        city,
+        postalCode,
+        locationLat,
+        locationLng,
+        locationPlaceId,
+        priority,
+        customerId,
+        customerName,
+        scheduleDate,
+        scheduleStartTime,
+        scheduleEndTime,
+        assignedEmployeeIds,
+        notes,
+        jobType,
+        lineItems,
+      } = req.body;
       
-      res.json(job);
+      // Update job fields
+      const jobUpdateData: any = {};
+      if (title !== undefined) jobUpdateData.title = title;
+      if (description !== undefined) jobUpdateData.description = description;
+      if (location !== undefined) jobUpdateData.location = location;
+      if (city !== undefined) jobUpdateData.city = city;
+      if (postalCode !== undefined) jobUpdateData.postalCode = postalCode;
+      if (locationLat !== undefined) jobUpdateData.locationLat = locationLat;
+      if (locationLng !== undefined) jobUpdateData.locationLng = locationLng;
+      if (locationPlaceId !== undefined) jobUpdateData.locationPlaceId = locationPlaceId;
+      if (priority !== undefined) jobUpdateData.priority = priority;
+      if (customerId !== undefined) jobUpdateData.customerId = customerId;
+      if (customerName !== undefined) jobUpdateData.clientName = customerName;
+      if (notes !== undefined) jobUpdateData.notes = notes;
+      if (jobType !== undefined) jobUpdateData.jobType = jobType;
+      
+      const updatedJob = await storage.updateJob(jobId, jobUpdateData);
+      
+      // Update schedule if provided
+      if (scheduleDate !== undefined) {
+        const existingScheduleItems = await storage.getScheduleItemsByJob(jobId);
+        
+        if (scheduleDate) {
+          let startDateTime: Date;
+          let endDateTime: Date;
+          
+          if (scheduleStartTime && scheduleEndTime) {
+            startDateTime = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
+            endDateTime = new Date(`${scheduleDate}T${scheduleEndTime}:00`);
+          } else if (scheduleStartTime) {
+            startDateTime = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
+            endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
+          } else {
+            startDateTime = new Date(`${scheduleDate}T09:00:00`);
+            endDateTime = new Date(`${scheduleDate}T10:00:00`);
+          }
+          
+          if (existingScheduleItems.length > 0) {
+            // Update existing schedule item
+            await storage.updateScheduleItem(existingScheduleItems[0].id, {
+              startDateTime,
+              endDateTime,
+            });
+          } else {
+            // Create new schedule item
+            await storage.createScheduleItem({
+              jobId,
+              companyId: company.id,
+              title: updatedJob.title || 'Job',
+              startDateTime,
+              endDateTime,
+              allDay: false,
+            });
+          }
+        } else if (existingScheduleItems.length > 0) {
+          // Remove schedule if date cleared
+          await storage.deleteScheduleItem(existingScheduleItems[0].id);
+        }
+      }
+      
+      // Update crew assignments if provided
+      if (assignedEmployeeIds !== undefined) {
+        const existingCrew = await storage.getJobCrewAssignments(jobId);
+        const existingIds = existingCrew.map(c => c.userId);
+        
+        // Remove crew members not in the new list
+        const toRemove = existingIds.filter(id => !assignedEmployeeIds.includes(id));
+        if (toRemove.length > 0) {
+          await storage.removeJobCrewAssignments(jobId, toRemove);
+        }
+        
+        // Add new crew members
+        const toAdd = assignedEmployeeIds.filter((id: string) => !existingIds.includes(id));
+        if (toAdd.length > 0) {
+          await storage.addJobCrewAssignments(jobId, toAdd, company.id, userId);
+        }
+      }
+      
+      // Update line items if provided
+      if (lineItems !== undefined) {
+        // Delete existing line items and create new ones
+        await db.delete(jobLineItems).where(eq(jobLineItems.jobId, jobId));
+        
+        if (lineItems && lineItems.length > 0) {
+          for (let i = 0; i < lineItems.length; i++) {
+            const item = lineItems[i];
+            const lineTotalCents = Math.round(parseFloat(item.quantity) * item.unitPriceCents);
+            await db.insert(jobLineItems).values({
+              jobId,
+              name: item.name,
+              description: item.description || null,
+              taskCode: item.taskCode || null,
+              quantity: item.quantity,
+              unitPriceCents: item.unitPriceCents,
+              unit: item.unit || 'each',
+              taxable: item.taxable || false,
+              lineTotalCents,
+              sortOrder: i,
+            });
+          }
+        }
+      }
+      
+      res.json(updatedJob);
     } catch (error) {
       console.error("Error updating job:", error);
       res.status(500).json({ message: "Failed to update job" });
