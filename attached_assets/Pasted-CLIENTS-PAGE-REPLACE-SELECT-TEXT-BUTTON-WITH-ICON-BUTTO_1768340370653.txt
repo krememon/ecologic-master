@@ -1,0 +1,63 @@
+CLIENTS PAGE: REPLACE “SELECT” TEXT BUTTON WITH ICON BUTTON + CLEAN UP TOP LAYOUT
+
+GOALS
+1) Replace the “Select” text button with a clean icon-only button (square) like the screenshot.
+2) Redesign the top header layout to look more polished and aligned.
+
+------------------------------------
+1) ICON-ONLY SELECT BUTTON
+CURRENT
+- Button says “Select”
+
+CHANGE TO
+- Square icon-only button (no text)
+- Use a checkbox/check-square icon inside
+- Same style as other icon buttons in the app (rounded, subtle border)
+
+BEHAVIOR
+- Clicking toggles Select mode ON/OFF
+- When Select mode is ON:
+  - Icon button appears “active” (filled background or highlighted border)
+  - Optionally swap icon to “X” or keep checkbox but highlight state
+  - Do NOT show the word “Select”
+
+------------------------------------
+2) CLEAN TOP HEADER LAYOUT
+
+CURRENT PROBLEM
+- The top area feels cluttered (title, select, add button, search bar).
+- Spacing and alignment should be cleaner.
+
+NEW LAYOUT (REQUIRED)
+Row 1:
+- Left: “All Clients (X)” (stacked or single line)
+- Right: action buttons group:
+  [ icon-only Select button ]  [ + Add New Client button ]
+
+Row 2:
+- Full width search input below, aligned with the card column
+- Search bar should have consistent padding and not feel too tall
+
+STYLING RULES
+- Use consistent horizontal padding with the client cards container (same left/right edges)
+- Ensure Row 1 has vertical alignment (title baseline aligns with buttons)
+- Keep button heights consistent:
+  - Select icon button height matches Add button height (or slightly smaller but visually aligned)
+- Add breathing room:
+  - 12–16px gap between Row 1 and search bar
+  - 16–20px gap between search bar and first client card
+
+------------------------------------
+DETAILS
+- Make Select icon button a square pill:
+  - width/height ~44px (or match app icon buttons)
+  - center icon
+- Add button remains primary
+- Search bar stays clean with:
+  - left search icon
+  - clear “X” on right when typing
+
+DELIVERABLES
+- Select text removed, replaced by icon-only button
+- Header area looks clean, aligned, and professional
+- No regressions to select mode behavior or search

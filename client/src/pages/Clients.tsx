@@ -14,7 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertClientSchema, type Client, type Job, type Customer } from "@shared/schema";
 import { z } from "zod";
-import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X, Check } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X, Check, CheckSquare } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -670,28 +670,61 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* Client Count and Action Buttons */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          All Clients ({customers.length})
-        </h3>
-        <div className="flex items-center gap-2">
-          {isSelectMode ? (
-            <Button variant="outline" onClick={exitSelectMode}>
-              Cancel
-            </Button>
-          ) : (
-            <>
-              {customers.length > 0 && (
-                <Button variant="outline" onClick={() => setIsSelectMode(true)}>
-                  Select
-                </Button>
-              )}
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add New Client
+      {/* Header Section */}
+      <div className="space-y-4">
+        {/* Row 1: Title + Action Buttons */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            All Clients ({customers.length})
+          </h3>
+          <div className="flex items-center gap-2">
+            {isSelectMode ? (
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={exitSelectMode}
+                className="h-10 w-10 bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+              >
+                <X className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </Button>
-            </>
+            ) : (
+              <>
+                {customers.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setIsSelectMode(true)}
+                    className="h-10 w-10"
+                  >
+                    <CheckSquare className="h-5 w-5" />
+                  </Button>
+                )}
+                <Button onClick={() => setIsDialogOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New Client
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search clients..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 pr-10 h-10 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-lg"
+            data-testid="input-search-clients"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500 transition-colors"
+            >
+              <X className="h-3 w-3 text-slate-600 dark:text-slate-300" />
+            </button>
           )}
         </div>
       </div>
@@ -735,26 +768,6 @@ export default function Clients() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-        <Input
-          placeholder="Search clients..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 pr-10 h-10 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-lg"
-          data-testid="input-search-clients"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500 transition-colors"
-          >
-            <X className="h-3 w-3 text-slate-600 dark:text-slate-300" />
-          </button>
-        )}
-      </div>
 
       {/* Clients List (from unified customers table) */}
       {customers.length === 0 ? (
