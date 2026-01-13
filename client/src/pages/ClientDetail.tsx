@@ -230,16 +230,9 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {job.totalCents && job.totalCents > 0 && (
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                          {formatCurrency(job.totalCents)}
-                        </span>
-                      )}
-                      <Badge variant={getStatusBadgeVariant(job.status)}>
-                        {job.status}
-                      </Badge>
-                    </div>
+                    <Badge variant={getStatusBadgeVariant(job.status)}>
+                      {job.status}
+                    </Badge>
                   </div>
                 </CardContent>
               </Card>

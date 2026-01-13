@@ -2914,7 +2914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer not found" });
       }
       
-      // Get jobs for this customer
+      // Get jobs for this customer (Job table has customerId field)
       const allJobs = await storage.getJobs(company.id);
       const customerJobs = allJobs.filter(job => job.customerId === customerId);
       
@@ -2957,7 +2957,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer not found" });
       }
       
-      // Get estimates for this customer
+      // Get estimates for this customer (Estimate table uses customerId)
       const allEstimates = await storage.getEstimatesByCompany(company.id);
       const customerEstimates = allEstimates.filter(est => est.customerId === customerId);
       
