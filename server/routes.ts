@@ -25,7 +25,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -1418,33 +1418,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Find or create corresponding customer for this client
-      // This ensures jobs appear under the customer's Jobs tab
-      let customerId: number | null = null;
+      // Get client data for customer lookup/creation
       const client = await storage.getClient(clientId);
-      if (client) {
-        // Try to find existing customer with same name in this company
-        const companyCustomers = await storage.getCustomersByCompany(company.id);
-        const matchingCustomer = companyCustomers.find(c => 
-          c.firstName === client.name?.split(' ')[0] && 
-          (c.email === client.email || !client.email)
-        );
-        
-        if (matchingCustomer) {
-          customerId = matchingCustomer.id;
-        } else {
-          // Create customer from client data
-          const nameParts = (client.name || '').split(' ');
-          const newCustomer = await storage.createCustomer({
-            companyId: company.id,
-            firstName: nameParts[0] || 'Customer',
-            lastName: nameParts.slice(1).join(' ') || '',
-            email: client.email || null,
-            phone: client.phone || null,
-            address: client.address || null,
-          });
-          customerId = newCustomer.id;
-        }
+      if (!client) {
+        return res.status(404).json({ 
+          code: 'CLIENT_NOT_FOUND', 
+          message: "Client not found after creation",
+          field: 'client'
+        });
       }
       
       // Parse and validate schedule dates
@@ -1469,6 +1450,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create job and schedule in atomic transaction
       const job = await db.transaction(async (tx) => {
+        // Find or create corresponding customer for this client
+        // This ensures jobs appear under the customer's Jobs tab
+        let customerId: number | null = null;
+        
+        // Try to find existing customer by email (most reliable) or by name+phone
+        const companyCustomers = await storage.getCustomersByCompany(company.id);
+        const clientEmail = client.email?.toLowerCase().trim();
+        const clientPhone = client.phone?.replace(/\D/g, '');
+        const nameParts = (client.name || '').trim().split(/\s+/);
+        const clientFirstName = nameParts[0] || '';
+        const clientLastName = nameParts.slice(1).join(' ') || '';
+        
+        // Match by email if available, otherwise match by name AND phone
+        const matchingCustomer = companyCustomers.find(c => {
+          if (clientEmail && c.email?.toLowerCase().trim() === clientEmail) {
+            return true;
+          }
+          if (clientPhone && c.phone?.replace(/\D/g, '') === clientPhone &&
+              c.firstName?.toLowerCase() === clientFirstName.toLowerCase()) {
+            return true;
+          }
+          return false;
+        });
+        
+        if (matchingCustomer) {
+          customerId = matchingCustomer.id;
+        } else {
+          // Create customer from client data inside transaction
+          const [newCustomer] = await tx
+            .insert(customers)
+            .values({
+              companyId: company.id,
+              firstName: clientFirstName || 'Customer',
+              lastName: clientLastName,
+              email: client.email || null,
+              phone: client.phone || null,
+              address: client.address || null,
+            })
+            .returning();
+          customerId = newCustomer.id;
+        }
+        
         // Create the job with both clientId and customerId
         const [createdJob] = await tx
           .insert(jobs)
