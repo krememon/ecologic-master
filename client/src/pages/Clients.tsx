@@ -334,21 +334,14 @@ export default function Clients() {
     }
   };
 
-  if (isLoading || !isAuthenticated || customersLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // Helper to format customer name
+  // Helper to format customer name (defined before useMemo)
   const formatCustomerName = (customer: Customer) => {
     return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed';
   };
 
-  // Filter customers based on search query
+  // Filter customers based on search query - MUST be before early return (Rules of Hooks)
   const filteredCustomers = useMemo(() => {
+    if (!customers || customers.length === 0) return [];
     const query = searchQuery.trim().toLowerCase();
     if (!query) return customers;
     
@@ -367,6 +360,40 @@ export default function Clients() {
     });
   }, [customers, searchQuery]);
 
+  // Bulk delete mutation - MUST be before early return (Rules of Hooks)
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (customerIds: number[]) => {
+      const res = await apiRequest("DELETE", "/api/customers/bulk", { customerIds });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Deleted",
+        description: `Deleted ${selectedCustomerIds.size} client${selectedCustomerIds.size > 1 ? 's' : ''}`,
+      });
+      setIsSelectMode(false);
+      setSelectedCustomerIds(new Set());
+      setDeleteConfirmOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete clients",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Loading state - AFTER all hooks
+  if (isLoading || !isAuthenticated || customersLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   // Toggle customer selection
   const toggleCustomerSelection = (customerId: number) => {
     const newSelected = new Set(selectedCustomerIds);
@@ -383,30 +410,6 @@ export default function Clients() {
     setIsSelectMode(false);
     setSelectedCustomerIds(new Set());
   };
-
-  // Bulk delete mutation
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (customerIds: number[]) => {
-      const res = await apiRequest("DELETE", "/api/customers/bulk", { customerIds });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({
-        title: "Deleted",
-        description: `Deleted ${selectedCustomerIds.size} client${selectedCustomerIds.size > 1 ? 's' : ''}`,
-      });
-      exitSelectMode();
-      setDeleteConfirmOpen(false);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete clients",
-        variant: "destructive",
-      });
-    },
-  });
 
   const handleBulkDelete = () => {
     const idsToDelete = Array.from(selectedCustomerIds);

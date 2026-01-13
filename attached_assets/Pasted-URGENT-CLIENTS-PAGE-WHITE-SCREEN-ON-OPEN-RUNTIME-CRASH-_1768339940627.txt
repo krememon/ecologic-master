@@ -1,0 +1,71 @@
+URGENT: CLIENTS PAGE WHITE SCREEN ON OPEN (RUNTIME CRASH)
+
+SYMPTOM
+- Clicking Clients page causes the screen to go completely white.
+- This started after adding Search + Select/Bulk Delete features.
+- Likely a React runtime error or infinite render loop.
+
+GOAL
+- Clients page must render reliably again.
+- Search bar + Select mode should not crash the app.
+- If data is missing/undefined, page should still render gracefully.
+
+DO THIS IN ORDER
+
+1) GET THE REAL ERROR (DO NOT GUESS)
+- Open browser console and capture the exact error message + stack trace.
+- Also check the server console if API calls fail.
+- Add temporary try/catch logging around key areas only if needed.
+
+2) COMMON CRASH SOURCES TO CHECK IMMEDIATELY
+A) Undefined data access
+- Ensure clients is always an array:
+  const clientsSafe = Array.isArray(clients) ? clients : [];
+- Guard against undefined fields:
+  name/email/phone/address might be null.
+
+B) Search filter crash
+- If filtering does:
+  client.name.toLowerCase()
+  it will crash if name is null.
+Fix by using:
+  (client.name || "").toLowerCase()
+
+C) Selection state crash
+- Ensure selectedIds is a Set or array initialized correctly:
+  const [selectedIds, setSelectedIds] = useState(new Set());
+- Avoid mutating Set directly in state (must clone new Set on updates).
+
+D) Infinite render loop
+- Look for useEffect that depends on filteredClients or selectedIds and sets state each render.
+- Fix dependencies and only set state when necessary.
+
+E) Key prop issues
+- Ensure list rendering uses stable unique keys:
+  key={client.id}
+- Not index keys.
+
+3) ADD A SAFE ERROR BOUNDARY (SO PAGE DOESN’T GO WHITE)
+- Wrap Clients page route in an ErrorBoundary that shows a friendly fallback:
+  “Something went wrong loading Clients”
+  + a “Reload” button.
+(This prevents full white screen in future.)
+
+4) FIX THE ROOT CAUSE
+- After identifying the exact error:
+  - patch the offending code
+  - keep null-safe string handling
+  - keep clients array safe
+  - keep selection Set cloning correct
+
+5) VERIFY
+- Clicking Clients page always loads
+- Search works
+- Select mode toggles without crashing
+- Selecting/unselecting works
+- Bulk delete bar renders only in select mode
+- No console errors
+
+DELIVERABLE
+- Clients page no longer white screens.
+- Root cause fixed + ErrorBoundary protection in place.
