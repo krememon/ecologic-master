@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, DollarSign } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X } from "lucide-react";
 import { format } from "date-fns";
 import type { Customer, Job, Estimate } from "@shared/schema";
 
@@ -47,7 +49,11 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { role } = useCan();
   
-  const [activeTab, setActiveTab] = useState<'jobs' | 'estimates'>('jobs');
+  const [activeTab, setActiveTab] = useState<'jobs' | 'estimates' | 'notes'>('jobs');
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [editedNotes, setEditedNotes] = useState('');
+
+  const canEditCustomers = ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(role || '');
 
   const { data: customer, isLoading, error } = useQuery<Customer>({
     queryKey: [`/api/customers/${customerId}`],
@@ -63,6 +69,35 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
     queryKey: [`/api/customers/${customerId}/estimates`],
     enabled: !!customerId && isAuthenticated,
   });
+
+  const updateNotesMutation = useMutation({
+    mutationFn: async (notes: string) => {
+      const res = await apiRequest('PATCH', `/api/customers/${customerId}`, { notes });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      toast({ title: "Notes saved" });
+      setIsEditingNotes(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to save notes", variant: "destructive" });
+    },
+  });
+
+  const handleEditNotes = () => {
+    setEditedNotes(customer?.notes || '');
+    setIsEditingNotes(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingNotes(false);
+    setEditedNotes('');
+  };
+
+  const handleSaveNotes = () => {
+    updateNotesMutation.mutate(editedNotes);
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -187,6 +222,16 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
         >
           Estimates ({estimates.length})
         </button>
+        <button
+          onClick={() => setActiveTab('notes')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'notes'
+              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          Notes
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -291,6 +336,83 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
             ))
           )}
         </div>
+      )}
+
+      {activeTab === 'notes' && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <StickyNote className="h-5 w-5 text-blue-600" />
+                Notes
+              </CardTitle>
+              {canEditCustomers && !isEditingNotes && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEditNotes}
+                  className="gap-2"
+                >
+                  <Edit2 className="h-4 w-4" />
+                  Edit
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isEditingNotes ? (
+              <div className="space-y-4">
+                <Textarea
+                  value={editedNotes}
+                  onChange={(e) => setEditedNotes(e.target.value)}
+                  placeholder="Add notes about this client..."
+                  className="min-h-[200px] resize-y"
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                    disabled={updateNotesMutation.isPending}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveNotes}
+                    disabled={updateNotesMutation.isPending}
+                  >
+                    {updateNotesMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              </div>
+            ) : customer.notes ? (
+              <div className="prose prose-slate dark:prose-invert max-w-none">
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                  {customer.notes}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8">
+                <StickyNote className="h-12 w-12 text-slate-400 mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No notes yet</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-center">
+                  Add notes for this client.
+                </p>
+                {canEditCustomers && (
+                  <Button
+                    variant="outline"
+                    onClick={handleEditNotes}
+                    className="mt-4 gap-2"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Add Notes
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

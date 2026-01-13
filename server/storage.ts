@@ -244,6 +244,7 @@ export interface IStorage {
   getCustomers(companyId: number): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer>;
+  updateCustomer(id: number, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: number): Promise<void>;
   deleteCustomersBulk(ids: number[]): Promise<number>;
   
@@ -1876,6 +1877,15 @@ export class DatabaseStorage implements IStorage {
       .values(customer)
       .returning();
     return created;
+  }
+
+  async updateCustomer(id: number, updates: Partial<InsertCustomer>): Promise<Customer> {
+    const [updated] = await db
+      .update(customers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(customers.id, id))
+      .returning();
+    return updated;
   }
 
   async deleteCustomer(id: number): Promise<void> {

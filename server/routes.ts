@@ -2873,6 +2873,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/customers/:id - Update a customer
+  app.patch('/api/customers/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Only Owner, Supervisor, Dispatcher, Estimator can edit customers
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to edit customers" });
+      }
+      
+      const customerId = parseInt(req.params.id);
+      const customer = await storage.getCustomer(customerId);
+      
+      if (!customer || customer.companyId !== company.id) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+      
+      // Update the customer with provided fields
+      const updatedCustomer = await storage.updateCustomer(customerId, req.body);
+      
+      console.log(`[Customers] update customerId=${customerId} userId=${userId}`);
+      res.json(updatedCustomer);
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      res.status(500).json({ message: "Failed to update customer" });
+    }
+  });
+
   // GET /api/customers/:id - Get a single customer by ID
   app.get('/api/customers/:id', isAuthenticated, async (req: any, res) => {
     try {
