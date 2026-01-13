@@ -1,0 +1,91 @@
+BUILD CLIENT DETAIL PAGE (CLICK CLIENT CARD -> SHOW JOB/ESTIMATE HISTORY) USING SAME DESIGN SYSTEM AS JOB/ESTIMATE DETAIL
+
+GOAL
+When a user clicks a client card on the Clients page, open a Client Detail page that shows:
+- Client info (name, email, phone, address, notes)
+- Previous Jobs for this client
+- Previous Estimates for this client
+- Related Documents/Attachments (optional)
+All in the same clean “detail page” style used by Job and Estimate detail views.
+
+ROUTING
+1) Add route:
+   /clients/:clientId
+2) Clicking a client card navigates to /clients/:clientId (NOT a popup).
+3) Add back navigation to return to Clients list.
+
+DESIGN (MUST MATCH JOB/ESTIMATE DETAIL STYLE)
+- Use the same centered page container/wrapper used on Job/Estimate detail pages.
+- Header:
+  - Back arrow (left)
+  - Client name (title)
+  - Optional edit button (right) if role allowed
+- Use card sections with the same padding, radius, typography.
+
+PAGE SECTIONS (ORDER)
+
+A) Client Info Card
+- Title: “Client”
+- Show:
+  - Name
+  - Email
+  - Phone
+  - Address (with “Address” label)
+  - Notes (if any)
+- Hide empty fields (don’t show blank lines)
+
+B) Tabs (same style as Jobs: segmented pill tabs)
+Tabs:
+1) Jobs
+2) Estimates
+3) Documents (optional for now)
+4) Activity (optional later)
+
+TAB CONTENT
+
+1) JOBS TAB
+- Show list of all jobs for this client, newest first.
+- Each job displayed as a clean card row like Job cards:
+  - Primary text: first line item name (or job type if no line items)
+  - Secondary: address + created date
+  - Right side: total (if exists) and status (optional)
+- Clicking a job navigates to /jobs/:jobId
+
+2) ESTIMATES TAB
+- Show list of all estimates for this client, newest first.
+- Each estimate displayed like estimate cards:
+  - Estimate #
+  - Date
+  - Total
+  - Status (Draft/Sent/Approved)
+- Clicking an estimate navigates to the estimate detail page route used currently.
+
+3) DOCUMENTS TAB (OPTIONAL)
+- Show documents linked to this client (or linked through jobs/estimates)
+- Reuse existing document card + preview modal logic
+
+DATA REQUIREMENTS (BACKEND)
+- Create/confirm endpoints:
+  GET /api/clients/:clientId  -> client details
+  GET /api/clients/:clientId/jobs -> jobs list for client
+  GET /api/clients/:clientId/estimates -> estimates list for client
+(OR one combined endpoint that returns client + jobs + estimates)
+
+- Ensure returned data includes what UI needs:
+  - Jobs: id, createdAt, address/location, lineItems (or primaryItemName), total, status
+  - Estimates: id, estimateNumber, createdAt/date, total, status
+
+RBAC
+- Only show data the user is allowed to see.
+- Techs should only see jobs assigned to them (consistent with existing rules).
+
+EMPTY STATES
+- If no jobs: show clean empty state “No jobs yet”
+- If no estimates: “No estimates yet”
+
+DELIVERABLES
+- Client cards are clickable
+- Client Detail page exists at /clients/:clientId
+- Shows client info + Jobs/Estimates history in clean Job/Estimate-style design
+- Navigation works (back to list, open job, open estimate)
+- No regressions to Clients list/search/select/bulk delete

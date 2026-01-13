@@ -36,6 +36,7 @@ import IndustryOnboarding from "@/pages/IndustryOnboarding";
 import EstimateDetails from "@/pages/EstimateDetails";
 import JobDetails from "@/pages/JobDetails";
 import JobEdit from "@/pages/JobEdit";
+import ClientDetail from "@/pages/ClientDetail";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -91,6 +92,9 @@ function Router() {
         <Route path="/jobs" component={Jobs} />
         <Route path="/subcontractors" component={Contractors} />
         <Route path="/clients" component={Clients} />
+        <Route path="/clients/:id">
+          {(params) => <ClientDetail customerId={params.id} />}
+        </Route>
         <Route path="/invoicing" component={Invoicing} />
         <Route path="/payments" component={PaymentsPage} />
         <Route path="/documents" component={Documents} />

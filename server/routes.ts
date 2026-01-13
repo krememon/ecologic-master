@@ -2873,6 +2873,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/customers/:id - Get a single customer by ID
+  app.get('/api/customers/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const customerId = parseInt(req.params.id);
+      const customer = await storage.getCustomer(customerId);
+      
+      if (!customer || customer.companyId !== company.id) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+      
+      res.json(customer);
+    } catch (error) {
+      console.error("Error fetching customer:", error);
+      res.status(500).json({ message: "Failed to fetch customer" });
+    }
+  });
+
+  // GET /api/customers/:id/jobs - Get jobs for a customer
+  app.get('/api/customers/:id/jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const customerId = parseInt(req.params.id);
+      const customer = await storage.getCustomer(customerId);
+      
+      if (!customer || customer.companyId !== company.id) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+      
+      // Get jobs for this customer
+      const allJobs = await storage.getJobs(company.id);
+      const customerJobs = allJobs.filter(job => job.customerId === customerId);
+      
+      // Sort by createdAt descending (newest first)
+      customerJobs.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      
+      res.json(customerJobs);
+    } catch (error) {
+      console.error("Error fetching customer jobs:", error);
+      res.status(500).json({ message: "Failed to fetch customer jobs" });
+    }
+  });
+
+  // GET /api/customers/:id/estimates - Get estimates for a customer
+  app.get('/api/customers/:id/estimates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Technician cannot access estimates
+      if (!canAccessEstimates(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to view estimates" });
+      }
+      
+      const customerId = parseInt(req.params.id);
+      const customer = await storage.getCustomer(customerId);
+      
+      if (!customer || customer.companyId !== company.id) {
+        return res.status(404).json({ message: "Customer not found" });
+      }
+      
+      // Get estimates for this customer
+      const allEstimates = await storage.getEstimatesByCompany(company.id);
+      const customerEstimates = allEstimates.filter(est => est.customerId === customerId);
+      
+      // Sort by createdAt descending (newest first)
+      customerEstimates.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      
+      res.json(customerEstimates);
+    } catch (error) {
+      console.error("Error fetching customer estimates:", error);
+      res.status(500).json({ message: "Failed to fetch customer estimates" });
+    }
+  });
+
   // DELETE /api/customers/bulk - Bulk delete customers
   app.delete('/api/customers/bulk', isAuthenticated, async (req: any, res) => {
     try {

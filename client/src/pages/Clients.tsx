@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import LocationInput from "@/components/LocationInput";
 import { useCompanyCustomers } from "@/hooks/useCompanyCustomers";
 
@@ -82,6 +83,7 @@ function ClientJobsHistory({ clientId }: { clientId: number }) {
 export default function Clients() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -800,12 +802,18 @@ export default function Clients() {
           {filteredCustomers.map((customer) => (
             <Card 
               key={`customer-${customer.id}`} 
-              className={`hover:shadow-md transition-shadow border-l-4 ${
+              className={`hover:shadow-md transition-shadow border-l-4 cursor-pointer ${
                 isSelectMode && selectedCustomerIds.has(customer.id) 
                   ? 'border-l-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500' 
                   : 'border-l-blue-500'
-              } ${isSelectMode ? 'cursor-pointer' : ''}`}
-              onClick={isSelectMode ? () => toggleCustomerSelection(customer.id) : undefined}
+              }`}
+              onClick={() => {
+                if (isSelectMode) {
+                  toggleCustomerSelection(customer.id);
+                } else {
+                  navigate(`/clients/${customer.id}`);
+                }
+              }}
             >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
