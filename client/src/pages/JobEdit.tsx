@@ -47,7 +47,7 @@ export default function JobEdit({ jobId }: JobEditProps) {
       open={true}
       onOpenChange={(open) => {
         if (!open) {
-          navigate(`/jobs/${jobId}`);
+          navigate('/jobs');
         }
       }}
       initialJob={job}
