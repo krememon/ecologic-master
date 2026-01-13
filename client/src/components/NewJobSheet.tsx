@@ -238,15 +238,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
           email: initialJob.customer.email || null,
           phone: initialJob.customer.phone || null,
           address: initialJob.customer.address || null,
-          companyId: 0, // Not needed for display
+          companyId: 0,
           createdAt: null,
         } as Customer);
-      } else if (initialJob.customerId && apiCustomers.length > 0) {
-        // Fallback: look up in apiCustomers if customer object not provided
-        const customer = apiCustomers.find(c => c.id === initialJob.customerId);
-        if (customer) {
-          setSelectedCustomer(customer);
-        }
       }
       
       // Set line items if available
@@ -266,7 +260,33 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       
       setIsInitialized(true);
     }
-  }, [isEditMode, initialJob, open, isInitialized, apiCustomers]);
+  }, [isEditMode, initialJob, open, isInitialized]);
+  
+  // Separate effect to handle customer lookup from apiCustomers as fallback
+  useEffect(() => {
+    if (isEditMode && initialJob && open && isInitialized && !selectedCustomer && apiCustomers.length > 0) {
+      // Try to find by customerId first
+      if (initialJob.customerId) {
+        const customer = apiCustomers.find(c => c.id === initialJob.customerId);
+        if (customer) {
+          setSelectedCustomer(customer);
+          return;
+        }
+      }
+      
+      // Fallback: try to find by clientName (for legacy jobs without customerId)
+      if (initialJob.clientName) {
+        const clientNameLower = initialJob.clientName.toLowerCase().trim();
+        const customer = apiCustomers.find(c => {
+          const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase().trim();
+          return fullName === clientNameLower;
+        });
+        if (customer) {
+          setSelectedCustomer(customer);
+        }
+      }
+    }
+  }, [isEditMode, initialJob, open, isInitialized, selectedCustomer, apiCustomers]);
 
   // Reset initialization when dialog closes
   useEffect(() => {
