@@ -524,7 +524,7 @@ export default function Auth() {
             <Input
               id="phone"
               name="phone"
-              placeholder="555-555-1234"
+              placeholder="555-123-4567"
               value={formData.phone}
               onChange={handlePhoneChange}
               inputMode="numeric"
