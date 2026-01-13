@@ -248,6 +248,9 @@ export const invoices = pgTable("invoices", {
   dueDate: date("due_date").notNull(),
   paidDate: date("paid_date"),
   notes: text("notes"),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+  paidAt: timestamp("paid_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -342,10 +345,13 @@ export const jobPhotos = pgTable("job_photos", {
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").references(() => companies.id).notNull(),
-  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }).notNull(),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+  invoiceId: integer("invoice_id").references(() => invoices.id, { onDelete: "cascade" }),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  paymentMethod: varchar("payment_method").notNull(), // cash, check, credit_card, bank_transfer, other
+  paymentMethod: varchar("payment_method"), // cash, check, credit_card, bank_transfer, stripe, other
   status: varchar("status").notNull().default("pending"), // pending, completed, failed, refunded
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
   paidDate: timestamp("paid_date"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -974,6 +980,12 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
   id: true,
   createdAt: true,
   updatedAt: true,

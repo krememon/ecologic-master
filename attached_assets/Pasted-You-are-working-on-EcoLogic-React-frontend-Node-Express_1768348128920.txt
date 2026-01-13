@@ -1,0 +1,68 @@
+You are working on EcoLogic (React frontend + Node/Express backend + DB + storage). We are implementing Phase 1 payment processing with Stripe Checkout for customer invoice payments, using immediate payout (money goes directly to the company’s connected Stripe account/bank). Keep it minimal and safe. Do NOT implement escrow, subscriptions, partial payments, saved cards, or refunds.
+
+GOAL:
+- Add a “Pay Invoice” button on invoice cards (inside Jobs) that creates a Stripe Checkout Session for that invoice amount and redirects the customer to Stripe’s hosted Checkout page.
+- When Stripe confirms payment, EcoLogic must automatically mark the invoice as PAID and store Stripe IDs.
+- Must not break RBAC or existing invoice/estimate functionality.
+
+BACKEND REQUIREMENTS:
+1) Add Stripe server SDK and env vars:
+   - STRIPE_SECRET_KEY
+   - STRIPE_WEBHOOK_SECRET
+   - PUBLIC_APP_URL (for success/cancel URLs)
+
+2) Create endpoint: POST /api/payments/checkout
+   Body: { invoiceId }
+   Server:
+   - Auth required for internal users creating the link (Owner/Admin/Dispatcher/Estimator as appropriate)
+   - Load invoice from DB, verify user has access to that job/company
+   - If invoice already PAID, return error
+   - Create Stripe Checkout Session with:
+     - mode: "payment"
+     - line_items: single item with invoice amount
+     - metadata: { invoiceId, companyId, jobId }
+     - success_url: `${PUBLIC_APP_URL}/pay/success?session_id={CHECKOUT_SESSION_ID}`
+     - cancel_url: `${PUBLIC_APP_URL}/pay/cancel?invoiceId=...`
+   - Return { url, sessionId }
+
+3) Add webhook endpoint: POST /api/webhooks/stripe
+   - Must use raw body parsing for Stripe signature verification
+   - Verify signature using STRIPE_WEBHOOK_SECRET
+   - Handle event types:
+     - checkout.session.completed (primary)
+   - On completed:
+     - Read metadata.invoiceId
+     - Mark invoice status = "PAID", paid_at = now
+     - Save stripe_checkout_session_id and stripe_payment_intent_id
+     - Insert a Payments row linked to invoice with amount + status
+   - Ensure idempotency: if invoice already paid or payment already recorded, do nothing safely
+
+DATABASE:
+- Add columns to invoices:
+  - stripe_checkout_session_id (nullable)
+  - stripe_payment_intent_id (nullable)
+  - paid_at (nullable)
+  - status existing should support "PAID"
+- Add payments table (if not exists):
+  - id, company_id, invoice_id, amount, status, stripe_payment_intent_id, stripe_checkout_session_id, created_at
+
+FRONTEND REQUIREMENTS:
+1) Add “Pay Invoice” button in the invoice UI (inside Job cards) similar style to Estimate invoice buttons.
+2) On click:
+   - Call POST /api/payments/checkout with invoiceId
+   - Redirect user to returned url (window.location = url)
+3) Add simple routes/pages:
+   - /pay/success: shows “Payment Successful” and instructs customer they can close window
+   - /pay/cancel: shows “Payment Cancelled”
+   (Do not require login for these pages; they are public informational pages.)
+
+SECURITY / RBAC:
+- Internal endpoint requires auth + verifies invoice belongs to the user’s company and job access rules.
+- Webhook is public but signature-verified.
+- Do not expose secret keys to frontend.
+
+DELIVERABLES:
+- Working Stripe Checkout flow in Stripe TEST MODE
+- Invoice updates to PAID after webhook
+- UI reflects paid state correctly (refresh after return, or poll invoice status on success page)
+- Add logging only where necessary, remove noisy logs after verified
