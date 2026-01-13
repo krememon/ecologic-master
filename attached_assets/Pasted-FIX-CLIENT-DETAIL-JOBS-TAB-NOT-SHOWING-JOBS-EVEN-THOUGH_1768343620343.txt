@@ -1,0 +1,63 @@
+FIX CLIENT DETAIL “JOBS” TAB NOT SHOWING JOBS EVEN THOUGH JOBS EXIST
+
+SYMPTOM
+- A job is created under Linda (Jobs page shows the job card).
+- But Client Detail page for Linda still shows “No jobs yet” and Jobs (0).
+- This means the job is not being returned by the client-jobs query/filter.
+
+GOAL
+Client Detail -> Jobs tab must show ALL jobs created for that client.
+
+DO THIS IN ORDER (NO GUESSING)
+
+1) CONFIRM IDS MATCH (MOST IMPORTANT)
+- Open the created job record in DB (or log the job API response) and confirm fields:
+  - job.id
+  - job.customerId (or job.clientId)
+  - job.companyId (if relevant)
+- Open the client record and confirm:
+  - client.id
+- Verify job.customerId === client.id (or the correct FK field)
+
+2) FIX JOB CREATION LINKING
+- In job creation submit handler (New Job):
+  - Ensure payload includes customerId/clientId (the actual client primary key)
+  - Do NOT only store name/email
+- In backend POST /api/jobs:
+  - Require customerId (NOT NULL)
+  - Save it to the correct column (customer_id or client_id)
+  - Return created job with that field populated
+
+3) FIX CLIENT JOBS ENDPOINT
+- Ensure GET /api/clients/:clientId/jobs (or equivalent) queries the correct field:
+  SELECT * FROM jobs
+  WHERE jobs.customer_id = :clientId
+  ORDER BY created_at DESC
+- If your jobs table uses client_id instead, use that.
+- Include companyId filter if multi-tenant:
+  AND jobs.company_id = currentCompanyId
+
+4) FIX FRONTEND CLIENT DETAIL QUERY
+- In ClientDetail page Jobs tab:
+  - Ensure it requests using the correct id:
+    /api/clients/${client.id}/jobs
+  - Or if you fetch all jobs and filter client-side:
+    filter jobs where job.customerId === client.id
+- Make sure it’s not mistakenly using a different id (like client.customerId or userId).
+
+5) VERIFY WITH LOGS (TEMP)
+- Log on ClientDetail:
+  console.log("[ClientDetail] clientId", clientId)
+  console.log("[ClientDetail] jobs returned", jobs)
+- Log on Job create success:
+  console.log("[JobCreate] created job customerId", createdJob.customerId)
+
+6) TESTS (MUST PASS)
+- Create job for Linda -> client detail Linda shows Jobs (1) and lists the job
+- Create job for Daniel -> Daniel shows Jobs (1), Linda unchanged
+- Refresh client detail -> still shows correct jobs
+- Jobs count updates correctly
+
+DELIVERABLE
+- Client detail Jobs tab displays jobs correctly by linking jobs to clients via the proper foreign key and correct query/filter.
+- Remove temp logs after confirmed.
