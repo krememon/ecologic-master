@@ -997,7 +997,11 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
       {/* EMPLOYEES Modal */}
       <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
+        <DialogContent 
+          className="w-[95vw] max-w-md p-0 gap-0" 
+          hideCloseButton
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <button onClick={() => setEmployeesModalOpen(false)} className="text-sm text-blue-500 font-medium">
               Cancel
