@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -14,7 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertClientSchema, type Client, type Job, type Customer } from "@shared/schema";
 import { z } from "zod";
-import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
@@ -87,6 +87,7 @@ export default function Clients() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [expandedClientJobs, setExpandedClientJobs] = useState<Set<number>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -341,6 +342,26 @@ export default function Clients() {
   const formatCustomerName = (customer: Customer) => {
     return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed';
   };
+
+  // Filter customers based on search query
+  const filteredCustomers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return customers;
+    
+    return customers.filter((customer) => {
+      const fullName = formatCustomerName(customer).toLowerCase();
+      const email = (customer.email || '').toLowerCase();
+      const phone = (customer.phone || '').toLowerCase();
+      const address = (customer.address || '').toLowerCase();
+      const companyName = (customer.companyName || '').toLowerCase();
+      
+      return fullName.includes(query) || 
+             email.includes(query) || 
+             phone.includes(query) || 
+             address.includes(query) ||
+             companyName.includes(query);
+    });
+  }, [customers, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -607,6 +628,26 @@ export default function Clients() {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Input
+          placeholder="Search clients..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 pr-10 h-10 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-lg"
+          data-testid="input-search-clients"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500 transition-colors"
+          >
+            <X className="h-3 w-3 text-slate-600 dark:text-slate-300" />
+          </button>
+        )}
+      </div>
+
       {/* Clients List (from unified customers table) */}
       {customers.length === 0 ? (
         <Card>
@@ -622,9 +663,22 @@ export default function Clients() {
             </Button>
           </CardContent>
         </Card>
+      ) : filteredCustomers.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-slate-400 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No clients found</h3>
+            <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
+              No clients match your search "{searchQuery}"
+            </p>
+            <Button variant="outline" onClick={() => setSearchQuery("")}>
+              Clear Search
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {customers.map((customer) => (
+          {filteredCustomers.map((customer) => (
             <Card key={`customer-${customer.id}`} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
