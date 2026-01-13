@@ -153,9 +153,15 @@ export function JobInvoiceModal({
   });
 
   const handleClose = () => {
+    // Reset all state so each job starts fresh
     setStep(1);
+    setPdfUrl(null);
+    setPdfFileName(null);
+    setInvoiceNumber(null);
+    setPreviewImageUrl(null);
     setPreviewLoading(false);
     setPreviewError(false);
+    setLoadingExisting(false);
     setErrorMessage(null);
     setToEmail(customerEmail || "");
     onOpenChange(false);
