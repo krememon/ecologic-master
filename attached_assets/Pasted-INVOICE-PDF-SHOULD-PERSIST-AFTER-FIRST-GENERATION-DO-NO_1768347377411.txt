@@ -1,0 +1,70 @@
+INVOICE PDF SHOULD PERSIST AFTER FIRST GENERATION (DO NOT REQUIRE RE-GENERATE EACH TIME)
+
+PROBLEM
+- Invoice PDF generates correctly the first time.
+- But when reopening the Generate Invoice modal, it acts like no invoice exists and requires pressing Generate again.
+- We previously had the same issue with Estimates.
+
+GOAL
+Once an invoice PDF is generated for a job:
+- It should remain available permanently
+- Reopening the modal should automatically show:
+  - existing invoice filename row
+  - PDF preview
+  - regenerate option (optional)
+  - Next button enabled (since PDF exists)
+NO need to click Generate again unless user chooses Regenerate.
+
+REQUIRED BEHAVIOR
+1) On modal open:
+- Fetch existing invoice document for that job (if it exists)
+- If found:
+  - set invoiceDoc state
+  - set pdfUrl
+  - render preview + file row immediately
+
+2) Only show “Generate” when no invoice doc exists yet.
+
+IMPLEMENTATION
+
+BACKEND (PREFERRED)
+- Add or confirm endpoint:
+  GET /api/jobs/:jobId/documents?type=invoice
+  OR GET /api/jobs/:jobId/invoice
+- It should return the latest invoice document linked to that job:
+  - id, name, url/path, createdAt, type="invoice"
+- If multiple exist, return the most recent.
+
+FRONTEND
+- When opening Generate Invoice modal:
+  - call the endpoint above
+  - if response has invoice doc:
+     setInvoiceDoc(doc)
+     setPdfUrl(doc.url)
+     setHasGenerated(true)
+- UI state rules:
+  - if invoiceDoc exists:
+     show file row + preview immediately
+     Next enabled
+     show Regenerate button
+     hide or disable the initial Generate button
+  - if invoiceDoc does not exist:
+     show Generate button
+
+REGENERATION
+- Regenerate should create a new invoice PDF and replace the “current” invoice doc used in modal:
+  - update invoiceDoc + pdfUrl with the newly returned doc
+
+CACHING / STALE DATA
+- Add a cache buster to preview url when regenerating:
+  pdfUrl + "?v=" + Date.now()
+
+TESTS (MUST PASS)
+- Generate invoice once -> close modal
+- Reopen modal -> invoice is already shown (no Generate needed)
+- Next is enabled immediately
+- Regenerate -> preview updates to new version
+- Refresh the app -> reopen modal -> invoice still shown
+
+DELIVERABLE
+- Invoice PDFs persist and load automatically after first generation, matching expected Estimate behavior.

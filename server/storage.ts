@@ -160,6 +160,7 @@ export interface IStorage {
   getDocuments(companyId: number): Promise<any[]>;
   getDocument(id: number): Promise<Document | null>;
   getDocumentsByIds(ids: number[], companyId: number): Promise<Document[]>;
+  getDocumentsByJob(jobId: number): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocumentStatus(id: number, status: string): Promise<Document>;
   deleteDocument(id: number): Promise<void>;
@@ -927,6 +928,15 @@ export class DatabaseStorage implements IStorage {
           eq(documents.companyId, companyId)
         )
       );
+    return result;
+  }
+
+  async getDocumentsByJob(jobId: number): Promise<Document[]> {
+    const result = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.jobId, jobId))
+      .orderBy(desc(documents.createdAt));
     return result;
   }
 
