@@ -14,7 +14,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertClientSchema, type Client, type Job, type Customer } from "@shared/schema";
 import { z } from "zod";
-import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
@@ -88,6 +89,9 @@ export default function Clients() {
   const [expandedClientJobs, setExpandedClientJobs] = useState<Set<number>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -363,6 +367,52 @@ export default function Clients() {
     });
   }, [customers, searchQuery]);
 
+  // Toggle customer selection
+  const toggleCustomerSelection = (customerId: number) => {
+    const newSelected = new Set(selectedCustomerIds);
+    if (newSelected.has(customerId)) {
+      newSelected.delete(customerId);
+    } else {
+      newSelected.add(customerId);
+    }
+    setSelectedCustomerIds(newSelected);
+  };
+
+  // Exit select mode
+  const exitSelectMode = () => {
+    setIsSelectMode(false);
+    setSelectedCustomerIds(new Set());
+  };
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (customerIds: number[]) => {
+      const res = await apiRequest("DELETE", "/api/customers/bulk", { customerIds });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Deleted",
+        description: `Deleted ${selectedCustomerIds.size} client${selectedCustomerIds.size > 1 ? 's' : ''}`,
+      });
+      exitSelectMode();
+      setDeleteConfirmOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete clients",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleBulkDelete = () => {
+    const idsToDelete = Array.from(selectedCustomerIds);
+    bulkDeleteMutation.mutate(idsToDelete);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -617,16 +667,71 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* Client Count and Add Button */}
+      {/* Client Count and Action Buttons */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Clients ({customers.length})
         </h3>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add New Client
-        </Button>
+        <div className="flex items-center gap-2">
+          {isSelectMode ? (
+            <Button variant="outline" onClick={exitSelectMode}>
+              Cancel
+            </Button>
+          ) : (
+            <>
+              {customers.length > 0 && (
+                <Button variant="outline" onClick={() => setIsSelectMode(true)}>
+                  Select
+                </Button>
+              )}
+              <Button onClick={() => setIsDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add New Client
+              </Button>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {isSelectMode && (
+        <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {selectedCustomerIds.size} selected
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={selectedCustomerIds.size === 0}
+            onClick={() => setDeleteConfirmOpen(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            Delete
+          </Button>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedCustomerIds.size} client{selectedCustomerIds.size > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The selected clients will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleBulkDelete}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Search Bar */}
       <div className="relative">
@@ -679,11 +784,32 @@ export default function Clients() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredCustomers.map((customer) => (
-            <Card key={`customer-${customer.id}`} className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+            <Card 
+              key={`customer-${customer.id}`} 
+              className={`hover:shadow-md transition-shadow border-l-4 ${
+                isSelectMode && selectedCustomerIds.has(customer.id) 
+                  ? 'border-l-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500' 
+                  : 'border-l-blue-500'
+              } ${isSelectMode ? 'cursor-pointer' : ''}`}
+              onClick={isSelectMode ? () => toggleCustomerSelection(customer.id) : undefined}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    {isSelectMode && (
+                      <div 
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          selectedCustomerIds.has(customer.id)
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {selectedCustomerIds.has(customer.id) && (
+                          <Check className="h-3 w-3 text-white" />
+                        )}
+                      </div>
+                    )}
+                    {!isSelectMode && <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                     {formatCustomerName(customer)}
                   </CardTitle>
                   {customer.companyName && (
@@ -695,40 +821,61 @@ export default function Clients() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {customer.email && (
-                  <a 
-                    href={`mailto:${customer.email}`}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
-                  >
-                    <Mail className="h-4 w-4" />
-                    {customer.email}
-                  </a>
+                  isSelectMode ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                      <Mail className="h-4 w-4" />
+                      {customer.email}
+                    </div>
+                  ) : (
+                    <a 
+                      href={`mailto:${customer.email}`}
+                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                    >
+                      <Mail className="h-4 w-4" />
+                      {customer.email}
+                    </a>
+                  )
                 )}
                 {customer.phone && (
-                  <a 
-                    href={`tel:${customer.phone}`}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
-                  >
-                    <Phone className="h-4 w-4" />
-                    {customer.phone}
-                  </a>
+                  isSelectMode ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                      <Phone className="h-4 w-4" />
+                      {customer.phone}
+                    </div>
+                  ) : (
+                    <a 
+                      href={`tel:${customer.phone}`}
+                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                    >
+                      <Phone className="h-4 w-4" />
+                      {customer.phone}
+                    </a>
+                  )
                 )}
                 {customer.address && (
-                  <button
-                    onClick={() => {
-                      const address = encodeURIComponent(customer.address || '');
-                      if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
-                        window.open(`maps://maps.apple.com/?q=${address}`, '_self');
-                      } else if (navigator.userAgent.includes('Android')) {
-                        window.open(`geo:0,0?q=${address}`, '_self');
-                      } else {
-                        window.open(`https://maps.google.com/?q=${address}`, '_blank');
-                      }
-                    }}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left"
-                  >
-                    <MapPin className="h-4 w-4" />
-                    {customer.address}
-                  </button>
+                  isSelectMode ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 text-left">
+                      <MapPin className="h-4 w-4" />
+                      {customer.address}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const address = encodeURIComponent(customer.address || '');
+                        if (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad')) {
+                          window.open(`maps://maps.apple.com/?q=${address}`, '_self');
+                        } else if (navigator.userAgent.includes('Android')) {
+                          window.open(`geo:0,0?q=${address}`, '_self');
+                        } else {
+                          window.open(`https://maps.google.com/?q=${address}`, '_blank');
+                        }
+                      }}
+                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer text-left"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      {customer.address}
+                    </button>
+                  )
                 )}
                 {customer.jobTitle && (
                   <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">

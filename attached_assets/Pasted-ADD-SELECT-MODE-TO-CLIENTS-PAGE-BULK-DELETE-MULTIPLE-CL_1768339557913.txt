@@ -1,0 +1,64 @@
+ADD “SELECT” MODE TO CLIENTS PAGE (BULK DELETE MULTIPLE CLIENTS)
+
+GOAL
+On the Clients page, add a “Select” button that enables multi-select so users can delete multiple clients at once.
+
+UI REQUIREMENTS (CLEAN)
+1) Add a “Select” button near the top right of the Clients list area (next to Add New Client, or aligned on same row).
+   - Button label: “Select”
+   - Uses clean pill button style like the screenshot.
+
+2) When Select mode is ON:
+   - Replace “Select” button with:
+     - “Cancel” (left or same spot)
+     - A bulk action bar that appears (sticky at top or bottom):
+       - “X selected”
+       - “Delete” button (danger style)
+   - Each client card shows a checkbox on the left (or top-right) for selecting.
+   - Tapping the card toggles selection (don’t open client details in select mode).
+
+3) When Select mode is OFF:
+   - Checkboxes and bulk action bar disappear
+   - Cards behave normally again
+
+BEHAVIOR
+- User can select multiple clients
+- “Delete” is disabled until at least 1 client is selected
+- On Delete click:
+  - Show confirmation modal:
+    “Delete X clients? This cannot be undone.”
+    Buttons: Cancel / Delete
+- After successful delete:
+  - Remove deleted clients from UI immediately (no refresh needed)
+  - Exit select mode automatically
+  - Show toast: “Deleted X clients”
+
+BACKEND
+- Implement bulk delete endpoint OR reuse existing delete endpoint safely:
+  OPTION A (preferred): DELETE /api/clients/bulk
+    body: { clientIds: [...] }
+  OPTION B: loop existing DELETE /api/clients/:id
+- Must enforce RBAC (only allowed roles can delete clients)
+- Return clear errors if any deletions fail
+
+DATA INTEGRITY (IMPORTANT)
+- If a client is linked to Jobs/Estimates/Documents:
+  - Either block deletion with a clear message:
+    “Cannot delete client with existing jobs/estimates”
+  - OR do a soft delete (mark inactive) instead of hard delete
+Choose the safest approach used elsewhere in the app (prefer soft delete if uncertain).
+
+SEARCH + SELECT COMPATIBILITY
+- Search bar should still work in Select mode
+- Selecting should apply only to currently visible filtered results, but selected IDs remain selected even if search query changes
+
+EDGE CASES
+- If user selects all visible, then clears search, selection should remain correct by ID
+- If delete partially fails, show which ones failed and keep them selected
+
+DELIVERABLES
+- Select button toggles select mode
+- Checkboxes on client cards
+- Bulk delete action bar + confirmation
+- Deletes work and UI updates instantly
+- No messy layout shifts; looks professional on mobile + desktop

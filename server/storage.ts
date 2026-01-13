@@ -244,6 +244,8 @@ export interface IStorage {
   getCustomers(companyId: number): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer>;
+  deleteCustomer(id: number): Promise<void>;
+  deleteCustomersBulk(ids: number[]): Promise<number>;
   
   // Service catalog operations
   getServiceCatalogItems(companyId: number): Promise<ServiceCatalogItem[]>;
@@ -1874,6 +1876,16 @@ export class DatabaseStorage implements IStorage {
       .values(customer)
       .returning();
     return created;
+  }
+
+  async deleteCustomer(id: number): Promise<void> {
+    await db.delete(customers).where(eq(customers.id, id));
+  }
+
+  async deleteCustomersBulk(ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db.delete(customers).where(inArray(customers.id, ids));
+    return result.rowCount ?? ids.length;
   }
 
   // Service catalog operations

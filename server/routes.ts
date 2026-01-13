@@ -2873,6 +2873,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/customers/bulk - Bulk delete customers
+  app.delete('/api/customers/bulk', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Only Owner and Supervisor can delete customers
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to delete customers" });
+      }
+
+      const { customerIds } = req.body;
+      
+      if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+        return res.status(400).json({ message: "customerIds array is required" });
+      }
+
+      // Verify all customers belong to this company
+      const allCustomers = await storage.getCustomers(company.id);
+      const companyCustomerIds = new Set(allCustomers.map(c => c.id));
+      const invalidIds = customerIds.filter((id: number) => !companyCustomerIds.has(id));
+      
+      if (invalidIds.length > 0) {
+        return res.status(403).json({ message: "Some customers do not belong to your company" });
+      }
+
+      const deletedCount = await storage.deleteCustomersBulk(customerIds);
+      
+      console.log(`[Customers] bulkDelete userId=${userId} companyId=${company.id} count=${deletedCount}`);
+      res.json({ message: "Customers deleted successfully", deletedCount });
+    } catch (error) {
+      console.error("Error bulk deleting customers:", error);
+      res.status(500).json({ message: "Failed to delete customers" });
+    }
+  });
+
   // ===================
   // Estimate Routes (Job-scoped estimates with line items)
   // ===================
