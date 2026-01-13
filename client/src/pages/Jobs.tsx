@@ -906,8 +906,9 @@ export default function Jobs() {
                   variant="outline"
                   onClick={() => {
                     if (selectedJob) {
+                      const jobId = selectedJob.id;
                       setSelectedJob(null);
-                      setLocation(`/jobs/${selectedJob.id}/edit`);
+                      setTimeout(() => setLocation(`/jobs/${jobId}/edit`), 0);
                     }
                   }}
                   data-testid="button-edit-job"
