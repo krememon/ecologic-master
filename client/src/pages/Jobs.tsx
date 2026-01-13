@@ -103,7 +103,12 @@ export default function Jobs() {
   } | null>(null);
   
   // Invoice modal state
-  const [invoiceJobData, setInvoiceJobData] = useState<{ id: number; title: string } | null>(null);
+  const [invoiceJobData, setInvoiceJobData] = useState<{ 
+    id: number; 
+    title: string; 
+    customerEmail?: string | null; 
+    customerFirstName?: string | null;
+  } | null>(null);
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -183,6 +188,12 @@ export default function Jobs() {
   const { data: allCustomers = [] } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
     enabled: isAuthenticated && canAccessEstimates,
+  });
+  
+  // Fetch company profile for invoice email
+  const { data: companyProfile } = useQuery<{ name: string }>({
+    queryKey: ['/api/company/profile'],
+    enabled: isAuthenticated,
   });
 
   // Filter estimates based on customer and status filters
@@ -1775,7 +1786,25 @@ export default function Jobs() {
                         className="h-8 w-8 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setInvoiceJobData({ id: job.id, title: job.title });
+                          // Get customer info from job.customerId or job.client
+                          let customerEmail: string | null = null;
+                          let customerFirstName: string | null = null;
+                          if (job.customerId) {
+                            const customer = allCustomers.find(c => c.id === job.customerId);
+                            if (customer) {
+                              customerEmail = customer.email || null;
+                              customerFirstName = customer.firstName || null;
+                            }
+                          } else if (job.client?.email) {
+                            customerEmail = job.client.email;
+                            customerFirstName = job.client.name?.split(' ')[0] || null;
+                          }
+                          setInvoiceJobData({ 
+                            id: job.id, 
+                            title: job.title,
+                            customerEmail,
+                            customerFirstName,
+                          });
                         }}
                         data-testid={`button-invoice-job-${job.id}`}
                         title="Generate Invoice"
@@ -2140,6 +2169,9 @@ export default function Jobs() {
         onOpenChange={(open) => !open && setInvoiceJobData(null)}
         jobId={invoiceJobData?.id ?? 0}
         jobTitle={invoiceJobData?.title ?? ""}
+        customerEmail={invoiceJobData?.customerEmail}
+        customerFirstName={invoiceJobData?.customerFirstName}
+        companyName={companyProfile?.name}
       />
     </div>
   );
