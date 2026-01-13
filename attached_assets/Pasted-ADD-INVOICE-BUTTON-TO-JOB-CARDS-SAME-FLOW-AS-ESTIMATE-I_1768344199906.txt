@@ -1,0 +1,77 @@
+ADD “INVOICE” BUTTON TO JOB CARDS (SAME FLOW AS ESTIMATE INVOICE/PDF ACTION)
+
+CONTEXT
+- Estimate cards already have a working “Generate Estimate PDF” flow:
+  - opens modal
+  - generates PDF
+  - shows file row (filename, regenerate, open, download)
+- We now need an Invoice button inside Job cards that works the same way, but generates an INVOICE for the job.
+
+GOAL
+- Add an Invoice button/icon on each Job card.
+- Clicking it opens a modal like the Estimate PDF modal, but for invoices:
+  Title: “Generate Invoice PDF”
+- It generates an invoice PDF for that job and stores it as a document/attachment linked to the job.
+- After generation, show the same file UI controls:
+  - Regenerate
+  - Open in new tab
+  - Download
+
+IMPORTANT: REUSE EXISTING COMPONENTS
+- Do NOT build a brand new modal system.
+- Reuse the existing “Generate Estimate PDF” modal/component and adapt it to support:
+  - type = "invoice"
+  - entity = job
+
+UI REQUIREMENTS (JOB CARD)
+- Add an invoice icon button next to the other action icons (view/assigned/edit/delete).
+- Clean icon-only button; tooltip optional.
+- Only show if user has permission to generate invoices.
+
+DATA / BACKEND REQUIREMENTS
+1) Add endpoint to generate invoice PDF for a job:
+   POST /api/jobs/:jobId/invoice/pdf
+   - Generates PDF from job data:
+     - company info (logo, address, email, phone)
+     - client info (name, address, email, phone)
+     - line items from the job
+     - totals
+     - invoice number (INV-xxxxx) + date
+   - Stores the generated PDF as a document record linked to the job
+     - documents.type = "invoice"
+     - documents.jobId = jobId
+     - documents.name like: Invoice_INV-000123.pdf (or similar)
+   - Returns document metadata + url
+
+2) If an invoice doc already exists for the job:
+   - the modal should display it immediately
+   - “Regenerate” replaces/creates a new version (your call: replace file or create new document version)
+
+FRONTEND REQUIREMENTS
+1) When clicking Invoice button:
+   - Open “Generate Invoice PDF” modal
+   - Load any existing invoice document for that job (if present)
+2) “Generate” or “Regenerate” triggers POST /api/jobs/:jobId/invoice/pdf
+3) On success:
+   - Update UI instantly to show the new invoice document row
+4) Open/download actions should work exactly like estimate PDF modal
+
+PERMISSIONS / RBAC
+- Respect existing role rules:
+  - Only allowed office roles can generate invoices (Owner/Admin/Dispatcher etc.)
+  - Technicians maybe view-only (depending on your rule set)
+- Hide the invoice button if not allowed.
+
+EDGE CASES
+- If job has no line items:
+  - block generation and show message:
+    “Add line items before generating an invoice.”
+- If job has no customer:
+  - block and message:
+    “Assign a customer before generating an invoice.”
+
+DELIVERABLES
+- Invoice icon button added to Job cards
+- Modal identical UX to Estimate PDF modal, but for invoices
+- Invoice PDF generates, saves as a document linked to job, and can be regenerated/opened/downloaded
+- Clean UI + no regressions to estimate PDF flow

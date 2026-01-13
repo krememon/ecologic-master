@@ -25,7 +25,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -2854,6 +2854,428 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error adding signature request:", error);
       res.status(500).json({ message: "Failed to add signature request" });
+    }
+  });
+
+  // ===================
+  // Job Invoice PDF Routes
+  // ===================
+
+  // Helper to check if user can create invoices
+  const canCreateInvoices = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+  };
+
+  // POST /api/jobs/:jobId/invoice/pdf - Generate invoice PDF for a job
+  app.post('/api/jobs/:jobId/invoice/pdf', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateInvoices(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to generate invoices" });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      
+      // Get job with full details
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      // Get line items for this job
+      const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
+
+      // Validation: Job must have line items
+      if (!lineItems || lineItems.length === 0) {
+        return res.status(400).json({ 
+          message: "Add line items before generating an invoice.",
+          code: "NO_LINE_ITEMS"
+        });
+      }
+
+      // Validation: Job must have a customer
+      if (!job.customerId && !job.clientId && !job.clientName) {
+        return res.status(400).json({ 
+          message: "Assign a customer before generating an invoice.",
+          code: "NO_CUSTOMER"
+        });
+      }
+
+      // Get customer info if available
+      let customer = null;
+      if (job.customerId) {
+        customer = await storage.getCustomer(job.customerId);
+      } else if (job.clientId) {
+        const client = await storage.getClient(job.clientId);
+        if (client) {
+          customer = {
+            firstName: client.name?.split(' ')[0] || '',
+            lastName: client.name?.split(' ').slice(1).join(' ') || '',
+            email: client.email,
+            phone: client.phone,
+            address: client.address,
+          };
+        }
+      }
+
+      // Generate invoice number
+      let invoiceNumber: string;
+      try {
+        const [counter] = await db
+          .insert(companyCounters)
+          .values({ companyId: company.id, estimateCounter: 0, invoiceCounter: 1 })
+          .onConflictDoUpdate({
+            target: companyCounters.companyId,
+            set: { invoiceCounter: sql`${companyCounters.invoiceCounter} + 1` },
+          })
+          .returning();
+        invoiceNumber = `INV-${String(counter.invoiceCounter).padStart(5, '0')}`;
+      } catch (e) {
+        // Fallback if counter fails
+        const timestamp = Date.now().toString().slice(-6);
+        invoiceNumber = `INV-${timestamp}`;
+      }
+
+      // Generate PDF
+      const fileName = `Invoice_${invoiceNumber.replace(/-/g, '_')}.pdf`;
+      const filePath = path.join('uploads', fileName);
+      
+      if (!fs.existsSync('uploads')) {
+        fs.mkdirSync('uploads', { recursive: true });
+      }
+
+      const doc = new PDFDocument({ margin: 48, size: 'LETTER' });
+      const writeStream = fs.createWriteStream(filePath);
+      doc.pipe(writeStream);
+
+      // Page constants
+      const PAGE_WIDTH = 612;
+      const PAGE_HEIGHT = 792;
+      const MARGIN = 48;
+      const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
+      const LOGO_SIZE = 80;
+      const HEADER_BOX_WIDTH = 180;
+      
+      // Colors
+      const GRAY_LIGHT = '#F5F5F5';
+      const GRAY_TEXT = '#666666';
+      const GRAY_BORDER = '#E0E0E0';
+      const BLACK = '#000000';
+      
+      // Calculate totals
+      let subtotalCents = 0;
+      for (const item of lineItems) {
+        subtotalCents += item.lineTotalCents || 0;
+      }
+      const subtotal = subtotalCents / 100;
+      const total = subtotal; // No tax for now, can be added later
+      
+      // Invoice date
+      const invoiceDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+      // Customer info preparation
+      const custName = customer ? `${customer.firstName || ''} ${customer.lastName || ''}`.trim() : job.clientName || 'Customer';
+      const custEmail = customer?.email || '';
+      const custPhone = customer?.phone || '';
+      const custAddress = customer?.address || job.location || '';
+
+      // Table column positions
+      const COL_SERVICE = MARGIN;
+      const COL_QTY = 340;
+      const COL_PRICE = 400;
+      const COL_AMOUNT = 490;
+      const TABLE_ROW_HEIGHT = 20;
+
+      let yPos = MARGIN;
+
+      // ========== HEADER ==========
+      // LEFT SIDE: Logo + Company Info
+      const leftColumnWidth = CONTENT_WIDTH - HEADER_BOX_WIDTH - 20;
+      
+      if (company.logo) {
+        try {
+          const logoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
+          if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, MARGIN, yPos, { width: LOGO_SIZE, height: LOGO_SIZE });
+            yPos += LOGO_SIZE + 8;
+          }
+        } catch (e) {
+          console.log('Logo not found, skipping');
+        }
+      }
+      
+      // Company name
+      doc.fontSize(16).font('Helvetica-Bold').fillColor(BLACK);
+      doc.text(company.name, MARGIN, yPos, { width: leftColumnWidth });
+      yPos += 20;
+      
+      // Company contact info
+      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+      if (company.addressLine1) {
+        let addressLine = company.addressLine1;
+        if (company.addressLine2) addressLine += ', ' + company.addressLine2;
+        doc.text(addressLine, MARGIN, yPos, { width: leftColumnWidth });
+        yPos += 13;
+      }
+      if (company.city || company.state || company.postalCode) {
+        const cityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(', ');
+        doc.text(cityLine, MARGIN, yPos, { width: leftColumnWidth });
+        yPos += 13;
+      }
+      if (company.phone) {
+        doc.text(company.phone, MARGIN, yPos, { width: leftColumnWidth });
+        yPos += 13;
+      }
+      if (company.email) {
+        doc.text(company.email, MARGIN, yPos, { width: leftColumnWidth });
+        yPos += 13;
+      }
+      
+      // RIGHT SIDE: Invoice Info Box
+      const boxX = PAGE_WIDTH - MARGIN - HEADER_BOX_WIDTH;
+      const boxPadding = 12;
+      const boxHeight = 85;
+      const boxY = MARGIN;
+      
+      doc.rect(boxX, boxY, HEADER_BOX_WIDTH, boxHeight)
+         .fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
+      
+      let boxTextY = boxY + boxPadding;
+      
+      doc.fontSize(18).font('Helvetica-Bold').fillColor(BLACK);
+      doc.text('INVOICE', boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+      boxTextY += 22;
+      
+      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+      doc.text(`#${invoiceNumber}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+      boxTextY += 16;
+      
+      doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
+      doc.text(`Date: ${invoiceDate}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+      boxTextY += 14;
+      
+      doc.fontSize(11).font('Helvetica-Bold').fillColor(BLACK);
+      doc.text(`Total: $${total.toFixed(2)}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+
+      yPos = Math.max(yPos, boxY + boxHeight) + 25;
+
+      // ========== BILL TO ==========
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
+      doc.text('BILL TO', MARGIN, yPos);
+      yPos += 15;
+      
+      doc.fontSize(11).font('Helvetica').fillColor(BLACK);
+      doc.text(custName, MARGIN, yPos);
+      yPos += 14;
+      
+      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+      if (custAddress) {
+        doc.text(custAddress, MARGIN, yPos);
+        yPos += 12;
+      }
+      if (custPhone) {
+        doc.text(custPhone, MARGIN, yPos);
+        yPos += 12;
+      }
+      if (custEmail) {
+        doc.text(custEmail, MARGIN, yPos);
+        yPos += 12;
+      }
+
+      yPos += 20;
+
+      // ========== JOB INFO ==========
+      if (job.title) {
+        doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
+        doc.text('JOB:', MARGIN, yPos);
+        doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text(job.title, MARGIN + 35, yPos);
+        yPos += 15;
+      }
+
+      yPos += 10;
+
+      // ========== TABLE HEADER ==========
+      doc.rect(MARGIN, yPos, CONTENT_WIDTH, 25).fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
+      yPos += 7;
+      doc.fontSize(9).font('Helvetica-Bold').fillColor(BLACK);
+      doc.text('SERVICE', COL_SERVICE + 8, yPos);
+      doc.text('QTY', COL_QTY, yPos, { width: 50, align: 'right' });
+      doc.text('PRICE', COL_PRICE, yPos, { width: 70, align: 'right' });
+      doc.text('AMOUNT', COL_AMOUNT, yPos, { width: 70, align: 'right' });
+      yPos += 20;
+
+      // ========== TABLE ROWS ==========
+      for (let i = 0; i < lineItems.length; i++) {
+        const item = lineItems[i];
+        const isAlternate = i % 2 === 1;
+        
+        if (isAlternate) {
+          doc.rect(MARGIN, yPos, CONTENT_WIDTH, TABLE_ROW_HEIGHT).fill(GRAY_LIGHT);
+        }
+        
+        doc.fontSize(9).font('Helvetica').fillColor(BLACK);
+        const itemName = item.name || 'Service';
+        doc.text(itemName, COL_SERVICE + 8, yPos + 5, { width: COL_QTY - COL_SERVICE - 20 });
+        
+        const qty = parseFloat(item.quantity) || 1;
+        const unitPrice = (item.unitPriceCents || 0) / 100;
+        const lineTotal = (item.lineTotalCents || 0) / 100;
+        
+        doc.text(qty.toString(), COL_QTY, yPos + 5, { width: 50, align: 'right' });
+        doc.text(`$${unitPrice.toFixed(2)}`, COL_PRICE, yPos + 5, { width: 70, align: 'right' });
+        doc.text(`$${lineTotal.toFixed(2)}`, COL_AMOUNT, yPos + 5, { width: 70, align: 'right' });
+        
+        yPos += TABLE_ROW_HEIGHT;
+      }
+
+      // ========== TOTALS ==========
+      yPos += 15;
+      
+      // Subtotal
+      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+      doc.text('Subtotal:', COL_PRICE, yPos, { width: 70, align: 'right' });
+      doc.text(`$${subtotal.toFixed(2)}`, COL_AMOUNT, yPos, { width: 70, align: 'right' });
+      yPos += 15;
+      
+      // Total
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(BLACK);
+      doc.text('TOTAL:', COL_PRICE, yPos, { width: 70, align: 'right' });
+      doc.text(`$${total.toFixed(2)}`, COL_AMOUNT, yPos, { width: 70, align: 'right' });
+
+      // ========== FOOTER ==========
+      if (company.footerText) {
+        doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
+        doc.text(company.footerText, MARGIN, PAGE_HEIGHT - MARGIN - 40, { 
+          width: CONTENT_WIDTH, 
+          align: 'center' 
+        });
+      }
+
+      doc.end();
+
+      // Wait for PDF to finish writing
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+
+      // Generate PNG preview
+      let previewImageUrl: string | null = null;
+      try {
+        const pdfBuffer = fs.readFileSync(filePath);
+        const pdfData = new Uint8Array(pdfBuffer);
+        const pdfDoc = await pdfjs.getDocument({ data: pdfData }).promise;
+        const page = await pdfDoc.getPage(1);
+        
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+        
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const context = canvas.getContext('2d');
+        
+        await page.render({
+          canvasContext: context as any,
+          viewport: viewport,
+        }).promise;
+        
+        const previewFileName = fileName.replace('.pdf', '_preview.png');
+        const previewPath = path.join('uploads', previewFileName);
+        const pngBuffer = canvas.toBuffer('image/png');
+        fs.writeFileSync(previewPath, pngBuffer);
+        
+        previewImageUrl = `/uploads/${previewFileName}`;
+      } catch (previewError) {
+        console.error('[Invoice] Failed to generate preview:', previewError);
+      }
+
+      // Store as document linked to job
+      const fileUrl = `/uploads/${fileName}`;
+      const document = await storage.createDocument({
+        companyId: company.id,
+        jobId: jobId,
+        name: fileName,
+        type: 'invoice',
+        category: 'Invoices',
+        status: 'Approved',
+        visibility: 'internal',
+        fileUrl,
+        uploadedBy: userId,
+      });
+
+      console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${fileName} docId=${document.id}`);
+      res.json({ 
+        pdfUrl: fileUrl, 
+        previewImageUrl,
+        fileName, 
+        documentId: document.id,
+        invoiceNumber,
+      });
+    } catch (error) {
+      console.error("Error generating invoice PDF:", error);
+      res.status(500).json({ message: "Failed to generate invoice PDF" });
+    }
+  });
+
+  // GET /api/jobs/:jobId/invoice/pdf/latest - Get the latest invoice PDF for a job
+  app.get('/api/jobs/:jobId/invoice/pdf/latest', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      // Get the latest invoice document for this job
+      const docs = await storage.getDocumentsByJob(jobId);
+      const invoiceDocs = docs.filter(d => d.type === 'invoice' || d.category === 'Invoices');
+      
+      if (!invoiceDocs.length) {
+        return res.status(404).json({ pdfUrl: null, message: "No invoice found for this job" });
+      }
+
+      // Sort by createdAt desc and get the latest
+      invoiceDocs.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      const latestDoc = invoiceDocs[0];
+
+      // Check if preview image exists
+      const previewFileName = latestDoc.name.replace('.pdf', '_preview.png');
+      const previewPath = path.join('uploads', previewFileName);
+      const previewImageUrl = fs.existsSync(previewPath) ? `/uploads/${previewFileName}` : null;
+
+      res.json({
+        pdfUrl: latestDoc.fileUrl,
+        fileName: latestDoc.name,
+        previewImageUrl,
+        documentId: latestDoc.id,
+        createdAt: latestDoc.createdAt,
+      });
+    } catch (error) {
+      console.error("Error fetching latest invoice PDF:", error);
+      res.status(500).json({ message: "Failed to fetch latest invoice PDF" });
     }
   });
 

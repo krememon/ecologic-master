@@ -23,7 +23,8 @@ import { useCan } from "@/hooks/useCan";
 import { SelectCustomerModal } from "@/components/CustomerModals";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
-import { Share2 } from "lucide-react";
+import { JobInvoiceModal } from "@/components/JobInvoiceModal";
+import { Share2, Receipt } from "lucide-react";
 
 interface JobWithClient extends Job {
   client?: {
@@ -100,6 +101,9 @@ export default function Jobs() {
     customerEmail?: string | null;
     customerFirstName?: string | null;
   } | null>(null);
+  
+  // Invoice modal state
+  const [invoiceJobData, setInvoiceJobData] = useState<{ id: number; title: string } | null>(null);
   
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -1761,6 +1765,21 @@ export default function Jobs() {
                         <Users className="h-4 w-4" />
                       </Button>
                     )}
+                    {canShareEstimates && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInvoiceJobData({ id: job.id, title: job.title });
+                        }}
+                        data-testid={`button-invoice-job-${job.id}`}
+                        title="Generate Invoice"
+                      >
+                        <Receipt className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -2111,6 +2130,14 @@ export default function Jobs() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Invoice Modal */}
+      <JobInvoiceModal
+        open={!!invoiceJobData}
+        onOpenChange={(open) => !open && setInvoiceJobData(null)}
+        jobId={invoiceJobData?.id ?? 0}
+        jobTitle={invoiceJobData?.title ?? ""}
+      />
     </div>
   );
 }
