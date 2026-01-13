@@ -110,6 +110,9 @@ export default function Jobs() {
   
   // RBAC: Owner, Supervisor, Estimator can share estimates
   const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
+  
+  // RBAC: Owner, Supervisor, Dispatcher, Estimator can generate invoices
+  const canGenerateInvoices = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
 
   // Reset description expansion and tab when job changes
   useEffect(() => {
@@ -1765,7 +1768,7 @@ export default function Jobs() {
                         <Users className="h-4 w-4" />
                       </Button>
                     )}
-                    {canShareEstimates && (
+                    {canGenerateInvoices && (
                       <Button 
                         variant="ghost" 
                         size="sm" 
