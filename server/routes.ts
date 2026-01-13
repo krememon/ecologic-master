@@ -3279,6 +3279,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/jobs/:jobId/invoice/email - Send invoice PDF via email
+  app.post('/api/jobs/:jobId/invoice/email', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateInvoices(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to send invoices" });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      const { toEmail, subject, message, pdfUrl } = req.body;
+      
+      if (!toEmail || !pdfUrl) {
+        return res.status(400).json({ message: "Email address and PDF URL are required" });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(toEmail)) {
+        return res.status(400).json({ message: "Invalid email address" });
+      }
+
+      // Verify the pdfUrl belongs to this job's invoice documents
+      const docs = await storage.getDocumentsByJob(jobId);
+      const invoiceDocs = docs.filter(d => d.type === 'invoice' || d.category === 'Invoices');
+      const matchingDoc = invoiceDocs.find(doc => doc.fileUrl === pdfUrl);
+      if (!matchingDoc) {
+        console.warn(`[Invoice] Unauthorized PDF access attempt: ${pdfUrl} for job ${jobId} company ${company.id}`);
+        return res.status(403).json({ message: "Invalid PDF document for this job" });
+      }
+
+      // Check if Resend is configured
+      if (!process.env.RESEND_API_KEY) {
+        return res.status(503).json({ 
+          message: "Email not configured. Please configure RESEND_API_KEY to send emails.",
+          code: "EMAIL_NOT_CONFIGURED"
+        });
+      }
+
+      // Read PDF file with path traversal protection
+      const uploadsDir = path.resolve('uploads');
+      const rawPath = pdfUrl.startsWith('/') ? pdfUrl.substring(1) : pdfUrl;
+      const resolvedPath = path.resolve(rawPath);
+      
+      // Ensure the resolved path is within the uploads directory
+      if (!resolvedPath.startsWith(uploadsDir + path.sep) && resolvedPath !== uploadsDir) {
+        console.warn(`[Invoice] Path traversal attempt blocked: ${pdfUrl}`);
+        return res.status(400).json({ message: "Invalid PDF path" });
+      }
+      
+      // Also verify the path starts with uploads/ prefix
+      if (!rawPath.startsWith('uploads/') && !rawPath.startsWith('uploads\\')) {
+        return res.status(400).json({ message: "Invalid PDF path" });
+      }
+      
+      if (!fs.existsSync(resolvedPath)) {
+        return res.status(400).json({ message: "PDF file not found. Please generate the invoice first." });
+      }
+      
+      const pdfBuffer = fs.readFileSync(resolvedPath);
+      const pdfFileName = path.basename(resolvedPath);
+
+      // Must use proper email format like "Name <email@domain.com>"
+      const fromEmail = process.env.RESEND_FROM_EMAIL;
+      if (!fromEmail) {
+        console.error("[InvoiceEmail] RESEND_FROM_EMAIL not configured");
+        return res.status(503).json({ 
+          success: false, 
+          message: "Email sender not configured. Please set RESEND_FROM_EMAIL.",
+          code: "EMAIL_NOT_CONFIGURED"
+        });
+      }
+      
+      const emailSubject = subject || `Invoice from ${company.name}`;
+      const emailBody = message || `Please find attached the invoice for your review.`;
+
+      console.log("[InvoiceEmail] calling Resend now", { 
+        fromEmail, 
+        toEmail, 
+        subject: emailSubject,
+        pdfSize: pdfBuffer.length 
+      });
+
+      // Send email using Resend
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      
+      const { data, error } = await resend.emails.send({
+        from: fromEmail,
+        to: toEmail,
+        subject: emailSubject,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">${company.name}</h2>
+            <p style="color: #555; white-space: pre-line;">${emailBody}</p>
+            <p style="color: #777; font-size: 12px; margin-top: 30px;">
+              This invoice is attached as a PDF document.
+            </p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: pdfFileName,
+            content: pdfBuffer,
+          },
+        ],
+      });
+
+      if (error) {
+        console.error("[InvoiceEmail] Resend error", error);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Failed to send email", 
+          error: error.message || error 
+        });
+      }
+
+      console.log("[InvoiceEmail] Resend result", { id: data?.id });
+      console.log(`[InvoiceEmail] Email sent jobId=${jobId} toEmail=${toEmail}`);
+      res.json({ success: true, message: "Invoice sent successfully", id: data?.id });
+    } catch (error: any) {
+      console.error("Error sending invoice email:", error);
+      if (error.message?.includes('API key')) {
+        return res.status(503).json({ 
+          message: "Email service configuration error. Please check RESEND_API_KEY.",
+          code: "EMAIL_NOT_CONFIGURED"
+        });
+      }
+      res.status(500).json({ message: "Failed to send email" });
+    }
+  });
+
   // ===================
   // Customer Routes
   // ===================

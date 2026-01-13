@@ -1,0 +1,81 @@
+MAKE JOB INVOICE FLOW MATCH ESTIMATE FLOW:
+1) SHOW PDF PREVIEW IN “GENERATE INVOICE PDF”
+2) ADD “NEXT” BUTTON TO OPEN “SEND INVOICE” EMAIL STEP
+
+CURRENT PROBLEM
+- “Generate Invoice PDF” modal does NOT show the PDF preview like Estimate does.
+- It only shows a success message.
+- It also has no “Next” button to proceed to emailing the invoice.
+
+GOAL (MATCH ESTIMATE UX EXACTLY)
+Invoice flow should mirror the Estimate flow:
+
+STEP 1: Generate Invoice PDF
+- Show the invoice file row (filename + regenerate + open + download)
+- Display embedded PDF preview (same preview component used in Estimate PDF modal)
+- Show a big “Next →” button (same style as Estimate flow)
+
+STEP 2: Send Invoice
+- Clicking Next opens an email modal like “Send Estimate”
+- Prefill:
+  To: client email (from the job’s customer/client record)
+  Subject: “Invoice INV-0000XX from {Company Name}”
+  Message template similar to estimate but invoice wording
+  Attachment: Invoice_INV_0000XX.pdf
+- “Send Email” triggers backend send flow and shows success/failure toasts
+
+IMPLEMENTATION (DO NOT REBUILD — REUSE EXISTING ESTIMATE COMPONENTS)
+
+1) REUSE PDF PREVIEW UI
+- Locate the existing Estimate “Generate PDF” modal component that shows:
+  - file row
+  - embedded PDF preview area
+  - Next button
+- Create a shared component or extend the existing one so it supports:
+  type = "estimate" | "invoice"
+  entity = estimateId | jobId
+- For invoices, use the same iframe/pdf viewer block used by Estimate.
+
+2) DISPLAY INVOICE PDF PREVIEW
+- When invoice is generated (or already exists):
+  - set pdfUrl to the returned document URL
+  - render the exact preview block (iframe / embedded viewer)
+- Ensure it handles:
+  - loading
+  - errors (show “Unable to load preview” with open/download still available)
+
+3) ADD NEXT BUTTON
+- Add the same “Next →” button at the bottom like Estimate modal.
+- Only enable Next when an invoice PDF exists (generated successfully).
+- Next opens the “Send Invoice” modal.
+
+4) BUILD/REUSE “SEND EMAIL” MODAL FOR INVOICE
+- Copy the existing “Send Estimate” modal and adapt it for invoices OR make it shared:
+  - props: document (pdf), recipient defaults, subject defaults, message defaults
+- Prefill recipient from job.customer.email if available
+- Prefill subject:
+  “Invoice INV-0000XX from {Company Name}”
+- Prefill message template:
+  “Hi {ClientName}, Please find your invoice attached…”
+- Attachment line shows invoice pdf filename.
+
+5) BACKEND EMAIL SEND
+- Reuse the same backend email sending endpoint used by Estimate email sending.
+- Ensure it can send the INVOICE pdf attachment:
+  - pass documentId or file url/path
+  - email to recipient
+  - subject + message
+- Return success JSON and show toast “Invoice sent”.
+
+6) EDGE CASES
+- If job has no customer email:
+  - allow manual entry but show a warning “No email on file”
+- If invoice not generated yet:
+  - Next disabled and show hint “Generate invoice PDF first”
+- RBAC: only allowed roles can generate/send invoice
+
+DELIVERABLES
+- Generate Invoice PDF modal shows embedded PDF preview (identical to Estimate)
+- “Next →” button exists and opens Send Invoice modal
+- Send Invoice modal emails invoice with attachment (same UX as Send Estimate)
+- No regressions to Estimate PDF or Send Estimate flows
