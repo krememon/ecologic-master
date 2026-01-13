@@ -44,7 +44,13 @@ import {
 } from "../shared/documentPermissions";
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
-// Stripe removed
+import Stripe from "stripe";
+import { invoices, payments } from "../shared/schema";
+
+// Initialize Stripe only if secret key is available
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-04-30.basil" as any })
+  : null;
 
 // Subscription plans removed
 
@@ -7025,6 +7031,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error deleting service catalog item:', error);
       res.status(500).json({ error: 'Failed to delete service catalog item' });
+    }
+  });
+
+  // =============================================================
+  // STRIPE PAYMENT ENDPOINTS
+  // =============================================================
+
+  // POST /api/payments/checkout - Create a Stripe Checkout session for an invoice
+  app.post('/api/payments/checkout', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Owner, Supervisor, Dispatcher, Estimator can create payment links
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to create payment links" });
+      }
+
+      const { invoiceId } = req.body;
+      
+      if (!invoiceId) {
+        return res.status(400).json({ message: "Invoice ID is required" });
+      }
+
+      // Load invoice from DB
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      // Check if invoice is already paid
+      if (invoice.status?.toLowerCase() === 'paid') {
+        return res.status(400).json({ message: "This invoice has already been paid" });
+      }
+
+      const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+      const amountInCents = Math.round(parseFloat(invoice.amount) * 100);
+
+      // Create Stripe Checkout Session
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Invoice ${invoice.invoiceNumber}`,
+                description: invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`,
+              },
+              unit_amount: amountInCents,
+            },
+            quantity: 1,
+          },
+        ],
+        metadata: {
+          invoiceId: String(invoice.id),
+          companyId: String(company.id),
+          jobId: invoice.jobId ? String(invoice.jobId) : '',
+        },
+        success_url: `${appBaseUrl}/pay/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appBaseUrl}/pay/cancel?invoiceId=${invoice.id}`,
+      });
+
+      console.log(`[Stripe] Created checkout session ${session.id} for invoice ${invoice.id}`);
+      
+      res.json({ 
+        url: session.url, 
+        sessionId: session.id 
+      });
+    } catch (error: any) {
+      console.error('Error creating Stripe checkout session:', error);
+      res.status(500).json({ message: error.message || "Failed to create payment session" });
+    }
+  });
+
+  // GET /api/payments/session/:sessionId - Get payment session status
+  app.get('/api/payments/session/:sessionId', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+
+      const { sessionId } = req.params;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      res.json({
+        status: session.status,
+        paymentStatus: session.payment_status,
+        invoiceId: session.metadata?.invoiceId,
+      });
+    } catch (error: any) {
+      console.error('Error retrieving session:', error);
+      res.status(500).json({ message: "Failed to retrieve session" });
     }
   });
 

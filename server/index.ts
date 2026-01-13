@@ -3,8 +3,110 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db-init";
 import path from "path";
+import Stripe from "stripe";
+import { db } from "./db";
+import { invoices, payments } from "../shared/schema";
+import { eq } from "drizzle-orm";
 
 const app = express();
+
+// Initialize Stripe for webhook (needs to be before JSON parsing)
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-04-30.basil" as any })
+  : null;
+
+// Stripe webhook endpoint - MUST use raw body for signature verification
+// This MUST be before express.json() middleware
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe) {
+    console.error('[Stripe Webhook] Stripe not configured');
+    return res.status(500).send('Stripe not configured');
+  }
+
+  const sig = req.headers['stripe-signature'] as string;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('[Stripe Webhook] Webhook secret not configured');
+    return res.status(500).send('Webhook secret not configured');
+  }
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err: any) {
+    console.error(`[Stripe Webhook] Signature verification failed:`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log(`[Stripe Webhook] Received event: ${event.type}`);
+
+  // Handle checkout.session.completed event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const { invoiceId, companyId, jobId } = session.metadata || {};
+
+    if (!invoiceId) {
+      console.error('[Stripe Webhook] No invoiceId in metadata');
+      return res.status(400).send('Missing invoiceId in metadata');
+    }
+
+    try {
+      // Check if invoice is already paid (idempotency)
+      const [existingInvoice] = await db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, parseInt(invoiceId)));
+
+      if (!existingInvoice) {
+        console.error(`[Stripe Webhook] Invoice ${invoiceId} not found`);
+        return res.status(404).send('Invoice not found');
+      }
+
+      if (existingInvoice.status?.toLowerCase() === 'paid') {
+        console.log(`[Stripe Webhook] Invoice ${invoiceId} already paid, skipping`);
+        return res.json({ received: true, message: 'Already processed' });
+      }
+
+      // Mark invoice as paid
+      const now = new Date();
+      await db
+        .update(invoices)
+        .set({
+          status: 'paid',
+          paidAt: now,
+          paidDate: now.toISOString().split('T')[0],
+          stripeCheckoutSessionId: session.id,
+          stripePaymentIntentId: session.payment_intent as string,
+          updatedAt: now,
+        })
+        .where(eq(invoices.id, parseInt(invoiceId)));
+
+      // Create payment record
+      const amountCents = session.amount_total || 0;
+      await db.insert(payments).values({
+        companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
+        invoiceId: parseInt(invoiceId),
+        jobId: jobId ? parseInt(jobId) : existingInvoice.jobId,
+        amount: (amountCents / 100).toFixed(2),
+        paymentMethod: 'stripe',
+        status: 'completed',
+        stripePaymentIntentId: session.payment_intent as string,
+        stripeCheckoutSessionId: session.id,
+        paidDate: now,
+      });
+
+      console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid, payment recorded`);
+    } catch (error: any) {
+      console.error('[Stripe Webhook] Error processing payment:', error);
+      return res.status(500).send('Error processing payment');
+    }
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
