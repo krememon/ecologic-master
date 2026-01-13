@@ -2898,8 +2898,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Customer not found" });
       }
       
+      // Filter allowed fields for update
+      const allowedFields = ['firstName', 'lastName', 'email', 'phone', 'address', 'companyName', 'companyNumber', 'jobTitle', 'notes'];
+      const updates: Record<string, any> = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          updates[field] = req.body[field];
+        }
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: "No valid fields to update" });
+      }
+      
       // Update the customer with provided fields
-      const updatedCustomer = await storage.updateCustomer(customerId, req.body);
+      const updatedCustomer = await storage.updateCustomer(customerId, updates);
       
       console.log(`[Customers] update customerId=${customerId} userId=${userId}`);
       res.json(updatedCustomer);
