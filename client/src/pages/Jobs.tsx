@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { insertJobSchema, type InsertJob, type Job, type Client, type Estimate, type Customer } from "@shared/schema";
+import { type Job, type Client, type Estimate, type Customer } from "@shared/schema";
 import JobPhotoFeed from "@/components/JobPhotoFeed";
 import { NewJobSheet } from "@/components/NewJobSheet";
 import { useCan } from "@/hooks/useCan";
@@ -48,213 +48,9 @@ interface JobPhoto {
   isPublic: boolean;
   createdAt: string;
 }
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import LocationInput from "@/components/LocationInput";
-import { ClientSuggestions } from "@/components/ClientSuggestions";
-
-function JobForm({ 
-  onSubmit, 
-  isLoading, 
-  initialData, 
-  isEdit = false 
-}: { 
-  onSubmit: (data: InsertJob) => void; 
-  isLoading: boolean; 
-  initialData?: any;
-  isEdit?: boolean;
-}) {
-  const form = useForm<InsertJob>({
-    resolver: zodResolver(insertJobSchema),
-    defaultValues: {
-      title: initialData?.title || "",
-      clientName: initialData?.clientName || "",
-      description: initialData?.description || "",
-      location: initialData?.location || "",
-      city: initialData?.city || "",
-      postalCode: initialData?.postalCode || "",
-      locationLat: initialData?.locationLat || undefined,
-      locationLng: initialData?.locationLng || undefined,
-      locationPlaceId: initialData?.locationPlaceId || "",
-      status: initialData?.status || "pending",
-      priority: initialData?.priority || "medium",
-    },
-  });
-
-  const handleSubmit = (data: InsertJob) => {
-    onSubmit(data);
-  };
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="title"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Job Title</FormLabel>
-              <FormControl>
-                <Input {...field} data-testid="input-job-title" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="clientName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Client Name *</FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Input {...field} placeholder="Enter client name..." data-testid="input-client-name" />
-                  <ClientSuggestions
-                    searchTerm={field.value}
-                    onSelect={(client) => {
-                      field.onChange(client.name);
-                    }}
-                  />
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea {...field} data-testid="input-job-description" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="location"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Location *</FormLabel>
-              <FormControl>
-                <LocationInput
-                  value={field.value}
-                  onChange={(value) => {
-                    field.onChange(value);
-                  }}
-                  onAddressSelected={(addr) => {
-                    form.setValue("city", addr.city);
-                    form.setValue("postalCode", addr.postalCode);
-                    form.setValue("locationPlaceId", addr.place_id);
-                    form.setValue("location", addr.formatted_address || addr.street);
-                  }}
-                  placeholder="Start typing an address..."
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="city"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>City</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="City name..." data-testid="input-job-city" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="postalCode"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>ZIP / Postal Code</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="ZIP code..." data-testid="input-job-postal-code" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="priority"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Priority</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-job-submit">
-          {isLoading ? (isEdit ? "Updating..." : "Creating...") : (isEdit ? "Update Job" : "Create Job")}
-        </Button>
-      </form>
-    </Form>
-  );
-}
 
 export default function Jobs() {
   const { toast } = useToast();
@@ -262,7 +58,6 @@ export default function Jobs() {
   const { role } = useCan();
   const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingJob, setEditingJob] = useState<any>(null);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -695,35 +490,6 @@ export default function Jobs() {
     },
   });
 
-  const updateJobMutation = useMutation({
-    mutationFn: async ({ jobId, jobData }: { jobId: number; jobData: Partial<InsertJob> }) => {
-      const res = await apiRequest("PATCH", `/api/jobs/${jobId}`, jobData);
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      setEditingJob(null);
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to update job",
-        variant: "destructive",
-      });
-    },
-  });
 
   // Photo upload mutation
   const uploadPhotoMutation = useMutation({
@@ -1107,20 +873,6 @@ export default function Jobs() {
         }}
       />
 
-      {/* Edit Job Dialog */}
-      <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
-        <DialogContent className="sm:max-w-[350px] rounded-2xl" onInteractOutside={handleInteractOutside}>
-          <DialogHeader>
-            <DialogTitle>Edit Job</DialogTitle>
-          </DialogHeader>
-          <JobForm 
-            onSubmit={(data) => updateJobMutation.mutate({ jobId: editingJob.id, jobData: data })} 
-            isLoading={updateJobMutation.isPending}
-            initialData={editingJob}
-            isEdit={true}
-          />
-        </DialogContent>
-      </Dialog>
 
       {/* Job Detail Modal - Estimate-style layout */}
       <Dialog open={!!selectedJob} onOpenChange={(open) => !open && setSelectedJob(null)}>
@@ -1154,8 +906,8 @@ export default function Jobs() {
                   variant="outline"
                   onClick={() => {
                     if (selectedJob) {
-                      setEditingJob(selectedJob);
                       setSelectedJob(null);
+                      setLocation(`/jobs/${selectedJob.id}/edit`);
                     }
                   }}
                   data-testid="button-edit-job"
@@ -2009,7 +1761,7 @@ export default function Jobs() {
                       className="h-8 w-8 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditingJob(job);
+                        setLocation(`/jobs/${job.id}/edit`);
                       }}
                       data-testid={`button-edit-job-${job.id}`}
                     >

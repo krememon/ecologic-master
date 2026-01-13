@@ -1,0 +1,56 @@
+UNIFY JOB EDITING: ROUTE ALL JOB “EDIT” BUTTONS TO THE NEW EDIT JOB SCREEN (REMOVE LEGACY EDIT PAGE)
+
+PROBLEM
+- There are currently TWO job edit UIs:
+  1) NEW edit screen (the one we just finished): Customer, Line Items, Location, Job Type, Schedule, Assigned To, Notes ✅
+  2) OLD legacy edit page/modal: Job Title, Client Name, Status, Priority, Update Job button ❌
+- Clicking the blue pencil edit button opens the OLD legacy editor.
+- We want ALL edit actions to open the NEW edit screen.
+
+GOAL
+- Every Job edit entry point (job card edit icon, job detail header edit button, pencil icon, etc.) must route to the SAME new edit route:
+  /jobs/:jobId/edit
+- The old legacy job edit page should no longer be reachable from UI.
+
+IMPLEMENTATION
+
+1) IDENTIFY ALL EDIT ENTRY POINTS
+Find all places with an Edit icon/button for jobs:
+- Job cards list edit icon
+- Job detail header edit button
+- Any pencil icon inside job views
+- Any kebab menu “Edit”
+List them and update them all.
+
+2) UPDATE ROUTING TARGET
+Change each edit button onClick/navigation to:
+- navigate(`/jobs/${jobId}/edit`)
+
+3) ENSURE ROUTE EXISTS AND WORKS
+- Confirm router includes:
+  Route: /jobs/:jobId/edit
+- Ensure it renders the NEW Edit Job screen component (the one matching New Job flow).
+
+4) DISABLE / REMOVE LEGACY EDIT PAGE FROM UI
+- Remove navigation links/routes to the old editor from the UI.
+- If the legacy route must remain for now, make it redirect to the new route:
+  legacy route -> navigate(`/jobs/${jobId}/edit`)
+
+5) CONSISTENT RETURN AFTER SAVE
+- After saving in the new edit screen:
+  - navigate back to /jobs/:jobId (job detail)
+  - and ensure job detail refreshes updated data
+
+6) RBAC
+- Only show edit buttons to users who can edit jobs (hidden otherwise).
+
+TESTS
+- Click edit from job card -> opens new edit screen
+- Click edit from job detail header -> opens new edit screen
+- Click pencil icon -> opens new edit screen
+- No UI path opens the legacy editor anymore
+- Save changes -> reflects in job detail
+
+DELIVERABLE
+- Single unified Job edit experience (new edit screen only)
+- Pencil/edit buttons no longer open the old edit page/modal
