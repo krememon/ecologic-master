@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import LocationInput from "@/components/LocationInput";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import type { Customer } from "@shared/schema";
+import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
 interface LineItem {
   name: string;
@@ -876,8 +877,10 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
               <Label>Phone</Label>
               <Input
                 value={newCustomer.phone}
-                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                placeholder="(555) 123-4567"
+                onChange={(e) => setNewCustomer({ ...newCustomer, phone: formatPhoneInput(e.target.value) })}
+                placeholder="555-123-4567"
+                inputMode="numeric"
+                autoComplete="tel"
               />
             </div>
             <div className="space-y-2">

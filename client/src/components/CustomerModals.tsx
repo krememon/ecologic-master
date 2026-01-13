@@ -11,6 +11,7 @@ import { Loader2, Search, Plus, X, ChevronLeft, User } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
+import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
 interface SelectCustomerModalProps {
   open: boolean;
@@ -330,10 +331,11 @@ function AddCustomerModal({
               <Label htmlFor="phone">Phone Number</Label>
               <Input
                 id="phone"
-                type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(555) 123-4567"
+                onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                placeholder="555-123-4567"
+                inputMode="numeric"
+                autoComplete="tel"
                 data-testid="input-customer-phone"
               />
             </div>

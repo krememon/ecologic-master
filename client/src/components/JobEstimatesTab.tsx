@@ -23,6 +23,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import type { Customer, Estimate } from "@shared/schema";
+import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
 interface LineItem {
   name: string;
@@ -923,8 +924,10 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
               <Input
                 id="phone"
                 value={newCustomer.phone}
-                onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
-                placeholder="(555) 123-4567"
+                onChange={(e) => setNewCustomer({ ...newCustomer, phone: formatPhoneInput(e.target.value) })}
+                placeholder="555-123-4567"
+                inputMode="numeric"
+                autoComplete="tel"
                 data-testid="input-customer-phone"
               />
             </div>

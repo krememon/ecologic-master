@@ -78,30 +78,19 @@ export function validatePhone(phone: string): boolean {
 }
 
 /**
- * Format phone as user types (US format with mask)
- * Returns formatted value suitable for input display
+ * Format phone as user types (US format with dashes)
+ * Returns formatted value suitable for input display: XXX-XXX-XXXX
  */
 export function formatPhoneInput(value: string): string {
   if (!value) return '';
   
-  // Remove all non-numeric characters
-  const numbers = value.replace(/\D/g, '');
+  // Remove all non-numeric characters and limit to 10 digits
+  const digits = value.replace(/\D/g, '').slice(0, 10);
   
-  // Handle international format (starts with +)
-  if (value.trim().startsWith('+')) {
-    return '+' + numbers;
-  }
-  
-  // US format: (XXX) XXX-XXXX
-  const match = numbers.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
-  if (match) {
-    if (!match[1]) return '';
-    if (!match[2]) return match[1];
-    if (!match[3]) return `(${match[1]}) ${match[2]}`;
-    return `(${match[1]}) ${match[2]}-${match[3]}`;
-  }
-  
-  return value;
+  // Format with dashes: XXX-XXX-XXXX
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 /**

@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, UserCheck, Mail, Phone, Star, Edit, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertSubcontractorSchema, type InsertSubcontractor, type Subcontractor } from "@shared/schema";
+import { formatPhoneInput } from "@shared/phoneUtils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -82,9 +83,11 @@ function ContractorForm({
       <div className="space-y-2">
         <label className="text-sm font-medium block">Phone</label>
         <Input 
-          placeholder="(555) 123-4567" 
+          placeholder="555-123-4567" 
           value={formData.phone}
-          onChange={(e) => setFormData({...formData, phone: e.target.value})}
+          onChange={(e) => setFormData({...formData, phone: formatPhoneInput(e.target.value)})}
+          inputMode="numeric"
+          autoComplete="tel"
           className="w-full"
         />
       </div>

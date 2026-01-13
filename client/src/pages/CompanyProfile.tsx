@@ -14,6 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
+import { formatPhoneInput } from "@shared/phoneUtils";
 
 interface CompanyProfileData {
   name: string;
@@ -363,8 +364,10 @@ export default function CompanyProfile() {
                 <Input
                   id="phone"
                   value={formData.phone || ""}
-                  onChange={(e) => handleChange('phone', e.target.value || null)}
-                  placeholder="(555) 123-4567"
+                  onChange={(e) => handleChange('phone', formatPhoneInput(e.target.value) || null)}
+                  placeholder="555-123-4567"
+                  inputMode="numeric"
+                  autoComplete="tel"
                 />
               </div>
               <div className="space-y-2">

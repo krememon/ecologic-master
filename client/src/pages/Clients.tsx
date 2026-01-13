@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertClientSchema, type Client, type Job, type Customer } from "@shared/schema";
+import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import { z } from "zod";
 import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X, Check, CheckSquare } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -481,7 +482,16 @@ export default function Clients() {
                           <FormItem className="min-w-0">
                             <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.phone')}</FormLabel>
                             <FormControl>
-                              <Input placeholder={t('clients.fields.phone')} {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-phone" />
+                              <Input 
+                                placeholder="555-123-4567" 
+                                {...field} 
+                                value={field.value || ""} 
+                                onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
+                                inputMode="numeric"
+                                autoComplete="tel"
+                                className="h-9 text-sm" 
+                                data-testid="input-client-phone" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -606,7 +616,16 @@ export default function Clients() {
                           <FormItem className="min-w-0">
                             <FormLabel className="text-xs font-medium mb-1">Phone</FormLabel>
                             <FormControl>
-                              <Input placeholder="(555) 123-4567" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-phone" />
+                              <Input 
+                                placeholder="555-123-4567" 
+                                {...field} 
+                                value={field.value || ""} 
+                                onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
+                                inputMode="numeric"
+                                autoComplete="tel"
+                                className="h-9 text-sm" 
+                                data-testid="input-edit-client-phone" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

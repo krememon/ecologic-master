@@ -15,6 +15,7 @@ import { ClientSuggestions } from "@/components/ClientSuggestions";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { insertJobSchema, insertClientSchema, insertScheduleItemSchema } from "@shared/schema";
+import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
 // Step 1: Job Details Schema
 const step1Schema = insertJobSchema.pick({
@@ -497,7 +498,16 @@ export function JobWizard({ onComplete, isLoading }: JobWizardProps) {
                           <FormItem>
                             <FormLabel>Phone</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="(555) 123-4567" className="w-full" data-testid="input-wizard-client-phone" />
+                              <Input 
+                                {...field} 
+                                value={field.value || ""}
+                                onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
+                                placeholder="555-123-4567" 
+                                inputMode="numeric"
+                                autoComplete="tel"
+                                className="w-full" 
+                                data-testid="input-wizard-client-phone" 
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

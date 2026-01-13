@@ -524,10 +524,11 @@ export default function Auth() {
             <Input
               id="phone"
               name="phone"
-              type="tel"
-              placeholder="(555) 555-1234"
+              placeholder="555-555-1234"
               value={formData.phone}
               onChange={handlePhoneChange}
+              inputMode="numeric"
+              autoComplete="tel"
               className={errors.phone ? "border-red-500" : ""}
             />
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
