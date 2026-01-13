@@ -357,6 +357,11 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      // Invalidate the customer's jobs list so it appears immediately on their detail page
+      if (newJob.customerId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/customers/${newJob.customerId}/jobs`] });
+      }
       queryClient.invalidateQueries({ 
         predicate: (query) => 
           typeof query.queryKey[0] === 'string' && 
@@ -404,6 +409,14 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', initialJob?.id?.toString()] });
       queryClient.invalidateQueries({ queryKey: [`/api/jobs/${initialJob?.id}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      // Invalidate customer jobs for both old and new customer if changed
+      if (updatedJob.customerId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/customers/${updatedJob.customerId}/jobs`] });
+      }
+      if (initialJob?.customerId && initialJob.customerId !== updatedJob.customerId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/customers/${initialJob.customerId}/jobs`] });
+      }
       queryClient.invalidateQueries({ 
         predicate: (query) => 
           typeof query.queryKey[0] === 'string' && 

@@ -1,0 +1,60 @@
+ENSURE NEWLY CREATED JOB APPEARS UNDER THE CORRECT CLIENT (CLIENT CARD/DETAIL UPDATES)
+
+CONTEXT
+- We have Clients list + Client detail page with tabs (Jobs, Estimates, Notes).
+- When creating a Job, a customer is selected or added.
+- After successfully creating the job, it must show under that client’s Jobs tab and update counts.
+
+GOAL
+When a job is created:
+- It must be linked to the selected customer/client in the database (clientId/customerId stored on the job).
+- The client’s Jobs tab should immediately show the new job (and Jobs count should update).
+- This should work whether:
+  A) customer is selected
+  B) customer is created on the spot and then selected
+
+BACKEND REQUIREMENTS (SOURCE OF TRUTH)
+1) On job creation (POST /api/jobs):
+- Ensure request includes customerId (or clientId) of the selected/created customer.
+- Save job.customerId = selectedCustomer.id (required).
+- Return the created job record with customerId.
+
+2) Client jobs endpoint:
+- Ensure GET /api/clients/:clientId/jobs returns jobs WHERE job.customerId = clientId
+- (Or whatever relationship you use)
+- Sort newest first.
+
+FRONTEND REQUIREMENTS
+1) Job creation flow:
+- After job is successfully created, do NOT lose the customerId.
+- Navigate to job detail as usual.
+
+2) Client detail page:
+- Ensure Jobs tab fetches jobs by clientId from backend and displays them.
+- After creating a job and returning to client detail:
+  - it should show immediately (refetch on page focus OR after navigation).
+
+3) Immediate UI refresh (IMPORTANT)
+Implement one of these:
+OPTION A (simple): When Client detail page mounts or tab changes to Jobs -> fetch fresh jobs list.
+OPTION B (best): After job creation success, invalidate/refetch client jobs queries (if using react-query).
+OPTION C: If we keep client jobs in local state, append the created job to that client’s list.
+
+CLIENTS LIST COUNT
+- “All Clients (X)” stays same, but inside Client detail tabs:
+  Jobs (0) -> Jobs (1) etc.
+- If you display job counts on client cards later, ensure those counts refresh too.
+
+EDGE CASES
+- If customer was created during job creation:
+  - Make sure we create customer first, get new customerId, then create job with that id.
+- If job is created without customerId: block it (customer required).
+
+TESTS
+- Select existing customer -> create job -> open that client -> Jobs tab shows the job
+- Add new customer -> create job -> open that client -> Jobs tab shows the job
+- Jobs count updates correctly
+- Refresh page -> job still appears under the correct client
+
+DELIVERABLE
+- Jobs are correctly linked to customers and appear under the client’s Jobs tab immediately after creation.

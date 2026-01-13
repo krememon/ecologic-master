@@ -397,6 +397,11 @@ export default function Jobs() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      // Invalidate the customer's jobs list so it appears on their detail page
+      if (newJob.customerId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/customers/${newJob.customerId}/jobs`] });
+      }
       // Invalidate all schedule queries (with any date range)
       queryClient.invalidateQueries({ 
         predicate: (query) => 

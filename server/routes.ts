@@ -1418,6 +1418,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Find or create corresponding customer for this client
+      // This ensures jobs appear under the customer's Jobs tab
+      let customerId: number | null = null;
+      const client = await storage.getClient(clientId);
+      if (client) {
+        // Try to find existing customer with same name in this company
+        const companyCustomers = await storage.getCustomersByCompany(company.id);
+        const matchingCustomer = companyCustomers.find(c => 
+          c.firstName === client.name?.split(' ')[0] && 
+          (c.email === client.email || !client.email)
+        );
+        
+        if (matchingCustomer) {
+          customerId = matchingCustomer.id;
+        } else {
+          // Create customer from client data
+          const nameParts = (client.name || '').split(' ');
+          const newCustomer = await storage.createCustomer({
+            companyId: company.id,
+            firstName: nameParts[0] || 'Customer',
+            lastName: nameParts.slice(1).join(' ') || '',
+            email: client.email || null,
+            phone: client.phone || null,
+            address: client.address || null,
+          });
+          customerId = newCustomer.id;
+        }
+      }
+      
       // Parse and validate schedule dates
       const startDate = new Date(scheduleData.startDateTime);
       const endDate = new Date(scheduleData.endDateTime);
@@ -1440,13 +1469,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Create job and schedule in atomic transaction
       const job = await db.transaction(async (tx) => {
-        // Create the job
+        // Create the job with both clientId and customerId
         const [createdJob] = await tx
           .insert(jobs)
           .values({
             ...jobData,
             companyId: company.id,
             clientId,
+            customerId,
           } as any)
           .returning();
         
