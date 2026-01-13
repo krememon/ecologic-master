@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -130,6 +131,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const [locationLat, setLocationLat] = useState<number | undefined>();
   const [locationLng, setLocationLng] = useState<number | undefined>();
   const [locationPlaceId, setLocationPlaceId] = useState("");
+  const [locationIsManualOverride, setLocationIsManualOverride] = useState(false);
   const [priority, setPriority] = useState("medium");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [schedule, setSchedule] = useState<ScheduleData>({ date: "", startTime: "", endTime: "" });
@@ -150,6 +152,8 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
   const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
   const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
+  const [locationUpdateConfirmOpen, setLocationUpdateConfirmOpen] = useState(false);
+  const [pendingCustomerForLocation, setPendingCustomerForLocation] = useState<Customer | null>(null);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -304,6 +308,15 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     onSuccess: (newCust: Customer) => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       setSelectedCustomer(newCust);
+      // Auto-fill location from new customer's address
+      if (newCust.address && (!location.trim() || !locationIsManualOverride)) {
+        setLocation(newCust.address);
+        setLocationLat(undefined);
+        setLocationLng(undefined);
+        setLocationPlaceId("");
+        setCity("");
+        setPostalCode("");
+      }
       setAddCustomerModalOpen(false);
       setCustomerModalOpen(false);
       setNewCustomer({ firstName: "", lastName: "", email: "", phone: "", address: "" });
@@ -416,6 +429,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     setLocationLat(undefined);
     setLocationLng(undefined);
     setLocationPlaceId("");
+    setLocationIsManualOverride(false);
     setPriority("medium");
     setSelectedCustomer(null);
     setSchedule({ date: "", startTime: "", endTime: "" });
@@ -425,6 +439,74 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
     setCustomerSearch("");
     setEmployeeSearch("");
+    setPendingCustomerForLocation(null);
+  };
+
+  // Helper function to update location from customer address
+  const updateLocationFromCustomer = (customer: Customer) => {
+    if (customer.address) {
+      setLocation(customer.address);
+      // Clear geocode data since this is a new address string
+      setLocationLat(undefined);
+      setLocationLng(undefined);
+      setLocationPlaceId("");
+      setCity("");
+      setPostalCode("");
+    }
+  };
+
+  // Handle customer selection with automatic location sync
+  const handleCustomerSelect = (customer: Customer) => {
+    const customerAddress = customer.address;
+    
+    // If location is empty, always fill from customer
+    if (!location.trim()) {
+      setSelectedCustomer(customer);
+      if (customerAddress) {
+        updateLocationFromCustomer(customer);
+      }
+      setCustomerModalOpen(false);
+      return;
+    }
+    
+    // If location was not manually overridden, auto-update
+    if (!locationIsManualOverride) {
+      setSelectedCustomer(customer);
+      if (customerAddress) {
+        updateLocationFromCustomer(customer);
+      } else {
+        toast({ title: "Note", description: "Customer has no address on file." });
+      }
+      setCustomerModalOpen(false);
+      return;
+    }
+    
+    // Location was manually overridden - prompt user
+    if (customerAddress) {
+      setPendingCustomerForLocation(customer);
+      setSelectedCustomer(customer);
+      setCustomerModalOpen(false);
+      setLocationUpdateConfirmOpen(true);
+    } else {
+      setSelectedCustomer(customer);
+      setCustomerModalOpen(false);
+      toast({ title: "Note", description: "Customer has no address on file." });
+    }
+  };
+
+  // Handle confirmation to update location
+  const handleConfirmLocationUpdate = () => {
+    if (pendingCustomerForLocation?.address) {
+      updateLocationFromCustomer(pendingCustomerForLocation);
+    }
+    setPendingCustomerForLocation(null);
+    setLocationUpdateConfirmOpen(false);
+  };
+
+  // Handle keeping current location
+  const handleKeepCurrentLocation = () => {
+    setPendingCustomerForLocation(null);
+    setLocationUpdateConfirmOpen(false);
   };
 
   const handleSave = () => {
@@ -730,8 +812,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                       selectedCustomer?.id === customer.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                     }`}
                     onClick={() => {
-                      setSelectedCustomer(customer);
-                      setCustomerModalOpen(false);
+                      handleCustomerSelect(customer);
                       setCustomerSearch("");
                     }}
                   >
@@ -843,12 +924,16 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
               <Label>Address</Label>
               <LocationInput
                 value={location}
-                onChange={setLocation}
+                onChange={(val) => {
+                  setLocation(val);
+                  setLocationIsManualOverride(true);
+                }}
                 onAddressSelected={(addr) => {
                   setCity(addr.city);
                   setPostalCode(addr.postalCode);
                   setLocationPlaceId(addr.place_id);
                   setLocation(addr.formatted_address || addr.street);
+                  setLocationIsManualOverride(true);
                 }}
                 placeholder="Start typing an address..."
               />
@@ -856,11 +941,11 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>City</Label>
-                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" />
+                <Input value={city} onChange={(e) => { setCity(e.target.value); setLocationIsManualOverride(true); }} placeholder="City" />
               </div>
               <div className="space-y-2">
                 <Label>ZIP/Postal Code</Label>
-                <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="ZIP" />
+                <Input value={postalCode} onChange={(e) => { setPostalCode(e.target.value); setLocationIsManualOverride(true); }} placeholder="ZIP" />
               </div>
             </div>
           </div>
@@ -1190,6 +1275,27 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
         onAddItem={addLineItemFromPriceBook}
         existingItems={lineItems}
       />
+
+      {/* LOCATION UPDATE CONFIRMATION Dialog */}
+      <AlertDialog open={locationUpdateConfirmOpen} onOpenChange={setLocationUpdateConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Update Job Location?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Would you like to update the job location to match this customer's address?
+              {pendingCustomerForLocation?.address && (
+                <span className="block mt-2 font-medium text-slate-700 dark:text-slate-300">
+                  {pendingCustomerForLocation.address}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleKeepCurrentLocation}>Keep Current</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmLocationUpdate}>Update</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

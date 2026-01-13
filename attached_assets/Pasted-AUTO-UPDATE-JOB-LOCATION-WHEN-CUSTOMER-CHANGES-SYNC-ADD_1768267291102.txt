@@ -1,0 +1,64 @@
+AUTO-UPDATE JOB LOCATION WHEN CUSTOMER CHANGES (SYNC ADDRESS)
+
+GOAL
+When the user changes the customer on a Job (New Job + Edit Job):
+- Automatically update the Job Location address to match the newly selected customer’s primary address.
+
+EXAMPLE
+- Customer = Linda Graziano (321 Astor Dr) -> Job Location becomes 321 Astor Dr
+- Change customer to Daniel Kelly (22 Split Cedar Dr) -> Job Location automatically becomes 22 Split Cedar Dr
+
+IMPORTANT BEHAVIOR RULES
+1) Default behavior:
+- If user has NOT manually customized the job location, always sync location to selected customer’s address.
+
+2) Preserve manual overrides:
+- If user manually edited the job location (typed a different address), do NOT overwrite it automatically.
+- In that case, after customer change show a small prompt/toast:
+  “Update job location to match this customer’s address?”
+  Buttons: Update / Keep current
+
+DATA / STATE REQUIREMENTS
+- Add a boolean flag in the job form state:
+  locationIsManualOverride (default false)
+- When location is auto-filled from customer -> keep flag false
+- When user edits location field manually -> set flag true
+
+IMPLEMENTATION DETAILS (FRONTEND)
+- In the customer selection handler (New + Edit):
+  onCustomerSelected(customer):
+    setSelectedCustomer(customer)
+    setCustomerId(customer.id)
+
+    const customerAddress = customer.addressLine1/ fullAddress / formattedAddress (use your actual fields)
+
+    if (!locationIsManualOverride) {
+       setJobLocation(customerAddress)
+    } else {
+       show confirm UI:
+         “Update job location to match customer address?”
+         If confirm -> setJobLocation(customerAddress) and keep flag false or keep true (either is fine)
+         If keep -> do nothing
+    }
+
+- Ensure the Location row display updates immediately in the UI.
+
+BACKEND
+- No special backend logic required if frontend sends the updated location in the save payload.
+- Ensure job create/update routes accept and persist updated location fields.
+
+EDGE CASES
+- If customer has no address:
+  - Do not overwrite job location
+  - Show toast: “Customer has no address on file”
+- If job location is empty and customer has address:
+  - Always fill it (even if manual override flag is true/false)
+
+TESTS (MUST PASS)
+- New Job: pick customer -> location auto-populates
+- Edit Job: change customer -> location auto-updates (when not manually overridden)
+- Edit Job with manually typed job location -> customer change prompts Update/Keep
+- Save -> location persists correctly after refresh
+
+DELIVERABLE
+- Customer change automatically updates job location to customer’s address with safe manual override behavior.
