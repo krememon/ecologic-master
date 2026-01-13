@@ -258,22 +258,18 @@ export default function Clients() {
 
   const handleClientCreateSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.info('client:submit:start');
     
     if (isSubmitting) {
-      console.info('client:submit:already-submitting');
       return;
     }
 
     const formData = form.getValues();
-    console.info('client:form-data', formData);
     
-    // Validate required fields
+    // Validate required fields - name is required
     if (!formData.name || formData.name.trim() === '') {
-      console.error('client:validation:name-required');
       toast({
         title: "Validation Error",
-        description: "Company Name is required",
+        description: "Name is required",
         variant: "destructive",
       });
       return;
@@ -283,7 +279,6 @@ export default function Clients() {
     if (formData.email && formData.email.trim() !== '') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
-        console.error('client:validation:email-invalid', formData.email);
         toast({
           title: "Validation Error",
           description: "Please enter a valid email address",
@@ -296,34 +291,37 @@ export default function Clients() {
     setIsSubmitting(true);
 
     try {
+      // Split name into firstName/lastName for customers table
+      const nameParts = formData.name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
       const payload = {
-        name: formData.name,
+        firstName,
+        lastName,
         email: formData.email || "",
         phone: formData.phone || "",
         address: formData.address || "",
-        notes: formData.notes || "",
       };
       
-      console.info('client:req:url/status', 'POST /api/clients', payload);
-      
-      const res = await apiRequest("POST", "/api/clients", payload);
-      
-      console.info('client:req:url/status', res.status, res.statusText);
+      const res = await apiRequest("POST", "/api/customers", payload);
       
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ message: res.statusText }));
-        console.error('client:create:error', res.status, errorData);
         throw new Error(errorData.message || `Server error: ${res.status}`);
       }
       
-      const newClient = await res.json();
-      console.info('client:create:ok', newClient);
+      await res.json();
       
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      // Invalidate customers cache to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       form.reset();
       setIsDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Client added successfully",
+      });
     } catch (error: any) {
-      console.error('client:create:error', error);
       toast({
         title: "Error",
         description: error.message || "Couldn't add client. Try again.",

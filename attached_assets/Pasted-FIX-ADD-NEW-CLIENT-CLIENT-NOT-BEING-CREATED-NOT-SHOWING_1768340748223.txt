@@ -1,0 +1,73 @@
+FIX “ADD NEW CLIENT” — CLIENT NOT BEING CREATED / NOT SHOWING IN LIST
+
+SYMPTOM
+- In Clients page, the “Add New Client” modal opens.
+- Clicking “Add New Client” button does NOT successfully add the client (nothing appears / no save).
+
+GOAL
+- Clicking “Add New Client” must create a client in the database and immediately show it in the Clients list.
+- Provide good UX: loading state, success toast, error toast.
+
+DO THIS IN ORDER
+
+1) CONFIRM THE BUTTON IS ACTUALLY CALLING SUBMIT
+- Locate the modal component for Add New Client.
+- Ensure the primary button onClick calls the submit handler (no missing binding).
+- Add TEMP log:
+  console.log("[CreateClient] submit clicked", formState)
+
+2) VERIFY FRONTEND API CALL
+- Ensure submit handler sends a POST request to the correct endpoint (whatever your API uses):
+  POST /api/clients  (or /api/customers depending on your naming)
+- Payload should include:
+  - name (or companyName / clientName depending on your schema)
+  - email
+  - phone
+  - address
+  - notes
+- Add TEMP log of response:
+  console.log("[CreateClient] response", res.status, data)
+
+3) BACKEND: CONFIRM ROUTE EXISTS + WORKS
+- Verify there is a server route that creates a client:
+  POST /api/clients
+- Ensure it:
+  - validates required fields (at least name)
+  - inserts into DB
+  - returns the created client record JSON (including id)
+- If route doesn’t exist or naming mismatch (clients vs customers), align frontend to backend.
+
+4) HANDLE DB CONSTRAINTS / REQUIRED FIELDS
+- If DB requires fields (NOT NULL), enforce them:
+  - if “name” is required, map the UI field correctly:
+    UI “Company Name” should populate the DB “name” field (or customer_name)
+- If “Company Name” is optional, still ensure you send a “name” value:
+  - if companyName empty, create name from person name fields (if present)
+  - If you only have company name field, then treat it as required for now.
+
+5) FIX UI STATE + LIST REFRESH
+After successful create:
+- Close the modal
+- Show toast: “Client added”
+- Update clients list immediately:
+  Option A: append created client to local state
+  Option B: refetch clients list
+- Ensure the “All Clients (X)” count updates correctly.
+
+6) LOADING + ERROR UX
+- On submit:
+  - disable button
+  - show loading text “Adding…”
+- On error:
+  - show toast with server error message (not generic)
+  - keep modal open so user can fix fields
+
+7) TESTS
+- Create client with name + email -> shows in list instantly
+- Create client with name only -> shows in list (if allowed)
+- Missing required field -> shows clear error
+- Refresh page -> client persists
+
+DELIVERABLE
+- Add New Client creates a client successfully and list updates immediately.
+- Remove TEMP logs after confirmed.
