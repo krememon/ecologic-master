@@ -23,6 +23,7 @@ import {
   estimateDocuments,
   companyCounters,
   serviceCatalogItems,
+  companyTaxes,
   type User,
   type UpsertUser,
   type Company,
@@ -61,6 +62,8 @@ import {
   type UpdateEstimatePayload,
   type ServiceCatalogItem,
   type InsertServiceCatalogItem,
+  type CompanyTax,
+  type InsertCompanyTax,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -270,6 +273,11 @@ export interface IStorage {
   
   // Estimate approval operations
   approveEstimate(id: number, userId: string, signatureDataUrl: string): Promise<Estimate>;
+  
+  // Company tax operations
+  getCompanyTaxes(companyId: number): Promise<CompanyTax[]>;
+  createCompanyTax(tax: InsertCompanyTax): Promise<CompanyTax>;
+  deleteCompanyTax(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2067,6 +2075,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(estimates.id, id))
       .returning();
     return updated;
+  }
+
+  // Company tax operations
+  async getCompanyTaxes(companyId: number): Promise<CompanyTax[]> {
+    return await db
+      .select()
+      .from(companyTaxes)
+      .where(eq(companyTaxes.companyId, companyId))
+      .orderBy(companyTaxes.name);
+  }
+
+  async createCompanyTax(tax: InsertCompanyTax): Promise<CompanyTax> {
+    const [created] = await db
+      .insert(companyTaxes)
+      .values(tax)
+      .returning();
+    return created;
+  }
+
+  async deleteCompanyTax(id: number): Promise<void> {
+    await db.delete(companyTaxes).where(eq(companyTaxes.id, id));
   }
 }
 
