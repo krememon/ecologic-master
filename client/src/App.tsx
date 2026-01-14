@@ -143,6 +143,7 @@ function Router() {
         <Route path="/jobs/:id">
           {(params) => <JobDetails jobId={params.id} />}
         </Route>
+        <Route path="/stripe/return" component={StripeReturn} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>
       </Switch>

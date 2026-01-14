@@ -1,0 +1,64 @@
+Fix Stripe success redirect still landing on React 404 + wrong origin. Stripe must return to the SAME origin the user is currently using (dev or prod), hit a real /stripe/return route, then redirect to /jobs.
+
+CURRENT
+After Stripe payment succeeds it still redirects to a React 404 page ("Did you forget to add the page to the router?").
+Console shows Stripe is generating:
+Success URL: https://eco-logic-pjpell077.replit.app/stripe/return
+But the app is running in dev on port 5000. This indicates Stripe is returning to a different origin/build than the current session, causing route mismatch + stale build and/or auth/cookie issues.
+
+GOAL
+- Stripe success MUST return to the same origin the user initiated checkout from (dev origin or prod origin).
+- /stripe/return MUST be a real route in the React router (no React 404).
+- /stripe/return MUST clear payment/job transient state and then navigate to /jobs (replace history).
+- Never log out user.
+- Jobs list is the safe landing page.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) PROVE THE ORIGIN MISMATCH (LOG IT)
+- In the checkout creation endpoint, log:
+  console.log("[Checkout] req origin", req.headers.origin)
+  console.log("[Checkout] host", req.headers.host)
+  console.log("[Checkout] x-forwarded-host", req.headers["x-forwarded-host"])
+  console.log("[Checkout] x-forwarded-proto", req.headers["x-forwarded-proto"])
+- In the frontend right before calling /api/payments/checkout, log:
+  console.log("[Checkout] window.location.origin", window.location.origin)
+
+2) FIX BASE URL GENERATION (CRITICAL)
+- Do NOT hardcode appBaseUrl to https://eco-logic-pjpell077.replit.app
+- Build appBaseUrl dynamically from the incoming request OR from a frontend-provided returnUrlBase.
+Preferred approach:
+A) Frontend sends currentOrigin in body: { ..., returnBaseUrl: window.location.origin }
+B) Backend uses returnBaseUrl to form:
+   success_url = `${returnBaseUrl}/stripe/return`
+   cancel_url = `${returnBaseUrl}/stripe/return?canceled=1`
+- Validate returnBaseUrl is allowed (must match our app domains) to avoid open redirect.
+
+3) ENSURE /stripe/return EXISTS IN REACT ROUTER
+- Add a real route in the authenticated router:
+  path="/stripe/return" element={<StripeReturn />}
+- StripeReturn component must:
+  - clear: selectedJob, activeJobId, any invoice draft state, stripe state
+  - strip query params (replace)
+  - navigate("/jobs", { replace: true }) immediately after cleanup
+- DO NOT show a success page UI. This route is a silent redirect/cleanup.
+
+4) ENSURE 404 NEVER SHOWS FOR AUTHENTICATED USERS
+- Confirm the router catch-all does not trap /stripe/return.
+- Add a safety: if route is unknown and user is authenticated, redirect to /jobs.
+
+5) RETEST END-TO-END (MUST PASS)
+- Start app in dev
+- Create invoice
+- Pay via Stripe
+- After success:
+  - browser returns to SAME origin as before checkout (compare window.location.origin)
+  - /stripe/return loads (no React 404)
+  - user ends on /jobs with correct layout
+  - refresh works
+  - back button does not log out
+
+DELIVERABLES
+- Show server logs proving appBaseUrl now matches the user's current origin
+- Confirm /stripe/return route exists and no longer hits React 404
+- Confirm after Stripe success user lands on /jobs every time, same origin, no logout

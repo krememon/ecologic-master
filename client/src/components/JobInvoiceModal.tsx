@@ -219,7 +219,11 @@ export function JobInvoiceModal({
 
     setPaymentLinkLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId });
+      console.log("[Checkout] window.location.origin", window.location.origin);
+      const response = await apiRequest("POST", "/api/payments/checkout", { 
+        invoiceId,
+        returnBaseUrl: window.location.origin 
+      });
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.message || "Failed to create payment link");

@@ -221,8 +221,12 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
         return; // Error already shown by ensureInvoice
       }
       
-      // Now call checkout with the invoice ID
-      const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId: inv.id });
+      // Now call checkout with the invoice ID - pass current origin for Stripe redirect
+      console.log("[Checkout] window.location.origin", window.location.origin);
+      const response = await apiRequest("POST", "/api/payments/checkout", { 
+        invoiceId: inv.id,
+        returnBaseUrl: window.location.origin 
+      });
       const data = await response.json();
       
       if (data.url) {

@@ -7218,7 +7218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to create payment links" });
       }
 
-      const { invoiceId } = req.body;
+      const { invoiceId, returnBaseUrl } = req.body;
       
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
@@ -7236,7 +7236,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "This invoice has already been paid" });
       }
 
-      const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+      // Log request headers for debugging origin issues
+      console.log(`[Checkout] req origin: ${req.headers.origin}`);
+      console.log(`[Checkout] host: ${req.headers.host}`);
+      console.log(`[Checkout] x-forwarded-host: ${req.headers["x-forwarded-host"]}`);
+      console.log(`[Checkout] x-forwarded-proto: ${req.headers["x-forwarded-proto"]}`);
+      console.log(`[Checkout] returnBaseUrl from frontend: ${returnBaseUrl}`);
+
+      // Use the frontend-provided returnBaseUrl if valid, otherwise fall back to env/header
+      let appBaseUrl: string;
+      if (returnBaseUrl && typeof returnBaseUrl === 'string' && returnBaseUrl.startsWith('https://')) {
+        appBaseUrl = returnBaseUrl;
+      } else {
+        // Fallback: build from request headers or env
+        const proto = req.headers["x-forwarded-proto"] || 'https';
+        const host = req.headers["x-forwarded-host"] || req.headers.host;
+        if (host) {
+          appBaseUrl = `${proto}://${host}`;
+        } else {
+          appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+        }
+      }
+      
       const amountInCents = Math.round(parseFloat(invoice.amount) * 100);
 
       console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
