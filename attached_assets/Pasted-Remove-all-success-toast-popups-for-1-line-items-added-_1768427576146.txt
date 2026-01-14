@@ -1,0 +1,65 @@
+Remove all success/toast popups for: (1) line items added, (2) job created successfully, (3) job updated successfully. No popups should appear for these actions.
+
+CURRENT
+When the user:
+- adds a line item → a popup appears (“Added… added to estimate”)
+- creates a job → popup appears (“Job created… created successfully”)
+- updates a job → popup appears (“Job updated… updated successfully”)
+User wants NONE of these popups.
+
+GOAL
+- No toast/popup notifications for:
+  1) Adding line items
+  2) Job created successfully
+  3) Job updated successfully
+- Actions should still work normally (save, refresh UI, update lists)
+- If an error occurs, error messages CAN still show (only error, no success).
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FIND THE TOAST SYSTEM
+- Search codebase for any of:
+  toast(
+  toast.success
+  toast({ title:
+  showToast
+  notify(
+  useToast(
+  sonner
+  react-hot-toast
+  "Job created"
+  "Job updated"
+  "added to estimate"
+- Identify exactly where these 3 success toasts are triggered.
+
+2) REMOVE SUCCESS TOASTS FOR LINE ITEMS
+- In the line item “add” flow (estimate/job invoice line items):
+  - remove or disable the success toast call
+  - keep the actual add logic and UI refresh
+- Do NOT show any popup for successful add.
+
+3) REMOVE SUCCESS TOASTS FOR JOB CREATE
+- In the create job flow:
+  - remove “Job created successfully” toast/popup
+  - keep navigation behavior: after create → return to Jobs list
+  - do not auto-open job
+
+4) REMOVE SUCCESS TOASTS FOR JOB UPDATE
+- In job edit/update flow:
+  - remove “Job updated successfully” toast/popup
+  - keep save logic and UI refresh
+
+5) KEEP ERROR TOASTS ONLY
+- If the operation fails (network/server validation):
+  - error toast/modal is allowed
+- But do not show any success confirmations.
+
+ACCEPTANCE TEST
+- Add a line item → no popup
+- Create job → no popup, returns to Jobs list
+- Update job → no popup
+- Force an error (disconnect server / invalid input) → error message still shows
+
+DELIVERABLES
+- Commit removing/guarding the 3 success toast triggers
+- Confirm no success popups appear for those actions

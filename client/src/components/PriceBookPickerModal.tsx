@@ -88,11 +88,7 @@ export function PriceBookPickerModal({
       };
       onAddItem(lineItem);
       setAddedItemIds(prev => new Set(prev).add(createdItem.id));
-      
-      toast({ 
-        title: "Item Created & Added", 
-        description: `${createdItem.name} saved to Price Book and added to estimate` 
-      });
+      // No success toast per user preference - visual feedback via checkmark in UI
       
       resetCreateForm();
       setShowCreateForm(false);
@@ -138,7 +134,7 @@ export function PriceBookPickerModal({
     };
     onAddItem(lineItem);
     setAddedItemIds(prev => new Set(prev).add(item.id));
-    toast({ title: "Added", description: `${item.name} added to estimate` });
+    // No success toast per user preference - visual feedback via checkmark in UI
   };
 
   const handleCreateItem = () => {

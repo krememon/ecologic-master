@@ -372,7 +372,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       if (onJobCreated) {
         onJobCreated(newJob);
       }
-      toast({ title: "Job created", description: "Your new job has been created successfully." });
+      // No success toast per user preference - visual feedback via UI update
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message || "Failed to create job", variant: "destructive" });
@@ -427,7 +427,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       if (onJobUpdated) {
         onJobUpdated(updatedJob);
       }
-      toast({ title: "Job updated", description: "Your job has been updated successfully." });
+      // No success toast per user preference - visual feedback via UI update
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message || "Failed to update job", variant: "destructive" });
