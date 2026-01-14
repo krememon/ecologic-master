@@ -32,6 +32,7 @@ import JoinCompany from "@/pages/JoinCompany";
 import Customize from "@/pages/Customize";
 import PriceBook from "@/pages/PriceBook";
 import CompanyProfile from "@/pages/CompanyProfile";
+import Taxes from "@/pages/Taxes";
 import IndustryOnboarding from "@/pages/IndustryOnboarding";
 import EstimateDetails from "@/pages/EstimateDetails";
 import JobDetails from "@/pages/JobDetails";
@@ -135,6 +136,7 @@ function Router() {
         <Route path="/customize" component={Customize} />
         <Route path="/customize/company-profile" component={CompanyProfile} />
         <Route path="/customize/price-book" component={PriceBook} />
+        <Route path="/customize/taxes" component={Taxes} />
         <Route path="/estimates/:id">
           {(params) => <EstimateDetails estimateId={params.id} />}
         </Route>

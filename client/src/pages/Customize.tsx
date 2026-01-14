@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2 } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent } from "lucide-react";
 
 export default function Customize() {
   const { isLoading: authLoading } = useAuth();
@@ -41,6 +41,12 @@ export default function Customize() {
       title: "Price book",
       description: "Manage reusable line items for estimates",
       href: "/customize/price-book",
+    },
+    {
+      icon: Percent,
+      title: "Taxes",
+      description: "Create custom tax rates for invoices",
+      href: "/customize/taxes",
     },
   ];
 
