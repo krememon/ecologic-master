@@ -1441,7 +1441,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
           setNewTaxError(null);
         }
       }}>
-        <DialogContent className="w-full h-full max-w-none max-h-none md:max-w-[640px] md:max-h-[85vh] md:h-auto rounded-none md:rounded-xl flex flex-col p-0">
+        <DialogContent hideCloseButton className="w-full h-full max-w-none max-h-none md:max-w-[640px] md:max-h-[85vh] md:h-auto rounded-none md:rounded-xl flex flex-col p-0">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
             <button
               type="button"
