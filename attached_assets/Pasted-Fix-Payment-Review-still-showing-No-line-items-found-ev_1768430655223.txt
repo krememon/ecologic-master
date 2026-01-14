@@ -1,0 +1,70 @@
+Fix Payment Review still showing “No line items found” even though the server clearly returns line items. This is a FRONTEND fetch/parse/cache bug. Make Payment Review display the exact same line items returned by GET /api/jobs/:jobId/line-items.
+
+EVIDENCE
+Server log shows line items DO exist:
+GET /api/jobs/379/line-items ... :: [{"id":37,"jobId":379,"name":"Leaking Faucet", ...}]
+
+CURRENT
+Payment Review UI still shows “No line items found”.
+
+GOAL
+- Payment Review must render the exact line items returned by /api/jobs/:jobId/line-items.
+- Must update automatically when more items are added later (no stale cache).
+- Zero regressions to checkout flow.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CONFIRM WHICH IDS PAYMENT REVIEW HAS
+- Payment Review route appears to be: /jobs/:jobId/pay/:invoiceId (or similar).
+- Use the jobId from the URL param (NOT invoiceId) to fetch line items.
+- Add a one-time log in PaymentReview:
+  console.log("[PaymentReview] jobId", jobId, "invoiceId", invoiceId)
+
+2) FIX RESPONSE SHAPE PARSING (MOST LIKELY BUG)
+- The endpoint /api/jobs/:jobId/line-items returns an ARRAY, not an object.
+- Update Payment Review fetch logic to handle both shapes safely:
+
+  const res = await fetch(`/api/jobs/${jobId}/line-items`, { cache: "no-store" });
+  const data = await res.json();
+  const items = Array.isArray(data) ? data : (data.lineItems ?? data.items ?? []);
+  setLineItems(items);
+
+- Do NOT assume data.lineItems exists.
+
+3) KILL 304 / STALE CACHE ISSUES (CRITICAL)
+- In ALL Payment Review fetches, set fetch option:
+  { cache: "no-store" }
+- Also ensure the api client wrapper (if you have one) uses no-store for this request.
+- If using React Query:
+  - set staleTime: 0
+  - set cacheTime low or invalidate on navigation
+  - queryKey must include jobId
+
+4) ENSURE STATE IS NOT BEING OVERWRITTEN TO []
+- Search PaymentReview for any code that does:
+  setLineItems([])
+  when invoice loads, when note toggles, when user clicks Next, etc.
+- Only set [] when the request successfully returns an empty array.
+
+5) VERIFY RENDER PATH
+- Add a temporary debug line in Payment Review UI:
+  <div style={{fontSize:12, opacity:.6}}>items: {lineItems?.length ?? "null"}</div>
+- Confirm it becomes 1+ when the API returns the items.
+- Remove this debug text after confirmed working.
+
+6) AUTO-REFRESH WHEN ITEMS CHANGE LATER
+- After saving line items in the Job screen, invalidate/refetch:
+  - Payment Review line items query for that jobId
+- Minimum requirement: Payment Review ALWAYS fetches fresh on mount (no-store) so next time it opens it shows updated items.
+
+ACCEPTANCE TEST (MUST PASS)
+- Job has “Leaking Faucet” in line items
+- Open Payment Review -> shows “Leaking Faucet $350.00” (NOT “No line items found”)
+- Add another line item, save job
+- Open Payment Review again -> shows BOTH items
+- Total remains correct and matches Stripe
+
+DELIVERABLES
+- Fix Payment Review line items fetch to use jobId and correct response parsing
+- Disable caching for this fetch to prevent 304 empty/stale behavior
+- Confirm UI renders items and updates after adding more

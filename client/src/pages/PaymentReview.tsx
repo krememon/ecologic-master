@@ -59,18 +59,22 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   const invoice = invoiceData?.invoice;
 
-  // Fetch line items for the job
-  const { data: lineItemsData, isLoading: lineItemsLoading } = useQuery<{ lineItems: LineItem[] }>({
+  // Fetch line items for the job (API returns array directly, not wrapped object)
+  const { data: lineItems = [], isLoading: lineItemsLoading } = useQuery<LineItem[]>({
     queryKey: ['/api/jobs', numericJobId, 'line-items'],
     queryFn: async () => {
-      const res = await fetch(`/api/jobs/${numericJobId}/line-items`, { credentials: 'include' });
-      if (!res.ok) return { lineItems: [] };
-      return res.json();
+      const res = await fetch(`/api/jobs/${numericJobId}/line-items`, { 
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      // Handle both array and wrapped object shapes
+      return Array.isArray(data) ? data : (data.lineItems ?? data.items ?? []);
     },
     enabled: !isNaN(numericJobId),
+    staleTime: 0,
   });
-
-  const lineItems = lineItemsData?.lineItems || [];
 
   const handleClose = () => {
     if (window.history.length > 1) {
