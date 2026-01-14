@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -34,6 +34,7 @@ interface JobWithClient extends Job {
     phone: string | null;
   } | null;
   primaryLineItem?: string | null;
+  isPaid?: boolean;
 }
 
 interface JobPhoto {
@@ -1685,7 +1686,7 @@ export default function Jobs() {
           {filteredJobs.map((job: JobWithClient) => (
             <Card 
               key={job.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-md transition-shadow cursor-pointer relative"
               onClick={(e) => {
                 // let anchors / autocomplete interactions proceed
                 if (e.target && (e.target as Element).closest && (e.target as Element).closest('a')) {
@@ -1698,9 +1699,16 @@ export default function Jobs() {
                 setLocation(`/jobs/${job.id}`);
               }}
             >
+              {/* Paid Badge - Top Right */}
+              {job.isPaid && (
+                <Badge className="absolute top-3 right-3 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Paid
+                </Badge>
+              )}
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1">
+                  <div className="flex-1 pr-14">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                       {job.clientName || job.client?.name || 'Unassigned Job'}

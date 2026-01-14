@@ -682,15 +682,20 @@ export class DatabaseStorage implements IStorage {
           email: clients.email,
           phone: clients.phone,
         },
+        invoiceStatus: invoices.status,
       })
       .from(jobs)
       .leftJoin(clients, eq(jobs.clientId, clients.id))
+      .leftJoin(invoices, eq(invoices.jobId, jobs.id))
       .where(eq(jobs.companyId, companyId))
       .orderBy(desc(jobs.createdAt));
     
     // Fetch first line item for each job
     const jobIds = jobsList.map(j => j.id);
-    if (jobIds.length === 0) return jobsList;
+    if (jobIds.length === 0) return jobsList.map(job => ({
+      ...job,
+      isPaid: job.invoiceStatus?.toLowerCase() === 'paid',
+    }));
     
     const allLineItems = await db
       .select()
@@ -706,10 +711,11 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Merge primary line item into jobs
+    // Merge primary line item and isPaid into jobs
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
+      isPaid: job.invoiceStatus?.toLowerCase() === 'paid',
     }));
   }
 
