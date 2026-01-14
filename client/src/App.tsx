@@ -142,7 +142,7 @@ function Router() {
           {(params) => <JobDetails jobId={params.id} />}
         </Route>
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
-        <Route component={NotFound} />
+        <Route>{() => <Redirect to="/jobs" />}</Route>
       </Switch>
     </Layout>
   );

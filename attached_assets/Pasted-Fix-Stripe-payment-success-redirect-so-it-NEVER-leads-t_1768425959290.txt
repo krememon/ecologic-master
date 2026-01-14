@@ -1,0 +1,74 @@
+Fix Stripe payment success redirect so it NEVER leads to a 404 or outdated app state and ALWAYS returns the user to the Jobs page.
+
+CURRENT
+After a successful Stripe payment:
+- App redirects to a 404 Page Not Found
+- Sidebar shows an outdated / old version of the app
+- Routing breaks and stale state appears
+
+GOAL
+After Stripe payment success:
+- User is redirected directly to the Jobs list page
+- App loads the CURRENT build and routing state
+- User remains authenticated
+- No 404 is ever shown
+- No outdated sidebar/layout appears
+- Jobs list is the safe landing page
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) STRIPE SUCCESS REDIRECT (CRITICAL)
+- Update Stripe success_url to point to a valid SPA route
+- success_url MUST be:
+  - /jobs
+- Do NOT use:
+  - /payment-success
+  - /jobs/:id
+  - legacy or non-router paths
+- Stripe must redirect into the existing React router
+
+2) FRONTEND ROUTING (NO FULL PAGE RELOADS)
+- Do NOT use window.location or hard reloads
+- Use client-side navigation only:
+  navigate('/jobs', { replace: true })
+- Ensure navigation stays inside the current React app instance
+
+3) STATE CLEANUP AFTER PAYMENT (MANDATORY)
+Before navigating to Jobs, clear ALL of the following:
+- selectedJob
+- activeJobId
+- invoice draft state
+- Stripe session / payment state
+- ALL payment-related query params
+
+Jobs page must load in a clean, neutral state.
+
+4) 404 DEFENSIVE GUARD
+- Add a catch-all route:
+  - Any unknown route after auth MUST redirect to /jobs
+- 404 pages are NOT allowed for authenticated users
+- 404s only apply to logged-out/public routes
+
+5) SIDEBAR / LAYOUT CONSISTENCY
+- Sidebar must always render from the current authenticated layout
+- Ensure no legacy layout or duplicated Router is mounted
+- Do NOT allow stale builds to render after redirect
+
+DO NOT
+- Do NOT auto-open a job
+- Do NOT open Job Insights
+- Do NOT restore previous job state
+- Do NOT reload the page
+- Do NOT log the user out
+- Do NOT add a payment success page
+
+ACCEPTANCE TEST
+1. Create job
+2. Create invoice
+3. Pay via Stripe
+4. Stripe payment succeeds
+5. App redirects to Jobs list
+6. Sidebar is current version
+7. No 404
+8. Refresh page → still correct
+9. Back button → still authenticated
