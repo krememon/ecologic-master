@@ -1181,6 +1181,27 @@ export interface EstimateWithItems extends Estimate {
   createdBy?: { firstName: string | null; lastName: string | null } | null;
 }
 
+// Company Taxes table
+export const companyTaxes = pgTable("company_taxes", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 40 }).notNull(),
+  ratePercent: decimal("rate_percent", { precision: 5, scale: 3 }).notNull(), // e.g., 8.625
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("company_taxes_company_name_unique").on(table.companyId, table.name),
+]);
+
+export const insertCompanyTaxSchema = createInsertSchema(companyTaxes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CompanyTax = typeof companyTaxes.$inferSelect;
+export type InsertCompanyTax = z.infer<typeof insertCompanyTaxSchema>;
+
 // Finalize Job Schema - for wizard completion (job + client + schedule)
 export const finalizeJobSchema = z.object({
   job: insertJobSchema, // companyId already omitted

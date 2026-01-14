@@ -1,0 +1,89 @@
+Add a Tax Management section to the Customize page so the user can create their own taxes. Each tax has a Name and a Percentage. This will be used later to apply taxes to invoices, but for this task just build the Tax creation + storage + list UI correctly (no bugs).
+
+CURRENT
+We need a way for users to define custom taxes (different states/different rates). No Tax section exists yet.
+
+GOAL
+On the Customize page:
+- Add a new section: “Taxes”
+- User can create a tax with:
+  - Tax Name (text)
+  - Percentage (number, ex: 8.625)
+- User can view all saved taxes in a list
+- Taxes persist after refresh (stored in DB, tied to company)
+- No success popups/toasts (only show errors if something fails)
+- No regressions to any existing Customize page functionality
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) DATABASE + MODEL
+- Create a new table/collection for company taxes (CompanyTax):
+  - id (primary key)
+  - companyId (FK)
+  - name (string, required)
+  - ratePercent (decimal/float, required)  // store as percent, not fraction
+  - createdAt, updatedAt
+- Add uniqueness guard:
+  - (companyId, name) unique (case-insensitive preferred)
+  - If duplicate, return a clear error message
+
+2) BACKEND API (SECURE + RBAC)
+- Add endpoints:
+  GET  /api/company/taxes         -> returns list for company
+  POST /api/company/taxes         -> creates new tax
+- RBAC:
+  - Only Owner/Admin can create/edit taxes
+  - Others can only read (or hide section entirely if not allowed)
+
+Validation on POST:
+- name: 2–40 chars, trimmed
+- ratePercent:
+  - must be number
+  - range 0 to 15 (or 0 to 20 if you prefer, but keep it bounded)
+  - up to 3 decimals allowed (8.625)
+- Return created tax
+
+3) FRONTEND UI (CUSTOMIZE PAGE)
+Add a “Taxes” card/section with:
+- Header: Taxes
+- Description: “Create custom tax rates to apply to invoices.”
+- Form inputs:
+  - Tax Name (placeholder: “New York Sales Tax”)
+  - Percentage (placeholder: “8.625”)
+- Button: “Add Tax”
+
+List below the form:
+- Show existing taxes as rows/cards:
+  - Name (left)
+  - “8.625%” (right)
+- If none exist: “No taxes created yet.”
+
+UX rules:
+- No toast popups for success
+- Inline validation messages under inputs
+- Disable “Add Tax” button while saving
+- After success:
+  - clear inputs
+  - refresh list immediately
+
+4) ERROR HANDLING (NO BUGS)
+- If API fails, show inline error message in the section
+- If duplicate name, show: “A tax with this name already exists.”
+- Prevent blank submits
+
+5) DATA REFRESH
+- On page load: fetch /api/company/taxes
+- After create: re-fetch OR optimistically add to list (but ensure it matches backend response)
+- Must persist after refresh (DB-backed)
+
+ACCEPTANCE TEST (MUST PASS)
+- Create tax: “NY Sales Tax” at 8.625 -> appears in list, persists after refresh
+- Create another: “NJ Sales Tax” at 6.625 -> appears
+- Try duplicate “ny sales tax” -> blocked with inline message
+- Invalid percent (empty, negative, > 20, letters) -> blocked
+- Non-admin user does not see create form (or cannot submit)
+
+DELIVERABLES
+- DB table/model + migrations
+- API routes for list/create with RBAC + validation
+- Customize page “Taxes” section UI that works and persists
