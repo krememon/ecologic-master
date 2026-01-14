@@ -14,6 +14,7 @@ import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, E
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
+import { JobInvoiceModal } from "@/components/JobInvoiceModal";
 
 interface JobDetailsProps {
   jobId: string;
@@ -160,45 +161,68 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const invoiceId = invoice?.id;
   const invoiceStatus = invoice?.status;
   const isPaid = invoiceStatus?.toLowerCase() === 'paid';
-  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
 
-  const handleCreateInvoice = async () => {
-    setCreatingInvoice(true);
+  // Helper to ensure invoice exists (creates if needed, returns invoice)
+  const ensureInvoice = async (): Promise<{ id: number; invoiceNumber: string } | null> => {
+    // If invoice already exists, return it
+    if (invoice) {
+      return { id: invoice.id, invoiceNumber: invoice.invoiceNumber };
+    }
+    
+    // Create new invoice
     try {
       const response = await apiRequest("POST", `/api/jobs/${jobId}/invoice`);
       const data = await response.json();
       
       if (data.invoice) {
-        toast({
-          title: "Invoice Created",
-          description: `Invoice ${data.invoice.invoiceNumber} created successfully.`,
-        });
-        refetchInvoice();
+        // Update cache
+        await refetchInvoice();
+        return { id: data.invoice.id, invoiceNumber: data.invoice.invoiceNumber };
       }
+      return null;
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to create invoice",
         variant: "destructive",
       });
-    } finally {
-      setCreatingInvoice(false);
+      return null;
     }
   };
 
-  const handlePayInvoice = async () => {
-    if (!invoiceId) {
-      toast({
-        title: "No Invoice",
-        description: "Create an invoice first before paying.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  // Handle Invoice button click - creates if needed, then opens modal
+  const handleInvoiceClick = async () => {
     setPaymentLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId });
+      const inv = await ensureInvoice();
+      if (inv) {
+        toast({
+          title: invoice ? "Opening Invoice" : "Invoice Created",
+          description: `Invoice ${inv.invoiceNumber}`,
+        });
+        setInvoiceModalOpen(true);
+      }
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  // Handle Pay button click - auto-creates invoice if needed, then redirects to Stripe
+  const handlePayInvoice = async () => {
+    if (isPaid) return; // Already paid, do nothing
+    
+    setPaymentLoading(true);
+    try {
+      // Ensure invoice exists first
+      const inv = await ensureInvoice();
+      if (!inv) {
+        setPaymentLoading(false);
+        return; // Error already shown by ensureInvoice
+      }
+      
+      // Now call checkout with the invoice ID
+      const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId: inv.id });
       const data = await response.json();
       
       if (data.url) {
@@ -349,52 +373,45 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Invoice Actions: Create Invoice / Pay / Paid Badge */}
-          {isPaid && (
-            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-3 py-1">
-              <CheckCircle2 className="h-4 w-4" />
-              Paid
-            </Badge>
-          )}
-          {invoiceId && !isPaid && canCreatePaymentLink && (
-            <Button
-              size="sm"
-              onClick={handlePayInvoice}
-              disabled={paymentLoading}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {paymentLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Opening...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Pay
-                </>
-              )}
-            </Button>
-          )}
-          {!invoiceId && canCreatePaymentLink && (
+          {/* Invoice Button - Always visible */}
+          {canCreatePaymentLink && (
             <Button
               size="sm"
               variant="outline"
-              onClick={handleCreateInvoice}
-              disabled={creatingInvoice}
+              onClick={handleInvoiceClick}
+              disabled={paymentLoading}
             >
-              {creatingInvoice ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Create Invoice
-                </>
-              )}
+              <FileText className="h-4 w-4 mr-2" />
+              Invoice
             </Button>
+          )}
+          {/* Pay Button / Paid Badge - Always visible */}
+          {canCreatePaymentLink && (
+            isPaid ? (
+              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-3 py-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                Paid
+              </Badge>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handlePayInvoice}
+                disabled={paymentLoading}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {paymentLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Pay
+                  </>
+                )}
+              </Button>
+            )
           )}
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
@@ -804,6 +821,16 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Invoice Modal */}
+      <JobInvoiceModal
+        open={invoiceModalOpen}
+        onOpenChange={setInvoiceModalOpen}
+        jobId={parseInt(jobId)}
+        jobTitle={job?.title || customerName || 'Job'}
+        customerEmail={job?.client?.email}
+        customerFirstName={job?.clientName?.split(' ')[0]}
+      />
     </div>
   );
 }
