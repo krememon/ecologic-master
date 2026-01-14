@@ -40,6 +40,7 @@ import ClientDetail from "@/pages/ClientDetail";
 import PaySuccess from "@/pages/PaySuccess";
 import PayCancel from "@/pages/PayCancel";
 import StripeReturn from "@/pages/StripeReturn";
+import PaymentReview from "@/pages/PaymentReview";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -142,6 +143,9 @@ function Router() {
         </Route>
         <Route path="/jobs/:id">
           {(params) => <JobDetails jobId={params.id} />}
+        </Route>
+        <Route path="/payments/review/:invoiceId">
+          {(params) => <PaymentReview invoiceId={params.invoiceId} />}
         </Route>
         <Route path="/stripe/return" component={StripeReturn} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>

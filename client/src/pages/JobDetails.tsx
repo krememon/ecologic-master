@@ -208,7 +208,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     }
   };
 
-  // Handle Pay button click - auto-creates invoice if needed, then redirects to Stripe
+  // Handle Pay button click - auto-creates invoice if needed, then navigates to Payment Review
   const handlePayInvoice = async () => {
     if (isPaid) return; // Already paid, do nothing
     
@@ -221,25 +221,13 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
         return; // Error already shown by ensureInvoice
       }
       
-      // Now call checkout with the invoice ID - pass current origin for Stripe redirect
-      console.log("[Checkout] window.location.origin", window.location.origin);
-      const response = await apiRequest("POST", "/api/payments/checkout", { 
-        invoiceId: inv.id,
-        returnBaseUrl: window.location.origin 
-      });
-      const data = await response.json();
-      
-      if (data.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
-      } else {
-        throw new Error("No checkout URL received");
-      }
+      // Navigate to Payment Review page instead of direct Stripe checkout
+      navigate(`/payments/review/${inv.id}`);
     } catch (error: any) {
       setPaymentLoading(false);
       toast({
         title: "Error",
-        description: error.message || "Failed to create payment link",
+        description: error.message || "Failed to prepare payment",
         variant: "destructive",
       });
     }
