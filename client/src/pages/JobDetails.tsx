@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
@@ -360,36 +361,39 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      {/* Header - like Estimates */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs')}>
+      {/* Header - Two Row Mobile Layout */}
+      <div className="mb-4 space-y-3">
+        {/* Row 1: Back arrow + Title */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs')} className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {customerName || 'Untitled Job'}
-            </h1>
-          </div>
+          <h1 className="text-xl md:text-2xl font-bold truncate">
+            {customerName || 'Untitled Job'}
+          </h1>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Invoice Button - Always visible */}
+        
+        {/* Row 2: Action Bar */}
+        <div className="flex items-center gap-2 flex-wrap pl-1">
+          {/* Invoice Button */}
           {canCreatePaymentLink && (
             <Button
               size="sm"
               variant="outline"
               onClick={handleInvoiceClick}
               disabled={paymentLoading}
+              className="h-8 px-3 text-sm"
             >
-              <FileText className="h-4 w-4 mr-2" />
+              <FileText className="h-4 w-4 mr-1.5" />
               Invoice
             </Button>
           )}
-          {/* Pay Button / Paid Badge - Always visible */}
+          
+          {/* Pay Button / Paid Badge */}
           {canCreatePaymentLink && (
             isPaid ? (
-              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-3 py-1.5">
-                <CheckCircle2 className="h-4 w-4" />
+              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium">
+                <CheckCircle2 className="h-3.5 w-3.5" />
                 Paid
               </Badge>
             ) : (
@@ -397,32 +401,45 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 size="sm"
                 onClick={handlePayInvoice}
                 disabled={paymentLoading}
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="bg-green-600 hover:bg-green-700 text-white h-8 px-3 text-sm"
               >
                 {paymentLoading ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    Processing
                   </>
                 ) : (
                   <>
-                    <CreditCard className="h-4 w-4 mr-2" />
+                    <CreditCard className="h-4 w-4 mr-1.5" />
                     Pay
                   </>
                 )}
               </Button>
             )
           )}
+          
+          {/* Overflow Menu for Edit/Delete */}
           {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-          )}
-          {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 px-2">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate(`/jobs/${jobId}/edit`)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Job
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Job
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>

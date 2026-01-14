@@ -1,0 +1,49 @@
+Payments are working now. Next task: CLEAN UP the top header area of the Job Details page (mobile layout). Right now the controls are getting cut off (the select button is clipped) and the top looks cluttered.
+
+GOAL:
+- Make the Job Details header look clean, responsive, and professional on mobile.
+- Nothing should be cut off at any screen width.
+- Keep it consistent with our modern card design.
+- You can move things around if needed.
+
+CURRENT HEADER ELEMENTS:
+- Back arrow
+- Job/Customer name (ex: “Linda Graziano”)
+- Invoice button
+- Paid pill/badge (or Pay button when unpaid)
+- Select button (currently clipped)
+
+REQUIRED DESIGN FIX (IMPLEMENT THIS LAYOUT):
+1) Split the header into TWO ROWS on mobile:
+   Row 1 (top): back arrow + title (name) only
+   Row 2 (below): action bar with buttons/pills (Invoice, Pay/Paid, Select, Edit, Delete etc as applicable)
+
+2) The action bar (Row 2) must:
+   - Use flex-wrap or horizontal scroll (choose best clean option)
+   - Prefer flex-wrap with consistent spacing so it wraps nicely onto a second line if needed
+   - Buttons should be the same height and aligned
+   - Use compact button style for secondary actions (Invoice/Select) and a pill badge for Paid
+
+3) Paid/Pay styling:
+   - Paid badge should be a compact pill and not push other buttons offscreen
+   - Pay button should be primary style when unpaid
+
+4) Select button:
+   - Must never be clipped
+   - If space is tight, convert “Select” into an icon+label compact pill OR move it into a 3-dot menu
+
+5) Optional but recommended cleanup:
+   - Move destructive actions (trash/delete) into a 3-dot overflow menu to reduce clutter
+   - Keep only key actions visible: Invoice + Pay/Paid + Select
+   - Put Edit/Delete under overflow menu on mobile
+
+IMPLEMENTATION NOTES:
+- Make changes in the exact component that renders the Job Details header in mobile (the one we previously added PAY (DEBUG) into).
+- Ensure padding/safe-area is correct (top padding) and no element is outside the viewport.
+- Test on narrow width (iPhone sized) and ensure no clipping.
+
+DELIVERABLES:
+- Job Details header looks clean
+- No clipped buttons
+- Consistent spacing/typography
+- Actions feel intentional and professional
