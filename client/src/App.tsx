@@ -40,22 +40,27 @@ import ClientDetail from "@/pages/ClientDetail";
 import PaySuccess from "@/pages/PaySuccess";
 import PayCancel from "@/pages/PayCancel";
 
+// Separate component for public payment pages - NO auth hooks
+function PaymentRouter() {
+  return (
+    <Switch>
+      <Route path="/pay/success" component={PaySuccess} />
+      <Route path="/pay/cancel" component={PayCancel} />
+    </Switch>
+  );
+}
+
 function Router() {
+  // Check for public payment routes BEFORE any auth hooks
+  const path = window.location.pathname;
+  if (path.startsWith('/pay/')) {
+    return <PaymentRouter />;
+  }
+
   const { isAuthenticated, isLoading, user } = useAuth();
   
   useWebSocket();
   usePushNotifications();
-
-  // Public payment pages - accessible without authentication
-  const path = window.location.pathname;
-  if (path.startsWith('/pay/')) {
-    return (
-      <Switch>
-        <Route path="/pay/success" component={PaySuccess} />
-        <Route path="/pay/cancel" component={PayCancel} />
-      </Switch>
-    );
-  }
 
   if (isLoading) {
     return (

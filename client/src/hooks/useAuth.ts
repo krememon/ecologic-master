@@ -18,7 +18,8 @@ export function useAuth() {
   const { data: user, isLoading, error } = useQuery<AuthUser | null>({
     queryKey: ["/api/auth/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
-    retry: false,
+    retry: 2, // Retry twice on failure (helps with temporary network issues after redirect)
+    retryDelay: 1000, // Wait 1 second between retries
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
