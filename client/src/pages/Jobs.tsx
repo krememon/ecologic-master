@@ -1766,39 +1766,6 @@ export default function Jobs() {
                     Created {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                   <div className="flex gap-1 flex-shrink-0">
-                    {canGenerateInvoices && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Get customer info from job.customerId or job.client
-                          let customerEmail: string | null = null;
-                          let customerFirstName: string | null = null;
-                          if (job.customerId) {
-                            const customer = allCustomers.find(c => c.id === job.customerId);
-                            if (customer) {
-                              customerEmail = customer.email || null;
-                              customerFirstName = customer.firstName || null;
-                            }
-                          } else if (job.client?.email) {
-                            customerEmail = job.client.email;
-                            customerFirstName = job.client.name?.split(' ')[0] || null;
-                          }
-                          setInvoiceJobData({ 
-                            id: job.id, 
-                            title: job.title,
-                            customerEmail,
-                            customerFirstName,
-                          });
-                        }}
-                        data-testid={`button-invoice-job-${job.id}`}
-                        title="Generate Invoice"
-                      >
-                        <Receipt className="h-4 w-4" />
-                      </Button>
-                    )}
                     <Button 
                       variant="ghost" 
                       size="sm" 
