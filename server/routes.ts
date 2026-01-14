@@ -1827,6 +1827,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               unitPriceCents,
               unit: item.unit || 'each',
               taxable: item.taxable || false,
+              taxId: item.taxable && item.taxId ? item.taxId : null,
+              taxRatePercentSnapshot: item.taxable && item.taxRatePercentSnapshot ? item.taxRatePercentSnapshot : null,
+              taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : null,
               lineTotalCents,
               sortOrder: i,
             });
@@ -1978,6 +1981,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               unitPriceCents: item.unitPriceCents,
               unit: item.unit || 'each',
               taxable: item.taxable || false,
+              taxId: item.taxable && item.taxId ? item.taxId : null,
+              taxRatePercentSnapshot: item.taxable && item.taxRatePercentSnapshot ? item.taxRatePercentSnapshot : null,
+              taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : null,
               lineTotalCents,
               sortOrder: i,
             });

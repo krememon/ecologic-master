@@ -1,0 +1,99 @@
+Upgrade the existing “Taxable” toggle in the Line Item editor so that when Taxable is turned ON, a tax selector appears (dropdown / picker) using the saved taxes from Customize > Taxes. This should work like the screenshots: toggle on -> show selected tax row -> tap to choose tax.
+
+CURRENT
+- Line Item editor already has a “Taxable” toggle (on/off).
+- We now have saved taxes (name + percentage) in Customize > Taxes.
+- User flow:
+  Create New Job -> add/select line items -> tap a line item -> opens line item details screen (with Taxable toggle).
+- Right now, toggling Taxable does NOT let the user choose which tax to apply.
+
+GOAL
+When user toggles “Taxable” ON:
+- Show a new UI row beneath it:
+  - “Tax rate” (or the selected tax name + percent)
+  - chevron/right arrow
+  - shows calculated tax amount for THIS line item (optional now, but preferred)
+- Tapping that row opens a “Tax rates” picker screen listing saved taxes (like the screenshot).
+- User selects ONE tax rate -> returns to line item screen with that tax selected.
+When “Taxable” is OFF:
+- Hide the tax selector row completely
+- Clear the selected tax from that line item (or keep it but do not apply — pick ONE approach and be consistent; preferred: clear it)
+
+CRITICAL
+- No new routing bugs, no broken job creation flow
+- No popups/toasts for success
+- Must persist after refresh (DB-backed)
+- Must automatically be used later in invoice calculations (store the tax selection per line item)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) DATABASE: STORE TAX ON EACH LINE ITEM
+Add fields to job line items table/model:
+- isTaxable (boolean, default false)
+- taxId (nullable)  // references CompanyTax
+- taxRatePercentSnapshot (nullable)  // snapshot at time of selection
+- taxNameSnapshot (nullable)
+
+Reason: tax rates can change later; line item should preserve what was selected.
+
+2) BACKEND: UPDATE LINE ITEM TAX FIELDS
+- Ensure existing line-item create/update endpoints accept:
+  - isTaxable
+  - taxId (optional)
+- Validate:
+  - If isTaxable = false -> force taxId/tax snapshots to null
+  - If isTaxable = true and taxId is set:
+    - verify tax belongs to same company
+    - snapshot name + ratePercent onto the line item
+- Return updated line item
+
+3) FRONTEND: LINE ITEM EDITOR UI
+On the line item details screen:
+- Keep the Taxable toggle.
+- When toggle is ON:
+  show a new “Tax rate” row underneath (like iOS style):
+    Left: Selected tax name (ex: “New York State Tax (8.265%)”)
+    Right: either:
+      - calculated tax amount for this line item (optional)
+      - chevron
+- When toggle is OFF:
+  hide the row entirely
+
+Behavior rules:
+- If user toggles ON and there is no selected tax yet:
+  - auto-open the tax picker OR show “Select tax rate” placeholder row that opens picker when tapped
+- If user toggles OFF:
+  - clear selected tax on that line item and save immediately (or mark dirty and save when user saves line item—match current save pattern)
+
+4) TAX PICKER SCREEN (LIKE SCREENSHOT)
+Create a screen/modal: “Tax rates”
+- Header: Back to Line items
+- List all saved company taxes (GET /api/company/taxes)
+- Selecting one sets it for this line item and navigates back
+- Show checkmark on selected tax
+- Optional plus button to create a new tax (nice to have, not required now)
+
+5) APPLY TAX AMOUNT DISPLAY (OPTIONAL BUT PREFERRED)
+- For the tax row right side value:
+  taxAmount = round(lineItemTotal * ratePercent / 100)
+- Display $0.00 when taxable is on but no tax selected yet
+- Use safe rounding and currency formatting
+
+6) FUTURE-PROOFING FOR INVOICE TOTALS (DO NOT BREAK ANYTHING)
+- Do NOT change Stripe or invoice totals in this task unless already stable.
+- Just store the per-line-item tax selection + taxable flag correctly and ensure UI works.
+
+ACCEPTANCE TEST (MUST PASS)
+- Create a saved tax in Customize (ex: “NY State Tax 8.625%”)
+- Create new job -> add line item -> open line item details
+- Toggle Taxable ON -> tax selector row appears
+- Tap tax selector row -> opens Tax rates screen -> choose NY -> returns and shows selected tax
+- Toggle Taxable OFF -> selector row disappears and tax is cleared
+- Refresh -> line item retains taxable + selected tax when ON
+- Edit job, add new line item, set taxable+tax -> works the same
+
+DELIVERABLES
+- DB fields + API support for line item taxable + tax selection
+- Line item editor: toggle shows/hides tax selector row
+- Tax picker screen listing saved taxes with checkmark selection
+- Persisted selection tied to company, no regressions in job creation flow
