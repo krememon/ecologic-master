@@ -323,6 +323,33 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Pay Invoice Button / Paid Badge */}
+          {invoiceId && isPaid && (
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-3 py-1">
+              <CheckCircle2 className="h-4 w-4" />
+              Paid
+            </Badge>
+          )}
+          {invoiceId && !isPaid && canCreatePaymentLink && (
+            <Button
+              size="sm"
+              onClick={handlePayInvoice}
+              disabled={paymentLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {paymentLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Opening...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Pay
+                </>
+              )}
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
               <Edit className="h-4 w-4 mr-2" />
@@ -532,35 +559,6 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 <span>${(lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
               </div>
               
-              {/* Pay Invoice Section */}
-              {invoiceId && (
-                <div className="mt-4 pt-4 border-t">
-                  {isPaid ? (
-                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 w-fit">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Paid
-                    </Badge>
-                  ) : canCreatePaymentLink ? (
-                    <Button
-                      onClick={handlePayInvoice}
-                      disabled={paymentLoading}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      {paymentLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Creating Payment Link...
-                        </>
-                      ) : (
-                        <>
-                          <CreditCard className="h-4 w-4 mr-2" />
-                          Pay Invoice
-                        </>
-                      )}
-                    </Button>
-                  ) : null}
-                </div>
-              )}
             </CardContent>
           </Card>
 
