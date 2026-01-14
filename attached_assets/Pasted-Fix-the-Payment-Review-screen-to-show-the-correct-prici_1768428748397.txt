@@ -1,0 +1,63 @@
+Fix the Payment Review screen to show the correct pricing/amount (it currently shows $0.00). It must always display the real invoice total and match what Stripe will charge.
+
+CURRENT
+Payment Review screen UI is working, but it displays:
+- Job name correctly
+- Amount and Total incorrectly as $0.00
+
+GOAL
+- Show the correct invoice amount everywhere on the review screen:
+  - Line row amount
+  - Total
+- Amount must be the SAME amount Stripe checkout charges
+- Must handle cents correctly (ex: $350.00)
+- If invoice has payments/partial payments later, show remaining balance (for now, at minimum show invoice total correctly)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY THE SOURCE OF TRUTH FOR AMOUNT
+- Determine what the invoice object actually stores:
+  - total / amount / subtotal / totalAmount / amountDue / totalCents, etc.
+- Confirm whether values are stored in dollars or cents.
+- Log the invoice returned to the review screen once:
+  console.log("[PaymentReview] invoice", invoice)
+
+2) USE THE SAME AMOUNT USED FOR STRIPE CHECKOUT
+- Wherever Stripe checkout session is created, find the exact amount being sent to Stripe (unit_amount).
+- The Payment Review screen must compute/display using the SAME field(s) and logic.
+- If Stripe uses line items sum, match that sum in the review UI.
+
+3) IMPLEMENT A SINGLE HELPER: getInvoiceDisplayAmount()
+- Create a small helper function in the review screen (or shared util) that returns:
+  - amountCents (integer)
+  - amountFormatted (string like $350.00)
+Rules:
+- If invoice has a stored totalCents -> use that
+- Else compute total from line items (sum of item total * qty) and convert properly
+- Never return NaN, undefined, or 0 unless the invoice truly is $0
+
+4) HANDLE THE MOST COMMON DATA SHAPES SAFELY
+- If invoice fields are:
+  - total (dollars) -> convert to cents for formatting
+  - totalCents (cents) -> format directly
+  - lineItems array -> compute
+- Add defensive fallbacks:
+  - If still missing, show “—” and disable Next with inline message “Invoice total missing”
+
+5) FIX BACKEND IF INVOICE TOTAL IS NOT BEING RETURNED
+- If /api/jobs/:id/invoice or invoice endpoint does not include total:
+  - Update backend response to include totalCents (preferred) and/or total
+  - Ensure it’s consistent with Stripe charging logic
+
+6) ACCEPTANCE TEST (MUST PASS)
+- Create invoice with known amount (ex: $350.00)
+- Open Payment Review:
+  - shows $350.00 on the job row
+  - shows $350.00 total
+- Tap Next -> Stripe checkout shows the same amount
+- After payment success -> returns to Jobs page (existing behavior unchanged)
+
+DELIVERABLES
+- Payment Review displays correct invoice total (not $0.00)
+- Uses same source-of-truth as Stripe
+- Defensive handling: never silently shows $0.00 if data missing

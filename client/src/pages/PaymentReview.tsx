@@ -11,7 +11,7 @@ interface Invoice {
   id: number;
   invoiceNumber: string;
   jobId: number;
-  totalCents: number;
+  amount: string; // Stored as decimal string in dollars (e.g., "350.00")
   status: string;
   createdAt: string;
 }
@@ -92,11 +92,11 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     }
   };
 
-  const formatCurrency = (cents: number) => {
+  const formatCurrency = (dollars: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(cents / 100);
+    }).format(dollars);
   };
 
   if (invoiceLoading) {
@@ -121,7 +121,8 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   }
 
   const jobTitle = job?.title || 'Job';
-  const totalAmount = invoice.totalCents || 0;
+  // Invoice amount is stored as decimal string in dollars (e.g., "350.00")
+  const totalAmount = parseFloat(invoice.amount) || 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
