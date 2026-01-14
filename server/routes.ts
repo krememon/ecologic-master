@@ -688,6 +688,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // =====================
+  // Company Taxes Routes
+  // =====================
+
+  // Get company taxes (Owner only)
+  app.get('/api/company/taxes', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const taxes = await storage.getCompanyTaxes(member.companyId);
+      res.json(taxes);
+    } catch (error: any) {
+      console.error('Error fetching company taxes:', error);
+      res.status(500).json({ error: 'Failed to fetch company taxes' });
+    }
+  });
+
+  // Create company tax (Owner only)
+  app.post('/api/company/taxes', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const { name, ratePercent } = req.body;
+      
+      // Validation: name
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ error: 'Tax name is required' });
+      }
+      const trimmedName = name.trim();
+      if (trimmedName.length < 2 || trimmedName.length > 40) {
+        return res.status(400).json({ error: 'Tax name must be 2-40 characters' });
+      }
+      
+      // Validation: ratePercent
+      const rate = parseFloat(ratePercent);
+      if (isNaN(rate) || rate < 0 || rate > 20) {
+        return res.status(400).json({ error: 'Rate must be a number between 0 and 20' });
+      }
+      // Round to 3 decimal places
+      const roundedRate = Math.round(rate * 1000) / 1000;
+      
+      // Create tax
+      const tax = await storage.createCompanyTax({
+        companyId: member.companyId,
+        name: trimmedName,
+        ratePercent: roundedRate.toString(),
+      });
+      
+      res.status(201).json(tax);
+    } catch (error: any) {
+      console.error('Error creating company tax:', error);
+      // Check for unique constraint violation (case-insensitive)
+      if (error.code === '23505' || error.message?.includes('unique')) {
+        return res.status(400).json({ error: 'A tax with this name already exists' });
+      }
+      res.status(500).json({ error: 'Failed to create company tax' });
+    }
+  });
+
+  // Delete company tax (Owner only)
+  app.delete('/api/company/taxes/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const taxId = parseInt(req.params.id);
+      if (isNaN(taxId)) {
+        return res.status(400).json({ error: 'Invalid tax ID' });
+      }
+      
+      await storage.deleteCompanyTax(taxId);
+      res.status(204).send();
+    } catch (error: any) {
+      console.error('Error deleting company tax:', error);
+      res.status(500).json({ error: 'Failed to delete company tax' });
+    }
+  });
+
   // Set company industry and seed price book presets (Owner only - onboarding)
   app.patch('/api/company/industry', isAuthenticated, async (req: any, res) => {
     try {
