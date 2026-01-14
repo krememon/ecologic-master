@@ -1,0 +1,60 @@
+Fix Stripe success now landing on a blank white page (no UI) after payment success. We must surface the error, ensure /stripe/return always renders, and always redirects to /jobs.
+
+CURRENT
+After Stripe payment succeeds, redirect no longer shows the 404 — it now lands on a completely blank white page. This indicates the /stripe/return flow is crashing, stuck, or rendering nothing.
+
+GOAL
+- After Stripe success, /stripe/return must ALWAYS:
+  1) Render safely (never blank page)
+  2) Perform cleanup
+  3) Navigate to /jobs with replace:true
+- User must remain authenticated
+- Jobs list loads with correct layout
+- No 404, no blank page
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CAPTURE THE FRONTEND ERROR CAUSING WHITE PAGE (MANDATORY)
+- Add a global error logger in the frontend entry (App root or main.tsx):
+  window.addEventListener("error", (e) => console.error("[GlobalError]", e.error || e.message));
+  window.addEventListener("unhandledrejection", (e) => console.error("[UnhandledRejection]", e.reason));
+- Add a temporary ErrorBoundary around the router/app layout that renders a visible fallback card with the error message + stack (so we never see blank white).
+- Ensure errors are visible on screen AND in console.
+
+2) CONFIRM THE ROUTE IS ACTUALLY BEING HIT
+- In StripeReturn component, FIRST LINE:
+  console.log("[StripeReturn] mounted", window.location.href);
+- Render a minimal “Returning…” text while redirecting so user never sees blank white.
+  Example: <div style={{padding:16}}>Returning to Jobs…</div>
+
+3) MAKE StripeReturn ROUTE PUBLIC-SAFE (NO AUTH DEADLOCK)
+- White page can happen if route is behind an auth gate that is stuck.
+- Ensure /stripe/return can mount even while auth is resolving.
+- If user is not authenticated yet, show “Restoring session…” and poll /api/auth/user once, then continue.
+- DO NOT redirect to login from /stripe/return. Never log out.
+
+4) STRIP QUERY PARAMS + CLEAN STATE THEN REDIRECT
+- In StripeReturn:
+  - Clear selectedJob, activeJobId, invoice draft, stripe state
+  - Remove query params with navigate("/stripe/return", { replace:true }) OR history.replaceState(null,"", "/stripe/return")
+  - Finally navigate("/jobs", { replace:true })
+- Add a safety timeout:
+  setTimeout(() => navigate("/jobs", { replace:true }), 500)
+  (Only if the normal redirect fails)
+
+5) VERIFY BACKEND IS SERVING THE SPA CORRECTLY (NO EMPTY HTML)
+- Ensure Express serves index.html for /stripe/return (SPA fallback)
+- Confirm /stripe/return returns the same index.html as /jobs and / (not a blank response)
+
+6) RETEST (MUST PASS)
+- Pay invoice -> Stripe success -> returns to /stripe/return
+- We see “Returning to Jobs…” for a moment
+- Then lands on Jobs list with full layout
+- Refresh works
+- Back works
+- No blank page
+
+DELIVERABLES
+- Show the exact console error that caused the blank page and the code fix
+- Keep ErrorBoundary + global error logging until confirmed stable (then you may remove the visible overlay if desired, but keep basic logging)
+- Confirm StripeReturn always renders a visible fallback and always ends on /jobs

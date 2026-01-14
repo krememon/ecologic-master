@@ -4,8 +4,18 @@ import PublicSignApp from "./public/PublicSignApp";
 import "./index.css";
 import "./i18n/config";
 
+// Global error handlers to catch any crashes
+window.addEventListener("error", (e) => {
+  console.error("[GlobalError]", e.error || e.message, e);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("[UnhandledRejection]", e.reason);
+});
+
+console.log("[main.tsx] Starting app initialization, pathname:", window.location.pathname);
+
 // App version for cache-busting (update this when deploying significant changes)
-const APP_VERSION = "2026.01.14.2";
+const APP_VERSION = "2026.01.14.3";
 
 // Version check and cache-bust mechanism
 const checkAndClearCache = async () => {
@@ -36,11 +46,19 @@ const checkAndClearCache = async () => {
 
 // Check if this is a public signing route - render standalone component
 const isPublicSignRoute = window.location.pathname.startsWith('/sign/');
+// Check if this is a Stripe return route - skip cache-busting to avoid reload loops
+const isStripeReturnRoute = window.location.pathname.startsWith('/stripe/') || 
+                           window.location.pathname.startsWith('/pay/');
 
 // Initialize app with cache check
 const initApp = async () => {
-  const shouldRender = await checkAndClearCache();
-  if (!shouldRender) return; // Page is reloading
+  // Skip cache-busting for payment return routes to prevent reload loops
+  if (!isStripeReturnRoute) {
+    const shouldRender = await checkAndClearCache();
+    if (!shouldRender) return; // Page is reloading
+  } else {
+    console.log("[main.tsx] Payment return route detected, skipping cache check");
+  }
   
   if (isPublicSignRoute) {
     console.log("[main.tsx] Public sign route detected, rendering PublicSignApp");
