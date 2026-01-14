@@ -431,8 +431,10 @@ export default function Jobs() {
           query.queryKey[0].startsWith('/api/schedule-items')
       });
       setIsDialogOpen(false);
-      // Navigate to job detail page (no success toast)
-      setSelectedJob(newJob);
+      // Ensure no job detail/insights overlay opens - stay on jobs list
+      setSelectedJob(null);
+      // Navigate to jobs list (ensure we're on the correct route)
+      setLocation("/jobs");
     },
     onError: (error: Error) => {
       // Try to parse error message for field-specific errors
