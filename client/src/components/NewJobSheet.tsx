@@ -29,7 +29,17 @@ interface LineItem {
   priceDisplay: string;
   unit: string;
   taxable: boolean;
+  taxId: number | null;
+  taxRatePercentSnapshot: string | null;
+  taxNameSnapshot: string | null;
   saveToPriceBook: boolean;
+}
+
+interface CompanyTax {
+  id: number;
+  companyId: number;
+  name: string;
+  ratePercent: string;
 }
 
 function formatCurrency(cents: number): string {
@@ -140,7 +150,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const [notes, setNotes] = useState("");
   const [jobType, setJobType] = useState<string | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }
+    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }
   ]);
 
   // Modal states
@@ -178,6 +188,15 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     queryKey: ['/api/org/users'],
   });
   const allEmployees = employeesData?.users || [];
+
+  // Fetch company taxes
+  const { data: companyTaxes = [] } = useQuery<CompanyTax[]>({
+    queryKey: ['/api/company/taxes'],
+  });
+
+  // Tax picker modal state
+  const [taxPickerOpen, setTaxPickerOpen] = useState(false);
+  const [taxPickerLineItemIndex, setTaxPickerLineItemIndex] = useState<number | null>(null);
 
   // Employee search
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -259,6 +278,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
           priceDisplay: formatCurrency(item.unitPriceCents || 0),
           unit: item.unit || "each",
           taxable: item.taxable || false,
+          taxId: item.taxId || null,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+          taxNameSnapshot: item.taxNameSnapshot || null,
           saveToPriceBook: false,
         })));
       }
@@ -450,7 +472,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     setAssignedEmployees([]);
     setNotes("");
     setJobType(null);
-    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
     setCustomerSearch("");
     setEmployeeSearch("");
     setPendingCustomerForLocation(null);
@@ -589,7 +611,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
   };
 
   const addLineItemFromPriceBook = (item: LineItem) => {
@@ -606,15 +628,35 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     if (field === 'unitPriceCents') {
       updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(String(value)) * 100) || 0;
-    } else if (field === 'taxable' || field === 'saveToPriceBook') {
+    } else if (field === 'taxable') {
       updated[index][field] = value as boolean;
+      // Clear tax selection when taxable is turned off
+      if (!value) {
+        updated[index].taxId = null;
+        updated[index].taxRatePercentSnapshot = null;
+        updated[index].taxNameSnapshot = null;
+      }
+    } else if (field === 'saveToPriceBook') {
+      updated[index][field] = value as boolean;
+    } else if (field === 'taxId') {
+      updated[index][field] = value as number | null;
+    } else if (field === 'taxRatePercentSnapshot' || field === 'taxNameSnapshot') {
+      updated[index][field] = value as string | null;
     } else {
       updated[index][field] = value as string;
     }
+    setLineItems(updated);
+  };
+
+  const setLineItemTax = (index: number, tax: CompanyTax) => {
+    const updated = [...lineItems];
+    updated[index].taxId = tax.id;
+    updated[index].taxRatePercentSnapshot = tax.ratePercent;
+    updated[index].taxNameSnapshot = tax.name;
     setLineItems(updated);
   };
 
@@ -1233,6 +1275,26 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                     onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
                   />
                 </div>
+                {item.taxable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTaxPickerLineItemIndex(index);
+                      setTaxPickerOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between py-2 px-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md transition-colors"
+                  >
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Tax rate</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {item.taxNameSnapshot 
+                          ? `${item.taxNameSnapshot} (${parseFloat(item.taxRatePercentSnapshot || '0').toFixed(3)}%)`
+                          : 'Select tax rate'}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                    </div>
+                  </button>
+                )}
                 <div className="flex items-center justify-between py-1 border-t pt-2">
                   <div>
                     <Label className="text-sm font-normal">Save to Price Book</Label>
@@ -1316,6 +1378,60 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* TAX PICKER Modal */}
+      <Dialog open={taxPickerOpen} onOpenChange={setTaxPickerOpen}>
+        <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
+          <DialogHeader className="pb-2">
+            <DialogTitle>Tax rates</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="space-y-1">
+              {companyTaxes.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 dark:text-slate-400">
+                  <p className="text-sm">No tax rates configured</p>
+                  <p className="text-xs mt-1">Add taxes in Customize &gt; Taxes</p>
+                </div>
+              ) : (
+                companyTaxes.map((tax) => {
+                  const isSelected = taxPickerLineItemIndex !== null && 
+                    lineItems[taxPickerLineItemIndex]?.taxId === tax.id;
+                  return (
+                    <button
+                      key={tax.id}
+                      type="button"
+                      onClick={() => {
+                        if (taxPickerLineItemIndex !== null) {
+                          setLineItemTax(taxPickerLineItemIndex, tax);
+                          setTaxPickerOpen(false);
+                          setTaxPickerLineItemIndex(null);
+                        }
+                      }}
+                      className="w-full flex items-center justify-between py-3 px-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <div className="text-left">
+                        <span className="text-sm font-medium">{tax.name}</span>
+                        <span className="text-sm text-slate-500 ml-2">({parseFloat(tax.ratePercent).toFixed(3)}%)</span>
+                      </div>
+                      {isSelected && (
+                        <Check className="h-5 w-5 text-green-600" />
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+          <div className="flex justify-end pt-4 border-t">
+            <Button variant="outline" onClick={() => {
+              setTaxPickerOpen(false);
+              setTaxPickerLineItemIndex(null);
+            }}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

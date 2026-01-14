@@ -22,6 +22,9 @@ interface LineItem {
   priceDisplay: string;
   unit: string;
   taxable: boolean;
+  taxId: number | null;
+  taxRatePercentSnapshot: string | null;
+  taxNameSnapshot: string | null;
   saveToPriceBook: boolean;
 }
 
@@ -84,6 +87,9 @@ export function PriceBookPickerModal({
         priceDisplay: (createdItem.defaultPriceCents / 100).toFixed(2),
         unit: createdItem.unit,
         taxable: createdItem.taxable,
+        taxId: null,
+        taxRatePercentSnapshot: null,
+        taxNameSnapshot: null,
         saveToPriceBook: false,
       };
       onAddItem(lineItem);
@@ -130,6 +136,9 @@ export function PriceBookPickerModal({
       priceDisplay: (item.defaultPriceCents / 100).toFixed(2),
       unit: item.unit,
       taxable: item.taxable,
+      taxId: null,
+      taxRatePercentSnapshot: null,
+      taxNameSnapshot: null,
       saveToPriceBook: false,
     };
     onAddItem(lineItem);
