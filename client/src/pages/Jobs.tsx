@@ -174,10 +174,13 @@ export default function Jobs() {
   };
 
 
-  const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
+  const { data: rawJobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
   });
+  
+  // De-duplicate jobs as a safety measure (in case of query issues)
+  const jobs = Array.from(new Map(rawJobs.map(j => [j.id, j])).values());
 
   // Fetch all estimates for the main page tab (only if user can access estimates)
   const { data: allEstimates = [], isLoading: estimatesLoading, error: estimatesError } = useQuery<Estimate[]>({

@@ -1,0 +1,115 @@
+CRITICAL FIX: LOGIN SOMETIMES LOADS OLD APP VERSION + JOBS ARE DUPLICATING AFTER PAYMENT
+
+ISSUES
+A) After being logged out and signing back in, the app sometimes loads a very old version/UI.
+B) Jobs are duplicating (same customer/job appears twice) even though only one job was created and paid.
+
+GOAL
+- Login should ALWAYS load the CURRENT app (latest routes/components), never an old version.
+- Job creation and payment completion must be idempotent (no duplicates).
+- Jobs list must never show duplicates.
+
+--------------------------------------------
+PART 1 — STOP “OLD VERSION” APP FROM LOADING
+
+1) CHECK AUTH REDIRECT TARGET
+- Find login success redirect logic (frontend + backend).
+- Ensure it always redirects to the correct modern app route (e.g. /jobs or /dashboard), NOT an old path like /app, /home, /index.html, etc.
+- Ensure it uses the correct base URL/host (no old subdomain, no old Replit URL, no preview URL).
+
+2) FIX ROUTER FALLBACK / BUILD SERVE
+- Ensure the server always serves the SAME built SPA for all app routes (React router fallback to index.html).
+- Avoid multiple static build folders or legacy index.html files.
+- Confirm there is only ONE frontend entry point being served in production.
+
+3) CACHE BUSTING (VERY IMPORTANT)
+- Add a build/version identifier and force reload when client is outdated:
+  - expose APP_VERSION from env or build hash
+  - store lastSeenVersion in localStorage
+  - if version changes, hard refresh once
+- Ensure service worker (if any) is not caching old assets:
+  - remove service worker if not needed
+  - or call unregister() / disable aggressive caching
+- Add cache-control headers for index.html to prevent stale loads if possible.
+
+4) POST-LOGIN ROUTE GUARANTEE
+- After login success:
+  - route to /jobs (or the main dashboard)
+  - never route to a legacy page
+- If user hits a legacy route, redirect it to the modern equivalent.
+
+DELIVERABLE A
+- Logging in always loads the current UI.
+- No path/host/cached bundle can load an older version.
+
+--------------------------------------------
+PART 2 — FIX JOB DUPLICATION (CREATE/PAY FLOW MUST BE IDEMPOTENT)
+
+We must identify WHERE duplicates are created: create job, create invoice, payment verify, or list query.
+
+1) DETECT IF DUPLICATES ARE REAL DB ROWS
+- Check DB: are there actually two job rows for Jennifer?
+- Compare:
+  - job.id
+  - createdAt timestamps
+  - customerId
+  - lineItems hash/total
+If two rows exist -> creation is happening twice.
+If only one exists -> UI query/merge is duplicating display.
+
+2) PREVENT DOUBLE JOB CREATION (FRONTEND)
+- On “Create Job” submit:
+  - disable Save immediately
+  - show loading state
+  - prevent double click
+  - ensure handler runs once (no double useEffect triggers)
+- Add client-side idempotency key:
+  - generate a uuid on submit and send with request (x-idempotency-key)
+
+3) PREVENT DOUBLE JOB CREATION (BACKEND)
+- Implement idempotency on POST /api/jobs:
+  - if request includes idempotency_key:
+    - store it on job row or a separate table
+    - if same key seen again, return the existing created job instead of creating a new one
+- Alternatively enforce a unique constraint on (companyId, idempotency_key).
+
+4) PAYMENT FLOW MUST NOT CREATE JOBS
+- Confirm that payment success / webhook / verify endpoint does NOT create a new job.
+- Payment flow should ONLY:
+  - mark invoice as paid
+  - attach payment record
+  - update job status (optional)
+- If webhook currently creates a job/invoice again, stop it and make it update existing records.
+
+5) INVOICE DUPLICATION SAFETY
+- Ensure invoice generation for a job is “one current invoice” unless user regenerates:
+  - store job.currentInvoiceDocumentId or query latest invoice doc by jobId + type="invoice"
+  - regenerating replaces current, doesn’t create duplicates in the Jobs list.
+
+6) FIX JOBS LIST QUERY (UI DUPES)
+- If jobs list is built from joins (jobs + documents + invoices):
+  - ensure the query returns distinct jobs
+  - or frontend de-dupes by job.id before rendering
+- Add a safeguard in UI:
+  - const uniqueJobs = Array.from(new Map(jobs.map(j => [j.id, j])).values())
+
+7) CLEANUP EXISTING DUPLICATES
+- If duplicates exist in DB:
+  - write a safe admin cleanup script:
+    - keep the job that has “paid” invoice/payment linked
+    - merge any documents/attachments to kept job
+    - delete the duplicate job row
+- If duplicates are only UI-level, fix query and no cleanup needed.
+
+TESTS (MUST PASS)
+- Create job once -> only one job row exists
+- Pay invoice -> still one job row exists; job shows Paid
+- Refresh -> no duplicates
+- Login/logout/login -> always loads current app UI
+- No old version ever appears again
+
+DELIVERABLES
+- Stable login routing + cache-bust so old app cannot load
+- Job creation + payment flow idempotent
+- Jobs list de-duped and correct
+- Remove any existing duplicate job if it truly exists in DB

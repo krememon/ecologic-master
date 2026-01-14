@@ -653,6 +653,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getJobs(companyId: number): Promise<any[]> {
+    // First get jobs with clients (no invoice join to avoid duplicates)
     const jobsList = await db
       .select({
         id: jobs.id,
@@ -682,21 +683,37 @@ export class DatabaseStorage implements IStorage {
           email: clients.email,
           phone: clients.phone,
         },
-        invoiceStatus: invoices.status,
       })
       .from(jobs)
       .leftJoin(clients, eq(jobs.clientId, clients.id))
-      .leftJoin(invoices, eq(invoices.jobId, jobs.id))
       .where(eq(jobs.companyId, companyId))
       .orderBy(desc(jobs.createdAt));
     
-    // Fetch first line item for each job
     const jobIds = jobsList.map(j => j.id);
     if (jobIds.length === 0) return jobsList.map(job => ({
       ...job,
-      isPaid: job.invoiceStatus?.toLowerCase() === 'paid',
+      isPaid: false,
+      primaryLineItem: null,
     }));
     
+    // Fetch invoice status for all jobs in one query (avoid duplicates by grouping)
+    const invoiceStatuses = await db
+      .select({
+        jobId: invoices.jobId,
+        status: invoices.status,
+      })
+      .from(invoices)
+      .where(inArray(invoices.jobId, jobIds));
+    
+    // Build map of job -> isPaid (true if any invoice is paid)
+    const paidStatusByJob: Record<number, boolean> = {};
+    for (const inv of invoiceStatuses) {
+      if (inv.jobId && inv.status?.toLowerCase() === 'paid') {
+        paidStatusByJob[inv.jobId] = true;
+      }
+    }
+    
+    // Fetch first line item for each job
     const allLineItems = await db
       .select()
       .from(jobLineItems)
@@ -715,7 +732,7 @@ export class DatabaseStorage implements IStorage {
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
-      isPaid: job.invoiceStatus?.toLowerCase() === 'paid',
+      isPaid: paidStatusByJob[job.id] || false,
     }));
   }
 
