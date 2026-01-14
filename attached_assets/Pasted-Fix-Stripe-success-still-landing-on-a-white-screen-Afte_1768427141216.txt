@@ -1,0 +1,59 @@
+Fix Stripe success still landing on a white screen. After successful payment, user MUST always end up on /jobs (Jobs list). Implement a backend-safe redirect for /stripe/return and ensure SPA fallback serves index.html for /jobs.
+
+CURRENT
+- Stripe success_url is now correct and matches current origin:
+  https://...picard.replit.dev/stripe/return
+- After payment success, browser shows a blank white page.
+- Server logs do NOT show any GET /stripe/return request after Stripe completes, so the return route is either not being handled/logged correctly or it returns empty content.
+
+GOAL
+- After payment success, user ALWAYS ends up on the Jobs page (/jobs).
+- No white screen. No 404.
+- Never log the user out.
+- Jobs list is safe landing page.
+- No auto-open job.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ADD SERVER-SIDE STRIPE RETURN ROUTE (BULLETPROOF FIX)
+- In server (Express), add an explicit route handler:
+  GET /stripe/return  -> 302 redirect to /jobs
+- This guarantees Stripe returns to Jobs even if SPA route handling is broken.
+
+REQUIREMENT:
+- Add a clear server log for this hit:
+  console.log("[StripeReturn] hit", req.originalUrl)
+
+2) ENSURE SERVER LOGS SHOW /stripe/return + /jobs
+- Update request logger to log all non-API GET requests too (not just /api).
+- Confirm when Stripe returns you see:
+  GET /stripe/return
+  then redirect -> GET /jobs
+
+3) ENSURE SPA FALLBACK SERVES THE SAME index.html FOR /jobs
+- In Express, ensure that for any non-API route (including /jobs) we serve the SPA index.html.
+- Do NOT allow /jobs to return blank HTML or different build.
+- If using express.static + fallback, confirm order is correct:
+  - Serve static assets
+  - Then fallback: app.get("*", serve index.html) for non-API
+
+4) FRONTEND SAFETY CLEANUP (IN CASE STATE IS CAUSING BLANK UI)
+- On Jobs page mount, clear transient payment/job state:
+  - selectedJob = null
+  - activeJobId = null
+  - any stripe/payment UI state
+  - strip any payment query params (history.replaceState)
+- Do NOT auto-open Job Insights.
+
+5) ACCEPTANCE TEST (MUST PASS)
+- Create invoice -> Pay with Stripe -> Success
+- App returns to SAME origin
+- Server logs show GET /stripe/return then redirect to /jobs
+- Jobs list renders normally (no white screen)
+- Refresh on /jobs works
+- Back button does not log out user
+
+DELIVERABLES
+- Confirm backend contains GET /stripe/return redirecting to /jobs
+- Provide console logs proving /stripe/return is being hit and /jobs loads after redirect
+- Confirm no white screen after payment success

@@ -228,6 +228,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   }, express.static('uploads'));
 
+  // SERVER-SIDE STRIPE RETURN HANDLER - Bulletproof redirect to /jobs
+  // This ensures Stripe always lands on Jobs even if SPA routing fails
+  app.get('/stripe/return', (req, res) => {
+    console.log('[StripeReturn] Server-side hit:', req.originalUrl);
+    console.log('[StripeReturn] Redirecting to /jobs');
+    res.redirect(302, '/jobs');
+  });
+
+  // Also handle /pay/* routes server-side for safety
+  app.get('/pay/success', (req, res) => {
+    console.log('[PaySuccess] Server-side hit:', req.originalUrl);
+    res.redirect(302, '/jobs');
+  });
+  app.get('/pay/cancel', (req, res) => {
+    console.log('[PayCancel] Server-side hit:', req.originalUrl);
+    res.redirect(302, '/jobs');
+  });
+
   // General file upload endpoint (for logos, etc.)
   app.post('/api/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
