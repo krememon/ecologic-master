@@ -1,8 +1,29 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { XCircle } from "lucide-react";
+import { XCircle, ArrowLeft } from "lucide-react";
+import { useLocation } from "wouter";
+import { useEffect } from "react";
 
 export default function PayCancel() {
+  const [, setLocation] = useLocation();
+  
+  // Get invoiceId from URL params to potentially navigate back to job
+  const params = new URLSearchParams(window.location.search);
+  const invoiceId = params.get('invoiceId');
+  
+  // Auto-redirect to jobs after 3 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLocation("/jobs");
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [setLocation]);
+  
+  const handleGoBack = () => {
+    // Navigate to jobs list
+    setLocation("/jobs");
+  };
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-md">
@@ -17,14 +38,14 @@ export default function PayCancel() {
         </CardHeader>
         <CardContent className="text-center space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            If you have any questions, please contact the company that sent you this invoice.
+            You will be redirected back to your jobs in a few seconds.
           </p>
           <Button
-            variant="outline"
-            onClick={() => window.close()}
+            onClick={handleGoBack}
             className="w-full"
           >
-            Close Window
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Jobs
           </Button>
         </CardContent>
       </Card>

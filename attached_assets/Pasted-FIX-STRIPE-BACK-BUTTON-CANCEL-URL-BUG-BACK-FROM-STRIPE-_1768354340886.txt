@@ -1,0 +1,61 @@
+FIX STRIPE BACK BUTTON / CANCEL URL BUG:
+BACK FROM STRIPE SHOULD RETURN TO CURRENT APP JOBS PAGE (NO 404, NO OLD APP)
+
+SYMPTOM
+- While on Stripe hosted payment page, pressing Back returns to our app, but:
+  - it hits a 404 route
+  - then loads a very old version of the app (legacy UI)
+- This is caused by incorrect Stripe cancel_url / success_url OR server SPA routing fallback issues OR wrong deployment host.
+
+GOAL
+- Stripe “Back” (cancel) and “success” redirects must ALWAYS return to the current app build and a valid route.
+- No 404. No old app. No logout.
+
+DO THIS IN ORDER
+
+1) FIND WHERE STRIPE SESSION IS CREATED
+- Locate backend code that creates Stripe Checkout Session.
+- Print/log the exact URLs being set:
+  success_url
+  cancel_url
+
+2) SET CORRECT RETURN URLS (MUST BE CURRENT APP ROUTES)
+- Replace any old/legacy URLs with the current frontend base URL.
+- cancel_url MUST go to a real route that exists in the SPA:
+  Example:
+    `${APP_BASE_URL}/jobs`
+  OR `${APP_BASE_URL}/jobs?stripe=cancel`
+- success_url MUST also go to a real route:
+  Example:
+    `${APP_BASE_URL}/payments/success?session_id={CHECKOUT_SESSION_ID}`
+- Do NOT use any old routes like /job, /dashboard-old, /app-old, etc.
+- Do NOT use an API endpoint as success/cancel URL.
+
+3) SINGLE SOURCE OF TRUTH FOR APP BASE URL
+- Create an env var (frontend base):
+  APP_BASE_URL = the current deployed domain for the app
+- Use it consistently in Stripe session creation.
+- Ensure it does not point to an old Replit preview URL.
+
+4) FIX SPA FALLBACK ON SERVER (PREVENT 404 ON REFRESH/RETURN)
+- Ensure backend serves index.html for all frontend routes:
+  /jobs
+  /jobs/:id
+  /clients/:id
+  /payments/success
+- If express is serving static files, add a catch-all that sends the same SPA index.html for unknown routes (excluding /api).
+- This prevents 404 when Stripe returns to /jobs or /payments/success.
+
+5) REMOVE LEGACY BUILD/PATHS
+- Confirm server is not serving two different frontend builds (old and new).
+- Remove any legacy static folder mappings that could serve an old index.html.
+- Ensure only ONE build output directory is used.
+
+6) VERIFY
+- Go to Stripe pay page -> hit Back -> returns to /jobs in current UI (no 404)
+- Cancel payment -> returns to /jobs
+- Success payment -> returns to /payments/success then navigates to /jobs/:jobId (or /jobs)
+- No old UI ever loads
+
+DELIVERABLE
+- Back/cancel/success from Stripe reliably returns to the current app without 404 or loading an old build.
