@@ -1,0 +1,56 @@
+REMOVE THE AUTO-OPEN “JOB INSIGHTS / PLACEHOLDER” SCREEN AFTER CREATING A NEW JOB
+
+PROBLEM
+- Immediately after creating a new Job, the app auto-opens a screen that looks like “inside the job card” (Job Insights-style modal/page).
+- This is NOT desired and feels like an extra placeholder screen.
+- After job creation, user should return to the normal Jobs list (job cards page) and NOTHING should auto-open.
+
+GOAL
+- On successful job creation:
+  1) Create job
+  2) Navigate back to Jobs list/cards page
+  3) Ensure NO Job detail/insights modal/page opens automatically
+  4) The new job appears in the list
+
+IMPLEMENTATION (DO THIS IN ORDER)
+
+1) FIND THE JOB CREATE SUCCESS HANDLER
+- Locate the code that runs after POST /api/jobs succeeds.
+- Look for any of these patterns and remove/disable them:
+  - setSelectedJob(createdJob)
+  - openJobInsights(createdJob.id)
+  - setIsJobModalOpen(true)
+  - navigate(`/jobs/${createdJob.id}`) (if this triggers the placeholder)
+  - query param like `?jobId=` or `?openJob=` being added
+
+2) FORCE NAVIGATION TO JOBS LIST ONLY
+- Replace success navigation with:
+  navigate("/jobs")   // or the actual route for job cards list
+- Do NOT push any “open details” state into the URL.
+
+3) CLEAR ANY “AUTO OPEN” STATE ON JOBS LIST PAGE
+- In Jobs list page, check for logic that auto-opens a job when:
+  - there is a selectedJob in global state
+  - a jobId exists in URL params/query
+  - a “lastCreatedJobId” exists in localStorage/context
+- Remove that behavior OR ensure it is cleared after create:
+  - setSelectedJob(null)
+  - setActiveJobId(null)
+  - setIsJobInsightsOpen(false)
+
+4) REMOVE/DEACTIVATE PLACEHOLDER ROUTE (IF IT EXISTS)
+- If there’s a route that renders this placeholder (ex: /jobs/:id or /jobs/view/:id) that is still modal-like:
+  - ensure create flow never navigates there
+  - optionally redirect that route to the proper new Job Detail page (if we keep one)
+
+5) VERIFY
+- Create New Job -> Save
+- Result:
+  - lands on Jobs list/cards page
+  - NO modal/page opens automatically
+  - new job is visible in the list
+- Refresh Jobs list -> nothing auto-opens
+
+DELIVERABLE
+- The auto-opening placeholder “job insights” screen after job creation is fully removed.
+- Job creation returns cleanly to Jobs list every time.

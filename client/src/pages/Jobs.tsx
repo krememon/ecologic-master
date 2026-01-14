@@ -897,8 +897,9 @@ export default function Jobs() {
       <NewJobSheet 
         open={isDialogOpen} 
         onOpenChange={setIsDialogOpen}
-        onJobCreated={(newJob) => {
-          setSelectedJob(newJob);
+        onJobCreated={() => {
+          // Job created - stay on jobs list, don't open any modal
+          setSelectedJob(null);
         }}
       />
 
