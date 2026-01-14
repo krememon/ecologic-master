@@ -1,0 +1,93 @@
+Implement a “Payment Review” screen BEFORE Stripe checkout (like the screenshot). Only when user taps “Next” should we create the Stripe session and navigate to Stripe checkout. Must introduce 0 regressions/bugs.
+
+CURRENT
+- Clicking “Pay” (or equivalent) brings user directly into Stripe checkout.
+- We already fixed Stripe return routing (/stripe/return -> /jobs).
+- We do NOT want more debugging loops or broken routing.
+
+GOAL
+Add an intermediate screen that matches the screenshot concept:
+- Title: “Checkout”
+- Shows the invoice/job summary and total
+- Has an “X” close button (top left) that safely returns to Jobs (or back to previous page) WITHOUT changing state
+- Has a “Next” button (top right) that triggers Stripe checkout
+- Optional “+ Note” area (can be placeholder now, stored locally only, NOT required to save)
+- “Payment History” section label (can be placeholder now)
+- No new popups/toasts for success
+
+CRITICAL RULES
+- Jobs list is the safe landing page after payment return
+- No auto-opening job
+- No new routing bugs, no 404, no white screens
+- Checkout session MUST be created ONLY when user taps “Next”
+- Must not create duplicate Stripe sessions on double-click
+- Must not break existing invoice creation, email invoice, or paid status logic
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ADD A NEW FRONTEND SCREEN/ROUTE (SAFE)
+- Create a new route/page: /payments/review/:invoiceId
+  (or /jobs/:jobId/invoice/:invoiceId/review — choose the simplest existing routing pattern)
+- This page is ONLY a review page, no Stripe call on mount.
+- It must work on mobile layout first (same vibe as screenshot).
+
+2) UI REQUIREMENTS (MATCH SCREENSHOT BEHAVIOR)
+Top bar:
+- Left: “X” close button
+- Right: “Next” button
+
+Body:
+- Header: “Checkout”
+- Row showing: “Job” and amount (e.g., $350.00)
+- “Total” row with same amount
+- “+ Note” link (optional; if clicked, open a small textarea inline; store in local component state only)
+- “PAYMENT HISTORY:” label (placeholder; can render “No payments yet”)
+
+3) DATA LOADING (NO CRASHES)
+- Fetch invoice details by invoiceId using existing endpoint (whatever is already used in invoice view)
+- Display:
+  - job/label (fallback to “Job” if missing)
+  - total amount
+- Show a skeleton/loading state while fetching
+- Show a simple inline error state if invoice not found (with a “Back to Jobs” button)
+
+4) NEXT BUTTON = STRIPE CHECKOUT (ONLY ACTION)
+- On clicking “Next”:
+  - disable the button immediately (loading state)
+  - call existing POST /api/payments/checkout with invoiceId (and returnBaseUrl as we already do)
+  - then redirect user to Stripe checkout URL returned
+- IMPORTANT:
+  - guard against double clicks (idempotent in UI)
+  - if API fails, re-enable Next and show ONE inline error message (no toast)
+
+5) CLOSE (X) BUTTON BEHAVIOR
+- X must safely exit the review screen without side effects:
+  - navigate(-1) if there is history
+  - otherwise navigate('/jobs', { replace:true })
+- Must not clear auth session
+- Must not mutate invoice/job state
+
+6) WIRING: WHERE THIS IS LAUNCHED FROM
+- Update the existing “Pay” button entry point so it navigates to:
+  /payments/review/:invoiceId
+  instead of immediately calling Stripe
+- Do not change any other invoice flows
+
+7) TESTS / ACCEPTANCE (MUST PASS)
+- From a Job invoice screen, tap Pay:
+  -> lands on Payment Review screen (not Stripe)
+- Tap X:
+  -> returns to previous page or Jobs safely, no state bugs
+- Tap Next once:
+  -> goes to Stripe checkout
+- Complete payment:
+  -> returns via /stripe/return and lands on Jobs list
+- Refresh on review screen:
+  -> still renders (no blank screen, no 404)
+- No new duplicate payments or duplicate Stripe sessions on double tap
+
+DELIVERABLES
+- New Payment Review page + route
+- Pay button now routes to review page first
+- Next triggers Stripe checkout only on click (with loading/disable)
+- No regressions in routing, auth, invoices, or Jobs landing behavior
