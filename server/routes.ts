@@ -47,10 +47,24 @@ import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { invoices, payments } from "../shared/schema";
 
-// Initialize Stripe only if secret key is available
-const stripe = process.env.STRIPE_SECRET_KEY 
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-04-30.basil" as any })
+// Initialize Stripe only if secret key is available and valid
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
+const stripeKeyPrefix = stripeSecretKey.slice(0, 7);
+
+// Validate the key prefix at startup
+if (stripeSecretKey && !stripeSecretKey.startsWith("sk_test_") && !stripeSecretKey.startsWith("sk_live_")) {
+  console.error(`[stripe] ERROR: STRIPE_SECRET_KEY has invalid prefix "${stripeKeyPrefix}". Must start with sk_test_ or sk_live_`);
+}
+
+const stripe = stripeSecretKey && (stripeSecretKey.startsWith("sk_test_") || stripeSecretKey.startsWith("sk_live_"))
+  ? new Stripe(stripeSecretKey, { apiVersion: "2025-04-30.basil" as any })
   : null;
+
+if (stripe) {
+  console.log(`[stripe] Initialized with key prefix: ${stripeKeyPrefix}`);
+} else if (stripeSecretKey) {
+  console.error(`[stripe] NOT initialized - invalid key prefix: ${stripeKeyPrefix}`);
+}
 
 // Subscription plans removed
 
