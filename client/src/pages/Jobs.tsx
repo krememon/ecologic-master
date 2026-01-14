@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Eye, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -1766,33 +1766,6 @@ export default function Jobs() {
                     Created {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                   <div className="flex gap-1 flex-shrink-0">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0 text-green-500 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/jobs/${job.id}`);
-                      }}
-                      data-testid={`button-view-job-${job.id}`}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    {isAdmin && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-purple-500 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCrewJobId(job.id);
-                          setIsAssignModalOpen(true);
-                        }}
-                        data-testid={`button-crew-job-${job.id}`}
-                      >
-                        <Users className="h-4 w-4" />
-                      </Button>
-                    )}
                     {canGenerateInvoices && (
                       <Button 
                         variant="ghost" 
