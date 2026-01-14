@@ -144,8 +144,8 @@ function Router() {
         <Route path="/jobs/:id">
           {(params) => <JobDetails jobId={params.id} />}
         </Route>
-        <Route path="/payments/review/:invoiceId">
-          {(params) => <PaymentReview invoiceId={params.invoiceId} />}
+        <Route path="/jobs/:jobId/pay/:invoiceId">
+          {(params) => <PaymentReview jobId={params.jobId} invoiceId={params.invoiceId} />}
         </Route>
         <Route path="/stripe/return" component={StripeReturn} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>

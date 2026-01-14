@@ -222,7 +222,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       }
       
       // Navigate to Payment Review page instead of direct Stripe checkout
-      navigate(`/payments/review/${inv.id}`);
+      navigate(`/jobs/${jobId}/pay/${inv.id}`);
     } catch (error: any) {
       setPaymentLoading(false);
       toast({

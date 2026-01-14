@@ -22,36 +22,42 @@ interface Job {
 }
 
 interface PaymentReviewProps {
+  jobId: string;
   invoiceId: string;
 }
 
-export default function PaymentReview({ invoiceId }: PaymentReviewProps) {
+export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) {
   const [, navigate] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState("");
 
+  const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
 
-  const { data: invoice, isLoading: invoiceLoading, error: invoiceError } = useQuery<Invoice>({
-    queryKey: ['/api/invoices', numericInvoiceId],
+  // Fetch invoice via the existing job invoice endpoint
+  const { data: invoiceData, isLoading: invoiceLoading, error: invoiceError } = useQuery<{ invoice: Invoice | null }>({
+    queryKey: ['/api/jobs', numericJobId, 'invoice'],
     queryFn: async () => {
-      const res = await fetch(`/api/invoices/${numericInvoiceId}`, { credentials: 'include' });
+      const res = await fetch(`/api/jobs/${numericJobId}/invoice`, { credentials: 'include' });
       if (!res.ok) throw new Error('Invoice not found');
       return res.json();
     },
-    enabled: !isNaN(numericInvoiceId),
+    enabled: !isNaN(numericJobId),
   });
 
+  const invoice = invoiceData?.invoice;
+
+  // Fetch job details for title
   const { data: job } = useQuery<Job>({
-    queryKey: ['/api/jobs', invoice?.jobId],
+    queryKey: ['/api/jobs', numericJobId],
     queryFn: async () => {
-      const res = await fetch(`/api/jobs/${invoice?.jobId}`, { credentials: 'include' });
-      if (!res.ok) return { id: invoice?.jobId || 0, title: 'Job' };
+      const res = await fetch(`/api/jobs/${numericJobId}`, { credentials: 'include' });
+      if (!res.ok) return { id: numericJobId, title: 'Job' };
       return res.json();
     },
-    enabled: !!invoice?.jobId,
+    enabled: !isNaN(numericJobId),
   });
 
   const handleClose = () => {
