@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
 
@@ -94,8 +95,10 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; id?: number } | null>(null);
   const [attachmentToDelete, setAttachmentToDelete] = useState<{ id: number; title: string } | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
+  const canCreatePaymentLink = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
 
   const { data: job, isLoading, error } = useQuery<JobWithClient>({
     queryKey: [`/api/jobs/${jobId}`],
@@ -131,6 +134,68 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     queryKey: [`/api/jobs/${jobId}/documents`],
     enabled: !!jobId && isAuthenticated,
   });
+
+  // Fetch invoice for this job (if exists)
+  interface JobInvoice {
+    invoiceId: number | null;
+    invoiceAmount: string | null;
+    invoiceStatus: string | null;
+  }
+  const { data: invoiceData } = useQuery<JobInvoice>({
+    queryKey: ['/api/jobs', jobId, 'invoice', 'latest'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/invoice/pdf/latest`, { credentials: 'include' });
+      if (!res.ok) return { invoiceId: null, invoiceAmount: null, invoiceStatus: null };
+      const data = await res.json();
+      return {
+        invoiceId: data.invoiceId || null,
+        invoiceAmount: data.invoiceAmount || null,
+        invoiceStatus: data.invoiceStatus || null,
+      };
+    },
+    enabled: !!jobId && isAuthenticated,
+  });
+
+  const invoiceId = invoiceData?.invoiceId;
+  const invoiceStatus = invoiceData?.invoiceStatus;
+  const isPaid = invoiceStatus?.toLowerCase() === 'paid';
+
+  const handlePayInvoice = async () => {
+    if (!invoiceId) {
+      toast({
+        title: "No Invoice",
+        description: "Generate an invoice first before creating a payment link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Failed to create payment link");
+      }
+      const data = await response.json();
+      
+      if (data.url) {
+        window.open(data.url, "_blank");
+        toast({
+          title: "Payment Link Created",
+          description: "Stripe Checkout opened in a new tab.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create payment link",
+        variant: "destructive",
+      });
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
 
   const jobDocumentPhotos = jobDocuments
     .filter(doc => doc.type?.startsWith('image/'))
@@ -472,6 +537,36 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 <span>Total</span>
                 <span>${(lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
               </div>
+              
+              {/* Pay Invoice Section */}
+              {lineItems.length > 0 && invoiceId && (
+                <div className="mt-4 pt-4 border-t">
+                  {isPaid ? (
+                    <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 w-fit">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Paid
+                    </Badge>
+                  ) : canCreatePaymentLink ? (
+                    <Button
+                      onClick={handlePayInvoice}
+                      disabled={paymentLoading}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {paymentLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Creating Payment Link...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Pay Invoice
+                        </>
+                      )}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
             </CardContent>
           </Card>
 
