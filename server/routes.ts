@@ -7240,8 +7240,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const amountInCents = Math.round(parseFloat(invoice.amount) * 100);
 
       console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
-      console.log(`[Stripe] Success URL: ${appBaseUrl}/jobs`);
-      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/jobs`);
+      console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return`);
+      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return`);
 
       // Create Stripe Checkout Session
       const session = await stripe.checkout.sessions.create({
@@ -7264,8 +7264,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           companyId: String(company.id),
           jobId: invoice.jobId ? String(invoice.jobId) : '',
         },
-        success_url: `${appBaseUrl}/jobs`,
-        cancel_url: `${appBaseUrl}/jobs`,
+        success_url: `${appBaseUrl}/stripe/return`,
+        cancel_url: `${appBaseUrl}/stripe/return`,
       });
 
       console.log(`[Stripe] Created checkout session ${session.id} for invoice ${invoice.id}`);

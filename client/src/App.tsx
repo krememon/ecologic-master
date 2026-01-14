@@ -39,6 +39,7 @@ import JobEdit from "@/pages/JobEdit";
 import ClientDetail from "@/pages/ClientDetail";
 import PaySuccess from "@/pages/PaySuccess";
 import PayCancel from "@/pages/PayCancel";
+import StripeReturn from "@/pages/StripeReturn";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -46,14 +47,15 @@ function PaymentRouter() {
     <Switch>
       <Route path="/pay/success" component={PaySuccess} />
       <Route path="/pay/cancel" component={PayCancel} />
+      <Route path="/stripe/return" component={StripeReturn} />
     </Switch>
   );
 }
 
 function Router() {
-  // Check for public payment routes BEFORE any auth hooks
+  // Check for public payment/stripe routes BEFORE any auth hooks
   const path = window.location.pathname;
-  if (path.startsWith('/pay/')) {
+  if (path.startsWith('/pay/') || path.startsWith('/stripe/')) {
     return <PaymentRouter />;
   }
 

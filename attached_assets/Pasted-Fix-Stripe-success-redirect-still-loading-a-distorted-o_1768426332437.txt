@@ -1,0 +1,75 @@
+Fix Stripe success redirect still loading a distorted/outdated version of EcoLogic after payment success. It must always return to the CURRENT authenticated app and render the normal Jobs page.
+
+CURRENT
+After Stripe payment success, it no longer always shows 404, but it still loads a weird distorted/outdated version of the app (looks like a different build/layout). It’s like Stripe success is routing to /jobs but on a different app shell / stale build.
+
+GOAL
+After Stripe payment success:
+- User lands on the normal CURRENT EcoLogic authenticated app
+- Jobs page renders with correct current layout + sidebar
+- No distorted UI, no legacy version, no stale bundle
+- No logout, no 404
+- This must work on refresh + back button
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY WHICH ORIGIN/BUILD STRIPE RETURNS TO (LOG IT)
+- On the Stripe success landing path, immediately log:
+  console.log("[StripeReturn] location.href", window.location.href)
+  console.log("[StripeReturn] origin", window.location.origin)
+  console.log("[StripeReturn] pathname", window.location.pathname)
+- Confirm whether Stripe returns to:
+  a) the same origin as the normal app, OR
+  b) a different Replit domain/port/subdomain serving an older build
+
+2) ENSURE STRIPE SUCCESS_URL USES THE EXACT SAME ORIGIN AS THE APP
+- success_url must use the SAME base domain as the app the user is currently using
+- Do NOT hardcode an outdated deployment URL
+- If the app runs behind a basename (ex: /app), success_url must include it exactly
+- Use a single env var canonical base URL (ex: APP_BASE_URL) and build success_url from it
+
+3) REMOVE MULTIPLE STATIC BUILDS / MULTIPLE APP SHELLS
+- Search backend for express.static usage:
+  - Ensure we only serve ONE frontend build directory (no duplicates)
+  - Remove serving any old "build" or "dist" folder that isn’t current
+- Confirm that the static index.html served by Express is the current one
+
+4) SPA FALLBACK MUST ALWAYS SERVE THE SAME index.html
+- In Express, for all non-API routes, serve the SAME current index.html:
+  - Example behavior: any route not starting with /api returns the frontend index.html
+- Do NOT return a different HTML file for /jobs vs /
+
+5) SERVICE WORKER / PWA CACHE CHECK (COMMON CAUSE OF “OLD APP”)
+- Search frontend for service worker registration (registerServiceWorker, serviceWorkerRegistration, navigator.serviceWorker)
+- If present:
+  - Either remove it OR ensure it updates correctly (skipWaiting + clientsClaim)
+  - Ensure the app does NOT serve stale cached bundles after redirect
+- Also add cache-busting headers for index.html from Express:
+  - Cache-Control: no-store (or at least no-cache) for index.html
+  - Bundled assets can remain hashed/cacheable, but index.html must not be stale
+
+6) CREATE A DEDICATED STRIPE RETURN ROUTE INSIDE THE SPA (CANONICAL)
+- Add a route like /stripe/return that:
+  - runs cleanup (clear selectedJob, activeJobId, stripe state, query params)
+  - then navigate('/jobs', { replace: true })
+- success_url should point to /stripe/return (same origin) NOT directly /jobs
+- This prevents odd state restoration and ensures cleanup before landing on Jobs
+
+7) ADD A HARD SAFETY REDIRECT FOR AUTHENTICATED USERS
+- If an authenticated user hits any unknown path or sees 404 component:
+  - redirect them to /jobs with replace: true
+- 404 must never show for logged-in users
+
+DO NOT
+- Do NOT create a separate “payment success” UI page
+- Do NOT use window.location to random domains
+- Do NOT allow logout
+- Do NOT allow two routers/layouts to mount
+
+DELIVERABLES
+- Show the exact Stripe success_url being generated (log it server-side)
+- Show confirmation logs of window.location after Stripe return proving it’s the correct origin
+- Fix Express static + SPA fallback to serve a single current build
+- Remove/neutralize any service worker caching causing old UI
+- Implement /stripe/return route that cleans state then navigates to /jobs
+- Retest end-to-end: pay -> return -> Jobs page correct layout (no distortion), refresh ok, back ok

@@ -5,7 +5,7 @@ import "./index.css";
 import "./i18n/config";
 
 // App version for cache-busting (update this when deploying significant changes)
-const APP_VERSION = "2026.01.14.1";
+const APP_VERSION = "2026.01.14.2";
 
 // Version check and cache-bust mechanism
 const checkAndClearCache = async () => {
