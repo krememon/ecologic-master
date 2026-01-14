@@ -152,6 +152,7 @@ export interface IStorage {
   // Invoice operations
   getInvoices(companyId: number): Promise<any[]>;
   getInvoice(id: number): Promise<any>;
+  getInvoiceByJobId(jobId: number, companyId: number): Promise<any>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice>;
   deleteInvoice(id: number): Promise<void>;
@@ -848,6 +849,29 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(jobs, eq(invoices.jobId, jobs.id))
       .where(eq(invoices.id, id));
     return invoice;
+  }
+
+  async getInvoiceByJobId(jobId: number, companyId: number): Promise<any> {
+    const [invoice] = await db
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        amount: invoices.amount,
+        status: invoices.status,
+        dueDate: invoices.dueDate,
+        issueDate: invoices.issueDate,
+        clientId: invoices.clientId,
+        jobId: invoices.jobId,
+        companyId: invoices.companyId,
+        stripeCheckoutSessionId: invoices.stripeCheckoutSessionId,
+        stripePaymentIntentId: invoices.stripePaymentIntentId,
+        paidAt: invoices.paidAt,
+        createdAt: invoices.createdAt,
+        updatedAt: invoices.updatedAt,
+      })
+      .from(invoices)
+      .where(and(eq(invoices.jobId, jobId), eq(invoices.companyId, companyId)));
+    return invoice || null;
   }
 
   async createInvoice(invoiceData: InsertInvoice): Promise<Invoice> {

@@ -2864,7 +2864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===================
-  // Job Invoice PDF Routes
+  // Job Invoice Routes
   // ===================
 
   // Helper to check if user can create invoices
@@ -2872,6 +2872,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const upperRole = role.toUpperCase();
     return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
   };
+
+  // GET /api/jobs/:jobId/invoice - Get invoice for a job
+  app.get('/api/jobs/:jobId/invoice', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      const invoice = await storage.getInvoiceByJobId(jobId, company.id);
+      
+      if (!invoice) {
+        return res.json({ invoice: null });
+      }
+      
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Error fetching job invoice:", error);
+      res.status(500).json({ message: "Failed to fetch invoice" });
+    }
+  });
+
+  // POST /api/jobs/:jobId/invoice - Create invoice record for a job
+  app.post('/api/jobs/:jobId/invoice', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateInvoices(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to create invoices" });
+      }
+
+      const jobId = parseInt(req.params.jobId);
+      
+      // Check if invoice already exists for this job
+      const existingInvoice = await storage.getInvoiceByJobId(jobId, company.id);
+      if (existingInvoice) {
+        return res.json({ invoice: existingInvoice, message: "Invoice already exists" });
+      }
+      
+      // Get job with full details
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      // Get line items for this job
+      const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
+
+      // Validation: Job must have line items
+      if (!lineItems || lineItems.length === 0) {
+        return res.status(400).json({ 
+          message: "Add line items before creating an invoice.",
+          code: "NO_LINE_ITEMS"
+        });
+      }
+
+      // Validation: Job must have a customer
+      if (!job.customerId && !job.clientId && !job.clientName) {
+        return res.status(400).json({ 
+          message: "Assign a customer before creating an invoice.",
+          code: "NO_CUSTOMER"
+        });
+      }
+
+      // Calculate total from line items
+      const totalCents = lineItems.reduce((sum, item) => sum + (item.lineTotalCents || 0), 0);
+      const totalAmount = (totalCents / 100).toFixed(2);
+
+      // Generate invoice number
+      let invoiceNumber: string;
+      try {
+        const counter = await storage.getNextAtomicCounter(company.id, 'invoice');
+        invoiceNumber = `INV-${counter.toString().padStart(5, '0')}`;
+      } catch (err) {
+        // Fallback to timestamp-based number
+        invoiceNumber = `INV-${Date.now()}`;
+      }
+
+      // Create invoice record
+      const today = new Date();
+      const dueDate = new Date(today);
+      dueDate.setDate(dueDate.getDate() + 30); // Due in 30 days
+
+      const invoice = await storage.createInvoice({
+        companyId: company.id,
+        jobId: jobId,
+        clientId: job.clientId || null,
+        invoiceNumber,
+        amount: totalAmount,
+        status: 'pending',
+        issueDate: today.toISOString().split('T')[0],
+        dueDate: dueDate.toISOString().split('T')[0],
+        notes: `Invoice for job: ${job.title || job.clientName || 'Job #' + jobId}`,
+      });
+
+      res.status(201).json({ invoice });
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      res.status(500).json({ message: "Failed to create invoice" });
+    }
+  });
 
   // POST /api/jobs/:jobId/invoice/pdf - Generate invoice PDF for a job
   app.post('/api/jobs/:jobId/invoice/pdf', isAuthenticated, async (req: any, res) => {

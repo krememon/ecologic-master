@@ -136,35 +136,61 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   });
 
   // Fetch invoice for this job (if exists)
-  interface JobInvoice {
-    invoiceId: number | null;
-    invoiceAmount: string | null;
-    invoiceStatus: string | null;
+  interface InvoiceData {
+    invoice: {
+      id: number;
+      invoiceNumber: string;
+      amount: string;
+      status: string;
+      jobId: number;
+      companyId: number;
+    } | null;
   }
-  const { data: invoiceData } = useQuery<JobInvoice>({
-    queryKey: ['/api/jobs', jobId, 'invoice', 'latest'],
+  const { data: invoiceData, refetch: refetchInvoice } = useQuery<InvoiceData>({
+    queryKey: ['/api/jobs', jobId, 'invoice'],
     queryFn: async () => {
-      const res = await fetch(`/api/jobs/${jobId}/invoice/pdf/latest`, { credentials: 'include' });
-      if (!res.ok) return { invoiceId: null, invoiceAmount: null, invoiceStatus: null };
-      const data = await res.json();
-      return {
-        invoiceId: data.invoiceId || null,
-        invoiceAmount: data.invoiceAmount || null,
-        invoiceStatus: data.invoiceStatus || null,
-      };
+      const res = await fetch(`/api/jobs/${jobId}/invoice`, { credentials: 'include' });
+      if (!res.ok) return { invoice: null };
+      return res.json();
     },
     enabled: !!jobId && isAuthenticated,
   });
 
-  const invoiceId = invoiceData?.invoiceId;
-  const invoiceStatus = invoiceData?.invoiceStatus;
+  const invoice = invoiceData?.invoice;
+  const invoiceId = invoice?.id;
+  const invoiceStatus = invoice?.status;
   const isPaid = invoiceStatus?.toLowerCase() === 'paid';
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+
+  const handleCreateInvoice = async () => {
+    setCreatingInvoice(true);
+    try {
+      const response = await apiRequest("POST", `/api/jobs/${jobId}/invoice`);
+      const data = await response.json();
+      
+      if (data.invoice) {
+        toast({
+          title: "Invoice Created",
+          description: `Invoice ${data.invoice.invoiceNumber} created successfully.`,
+        });
+        refetchInvoice();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create invoice",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
 
   const handlePayInvoice = async () => {
     if (!invoiceId) {
       toast({
         title: "No Invoice",
-        description: "Generate an invoice first before creating a payment link.",
+        description: "Create an invoice first before paying.",
         variant: "destructive",
       });
       return;
@@ -323,14 +349,53 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* DEBUG: Always visible button to confirm correct component */}
-          <Button
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white"
-            onClick={() => alert(`DEBUG: invoiceId=${invoiceId}, isPaid=${isPaid}, canCreatePaymentLink=${canCreatePaymentLink}`)}
-          >
-            PAY (DEBUG)
-          </Button>
+          {/* Invoice Actions: Create Invoice / Pay / Paid Badge */}
+          {isPaid && (
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-3 py-1">
+              <CheckCircle2 className="h-4 w-4" />
+              Paid
+            </Badge>
+          )}
+          {invoiceId && !isPaid && canCreatePaymentLink && (
+            <Button
+              size="sm"
+              onClick={handlePayInvoice}
+              disabled={paymentLoading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {paymentLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Opening...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Pay
+                </>
+              )}
+            </Button>
+          )}
+          {!invoiceId && canCreatePaymentLink && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCreateInvoice}
+              disabled={creatingInvoice}
+            >
+              {creatingInvoice ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </>
+              )}
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
               <Edit className="h-4 w-4 mr-2" />
