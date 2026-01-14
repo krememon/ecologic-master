@@ -173,27 +173,21 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     setPaymentLoading(true);
     try {
       const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Failed to create payment link");
-      }
       const data = await response.json();
       
       if (data.url) {
-        window.open(data.url, "_blank");
-        toast({
-          title: "Payment Link Created",
-          description: "Stripe Checkout opened in a new tab.",
-        });
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error("No checkout URL received");
       }
     } catch (error: any) {
+      setPaymentLoading(false);
       toast({
         title: "Error",
         description: error.message || "Failed to create payment link",
         variant: "destructive",
       });
-    } finally {
-      setPaymentLoading(false);
     }
   };
 
@@ -539,7 +533,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               </div>
               
               {/* Pay Invoice Section */}
-              {lineItems.length > 0 && invoiceId && (
+              {invoiceId && (
                 <div className="mt-4 pt-4 border-t">
                   {isPaid ? (
                     <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 w-fit">
