@@ -192,20 +192,19 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     }
   };
 
+  // Separate loading state for Invoice button
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+
   // Handle Invoice button click - creates if needed, then opens modal
   const handleInvoiceClick = async () => {
-    setPaymentLoading(true);
+    setInvoiceLoading(true);
     try {
       const inv = await ensureInvoice();
       if (inv) {
-        toast({
-          title: invoice ? "Opening Invoice" : "Invoice Created",
-          description: `Invoice ${inv.invoiceNumber}`,
-        });
         setInvoiceModalOpen(true);
       }
     } finally {
-      setPaymentLoading(false);
+      setInvoiceLoading(false);
     }
   };
 
@@ -381,10 +380,14 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               size="sm"
               variant="outline"
               onClick={handleInvoiceClick}
-              disabled={paymentLoading}
+              disabled={invoiceLoading}
               className="h-8 px-3 text-sm"
             >
-              <FileText className="h-4 w-4 mr-1.5" />
+              {invoiceLoading ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-1.5" />
+              )}
               Invoice
             </Button>
           )}
