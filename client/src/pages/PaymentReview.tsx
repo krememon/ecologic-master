@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { X, Loader2, Plus, ChevronLeft } from "lucide-react";
+import { X, Loader2, Plus, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Invoice {
@@ -14,6 +14,15 @@ interface Invoice {
   amount: string; // Stored as decimal string in dollars (e.g., "350.00")
   status: string;
   createdAt: string;
+}
+
+interface LineItem {
+  id: number;
+  name: string;
+  description?: string;
+  quantity: string;
+  unitPriceCents: number;
+  lineTotalCents: number;
 }
 
 interface Job {
@@ -32,6 +41,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [error, setError] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState("");
+  const [showAllItems, setShowAllItems] = useState(false);
 
   const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
@@ -49,16 +59,18 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   const invoice = invoiceData?.invoice;
 
-  // Fetch job details for title
-  const { data: job } = useQuery<Job>({
-    queryKey: ['/api/jobs', numericJobId],
+  // Fetch line items for the job
+  const { data: lineItemsData, isLoading: lineItemsLoading } = useQuery<{ lineItems: LineItem[] }>({
+    queryKey: ['/api/jobs', numericJobId, 'line-items'],
     queryFn: async () => {
-      const res = await fetch(`/api/jobs/${numericJobId}`, { credentials: 'include' });
-      if (!res.ok) return { id: numericJobId, title: 'Job' };
+      const res = await fetch(`/api/jobs/${numericJobId}/line-items`, { credentials: 'include' });
+      if (!res.ok) return { lineItems: [] };
       return res.json();
     },
     enabled: !isNaN(numericJobId),
   });
+
+  const lineItems = lineItemsData?.lineItems || [];
 
   const handleClose = () => {
     if (window.history.length > 1) {
@@ -99,7 +111,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     }).format(dollars);
   };
 
-  if (invoiceLoading) {
+  if (invoiceLoading || lineItemsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -120,9 +132,13 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     );
   }
 
-  const jobTitle = job?.title || 'Job';
   // Invoice amount is stored as decimal string in dollars (e.g., "350.00")
   const totalAmount = parseFloat(invoice.amount) || 0;
+  
+  // Determine which items to show (max 5 unless expanded)
+  const maxVisible = 5;
+  const hasMoreItems = lineItems.length > maxVisible;
+  const visibleItems = showAllItems ? lineItems : lineItems.slice(0, maxVisible);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -159,15 +175,65 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         )}
 
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 space-y-4">
-            <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-700">
-              <span className="text-gray-600 dark:text-gray-400">{jobTitle}</span>
-              <span className="font-medium text-gray-900 dark:text-white">
-                {formatCurrency(totalAmount)}
-              </span>
-            </div>
+          <CardContent className="p-4 space-y-0">
+            {lineItems.length === 0 ? (
+              <div className="py-3 text-gray-500 dark:text-gray-400 text-sm">
+                No line items found
+              </div>
+            ) : (
+              <>
+                {visibleItems.map((item, index) => {
+                  const qty = parseFloat(item.quantity) || 1;
+                  const lineTotal = (item.lineTotalCents || 0) / 100;
+                  const isLast = index === visibleItems.length - 1 && !hasMoreItems;
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex justify-between items-start py-3 ${
+                        !isLast ? 'border-b border-gray-100 dark:border-gray-700' : ''
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0 pr-4">
+                        <div className="text-gray-900 dark:text-white font-medium truncate">
+                          {item.name}
+                        </div>
+                        {qty !== 1 && (
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            Qty: {qty}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-gray-900 dark:text-white font-medium whitespace-nowrap">
+                        {formatCurrency(lineTotal)}
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {hasMoreItems && !showAllItems && (
+                  <button
+                    onClick={() => setShowAllItems(true)}
+                    className="flex items-center gap-1 py-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                    Show all ({lineItems.length})
+                  </button>
+                )}
+                
+                {hasMoreItems && showAllItems && (
+                  <button
+                    onClick={() => setShowAllItems(false)}
+                    className="flex items-center gap-1 py-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                    Show less
+                  </button>
+                )}
+              </>
+            )}
             
-            <div className="flex justify-between items-center py-3">
+            <div className="flex justify-between items-center py-3 mt-2 border-t border-gray-200 dark:border-gray-600">
               <span className="font-semibold text-gray-900 dark:text-white">Total</span>
               <span className="font-bold text-lg text-gray-900 dark:text-white">
                 {formatCurrency(totalAmount)}

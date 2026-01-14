@@ -1,0 +1,71 @@
+Update the Payment Review screen so it shows a breakdown of the line items being purchased (not “Job for [client]”). The user should see the actual items/services and pricing before tapping Next.
+
+CURRENT
+Payment Review screen now shows correct total ($350.00), but the main row label is “Job for Jennifer Pellegrino”.
+User wants the screen to show what is actually being purchased (line items).
+
+GOAL
+On the Payment Review screen:
+- Replace “Job for [client]” with a line item breakdown:
+  - Each line item name/description
+  - Qty (if applicable)
+  - Price per item (optional if we already show total per line)
+  - Line total (preferred)
+- Total at bottom stays correct and matches Stripe amount
+- If many line items, show first ~5 and then “+ X more” (expand/collapse optional)
+- Must NOT introduce bugs in checkout flow
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) LOAD LINE ITEMS FOR THIS INVOICE/JOB
+- Use existing endpoint already in the app for job invoice line items:
+  (ex: GET /api/jobs/:jobId/line-items OR invoice line items endpoint)
+- Payment Review must fetch:
+  - invoice (for totals)
+  - line items array (name, qty, unit price, line total)
+- Add loading skeleton while fetching line items.
+
+2) DISPLAY LINE ITEM LIST IN THE SUMMARY CARD
+Replace the single “Job for …” row with a list like:
+
+[Line Item Name]             [$Line Total]
+Qty: X  •  $UnitPrice (optional)
+
+Rules:
+- Show at least: name + line total
+- If qty is missing, treat as 1
+- If unit price missing but line total exists, just show line total
+- Use consistent currency formatting ($350.00)
+
+3) HANDLE EDGE CASES (NO $0.00 LIES)
+- If there are NO line items:
+  - show “No line items found” in the list area
+  - still show Total based on invoice
+- If line items exist but totals don’t match:
+  - total displayed must remain the invoice/Stripe total (source of truth)
+  - do not recalc Stripe from UI
+
+4) OPTIONAL: COLLAPSE IF TOO MANY ITEMS (CLEAN UX)
+- If lineItems.length > 5:
+  - show first 5
+  - show a link: “Show all (X)” / “Show less”
+- This is optional but preferred for mobile cleanliness.
+
+5) CONFIRM STRIPE STILL CHARGES THE SAME AMOUNT
+- Next button behavior stays identical:
+  - create Stripe session
+  - redirect to Stripe
+- Do NOT change Stripe pricing logic in this task.
+- Only change what the review screen displays.
+
+ACCEPTANCE TEST
+- Create invoice with multiple line items (ex: “Leaking Faucet”, “Labor”, etc.)
+- Payment Review shows each line item with correct line totals
+- Total equals $350.00 (or whatever invoice total is)
+- Next -> Stripe checkout amount matches total
+- No routing regressions; returns to Jobs after payment
+
+DELIVERABLES
+- Payment Review shows line item breakdown instead of “Job for [client]”
+- Correct formatting and mobile-friendly layout
+- Checkout flow unchanged and stable
