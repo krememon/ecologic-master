@@ -3219,13 +3219,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         uploadedBy: userId,
       });
 
-      console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${fileName} docId=${document.id}`);
+      // Create invoice record for payment tracking
+      const today = new Date().toISOString().split('T')[0];
+      const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const invoice = await storage.createInvoice({
+        companyId: company.id,
+        jobId: jobId,
+        clientId: customer?.id || null,
+        invoiceNumber: invoiceNumber,
+        amount: total.toFixed(2),
+        status: 'pending',
+        issueDate: today,
+        dueDate: dueDate,
+        notes: `Generated from job: ${job.title}`,
+      });
+
+      console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${fileName} docId=${document.id} invoiceId=${invoice.id}`);
       res.json({ 
         pdfUrl: fileUrl, 
         previewImageUrl,
         fileName, 
         documentId: document.id,
+        invoiceId: invoice.id,
         invoiceNumber,
+        amount: total.toFixed(2),
       });
     } catch (error) {
       console.error("Error generating invoice PDF:", error);
@@ -3272,11 +3289,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const previewPath = path.join('uploads', previewFileName);
       const previewImageUrl = fs.existsSync(previewPath) ? `/uploads/${previewFileName}` : null;
 
+      // Try to find the matching invoice record
+      let invoiceId: number | null = null;
+      let invoiceAmount: string | null = null;
+      let invoiceStatus: string | null = null;
+      const allInvoices = await storage.getInvoices(company.id);
+      const matchingInvoice = allInvoices.find((inv: any) => inv.jobId === jobId);
+      if (matchingInvoice) {
+        invoiceId = matchingInvoice.id;
+        invoiceAmount = matchingInvoice.amount;
+        invoiceStatus = matchingInvoice.status;
+      }
+
       res.json({
         pdfUrl: latestDoc.fileUrl,
         fileName: latestDoc.name,
         previewImageUrl,
         documentId: latestDoc.id,
+        invoiceId,
+        invoiceAmount,
+        invoiceStatus,
         createdAt: latestDoc.createdAt,
       });
     } catch (error) {

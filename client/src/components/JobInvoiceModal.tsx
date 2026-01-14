@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2 } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard, CheckCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 interface JobInvoiceModalProps {
@@ -33,11 +34,15 @@ export function JobInvoiceModal({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
+  const [invoiceAmount, setInvoiceAmount] = useState<string | null>(null);
+  const [invoiceStatus, setInvoiceStatus] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [paymentLinkLoading, setPaymentLinkLoading] = useState(false);
   
   const [toEmail, setToEmail] = useState(customerEmail || "");
   const [subject, setSubject] = useState("");
@@ -67,6 +72,12 @@ export function JobInvoiceModal({
               setPreviewImageUrl(data.previewImageUrl || null);
               setPreviewLoading(true);
               setPreviewError(false);
+              // Set invoice data for payment link
+              if (data.invoiceId) {
+                setInvoiceId(data.invoiceId);
+                setInvoiceAmount(data.invoiceAmount);
+                setInvoiceStatus(data.invoiceStatus);
+              }
               // Extract invoice number from filename
               const match = data.fileName?.match(/Invoice_(INV_\d+)/);
               if (match) {
@@ -98,6 +109,9 @@ export function JobInvoiceModal({
       setPdfFileName(data.fileName);
       setPreviewImageUrl(data.previewImageUrl || null);
       setInvoiceNumber(data.invoiceNumber || null);
+      setInvoiceId(data.invoiceId || null);
+      setInvoiceAmount(data.amount || null);
+      setInvoiceStatus('pending');
       setPreviewLoading(true);
       setPreviewError(false);
       setErrorMessage(null);
@@ -158,11 +172,15 @@ export function JobInvoiceModal({
     setPdfUrl(null);
     setPdfFileName(null);
     setInvoiceNumber(null);
+    setInvoiceId(null);
+    setInvoiceAmount(null);
+    setInvoiceStatus(null);
     setPreviewImageUrl(null);
     setPreviewLoading(false);
     setPreviewError(false);
     setLoadingExisting(false);
     setErrorMessage(null);
+    setPaymentLinkLoading(false);
     setToEmail(customerEmail || "");
     onOpenChange(false);
   };
@@ -189,7 +207,46 @@ export function JobInvoiceModal({
     sendEmailMutation.mutate();
   };
 
+  const handleGetPaymentLink = async () => {
+    if (!invoiceId) {
+      toast({
+        title: "No Invoice",
+        description: "Generate an invoice first before creating a payment link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPaymentLinkLoading(true);
+    try {
+      const response = await apiRequest("POST", "/api/payments/checkout", { invoiceId });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Failed to create payment link");
+      }
+      const data = await response.json();
+      
+      // Open Stripe Checkout in new tab
+      if (data.url) {
+        window.open(data.url, "_blank");
+        toast({
+          title: "Payment Link Created",
+          description: "Stripe Checkout page opened in a new tab. Share this with your customer.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create payment link",
+        variant: "destructive",
+      });
+    } finally {
+      setPaymentLinkLoading(false);
+    }
+  };
+
   const isEmailValid = toEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail);
+  const isPaid = invoiceStatus?.toLowerCase() === 'paid';
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -408,12 +465,38 @@ export function JobInvoiceModal({
           </div>
         )}
 
-        <DialogFooter className="flex gap-2 sm:gap-2">
+        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+          {isPaid && (
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 mr-auto">
+              <CheckCircle2 className="h-3 w-3" />
+              Paid
+            </Badge>
+          )}
           {step === 1 ? (
             <>
               <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
+              {pdfUrl && invoiceId && !isPaid && (
+                <Button
+                  variant="outline"
+                  onClick={handleGetPaymentLink}
+                  disabled={paymentLinkLoading}
+                  className="text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
+                >
+                  {paymentLinkLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Pay Invoice
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={() => setStep(2)}
                 disabled={!pdfUrl}
@@ -428,6 +511,26 @@ export function JobInvoiceModal({
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
+              {invoiceId && !isPaid && (
+                <Button
+                  variant="outline"
+                  onClick={handleGetPaymentLink}
+                  disabled={paymentLinkLoading}
+                  className="text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
+                >
+                  {paymentLinkLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Pay Invoice
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={handleSendEmail}
                 disabled={!isEmailValid || sendEmailMutation.isPending}

@@ -37,12 +37,25 @@ import EstimateDetails from "@/pages/EstimateDetails";
 import JobDetails from "@/pages/JobDetails";
 import JobEdit from "@/pages/JobEdit";
 import ClientDetail from "@/pages/ClientDetail";
+import PaySuccess from "@/pages/PaySuccess";
+import PayCancel from "@/pages/PayCancel";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
   
   useWebSocket();
   usePushNotifications();
+
+  // Public payment pages - accessible without authentication
+  const path = window.location.pathname;
+  if (path.startsWith('/pay/')) {
+    return (
+      <Switch>
+        <Route path="/pay/success" component={PaySuccess} />
+        <Route path="/pay/cancel" component={PayCancel} />
+      </Switch>
+    );
+  }
 
   if (isLoading) {
     return (
