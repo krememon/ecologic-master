@@ -1,0 +1,80 @@
+Improve the “Tax rates” selector screen: make it larger (full screen or large modal), add a + button to create a new tax, and ensure new taxes save to Customize > Taxes and appear immediately in the selector list.
+
+CURRENT
+- Tax selector (“Tax rates”) works, but the modal is too small.
+- No way to create a new tax from inside the selector.
+- We already have a Tax Management page/section that stores taxes in DB.
+
+GOAL
+- Make the Tax rates selector screen bigger:
+  - Preferred: full-screen drawer/modal on mobile (like iOS screen)
+  - Desktop: large centered modal with proper padding and scroll
+- Add a + button (top right) to create a new tax
+- Creating a new tax from this flow:
+  - saves to DB (same as Tax Management)
+  - appears instantly in the tax selector list
+  - stays saved in Customize > Taxes
+- Zero regressions to line item editing, job creation, invoice totals, or Stripe flow
+- No success toasts; inline errors only
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) RESIZE / RESTYLE THE TAX SELECTOR
+- Convert current small dialog into one of these:
+  Option A (preferred): full-screen modal/drawer (height: 100% on mobile)
+  Option B: large modal (min-width ~600, max-width ~720) with responsive full-width on small screens
+- Ensure the list area scrolls if many taxes
+- Keep the close X (top right) and back behavior clean
+
+2) ADD HEADER WITH + BUTTON
+Header layout:
+- Left: (optional) Back or Close (X)
+- Center: “Tax rates”
+- Right: + button
+Behavior:
+- Clicking + opens a “Create Tax” screen/modal
+
+3) CREATE TAX FLOW INSIDE SELECTOR
+- Create a simple “New Tax” form (modal or nested screen):
+  Fields:
+  - Tax Name
+  - Percentage
+  Buttons:
+  - Cancel
+  - Save
+- On Save:
+  - POST to the SAME endpoint used by Tax Management (ex: POST /api/company/taxes)
+  - Validate like existing:
+    - name required, trimmed
+    - percent 0–20, up to 3 decimals
+  - No success toast
+  - On success:
+    - close the create form
+    - refresh the tax list in selector
+    - auto-select the newly created tax for the current line item (preferred)
+    - show the new tax immediately in list with checkmark
+
+4) ENSURE DATA CONSISTENCY WITH TAX MANAGEMENT
+- Tax Management page and selector must pull from the same DB table and same GET /api/company/taxes endpoint
+- After creating a new tax from selector:
+  - Tax Management should show it on next visit/refresh
+- If using React Query/SWR:
+  - invalidate “companyTaxes” query after create so both screens update
+
+5) EDGE CASES / SAFETY
+- Prevent duplicate name (case-insensitive) with inline error
+- Disable Save while saving
+- If API error, show inline message and keep form open
+- Ensure closing selector does not lose line item edits
+
+ACCEPTANCE TEST (MUST PASS)
+- Open line item -> toggle Taxable -> tap Tax rate -> selector opens LARGE
+- Tap + -> create “NY State Tax 8.625” -> Save
+- New tax appears immediately in selector list and is selected
+- Go to Customize > Taxes -> new tax is there (persisted)
+- No UI glitches, no routing bugs, no popups/toasts
+
+DELIVERABLES
+- Larger Tax rates selector UI
+- + create tax flow inside selector
+- Proper DB save + immediate refresh/invalidation so tax appears everywhere
