@@ -1,0 +1,80 @@
+Fix line item tax so selecting a tax rate actually increases the line item total. Right now Taxable + selected tax does NOT change totals (still shows $350.00). We need the line item to include tax in its displayed total and in invoice/checkout totals.
+
+CURRENT
+- Line item editor:
+  - Taxable toggle works
+  - Tax rate picker works (ex: New York State 8.625%)
+- BUT line item Total still shows only qty * unit price (ex: $350.00)
+- Checkout/Payment Review also shows total without tax being added.
+
+GOAL
+When user selects a tax rate for a line item:
+- Line item total MUST include tax:
+  lineSubtotal = qty * unitPrice
+  lineTax = round(lineSubtotal * taxRatePercent / 100)
+  lineTotalWithTax = lineSubtotal + lineTax
+- UI must show tax effect immediately and persist after refresh
+- Invoice totals / Payment Review / Stripe charge must match (no mismatch bugs)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CONFIRM LINE ITEM DATA IS SAVED (TAXABLE + TAX RATE)
+- Verify backend line item object stores:
+  - isTaxable true/false
+  - taxId (or taxRateId)
+  - taxRatePercentSnapshot (ex: 8.625)
+- Add server logs when saving a line item:
+  console.log("[LineItemSave]", { id, jobId, isTaxable, taxRatePercentSnapshot, taxId })
+
+2) ADD BACKEND CALCULATION FIELDS (SOURCE OF TRUTH)
+- Backend must compute and return these for each line item:
+  - subtotalCents (qty * unitPriceCents)
+  - taxCents (0 if not taxable or no tax selected)
+  - totalCents (subtotalCents + taxCents)
+- IMPORTANT: do all math in cents; never rely on floats.
+  unitPriceCents = round(unitPriceDollars * 100)
+  qty can be decimal, so:
+    subtotalCents = round(qty * unitPriceCents)
+  taxCents = round(subtotalCents * taxRatePercent / 100)
+  totalCents = subtotalCents + taxCents
+
+3) ENSURE LINE ITEMS ENDPOINT RETURNS THESE FIELDS
+- Update GET /api/jobs/:jobId/line-items to include subtotalCents/taxCents/totalCents per item
+- Also ensure any “save line item” endpoint returns updated line item with these fields
+
+4) FRONTEND: UPDATE LINE ITEM “TOTAL” DISPLAY
+- In the line item editor screen:
+  - If NOT taxable OR no tax selected:
+    - show Total = subtotal (current behavior)
+  - If taxable AND tax selected:
+    - show Total = totalWithTax (subtotal + tax)
+    - show a small breakdown line (preferred):
+      “Tax (8.625%): $30.19”
+- The “Total” shown in the editor must use backend totalCents (not re-calculated from floats)
+- On selecting a tax rate, refetch/reload the line item data (or update from API response) so UI updates immediately.
+
+5) UPDATE INVOICE + CHECKOUT TOTALS TO MATCH
+- Invoice totals must be recomputed from line item totals:
+  invoiceSubtotalCents = sum(lineItem.subtotalCents)
+  invoiceTaxCents = sum(lineItem.taxCents)
+  invoiceTotalCents = sum(lineItem.totalCents) OR subtotal+tax
+- Payment Review must display invoiceSubtotal/tax/total
+- Stripe must charge invoiceTotalCents
+
+6) ACCEPTANCE TEST (MUST PASS)
+- Create line item: $350.00 qty 1
+- Toggle taxable ON
+- Select NY 8.625%
+Expected:
+- tax = $30.19
+- total = $380.19
+- Line item editor “Total” shows $380.19
+- Payment Review/Checkout show subtotal $350.00, tax $30.19, total $380.19
+- Stripe checkout charges $380.19
+- Refresh page -> totals still correct
+
+DELIVERABLES
+- Backend returns subtotalCents/taxCents/totalCents for line items
+- Line item editor Total includes tax when taxable+tax selected
+- Invoice/Payment Review/Stripe match exactly
+- No regressions in routing or job creation flow

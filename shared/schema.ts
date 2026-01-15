@@ -206,8 +206,9 @@ export const jobLineItems = pgTable("job_line_items", {
   taxId: integer("tax_id").references(() => companyTaxes.id, { onDelete: "set null" }),
   taxRatePercentSnapshot: decimal("tax_rate_percent_snapshot", { precision: 5, scale: 3 }),
   taxNameSnapshot: varchar("tax_name_snapshot", { length: 40 }),
-  lineTotalCents: integer("line_total_cents").notNull().default(0),
-  taxCents: integer("tax_cents").notNull().default(0),
+  lineTotalCents: integer("line_total_cents").notNull().default(0), // Subtotal (qty × price)
+  taxCents: integer("tax_cents").notNull().default(0), // Calculated tax amount
+  totalCents: integer("total_cents").notNull().default(0), // lineTotalCents + taxCents
   sortOrder: integer("sort_order").notNull().default(0),
 });
 

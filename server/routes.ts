@@ -1825,6 +1825,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxCents = Math.round(lineTotalCents * taxRate / 100);
             }
             
+            const totalCents = lineTotalCents + taxCents;
+            
+            console.log("[LineItemSave]", { 
+              name: item.name, 
+              jobId: createdJob.id, 
+              taxable: item.taxable, 
+              taxId: item.taxId,
+              taxRatePercentSnapshot: item.taxRatePercentSnapshot,
+              lineTotalCents,
+              taxCents,
+              totalCents
+            });
+            
             await tx.insert(jobLineItems).values({
               jobId: createdJob.id,
               name: item.name.trim(),
@@ -1839,6 +1852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : null,
               lineTotalCents,
               taxCents,
+              totalCents,
               sortOrder: i,
             });
           }
@@ -1988,6 +2002,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxCents = Math.round(lineTotalCents * taxRate / 100);
             }
             
+            const totalCents = lineTotalCents + taxCents;
+            
             await db.insert(jobLineItems).values({
               jobId,
               name: item.name,
@@ -2002,6 +2018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : null,
               lineTotalCents,
               taxCents,
+              totalCents,
               sortOrder: i,
             });
           }
@@ -2282,7 +2299,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
       
-      res.json(lineItems);
+      // Add subtotalCents as alias for lineTotalCents (pre-tax)
+      // totalCents is now persisted in the database
+      const lineItemsWithSubtotal = lineItems.map(item => ({
+        ...item,
+        subtotalCents: item.lineTotalCents, // lineTotalCents is the pre-tax subtotal
+      }));
+      
+      res.json(lineItemsWithSubtotal);
     } catch (error) {
       console.error("Error fetching job line items:", error);
       res.status(500).json({ message: "Failed to fetch job line items" });

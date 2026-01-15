@@ -55,7 +55,13 @@ interface JobLineItem {
   unitPriceCents: number;
   unit: string;
   taxable: boolean;
+  taxId: number | null;
+  taxRatePercentSnapshot: string | null;
+  taxNameSnapshot: string | null;
   lineTotalCents: number;
+  taxCents: number;
+  subtotalCents: number; // Backend computed: same as lineTotalCents
+  totalCents: number; // Backend computed: lineTotalCents + taxCents
   sortOrder: number;
 }
 
@@ -620,8 +626,13 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                         <p className="text-sm text-muted-foreground">
                           {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
                         </p>
+                        {item.taxable && item.taxCents > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            + Tax ({item.taxNameSnapshot || 'Tax'}): ${(item.taxCents / 100).toFixed(2)}
+                          </p>
+                        )}
                       </div>
-                      <p className="font-medium">${(item.lineTotalCents / 100).toFixed(2)}</p>
+                      <p className="font-medium">${(item.totalCents / 100).toFixed(2)}</p>
                     </div>
                   ))}
                 </div>
@@ -629,10 +640,31 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 <p className="text-muted-foreground text-center py-2">No line items</p>
               )}
               <Separator className="my-3" />
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>${(lineItems.reduce((sum, item) => sum + item.lineTotalCents, 0) / 100).toFixed(2)}</span>
-              </div>
+              {(() => {
+                const subtotal = lineItems.reduce((sum, item) => sum + (item.subtotalCents || item.lineTotalCents), 0);
+                const totalTax = lineItems.reduce((sum, item) => sum + (item.taxCents || 0), 0);
+                const grandTotal = lineItems.reduce((sum, item) => sum + (item.totalCents || item.lineTotalCents), 0);
+                return (
+                  <div className="space-y-1">
+                    {totalTax > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Subtotal</span>
+                          <span>${(subtotal / 100).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Tax</span>
+                          <span>${(totalTax / 100).toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total</span>
+                      <span>${(grandTotal / 100).toFixed(2)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
               
             </CardContent>
           </Card>

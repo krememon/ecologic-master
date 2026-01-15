@@ -634,6 +634,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
         unitPriceCents: item.unitPriceCents,
         unit: item.unit,
         taxable: item.taxable,
+        taxId: item.taxable && item.taxId ? item.taxId : undefined,
+        taxRatePercentSnapshot: item.taxable && item.taxRatePercentSnapshot ? item.taxRatePercentSnapshot : undefined,
+        taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : undefined,
       })) : undefined,
     };
 
@@ -737,21 +740,40 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     setLineItems(updated);
   };
 
-  const calculateLineTotal = (item: LineItem): number => {
+  const calculateLineSubtotal = (item: LineItem): number => {
     const qty = parseFloat(item.quantity) || 0;
     return Math.round(qty * item.unitPriceCents);
   };
 
+  const calculateLineTax = (item: LineItem): number => {
+    if (!item.taxable || !item.taxRatePercentSnapshot) return 0;
+    const subtotal = calculateLineSubtotal(item);
+    const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+    return Math.round(subtotal * taxRate / 100);
+  };
+
+  const calculateLineTotal = (item: LineItem): number => {
+    return calculateLineSubtotal(item) + calculateLineTax(item);
+  };
+
   const calculateSubtotal = (): number => {
-    return lineItems.reduce((sum, item) => sum + calculateLineTotal(item), 0);
+    return lineItems.reduce((sum, item) => sum + calculateLineSubtotal(item), 0);
+  };
+
+  const calculateTotalTax = (): number => {
+    return lineItems.reduce((sum, item) => sum + calculateLineTax(item), 0);
+  };
+
+  const calculateGrandTotal = (): number => {
+    return calculateSubtotal() + calculateTotalTax();
   };
 
   const getLineItemsSummary = () => {
     const validItems = lineItems.filter(i => i.name.trim());
     if (validItems.length === 0) return undefined;
-    const subtotal = calculateSubtotal();
-    if (subtotal > 0) {
-      return `${validItems.length} item${validItems.length > 1 ? 's' : ''} • ${formatCurrency(subtotal)}`;
+    const grandTotal = calculateGrandTotal();
+    if (grandTotal > 0) {
+      return `${validItems.length} item${validItems.length > 1 ? 's' : ''} • ${formatCurrency(grandTotal)}`;
     }
     return `${validItems.length} item${validItems.length > 1 ? 's' : ''}`;
   };
@@ -1357,9 +1379,23 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                     onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
                   />
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
-                  <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
+                <div className="pt-2 border-t space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Subtotal</span>
+                    <span className="text-sm">{formatCurrency(calculateLineSubtotal(item))}</span>
+                  </div>
+                  {item.taxable && item.taxRatePercentSnapshot && calculateLineTax(item) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        Tax ({parseFloat(item.taxRatePercentSnapshot).toFixed(3)}%)
+                      </span>
+                      <span className="text-sm">{formatCurrency(calculateLineTax(item))}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-1">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
+                    <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1386,10 +1422,20 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
               </Button>
             </div>
 
-            <div className="pt-4 border-t">
-              <div className="flex justify-between text-base font-semibold">
-                <span>Subtotal</span>
+            <div className="pt-4 border-t space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-400">Subtotal</span>
                 <span>{formatCurrency(calculateSubtotal())}</span>
+              </div>
+              {calculateTotalTax() > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600 dark:text-slate-400">Tax</span>
+                  <span>{formatCurrency(calculateTotalTax())}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base font-semibold pt-1 border-t">
+                <span>Total</span>
+                <span>{formatCurrency(calculateGrandTotal())}</span>
               </div>
             </div>
           </div>
