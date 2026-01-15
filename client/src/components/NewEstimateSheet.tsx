@@ -323,11 +323,11 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       return;
     }
 
-    // Save items to price book if requested
+    // Save items to price book if requested (using idempotent endpoint)
     const itemsToSave = validItems.filter(item => item.saveToPriceBook);
     for (const item of itemsToSave) {
       try {
-        await apiRequest('POST', '/api/service-catalog', {
+        await apiRequest('POST', '/api/service-catalog/save-from-line-item', {
           name: item.name.trim(),
           description: item.description || null,
           defaultPriceCents: item.unitPriceCents,
@@ -871,7 +871,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
                 className="flex-1"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Custom Item
+                Add New
               </Button>
             </div>
 
