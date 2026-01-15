@@ -1,0 +1,76 @@
+Fix centering, spacing, and layout issues in the Estimates tab
+
+CURRENT
+- Estimates tab is functional but visually off:
+  - Some elements feel misaligned horizontally
+  - Cards are not perfectly centered within the viewport
+  - Content appears slightly off-frame on mobile
+  - Inconsistent padding/margins between header, filters, buttons, and cards
+- This creates a “unfinished” look even though logic is correct
+
+GOAL
+- Make the Estimates tab feel clean, centered, and polished
+- Ensure all content is properly aligned and fully in frame
+- Match the visual quality of Jobs and Documents pages
+- Improve mobile + desktop layout consistency
+- NO logic changes — UI/UX only
+
+RULES
+- Do NOT change any data, API calls, or business logic
+- Do NOT rename buttons or alter functionality
+- Do NOT add new features
+- Pure layout, spacing, and alignment fixes only
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) PAGE CONTAINER ALIGNMENT
+- Ensure the main Estimates page container:
+  - Is horizontally centered
+  - Uses a consistent max-width (same pattern as Jobs/Documents)
+  - Has equal left/right padding
+- No content should touch the screen edges on mobile
+
+2) HEADER + FILTER ROW
+- Align the following elements on the same visual grid:
+  - “All customers” dropdown
+  - Status filter (All)
+  - Select checkbox
+- Ensure vertical centering within the row
+- Add consistent horizontal spacing between controls
+- Prevent wrapping or clipping on smaller screens
+
+3) CREATE ESTIMATE BUTTON
+- Ensure “Create Estimate” button:
+  - Is centered relative to the content area (not floating off-grid)
+  - Has consistent spacing above and below
+  - Does not overflow or clip on mobile
+
+4) ESTIMATE CARDS
+- Each estimate card should:
+  - Be fully centered in the viewport
+  - Have equal left/right margins
+  - Never overflow the screen bounds
+- Internal card layout:
+  - Title, customer name, date, and total aligned cleanly
+  - Amounts visually aligned and readable
+  - Action icons (approve, share, etc.) aligned consistently
+
+5) MOBILE SAFETY PASS
+- Test on narrow viewport:
+  - No horizontal scrolling
+  - No clipped text or buttons
+  - Cards remain fully visible
+- Ensure consistent padding from screen edges
+
+6) VISUAL CONSISTENCY CHECK
+- Compare Estimates tab to:
+  - Jobs tab
+  - Documents tab
+- Spacing, centering, and rhythm should feel identical
+
+ACCEPTANCE CHECKLIST
+- All elements are centered and visually balanced
+- Nothing is cut off or misaligned
+- Mobile and desktop both look clean
+- No regressions to estimate creation, selection, or approval
+- UI feels “finished” and professional

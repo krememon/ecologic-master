@@ -1404,11 +1404,11 @@ export default function Jobs() {
         {canAccessEstimates && (
         <TabsContent value="estimates" className="mt-6">
           {/* Filter Row: Customer Picker + Status Dropdown + Select Button */}
-          <div className="flex flex-col gap-3 mb-6">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex items-center gap-2 w-full">
               <Button 
                 variant="outline" 
-                className="flex-1 justify-between"
+                className="flex-[2] min-w-0 justify-between"
                 onClick={() => setEstimatesCustomerPickerOpen(true)}
                 disabled={isEstimateSelectionMode}
                 data-testid="button-estimates-customer-picker"
@@ -1421,8 +1421,8 @@ export default function Jobs() {
                 onValueChange={(v) => setEstimatesStatusFilter(v)}
                 disabled={isEstimateSelectionMode}
               >
-                <SelectTrigger className="flex-1 min-w-0" data-testid="filter-estimates-status">
-                  <span className="min-w-0 flex-1 truncate text-left">
+                <SelectTrigger className="flex-[1.5] min-w-[110px]" data-testid="filter-estimates-status">
+                  <span className="truncate text-left">
                     {estimatesStatusFilter === 'all' ? 'All statuses' : estimatesStatusFilter.charAt(0).toUpperCase() + estimatesStatusFilter.slice(1)}
                   </span>
                 </SelectTrigger>
@@ -1434,7 +1434,6 @@ export default function Jobs() {
                   <SelectItem value="declined">Declined</SelectItem>
                 </SelectContent>
               </Select>
-              {/* Select / Cancel button */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -1445,14 +1444,14 @@ export default function Jobs() {
                     setIsEstimateSelectionMode(true);
                   }
                 }}
-                className="shrink-0"
+                className="shrink-0 px-3"
                 data-testid="button-estimates-select-mode"
               >
                 {isEstimateSelectionMode ? (
                   "Cancel"
                 ) : (
                   <>
-                    <CheckSquare className="h-4 w-4 mr-1" />
+                    <CheckSquare className="h-4 w-4 mr-1.5" />
                     Select
                   </>
                 )}
@@ -1520,7 +1519,7 @@ export default function Jobs() {
             </Card>
           ) : (
             <>
-            <div className={`grid gap-4 md:grid-cols-2 lg:grid-cols-3 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
+            <div className={`flex flex-col gap-4 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
               {filteredEstimates.map((estimate) => {
                 const job = jobs.find(j => j.id === estimate.jobId);
                 const isSelected = selectedEstimateIds.has(estimate.id);
@@ -1538,10 +1537,9 @@ export default function Jobs() {
                     }}
                     data-testid={`card-estimate-${estimate.id}`}
                   >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
-                          {/* Checkbox in selection mode */}
                           {isEstimateSelectionMode && (
                             <div 
                               className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
@@ -1554,21 +1552,21 @@ export default function Jobs() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <CardTitle className="flex items-center gap-2 text-base truncate">
+                            <CardTitle className="flex items-center gap-2 text-base">
                               <DollarSign className="h-5 w-5 text-green-600 flex-shrink-0" />
-                              {estimate.title || estimate.estimateNumber}
+                              <span className="truncate">{estimate.title || estimate.estimateNumber}</span>
                             </CardTitle>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                               {estimate.estimateNumber}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 ml-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           {!isEstimateSelectionMode && canShareEstimates && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7"
+                              className="h-8 w-8"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setShareEstimateData({
@@ -1592,26 +1590,26 @@ export default function Jobs() {
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="pt-0 space-y-2">
+                    <CardContent className="pt-0 space-y-1.5">
                       {job && (
-                        <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400">
-                          <Building2 className="h-3 w-3" />
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <Building2 className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{job.title}</span>
                         </div>
                       )}
                       {estimate.customerName && (
-                        <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-400">
-                          <User className="h-3 w-3" />
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <User className="h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{estimate.customerName}</span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-100 dark:border-slate-800">
                         <span className="text-sm text-slate-500">Total</span>
                         <span className="font-semibold text-green-600">
                           ${((estimate.totalCents || 0) / 100).toFixed(2)}
                         </span>
                       </div>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-slate-400 pt-1">
                         {estimate.updatedAt ? format(new Date(estimate.updatedAt), 'MMM d, yyyy') : ''}
                       </div>
                     </CardContent>
