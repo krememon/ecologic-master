@@ -1,17 +1,25 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { X, Loader2, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Invoice {
   id: number;
   invoiceNumber: string;
   jobId: number;
-  amount: string; // Stored as decimal string in dollars (e.g., "350.00")
+  amount: string;
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
@@ -30,13 +38,8 @@ interface LineItem {
   taxCents?: number;
   taxNameSnapshot?: string;
   taxRatePercentSnapshot?: string;
-  subtotalCents?: number; // Backend computed
-  totalCents?: number; // Backend computed: lineTotalCents + taxCents
-}
-
-interface Job {
-  id: number;
-  title: string;
+  subtotalCents?: number;
+  totalCents?: number;
 }
 
 interface PaymentReviewProps {
@@ -44,18 +47,27 @@ interface PaymentReviewProps {
   invoiceId: string;
 }
 
+type PaymentMethod = 'cash' | 'check' | 'card';
+type ViewState = 'review' | 'processing' | 'success';
+
 export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState("");
   const [showAllItems, setShowAllItems] = useState(false);
+  
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
+  const [viewState, setViewState] = useState<ViewState>('review');
+  const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
 
-  // Fetch invoice via the existing job invoice endpoint
   const { data: invoiceData, isLoading: invoiceLoading, error: invoiceError } = useQuery<{ invoice: Invoice | null }>({
     queryKey: ['/api/jobs', numericJobId, 'invoice'],
     queryFn: async () => {
@@ -68,7 +80,6 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   const invoice = invoiceData?.invoice;
 
-  // Fetch line items for the job (API returns array directly, not wrapped object)
   const { data: lineItems = [], isLoading: lineItemsLoading } = useQuery<LineItem[]>({
     queryKey: ['/api/jobs', numericJobId, 'line-items'],
     queryFn: async () => {
@@ -78,7 +89,6 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       });
       if (!res.ok) return [];
       const data = await res.json();
-      // Handle both array and wrapped object shapes
       return Array.isArray(data) ? data : (data.lineItems ?? data.items ?? []);
     },
     enabled: !isNaN(numericJobId),
@@ -93,7 +103,16 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     }
   };
 
-  const handleNext = async () => {
+  const handleMethodSelect = (method: PaymentMethod) => {
+    if (method === 'card') {
+      handleStripeCheckout();
+    } else {
+      setSelectedMethod(method);
+      setConfirmModalOpen(true);
+    }
+  };
+
+  const handleStripeCheckout = async () => {
     if (isLoading) return;
     
     setIsLoading(true);
@@ -115,6 +134,42 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       setIsLoading(false);
       setError(err.message || "Failed to start payment");
     }
+  };
+
+  const handleManualPaymentConfirm = async () => {
+    if (!selectedMethod || isConfirming) return;
+    
+    setIsConfirming(true);
+    setConfirmModalOpen(false);
+    setViewState('processing');
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const response = await apiRequest("POST", "/api/payments/manual", {
+        invoiceId: numericInvoiceId,
+        method: selectedMethod,
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setPaidAmount(data.amountCents);
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+        setViewState('success');
+      } else {
+        throw new Error(data.message || "Payment failed");
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to record payment");
+      setViewState('review');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleDone = () => {
+    navigate('/jobs', { replace: true });
   };
 
   const formatCurrency = (dollars: number) => {
@@ -145,14 +200,67 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     );
   }
 
-  // Use totalCents from invoice if available, fall back to amount for older invoices
+  if (invoice.status?.toLowerCase() === 'paid') {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Already Paid</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            This invoice has already been paid.
+          </p>
+          <Button onClick={() => navigate('/jobs', { replace: true })}>
+            Back to Jobs
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (viewState === 'processing') {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-6">
+          <Loader2 className="h-16 w-16 animate-spin text-blue-600 mx-auto" />
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Processing payment…</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              We are processing your payment…
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (viewState === 'success') {
+    const paidDollars = paidAmount / 100;
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-6">
+          <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 className="h-12 w-12 text-green-500" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payment success</h1>
+            <p className="text-lg text-gray-600 dark:text-gray-400">
+              Payment of {formatCurrency(paidDollars)} was successful.
+            </p>
+          </div>
+          <Button onClick={handleDone} className="px-8">
+            Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const subtotalDollars = (invoice.subtotalCents || 0) / 100;
   const taxDollars = (invoice.taxCents || 0) / 100;
   const totalDollars = invoice.totalCents > 0 
     ? invoice.totalCents / 100 
     : parseFloat(invoice.amount) || 0;
   
-  // Determine which items to show (max 5 unless expanded)
   const maxVisible = 5;
   const hasMoreItems = lineItems.length > maxVisible;
   const visibleItems = showAllItems ? lineItems : lineItems.slice(0, maxVisible);
@@ -168,17 +276,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           >
             <X className="h-6 w-6" />
           </button>
-          <Button
-            onClick={handleNext}
-            disabled={isLoading}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6"
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              "Next"
-            )}
-          </Button>
+          <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            Invoice #{invoice.invoiceNumber}
+          </span>
         </div>
       </div>
 
@@ -305,13 +405,79 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           </div>
         )}
 
-        <div className="pt-4">
-          <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-            Payment History
+        <div className="space-y-3 pt-4">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Select payment method
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">No payments yet</p>
+          
+          <div className="grid grid-cols-3 gap-3">
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-24 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
+              onClick={() => handleMethodSelect('cash')}
+              disabled={isLoading}
+            >
+              <Banknote className="h-8 w-8 text-green-600" />
+              <span className="text-sm font-medium">Cash</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-24 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              onClick={() => handleMethodSelect('check')}
+              disabled={isLoading}
+            >
+              <FileCheck className="h-8 w-8 text-blue-600" />
+              <span className="text-sm font-medium">Check</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-24 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+              onClick={() => handleMethodSelect('card')}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+              ) : (
+                <CreditCard className="h-8 w-8 text-purple-600" />
+              )}
+              <span className="text-sm font-medium">Card</span>
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={confirmModalOpen} onOpenChange={setConfirmModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedMethod === 'cash' ? 'Cash payment' : 'Check payment'}
+            </DialogTitle>
+            <DialogDescription>
+              You're collecting payment by {selectedMethod === 'cash' ? 'cash' : 'check'}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmModalOpen(false)}
+              disabled={isConfirming}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleManualPaymentConfirm}
+              disabled={isConfirming}
+            >
+              {isConfirming ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

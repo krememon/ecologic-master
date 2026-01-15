@@ -7431,8 +7431,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =============================================================
-  // STRIPE PAYMENT ENDPOINTS
+  // PAYMENT ENDPOINTS
   // =============================================================
+
+  // POST /api/payments/manual - Record a manual payment (cash or check)
+  app.post('/api/payments/manual', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Owner, Supervisor, Dispatcher, Estimator can record payments
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to record payments" });
+      }
+
+      const { invoiceId, method } = req.body;
+      
+      if (!invoiceId) {
+        return res.status(400).json({ message: "Invoice ID is required" });
+      }
+      
+      if (!method || !['cash', 'check'].includes(method.toLowerCase())) {
+        return res.status(400).json({ message: "Payment method must be 'cash' or 'check'" });
+      }
+
+      // Load invoice from DB
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      // Idempotency: Check if invoice is already paid
+      if (invoice.status?.toLowerCase() === 'paid') {
+        // Return success with current payment status (do NOT create a second payment)
+        const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
+        return res.json({
+          success: true,
+          alreadyPaid: true,
+          amountCents: invoice.totalCents || Math.round(parseFloat(invoice.amount) * 100),
+          method: existingPayment?.paymentMethod || method.toLowerCase(),
+          invoiceId,
+        });
+      }
+
+      // Calculate amount from invoice totalCents (includes tax)
+      const amountCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+      const amountDollars = (amountCents / 100).toFixed(2);
+
+      // Create payment record
+      const payment = await storage.createPayment({
+        companyId: company.id,
+        jobId: invoice.jobId || null,
+        invoiceId: invoice.id,
+        amount: amountDollars,
+        paymentMethod: method.toLowerCase(),
+        status: 'completed',
+        paidDate: new Date(),
+        notes: `Manual ${method.toLowerCase()} payment recorded`,
+      });
+
+      // Mark invoice as paid
+      await storage.updateInvoice(invoiceId, {
+        status: 'paid',
+        paidDate: new Date().toISOString().split('T')[0],
+        paidAt: new Date(),
+      } as any);
+
+      console.log(`[Payment] Manual ${method} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
+
+      res.json({
+        success: true,
+        amountCents,
+        method: method.toLowerCase(),
+        invoiceId,
+        paymentId: payment.id,
+      });
+    } catch (error: any) {
+      console.error('Error recording manual payment:', error);
+      res.status(500).json({ message: error.message || "Failed to record payment" });
+    }
+  });
 
   // POST /api/payments/checkout - Create a Stripe Checkout session for an invoice
   app.post('/api/payments/checkout', isAuthenticated, async (req: any, res) => {

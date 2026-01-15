@@ -11,6 +11,7 @@ import {
   jobAssignments,
   crewAssignments,
   invoices,
+  payments,
   documents,
   messages,
   conversations,
@@ -111,6 +112,7 @@ export interface IStorage {
   
   // Payment operations
   getPayments(companyId: number): Promise<any[]>;
+  getPaymentByInvoiceId(invoiceId: number): Promise<any | null>;
   createPayment(payment: any): Promise<any>;
   updatePayment(id: number, payment: any): Promise<any>;
   
@@ -433,18 +435,34 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getPayments(companyId: number): Promise<any[]> {
-    // Implementation placeholder - return empty array for now
-    return [];
+    const result = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.companyId, companyId))
+      .orderBy(desc(payments.createdAt));
+    return result;
+  }
+  
+  async getPaymentByInvoiceId(invoiceId: number): Promise<any | null> {
+    const [payment] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.invoiceId, invoiceId));
+    return payment || null;
   }
   
   async createPayment(payment: any): Promise<any> {
-    // Implementation placeholder
-    return payment;
+    const [created] = await db.insert(payments).values(payment).returning();
+    return created;
   }
   
   async updatePayment(id: number, payment: any): Promise<any> {
-    // Implementation placeholder
-    return payment;
+    const [updated] = await db
+      .update(payments)
+      .set({ ...payment, updatedAt: new Date() })
+      .where(eq(payments.id, id))
+      .returning();
+    return updated;
   }
 
   async createCompany(companyData: InsertCompany): Promise<Company> {

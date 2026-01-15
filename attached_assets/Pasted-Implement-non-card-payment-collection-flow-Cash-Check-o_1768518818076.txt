@@ -1,0 +1,119 @@
+Implement non-card payment collection flow (Cash + Check) on the Payment screen BEFORE Stripe checkout. Must match the behavior described and shown in screenshots: choose method -> confirm modal -> processing screen -> payment success screen with amount. Card continues to use Stripe checkout.
+
+CURRENT
+- There is a Payment screen with buttons for CASH / CHECK / OTHER (and Card/Stripe flow exists elsewhere).
+- Stripe card payments work and return correctly.
+- We need a clean flow for recording manual payments (cash/check) without Stripe.
+
+GOAL
+On the Payment screen (before checkout):
+1) Show payment method options: Cash, Check, Card.
+2) If user taps CARD:
+   - continue existing Stripe checkout flow (no change)
+3) If user taps CASH:
+   - show a confirmation modal:
+     Title: “Cash payment”
+     Body: “You’re collecting payment by cash.”
+     Buttons: Cancel / Confirm
+   - On Confirm:
+     - show a “Processing payment…” screen
+     - then show “Payment success” screen
+     - include amount paid (the invoice total)
+     - record the payment in DB as paid by CASH
+4) If user taps CHECK:
+   - exact same flow as cash, but text says “check” and record as CHECK
+
+CRITICAL RULES
+- Must not introduce routing bugs or break Stripe flow
+- Must not auto-open jobs afterward; safe landing remains Jobs list after completion (or back to invoice screen if that’s current pattern)
+- No success toasts; screens handle feedback
+- Payment amount must exactly match invoice total (including tax)
+- Must be idempotent: cannot double-record payments if user taps confirm twice
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) BACKEND: ADD MANUAL PAYMENT ENDPOINT (SOURCE OF TRUTH)
+Create endpoint:
+POST /api/payments/manual
+Body:
+- invoiceId
+- method: "cash" | "check"
+Behavior:
+- Validate invoice exists + belongs to company
+- If invoice already paid:
+  - return 200 with current payment status (do NOT create a second payment)
+- Create a Payment record:
+  - invoiceId
+  - companyId
+  - amountCents = invoice.totalCents
+  - method = CASH or CHECK
+  - status = "paid"
+  - paidAt timestamp
+- Mark invoice as paid (same flags/status your Stripe webhook sets)
+- Return:
+  - { success: true, amountCents, method, invoiceId }
+
+Idempotency:
+- Enforce unique constraint or guard:
+  - one “paid” payment per invoice (or one per method, but simpler: one total)
+- Also disable double-click on frontend (see step 3)
+
+2) FRONTEND: PAYMENT METHOD SCREEN UI
+- On the Payment page, show 3 buttons:
+  - CASH
+  - CHECK
+  - CARD
+- CARD button triggers the existing Stripe checkout path (no changes to current Stripe endpoints)
+
+3) CASH/CHECK CONFIRM MODAL
+When user taps CASH or CHECK:
+- Show a modal:
+  Title: “Cash payment” OR “Check payment”
+  Body: “You’re collecting payment by cash.” OR “You’re collecting payment by check.”
+  Buttons: Cancel / Confirm
+Rules:
+- Confirm button must disable immediately after press (loading state) to prevent duplicates
+- Cancel closes modal with no side effects
+
+4) PROCESSING SCREEN (NON-STRIPE)
+After Confirm:
+- Navigate to a simple full-screen “Processing payment…” view
+  - spinner
+  - text: “We are processing your payment…”
+- While on this screen:
+  - call POST /api/payments/manual (invoiceId + method)
+- Optional: add a short intentional delay (300–800ms) so it feels real, but do NOT slow it down excessively
+
+5) PAYMENT SUCCESS SCREEN
+After API returns success:
+- Show “Payment success”
+- Show text:
+  “Payment of $X.XX was successful.”
+- Provide a single action to exit:
+  - “Done” button OR auto-redirect after 1–2 seconds (choose one; prefer Done for control)
+- On Done:
+  - navigate to Jobs list OR back to the invoice screen (choose whichever is currently the standard after payment in EcoLogic; preferred: Jobs list safe landing)
+- Ensure invoice UI now shows paid status.
+
+6) CHECK FLOW MUST MATCH CASH EXACTLY
+- Same screens
+- Same logic
+- Only wording + method differs
+
+7) ACCEPTANCE TEST (MUST PASS)
+- Invoice total is $300.00 (including tax)
+- Tap CASH -> confirm -> processing -> success shows $300.00
+- Invoice becomes paid in DB
+- Repeat attempt to pay same invoice again (cash/check/card):
+  - should not double-charge or double-record
+  - should show already paid / prevent checkout
+- Tap CHECK -> same behavior
+- Tap CARD -> Stripe checkout still works exactly as before
+
+DELIVERABLES
+- Manual payment backend endpoint + DB write + invoice paid update + idempotency guard
+- Payment screen with Cash/Check/Card
+- Cash/Check confirm modal
+- Processing screen
+- Payment success screen with amount
+- Safe navigation after completion (no 404, no white screen, no auto-open job)
