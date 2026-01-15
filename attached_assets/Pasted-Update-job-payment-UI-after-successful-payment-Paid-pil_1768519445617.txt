@@ -1,0 +1,77 @@
+Update job payment UI after successful payment (Paid pill + Pay button replacement)
+
+CURRENT
+- Jobs have a green “Pay” button when an invoice is unpaid
+- After payment (Card / Cash / Check), the payment succeeds correctly
+- User sees a success screen (“Payment Success” or “Already Paid”)
+- HOWEVER:
+  - Job card does NOT visually update to show paid status
+  - “Pay” button still exists after payment
+  - No clear paid indicator on the job card itself
+
+GOAL
+- After ANY successful payment (Card, Cash, or Check):
+  - Job card shows a “Paid” pill badge (top-right of the card)
+  - “Pay” button is replaced by a “Paid” pill
+  - Paid state is persistent across refreshes
+  - No duplicate payments possible
+- UX should clearly indicate payment completion without extra clicks
+
+RULES
+- Jobs list remains the source of truth
+- No auto-opening modals
+- No toast notifications for success
+- UI must react immediately after payment
+- Must work identically for:
+  - Stripe (card)
+  - Cash
+  - Check
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ADD PAID STATE TO JOB DATA
+- Ensure job or invoice has a reliable paid flag:
+  - e.g. invoice.status === "paid"
+- This state must persist in the DB
+- Do NOT rely on local state only
+
+2) UPDATE JOB CARD UI
+- In JobCard component:
+  - If invoice is unpaid:
+    - Show green “Pay” button
+  - If invoice is paid:
+    - REMOVE “Pay” button entirely
+    - SHOW a “Paid” pill badge instead
+- Paid pill:
+  - Green background
+  - White checkmark icon (optional)
+  - Text: “Paid”
+  - Non-clickable
+
+3) ADD PAID PILL TO TOP-RIGHT OF JOB CARD
+- Display a small “Paid” pill in the job card header area
+- This is visible in:
+  - Jobs list
+  - Client → Jobs tab
+- Ensure spacing and alignment remain clean
+
+4) UPDATE PAYMENT FLOWS TO TRIGGER UI REFRESH
+- After successful payment (Card / Cash / Check):
+  - Refetch job + invoice data
+  - Clear any stale job state
+  - Return user to Jobs list or Job view
+- NEVER leave user on a success screen without updated job state
+
+5) PREVENT DUPLICATE PAYMENTS
+- If invoice is already paid:
+  - Hide “Pay” button everywhere
+  - Show “Already Paid” screen if user somehow reaches payment route
+- No double charging, no double marking paid
+
+ACCEPTANCE TESTS
+- Pay with Card → Job card immediately shows “Paid” pill
+- Pay with Cash → Job card immediately shows “Paid” pill
+- Pay with Check → Job card immediately shows “Paid” pill
+- Refresh page → Paid state persists
+- No Pay button appears on paid jobs
+- No regressions to Stripe, checkout, or invoice totals

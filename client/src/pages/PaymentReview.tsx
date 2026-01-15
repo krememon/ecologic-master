@@ -154,6 +154,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       
       if (data.success) {
         setPaidAmount(data.amountCents);
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
         queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
         setViewState('success');
