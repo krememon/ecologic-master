@@ -12,6 +12,9 @@ interface Invoice {
   invoiceNumber: string;
   jobId: number;
   amount: string; // Stored as decimal string in dollars (e.g., "350.00")
+  subtotalCents: number;
+  taxCents: number;
+  totalCents: number;
   status: string;
   createdAt: string;
 }
@@ -23,6 +26,10 @@ interface LineItem {
   quantity: string;
   unitPriceCents: number;
   lineTotalCents: number;
+  taxable?: boolean;
+  taxCents?: number;
+  taxNameSnapshot?: string;
+  taxRatePercentSnapshot?: string;
 }
 
 interface Job {
@@ -136,8 +143,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     );
   }
 
-  // Invoice amount is stored as decimal string in dollars (e.g., "350.00")
-  const totalAmount = parseFloat(invoice.amount) || 0;
+  // Use totalCents from invoice if available, fall back to amount for older invoices
+  const subtotalDollars = (invoice.subtotalCents || 0) / 100;
+  const taxDollars = (invoice.taxCents || 0) / 100;
+  const totalDollars = invoice.totalCents > 0 
+    ? invoice.totalCents / 100 
+    : parseFloat(invoice.amount) || 0;
   
   // Determine which items to show (max 5 unless expanded)
   const maxVisible = 5;
@@ -237,11 +248,29 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               </>
             )}
             
-            <div className="flex justify-between items-center py-3 mt-2 border-t border-gray-200 dark:border-gray-600">
-              <span className="font-semibold text-gray-900 dark:text-white">Total</span>
-              <span className="font-bold text-lg text-gray-900 dark:text-white">
-                {formatCurrency(totalAmount)}
-              </span>
+            <div className="space-y-2 pt-3 mt-2 border-t border-gray-200 dark:border-gray-600">
+              {invoice.subtotalCents > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
+                  <span className="text-gray-900 dark:text-white">
+                    {formatCurrency(subtotalDollars)}
+                  </span>
+                </div>
+              )}
+              {invoice.taxCents > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-400">Tax</span>
+                  <span className="text-gray-900 dark:text-white">
+                    {formatCurrency(taxDollars)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-1">
+                <span className="font-semibold text-gray-900 dark:text-white">Total</span>
+                <span className="font-bold text-lg text-gray-900 dark:text-white">
+                  {formatCurrency(totalDollars)}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
