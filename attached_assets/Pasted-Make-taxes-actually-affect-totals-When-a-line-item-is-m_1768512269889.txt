@@ -1,0 +1,99 @@
+Make taxes actually affect totals. When a line item is marked Taxable and a tax rate is selected, the tax must be calculated and added into invoice totals, Payment Review totals, and Stripe charge totals.
+
+CURRENT
+- Line item editor has:
+  - Taxable toggle
+  - Tax rate selection (saved tax name + percent)
+- However, tax does NOT change totals:
+  - Line item “Total” still shows only qty * unit price
+  - Invoice totals do not include tax
+  - Payment Review totals do not include tax
+  - Stripe checkout charges pre-tax amount
+
+GOAL
+- Taxes must be real, not cosmetic.
+- If a line item is taxable AND has a selected tax rate:
+  - It contributes tax to the invoice
+- Invoice should show:
+  - Subtotal (sum of line item totals, pre-tax)
+  - Tax (sum of taxable line item taxes)
+  - Total (subtotal + tax)
+- Payment Review must show the same breakdown
+- Stripe checkout must charge the same final total (including tax)
+- All math must be stable (no floating bugs)
+- Zero regressions to job creation, routing, or Stripe return flow
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) DEFINE SOURCE OF TRUTH: BACKEND CALCULATES MONEY IN CENTS
+- Implement tax calculations in backend ONLY.
+- Use cents for all totals:
+  - lineSubtotalCents = round(qty * unitPriceCents)
+  - lineTaxCents = round(lineSubtotalCents * taxRatePercent / 100) if taxable + tax selected
+- Invoice totals:
+  subtotalCents = sum(lineSubtotalCents)
+  taxCents = sum(lineTaxCents)
+  totalCents = subtotalCents + taxCents
+- Round correctly:
+  - taxCents must use Math.round on the final cents calculation
+  - NO floating totals stored without rounding
+
+2) STORE/RETURN THE RIGHT FIELDS
+- Ensure each line item returned includes:
+  - subtotalCents (or lineTotalCents pre-tax)
+  - taxCents (0 if not taxable or no tax selected)
+  - totalWithTaxCents (optional; for display)
+- Ensure invoice returned includes:
+  - subtotalCents
+  - taxCents
+  - totalCents
+
+3) BACKEND: RECALC INVOICE TOTALS WHEN LINE ITEMS CHANGE
+- Whenever a line item is created/updated/deleted OR taxable/taxRate changes:
+  - Recalculate invoice totals for that job’s invoice (if invoice exists)
+  - Save the updated invoice subtotal/tax/total in DB
+- Add idempotency and avoid duplicate updates.
+
+4) FRONTEND DISPLAY UPDATES
+A) Line Item editor “Total”
+- Keep “Total” as pre-tax line total (qty * unit price) OR rename to “Subtotal”
+- Add a new small line below when taxable is on:
+  - “Tax: $X.XX”
+  - “Total w/ tax: $Y.YY” (optional but preferred)
+(Do NOT break existing UI layout.)
+
+B) Invoice screen
+- Display:
+  Subtotal
+  Tax
+  Total
+- If tax = 0, still show it but as $0.00 (clean UI)
+
+C) Payment Review screen
+- Add breakdown under line items card:
+  - Subtotal
+  - Tax
+  - Total
+
+5) STRIPE CHECKOUT MUST CHARGE invoice.totalCents
+- Update checkout session creation:
+  - Charge the final invoice.totalCents (includes tax)
+- Do NOT independently compute tax inside Stripe logic. Use invoice totals.
+
+6) ACCEPTANCE TEST (MUST PASS)
+- Create job with 2 line items:
+  - Item A $350 taxable (NY 8.625%)
+  - Item B $350 non-taxable
+- Subtotal = $700.00
+- Tax = $30.19 (350 * 8.625% = 30.1875 -> $30.19)
+- Total = $730.19
+- Invoice screen shows correct breakdown
+- Payment Review shows correct breakdown
+- Stripe checkout charges $730.19
+- Payment success returns to Jobs page (no regressions)
+
+DELIVERABLES
+- Backend tax math in cents + invoice recalc logic
+- Invoice + Payment Review display tax/subtotal/total
+- Stripe charges invoice.totalCents
+- No routing/auth regressions

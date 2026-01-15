@@ -1818,6 +1818,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const unitPriceCents = parseInt(item.unitPriceCents) || 0;
             const lineTotalCents = Math.round(quantity * unitPriceCents);
             
+            // Calculate tax for this line item
+            let taxCents = 0;
+            if (item.taxable && item.taxRatePercentSnapshot) {
+              const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+              taxCents = Math.round(lineTotalCents * taxRate / 100);
+            }
+            
             await tx.insert(jobLineItems).values({
               jobId: createdJob.id,
               name: item.name.trim(),
@@ -1831,6 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxRatePercentSnapshot: item.taxable && item.taxRatePercentSnapshot ? item.taxRatePercentSnapshot : null,
               taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : null,
               lineTotalCents,
+              taxCents,
               sortOrder: i,
             });
           }
@@ -1972,6 +1980,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (let i = 0; i < lineItems.length; i++) {
             const item = lineItems[i];
             const lineTotalCents = Math.round(parseFloat(item.quantity) * item.unitPriceCents);
+            
+            // Calculate tax for this line item
+            let taxCents = 0;
+            if (item.taxable && item.taxRatePercentSnapshot) {
+              const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+              taxCents = Math.round(lineTotalCents * taxRate / 100);
+            }
+            
             await db.insert(jobLineItems).values({
               jobId,
               name: item.name,
@@ -1985,9 +2001,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
               taxRatePercentSnapshot: item.taxable && item.taxRatePercentSnapshot ? item.taxRatePercentSnapshot : null,
               taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : null,
               lineTotalCents,
+              taxCents,
               sortOrder: i,
             });
           }
+        }
+        
+        // If invoice exists for this job, recalculate its totals
+        const existingInvoice = await storage.getInvoiceByJobId(jobId, company.id);
+        if (existingInvoice) {
+          const updatedLineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId));
+          const subtotalCents = updatedLineItems.reduce((sum, item) => sum + (item.lineTotalCents || 0), 0);
+          const invoiceTaxCents = updatedLineItems.reduce((sum, item) => sum + (item.taxCents || 0), 0);
+          const totalCents = subtotalCents + invoiceTaxCents;
+          const totalAmount = (totalCents / 100).toFixed(2);
+          
+          await db.update(invoices)
+            .set({
+              amount: totalAmount,
+              subtotalCents,
+              taxCents: invoiceTaxCents,
+              totalCents,
+              updatedAt: new Date(),
+            })
+            .where(eq(invoices.id, existingInvoice.id));
         }
       }
       
@@ -3086,8 +3123,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Calculate total from line items
-      const totalCents = lineItems.reduce((sum, item) => sum + (item.lineTotalCents || 0), 0);
+      // Calculate totals from line items (subtotal, tax, and total)
+      const subtotalCents = lineItems.reduce((sum, item) => sum + (item.lineTotalCents || 0), 0);
+      const taxCents = lineItems.reduce((sum, item) => sum + (item.taxCents || 0), 0);
+      const totalCents = subtotalCents + taxCents;
       const totalAmount = (totalCents / 100).toFixed(2);
 
       // Generate invoice number
@@ -3111,6 +3150,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         clientId: job.clientId || null,
         invoiceNumber,
         amount: totalAmount,
+        subtotalCents,
+        taxCents,
+        totalCents,
         status: 'pending',
         issueDate: today.toISOString().split('T')[0],
         dueDate: dueDate.toISOString().split('T')[0],
@@ -7383,9 +7425,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const amountInCents = Math.round(parseFloat(invoice.amount) * 100);
+      // Use totalCents from invoice (includes tax), fall back to amount calculation for older invoices
+      const amountInCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
 
       console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
+      console.log(`[Stripe] Charging amount: ${amountInCents} cents (totalCents: ${invoice.totalCents}, amount: ${invoice.amount})`);
       console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return`);
       console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return`);
 

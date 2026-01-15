@@ -207,6 +207,7 @@ export const jobLineItems = pgTable("job_line_items", {
   taxRatePercentSnapshot: decimal("tax_rate_percent_snapshot", { precision: 5, scale: 3 }),
   taxNameSnapshot: varchar("tax_name_snapshot", { length: 40 }),
   lineTotalCents: integer("line_total_cents").notNull().default(0),
+  taxCents: integer("tax_cents").notNull().default(0),
   sortOrder: integer("sort_order").notNull().default(0),
 });
 
@@ -246,6 +247,9 @@ export const invoices = pgTable("invoices", {
   clientId: integer("client_id").references(() => clients.id),
   invoiceNumber: varchar("invoice_number").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  taxCents: integer("tax_cents").notNull().default(0),
+  totalCents: integer("total_cents").notNull().default(0),
   status: varchar("status").notNull().default("pending"), // pending, paid, overdue, cancelled
   issueDate: date("issue_date").notNull(),
   dueDate: date("due_date").notNull(),
