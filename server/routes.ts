@@ -7319,6 +7319,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/service-catalog/save-from-line-item - Save line item to price book (idempotent)
+  // Any authenticated company member who can create jobs can use this
+  app.post('/api/service-catalog/save-from-line-item', isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+
+      const { name, description, defaultPriceCents, unit, taskCode, taxable } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: 'Name is required to save to Price Book' });
+      }
+
+      // Check for existing item with same name + unit + price (idempotent)
+      const existingItems = await storage.getServiceCatalogItems(member.companyId);
+      const duplicate = existingItems.find(item => 
+        item.name.toLowerCase() === name.trim().toLowerCase() &&
+        item.unit === (unit || 'each') &&
+        item.defaultPriceCents === (defaultPriceCents || 0)
+      );
+
+      if (duplicate) {
+        // Already exists, return existing item silently (no error, no duplicate created)
+        return res.status(200).json({ item: duplicate, alreadyExists: true });
+      }
+
+      // Create new price book item
+      const item = await storage.createServiceCatalogItem({
+        companyId: member.companyId,
+        name: name.trim(),
+        description: description || null,
+        defaultPriceCents: defaultPriceCents || 0,
+        unit: unit || 'each',
+        category: null,
+        taskCode: taskCode || null,
+        taxable: taxable ?? false,
+      });
+
+      res.status(201).json({ item, alreadyExists: false });
+    } catch (error: any) {
+      console.error('Error saving line item to price book:', error);
+      res.status(500).json({ error: 'Failed to save to Price Book' });
+    }
+  });
+
   // PATCH /api/service-catalog/:id - Update a service catalog item
   app.patch('/api/service-catalog/:id', isAuthenticated, async (req, res) => {
     try {

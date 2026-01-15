@@ -1,0 +1,87 @@
+Fix the Line Items “Custom item” button + make “Save to Price Book” actually save for future use.
+
+CURRENT
+- There is a blue button that says “Custom item”.
+- When adding a custom line item, there is a toggle “Save to Price Book (Add as reusable template)”.
+- The toggle currently does NOT actually save the item into the Price Book for future use.
+
+GOAL
+1) UI text change:
+- Change the button label from “Custom item” to “Add New”
+- Keep the + icon and styling consistent
+
+2) Price Book persistence (MOST IMPORTANT):
+- When “Save to Price Book” is enabled for a line item and the user completes/saves the line item:
+  - A reusable Price Book item is created/saved in DB
+  - It appears in the Price Book list immediately
+  - It is available later when user taps “From Price Book”
+  - It persists after refresh
+
+CRITICAL RULES
+- No regressions to job line items, invoices, tax logic, or Stripe flow
+- No success popups/toasts; inline error only if save fails
+- Must be idempotent: saving same item twice should not create duplicates unless user intentionally creates a different one
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) UI LABEL CHANGE
+- Locate the button that currently says “Custom item”
+- Change label to: “Add New”
+- Do not change its behavior, only the text
+
+2) CONFIRM EXISTING PRICE BOOK DATA MODEL / ENDPOINTS
+- Find how “From Price Book” currently loads items (API + DB).
+- Identify:
+  - PriceBookItem table/model
+  - GET endpoint used to list price book items
+  - POST endpoint (if exists) to create new price book items
+If a create endpoint does NOT exist, add one.
+
+3) IMPLEMENT “SAVE TO PRICE BOOK” BEHAVIOR
+When user has Save to Price Book toggle ON and line item is saved:
+- Create a new PriceBookItem with fields:
+  - companyId
+  - name (required)
+  - description (optional)
+  - taskCode (optional)
+  - unit (ex: Each/Job)
+  - defaultQty (optional; usually 1)
+  - unitPriceCents (store cents, not float)
+  - taxable default (optional)
+  - taxRateId default (optional)
+  - createdAt/updatedAt
+- Then continue saving the line item normally (no change to line item flow)
+
+Idempotency / duplicates:
+- If a PriceBookItem with same companyId + name + unitPriceCents + unit already exists, do NOT create a duplicate.
+- Instead reuse existing or return a “already exists” response silently (no popup).
+
+4) FRONTEND: REFRESH PRICE BOOK LIST IMMEDIATELY
+- After a successful save-to-price-book:
+  - invalidate/refetch the Price Book items query
+  - so “From Price Book” immediately shows the newly saved item
+- Keep this silent (no success toast)
+
+5) VALIDATION + ERRORS
+- If Save to Price Book is ON but the line item name is empty:
+  - show inline error “Name is required to save to Price Book”
+  - do not create pricebook entry
+- If API fails:
+  - show inline error in the line item editor section (no toast)
+
+ACCEPTANCE TEST (MUST PASS)
+- Tap “Add New” (button renamed from Custom item)
+- Fill out a custom line item:
+  - Name: “Bathroom Sink Install”
+  - Unit price: 350
+  - Toggle “Save to Price Book” ON
+- Save/Done
+- Open “From Price Book” -> item appears
+- Refresh app -> item still appears
+- Try to save same item again -> no duplicates created
+
+DELIVERABLES
+- Button label changed to “Add New”
+- Save to Price Book creates/reuses a PriceBookItem in DB
+- From Price Book list updates immediately and persists
+- No regressions or new popups

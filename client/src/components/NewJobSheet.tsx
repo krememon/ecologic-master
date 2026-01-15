@@ -402,6 +402,30 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     }
   });
 
+  // Helper to save line items to price book (after job save succeeds)
+  const saveToPriceBook = async (items: LineItem[]) => {
+    const itemsToSave = items.filter(item => item.saveToPriceBook && item.name.trim());
+    for (const item of itemsToSave) {
+      try {
+        await apiRequest('POST', '/api/service-catalog/save-from-line-item', {
+          name: item.name.trim(),
+          description: item.description?.trim() || null,
+          defaultPriceCents: item.unitPriceCents,
+          unit: item.unit,
+          taskCode: item.taskCode?.trim() || null,
+          taxable: item.taxable,
+        });
+      } catch (error) {
+        // Silently fail - the job was already saved successfully
+        console.error('Failed to save item to price book:', error);
+      }
+    }
+    // Refresh price book list
+    if (itemsToSave.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+    }
+  };
+
   // Create job mutation - uses new simplified endpoint
   const createJobMutation = useMutation({
     mutationFn: async (data: {
@@ -427,7 +451,10 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       const response = await apiRequest('POST', '/api/jobs/create', data);
       return response.json();
     },
-    onSuccess: (newJob) => {
+    onSuccess: async (newJob) => {
+      // Save any line items with saveToPriceBook=true to the price book
+      await saveToPriceBook(lineItems);
+      
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
@@ -478,7 +505,10 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       const response = await apiRequest('PATCH', `/api/jobs/${initialJob?.id}`, data);
       return response.json();
     },
-    onSuccess: (updatedJob) => {
+    onSuccess: async (updatedJob) => {
+      // Save any line items with saveToPriceBook=true to the price book
+      await saveToPriceBook(lineItems);
+      
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', initialJob?.id?.toString()] });
       queryClient.invalidateQueries({ queryKey: [`/api/jobs/${initialJob?.id}`] });
@@ -600,6 +630,14 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const handleSave = () => {
     if (!selectedCustomer) {
       toast({ title: "Customer required", description: "Please select a customer before saving.", variant: "destructive" });
+      return;
+    }
+
+    // Validate: if any line item has saveToPriceBook=true, it must have a name
+    const itemsToSaveToPriceBook = lineItems.filter(item => item.saveToPriceBook);
+    const invalidPriceBookItem = itemsToSaveToPriceBook.find(item => !item.name.trim());
+    if (invalidPriceBookItem) {
+      toast({ title: "Name required", description: "Name is required to save to Price Book", variant: "destructive" });
       return;
     }
 
@@ -1418,7 +1456,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                 className="flex-1"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Custom Item
+                Add New
               </Button>
             </div>
 
