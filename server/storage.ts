@@ -1733,19 +1733,45 @@ export class DatabaseStorage implements IStorage {
 
   // Estimate operations
   async getEstimatesByJob(jobId: number): Promise<Estimate[]> {
-    return await db
-      .select()
+    // Join with jobs to get schedule from converted job if estimate doesn't have its own
+    const results = await db
+      .select({
+        estimate: estimates,
+        jobStartDate: jobs.startDate,
+        jobScheduledTime: jobs.scheduledTime,
+      })
       .from(estimates)
+      .leftJoin(jobs, eq(estimates.convertedJobId, jobs.id))
       .where(eq(estimates.jobId, jobId))
       .orderBy(desc(estimates.createdAt));
+    
+    // Return estimates with fallback schedule from job
+    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => ({
+      ...estimate,
+      scheduledDate: estimate.scheduledDate || (jobStartDate ? new Date(jobStartDate + 'T12:00:00') : null),
+      scheduledTime: estimate.scheduledTime || jobScheduledTime,
+    }));
   }
 
   async getEstimatesByCompany(companyId: number): Promise<Estimate[]> {
-    return await db
-      .select()
+    // Join with jobs to get schedule from converted job if estimate doesn't have its own
+    const results = await db
+      .select({
+        estimate: estimates,
+        jobStartDate: jobs.startDate,
+        jobScheduledTime: jobs.scheduledTime,
+      })
       .from(estimates)
+      .leftJoin(jobs, eq(estimates.convertedJobId, jobs.id))
       .where(eq(estimates.companyId, companyId))
       .orderBy(desc(estimates.updatedAt));
+    
+    // Return estimates with fallback schedule from job
+    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => ({
+      ...estimate,
+      scheduledDate: estimate.scheduledDate || (jobStartDate ? new Date(jobStartDate + 'T12:00:00') : null),
+      scheduledTime: estimate.scheduledTime || jobScheduledTime,
+    }));
   }
 
   async getEstimate(id: number): Promise<EstimateWithItems | undefined> {

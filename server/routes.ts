@@ -2361,6 +2361,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(jobs.id, jobId))
         .returning();
       
+      // Also update any estimate that was converted to this job
+      // so the estimate card shows the schedule too
+      if (scheduledDate) {
+        await db
+          .update(estimates)
+          .set({
+            scheduledDate: new Date(scheduledDate + 'T12:00:00'),
+            scheduledTime: timeStr,
+            updatedAt: new Date(),
+          })
+          .where(eq(estimates.convertedJobId, jobId));
+      }
+      
       console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime: timeStr, timezone });
       res.json(updated);
     } catch (error) {

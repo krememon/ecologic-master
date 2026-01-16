@@ -1,0 +1,64 @@
+Fix Estimate cards: Schedule box still not appearing. Make it show EXACTLY like the Job card Schedule box.
+
+CURRENT
+- Job cards correctly show a Schedule row/box with:
+  - calendar icon
+  - scheduled date + time
+  - “Jan 16, 2026 · 9:00 AM” style
+- Estimate cards do NOT show the Schedule box at all (even when the estimate was scheduled during approval).
+
+GOAL
+- On the Estimates list cards, show a Schedule box that is visually identical to the Job card Schedule box.
+- It must appear whenever the estimate has a schedule set.
+- It must use the estimate’s saved schedule fields (not createdAt, not job date).
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CONFIRM WHERE THE SCHEDULE DATA LIVES FOR ESTIMATES
+- Identify the estimate fields that store schedule:
+  - estimate.scheduledAt OR estimate.scheduledDate + estimate.scheduledTime
+  - or estimate.approvedJobId -> job.scheduledAt (if schedule is stored on the created job)
+- We must display schedule consistently.
+- Add a temporary log in the EstimateCard render:
+  console.log("[EstimateCard] schedule fields", { id: estimate.id, scheduledAt: estimate.scheduledAt, scheduledDate: estimate.scheduledDate, scheduledTime: estimate.scheduledTime, convertedJobId: estimate.convertedJobId, approvedJobId: estimate.approvedJobId })
+
+2) ENSURE ESTIMATES LIST API RETURNS THE SCHEDULE INFO
+- In GET /api/estimates (or whatever list endpoint):
+  - include the estimate schedule fields
+  - OR if schedule is stored on the converted job, join/fetch job.scheduledAt and return it as:
+    estimate.scheduledAt (preferred) or estimate.jobScheduledAt
+- This is likely the reason the UI cannot show it (the list endpoint doesn’t return schedule).
+
+3) RENDER THE SCHEDULE BOX EXACTLY LIKE JOB CARD
+- Reuse the SAME component or markup used in JobCard for the schedule row:
+  - same icon
+  - same spacing
+  - same typography
+  - same formatting function
+- Do NOT create a new “different looking” schedule UI.
+- Place it in the same location within the card body where it visually makes sense (matching Jobs cards).
+
+4) VISIBILITY RULE
+- If there is NO schedule value:
+  - hide schedule box completely
+- If schedule exists:
+  - show it every time
+
+5) LIVE REFRESH AFTER APPROVAL/SCHEDULING
+- After approving and scheduling an estimate:
+  - invalidate/refetch estimates list query so the card updates immediately
+- No page refresh required.
+
+ACCEPTANCE TEST (MUST PASS)
+- Approve an estimate and set schedule date/time
+- Go to Estimates list:
+  - The estimate card shows Schedule box identical to job card
+  - Displays correct date + time
+- Refresh app:
+  - schedule box persists
+- An estimate without schedule does not show schedule box
+
+DELIVERABLES
+- Estimates list API returns schedule data
+- EstimateCard renders schedule box identical to JobCard schedule box
+- Schedule box appears correctly and updates immediately after scheduling
