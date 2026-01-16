@@ -1,0 +1,95 @@
+Fix EcoLogic “Select Time” scroll wheel to behave EXACTLY like Housecall Pro: minutes only in 15-minute increments (00/15/30/45), stable vertical scroll only (no side-to-side drag), no blue selection bars, and clear selected time.
+
+CURRENT
+- EcoLogic uses a custom 3-column time wheel (Hour / Minutes / AM-PM).
+- It is buggy:
+  - Numbers can be dragged/moved side-to-side (should NOT happen)
+  - Minutes still show invalid values sometimes / not strictly 15-min
+  - Blue “selection bars” appear in the middle of the numbers (unwanted)
+  - Selected time is hard to understand visually
+- Housecall Pro shows a clean wheel where:
+  - Minutes are ONLY 00, 15, 30, 45
+  - Wheel scroll is vertical only
+  - No weird overlay bars
+
+GOAL
+- Keep the wheel UI.
+- Minutes column must ONLY include: 00, 15, 30, 45 (nothing else visible/selectable).
+- Columns must scroll vertically ONLY (no horizontal movement).
+- Remove the blue bars/overlays in the middle.
+- Selected time must be obvious and readable (and shown as a live preview like “7:15 PM”).
+- Must feel stable on iPhone/mobile preview.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) REMOVE THE BLUE SELECTION BARS (CRITICAL)
+- Delete/disable any highlight overlay elements causing the blue rounded bars:
+  - any absolute “selection window” div
+  - any ::before / ::after highlight layer
+- Do NOT replace it with another bar.
+- Selection should be indicated by centered alignment + text styling only.
+
+2) LOCK EACH COLUMN TO VERTICAL SCROLL ONLY (NO SIDEWAYS DRAG)
+For EACH wheel column container:
+- CSS requirements:
+  - overflow-y: scroll;
+  - overflow-x: hidden;
+  - touch-action: pan-y;
+  - overscroll-behavior: contain;
+  - -webkit-overflow-scrolling: touch;
+- Ensure each column has fixed width and does not flex-shrink:
+  - flex: 0 0 auto;
+- If using pointer/touch handlers:
+  - ignore horizontal delta (dx)
+  - only respond to vertical delta (dy)
+
+3) MINUTES MUST BE 15-MIN INCREMENTS ONLY (HOUSECALL STYLE)
+- The minutes wheel must be built from a fixed list ONLY:
+  ["00","15","30","45"]
+- Do NOT generate minutes 00–59.
+- The user must NEVER see or land on 29, 46, etc.
+
+4) SNAP TO ROWS (NO IN-BETWEEN STATES)
+- Make each option row the same height (ex: 44px).
+- Use scroll snapping:
+  - wheel: scroll-snap-type: y mandatory;
+  - row: scroll-snap-align: center;
+- On scroll end / touch end:
+  - snap to the nearest valid item
+  - never leave the wheel between values
+
+5) MAKE SELECTED VALUE CLEAR (TEXT STYLE, NOT BLUE BARS)
+- Center row should be the “selected” row.
+- Selected row text:
+  - darker + bold
+- Non-selected rows:
+  - faded / lighter
+- Ensure no clipping and the centered value is always readable.
+
+6) SHOW LIVE SELECTED TIME PREVIEW (ALREADY PRESENT — KEEP IT)
+- Under the wheel (above Done), show the selected time (ex: “7:15 PM”).
+- This preview must update instantly while scrolling.
+- It must match the actual selected hour/minute/am-pm values.
+
+7) NORMALIZE INVALID EXISTING MINUTES (SAFETY)
+- If an existing saved time has minutes not in {0,15,30,45}:
+  - snap DOWN to nearest:
+    29 -> 15
+    44 -> 30
+    59 -> 45
+- Do this when opening the picker so the wheel always starts valid.
+
+ACCEPTANCE TEST (MUST PASS)
+- Minutes wheel shows ONLY: 00, 15, 30, 45.
+- Sideways dragging does nothing (no horizontal shift).
+- Wheel snaps cleanly to values (no jitter).
+- Live preview shows correct time.
+- User can select 7:45 PM, 8:00 AM, etc.
+- User cannot select 8:29 AM or 7:52 PM (not possible).
+- Done saves correctly and job displays the same scheduled time.
+
+DELIVERABLES
+- Stable Housecall-style time wheel (vertical only)
+- Minutes restricted to 15-minute increments
+- No blue selection bars
+- Clear readable selection + live time preview

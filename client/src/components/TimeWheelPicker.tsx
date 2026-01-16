@@ -14,14 +14,14 @@ const HOURS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11',
 const MINUTES = ['00', '15', '30', '45'];
 const PERIODS = ['AM', 'PM'];
 
-const ITEM_HEIGHT = 40;
-const VISIBLE_ITEMS = 3;
+const ITEM_HEIGHT = 44;
+const VISIBLE_ITEMS = 5;
 
 function WheelColumn({ 
   items, 
   value, 
   onChange,
-  width = 60
+  width = 64
 }: { 
   items: string[]; 
   value: string; 
@@ -30,7 +30,7 @@ function WheelColumn({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const selectedIndex = items.indexOf(value);
   
@@ -72,7 +72,7 @@ function WheelColumn({
         }
       }
       isScrollingRef.current = false;
-    }, 100);
+    }, 80);
   };
   
   const handleItemClick = (index: number) => {
@@ -80,68 +80,57 @@ function WheelColumn({
     onChange(items[index]);
   };
   
+  const paddingItems = Math.floor(VISIBLE_ITEMS / 2);
+  
   return (
     <div 
-      className="relative overflow-hidden flex-shrink-0"
+      className="relative flex-shrink-0 flex-grow-0"
       style={{ 
         width: `${width}px`, 
         height: `${ITEM_HEIGHT * VISIBLE_ITEMS}px`,
+        overflow: 'hidden',
       }}
     >
       <div 
-        className="absolute inset-x-0 pointer-events-none z-20"
-        style={{ 
-          top: `${ITEM_HEIGHT}px`, 
-          height: `${ITEM_HEIGHT}px`,
-        }}
-      >
-        <div className="h-full mx-1 bg-blue-100 dark:bg-blue-900/40 rounded-lg border-y-2 border-blue-200 dark:border-blue-700" />
-      </div>
-      
-      <div 
-        className="absolute inset-0 pointer-events-none z-10"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(255,255,255,0.9) 0%, transparent 30%, transparent 70%, rgba(255,255,255,0.9) 100%)',
-        }}
-      />
-      <div 
-        className="absolute inset-0 pointer-events-none z-10 hidden dark:block"
-        style={{
-          background: 'linear-gradient(to bottom, rgba(15,23,42,0.9) 0%, transparent 30%, transparent 70%, rgba(15,23,42,0.9) 100%)',
-        }}
-      />
-      
-      <div 
         ref={containerRef}
-        className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide"
+        className="h-full scrollbar-hide"
         onScroll={handleScroll}
         style={{ 
+          overflowY: 'scroll',
+          overflowX: 'hidden',
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch',
           scrollSnapType: 'y mandatory',
         }}
       >
-        <div style={{ height: `${ITEM_HEIGHT}px` }} />
-        
-        {items.map((item, index) => (
-          <div
-            key={item}
-            onClick={() => handleItemClick(index)}
-            className={`flex items-center justify-center cursor-pointer select-none transition-all duration-150 ${
-              item === value 
-                ? 'text-blue-600 dark:text-blue-400 font-bold text-xl' 
-                : 'text-slate-400 dark:text-slate-500 text-lg'
-            }`}
-            style={{ 
-              height: `${ITEM_HEIGHT}px`,
-              scrollSnapAlign: 'center',
-            }}
-          >
-            {item}
-          </div>
+        {Array.from({ length: paddingItems }).map((_, i) => (
+          <div key={`pad-top-${i}`} style={{ height: `${ITEM_HEIGHT}px` }} />
         ))}
         
-        <div style={{ height: `${ITEM_HEIGHT}px` }} />
+        {items.map((item, index) => {
+          const isSelected = item === value;
+          return (
+            <div
+              key={item}
+              onClick={() => handleItemClick(index)}
+              className="flex items-center justify-center cursor-pointer select-none transition-colors duration-100"
+              style={{ 
+                height: `${ITEM_HEIGHT}px`,
+                scrollSnapAlign: 'center',
+                fontSize: isSelected ? '22px' : '18px',
+                fontWeight: isSelected ? 700 : 400,
+                color: isSelected ? '#1e293b' : '#94a3b8',
+              }}
+            >
+              {item}
+            </div>
+          );
+        })}
+        
+        {Array.from({ length: paddingItems }).map((_, i) => (
+          <div key={`pad-bot-${i}`} style={{ height: `${ITEM_HEIGHT}px` }} />
+        ))}
       </div>
     </div>
   );
@@ -153,6 +142,13 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
   const [minute, setMinute] = useState('00');
   const [period, setPeriod] = useState('AM');
   
+  const normalizeMinutes = (min: number): string => {
+    if (min < 15) return '00';
+    if (min < 30) return '15';
+    if (min < 45) return '30';
+    return '45';
+  };
+  
   useEffect(() => {
     if (value) {
       const [h, m] = value.split(':');
@@ -163,10 +159,8 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
       if (hourNum === 0) hourNum = 12;
       else if (hourNum > 12) hourNum -= 12;
       
-      const normalizedMin = Math.floor(minNum / 15) * 15;
-      
       setHour(hourNum.toString().padStart(2, '0'));
-      setMinute(normalizedMin.toString().padStart(2, '0'));
+      setMinute(normalizeMinutes(minNum));
       setPeriod(newPeriod);
     }
   }, [value]);
@@ -218,25 +212,28 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
       </button>
       
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[280px] p-4">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-center">{label || 'Select Time'}</DialogTitle>
+        <DialogContent className="sm:max-w-[300px] p-5">
+          <DialogHeader className="pb-3">
+            <DialogTitle className="text-center text-lg">{label || 'Select Time'}</DialogTitle>
           </DialogHeader>
           
-          <div className="flex items-center justify-center gap-0 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg mx-auto">
-            <WheelColumn items={HOURS} value={hour} onChange={setHour} width={56} />
-            <span className="text-2xl font-bold text-slate-600 dark:text-slate-400 flex-shrink-0 w-4 text-center">:</span>
-            <WheelColumn items={MINUTES} value={minute} onChange={setMinute} width={56} />
-            <WheelColumn items={PERIODS} value={period} onChange={setPeriod} width={56} />
+          <div 
+            className="flex items-center justify-center bg-white dark:bg-slate-950 rounded-xl py-2"
+            style={{ gap: '4px' }}
+          >
+            <WheelColumn items={HOURS} value={hour} onChange={setHour} width={60} />
+            <span className="text-2xl font-bold text-slate-400 flex-shrink-0">:</span>
+            <WheelColumn items={MINUTES} value={minute} onChange={setMinute} width={60} />
+            <WheelColumn items={PERIODS} value={period} onChange={setPeriod} width={60} />
           </div>
           
-          <div className="text-center py-2">
-            <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+          <div className="text-center py-3 border-t border-slate-100 dark:border-slate-800 mt-2">
+            <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
               {getCurrentSelection()}
             </span>
           </div>
           
-          <DialogFooter className="flex gap-2 pt-2">
+          <DialogFooter className="flex gap-3 pt-2">
             <Button variant="outline" onClick={() => setIsOpen(false)} className="flex-1">
               Cancel
             </Button>
