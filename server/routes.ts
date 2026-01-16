@@ -4209,9 +4209,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobType, scheduledDate, scheduledTime } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobType, scheduledDate, scheduledTime, requestedStartAt } = req.body;
 
-      console.log('[Estimates] create request received:', { jobId, scheduledDate, scheduledTime, bodyKeys: Object.keys(req.body) });
+      console.log('[Estimates] create request received:', { jobId, requestedStartAt, scheduledDate, scheduledTime, bodyKeys: Object.keys(req.body) });
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -4266,9 +4266,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Process schedule fields
-      const processedScheduledDate = scheduledDate ? new Date(scheduledDate + 'T12:00:00') : null;
-      const processedScheduledTime = scheduledTime || null;
+      // Process requestedStartAt - this is the single source of truth for estimate schedule
+      // Accept requestedStartAt (ISO string) OR fall back to scheduledDate+scheduledTime for backward compat
+      let processedRequestedStartAt: Date | null = null;
+      if (requestedStartAt) {
+        processedRequestedStartAt = new Date(requestedStartAt);
+        console.log('[Estimates] using requestedStartAt:', requestedStartAt, '→', processedRequestedStartAt);
+      } else if (scheduledDate) {
+        // Backward compatibility: combine date + time into single timestamp
+        const timeStr = scheduledTime || '09:00';
+        processedRequestedStartAt = new Date(`${scheduledDate}T${timeStr}:00`);
+        console.log('[Estimates] using scheduledDate+Time fallback:', scheduledDate, timeStr, '→', processedRequestedStartAt);
+      }
       
       const estimate = await storage.createEstimate(
         { 
@@ -4283,15 +4292,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
           jobType: jobType?.trim() || undefined,
-          scheduledDate: processedScheduledDate,
-          scheduledTime: processedScheduledTime,
+          requestedStartAt: processedRequestedStartAt,
           items: normalizedItems 
         },
         companyId,
         userId
       );
 
-      console.log(`[Estimates] create estimateId=${estimate.id} jobId=${jobId} companyId=${companyId} scheduledDate=${scheduledDate} scheduledTime=${scheduledTime}`);
+      console.log(`[Estimates] CREATED estimateId=${estimate.id} requestedStartAt=${estimate.requestedStartAt}`);
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating estimate:", error);
@@ -4636,9 +4644,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH /api/estimates/:id/schedule - Save schedule to estimate (for draft estimates)
+  // Uses requestedStartAt as single source of truth
   app.patch('/api/estimates/:id/schedule', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
-      const userId = getUserId(req.user);
       const companyId = req.companyId;
       const estimateId = parseInt(req.params.id);
       
@@ -4648,30 +4656,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
       
-      const { scheduledDate, scheduledTime, timezone } = req.body;
+      const { requestedStartAt } = req.body;
       
-      // Normalize time to 15-minute intervals
-      const normalizeTimeTo15Min = (time: string): string => {
-        if (!time) return '09:00';
-        const [hours, mins] = time.split(':').map(Number);
-        const normalizedMins = Math.floor(mins / 15) * 15;
-        return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
-      };
+      console.log('[Estimates] schedule PATCH received:', { estimateId, requestedStartAt });
       
-      const timeStr = scheduledTime ? normalizeTimeTo15Min(scheduledTime) : null;
-      
-      // Update estimate with schedule
+      // Update estimate with requestedStartAt
       const [updated] = await db
         .update(estimates)
         .set({
-          scheduledDate: scheduledDate ? new Date(scheduledDate + 'T12:00:00') : null,
-          scheduledTime: timeStr,
+          requestedStartAt: requestedStartAt ? new Date(requestedStartAt) : null,
           updatedAt: new Date(),
         })
         .where(eq(estimates.id, estimateId))
         .returning();
       
-      console.log(`[Estimates] schedule saved estimateId=${estimateId} scheduledDate=${scheduledDate} scheduledTime=${timeStr}`);
+      console.log(`[Estimates] schedule SAVED estimateId=${estimateId} requestedStartAt=${updated.requestedStartAt}`);
       res.json(updated);
     } catch (error) {
       console.error("Error saving estimate schedule:", error);

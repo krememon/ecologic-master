@@ -1603,7 +1603,7 @@ export default function Jobs() {
                           <span className="truncate">{estimate.customerName}</span>
                         </div>
                       )}
-                      {/* Schedule Box - Always visible (display-only) */}
+                      {/* Schedule Box - Always visible (display-only) - reads ONLY from requestedStartAt */}
                       <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                           <Calendar className="h-3.5 w-3.5 shrink-0" />
@@ -1611,22 +1611,27 @@ export default function Jobs() {
                         </div>
                         <div className="mt-1 text-sm">
                           {(() => {
-                            const rawDate = (estimate as any).scheduledDate;
+                            const rawDate = (estimate as any).requestedStartAt;
                             if (!rawDate) {
                               return <span className="text-slate-400 dark:text-slate-500">Not scheduled</span>;
                             }
                             try {
-                              const dateStr = typeof rawDate === 'string' 
-                                ? rawDate.split('T')[0] 
-                                : format(new Date(rawDate), 'yyyy-MM-dd');
-                              const formattedDate = format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
-                              const timeStr = (estimate as any).scheduledTime;
-                              const formattedTime = timeStr 
-                                ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a')
-                                : null;
+                              const dateObj = new Date(rawDate);
+                              // Use locale-aware formatting to preserve user's intended time
+                              const formattedDate = dateObj.toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              });
+                              const formattedTime = dateObj.toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true,
+                              });
                               return (
                                 <span className="text-slate-900 dark:text-slate-100">
-                                  {formattedTime ? `${formattedDate} · ${formattedTime}` : formattedDate}
+                                  {formattedDate} · {formattedTime}
                                 </span>
                               );
                             } catch {

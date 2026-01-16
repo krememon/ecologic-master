@@ -203,7 +203,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Create estimate mutation
   const createEstimateMutation = useMutation({
-    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; jobType?: string; scheduledDate?: string | null; scheduledTime?: string | null; items: EstimateItemPayload[] }) => {
+    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; jobType?: string; requestedStartAt?: string | null; items: EstimateItemPayload[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
@@ -302,8 +302,15 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''} – Estimate`.trim()
       : "Estimate";
 
-    console.log('[CreateEstimate] schedule state:', schedule);
-    console.log('[CreateEstimate] sending scheduledDate:', schedule.date, 'scheduledTime:', schedule.time);
+    // Combine date + time into single ISO string for requestedStartAt
+    let requestedStartAt: string | null = null;
+    if (schedule.date) {
+      const timeStr = schedule.time || '09:00';
+      requestedStartAt = `${schedule.date}T${timeStr}:00`;
+      console.log('[CreateEstimate] requestedStartAt:', requestedStartAt);
+    } else {
+      console.log('[CreateEstimate] No schedule date selected');
+    }
     
     createEstimateMutation.mutate({
       title: autoTitle,
@@ -316,8 +323,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       taxCents: calculateTaxCents(),
       assignedEmployeeIds: assignedEmployees,
       jobType: jobType || undefined,
-      scheduledDate: schedule.date || null,
-      scheduledTime: schedule.time || null,
+      requestedStartAt,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
         description: item.description?.trim() || null,
@@ -663,7 +669,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                     </div>
                   </div>
                   
-                  {/* Schedule Box - Always visible (display-only) */}
+                  {/* Schedule Box - Always visible (display-only) - reads ONLY from requestedStartAt */}
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                       <Calendar className="h-4 w-4" />
@@ -671,22 +677,27 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                     </div>
                     <div className="mt-1.5 text-sm">
                       {(() => {
-                        const rawDate = (estimate as any).scheduledDate;
+                        const rawDate = (estimate as any).requestedStartAt;
                         if (!rawDate) {
                           return <span className="text-slate-400 dark:text-slate-500">Not scheduled</span>;
                         }
                         try {
-                          const dateStr = typeof rawDate === 'string' 
-                            ? rawDate.split('T')[0] 
-                            : format(new Date(rawDate), 'yyyy-MM-dd');
-                          const formattedDate = format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
-                          const timeStr = (estimate as any).scheduledTime;
-                          const formattedTime = timeStr 
-                            ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a')
-                            : null;
+                          const dateObj = new Date(rawDate);
+                          // Use locale-aware formatting to preserve user's intended time
+                          const formattedDate = dateObj.toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          });
+                          const formattedTime = dateObj.toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
                           return (
                             <span className="text-slate-900 dark:text-slate-100">
-                              {formattedTime ? `${formattedDate} · ${formattedTime}` : formattedDate}
+                              {formattedDate} · {formattedTime}
                             </span>
                           );
                         } catch {

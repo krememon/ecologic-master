@@ -1850,15 +1850,17 @@ export class DatabaseStorage implements IStorage {
     const taxCents = payload.taxCents || 0;
     const totalCents = subtotalCents + taxCents;
 
-    // Process schedule date if provided
-    let processedScheduledDate: Date | null = null;
-    if (payload.scheduledDate) {
-      if (typeof payload.scheduledDate === 'string') {
-        processedScheduledDate = new Date(payload.scheduledDate + 'T12:00:00');
-      } else if (payload.scheduledDate instanceof Date) {
-        processedScheduledDate = payload.scheduledDate;
+    // Process requestedStartAt - convert to Date if string
+    let processedRequestedStartAt: Date | null = null;
+    if (payload.requestedStartAt) {
+      if (typeof payload.requestedStartAt === 'string') {
+        processedRequestedStartAt = new Date(payload.requestedStartAt);
+      } else if (payload.requestedStartAt instanceof Date) {
+        processedRequestedStartAt = payload.requestedStartAt;
       }
     }
+    
+    console.log(`[EstimateCreate] payload.requestedStartAt=${payload.requestedStartAt} → processed=${processedRequestedStartAt}`);
     
     // Create estimate
     const [estimate] = await db
@@ -1880,13 +1882,12 @@ export class DatabaseStorage implements IStorage {
         taxCents,
         totalCents,
         assignedEmployeeIds: payload.assignedEmployeeIds || [],
-        scheduledDate: processedScheduledDate,
-        scheduledTime: payload.scheduledTime || null,
+        requestedStartAt: processedRequestedStartAt,
         createdByUserId: userId,
       })
       .returning();
     
-    console.log(`[EstimateCreate] saved estimateId=${estimate.id} scheduledDate=${processedScheduledDate} scheduledTime=${payload.scheduledTime}`);
+    console.log(`[EstimateCreate] SAVED estimateId=${estimate.id} requestedStartAt=${estimate.requestedStartAt}`);
 
     // Create line items
     const createdItems: EstimateItem[] = [];

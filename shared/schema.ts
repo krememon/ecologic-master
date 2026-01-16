@@ -748,6 +748,8 @@ export const estimates = pgTable("estimates", {
   signatureDataUrl: text("signature_data_url"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledTime: varchar("scheduled_time", { length: 10 }),
+  // Unified field for requested schedule (ISO timestamp) - this is the source of truth
+  requestedStartAt: timestamp("requested_start_at"),
   // Job conversion (idempotency - one estimate can only create one job)
   convertedJobId: integer("converted_job_id").references(() => jobs.id, { onDelete: "set null" }),
 }, (table) => ({
@@ -1103,6 +1105,9 @@ export const createEstimateSchema = z.object({
   jobType: z.string().optional(),
   taxCents: z.number().int().min(0).optional().default(0),
   assignedEmployeeIds: z.array(z.string()).optional().default([]),
+  // requestedStartAt is the single source of truth for estimate schedule (ISO string or Date)
+  requestedStartAt: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
+  // Keep for backward compatibility but prefer requestedStartAt
   scheduledDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
   scheduledTime: z.string().optional().nullable(),
   items: z.array(z.object({

@@ -180,14 +180,18 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     navigate('/jobs', { replace: true });
   };
   
-  // Estimate schedule mutation (for draft estimates)
+  // Estimate schedule mutation (for draft estimates) - uses requestedStartAt
   const estimateScheduleMutation = useMutation({
     mutationFn: async ({ date, time }: { date: string; time: string }) => {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Combine date + time into single ISO string
+      let requestedStartAt: string | null = null;
+      if (date) {
+        const timeStr = time || '09:00';
+        requestedStartAt = `${date}T${timeStr}:00`;
+      }
+      console.log('[EstimateSchedule] saving requestedStartAt:', requestedStartAt);
       const res = await apiRequest('PATCH', `/api/estimates/${estimateId}/schedule`, {
-        scheduledDate: date || null,
-        scheduledTime: time || null,
-        timezone,
+        requestedStartAt,
       });
       return res.json();
     },
@@ -203,17 +207,18 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   });
   
   const openEstimateScheduleModal = () => {
-    // Pre-populate with existing schedule if any
-    const rawDate = (estimate as any)?.scheduledDate;
+    // Pre-populate with existing schedule from requestedStartAt
+    const rawDate = (estimate as any)?.requestedStartAt;
     if (rawDate) {
-      const dateStr = typeof rawDate === 'string' 
-        ? rawDate.split('T')[0]
-        : '';
+      const dateObj = new Date(rawDate);
+      const dateStr = dateObj.toISOString().split('T')[0];
+      const timeStr = dateObj.toTimeString().slice(0, 5); // HH:MM
       setEstimateScheduleDate(dateStr);
+      setEstimateScheduleTime(timeStr);
     } else {
       setEstimateScheduleDate('');
+      setEstimateScheduleTime('');
     }
-    setEstimateScheduleTime((estimate as any)?.scheduledTime || '');
     setIsEstimateScheduleModalOpen(true);
   };
   
@@ -411,33 +416,29 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               </div>
               {estimate.status === 'draft' && (
                 <Button variant="outline" size="sm" onClick={openEstimateScheduleModal}>
-                  {(estimate as any).scheduledDate || (estimate as any).scheduledTime ? 'Edit' : 'Set Schedule'}
+                  {(estimate as any).requestedStartAt ? 'Edit' : 'Set Schedule'}
                 </Button>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {(estimate as any).scheduledDate || (estimate as any).scheduledTime ? (
+            {(estimate as any).requestedStartAt ? (
               <div className="space-y-1">
-                {(estimate as any).scheduledDate && (
-                  <p className="font-medium">
-                    {new Date((estimate as any).scheduledDate + 'T12:00:00').toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                )}
-                {(estimate as any).scheduledTime && (
-                  <p className="text-muted-foreground">
-                    {new Date(`2000-01-01T${(estimate as any).scheduledTime}`).toLocaleTimeString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                      hour12: true,
-                    })}
-                  </p>
-                )}
+                <p className="font-medium">
+                  {new Date((estimate as any).requestedStartAt).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </p>
+                <p className="text-muted-foreground">
+                  {new Date((estimate as any).requestedStartAt).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </p>
               </div>
             ) : (
               <p className="text-muted-foreground">Not scheduled</p>

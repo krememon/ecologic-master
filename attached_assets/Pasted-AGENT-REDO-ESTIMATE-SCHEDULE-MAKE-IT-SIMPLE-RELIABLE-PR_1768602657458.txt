@@ -1,0 +1,66 @@
+AGENT — REDO ESTIMATE SCHEDULE (MAKE IT SIMPLE + RELIABLE)
+
+PROJECT: EcoLogic (React + Node/Express + DB)
+RULE: “hidden not disabled”, do not refactor unrelated code.
+
+THE ISSUE:
+The Estimate “Schedule” box keeps showing “Not scheduled” even when the user selects a date/time during “New Estimate”.
+We are overcomplicating it. We need to REDO the estimate schedule feature end-to-end so it works 100%.
+
+THE SIMPLE REQUIREMENT (NON-NEGOTIABLE):
+When creating an estimate, the user MUST pick a date/time.
+That date/time MUST show in the Estimate card’s “Schedule” box after saving.
+If no date exists, it can show “Not scheduled” — but our flow should require it.
+
+WHAT TO BUILD:
+1) FRONTEND — New Estimate screen
+   - The “Add schedule” row must open a schedule picker (date + time).
+   - Once selected, the row should show a preview (example: “Fri, Jan 16, 2026 • 10:00 AM”).
+   - On Save, the create estimate request payload MUST include the selected date/time.
+
+2) BACKEND — Persist on the ESTIMATE (not the Job)
+   - Add/ensure these fields exist on the Estimate model/table:
+     - estimate.requestedStartAt (required)
+     - estimate.requestedEndAt (optional)
+   - In POST /api/estimates (or your create route), validate and store requestedStartAt.
+   - Return requestedStartAt in all estimate responses:
+     - list estimates
+     - get estimate by id/details
+
+3) ESTIMATE UI — Schedule display box (redo it)
+   - In the estimate details view, the “Schedule” box must read ONLY:
+     - estimate.requestedStartAt
+   - If requestedStartAt exists → format and display it
+   - If missing → display “Not scheduled”
+   - Keep the same styling and layout, but replace the logic so it is impossible to show job schedule here.
+
+4) DO NOT MIX WITH JOB SCHEDULE
+   - The job scheduling that happens AFTER approval must update ONLY the Job record.
+   - It must NOT overwrite estimate.requestedStartAt.
+   - Estimate schedule = requested schedule at creation.
+   - Job schedule = scheduled after approval.
+   - These are separate concepts.
+
+DEBUGGING REQUIREMENT (SO WE STOP GUESSING):
+Add 3 temporary console logs (remove after verified):
+- When user selects schedule in New Estimate: log the selected Date object / ISO string
+- Right before sending the create estimate request: log the payload being sent
+- In backend create estimate route: log req.body.requestedStartAt and what is stored
+
+TEST CASES (MUST PASS):
+A) Create Estimate:
+   - Select schedule Jan 16, 2026 at 10:00 AM
+   - Save
+   - Open the estimate card/details
+   - Schedule box MUST show: Jan 16, 2026 • 10:00 AM (not “Not scheduled”)
+
+B) Approve Estimate + Set Job Schedule:
+   - Set job schedule to a different date/time
+   - Estimate Schedule box MUST still show the original requestedStartAt
+   - Job views show job schedule separately
+
+DELIVERABLES:
+- Estimate schedule stored and returned reliably
+- Schedule box displays the saved estimate schedule
+- Remove temporary logs after confirmed working
+- No UI regressions, no unrelated refactors
