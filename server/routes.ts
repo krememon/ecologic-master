@@ -2333,38 +2333,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { scheduledDate, scheduledTime, timezone } = req.body;
       
-      // Construct scheduledAt timestamp from date + time
-      // If no time provided, default to 9:00 AM
-      let scheduledAt: Date | null = null;
-      if (scheduledDate) {
-        const timeStr = scheduledTime || '09:00';
-        // Create the datetime string in the user's local timezone
-        // Format: "YYYY-MM-DDTHH:mm" - parsed as local time
-        const localDateTimeStr = `${scheduledDate}T${timeStr}:00`;
-        
-        // Parse as a date representing the user's intended local time
-        // We store this as-is since PostgreSQL timestamp without timezone
-        // stores the literal datetime value
-        scheduledAt = new Date(localDateTimeStr);
-        
-        // Validate the date is valid
-        if (isNaN(scheduledAt.getTime())) {
-          scheduledAt = null;
-        }
-      }
+      // Store date and time as separate fields to avoid timezone conversion issues
+      // The frontend sends YYYY-MM-DD and HH:mm, we store them as-is
+      const timeStr = scheduledTime || '09:00';
       
-      // Update job with schedule
+      // Update job with schedule - store date and time separately
       const [updated] = await db
         .update(jobs)
         .set({
-          scheduledAt: scheduledAt,
-          startDate: scheduledDate || null, // Keep for backward compatibility
+          startDate: scheduledDate || null,
+          scheduledTime: scheduledDate ? timeStr : null,
           updatedAt: new Date(),
         })
         .where(eq(jobs.id, jobId))
         .returning();
       
-      console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime, timezone, storedScheduledAt: scheduledAt?.toISOString() });
+      console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime: timeStr, timezone });
       res.json(updated);
     } catch (error) {
       console.error("Error scheduling job:", error);

@@ -530,7 +530,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           )}
 
           {/* Schedule Card */}
-          {(job.scheduledAt || job.startDate || job.endDate) && (
+          {(job.startDate || job.endDate) && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -540,11 +540,12 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  {job.scheduledAt ? (
-                    <p>{format(new Date(job.scheduledAt), 'EEEE, MMMM d, yyyy • h:mm a')}</p>
-                  ) : job.startDate ? (
-                    <p>{format(new Date(job.startDate + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}</p>
-                  ) : null}
+                  {job.startDate && (
+                    <p>
+                      {format(new Date(job.startDate + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}
+                      {job.scheduledTime && ` • ${format(new Date(`2000-01-01T${job.scheduledTime}`), 'h:mm a')}`}
+                    </p>
+                  )}
                   {job.endDate && job.startDate !== job.endDate && (
                     <p className="text-sm text-muted-foreground">
                       to {format(new Date(job.endDate + 'T12:00:00'), 'MMMM d, yyyy')}
