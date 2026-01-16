@@ -1,0 +1,53 @@
+AGENT — ESTIMATE REQUESTED SCHEDULE IS NOT SAVING (MUST PERSIST ON SAVE)
+
+OBSERVED BEHAVIOR (CONFIRMED):
+- In “New Estimate”, after choosing schedule, the row shows: “2026-01-26 at 09:00”
+- After hitting Save, the estimate list card shows “Not scheduled”
+- Opening the estimate details also shows “Not scheduled”
+=> Therefore the schedule is NOT being persisted on the estimate (or saved under wrong field and not returned).
+
+GOAL:
+When saving a new estimate, persist the selected schedule onto the ESTIMATE record, and return it so the card/details can display it.
+
+IMPORTANT: THIS IS ESTIMATE REQUESTED SCHEDULE (NOT JOB SCHEDULE)
+- Save on estimate: requestedStartAt (required if user picked schedule)
+- Job schedule remains separate.
+
+STEP 1 — FRONTEND: PROVE THE SAVE PAYLOAD CONTAINS THE SCHEDULE
+1) Find the New Estimate “Save” handler (the code that submits create estimate request).
+2) Add TEMP console logs right before the API call:
+   console.log("CREATE ESTIMATE payload", payload);
+3) Ensure payload includes the selected date+time combined as an ISO string:
+   payload.requestedStartAt = new Date(selectedDate + selectedTime).toISOString();
+   (use your current state values; do not invent new state)
+4) Make sure the state that shows “2026-01-26 at 09:00” is the same state used to build the payload.
+
+STEP 2 — BACKEND: ACCEPT + STORE requestedStartAt
+1) In the create estimate route/controller, log incoming body:
+   console.log("CREATE ESTIMATE body", req.body);
+2) Persist req.body.requestedStartAt onto the estimate in DB.
+3) Ensure the DB model/schema includes requestedStartAt (datetime/timestamp).
+4) Return requestedStartAt in the response.
+
+STEP 3 — FETCH/APIs: MAKE SURE REQUESTED SCHEDULE IS RETURNED EVERYWHERE
+- In GET estimates list response and GET estimate details response, include requestedStartAt.
+- If you have a serializer/select list, add requestedStartAt there.
+
+STEP 4 — UI DISPLAY (SHOULD “JUST WORK” AFTER DATA FIX)
+- Estimate list card schedule text should display estimate.requestedStartAt if present.
+- Estimate details schedule card should display estimate.requestedStartAt if present.
+
+DO NOT:
+- Use job.schedule fields for estimate schedule.
+- Add hacks like localStorage to “remember” the schedule.
+- Change styling.
+
+REQUIRED VERIFICATION:
+After changes:
+1) Create estimate, set schedule 01/26/2026 9:00 AM, hit Save
+2) Immediately after redirect:
+   - Estimate list card must show the date/time (not “Not scheduled”)
+3) Open estimate details:
+   - Schedule card must show the date/time
+
+REMOVE ALL TEMP LOGS AFTER VERIFIED.

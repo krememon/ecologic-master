@@ -354,6 +354,14 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     const subtotal = calculateSubtotal();
     const taxCents = Math.round(subtotal * (taxRate / 100));
 
+    // Combine date + time into single ISO string for requestedStartAt
+    let requestedStartAt: string | null = null;
+    if (schedule.date) {
+      const timeStr = schedule.time || '09:00';
+      requestedStartAt = `${schedule.date}T${timeStr}:00`;
+      console.log('[NewEstimateSheet] requestedStartAt:', requestedStartAt);
+    }
+
     createEstimateMutation.mutate({
       title: autoTitle,
       notes: notes || undefined,
@@ -365,6 +373,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       taxCents,
       assignedEmployeeIds: assignedEmployees,
       jobType: jobType || undefined,
+      requestedStartAt,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
         description: item.description?.trim() || null,
