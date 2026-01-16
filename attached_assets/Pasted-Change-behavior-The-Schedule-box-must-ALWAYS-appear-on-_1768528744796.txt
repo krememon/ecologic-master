@@ -1,0 +1,65 @@
+Change behavior: The Schedule box must ALWAYS appear on Estimate cards (even when Draft), not only after Approve.
+
+CURRENT
+- The Schedule box sometimes only appears AFTER pressing Approve.
+- Before approval, the Schedule box may not show (or shows inconsistently).
+- This is not desired.
+
+GOAL
+- Every Estimate card must ALWAYS display the Schedule box, no matter the estimate status:
+  - Draft
+  - Approved
+  - Converted to Job
+- The Schedule box should never be conditional on approval.
+- If the estimate has no schedule yet:
+  - Show “Not scheduled” + a “Set Schedule” button/link (like the screenshot).
+- If the estimate has a schedule:
+  - Show full schedule date + time:
+    “Friday, January 16, 2026 · 9:00 AM”
+- Styling must match Job card Schedule box (same icon, spacing, typography).
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) REMOVE ANY CONDITIONAL RENDERING BASED ON APPROVAL
+- In EstimateCard, remove conditions like:
+  - status === "approved"
+  - convertedJobId exists
+  - approvedJobId exists
+- The Schedule box must render regardless of those fields.
+
+2) SCHEDULE BOX ALWAYS RENDERS
+- Render the Schedule box for every estimate card:
+  - Header: calendar icon + “Schedule”
+  - Right side: “Set Schedule” button (always visible)
+  - Body:
+    - If estimate has schedule: show formatted date + time
+    - Else: show “Not scheduled”
+
+3) SET SCHEDULE BUTTON ACTION
+- Tapping “Set Schedule” should open the estimate schedule picker/modal (date + time).
+- Saving should persist schedule to the ESTIMATE record.
+- After save:
+  - Estimate card updates immediately (invalidate/refetch estimates query)
+
+4) DATA SOURCE
+- Estimate schedule display must come from estimate schedule fields:
+  - estimate.scheduledAt (preferred)
+  OR estimate.scheduled_date + scheduled_time
+- Do NOT depend on job schedule for showing schedule in estimate cards.
+
+5) ACCEPTANCE TEST (MUST PASS)
+- Create a draft estimate:
+  - Card shows Schedule box with “Not scheduled” + Set Schedule
+- Set schedule:
+  - Card updates to show schedule date + time
+- Approve estimate:
+  - Schedule box remains (no visual behavior change)
+  - Schedule continues to display correctly
+- Refresh app:
+  - Schedule box still appears on all estimate cards
+
+DELIVERABLES
+- Schedule box always rendered on estimate cards for all statuses
+- Set Schedule works in Draft and Approved
+- Schedule persists to estimate and displays correctly
+- No regressions to approval/job conversion flow
