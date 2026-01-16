@@ -1733,91 +1733,45 @@ export class DatabaseStorage implements IStorage {
 
   // Estimate operations
   async getEstimatesByJob(jobId: number): Promise<Estimate[]> {
-    // Join with jobs to get schedule from converted job if estimate doesn't have its own
+    // Return estimates with their own schedule only (no fallback to job schedule)
     const results = await db
-      .select({
-        estimate: estimates,
-        jobStartDate: jobs.startDate,
-        jobScheduledTime: jobs.scheduledTime,
-      })
+      .select()
       .from(estimates)
-      .leftJoin(jobs, eq(estimates.convertedJobId, jobs.id))
       .where(eq(estimates.jobId, jobId))
       .orderBy(desc(estimates.createdAt));
     
-    // Return estimates with fallback schedule from job and displayScheduledAt
-    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => {
-      // Get the effective scheduled date (estimate's own or from job)
-      let effectiveScheduledDate = estimate.scheduledDate;
-      if (!effectiveScheduledDate && jobStartDate) {
-        if (jobStartDate instanceof Date) {
-          effectiveScheduledDate = jobStartDate;
-        } else if (typeof jobStartDate === 'string') {
-          effectiveScheduledDate = new Date(jobStartDate + 'T12:00:00');
-        }
-      }
-      
-      const effectiveScheduledTime = estimate.scheduledTime || jobScheduledTime;
-      
-      // Build displayScheduledAt as ISO string for frontend convenience
-      let displayScheduledAt: string | null = null;
-      if (effectiveScheduledDate) {
-        displayScheduledAt = effectiveScheduledDate instanceof Date 
-          ? effectiveScheduledDate.toISOString()
-          : new Date(effectiveScheduledDate).toISOString();
-      }
-      
-      return {
-        ...estimate,
-        scheduledDate: effectiveScheduledDate,
-        scheduledTime: effectiveScheduledTime,
-        displayScheduledAt,
-      };
-    });
+    console.log(`[Estimates] getByJob jobId=${jobId} count=${results.length}`);
+    if (results.length > 0) {
+      console.log(`[Estimates] first estimate schedule:`, {
+        id: results[0].id,
+        status: results[0].status,
+        scheduledDate: results[0].scheduledDate,
+        scheduledTime: results[0].scheduledTime,
+      });
+    }
+    
+    return results;
   }
 
   async getEstimatesByCompany(companyId: number): Promise<Estimate[]> {
-    // Join with jobs to get schedule from converted job if estimate doesn't have its own
+    // Return estimates with their own schedule only (no fallback to job schedule)
     const results = await db
-      .select({
-        estimate: estimates,
-        jobStartDate: jobs.startDate,
-        jobScheduledTime: jobs.scheduledTime,
-      })
+      .select()
       .from(estimates)
-      .leftJoin(jobs, eq(estimates.convertedJobId, jobs.id))
       .where(eq(estimates.companyId, companyId))
       .orderBy(desc(estimates.updatedAt));
     
-    // Return estimates with fallback schedule from job and displayScheduledAt
-    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => {
-      // Get the effective scheduled date (estimate's own or from job)
-      let effectiveScheduledDate = estimate.scheduledDate;
-      if (!effectiveScheduledDate && jobStartDate) {
-        if (jobStartDate instanceof Date) {
-          effectiveScheduledDate = jobStartDate;
-        } else if (typeof jobStartDate === 'string') {
-          effectiveScheduledDate = new Date(jobStartDate + 'T12:00:00');
-        }
-      }
-      
-      const effectiveScheduledTime = estimate.scheduledTime || jobScheduledTime;
-      
-      // Build displayScheduledAt as ISO string for frontend convenience
-      let displayScheduledAt: string | null = null;
-      if (effectiveScheduledDate) {
-        displayScheduledAt = effectiveScheduledDate instanceof Date 
-          ? effectiveScheduledDate.toISOString()
-          : new Date(effectiveScheduledDate).toISOString();
-      }
-      
-      return {
-        ...estimate,
-        scheduledDate: effectiveScheduledDate,
-        scheduledTime: effectiveScheduledTime,
-        displayScheduledAt,
-      };
-    });
+    console.log(`[Estimates] getByCompany companyId=${companyId} count=${results.length}`);
+    if (results.length > 0) {
+      console.log(`[Estimates] first estimate schedule:`, {
+        id: results[0].id,
+        status: results[0].status,
+        scheduledDate: results[0].scheduledDate,
+        scheduledTime: results[0].scheduledTime,
+      });
+    }
+    
+    return results;
   }
 
   async getEstimate(id: number): Promise<EstimateWithItems | undefined> {

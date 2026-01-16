@@ -1,0 +1,50 @@
+PROBLEM:
+The Estimate card’s “Schedule” field is currently showing the JOB schedule that is set AFTER estimate approval.
+This is incorrect and confusing.
+
+There are TWO different schedules that must remain SEPARATE:
+1) Estimate Requested Schedule (set during estimate creation)
+2) Job Scheduled Date/Time (set after estimate approval)
+
+Right now, the Estimate card is incorrectly reading from the Job schedule.
+
+GOAL:
+Fix the data flow so the Estimate card displays ONLY the estimate’s originally requested schedule.
+The Job schedule should NEVER overwrite or replace the estimate’s schedule.
+
+REQUIREMENTS (VERY IMPORTANT):
+- The estimate must store its own schedule fields (example: estimate.requestedStartAt / requestedEndAt)
+- The job must store its own schedule fields (example: job.scheduledStartAt / scheduledEndAt)
+- Approving an estimate must NOT modify or overwrite the estimate’s requested schedule
+- Scheduling a job must ONLY update the job record
+
+UI RULES:
+On the ESTIMATE CARD:
+- If estimate.requestedStartAt exists → display that date/time
+- If it does not exist → display “Not scheduled”
+- DO NOT show job scheduling info on the estimate card
+- Label remains “Schedule” (no wording changes for now)
+
+On the JOB:
+- Job scheduling UI continues to work exactly as it does now
+- Job date/time displays ONLY inside job-related views
+
+TECHNICAL STEPS:
+1) Identify where the estimate schedule is initially saved during estimate creation
+2) Ensure that value is persisted on the estimate record
+3) Ensure post-approval job scheduling updates ONLY the job record
+4) Update the Estimate card component to read ONLY from estimate.requestedStartAt
+5) Confirm that approving an estimate does NOT mutate estimate scheduling fields
+
+DO NOT:
+- Merge estimate and job scheduling fields
+- Rename fields unless absolutely necessary
+- Change existing UI styling
+- Break backward compatibility with existing estimates
+
+EXPECTED RESULT:
+- Estimate card always shows the originally requested schedule
+- Job scheduling after approval no longer affects estimate display
+- No more date/time confusion between estimate creation and job scheduling
+
+ONLY IMPLEMENT WHAT IS DESCRIBED ABOVE.
