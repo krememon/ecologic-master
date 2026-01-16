@@ -684,23 +684,11 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                     </div>
                   </div>
                   
-                  {/* Schedule Box - Always visible */}
+                  {/* Schedule Box - Always visible (display-only) */}
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                        <Calendar className="h-4 w-4" />
-                        <span className="font-medium">Schedule</span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/estimates/${estimate.id}`);
-                        }}
-                        className="text-xs text-blue-500 hover:text-blue-600 font-medium"
-                        data-testid={`button-set-schedule-${estimate.id}`}
-                      >
-                        {(estimate as any).scheduledDate ? 'Edit' : 'Set Schedule'}
-                      </button>
+                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                      <Calendar className="h-4 w-4" />
+                      <span className="font-medium">Schedule</span>
                     </div>
                     <div className="mt-1.5 text-sm">
                       {(() => {
