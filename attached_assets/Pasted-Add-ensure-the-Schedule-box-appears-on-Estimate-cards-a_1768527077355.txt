@@ -1,0 +1,65 @@
+Add/ensure the Schedule box appears on Estimate cards and shows FULL schedule information (date + time), exactly like the Job card Schedule box.
+
+CURRENT
+- We need the Schedule box on Estimates.
+- The Schedule box should look exactly like the Job card schedule UI.
+- It must show ALL schedule information (weekday + date + time), like:
+  “Friday, January 16, 2026 · 9:00 AM”
+- Right now it is either not appearing or not showing correctly.
+
+GOAL
+- Every Estimate card that has a schedule MUST display a Schedule box.
+- The box must include:
+  - Calendar icon
+  - Label: “Schedule”
+  - Full formatted value: “Friday, January 16, 2026 · 9:00 AM”
+- It must match the Job card schedule box styling 1:1.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) USE A SINGLE SOURCE OF TRUTH FIELD FOR ESTIMATE CARD SCHEDULE
+- On the estimate object used by the Estimates list UI, provide ONE canonical field:
+  estimate.displayScheduledAt (ISO string / timestamp)
+- This field MUST be populated if a schedule exists.
+
+Rules:
+- If estimate has scheduledAt -> displayScheduledAt = estimate.scheduledAt
+- Else if estimate has convertedJobId / approvedJobId -> displayScheduledAt = job.scheduledAt (JOIN jobs)
+- Else -> displayScheduledAt = null
+
+2) BACKEND: ENSURE ESTIMATES LIST RETURNS displayScheduledAt
+- Update the Estimates list endpoint to return displayScheduledAt for each estimate.
+- If schedule is stored only on the created job, JOIN jobs table and include job.scheduledAt.
+
+3) FRONTEND: RENDER SCHEDULE BOX WHEN displayScheduledAt EXISTS
+- In EstimateCard:
+  - if estimate.displayScheduledAt exists -> render Schedule box
+  - if null -> do NOT render it
+
+4) REUSE JOB CARD SCHEDULE UI EXACTLY
+- Extract the JobCard schedule box into a shared component:
+  <ScheduleBox scheduledAt={...} />
+- Use the same ScheduleBox in BOTH JobCard and EstimateCard.
+- No duplicate styling. No new design.
+
+5) FORMAT MUST INCLUDE DATE + TIME
+- Use the same formatter as Jobs:
+  “Friday, January 16, 2026 · 9:00 AM”
+- Ensure time is included always if scheduledAt exists.
+
+6) REFRESH/INVALIDATION
+- After approving + scheduling an estimate:
+  - invalidate/refetch estimates list so Schedule box appears immediately
+  - no refresh required
+
+ACCEPTANCE TEST (MUST PASS)
+- Approve an estimate and set schedule date + time
+- Estimates list shows Schedule box on that estimate card
+- Schedule box shows full date + time
+- Styling matches Job card exactly
+- Refresh app -> schedule box still appears
+
+DELIVERABLES
+- Estimates API returns displayScheduledAt
+- Estimate cards show Schedule box with full schedule info
+- Reused ScheduleBox component ensures identical styling

@@ -1745,22 +1745,33 @@ export class DatabaseStorage implements IStorage {
       .where(eq(estimates.jobId, jobId))
       .orderBy(desc(estimates.createdAt));
     
-    // Return estimates with fallback schedule from job
+    // Return estimates with fallback schedule from job and displayScheduledAt
     return results.map(({ estimate, jobStartDate, jobScheduledTime }) => {
-      // jobStartDate is a Date object or string, convert properly
-      let fallbackScheduledDate = null;
-      if (jobStartDate) {
+      // Get the effective scheduled date (estimate's own or from job)
+      let effectiveScheduledDate = estimate.scheduledDate;
+      if (!effectiveScheduledDate && jobStartDate) {
         if (jobStartDate instanceof Date) {
-          fallbackScheduledDate = jobStartDate;
+          effectiveScheduledDate = jobStartDate;
         } else if (typeof jobStartDate === 'string') {
-          fallbackScheduledDate = new Date(jobStartDate + 'T12:00:00');
+          effectiveScheduledDate = new Date(jobStartDate + 'T12:00:00');
         }
+      }
+      
+      const effectiveScheduledTime = estimate.scheduledTime || jobScheduledTime;
+      
+      // Build displayScheduledAt as ISO string for frontend convenience
+      let displayScheduledAt: string | null = null;
+      if (effectiveScheduledDate) {
+        displayScheduledAt = effectiveScheduledDate instanceof Date 
+          ? effectiveScheduledDate.toISOString()
+          : new Date(effectiveScheduledDate).toISOString();
       }
       
       return {
         ...estimate,
-        scheduledDate: estimate.scheduledDate || fallbackScheduledDate,
-        scheduledTime: estimate.scheduledTime || jobScheduledTime,
+        scheduledDate: effectiveScheduledDate,
+        scheduledTime: effectiveScheduledTime,
+        displayScheduledAt,
       };
     });
   }
@@ -1778,22 +1789,33 @@ export class DatabaseStorage implements IStorage {
       .where(eq(estimates.companyId, companyId))
       .orderBy(desc(estimates.updatedAt));
     
-    // Return estimates with fallback schedule from job
+    // Return estimates with fallback schedule from job and displayScheduledAt
     return results.map(({ estimate, jobStartDate, jobScheduledTime }) => {
-      // jobStartDate is a Date object or string, convert properly
-      let fallbackScheduledDate = null;
-      if (jobStartDate) {
+      // Get the effective scheduled date (estimate's own or from job)
+      let effectiveScheduledDate = estimate.scheduledDate;
+      if (!effectiveScheduledDate && jobStartDate) {
         if (jobStartDate instanceof Date) {
-          fallbackScheduledDate = jobStartDate;
+          effectiveScheduledDate = jobStartDate;
         } else if (typeof jobStartDate === 'string') {
-          fallbackScheduledDate = new Date(jobStartDate + 'T12:00:00');
+          effectiveScheduledDate = new Date(jobStartDate + 'T12:00:00');
         }
+      }
+      
+      const effectiveScheduledTime = estimate.scheduledTime || jobScheduledTime;
+      
+      // Build displayScheduledAt as ISO string for frontend convenience
+      let displayScheduledAt: string | null = null;
+      if (effectiveScheduledDate) {
+        displayScheduledAt = effectiveScheduledDate instanceof Date 
+          ? effectiveScheduledDate.toISOString()
+          : new Date(effectiveScheduledDate).toISOString();
       }
       
       return {
         ...estimate,
-        scheduledDate: estimate.scheduledDate || fallbackScheduledDate,
-        scheduledTime: estimate.scheduledTime || jobScheduledTime,
+        scheduledDate: effectiveScheduledDate,
+        scheduledTime: effectiveScheduledTime,
+        displayScheduledAt,
       };
     });
   }

@@ -1603,21 +1603,25 @@ export default function Jobs() {
                           <span className="truncate">{estimate.customerName}</span>
                         </div>
                       )}
-                      {(estimate as any).scheduledDate && (
+                      {((estimate as any).displayScheduledAt || (estimate as any).scheduledDate) && (
                         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                           <Calendar className="h-3.5 w-3.5 shrink-0" />
                           <span>
                             {(() => {
-                              const rawDate = (estimate as any).scheduledDate;
-                              const dateStr = typeof rawDate === 'string' 
-                                ? rawDate.split('T')[0] 
-                                : format(new Date(rawDate), 'yyyy-MM-dd');
-                              const formattedDate = format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
-                              const timeStr = (estimate as any).scheduledTime;
-                              const formattedTime = timeStr 
-                                ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a')
-                                : null;
-                              return formattedTime ? `${formattedDate} · ${formattedTime}` : formattedDate;
+                              try {
+                                const rawDate = (estimate as any).displayScheduledAt || (estimate as any).scheduledDate;
+                                const dateStr = typeof rawDate === 'string' 
+                                  ? rawDate.split('T')[0] 
+                                  : format(new Date(rawDate), 'yyyy-MM-dd');
+                                const formattedDate = format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
+                                const timeStr = (estimate as any).scheduledTime;
+                                const formattedTime = timeStr 
+                                  ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a')
+                                  : null;
+                                return formattedTime ? `${formattedDate} · ${formattedTime}` : formattedDate;
+                              } catch {
+                                return 'Scheduled';
+                              }
                             })()}
                           </span>
                         </div>
