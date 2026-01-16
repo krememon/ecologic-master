@@ -1,0 +1,75 @@
+Fix: Estimate card Schedule box is showing the wrong schedule (or “Not scheduled”) instead of the schedule selected during Estimate creation. Make the Schedule box always display the estimate’s own saved schedule.
+
+CURRENT
+- Schedule box now appears on all Estimate cards ✅
+- “Set Schedule” button removed ✅
+- BUT the Schedule box does NOT show the correct date/time that was selected during “Create Estimate”.
+  - It may show “Not scheduled” or a different date than what was set.
+
+GOAL
+- The Estimate Schedule box must always reflect the schedule stored on the ESTIMATE record (draft or approved).
+- Whatever schedule the user selects during Create Estimate must:
+  1) Persist to the estimate in DB immediately
+  2) Be returned by the estimates list endpoint
+  3) Render in the Estimate card Schedule box
+
+IMPORTANT RULE
+- Estimate cards must NOT rely on job schedule, approval schedule, or createdAt.
+- Source of truth for estimate cards = estimate.scheduledAt (or scheduled_date + scheduled_time).
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) VERIFY WHAT FIELDS EXIST ON ESTIMATE
+- Identify the real schedule fields on the estimate table/model:
+  - preferred: estimate.scheduledAt (timestamp)
+  - or: estimate.scheduled_date + estimate.scheduled_time (+ timezone)
+- Add a temporary server log when fetching estimates:
+  console.log("[EstimatesListAPI] schedule fields", estimates.map(e => ({
+    id: e.id,
+    status: e.status,
+    scheduledAt: e.scheduledAt,
+    scheduled_date: e.scheduled_date,
+    scheduled_time: e.scheduled_time
+  })))
+
+2) SAVE SCHEDULE DURING CREATE ESTIMATE (ROOT CAUSE LIKELY)
+- In the Create Estimate flow, ensure the schedule selected under “Add schedule” is included in the POST /api/estimates/create request.
+- Add a frontend log right before saving:
+  console.log("[CreateEstimate] sending schedule", { scheduledAt, scheduledDate, scheduledTime, timezone })
+
+Backend:
+- Persist those schedule fields on creation.
+- Add server log after insert:
+  console.log("[EstimateCreate] saved schedule", { id, scheduledAt, scheduled_date, scheduled_time })
+
+3) ENSURE ESTIMATES LIST ENDPOINT RETURNS ESTIMATE SCHEDULE
+- GET /api/estimates must include the schedule fields in the response.
+- Do NOT compute schedule from job or approval status for estimate cards.
+
+4) UPDATE ESTIMATE CARD TO DISPLAY ESTIMATE SCHEDULE ONLY
+- In EstimateCard Schedule box:
+  - if estimate.scheduledAt exists -> show formatted date + time
+  - else if scheduled_date + scheduled_time exist -> format and show
+  - else -> “Not scheduled”
+- Remove any fallbacks to:
+  - convertedJobId job schedule
+  - createdAt
+  - approval date
+
+5) REFRESH AFTER CREATE
+- After creating an estimate, refetch estimates list so the card shows schedule immediately.
+
+6) REMOVE DEBUG LOGS AFTER CONFIRMED
+
+ACCEPTANCE TEST (MUST PASS)
+- Create estimate
+- Set schedule during creation: Jan 16, 2026 at 9:00 AM
+- Save estimate
+- Estimates list card shows: “Friday, January 16, 2026 · 9:00 AM”
+- Refresh app -> still correct
+- Approve estimate -> schedule box still shows the same schedule (no change)
+
+DELIVERABLES
+- Schedule selected during estimate creation persists correctly
+- Estimate card displays that exact schedule
+- No reliance on approval/job schedule for estimate card schedule
