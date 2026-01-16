@@ -2335,7 +2335,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Store date and time as separate fields to avoid timezone conversion issues
       // The frontend sends YYYY-MM-DD and HH:mm, we store them as-is
-      const timeStr = scheduledTime || '09:00';
+      // Normalize time to 15-minute intervals (00, 15, 30, 45)
+      const normalizeTimeTo15Min = (time: string): string => {
+        if (!time) return '09:00';
+        const [hours, mins] = time.split(':').map(Number);
+        const normalizedMins = Math.floor(mins / 15) * 15;
+        return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
+      };
+      
+      const incomingTime = scheduledTime || '09:00';
+      const timeStr = normalizeTimeTo15Min(incomingTime);
+      
+      if (timeStr !== incomingTime) {
+        console.log('[ScheduleNormalize]', { incoming: incomingTime, normalized: timeStr });
+      }
       
       // Update job with schedule - store date and time separately
       const [updated] = await db

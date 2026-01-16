@@ -1,0 +1,74 @@
+Keep the scroll wheel time picker, but restrict minutes to 15-minute increments only (00, 15, 30, 45). Do NOT replace the wheel with dropdowns.
+
+CURRENT
+- Scheduling time picker uses a scroll wheel UI.
+- Minutes still scroll through every number (00–59).
+- We attempted 15-min intervals but it didn’t change the wheel options.
+
+GOAL
+- KEEP the scroll wheel experience.
+- Restrict the MINUTES wheel to only:
+  00, 15, 30, 45
+- User must not be able to select 7:35, 7:12, etc.
+- Enforce this in the UI AND in backend save validation.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY THE TIME PICKER COMPONENT IN USE
+- Locate the scheduling modal time picker component.
+- Identify whether it is:
+  - native <input type="time">
+  - a library time picker (MUI, react-datepicker, etc.)
+  - a custom wheel picker component
+- We must keep the wheel UI.
+
+2) ENFORCE 15-MINUTE MINUTES AT THE WHEEL LEVEL
+Use one of these depending on the implementation:
+
+A) If it is <input type="time">:
+- Set step to 900 seconds (15 minutes):
+  step="900"
+- Ensure the UI still shows the wheel on mobile.
+- Ensure typed input cannot bypass it.
+
+B) If it is a wheel picker library:
+- Replace the minutes data source/options with exactly:
+  ["00","15","30","45"]
+- Keep hour wheel unchanged.
+- Keep AM/PM wheel unchanged.
+- Ensure the selected minute snaps ONLY to those values.
+
+C) If it is currently a native Date picker (Date object):
+- Stop using the built-in minute wheel.
+- Keep hour wheel, but implement a controlled minutes wheel with only 4 values (00/15/30/45) so it still looks like a wheel.
+
+3) SNAP / NORMALIZE ANY OUT-OF-RANGE MINUTE VALUES
+- If the component receives a time with minute not in [0,15,30,45]:
+  - snap it to the nearest lower 15-minute increment
+    examples:
+      7:35 -> 7:30
+      7:59 -> 7:45
+      7:01 -> 7:00
+- Do this in the scheduling modal before saving.
+
+4) BACKEND SAFETY NET (MANDATORY)
+- In PATCH /api/jobs/:jobId/schedule (or schedule save endpoint):
+  - Validate minutes are in [0,15,30,45]
+  - If not, normalize by rounding DOWN to nearest 15
+  - Save normalized scheduledAt
+- Log normalization:
+  console.log("[ScheduleNormalize]", { incoming, normalized })
+
+5) ACCEPTANCE TEST (MUST PASS)
+- Open time wheel:
+  - Minutes wheel shows ONLY: 00, 15, 30, 45
+- Try to select 7:35 -> impossible OR snaps to 7:30
+- Save schedule -> job shows correct time
+- Refresh -> time stays correct
+- Job card and Job Insights both show the same time
+
+DELIVERABLES
+- Wheel UI remains
+- Minutes wheel restricted to 4 options
+- Save endpoint enforces 15-min rule so it can’t be bypassed
+- No regressions to scheduling flow
