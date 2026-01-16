@@ -308,9 +308,6 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     if (schedule.date) {
       const timeStr = schedule.time || '09:00';
       requestedStartAt = `${schedule.date}T${timeStr}:00`;
-      console.log('[CreateEstimate] requestedStartAt:', requestedStartAt);
-    } else {
-      console.log('[CreateEstimate] No schedule date selected');
     }
     
     createEstimateMutation.mutate({

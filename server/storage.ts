@@ -1860,8 +1860,6 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    console.log(`[EstimateCreate] payload.requestedStartAt=${payload.requestedStartAt} → processed=${processedRequestedStartAt}`);
-    
     // Create estimate
     const [estimate] = await db
       .insert(estimates)
@@ -1887,8 +1885,6 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     
-    console.log(`[EstimateCreate] SAVED estimateId=${estimate.id} requestedStartAt=${estimate.requestedStartAt}`);
-
     // Create line items
     const createdItems: EstimateItem[] = [];
     for (const item of itemsWithTotals) {

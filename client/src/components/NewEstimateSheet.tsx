@@ -360,7 +360,6 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     if (schedule.date) {
       const timeStr = schedule.time || '09:00';
       requestedStartAt = `${schedule.date}T${timeStr}:00`;
-      console.log('[NewEstimateSheet] requestedStartAt:', requestedStartAt);
     }
 
     createEstimateMutation.mutate({
