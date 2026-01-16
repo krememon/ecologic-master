@@ -1746,11 +1746,23 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(estimates.createdAt));
     
     // Return estimates with fallback schedule from job
-    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => ({
-      ...estimate,
-      scheduledDate: estimate.scheduledDate || (jobStartDate ? new Date(jobStartDate + 'T12:00:00') : null),
-      scheduledTime: estimate.scheduledTime || jobScheduledTime,
-    }));
+    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => {
+      // jobStartDate is a Date object or string, convert properly
+      let fallbackScheduledDate = null;
+      if (jobStartDate) {
+        if (jobStartDate instanceof Date) {
+          fallbackScheduledDate = jobStartDate;
+        } else if (typeof jobStartDate === 'string') {
+          fallbackScheduledDate = new Date(jobStartDate + 'T12:00:00');
+        }
+      }
+      
+      return {
+        ...estimate,
+        scheduledDate: estimate.scheduledDate || fallbackScheduledDate,
+        scheduledTime: estimate.scheduledTime || jobScheduledTime,
+      };
+    });
   }
 
   async getEstimatesByCompany(companyId: number): Promise<Estimate[]> {
@@ -1767,11 +1779,23 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(estimates.updatedAt));
     
     // Return estimates with fallback schedule from job
-    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => ({
-      ...estimate,
-      scheduledDate: estimate.scheduledDate || (jobStartDate ? new Date(jobStartDate + 'T12:00:00') : null),
-      scheduledTime: estimate.scheduledTime || jobScheduledTime,
-    }));
+    return results.map(({ estimate, jobStartDate, jobScheduledTime }) => {
+      // jobStartDate is a Date object or string, convert properly
+      let fallbackScheduledDate = null;
+      if (jobStartDate) {
+        if (jobStartDate instanceof Date) {
+          fallbackScheduledDate = jobStartDate;
+        } else if (typeof jobStartDate === 'string') {
+          fallbackScheduledDate = new Date(jobStartDate + 'T12:00:00');
+        }
+      }
+      
+      return {
+        ...estimate,
+        scheduledDate: estimate.scheduledDate || fallbackScheduledDate,
+        scheduledTime: estimate.scheduledTime || jobScheduledTime,
+      };
+    });
   }
 
   async getEstimate(id: number): Promise<EstimateWithItems | undefined> {

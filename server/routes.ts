@@ -4142,6 +4142,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allEstimates = await storage.getEstimatesByCompany(company.id);
       console.log(`[Estimates] listAll userId=${userId} companyId=${company.id} count=${allEstimates.length}`);
+      // Debug: log schedule fields for first estimate
+      if (allEstimates.length > 0) {
+        const first = allEstimates[0];
+        console.log(`[Estimates] first estimate schedule:`, {
+          id: first.id,
+          status: first.status,
+          convertedJobId: first.convertedJobId,
+          scheduledDate: first.scheduledDate,
+          scheduledTime: first.scheduledTime,
+        });
+      }
       res.json(allEstimates);
     } catch (error) {
       console.error("Error fetching all estimates:", error);

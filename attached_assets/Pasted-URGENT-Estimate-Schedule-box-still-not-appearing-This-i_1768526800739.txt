@@ -1,0 +1,82 @@
+URGENT: Estimate Schedule box still not appearing. This is almost certainly because the Estimates LIST endpoint does not include schedule fields (or we’re reading the wrong field). Fix by making schedule a guaranteed part of the estimate list payload, then render it by reusing the JobCard Schedule component.
+
+CURRENT
+- Job cards show schedule correctly.
+- Estimate cards STILL do not show schedule box at all.
+- We already attempted to add the UI, but nothing renders, which strongly indicates:
+  1) schedule data is not present in the estimates list response, OR
+  2) the UI is checking the wrong field (scheduledAt vs scheduledDate/time), OR
+  3) the estimate’s schedule is stored on the converted job, but not joined into estimate list.
+
+GOAL
+- Schedule box MUST appear on estimate cards whenever a schedule exists.
+- It must look identical to Job card schedule box.
+- Must work immediately after approving/scheduling (no refresh).
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) PRINT THE RAW ESTIMATES LIST DATA (MANDATORY DEBUG)
+- In the Estimates list page (right after fetching estimates), log the first estimate object:
+  console.log("[EstimatesList] first estimate", estimates?.[0]);
+- Also log the specific schedule-related fields for ALL estimates:
+  console.log("[EstimatesList] schedule map", estimates?.map(e => ({
+    id: e.id,
+    status: e.status,
+    scheduledAt: e.scheduledAt,
+    scheduledDate: e.scheduledDate,
+    scheduledTime: e.scheduledTime,
+    approvedJobId: e.approvedJobId,
+    convertedJobId: e.convertedJobId,
+    jobScheduledAt: e.jobScheduledAt
+  })));
+
+This tells us instantly which field actually exists.
+
+2) FIX THE BACKEND ESTIMATES LIST PAYLOAD (MOST LIKELY ROOT CAUSE)
+Update GET /api/estimates (or the endpoint powering estimate cards) so it ALWAYS returns a schedule field that the UI can render.
+
+We need ONE canonical field on each estimate card:
+- estimate.displayScheduledAt (timestamp or ISO string)   <-- preferred
+
+Rules to set it:
+A) If estimate has its own scheduledAt -> use that
+B) Else if estimate has scheduledDate + scheduledTime -> convert into an ISO datetime and return it
+C) Else if estimate was converted to a job (approvedJobId/convertedJobId exists) -> JOIN jobs table and return job.scheduledAt as displayScheduledAt
+D) Else -> null
+
+Make sure this field is included for every estimate in the list response.
+
+3) UPDATE THE ESTIMATE CARD TO USE ONLY ONE FIELD
+- In EstimateCard component:
+  - Look ONLY at estimate.displayScheduledAt
+  - If it exists -> render schedule box
+  - If null -> hide schedule box
+
+Do NOT check multiple fields in the UI. Backend normalizes it.
+
+4) REUSE THE JOB CARD SCHEDULE UI EXACTLY
+- Extract the JobCard schedule row into a shared component:
+  <ScheduleRow scheduledAt={...} />
+- Use it in BOTH:
+  - JobCard
+  - EstimateCard
+So the styling is guaranteed identical.
+
+5) ENSURE FRONTEND REFRESH AFTER APPROVAL/SCHEDULE
+- After approving + scheduling:
+  - invalidate/refetch estimates query
+  - invalidate/refetch jobs query
+So Estimate cards update immediately.
+
+ACCEPTANCE TEST (MUST PASS)
+- Approve an estimate and schedule it (date + time)
+- Estimates list shows schedule box on that estimate card
+- Schedule matches the job’s schedule date/time
+- Refresh app -> schedule still appears
+- Estimate with no schedule shows no schedule box
+
+DELIVERABLES
+- Backend returns estimate.displayScheduledAt for list view
+- Estimate cards render schedule via shared ScheduleRow component
+- Queries invalidate so UI updates instantly
+- Remove the temporary debug logs after confirmed working
