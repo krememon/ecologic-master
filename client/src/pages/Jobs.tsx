@@ -1775,7 +1775,25 @@ export default function Jobs() {
                 {job.startDate && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <Calendar className="h-4 w-4" />
-                    {new Date(job.startDate).toLocaleDateString()}
+                    {(() => {
+                      try {
+                        const rawDate = job.startDate as any;
+                        let formattedDate = '';
+                        if (rawDate instanceof Date) {
+                          formattedDate = format(rawDate, 'MMM d, yyyy');
+                        } else if (typeof rawDate === 'string' && rawDate) {
+                          const dateStr = rawDate.split('T')[0];
+                          formattedDate = format(new Date(dateStr + 'T12:00:00'), 'MMM d, yyyy');
+                        } else {
+                          formattedDate = format(new Date(rawDate), 'MMM d, yyyy');
+                        }
+                        const timeStr = (job as any).scheduledTime;
+                        const formattedTime = timeStr ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a') : null;
+                        return formattedTime ? `${formattedDate} • ${formattedTime}` : formattedDate;
+                      } catch {
+                        return 'Scheduled';
+                      }
+                    })()}
                   </div>
                 )}
                 

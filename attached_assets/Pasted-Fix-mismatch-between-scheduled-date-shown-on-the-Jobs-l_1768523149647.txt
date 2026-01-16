@@ -1,0 +1,62 @@
+Fix mismatch between scheduled date shown on the Jobs list card vs the Schedule date shown inside Job Insights. Job card currently shows the old estimate date, while Job Insights shows the correct scheduled job date.
+
+CURRENT
+- After approving an estimate and scheduling the job:
+  - Job Insights “Schedule” section shows the correct scheduled date (ex: Friday, Jan 16, 2026)
+  - BUT the Jobs list card still shows the old estimate date (ex: 1/15/2026)
+- This causes confusion and makes it look like scheduling didn’t save.
+
+GOAL
+- The Jobs list card must display the SAME scheduled date/time that is stored on the Job (scheduledAt).
+- It must NOT display the estimate date once the job exists.
+- Single source of truth: Job.scheduledAt
+- If job is not scheduled: show no schedule date (or “Not scheduled” if we prefer), but never show estimate date.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY WHAT DATE THE JOB CARD IS CURRENTLY RENDERING
+- In the JobCard component, find the calendar/date line.
+- It is likely using one of these incorrect fields:
+  - job.createdAt
+  - estimate.scheduledDate
+  - job.date (legacy field)
+  - startDate without time
+- Add a temporary log in JobCard:
+  console.log("[JobCard] job dates", { id: job.id, scheduledAt: job.scheduledAt, createdAt: job.createdAt, anyOtherDateFields: ... })
+
+2) ENSURE JOBS LIST API RETURNS scheduledAt
+- Confirm GET /api/jobs includes scheduledAt for each job.
+- If not returned:
+  - update backend jobs list query to include scheduledAt
+  - return it in the job JSON
+
+3) UPDATE JOB CARD TO USE scheduledAt ONLY
+- Update JobCard calendar display logic:
+  - If job.scheduledAt exists:
+      display formatted scheduledAt (date, and time if we added time)
+  - Else:
+      hide the date row OR display “Not scheduled”
+- Do NOT use estimate dates anywhere in job card rendering.
+
+4) HANDLE MIGRATED/FALLBACK FIELDS (IF THEY EXIST)
+- If there is an older job field (ex: job.scheduledDate or job.date):
+  - normalize it server-side into scheduledAt
+  - OR only display scheduledAt and ignore legacy fields
+
+5) REFRESH BEHAVIOR
+- Ensure after scheduling is saved:
+  - jobs list query is invalidated/refetched
+  - job card immediately updates to show new scheduledAt
+
+ACCEPTANCE TEST (MUST PASS)
+- Schedule a job for Jan 16
+- Jobs list card shows Jan 16 (not Jan 15)
+- Job Insights shows Jan 16
+- Refresh page -> Jobs list still shows Jan 16
+- Unschedule (if possible) -> date disappears / shows “Not scheduled”
+- No regressions to estimate->job conversion or routing
+
+DELIVERABLES
+- Jobs list API includes scheduledAt
+- JobCard renders scheduledAt consistently
+- No estimate date leaks into job card display

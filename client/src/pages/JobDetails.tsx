@@ -542,13 +542,39 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 <div className="space-y-1">
                   {job.startDate && (
                     <p>
-                      {format(new Date(job.startDate + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}
+                      {(() => {
+                        try {
+                          const rawDate = job.startDate as any;
+                          if (rawDate instanceof Date) {
+                            return format(rawDate, 'EEEE, MMMM d, yyyy');
+                          } else if (typeof rawDate === 'string' && rawDate) {
+                            const dateStr = rawDate.split('T')[0];
+                            return format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
+                          }
+                          return format(new Date(rawDate), 'EEEE, MMMM d, yyyy');
+                        } catch {
+                          return 'Scheduled';
+                        }
+                      })()}
                       {job.scheduledTime && ` • ${format(new Date(`2000-01-01T${job.scheduledTime}`), 'h:mm a')}`}
                     </p>
                   )}
                   {job.endDate && job.startDate !== job.endDate && (
                     <p className="text-sm text-muted-foreground">
-                      to {format(new Date(job.endDate + 'T12:00:00'), 'MMMM d, yyyy')}
+                      to {(() => {
+                        try {
+                          const rawDate = job.endDate as any;
+                          if (rawDate instanceof Date) {
+                            return format(rawDate, 'MMMM d, yyyy');
+                          } else if (typeof rawDate === 'string' && rawDate) {
+                            const dateStr = rawDate.split('T')[0];
+                            return format(new Date(dateStr + 'T12:00:00'), 'MMMM d, yyyy');
+                          }
+                          return format(new Date(rawDate), 'MMMM d, yyyy');
+                        } catch {
+                          return '';
+                        }
+                      })()}
                     </p>
                   )}
                 </div>
