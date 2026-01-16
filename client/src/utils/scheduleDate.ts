@@ -73,6 +73,14 @@ export function formatEstimateRequestedSchedule(estimate: { id?: number; request
   try {
     const dateObj = typeof rawDate === 'string' ? new Date(rawDate) : rawDate;
     
+    // Debug log for timezone verification
+    console.log("SCHEDULE RENDER:", { 
+      estimateId: estimate?.id, 
+      rawDate, 
+      dateObj: dateObj.toString(),
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+    });
+    
     const formattedDate = dateObj.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',

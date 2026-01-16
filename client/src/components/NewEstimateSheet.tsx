@@ -356,10 +356,23 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     const taxCents = Math.round(subtotal * (taxRate / 100));
 
     // Combine date + time into single ISO string for requestedStartAt
+    // We create a Date object from local date/time components, then convert to ISO
     let requestedStartAt: string | null = null;
     if (schedule.date) {
       const timeStr = schedule.time || '09:00';
-      requestedStartAt = `${schedule.date}T${timeStr}:00`;
+      const [year, month, day] = schedule.date.split('-').map(Number);
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      // Create date in LOCAL timezone
+      const localDate = new Date(year, month - 1, day, hours, minutes, 0);
+      // Convert to ISO string (UTC) - this preserves the correct moment in time
+      requestedStartAt = localDate.toISOString();
+      console.log("SCHEDULE PICKED:", { 
+        datePicked: schedule.date, 
+        timePicked: timeStr, 
+        localDateObj: localDate.toString(), 
+        isoToSave: requestedStartAt, 
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone 
+      });
     }
 
     createEstimateMutation.mutate({

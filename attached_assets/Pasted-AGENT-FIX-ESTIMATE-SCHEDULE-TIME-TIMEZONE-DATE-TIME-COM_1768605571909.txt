@@ -1,0 +1,49 @@
+AGENT — FIX ESTIMATE SCHEDULE TIME (TIMEZONE / DATE+TIME COMBINE BUG)
+
+STATUS:
+Estimate schedule now displays a date, but the TIME is wrong.
+Example: user sets a specific time in the clock picker, but the UI shows a different time (ex: 5:00 AM).
+
+GOAL (NON-NEGOTIABLE):
+The schedule time shown on:
+1) Estimate details Schedule card
+2) Estimate list card
+MUST exactly match the time the user selected in the clock picker.
+
+MOST LIKELY CAUSE:
+Timezone conversion (saving as UTC then formatting as local incorrectly) OR incorrect date+time combination.
+
+REQUIREMENTS:
+1) When user selects Date + Time on the New Estimate schedule modal:
+   - Combine them into a single DateTime in the USER’S LOCAL TIME.
+   - Save TWO fields on the estimate:
+     A) requestedStartAt (ISO string in UTC, derived from the local selection)
+     B) requestedTimeZone (IANA tz string, e.g. America/New_York) OR a numeric offset at save time
+   - If we cannot reliably get IANA zone, store offsetMinutes.
+
+2) When displaying:
+   - Always format requestedStartAt using requestedTimeZone if available.
+   - If only offsetMinutes is available, adjust accordingly.
+   - Do NOT let the browser default timezone formatting shift the time unexpectedly.
+
+3) DO NOT change the job scheduling flow.
+
+DEBUGGING (MANDATORY TEMP LOGS):
+Add logs at these points and verify with a real create-estimate test:
+A) Immediately after user hits “Done” in schedule modal:
+   console.log("SCHEDULE PICKED:", { datePicked, timePicked, combinedLocalString, combinedDateObj: combinedDateObj.toString(), isoToSave: combinedDateObj.toISOString(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+
+B) After saving and fetching the estimate back:
+   console.log("ESTIMATE FETCHED:", { requestedStartAt, requestedTimeZone, offsetMinutes });
+
+C) The rendered string:
+   console.log("SCHEDULE RENDER:", renderedText);
+
+IMPLEMENTATION NOTE (IMPORTANT):
+If the app is in America/New_York, and user selects Jan 16 2026 @ 9:00 AM,
+the rendered time MUST be 9:00 AM (not shifted to 5:00 AM, etc).
+
+DELIVERABLE:
+- Time shown matches picker exactly
+- Remove logs after verified
+- No UI redesign, just correct time
