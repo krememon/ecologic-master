@@ -1220,6 +1220,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
               <Input
                 id="scheduleTime"
                 type="time"
+                step="900"
                 value={schedule.time}
                 onChange={(e) => setSchedule({ ...schedule, time: e.target.value })}
                 data-testid="input-schedule-time"

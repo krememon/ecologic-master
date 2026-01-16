@@ -921,6 +921,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               <Input
                 id="scheduleTime"
                 type="time"
+                step="900"
                 value={schedule.time}
                 onChange={(e) => setSchedule({ ...schedule, time: e.target.value })}
               />

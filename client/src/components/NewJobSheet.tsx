@@ -1145,6 +1145,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                 <Label>Start Time</Label>
                 <Input
                   type="time"
+                  step="900"
                   value={schedule.startTime}
                   onChange={(e) => setSchedule({ ...schedule, startTime: e.target.value })}
                 />
@@ -1153,6 +1154,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                 <Label>End Time</Label>
                 <Input
                   type="time"
+                  step="900"
                   value={schedule.endTime}
                   onChange={(e) => setSchedule({ ...schedule, endTime: e.target.value })}
                 />
