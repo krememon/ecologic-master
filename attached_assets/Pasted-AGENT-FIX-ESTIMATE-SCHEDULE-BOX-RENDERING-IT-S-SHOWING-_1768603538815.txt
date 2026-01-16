@@ -1,0 +1,62 @@
+AGENT — FIX ESTIMATE “SCHEDULE” BOX RENDERING (IT’S SHOWING DISPATCH TEXT)
+
+STATUS:
+We made progress: approving the estimate creates a job, and job scheduling no longer overwrites the estimate.
+BUT the Estimate “Schedule” box is STILL WRONG:
+It displays “No employees assigned” instead of the requested date/time set during estimate creation.
+
+ROOT CAUSE:
+The Schedule box UI is still bound to the DISPATCH/EMPLOYEES field (assigned crew), not the estimate requested schedule field.
+We must correct the Estimate details/card UI mapping so “Schedule” renders the estimate’s requested date/time.
+
+NON-NEGOTIABLE REQUIREMENT:
+On an estimate, the Schedule box must display the date/time set during estimate creation.
+Example: Jan 16, 2026 • 10:00 AM
+
+WHAT TO DO (FRONTEND FIRST):
+1) Locate the component that renders the estimate details cards/sections (the area showing:
+   - Schedule (with Set Schedule button)
+   - Dispatch To / My employees
+   etc.)
+
+2) Identify where the “Schedule” card gets its display text.
+   - Right now it is incorrectly using something like:
+     - assignedEmployees / crew / dispatchTo
+   - That is why it shows “No employees assigned”.
+
+3) Replace the Schedule card’s value logic to read ONLY:
+   - estimate.requestedStartAt (or the field you saved from estimate creation)
+   - If requestedStartAt exists => format and display it
+   - If missing => “Not scheduled”
+
+4) Ensure the Dispatch card continues to display crew/employee assignment separately.
+   - Do NOT remove Dispatch.
+   - Just fix the Schedule card so it is not using Dispatch data.
+
+BACKEND CHECK (DO NOT SKIP):
+- Confirm the estimate object being returned to the frontend actually includes requestedStartAt.
+- If not included, add it to the API response serializer/SELECT.
+
+REQUIRED DEBUG LOGS (TEMPORARY, REMOVE AFTER):
+- In the estimate details component:
+  console.log("ESTIMATE DEBUG:", estimate.id, {
+    requestedStartAt: estimate.requestedStartAt,
+    dispatchEmployeesCount: estimate.assignedEmployees?.length,
+    jobId: estimate.jobId
+  });
+This will prove the UI is reading the right field.
+
+TESTS (MUST PASS):
+A) Create estimate + set schedule Jan 16, 2026 10:00 AM + Save
+   - Open estimate details
+   - Schedule box displays Jan 16, 2026 • 10:00 AM
+   - It must NOT display “No employees assigned”
+
+B) Approve estimate, schedule job for a different date
+   - Estimate Schedule box STILL displays the original requestedStartAt
+
+DELIVERABLE:
+- Schedule card renders requestedStartAt correctly
+- Dispatch card still works
+- Remove logs after verified
+- No styling changes except the value text being correct

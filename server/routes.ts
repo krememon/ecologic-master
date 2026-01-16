@@ -4430,7 +4430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
 
-      console.log(`[Estimates] get estimateId=${estimateId} jobId=${estimate.jobId} companyId=${company.id}`);
+      console.log(`[Estimates] get estimateId=${estimateId} jobId=${estimate.jobId} companyId=${company.id} requestedStartAt=${(estimate as any).requestedStartAt}`);
       res.json(estimate);
     } catch (error) {
       console.error("Error fetching estimate:", error);
