@@ -1,0 +1,75 @@
+Change requirement: Estimate cards must show a Schedule box immediately when an estimate is CREATED (draft), not only after approval/job conversion.
+
+CURRENT
+- The system currently only shows the Schedule box on Estimate cards after:
+  1) estimate is approved (converted_job_id exists)
+  2) estimate/job is scheduled
+- Debug confirmed the only estimate is a draft with no schedule, so nothing displays.
+- This is NOT what we want.
+
+NEW GOAL (IMPORTANT)
+- Every Estimate should have a Schedule box available immediately after the estimate is created (even in DRAFT).
+- User should be able to set a schedule on the estimate right away (before approval).
+- The schedule info (date + time) must be shown on the Estimate card once set.
+
+REQUIREMENTS
+
+1) ESTIMATE SCHEDULE DATA (STORE ON ESTIMATE)
+- Add/ensure these fields exist on Estimate (not Job):
+  - scheduledAt (preferred single timestamp) OR
+  - scheduled_date + scheduled_time + timezone (if already using that format)
+- This schedule must be editable while estimate is still Draft.
+
+2) ESTIMATE DETAILS: ADD “Schedule” SECTION
+- In the Estimate details page (draft state), add a Schedule card/section (same style as Job Insights Schedule):
+  - Calendar icon + “Schedule”
+  - Date picker + Time picker (15-min increments wheel)
+  - Save/Done
+- User can set/update schedule anytime on the estimate.
+
+3) ESTIMATE CARD: ALWAYS SUPPORT SCHEDULE DISPLAY
+- On the Estimates list card:
+  - If estimate has schedule set:
+    - show Schedule box with full date + time:
+      “Friday, January 16, 2026 · 9:00 AM”
+  - If schedule not set yet:
+    - still show the Schedule box but display:
+      “Not scheduled” (or “Set schedule”)
+    - (We want the box visible even for draft estimates)
+- Styling must match Job card schedule box 1:1.
+
+4) APPROVAL FLOW MUST CARRY SCHEDULE INTO JOB
+When approving an estimate:
+- Convert estimate -> job (already works)
+- If estimate has a schedule set:
+  - copy schedule to the created job.scheduledAt
+  - so the job shows the same date + time immediately
+- No date shifting, preserve timezone handling.
+
+5) BACKEND ENDPOINTS
+- Add/ensure:
+  PATCH /api/estimates/:estimateId/schedule
+  Body: { scheduledDate, scheduledTime, timezone } OR { scheduledAt }
+- Save to estimate fields.
+- Return updated estimate including schedule fields.
+
+6) UI REFRESH
+- After saving estimate schedule:
+  - invalidate/refetch estimates list so the Estimate card updates immediately
+  - no page refresh required
+
+ACCEPTANCE TEST (MUST PASS)
+- Create a new estimate (draft)
+- In estimate details, set schedule date + time
+- Return to estimates list:
+  - the estimate card shows Schedule box with correct date + time
+- Approve the estimate:
+  - job is created
+  - job inherits the same schedule date + time
+- Refresh app: both estimate and job still show schedule
+
+DELIVERABLES
+- Estimate scheduling is available immediately on draft estimates
+- Estimate cards show Schedule box even before approval
+- Approval copies schedule into job
+- Consistent styling + no regressions

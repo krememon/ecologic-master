@@ -4627,6 +4627,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/estimates/:id/schedule - Save schedule to estimate (for draft estimates)
+  app.patch('/api/estimates/:id/schedule', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+      
+      const { scheduledDate, scheduledTime, timezone } = req.body;
+      
+      // Normalize time to 15-minute intervals
+      const normalizeTimeTo15Min = (time: string): string => {
+        if (!time) return '09:00';
+        const [hours, mins] = time.split(':').map(Number);
+        const normalizedMins = Math.floor(mins / 15) * 15;
+        return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
+      };
+      
+      const timeStr = scheduledTime ? normalizeTimeTo15Min(scheduledTime) : null;
+      
+      // Update estimate with schedule
+      const [updated] = await db
+        .update(estimates)
+        .set({
+          scheduledDate: scheduledDate ? new Date(scheduledDate + 'T12:00:00') : null,
+          scheduledTime: timeStr,
+          updatedAt: new Date(),
+        })
+        .where(eq(estimates.id, estimateId))
+        .returning();
+      
+      console.log(`[Estimates] schedule saved estimateId=${estimateId} scheduledDate=${scheduledDate} scheduledTime=${timeStr}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error saving estimate schedule:", error);
+      res.status(500).json({ message: "Failed to save estimate schedule" });
+    }
+  });
+
   // PATCH /api/estimates/:id/approve - Approve estimate with signature and create job
   app.patch('/api/estimates/:id/approve', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
@@ -4684,10 +4728,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(eq(estimates.id, estimateId))
           .returning();
 
-        // 2. Create a job from the estimate
+        // 2. Create a job from the estimate (including schedule if set)
         const jobTitle = (estimate as any).customerName 
           ? `Job for ${(estimate as any).customerName}` 
           : estimate.title;
+        
+        // Get estimate schedule to copy to job
+        const estimateScheduledDate = (estimate as any).scheduledDate;
+        const estimateScheduledTime = (estimate as any).scheduledTime;
         
         const [newJob] = await tx.insert(jobs).values({
           companyId,
@@ -4701,6 +4749,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: (estimate as any).customerAddress || null,
           notes: estimate.notes || null,
           jobType: estimate.jobType || null,
+          startDate: estimateScheduledDate ? (typeof estimateScheduledDate === 'string' ? estimateScheduledDate.split('T')[0] : null) : null,
+          scheduledTime: estimateScheduledTime || null,
         }).returning();
 
         // 3. Copy line items from estimate to job
