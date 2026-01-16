@@ -1,0 +1,85 @@
+DEBUG: Find the exact reason the Estimate Schedule box is not appearing. Do a systematic, step-by-step trace from DB → API → frontend state → UI render. No guessing.
+
+CURRENT
+- We expect a Schedule box to appear on Estimate cards after an estimate is approved and scheduled.
+- Agent added displayScheduledAt (or displayScheduledAt/displayScheduledAt-like field) and updated UI, but schedule box still does not appear.
+- We need to identify where the chain is breaking.
+
+GOAL
+Identify the single failing link:
+A) Schedule not being saved
+B) Schedule saved but not included in estimates list API
+C) API returns it but frontend state/query doesn’t contain it (cache issue)
+D) State contains it but EstimateCard render condition is wrong
+E) CSS/layout renders it but it’s hidden/clipped
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CONFIRM REPRO WITH A KNOWN SCHEDULED ESTIMATE
+- Create ONE test estimate and run the full flow:
+  - Approve estimate
+  - Pick schedule date + time in scheduling modal
+- Capture:
+  - estimateId
+  - jobId (convertedJobId/approvedJobId)
+  - scheduledAt value
+
+2) DATABASE CHECK (SERVER-SIDE TRUTH)
+- After scheduling, directly query DB (server side) to confirm:
+  - The Job created from the estimate has scheduledAt set
+  - The Estimate record has convertedJobId set
+  - If we store schedule on estimate too, confirm estimate has scheduledAt or schedule fields
+- Print server logs clearly:
+  console.log("[DB CHECK]", { estimateId, convertedJobId, jobScheduledAt, estimateScheduledAt })
+
+3) API CHECK: ESTIMATES LIST RESPONSE MUST CONTAIN displayScheduledAt
+- In the backend estimates list endpoint (GET /api/estimates), log the response object for the scheduled estimate:
+  console.log("[API /estimates] scheduled estimate payload", scheduledEstimate)
+- Confirm the response includes:
+  - convertedJobId
+  - displayScheduledAt (or jobScheduledAt)
+  - and that displayScheduledAt is NOT null
+
+If missing:
+- Fix backend to JOIN jobs and return:
+  displayScheduledAt = jobs.scheduledAt
+- This must be included in the list payload (not only detail endpoint)
+
+4) FRONTEND FETCH CHECK (NETWORK + STATE)
+- In the Estimates list page after fetching:
+  console.log("[UI estimates]", estimates.map(e => ({
+    id: e.id,
+    status: e.status,
+    convertedJobId: e.convertedJobId,
+    displayScheduledAt: e.displayScheduledAt
+  })))
+- Confirm the scheduled estimate in the UI state has displayScheduledAt.
+
+If UI state is missing it but API has it:
+- Fix query caching/invalidation:
+  - invalidate “estimates” query after scheduling
+  - ensure fetch isn’t using stale cached data
+  - ensure we aren’t filtering out approved estimates unintentionally
+
+5) ESTIMATE CARD RENDER CHECK
+- In EstimateCard, add a temporary debug render:
+  - show text: “debug schedule: {String(displayScheduledAt)}”
+- Confirm whether the card component receives the field.
+- If field exists but box not showing:
+  - render condition is wrong (fix it)
+  - or schedule box is being placed inside a hidden container
+
+6) CSS / LAYOUT CHECK (LAST)
+- If schedule box is rendering but not visible:
+  - check if parent has overflow hidden
+  - check z-index
+  - check conditional classnames hiding it
+  - check if the schedule box is outside the card bounds
+
+7) REMOVE DEBUG LOGS AFTER FIX
+- Once root cause is fixed, remove logs and debug text.
+
+SUCCESS CRITERIA
+- We can point to the exact cause (A/B/C/D/E) with evidence.
+- Schedule box appears on scheduled estimate cards with full date + time.
+- No “it should work” assumptions; verified end-to-end.
