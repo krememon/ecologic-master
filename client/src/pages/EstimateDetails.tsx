@@ -56,6 +56,11 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   
+  // Estimate schedule editing state (for draft estimates)
+  const [isEstimateScheduleModalOpen, setIsEstimateScheduleModalOpen] = useState(false);
+  const [estimateScheduleDate, setEstimateScheduleDate] = useState('');
+  const [estimateScheduleTime, setEstimateScheduleTime] = useState('');
+  
   // RBAC: Owner, Supervisor, Estimator can share estimates
   const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
 
@@ -173,6 +178,46 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     setIsScheduleModalOpen(false);
     navigate('/jobs', { replace: true });
+  };
+  
+  // Estimate schedule mutation (for draft estimates)
+  const estimateScheduleMutation = useMutation({
+    mutationFn: async ({ date, time }: { date: string; time: string }) => {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await apiRequest('PATCH', `/api/estimates/${estimateId}/schedule`, {
+        scheduledDate: date || null,
+        scheduledTime: time || null,
+        timezone,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      setIsEstimateScheduleModalOpen(false);
+      toast({ title: "Schedule saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save schedule", variant: "destructive" });
+    },
+  });
+  
+  const openEstimateScheduleModal = () => {
+    // Pre-populate with existing schedule if any
+    if (estimate?.scheduledDate) {
+      const dateStr = typeof estimate.scheduledDate === 'string' 
+        ? estimate.scheduledDate.split('T')[0]
+        : '';
+      setEstimateScheduleDate(dateStr);
+    } else {
+      setEstimateScheduleDate('');
+    }
+    setEstimateScheduleTime(estimate?.scheduledTime || '');
+    setIsEstimateScheduleModalOpen(true);
+  };
+  
+  const handleSaveEstimateSchedule = () => {
+    estimateScheduleMutation.mutate({ date: estimateScheduleDate, time: estimateScheduleTime });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,26 +401,48 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           </Card>
         )}
 
-        {(estimate.scheduledDate || estimate.scheduledTime) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
                 Schedule
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </div>
+              {estimate.status === 'draft' && (
+                <Button variant="outline" size="sm" onClick={openEstimateScheduleModal}>
+                  {estimate.scheduledDate || estimate.scheduledTime ? 'Edit' : 'Set Schedule'}
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {estimate.scheduledDate || estimate.scheduledTime ? (
               <div className="space-y-1">
                 {estimate.scheduledDate && (
-                  <p>{new Date(estimate.scheduledDate).toLocaleDateString()}</p>
+                  <p className="font-medium">
+                    {new Date(estimate.scheduledDate + 'T12:00:00').toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </p>
                 )}
                 {estimate.scheduledTime && (
-                  <p className="text-sm text-muted-foreground">{estimate.scheduledTime}</p>
+                  <p className="text-muted-foreground">
+                    {new Date(`2000-01-01T${estimate.scheduledTime}`).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                  </p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <p className="text-muted-foreground">Not scheduled</p>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -693,6 +760,52 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               className="bg-green-600 hover:bg-green-700"
             >
               {scheduleMutation.isPending ? "Scheduling..." : "Schedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Estimate Schedule Modal - for draft estimates */}
+      <Dialog open={isEstimateScheduleModalOpen} onOpenChange={setIsEstimateScheduleModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-600" />
+              Schedule Estimate
+            </DialogTitle>
+            <DialogDescription>
+              Set when this estimate should be scheduled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date</label>
+              <input
+                type="date"
+                value={estimateScheduleDate}
+                onChange={(e) => setEstimateScheduleDate(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Time (optional)</label>
+              <TimeWheelPicker
+                value={estimateScheduleTime}
+                onChange={setEstimateScheduleTime}
+                label="Select Time"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsEstimateScheduleModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveEstimateSchedule}
+              disabled={estimateScheduleMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {estimateScheduleMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
