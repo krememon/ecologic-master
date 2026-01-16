@@ -49,6 +49,12 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [previewAttachment, setPreviewAttachment] = useState<EstimateAttachment | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   
+  // Scheduling modal state (after estimate approval)
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [createdJobId, setCreatedJobId] = useState<number | null>(null);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  
   // RBAC: Owner, Supervisor, Estimator can share estimates
   const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
 
@@ -113,16 +119,57 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setIsSignatureModalOpen(false);
-      toast({ title: "Estimate approved!" });
+      
+      // If a job was created, open the scheduling modal
+      if (data.jobId) {
+        setCreatedJobId(data.jobId);
+        setScheduledDate('');
+        setScheduledTime('');
+        setIsScheduleModalOpen(true);
+      } else {
+        navigate('/jobs', { replace: true });
+      }
     },
     onError: () => {
       toast({ title: "Approval failed", variant: "destructive" });
     },
   });
+  
+  // Schedule job mutation
+  const scheduleMutation = useMutation({
+    mutationFn: async ({ jobId, date, time }: { jobId: number; date: string; time: string }) => {
+      const res = await apiRequest('PATCH', `/api/jobs/${jobId}/schedule`, {
+        scheduledDate: date || null,
+        scheduledTime: time || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setIsScheduleModalOpen(false);
+      navigate('/jobs', { replace: true });
+    },
+    onError: () => {
+      toast({ title: "Failed to schedule job", variant: "destructive" });
+    },
+  });
+  
+  const handleScheduleJob = () => {
+    if (createdJobId) {
+      scheduleMutation.mutate({ jobId: createdJobId, date: scheduledDate, time: scheduledTime });
+    }
+  };
+  
+  const handleSkipSchedule = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    setIsScheduleModalOpen(false);
+    navigate('/jobs', { replace: true });
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -596,6 +643,53 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             </Button>
             <Button onClick={() => setPreviewAttachment(null)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Job Modal - appears after estimate approval */}
+      <Dialog open={isScheduleModalOpen} onOpenChange={(open) => !open && handleSkipSchedule()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-600" />
+              Schedule Job
+            </DialogTitle>
+            <DialogDescription>
+              When would you like to schedule the job?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date</label>
+              <input
+                type="date"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Time (optional)</label>
+              <input
+                type="time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleSkipSchedule}>
+              Skip
+            </Button>
+            <Button 
+              onClick={handleScheduleJob}
+              disabled={scheduleMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {scheduleMutation.isPending ? "Scheduling..." : "Schedule"}
             </Button>
           </DialogFooter>
         </DialogContent>

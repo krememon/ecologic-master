@@ -1,0 +1,105 @@
+After an Estimate is Approved, automatically convert it into a Job, then prompt the user to schedule the job.
+
+CURRENT
+- Estimates can be approved.
+- Jobs exist as the source of truth.
+- There is no automatic conversion from approved estimate -> job.
+- User wants a scheduling prompt immediately after approval.
+
+GOAL
+When an Estimate is approved:
+1) Automatically create a Job from that Estimate (one time only).
+2) Immediately show a scheduling prompt screen/modal:
+   - “When would you like to schedule the job?”
+   - user selects a date/time (or can skip for now)
+3) After scheduling is saved (or skipped), return to the Jobs list.
+4) Newly created Job should appear in Jobs list right away.
+5) Must be idempotent: approving the same estimate twice must NOT create duplicate jobs.
+
+CRITICAL RULES
+- Jobs list is the safe landing page after actions
+- Do NOT auto-open Job Insights after job creation
+- No routing bugs, no 404s
+- No success toasts; use the scheduling prompt as the confirmation UX
+- Must preserve RBAC (hidden not disabled)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) DATABASE: LINK ESTIMATE -> JOB (IDEMPOTENCY)
+- Add fields to estimate model:
+  - approvedAt (timestamp, nullable)
+  - approvedByUserId (nullable)
+  - convertedJobId (nullable)  // stores the Job created from this estimate
+- Add a uniqueness guarantee:
+  - one estimate can map to only one job (convertedJobId set once)
+
+2) BACKEND: APPROVE ESTIMATE ENDPOINT MUST CREATE JOB (ONE TIME)
+- In the “approve estimate” backend route:
+  - Mark estimate status = approved (if not already)
+  - If convertedJobId already exists:
+    - return existing jobId (do NOT create another)
+  - Else create a Job using estimate info:
+    - companyId
+    - clientId
+    - title: “Job for {client}” or estimate title
+    - address copied from estimate/client
+    - line items copied (and tax flags)
+    - notes copied (optional)
+    - initial status = pending
+  - Save estimate.convertedJobId = new job id
+- Return response:
+  - { estimateId, jobId, alreadyConverted: boolean }
+
+3) FRONTEND: AFTER APPROVE, OPEN SCHEDULING PROMPT
+- After user clicks Approve and backend returns jobId:
+  - Open a modal/screen:
+    Title: “Schedule Job”
+    Subtitle: “When would you like to schedule the job?”
+    Fields:
+      - Date picker
+      - Time picker (or start time)
+      - Optional duration (optional; can be omitted for now)
+    Buttons:
+      - “Skip”
+      - “Schedule”
+- UX:
+  - No toast popups
+  - Must feel smooth and professional
+
+4) BACKEND: SAVE SCHEDULE TO JOB
+- Add endpoint:
+  PATCH /api/jobs/:jobId/schedule
+  body: { scheduledDate, scheduledTime, timezone } (or ISO datetime)
+- Store schedule on Job:
+  - scheduledAt (timestamp, nullable)
+- Return updated job
+
+5) POST-SCHEDULE NAVIGATION + UI REFRESH
+- After user presses Schedule or Skip:
+  - close modal
+  - navigate to /jobs (replace: true)
+  - refetch jobs list so the new job appears immediately
+- Do NOT auto-open the new job
+
+6) EDGE CASES / SAFETY
+- If user approves estimate on mobile and refreshes:
+  - job should still exist (convertedJobId saved)
+- If approve endpoint called twice:
+  - must return same jobId (no duplicates)
+- If schedule save fails:
+  - show inline error in modal, do not close
+
+ACCEPTANCE TEST (MUST PASS)
+- Approve an estimate
+- A job is created automatically (exactly once)
+- Scheduling prompt appears immediately
+- Schedule -> saved to job
+- Skip -> job still created, no schedule set
+- User returns to Jobs list and sees the new job
+- Approve the same estimate again -> no duplicate job created
+
+DELIVERABLES
+- Estimate -> job conversion implemented with convertedJobId idempotency
+- Scheduling prompt UI + schedule save endpoint
+- Jobs list refresh after completion
+- No regressions to estimate approval flow

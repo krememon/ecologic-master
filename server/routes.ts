@@ -25,7 +25,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -2313,6 +2313,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/jobs/:jobId/schedule - Save schedule to job
+  app.patch('/api/jobs/:jobId/schedule', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const jobId = parseInt(req.params.jobId);
+      
+      // Verify job exists and belongs to company
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== company.id) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      const { scheduledDate, scheduledTime } = req.body;
+      
+      // Update job with schedule
+      const [updated] = await db
+        .update(jobs)
+        .set({
+          startDate: scheduledDate || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(jobs.id, jobId))
+        .returning();
+      
+      console.log(`[Jobs] scheduled jobId=${jobId} date=${scheduledDate} time=${scheduledTime}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error scheduling job:", error);
+      res.status(500).json({ message: "Failed to schedule job" });
+    }
+  });
+
   // Job Photos routes
   app.get('/api/jobs/:jobId/photos', isAuthenticated, async (req: any, res) => {
     try {
@@ -4547,7 +4585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PATCH /api/estimates/:id/approve - Approve estimate with signature
+  // PATCH /api/estimates/:id/approve - Approve estimate with signature and create job
   app.patch('/api/estimates/:id/approve', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
@@ -4560,7 +4598,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
 
-      // Verify status is draft
+      // Idempotency: If already approved with a converted job, return existing job
+      if (estimate.status === 'approved' && (estimate as any).convertedJobId) {
+        console.log(`[Estimates] already approved estimateId=${estimateId} convertedJobId=${(estimate as any).convertedJobId}`);
+        return res.json({ 
+          ...estimate, 
+          jobId: (estimate as any).convertedJobId, 
+          alreadyConverted: true 
+        });
+      }
+
+      // Verify status is draft (first time approval)
       if (estimate.status !== 'draft') {
         return res.status(400).json({ message: "Only draft estimates can be approved" });
       }
@@ -4579,10 +4627,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const approved = await storage.approveEstimate(estimateId, userId, signatureDataUrl);
+      // Use transaction to approve estimate and create job atomically
+      const result = await db.transaction(async (tx) => {
+        // 1. Approve the estimate
+        const [approved] = await tx
+          .update(estimates)
+          .set({
+            status: "approved",
+            approvedAt: new Date(),
+            approvedByUserId: userId,
+            signatureDataUrl,
+            updatedAt: new Date(),
+          })
+          .where(eq(estimates.id, estimateId))
+          .returning();
+
+        // 2. Create a job from the estimate
+        const jobTitle = (estimate as any).customerName 
+          ? `Job for ${(estimate as any).customerName}` 
+          : estimate.title;
+        
+        const [newJob] = await tx.insert(jobs).values({
+          companyId,
+          clientId: (estimate as any).clientId || null,
+          customerId: estimate.customerId || null,
+          clientName: (estimate as any).customerName || null,
+          title: jobTitle,
+          description: estimate.notes || null,
+          status: 'pending',
+          priority: 'medium',
+          location: (estimate as any).customerAddress || null,
+          notes: estimate.notes || null,
+          jobType: estimate.jobType || null,
+        }).returning();
+
+        // 3. Copy line items from estimate to job
+        const estimateLineItems = estimate.items || [];
+        for (const item of estimateLineItems) {
+          await tx.insert(jobLineItems).values({
+            jobId: newJob.id,
+            name: item.name,
+            description: item.description || null,
+            taskCode: item.taskCode || null,
+            quantity: String(item.quantity),
+            unitPriceCents: item.unitPriceCents,
+            unit: item.unit || 'each',
+            taxable: item.taxable || false,
+            lineTotalCents: item.lineTotalCents || 0,
+            sortOrder: item.sortOrder || 0,
+          });
+        }
+
+        // 4. Update estimate with convertedJobId
+        await tx
+          .update(estimates)
+          .set({ convertedJobId: newJob.id })
+          .where(eq(estimates.id, estimateId));
+
+        return { approved, jobId: newJob.id };
+      });
       
-      console.log(`[Estimates] approved estimateId=${estimateId} userId=${userId} totalCents=${estimate.totalCents}`);
-      res.json(approved);
+      console.log(`[Estimates] approved estimateId=${estimateId} userId=${userId} totalCents=${estimate.totalCents} createdJobId=${result.jobId}`);
+      res.json({ 
+        ...result.approved, 
+        jobId: result.jobId, 
+        alreadyConverted: false 
+      });
     } catch (error) {
       console.error("Error approving estimate:", error);
       res.status(500).json({ message: "Failed to approve estimate" });

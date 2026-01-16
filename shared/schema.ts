@@ -747,6 +747,8 @@ export const estimates = pgTable("estimates", {
   signatureDataUrl: text("signature_data_url"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledTime: varchar("scheduled_time", { length: 10 }),
+  // Job conversion (idempotency - one estimate can only create one job)
+  convertedJobId: integer("converted_job_id").references(() => jobs.id, { onDelete: "set null" }),
 }, (table) => ({
   companyEstimateNumberIdx: uniqueIndex("estimates_company_number_uniq").on(table.companyId, table.estimateNumber),
   jobIdx: index("estimates_job_idx").on(table.jobId),
