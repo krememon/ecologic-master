@@ -1103,6 +1103,8 @@ export const createEstimateSchema = z.object({
   jobType: z.string().optional(),
   taxCents: z.number().int().min(0).optional().default(0),
   assignedEmployeeIds: z.array(z.string()).optional().default([]),
+  scheduledDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
+  scheduledTime: z.string().optional().nullable(),
   items: z.array(z.object({
     name: z.string().min(1, "Item name is required"),
     description: z.string().nullable().optional(),

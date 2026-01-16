@@ -1896,6 +1896,16 @@ export class DatabaseStorage implements IStorage {
     const taxCents = payload.taxCents || 0;
     const totalCents = subtotalCents + taxCents;
 
+    // Process schedule date if provided
+    let processedScheduledDate: Date | null = null;
+    if (payload.scheduledDate) {
+      if (typeof payload.scheduledDate === 'string') {
+        processedScheduledDate = new Date(payload.scheduledDate + 'T12:00:00');
+      } else if (payload.scheduledDate instanceof Date) {
+        processedScheduledDate = payload.scheduledDate;
+      }
+    }
+    
     // Create estimate
     const [estimate] = await db
       .insert(estimates)
@@ -1916,9 +1926,13 @@ export class DatabaseStorage implements IStorage {
         taxCents,
         totalCents,
         assignedEmployeeIds: payload.assignedEmployeeIds || [],
+        scheduledDate: processedScheduledDate,
+        scheduledTime: payload.scheduledTime || null,
         createdByUserId: userId,
       })
       .returning();
+    
+    console.log(`[EstimateCreate] saved estimateId=${estimate.id} scheduledDate=${processedScheduledDate} scheduledTime=${payload.scheduledTime}`);
 
     // Create line items
     const createdItems: EstimateItem[] = [];
