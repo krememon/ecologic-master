@@ -203,12 +203,12 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`w-full flex items-center justify-between px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-left ${className || ''}`}
+        className={`w-full h-10 flex items-center justify-between px-3 border rounded-md bg-background border-input text-base md:text-sm text-left ${className || ''}`}
       >
-        <span className={value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}>
+        <span className={value ? 'text-foreground' : 'text-muted-foreground'}>
           {formatDisplayTime()}
         </span>
-        <Clock className="h-4 w-4 text-slate-400" />
+        <Clock className="h-4 w-4 text-muted-foreground" />
       </button>
       
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
