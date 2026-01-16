@@ -204,15 +204,16 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   
   const openEstimateScheduleModal = () => {
     // Pre-populate with existing schedule if any
-    if (estimate?.scheduledDate) {
-      const dateStr = typeof estimate.scheduledDate === 'string' 
-        ? estimate.scheduledDate.split('T')[0]
+    const rawDate = (estimate as any)?.scheduledDate;
+    if (rawDate) {
+      const dateStr = typeof rawDate === 'string' 
+        ? rawDate.split('T')[0]
         : '';
       setEstimateScheduleDate(dateStr);
     } else {
       setEstimateScheduleDate('');
     }
-    setEstimateScheduleTime(estimate?.scheduledTime || '');
+    setEstimateScheduleTime((estimate as any)?.scheduledTime || '');
     setIsEstimateScheduleModalOpen(true);
   };
   
@@ -410,17 +411,17 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               </div>
               {estimate.status === 'draft' && (
                 <Button variant="outline" size="sm" onClick={openEstimateScheduleModal}>
-                  {estimate.scheduledDate || estimate.scheduledTime ? 'Edit' : 'Set Schedule'}
+                  {(estimate as any).scheduledDate || (estimate as any).scheduledTime ? 'Edit' : 'Set Schedule'}
                 </Button>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {estimate.scheduledDate || estimate.scheduledTime ? (
+            {(estimate as any).scheduledDate || (estimate as any).scheduledTime ? (
               <div className="space-y-1">
-                {estimate.scheduledDate && (
+                {(estimate as any).scheduledDate && (
                   <p className="font-medium">
-                    {new Date(estimate.scheduledDate + 'T12:00:00').toLocaleDateString('en-US', {
+                    {new Date((estimate as any).scheduledDate + 'T12:00:00').toLocaleDateString('en-US', {
                       weekday: 'long',
                       year: 'numeric',
                       month: 'long',
@@ -428,9 +429,9 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                     })}
                   </p>
                 )}
-                {estimate.scheduledTime && (
+                {(estimate as any).scheduledTime && (
                   <p className="text-muted-foreground">
-                    {new Date(`2000-01-01T${estimate.scheduledTime}`).toLocaleTimeString('en-US', {
+                    {new Date(`2000-01-01T${(estimate as any).scheduledTime}`).toLocaleTimeString('en-US', {
                       hour: 'numeric',
                       minute: '2-digit',
                       hour12: true,
