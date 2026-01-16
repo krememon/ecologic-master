@@ -4211,6 +4211,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobType, scheduledDate, scheduledTime } = req.body;
 
+      console.log('[Estimates] create request received:', { jobId, scheduledDate, scheduledTime, bodyKeys: Object.keys(req.body) });
+
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
       if (!estimateTitle) {

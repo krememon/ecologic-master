@@ -1,0 +1,53 @@
+ECOLOGIC BUGFIX — ESTIMATE “REQUESTED SCHEDULE” NOT SAVING / NOT DISPLAYING
+
+CONTEXT:
+When creating an Estimate, the user can select a date/time (requested schedule).
+After creation, opening the estimate card still shows “Not scheduled”.
+This proves the estimate’s requested schedule is NOT being persisted and/or NOT being loaded into the estimate details UI.
+
+GOAL:
+When a user sets a schedule during initial Estimate creation, that schedule MUST:
+1) be saved on the ESTIMATE record in the database
+2) be returned by the API when fetching estimates / estimate details
+3) be displayed in the Estimate details “Schedule” section (and on the estimate card if present)
+
+IMPORTANT:
+This is NOT the job schedule. This is the estimate’s own requested schedule.
+Do NOT overwrite this field when the job schedule is set after approval.
+
+IMPLEMENTATION REQUIREMENTS:
+1) FRONTEND (Create Estimate flow)
+   - Find the Create Estimate form where user picks date/time.
+   - Ensure the selected date/time is included in the create request payload.
+   - Use a clear field name on the estimate payload, e.g.:
+     - requestedStartAt (ISO string)
+     - requestedEndAt (optional) OR durationMinutes (optional)
+   - If your current UI only picks one time, save at least requestedStartAt.
+
+2) BACKEND (Create Estimate endpoint)
+   - In the estimates create route/controller, accept requestedStartAt (and requestedEndAt if provided)
+   - Validate:
+     - if requestedStartAt exists, it must be a valid date
+   - Persist it to the estimates table/collection.
+   - Ensure the estimates schema/model includes these fields.
+   - Ensure all “get estimates” and “get estimate by id” endpoints return these fields.
+
+3) UI DISPLAY
+   - In Estimate details view, “Schedule” should display:
+     - formatted requestedStartAt (and requestedEndAt if you have it)
+     - otherwise “Not scheduled”
+   - Ensure the estimate card also uses estimate.requestedStartAt for display if present.
+   - Keep existing styling; just fix the data wiring.
+
+4) DO NOT BREAK EXISTING DATA
+   - If older estimates have no requestedStartAt, they should still show “Not scheduled” (expected).
+   - Do not rename existing fields unless necessary; if an old field exists (e.g. scheduleAt),
+     map it into requestedStartAt for backwards compatibility OR support both.
+
+DELIVERABLES:
+- Code changes to persist requested schedule on estimate creation
+- API returns schedule fields
+- Estimate card + estimate detail schedule section correctly display the saved date/time
+- Quick test:
+  Create estimate → set requested schedule Jan 16, 2026 → save
+  Reopen estimate → schedule shows Jan 16, 2026 (NOT “Not scheduled”)

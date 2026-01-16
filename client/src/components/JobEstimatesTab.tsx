@@ -302,6 +302,9 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''} – Estimate`.trim()
       : "Estimate";
 
+    console.log('[CreateEstimate] schedule state:', schedule);
+    console.log('[CreateEstimate] sending scheduledDate:', schedule.date, 'scheduledTime:', schedule.time);
+    
     createEstimateMutation.mutate({
       title: autoTitle,
       customerId: selectedCustomer?.id || undefined,
