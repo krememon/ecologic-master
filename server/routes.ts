@@ -4209,7 +4209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobType } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobType, scheduledDate, scheduledTime } = req.body;
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -4264,6 +4264,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Process schedule fields
+      const processedScheduledDate = scheduledDate ? new Date(scheduledDate + 'T12:00:00') : null;
+      const processedScheduledTime = scheduledTime || null;
+      
       const estimate = await storage.createEstimate(
         { 
           jobId, 
@@ -4277,13 +4281,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
           jobType: jobType?.trim() || undefined,
+          scheduledDate: processedScheduledDate,
+          scheduledTime: processedScheduledTime,
           items: normalizedItems 
         },
         companyId,
         userId
       );
 
-      console.log(`[Estimates] create estimateId=${estimate.id} jobId=${jobId} companyId=${companyId}`);
+      console.log(`[Estimates] create estimateId=${estimate.id} jobId=${jobId} companyId=${companyId} scheduledDate=${scheduledDate} scheduledTime=${scheduledTime}`);
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating estimate:", error);

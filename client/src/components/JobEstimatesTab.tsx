@@ -203,7 +203,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
   // Create estimate mutation
   const createEstimateMutation = useMutation({
-    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; jobType?: string; items: EstimateItemPayload[] }) => {
+    mutationFn: async (data: { title: string; customerId?: number; customerName?: string; customerEmail?: string; customerPhone?: string; customerAddress?: string; notes?: string; taxCents: number; assignedEmployeeIds?: string[]; jobType?: string; scheduledDate?: string | null; scheduledTime?: string | null; items: EstimateItemPayload[] }) => {
       return await apiRequest("POST", `/api/jobs/${jobId}/estimates`, data);
     },
     onSuccess: () => {
@@ -313,6 +313,8 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
       taxCents: calculateTaxCents(),
       assignedEmployeeIds: assignedEmployees,
       jobType: jobType || undefined,
+      scheduledDate: schedule.date || null,
+      scheduledTime: schedule.time || null,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
         description: item.description?.trim() || null,

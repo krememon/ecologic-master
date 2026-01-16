@@ -1,0 +1,67 @@
+Fix Estimate scheduling so the Schedule box correlates to what the user sets when initially creating the estimate.
+
+CURRENT
+- Estimates now show a Schedule box even while in Draft.
+- However, the Schedule box is not correlating to the schedule the user sets during initial estimate creation.
+- It shows “Not scheduled” even after a schedule was chosen (or the schedule is not being saved/loaded correctly).
+
+GOAL
+- When a user sets a schedule during the initial “Create Estimate” flow, that schedule must:
+  1) Save to the Estimate record in the DB immediately
+  2) Load back correctly when viewing the estimate
+  3) Display on the Estimate card Schedule box (date + time)
+- No mismatch, no resetting to “Not scheduled”.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY WHERE SCHEDULE IS SET DURING ESTIMATE CREATION
+- Locate the Create Estimate flow and the schedule picker inputs.
+- Confirm what state variables hold the chosen schedule (date/time).
+- Ensure these values are included in the create estimate payload.
+
+2) BACKEND: SAVE SCHEDULE FIELDS ON ESTIMATE CREATE
+- In POST /api/estimates/create (or equivalent), persist schedule fields:
+  Preferred: estimate.scheduledAt (single timestamp)
+  OR: estimate.scheduled_date + estimate.scheduled_time + timezone (if current format)
+- If the create payload includes schedule, do NOT ignore it.
+- Log on server after create:
+  console.log("[EstimateCreate] saved schedule", { estimateId, scheduledAt, scheduled_date, scheduled_time })
+
+3) FRONTEND: INCLUDE SCHEDULE IN CREATE REQUEST
+- When user clicks Save/Create Estimate:
+  - send schedule fields in request body
+  - do not wait until approval
+- If schedule is optional and not set, send null.
+
+4) ESTIMATES LIST: DISPLAY EXACT SAVED SCHEDULE
+- Ensure GET /api/estimates returns the schedule fields for each estimate.
+- Schedule box logic must use estimate’s schedule fields:
+  - if scheduledAt exists -> show formatted date + time
+  - else -> show “Not scheduled”
+
+5) ENSURE UI REFRESH AFTER CREATE
+- After creating an estimate:
+  - return to Estimates list
+  - refetch estimates list so the newly created estimate card shows the schedule immediately
+- No placeholder “Not scheduled” if user set a schedule.
+
+6) VALIDATION / EDGE CASES
+- If time picker is 15-min increments, store exact chosen value.
+- Prevent timezone date shifting:
+  - store full timestamp with timezone handling consistent with Jobs
+
+ACCEPTANCE TEST (MUST PASS)
+- Create a new estimate
+- During creation, set schedule: Jan 16, 2026 at 9:00 AM
+- Save estimate
+- On Estimates list card:
+  - Schedule box shows “Friday, January 16, 2026 · 9:00 AM”
+- Open estimate details:
+  - schedule matches
+- Refresh app:
+  - schedule persists and still displays
+
+DELIVERABLES
+- Schedule fields saved during estimate creation
+- Schedule loads and displays correctly on estimate cards
+- No “Not scheduled” when a schedule was set
