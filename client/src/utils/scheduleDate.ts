@@ -53,3 +53,48 @@ export function dateToYmdLocal(d: Date) {
   const day = d.getDate().toString().padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+/**
+ * Format estimate's requestedStartAt for display.
+ * This is the SINGLE SOURCE OF TRUTH for estimate schedule display.
+ * Returns { date: string, time: string, full: string } or null if not scheduled.
+ */
+export function formatEstimateRequestedSchedule(estimate: { id?: number; requestedStartAt?: string | Date | null }): {
+  date: string;
+  time: string;
+  full: string;
+} | null {
+  const rawDate = estimate?.requestedStartAt;
+  
+  // Debug log for schedule UI
+  console.log("SCHEDULE UI:", { estimateId: estimate?.id, requestedStartAt: rawDate });
+  
+  if (!rawDate) {
+    return null;
+  }
+  
+  try {
+    const dateObj = typeof rawDate === 'string' ? new Date(rawDate) : rawDate;
+    
+    const formattedDate = dateObj.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    
+    const formattedTime = dateObj.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    
+    return {
+      date: formattedDate,
+      time: formattedTime,
+      full: `${formattedDate} · ${formattedTime}`,
+    };
+  } catch {
+    return null;
+  }
+}
