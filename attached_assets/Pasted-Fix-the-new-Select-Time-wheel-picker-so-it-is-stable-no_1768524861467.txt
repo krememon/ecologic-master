@@ -1,0 +1,78 @@
+Fix the new “Select Time” wheel picker so it is stable (no side-to-side movement), readable, and always shows the selected time correctly.
+
+CURRENT
+- We implemented a custom 3-column time wheel (Hour / Minutes / AM-PM) to support 15-min increments.
+- BUT it is buggy:
+  - The numbers can be dragged/moved side-to-side (should NOT happen)
+  - The selected values are hard to see / not visible in the center
+  - The user can’t clearly tell what time is selected
+  - Overall feels unstable compared to Housecall’s wheel
+
+GOAL
+- Keep the wheel UI (Housecall-style) with 15-minute minute options.
+- Fix all bugs so:
+  - Wheel scrolls ONLY vertically
+  - No horizontal dragging / shifting of columns
+  - Selected value is clearly visible and centered
+  - The selected time is always displayed clearly (ex: “7:15 PM”)
+- UX must be smooth on mobile preview and real iPhone.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) LOCK EACH COLUMN TO VERTICAL SCROLL ONLY
+- For each wheel column (hours, minutes, am/pm):
+  - Prevent horizontal movement:
+    - Add CSS: touch-action: pan-y;
+    - Add CSS: overflow-x: hidden;
+    - Ensure container width is fixed (no flex shrink causing sliding)
+  - If using pointer/touch handlers:
+    - ignore horizontal delta (dx)
+    - only respond to vertical delta (dy)
+- The columns must not “slide” left/right at all.
+
+2) FIX COLUMN LAYOUT + ALIGNMENT
+- Ensure each column has a fixed width and is centered in its lane:
+  - Hours column: fixed width
+  - Minutes column: fixed width
+  - AM/PM column: fixed width
+- The “:” separator stays centered and does not move.
+- No clipping, no half-visible numbers.
+
+3) MAKE SELECTED VALUE VISUALLY OBVIOUS
+- Add a center “selection window” highlight bar (like iOS picker):
+  - A light rounded rectangle behind the selected row
+  - Selected text should be darker/bolder
+  - Non-selected rows faded
+- The selected row must always be readable.
+
+4) SHOW A LIVE SELECTED TIME PREVIEW
+- Under the picker (above the Done button), show:
+  - “Selected time: 7:15 PM” (or just “7:15 PM” like before)
+- This value must update instantly as the wheels scroll.
+- This solves the “can’t see the actual time” problem.
+
+5) SNAP BEHAVIOR (NO IN-BETWEEN STATES)
+- On scroll end / touch end:
+  - snap the column to the nearest option
+  - never leave it between values
+- Minutes options MUST stay:
+  00, 15, 30, 45 only
+
+6) KEEP BUTTONS CLEAN
+- Keep Done and Cancel working.
+- Remove the top-right X if it’s not needed (optional, but prefer consistency).
+- Done saves selected time and closes.
+
+7) ACCEPTANCE TEST (MUST PASS)
+- Minutes wheel shows ONLY 00/15/30/45
+- User cannot drag columns sideways
+- User can clearly see selected hour/minute/am-pm at all times
+- Preview label shows correct final time (ex: 7:15 PM)
+- Done saves correctly and job shows same time
+- No visual jitter, no overlap, no clipped text
+
+DELIVERABLES
+- Stable wheel picker (vertical only)
+- Clear selected-row highlight
+- Visible live time preview
+- No side-to-side movement or readability issues
