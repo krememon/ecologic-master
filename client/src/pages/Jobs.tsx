@@ -1608,17 +1608,16 @@ export default function Jobs() {
                           <Calendar className="h-3.5 w-3.5 shrink-0" />
                           <span>
                             {(() => {
-                              // Extract date part and format with noon to avoid timezone shifts
                               const rawDate = (estimate as any).scheduledDate;
                               const dateStr = typeof rawDate === 'string' 
                                 ? rawDate.split('T')[0] 
                                 : format(new Date(rawDate), 'yyyy-MM-dd');
-                              const formattedDate = format(new Date(dateStr + 'T12:00:00'), 'MMM d, yyyy');
+                              const formattedDate = format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
                               const timeStr = (estimate as any).scheduledTime;
                               const formattedTime = timeStr 
                                 ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a')
                                 : null;
-                              return formattedTime ? `${formattedDate} • ${formattedTime}` : formattedDate;
+                              return formattedTime ? `${formattedDate} · ${formattedTime}` : formattedDate;
                             })()}
                           </span>
                         </div>
