@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
+import { TimeWheelPicker } from "./TimeWheelPicker";
 import type { Customer } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
@@ -918,12 +919,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
             </div>
             <div className="space-y-2">
               <Label htmlFor="scheduleTime">Time</Label>
-              <Input
-                id="scheduleTime"
-                type="time"
-                step="900"
+              <TimeWheelPicker
                 value={schedule.time}
-                onChange={(e) => setSchedule({ ...schedule, time: e.target.value })}
+                onChange={(time) => setSchedule({ ...schedule, time })}
+                label="Select Time"
               />
             </div>
           </div>

@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import LocationInput from "@/components/LocationInput";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
+import { TimeWheelPicker } from "./TimeWheelPicker";
 import type { Customer } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
@@ -1143,20 +1144,18 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Start Time</Label>
-                <Input
-                  type="time"
-                  step="900"
+                <TimeWheelPicker
                   value={schedule.startTime}
-                  onChange={(e) => setSchedule({ ...schedule, startTime: e.target.value })}
+                  onChange={(time) => setSchedule({ ...schedule, startTime: time })}
+                  label="Start Time"
                 />
               </div>
               <div className="space-y-2">
                 <Label>End Time</Label>
-                <Input
-                  type="time"
-                  step="900"
+                <TimeWheelPicker
                   value={schedule.endTime}
-                  onChange={(e) => setSchedule({ ...schedule, endTime: e.target.value })}
+                  onChange={(time) => setSchedule({ ...schedule, endTime: time })}
+                  label="End Time"
                 />
               </div>
             </div>

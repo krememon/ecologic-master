@@ -1,0 +1,77 @@
+Make EcoLogic’s time scroll wheel minutes EXACTLY like Housecall Pro: only 15-minute increments (00, 15, 30, 45). Keep the wheel UI.
+
+CURRENT
+- EcoLogic time wheel shows every minute (ex: 29, 45, 46, 47, etc).
+- Housecall Pro wheel shows ONLY 15-minute increments (00, 15, 30, 45).
+- We want EcoLogic to match Housecall Pro exactly.
+
+GOAL
+- KEEP the scroll wheel UI.
+- Minutes wheel must ONLY contain:
+  00, 15, 30, 45
+- No other minute values should be visible or selectable.
+- Applies anywhere EcoLogic schedules time (estimate->job schedule modal, job edit schedule).
+
+IMPORTANT NOTE
+A backend “rounding” fix is NOT enough. The wheel itself must only show 4 minute options, like Housecall.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY THE EXACT TIME PICKER BEING USED
+- Find the scheduling modal component where time is selected.
+- Identify if time picker is:
+  A) native <input type="time">
+  B) a component library picker
+  C) custom wheel picker
+- We must keep the wheel look/feel.
+
+2) IMPLEMENT 15-MINUTE WHEEL MINUTES (UI ENFORCEMENT)
+Implement based on what we’re using:
+
+A) If using <input type="time">:
+- Set step to 900 seconds:
+  <input type="time" step="900" ... />
+- Confirm on iPhone-style wheel UI it only shows 00/15/30/45.
+- If it still shows every minute in our webview/browser, then we must NOT rely on native input.
+
+B) If using a wheel picker component:
+- Replace the “minutes” data source with:
+  ["00","15","30","45"]
+- Ensure the minutes wheel renders only these 4 options.
+- Ensure selecting minute snaps only to these values.
+
+C) If current picker cannot restrict minutes:
+- Keep the wheel UI but replace the time picker with a controlled 3-column wheel:
+  - Hours: 1–12
+  - Minutes: 00/15/30/45
+  - AM/PM
+- This MUST still look/behave like iOS wheel (same style as Housecall).
+
+3) SNAP EXISTING INVALID MINUTES (SAFETY)
+- If the current stored time has minutes not in {0,15,30,45}:
+  - snap DOWN to nearest:
+    29 -> 15
+    44 -> 30
+    59 -> 45
+- Do this when opening the scheduler so the wheel starts on a valid value.
+
+4) BACKEND SAFETY NET (SECONDARY)
+- In schedule save endpoint:
+  - If minutes not valid, normalize to nearest DOWN 15-min
+  - Save normalized scheduledAt
+- This ensures no invalid data can be saved even if something bypasses UI.
+
+5) ACCEPTANCE TEST (MUST PASS)
+- Open time wheel:
+  - minutes column shows ONLY: 00, 15, 30, 45
+  - no other minutes appear
+- Set time to 8:29 AM -> impossible
+- Set time to 8:30 AM -> possible
+- Save schedule -> job shows correct time
+- Refresh -> time persists
+- Job card + job insights show the saved time
+
+DELIVERABLES
+- Minutes wheel restricted to 4 options (00/15/30/45) like Housecall Pro
+- Works on mobile preview and real phone
+- No regressions to scheduling flow

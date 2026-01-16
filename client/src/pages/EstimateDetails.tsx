@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2 } from "lucide-react";
 import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
+import { TimeWheelPicker } from "@/components/TimeWheelPicker";
 import { useCan } from "@/hooks/useCan";
 
 interface EstimateDetailsProps {
@@ -675,12 +676,10 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Time (optional)</label>
-              <input
-                type="time"
-                step="900"
+              <TimeWheelPicker
                 value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                onChange={setScheduledTime}
+                label="Select Time"
               />
             </div>
           </div>
