@@ -222,6 +222,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       taxCents: number;
       assignedEmployeeIds: string[];
       jobType?: string;
+      requestedStartAt?: string | null;
       items: { name: string; quantity: string; unitPriceCents: number }[];
     }) => {
       const response = await apiRequest('POST', '/api/estimates', data);

@@ -4313,7 +4313,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId, jobType } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId, jobType, requestedStartAt } = req.body;
+
+      console.log('[Estimates] standalone create request received:', { requestedStartAt, bodyKeys: Object.keys(req.body) });
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -4378,6 +4380,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Process requestedStartAt - this is the single source of truth for estimate schedule
+      let processedRequestedStartAt: Date | null = null;
+      if (requestedStartAt) {
+        processedRequestedStartAt = new Date(requestedStartAt);
+        console.log('[Estimates] standalone using requestedStartAt:', requestedStartAt, '→', processedRequestedStartAt);
+      }
+
       const estimate = await storage.createEstimate(
         { 
           jobId: validatedJobId, 
@@ -4391,13 +4400,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
           jobType: jobType?.trim() || undefined,
+          requestedStartAt: processedRequestedStartAt,
           items: normalizedItems 
         },
         companyId,
         userId
       );
 
-      console.log(`[Estimates] create standalone estimateId=${estimate.id} jobId=${validatedJobId || 'none'} companyId=${companyId}`);
+      console.log(`[Estimates] create standalone estimateId=${estimate.id} requestedStartAt=${estimate.requestedStartAt} jobId=${validatedJobId || 'none'} companyId=${companyId}`);
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating standalone estimate:", error);
