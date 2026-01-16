@@ -771,6 +771,7 @@ export class DatabaseStorage implements IStorage {
         status: jobs.status,
         priority: jobs.priority,
         startDate: jobs.startDate,
+        scheduledTime: jobs.scheduledTime,
         endDate: jobs.endDate,
         location: jobs.location,
         city: jobs.city,
