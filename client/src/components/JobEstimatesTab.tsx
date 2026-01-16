@@ -25,6 +25,7 @@ import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import { TimeWheelPicker } from "./TimeWheelPicker";
 import type { Customer, Estimate } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
+import { formatEstimateRequestedSchedule } from "@/utils/scheduleDate";
 
 interface LineItem {
   name: string;
@@ -677,32 +678,15 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                     </div>
                     <div className="mt-1.5 text-sm">
                       {(() => {
-                        const rawDate = (estimate as any).requestedStartAt;
-                        if (!rawDate) {
+                        const scheduleInfo = formatEstimateRequestedSchedule({ id: estimate.id, requestedStartAt: (estimate as any).requestedStartAt });
+                        if (!scheduleInfo) {
                           return <span className="text-slate-400 dark:text-slate-500">Not scheduled</span>;
                         }
-                        try {
-                          const dateObj = new Date(rawDate);
-                          // Use locale-aware formatting to preserve user's intended time
-                          const formattedDate = dateObj.toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          });
-                          const formattedTime = dateObj.toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true,
-                          });
-                          return (
-                            <span className="text-slate-900 dark:text-slate-100">
-                              {formattedDate} · {formattedTime}
-                            </span>
-                          );
-                        } catch {
-                          return <span className="text-slate-900 dark:text-slate-100">Scheduled</span>;
-                        }
+                        return (
+                          <span className="text-slate-900 dark:text-slate-100">
+                            {scheduleInfo.full}
+                          </span>
+                        );
                       })()}
                     </div>
                   </div>

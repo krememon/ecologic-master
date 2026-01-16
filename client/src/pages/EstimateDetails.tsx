@@ -13,6 +13,7 @@ import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
 import { useCan } from "@/hooks/useCan";
+import { formatEstimateRequestedSchedule } from "@/utils/scheduleDate";
 
 interface EstimateDetailsProps {
   estimateId: string;
@@ -334,14 +335,6 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   }
 
   const canApprove = estimate.status === 'draft';
-  
-  // DEBUG: Log estimate schedule data
-  console.log("ESTIMATE DEBUG:", estimate.id, {
-    requestedStartAt: (estimate as any).requestedStartAt,
-    dispatchEmployeesCount: assignedEmployees?.length,
-    jobId: estimate.jobId,
-    status: estimate.status,
-  });
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -430,27 +423,18 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {(estimate as any).requestedStartAt ? (
-              <div className="space-y-1">
-                <p className="font-medium">
-                  {new Date((estimate as any).requestedStartAt).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-                <p className="text-muted-foreground">
-                  {new Date((estimate as any).requestedStartAt).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
-                </p>
-              </div>
-            ) : (
-              <p className="text-muted-foreground">Not scheduled</p>
-            )}
+            {(() => {
+              const scheduleInfo = formatEstimateRequestedSchedule({ id: estimate.id, requestedStartAt: (estimate as any).requestedStartAt });
+              if (!scheduleInfo) {
+                return <p className="text-muted-foreground">Not scheduled</p>;
+              }
+              return (
+                <div className="space-y-1">
+                  <p className="font-medium">{scheduleInfo.date}</p>
+                  <p className="text-muted-foreground">{scheduleInfo.time}</p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
