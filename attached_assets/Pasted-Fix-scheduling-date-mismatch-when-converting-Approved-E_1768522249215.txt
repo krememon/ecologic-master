@@ -1,0 +1,94 @@
+Fix scheduling date mismatch when converting Approved Estimate -> Job, and add scheduled time display in Job Insights + Estimate cards.
+
+CURRENT
+- Approving an Estimate correctly creates a Job and shows a scheduling prompt/modal.
+- BUT the scheduled date saved on the Job is incorrect (off by 1 day):
+  Example: Estimate schedule was set to Jan 15, but the Job shows Jan 16.
+- Job Insights currently shows scheduled DATE only (no time).
+- Estimate cards do not show the scheduled time.
+
+GOAL
+1) Scheduling accuracy:
+- When user picks a date/time in the scheduling modal, the Job must save and display the EXACT same date (no +1 day shift).
+- Fix timezone/ISO conversion so it never shifts days.
+
+2) Add scheduled TIME:
+- Job Insights must show:
+  - Scheduled date AND time (ex: “Thu, Jan 15, 2026 • 9:00 AM”)
+- Estimate cards must show scheduled date AND time (if scheduled exists).
+
+CRITICAL RULES
+- Do not break the estimate->job conversion flow
+- Do not break routing or Jobs list landing behavior
+- No auto-opening jobs
+- No new toasts
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY WHY DATE SHIFTS (+1 DAY)
+- This is almost certainly a timezone parsing issue:
+  - date-only stored as UTC midnight
+  - then rendered in local timezone -> becomes previous/next day
+- Find where scheduling modal constructs the datetime and how backend stores it.
+
+2) FIX THE DATA CONTRACT: ALWAYS STORE A FULL TIMESTAMP WITH TIMEZONE
+Preferred approach (stable):
+- In frontend scheduling modal:
+  - collect:
+    - scheduledDate (YYYY-MM-DD)
+    - scheduledTime (HH:mm)
+    - timezone (Intl.DateTimeFormat().resolvedOptions().timeZone)
+- Send these to backend:
+  PATCH /api/jobs/:jobId/schedule
+  { scheduledDate, scheduledTime, timezone }
+
+Backend:
+- Combine into a single timestamp correctly using the provided timezone
+- Store as scheduledAt (timestamp) in DB
+- Return scheduledAt
+
+IMPORTANT:
+- Do NOT store a date-only value as UTC midnight.
+- Ensure conversion preserves the intended local date/time.
+
+3) ADD TIME PICKER (IF NOT ALREADY PRESENT)
+- Scheduling modal must allow selecting BOTH:
+  - Date
+  - Time
+- Provide a sensible default time if user doesn’t pick one (ex: 9:00 AM)
+- Ensure time is saved and returned.
+
+4) UPDATE JOB INSIGHTS UI
+- In Job Insights “Schedule” card/section:
+  - Display both date + time
+  - Example format:
+    “Thursday, January 15, 2026 • 9:00 AM”
+- If no scheduledAt:
+  - show “Not scheduled”
+
+5) UPDATE ESTIMATE CARDS UI
+- On estimate cards (list view):
+  - Show scheduled date + time if schedule exists for that estimate/job
+- If estimate has a scheduled time before approval:
+  - ensure it carries into the created job (or is used as default in the scheduling modal)
+
+6) ADD LOGGING TO VERIFY FIX
+- When saving schedule:
+  - log on backend:
+    console.log("[ScheduleSave]", { jobId, scheduledDate, scheduledTime, timezone, storedScheduledAt })
+- On frontend after save:
+  - console.log("[ScheduleSaved]", response.scheduledAt)
+
+7) ACCEPTANCE TEST (MUST PASS)
+- Pick schedule: Jan 15 at 2:30 PM
+- After approval + scheduling:
+  - Job Insights shows Jan 15 (NOT Jan 16) and 2:30 PM
+- Refresh page -> still correct
+- Estimate card shows same scheduled date + time
+- No timezone day-shift occurs on different devices
+
+DELIVERABLES
+- Fix timezone/day-shift bug so scheduled date is exact
+- Store and display scheduled time
+- Job Insights shows date + time
+- Estimate cards show date + time

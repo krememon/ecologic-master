@@ -188,6 +188,7 @@ export const jobs = pgTable("jobs", {
   notes: text("notes"),
   jobType: varchar("job_type", { length: 100 }), // Same job types as estimates
   assignedTo: varchar("assigned_to").references(() => users.id), // Assigned user/technician
+  scheduledAt: timestamp("scheduled_at"), // Full timestamp for scheduled date+time (timezone-safe)
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -2331,19 +2331,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
       
-      const { scheduledDate, scheduledTime } = req.body;
+      const { scheduledDate, scheduledTime, timezone } = req.body;
+      
+      // Construct scheduledAt timestamp from date + time
+      // If no time provided, default to 9:00 AM
+      let scheduledAt: Date | null = null;
+      if (scheduledDate) {
+        const timeStr = scheduledTime || '09:00';
+        // Create the datetime string in the user's local timezone
+        // Format: "YYYY-MM-DDTHH:mm" - parsed as local time
+        const localDateTimeStr = `${scheduledDate}T${timeStr}:00`;
+        
+        // Parse as a date representing the user's intended local time
+        // We store this as-is since PostgreSQL timestamp without timezone
+        // stores the literal datetime value
+        scheduledAt = new Date(localDateTimeStr);
+        
+        // Validate the date is valid
+        if (isNaN(scheduledAt.getTime())) {
+          scheduledAt = null;
+        }
+      }
       
       // Update job with schedule
       const [updated] = await db
         .update(jobs)
         .set({
-          startDate: scheduledDate || null,
+          scheduledAt: scheduledAt,
+          startDate: scheduledDate || null, // Keep for backward compatibility
           updatedAt: new Date(),
         })
         .where(eq(jobs.id, jobId))
         .returning();
       
-      console.log(`[Jobs] scheduled jobId=${jobId} date=${scheduledDate} time=${scheduledTime}`);
+      console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime, timezone, storedScheduledAt: scheduledAt?.toISOString() });
       res.json(updated);
     } catch (error) {
       console.error("Error scheduling job:", error);

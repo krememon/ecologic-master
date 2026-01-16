@@ -143,13 +143,16 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   // Schedule job mutation
   const scheduleMutation = useMutation({
     mutationFn: async ({ jobId, date, time }: { jobId: number; date: string; time: string }) => {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const res = await apiRequest('PATCH', `/api/jobs/${jobId}/schedule`, {
         scheduledDate: date || null,
         scheduledTime: time || null,
+        timezone,
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[ScheduleSaved]', data.scheduledAt);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setIsScheduleModalOpen(false);
       navigate('/jobs', { replace: true });
