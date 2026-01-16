@@ -66,9 +66,6 @@ export function formatEstimateRequestedSchedule(estimate: { id?: number; request
 } | null {
   const rawDate = estimate?.requestedStartAt;
   
-  // Debug log for schedule UI
-  console.log("SCHEDULE UI:", { estimateId: estimate?.id, requestedStartAt: rawDate });
-  
   if (!rawDate) {
     return null;
   }
