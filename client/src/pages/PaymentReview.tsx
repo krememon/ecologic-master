@@ -125,7 +125,10 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       });
       const data = await response.json();
       
-      if (data.url) {
+      if (data.url && data.sessionId) {
+        localStorage.setItem("stripe_session", data.sessionId);
+        window.location.href = data.url;
+      } else if (data.url) {
         window.location.href = data.url;
       } else {
         throw new Error("No checkout URL received");
@@ -157,6 +160,8 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
         queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
         setViewState('success');
       } else {
         throw new Error(data.message || "Payment failed");

@@ -174,6 +174,7 @@ export const jobs = pgTable("jobs", {
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   status: varchar("status").notNull().default("pending"), // pending, active, completed, cancelled
+  paymentStatus: varchar("payment_status").notNull().default("unpaid"), // unpaid, partial, paid
   priority: varchar("priority").default("medium"), // low, medium, high, urgent
   startDate: date("start_date"),
   endDate: date("end_date"),
@@ -999,6 +1000,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
   locationLng: z.union([z.number(), z.string().transform(val => val ? parseFloat(val) : null)]).nullable().optional(),
   locationPlaceId: z.string().optional().transform(val => val || ""),
   status: z.enum(["pending", "active", "completed", "cancelled"]).default("pending"),
+  paymentStatus: z.enum(["unpaid", "partial", "paid"]).default("unpaid"),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
 });
 

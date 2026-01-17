@@ -7825,6 +7825,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paidAt: new Date(),
       } as any);
 
+      // Update job paymentStatus to 'paid' if invoice is associated with a job
+      if (invoice.jobId) {
+        await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
+        console.log(`[Payment] Job ${invoice.jobId} paymentStatus updated to 'paid'`);
+      }
+
       console.log(`[Payment] Manual ${method} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
 
       res.json({
@@ -7956,6 +7962,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { sessionId } = req.params;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      // If payment is successful, update invoice and job status
+      if (session.payment_status === 'paid' && session.metadata?.invoiceId) {
+        const invoiceId = parseInt(session.metadata.invoiceId);
+        const invoice = await storage.getInvoice(invoiceId);
+        
+        if (invoice && invoice.status !== 'paid') {
+          // Mark invoice as paid
+          await storage.updateInvoice(invoiceId, {
+            status: 'paid',
+            paidDate: new Date().toISOString().split('T')[0],
+            paidAt: new Date(),
+          } as any);
+          console.log(`[Stripe] Invoice ${invoiceId} marked as paid from session check`);
+
+          // Update job paymentStatus to 'paid' if invoice is associated with a job
+          if (invoice.jobId) {
+            await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
+            console.log(`[Stripe] Job ${invoice.jobId} paymentStatus updated to 'paid'`);
+          }
+        }
+      }
 
       res.json({
         status: session.status,

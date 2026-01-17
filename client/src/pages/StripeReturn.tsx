@@ -2,73 +2,85 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 
-// Log immediately when module loads
 console.log("[StripeReturn] Module loaded at", new Date().toISOString());
 
 export default function StripeReturn() {
-  // Log immediately when component mounts
   console.log("[StripeReturn] Component rendering, href:", window.location.href);
   
   const [, setLocation] = useLocation();
-  const [status, setStatus] = useState("Returning to your dashboard...");
+  const [status, setStatus] = useState("Verifying payment...");
   const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
     console.log("[StripeReturn] useEffect running");
     
-    // Safety: prevent double redirect
     if (hasRedirected) {
       console.log("[StripeReturn] Already redirected, skipping");
       return;
     }
     
-    try {
-      // Diagnostic logging
-      console.log("[StripeReturn] location.href", window.location.href);
-      console.log("[StripeReturn] origin", window.location.origin);
-      console.log("[StripeReturn] pathname", window.location.pathname);
-      console.log("[StripeReturn] search", window.location.search);
-      
-      // Clear query params from URL without reload
-      if (window.location.search) {
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-      
-      // Invalidate relevant queries to get fresh data
+    const processReturn = async () => {
       try {
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      } catch (e) {
-        console.error("[StripeReturn] Query invalidation error:", e);
+        console.log("[StripeReturn] location.href", window.location.href);
+        
+        if (window.location.search) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+        
+        const sessionId = localStorage.getItem("stripe_session");
+        console.log("[StripeReturn] Session ID from localStorage:", sessionId);
+        
+        if (sessionId) {
+          setStatus("Confirming payment...");
+          try {
+            const response = await fetch(`/api/payments/session/${sessionId}`, {
+              credentials: 'include'
+            });
+            const data = await response.json();
+            console.log("[StripeReturn] Session status:", data);
+            
+            if (data.paymentStatus === 'paid') {
+              setStatus("Payment confirmed! Redirecting...");
+            }
+          } catch (e) {
+            console.error("[StripeReturn] Session check error:", e);
+          }
+        }
+        
+        try {
+          queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+        } catch (e) {
+          console.error("[StripeReturn] Query invalidation error:", e);
+        }
+        
+        try {
+          localStorage.removeItem("selectedJobId");
+          localStorage.removeItem("activeJobId");
+          localStorage.removeItem("stripe_session");
+        } catch (e) {
+          console.error("[StripeReturn] localStorage clear error:", e);
+        }
+        
+        console.log("[StripeReturn] State cleaned, navigating to /jobs");
+        setStatus("Redirecting to Jobs...");
+        setHasRedirected(true);
+        
+        setLocation("/jobs", { replace: true });
+        
+      } catch (error) {
+        console.error("[StripeReturn] Error during cleanup:", error);
+        setStatus("Error occurred, redirecting...");
+        setHasRedirected(true);
+        setLocation("/jobs", { replace: true });
       }
-      
-      // Clear any localStorage state that might cause issues
-      try {
-        localStorage.removeItem("selectedJobId");
-        localStorage.removeItem("activeJobId");
-        localStorage.removeItem("stripe_session");
-      } catch (e) {
-        console.error("[StripeReturn] localStorage clear error:", e);
-      }
-      
-      console.log("[StripeReturn] State cleaned, navigating to /jobs");
-      setStatus("Redirecting to Jobs...");
-      setHasRedirected(true);
-      
-      // Navigate to jobs with replace to prevent back-button issues
-      setLocation("/jobs", { replace: true });
-      
-    } catch (error) {
-      console.error("[StripeReturn] Error during cleanup:", error);
-      setStatus("Error occurred, redirecting...");
-      // Safety fallback - redirect anyway
-      setHasRedirected(true);
-      setLocation("/jobs", { replace: true });
-    }
+    };
+
+    processReturn();
   }, [setLocation, hasRedirected]);
 
-  // Safety timeout - if redirect hasn't happened in 2 seconds, force it
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (!hasRedirected) {
@@ -76,12 +88,11 @@ export default function StripeReturn() {
         setHasRedirected(true);
         setLocation("/jobs", { replace: true });
       }
-    }, 2000);
+    }, 5000);
     
     return () => clearTimeout(timeout);
   }, [setLocation, hasRedirected]);
 
-  // Always render visible content - never blank
   return (
     <div style={{ 
       minHeight: '100vh', 

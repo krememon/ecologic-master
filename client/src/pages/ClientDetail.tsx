@@ -29,9 +29,11 @@ function getStatusBadgeVariant(status: string): "default" | "secondary" | "destr
     case 'approved':
     case 'completed':
     case 'active':
+    case 'paid':
       return 'default';
     case 'draft':
     case 'pending':
+    case 'unpaid':
       return 'secondary';
     case 'sent':
       return 'outline';
@@ -41,6 +43,13 @@ function getStatusBadgeVariant(status: string): "default" | "secondary" | "destr
     default:
       return 'secondary';
   }
+}
+
+function getJobDisplayStatus(job: Job & { paymentStatus?: string }): string {
+  if (job.paymentStatus === 'paid') {
+    return 'paid';
+  }
+  return job.status || 'pending';
 }
 
 export default function ClientDetail({ customerId }: ClientDetailProps) {
@@ -275,8 +284,8 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
                         )}
                       </div>
                     </div>
-                    <Badge variant={getStatusBadgeVariant(job.status)}>
-                      {job.status}
+                    <Badge variant={getStatusBadgeVariant(getJobDisplayStatus(job as any))}>
+                      {getJobDisplayStatus(job as any)}
                     </Badge>
                   </div>
                 </CardContent>
