@@ -261,7 +261,8 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       taxCents: number;
       assignedEmployeeIds: string[];
       jobType?: string;
-      requestedStartAt?: string | null;
+      scheduledDate?: string | null;
+      scheduledTime?: string | null;
       items: { 
         name: string; 
         quantity: string; 
@@ -484,18 +485,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     // Calculate tax from per-line-item taxes (matching Jobs flow)
     const taxCents = calculateTotalTax();
 
-    // Combine date + time into single ISO string for requestedStartAt
-    // We create a Date object from local date/time components, then convert to ISO
-    let requestedStartAt: string | null = null;
-    if (schedule.date) {
-      const timeStr = schedule.time || '09:00';
-      const [year, month, day] = schedule.date.split('-').map(Number);
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      // Create date in LOCAL timezone
-      const localDate = new Date(year, month - 1, day, hours, minutes, 0);
-      // Convert to ISO string (UTC) - this preserves the correct moment in time
-      requestedStartAt = localDate.toISOString();
-    }
+    // Send scheduledDate (YYYY-MM-DD) and scheduledTime (HH:mm) as separate strings
+    // to avoid timezone conversion issues on the server
+    const scheduledDate = schedule.date || null;
+    const scheduledTime = schedule.time || (schedule.date ? '09:00' : null);
 
     createEstimateMutation.mutate({
       title: autoTitle,
@@ -512,7 +505,8 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       taxCents,
       assignedEmployeeIds: assignedEmployees,
       jobType: jobType || undefined,
-      requestedStartAt,
+      scheduledDate,
+      scheduledTime,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
         description: item.description?.trim() || null,

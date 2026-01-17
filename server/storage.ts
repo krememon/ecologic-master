@@ -1902,25 +1902,23 @@ export class DatabaseStorage implements IStorage {
     const taxCents = totalTaxCents;
     const totalCents = subtotalCents + taxCents;
 
-    // Process requestedStartAt - convert to Date if string
-    let processedRequestedStartAt: Date | null = null;
+    // Process schedule data - use scheduledDate and scheduledTime directly (no timezone conversion)
+    // scheduledDate is a YYYY-MM-DD string, scheduledTime is an HH:mm string
     let processedScheduledDate: Date | null = null;
     let processedScheduledTime: string | null = null;
     
-    if (payload.requestedStartAt) {
-      if (typeof payload.requestedStartAt === 'string') {
-        processedRequestedStartAt = new Date(payload.requestedStartAt);
-      } else if (payload.requestedStartAt instanceof Date) {
-        processedRequestedStartAt = payload.requestedStartAt;
-      }
-      
-      // Also set scheduledDate and scheduledTime for backward compatibility
-      if (processedRequestedStartAt && !isNaN(processedRequestedStartAt.getTime())) {
-        processedScheduledDate = processedRequestedStartAt;
-        const hours = processedRequestedStartAt.getHours().toString().padStart(2, '0');
-        const minutes = processedRequestedStartAt.getMinutes().toString().padStart(2, '0');
-        processedScheduledTime = `${hours}:${minutes}`;
-      }
+    if (payload.scheduledDate) {
+      // Convert YYYY-MM-DD string to Date (stored as timestamp, but we only care about the date portion)
+      const dateStr = typeof payload.scheduledDate === 'string' 
+        ? payload.scheduledDate.split('T')[0] // Handle both "2026-01-17" and "2026-01-17T..."
+        : payload.scheduledDate.toISOString().split('T')[0];
+      // Create date at noon UTC to avoid any timezone edge cases
+      processedScheduledDate = new Date(`${dateStr}T12:00:00.000Z`);
+    }
+    
+    if (payload.scheduledTime) {
+      // scheduledTime is already "HH:mm" - use directly
+      processedScheduledTime = payload.scheduledTime;
     }
     
     // Create estimate
@@ -1947,7 +1945,6 @@ export class DatabaseStorage implements IStorage {
         taxCents,
         totalCents,
         assignedEmployeeIds: payload.assignedEmployeeIds || [],
-        requestedStartAt: processedRequestedStartAt,
         scheduledDate: processedScheduledDate,
         scheduledTime: processedScheduledTime,
         createdByUserId: userId,

@@ -217,18 +217,13 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     navigate('/jobs', { replace: true });
   };
   
-  // Estimate schedule mutation (for draft estimates) - uses requestedStartAt
+  // Estimate schedule mutation (for draft estimates) - sends scheduledDate and scheduledTime directly
   const estimateScheduleMutation = useMutation({
     mutationFn: async ({ date, time }: { date: string; time: string }) => {
-      // Combine date + time into single ISO string
-      let requestedStartAt: string | null = null;
-      if (date) {
-        const timeStr = time || '09:00';
-        requestedStartAt = `${date}T${timeStr}:00`;
-      }
-      console.log('[EstimateSchedule] saving requestedStartAt:', requestedStartAt);
+      // Send date (YYYY-MM-DD) and time (HH:mm) as separate strings to avoid timezone issues
       const res = await apiRequest('PATCH', `/api/estimates/${estimateId}/schedule`, {
-        requestedStartAt,
+        scheduledDate: date || null,
+        scheduledTime: time || '09:00',
       });
       return res.json();
     },
@@ -244,14 +239,16 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   });
   
   const openEstimateScheduleModal = () => {
-    // Pre-populate with existing schedule from requestedStartAt
-    const rawDate = (estimate as any)?.requestedStartAt;
+    // Pre-populate with existing schedule from scheduledDate and scheduledTime
+    const rawDate = (estimate as any)?.scheduledDate;
+    const rawTime = (estimate as any)?.scheduledTime;
     if (rawDate) {
-      const dateObj = new Date(rawDate);
-      const dateStr = dateObj.toISOString().split('T')[0];
-      const timeStr = dateObj.toTimeString().slice(0, 5); // HH:MM
+      // Extract YYYY-MM-DD from scheduledDate (handles both ISO string and Date)
+      const dateStr = typeof rawDate === 'string' 
+        ? rawDate.split('T')[0] 
+        : new Date(rawDate).toISOString().split('T')[0];
       setEstimateScheduleDate(dateStr);
-      setEstimateScheduleTime(timeStr);
+      setEstimateScheduleTime(rawTime || '09:00');
     } else {
       setEstimateScheduleDate('');
       setEstimateScheduleTime('');
@@ -476,21 +473,32 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               </div>
               {estimate.status === 'draft' && (
                 <Button variant="outline" size="sm" onClick={openEstimateScheduleModal}>
-                  {(estimate as any).requestedStartAt ? 'Edit' : 'Set Schedule'}
+                  {(estimate as any).scheduledDate ? 'Edit' : 'Set Schedule'}
                 </Button>
               )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {(() => {
-              const scheduleInfo = formatEstimateRequestedSchedule({ id: estimate.id, requestedStartAt: (estimate as any).requestedStartAt });
-              if (!scheduleInfo) {
+              const rawDate = (estimate as any)?.scheduledDate;
+              const rawTime = (estimate as any)?.scheduledTime;
+              if (!rawDate) {
                 return <p className="text-muted-foreground">Not scheduled</p>;
               }
+              // Format date for display
+              const dateStr = typeof rawDate === 'string' ? rawDate.split('T')[0] : new Date(rawDate).toISOString().split('T')[0];
+              const [year, month, day] = dateStr.split('-').map(Number);
+              const dateFormatted = new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+              // Format time for display
+              const timeStr = rawTime || '09:00';
+              const [hours, minutes] = timeStr.split(':').map(Number);
+              const period = hours >= 12 ? 'PM' : 'AM';
+              const displayHours = hours % 12 || 12;
+              const timeFormatted = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
               return (
                 <div className="space-y-1">
-                  <p className="font-medium">{scheduleInfo.date}</p>
-                  <p className="text-muted-foreground">{scheduleInfo.time}</p>
+                  <p className="font-medium">{dateFormatted}</p>
+                  <p className="text-muted-foreground">{timeFormatted}</p>
                 </div>
               );
             })()}

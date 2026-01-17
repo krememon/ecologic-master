@@ -1,0 +1,71 @@
+AGENT — SCHEDULE BLOCK SHOWING, BUT TIME IS WRONG (FIX TIMEZONE / DATE+TIME COMBINE)
+
+CONTEXT:
+Estimates are now appearing on the Schedule grid (good),
+but the block is being placed at the WRONG time compared to what I selected in the schedule modal.
+
+Example: I scheduled it for one time, but it renders at 2:00 PM (wrong).
+
+GOAL:
+Make schedule blocks render at the EXACT time the user selected (no hour offsets, no timezone drift).
+
+IMPORTANT:
+- Do NOT change the UI layout.
+- Do NOT add new modals.
+- Fix the time calculation and normalization only.
+
+LIKELY ROOT CAUSE:
+We are mixing:
+- scheduledDate stored as a Date with UTC time component
+- scheduledTime stored as "HH:mm"
+and then converting between UTC/local incorrectly (double-applying time or shifting timezones).
+
+WHAT TO DO:
+
+1) CONFIRM WHAT TIME IS SAVED
+In the schedule items normalization (server or client), log ONE estimate item (temporary):
+- estimate.id
+- scheduledDate raw (as ISO)
+- scheduledTime string
+- computed dateOnly (YYYY-MM-DD)
+- computed startAtLocal (Date + toString)
+- computed minutesFromMidnight
+
+This will show exactly where the shift is happening.
+
+2) USE A SINGLE SOURCE OF TRUTH FOR THE TIME
+The user-selected time MUST come from scheduledTime ("HH:mm").
+Do NOT take hours/minutes from scheduledDate at all.
+
+So the correct computation is:
+
+A) Extract local date-only string from scheduledDate:
+- dateOnly = YYYY-MM-DD in LOCAL timezone for the selected day
+
+B) Combine dateOnly + scheduledTime into a LOCAL datetime (no UTC conversion):
+- startAtLocal = new Date(`${dateOnly}T${scheduledTime}:00`)
+
+C) Place block using startAtLocal (local hours/minutes):
+- minutesFromMidnight = startAtLocal.getHours() * 60 + startAtLocal.getMinutes()
+
+DO NOT:
+- use Date.UTC
+- use toISOString() for placement math
+- parse scheduledDate’s time portion
+- add timezone offsets manually
+
+3) FIX FILTERING VS PLACEMENT CONSISTENCY
+Make sure the same dateOnly used for filtering is also used for placement.
+(If filtering uses local date but placement uses UTC, times will appear shifted.)
+
+4) JOBS AND ESTIMATES MUST USE THE SAME NORMALIZATION
+If jobs also use split fields (startDate + scheduledTime), apply the same method.
+This prevents one type being correct while the other is offset.
+
+5) REMOVE TEMP LOGS AFTER FIX
+After confirming the time now matches exactly what was selected, remove the temporary logs.
+
+DELIVERABLE:
+- The estimate/job schedule block appears at the EXACT selected time
+- No timezone offset bugs (no “moved by hours” issues)
+- Same logic works consistently for both jobs and estimates

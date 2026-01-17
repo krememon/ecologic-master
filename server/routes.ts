@@ -4346,7 +4346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, jobAddressLine1, jobCity, jobState, jobZip, taxCents, assignedEmployeeIds, jobId, jobType, requestedStartAt } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, jobAddressLine1, jobCity, jobState, jobZip, taxCents, assignedEmployeeIds, jobId, jobType, scheduledDate, scheduledTime } = req.body;
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -4415,12 +4415,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Process requestedStartAt - this is the single source of truth for estimate schedule
-      let processedRequestedStartAt: Date | null = null;
-      if (requestedStartAt) {
-        processedRequestedStartAt = new Date(requestedStartAt);
-      }
-
       const estimate = await storage.createEstimate(
         { 
           jobId: validatedJobId, 
@@ -4438,7 +4432,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
           jobType: jobType?.trim() || undefined,
-          requestedStartAt: processedRequestedStartAt,
+          scheduledDate: scheduledDate || undefined,
+          scheduledTime: scheduledTime || undefined,
           items: normalizedItems 
         },
         companyId,
@@ -4731,7 +4726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // PATCH /api/estimates/:id/schedule - Save schedule to estimate (for draft estimates)
-  // Uses requestedStartAt as single source of truth
+  // Accepts scheduledDate (YYYY-MM-DD) and scheduledTime (HH:mm) directly to avoid timezone issues
   app.patch('/api/estimates/:id/schedule', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
     try {
       const companyId = req.companyId;
@@ -4743,30 +4738,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
       
-      const { requestedStartAt } = req.body;
+      const { scheduledDate, scheduledTime } = req.body;
       
-      console.log('[Estimates] schedule PATCH received:', { estimateId, requestedStartAt });
-      
-      // Parse requestedStartAt and also compute scheduledDate/scheduledTime for backward compatibility
-      let parsedRequestedStartAt: Date | null = null;
+      // Parse scheduledDate (YYYY-MM-DD string) to Date
       let parsedScheduledDate: Date | null = null;
       let parsedScheduledTime: string | null = null;
       
-      if (requestedStartAt) {
-        parsedRequestedStartAt = new Date(requestedStartAt);
-        if (!isNaN(parsedRequestedStartAt.getTime())) {
-          parsedScheduledDate = parsedRequestedStartAt;
-          const hours = parsedRequestedStartAt.getHours().toString().padStart(2, '0');
-          const minutes = parsedRequestedStartAt.getMinutes().toString().padStart(2, '0');
-          parsedScheduledTime = `${hours}:${minutes}`;
-        }
+      if (scheduledDate) {
+        const dateStr = typeof scheduledDate === 'string' 
+          ? scheduledDate.split('T')[0] 
+          : scheduledDate;
+        // Store at noon UTC to avoid timezone edge cases
+        parsedScheduledDate = new Date(`${dateStr}T12:00:00.000Z`);
       }
       
-      // Update estimate with requestedStartAt AND scheduledDate/scheduledTime
+      if (scheduledTime) {
+        // Use the time string directly as provided (HH:mm)
+        parsedScheduledTime = scheduledTime;
+      }
+      
+      // Update estimate with scheduledDate and scheduledTime
       const [updated] = await db
         .update(estimates)
         .set({
-          requestedStartAt: parsedRequestedStartAt,
           scheduledDate: parsedScheduledDate,
           scheduledTime: parsedScheduledTime,
           updatedAt: new Date(),
@@ -4774,7 +4768,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(estimates.id, estimateId))
         .returning();
       
-      console.log(`[Estimates] schedule SAVED estimateId=${estimateId} requestedStartAt=${updated.requestedStartAt} scheduledDate=${updated.scheduledDate} scheduledTime=${updated.scheduledTime}`);
       res.json(updated);
     } catch (error) {
       console.error("Error saving estimate schedule:", error);
