@@ -688,12 +688,7 @@ export default function Jobs() {
       setIsEstimateSelectionMode(false);
       setEstimateDeleteConfirmOpen(false);
       
-      if (successCount > 0 && failedResults.length === 0) {
-        toast({
-          title: "Estimates deleted",
-          description: `Successfully deleted ${successCount} estimate${successCount !== 1 ? 's' : ''}.`,
-        });
-      } else if (successCount > 0 && failedResults.length > 0) {
+      if (successCount > 0 && failedResults.length > 0) {
         toast({
           title: "Partially deleted",
           description: `Deleted ${successCount}, but ${failedResults.length} failed: ${failedResults[0].error}`,
