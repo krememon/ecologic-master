@@ -367,7 +367,7 @@ export function PriceBookPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-md max-h-[85vh] flex flex-col">
+      <DialogContent className="w-[95vw] max-w-md max-h-[85vh] flex flex-col" preventAutoFocus>
         <DialogHeader>
           <DialogTitle>Add Line Items</DialogTitle>
         </DialogHeader>

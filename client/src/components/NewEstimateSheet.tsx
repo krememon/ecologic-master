@@ -757,7 +757,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
 
       {/* SELECT CUSTOMER Modal */}
       <Dialog open={customerModalOpen} onOpenChange={setCustomerModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0" preventAutoFocus>
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <button 
               onClick={() => setCustomerModalOpen(false)}
@@ -1198,7 +1198,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
         setEmployeesModalOpen(open);
         if (!open) setEmployeeSearch("");
       }}>
-        <DialogContent className="w-[95vw] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogContent className="w-[95vw] max-w-md max-h-[80vh] overflow-hidden flex flex-col" preventAutoFocus>
           <DialogHeader>
             <DialogTitle>Assign Employees</DialogTitle>
           </DialogHeader>

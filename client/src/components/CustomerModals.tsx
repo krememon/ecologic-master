@@ -79,7 +79,7 @@ export function SelectCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden" preventAutoFocus>
         <DialogHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
           <Button
             variant="ghost"
