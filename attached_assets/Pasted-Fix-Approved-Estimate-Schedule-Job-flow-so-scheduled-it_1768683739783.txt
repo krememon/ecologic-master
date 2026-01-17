@@ -1,0 +1,76 @@
+Fix Approved Estimate → Schedule Job flow so scheduled items appear on Schedule
+
+CURRENT
+Creating an Estimate correctly posts it to the Schedule.
+However, when the Estimate is approved and the user sets a Date and Time using the “Schedule Job” modal, the item does NOT appear on the Schedule.
+
+This happens even though the Schedule modal submits successfully with no visible error.
+
+GOAL
+When an Estimate is approved and scheduled:
+- It must immediately appear on the Schedule (Day/List views)
+- The scheduled date and time must be respected
+- The item must persist after refresh
+- No RBAC or visibility rules are broken
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) VERIFY FRONTEND REQUEST
+- Open devtools Network tab
+- Approve an Estimate
+- Use “Schedule Job” modal and click Schedule
+- Confirm:
+  - Which endpoint is called
+  - What ID is sent (estimateId vs jobId)
+  - Payload includes scheduled date/time
+  - Response is successful (no silent failure)
+
+DO NOT swallow errors — log them visibly if present.
+
+2) FIX BACKEND DATA WRITE
+Ensure the Schedule Job action actually persists scheduling data.
+
+One of the following MUST happen (match existing architecture):
+
+OPTION A — Schedule stays tied to Estimate
+- Save scheduling fields on the Estimate:
+  - scheduledAt (preferred single datetime)
+- Ensure approved estimates with scheduledAt are included in schedule queries
+
+OPTION B — Approval creates or links a Job
+- Ensure a Job exists when approving an Estimate
+- Save scheduledAt on the Job
+- Ensure schedule feed includes scheduled Jobs
+
+IMPORTANT:
+- Do NOT update only frontend state
+- Confirm DB row is actually written
+
+3) FIX SCHEDULE QUERY LOGIC
+Locate the Schedule data source:
+- Identify which endpoint feeds /schedule
+- Confirm it includes:
+  - Approved estimates or jobs WITH scheduledAt
+  - Correct date filtering
+- Ensure approved items are not being filtered out accidentally
+
+4) FORCE UI REFRESH AFTER SCHEDULING
+After scheduling from the modal:
+- Refetch schedule data OR
+- Update schedule state from the source of truth
+
+User should NOT need to manually refresh the page.
+
+5) ADD TEMP LOGGING (REMOVE AFTER FIX)
+Add minimal logs to confirm flow:
+- Frontend: log ID + payload on Schedule click
+- Backend: log received ID, payload, and DB update result
+
+Remove logs once confirmed working.
+
+DONE WHEN
+- Creating Estimate → shows on Schedule
+- Approving + Scheduling Estimate → shows on Schedule immediately
+- Scheduled time renders correctly
+- Persists after refresh
+- No RBAC leaks or visibility regressions

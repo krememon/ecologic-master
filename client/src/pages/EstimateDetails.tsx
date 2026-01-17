@@ -195,10 +195,11 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       return res.json();
     },
     onSuccess: (data) => {
-      console.log('[ScheduleSaved]', data.scheduledAt);
+      console.log('[ScheduleSaved]', { startDate: data.startDate, scheduledTime: data.scheduledTime });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       setIsScheduleModalOpen(false);
-      navigate('/jobs', { replace: true });
+      navigate('/schedule', { replace: true });
     },
     onError: () => {
       toast({ title: "Failed to schedule job", variant: "destructive" });
@@ -213,6 +214,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   
   const handleSkipSchedule = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
     setIsScheduleModalOpen(false);
     navigate('/jobs', { replace: true });
   };

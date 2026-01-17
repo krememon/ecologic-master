@@ -4841,6 +4841,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const estimateScheduledDate = (estimate as any).scheduledDate;
         const estimateScheduledTime = (estimate as any).scheduledTime;
         
+        // Convert scheduledDate to YYYY-MM-DD string (handles Date objects and ISO strings)
+        let jobStartDate: string | null = null;
+        if (estimateScheduledDate) {
+          if (typeof estimateScheduledDate === 'string') {
+            // ISO string like "2026-01-17T12:00:00.000Z" - extract date part
+            jobStartDate = estimateScheduledDate.split('T')[0];
+          } else if (estimateScheduledDate instanceof Date) {
+            // Date object - convert to YYYY-MM-DD
+            jobStartDate = estimateScheduledDate.toISOString().split('T')[0];
+          }
+        }
+        
         const [newJob] = await tx.insert(jobs).values({
           companyId,
           clientId: (estimate as any).clientId || null,
@@ -4853,7 +4865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           location: (estimate as any).customerAddress || null,
           notes: estimate.notes || null,
           jobType: estimate.jobType || null,
-          startDate: estimateScheduledDate ? (typeof estimateScheduledDate === 'string' ? estimateScheduledDate.split('T')[0] : null) : null,
+          startDate: jobStartDate,
           scheduledTime: estimateScheduledTime || null,
         }).returning();
 
