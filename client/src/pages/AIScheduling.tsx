@@ -362,9 +362,6 @@ export default function AIScheduling() {
           >
             Today
           </button>
-          <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-            <Calendar className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-          </button>
           <button 
             onClick={() => setIsViewOptionsOpen(true)}
             className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
