@@ -14,7 +14,6 @@ import {
   ChevronDown, 
   ChevronLeft, 
   ChevronRight, 
-  Plus, 
   MapPin, 
   SlidersHorizontal,
   List,
@@ -23,7 +22,6 @@ import {
 import { startOfWeekLocal, addDaysLocal, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
-import { NewJobSheet } from "@/components/NewJobSheet";
 import { ViewOptionsModal, ExtendedViewMode } from "@/components/ViewOptionsModal";
 
 interface JobWithSchedule {
@@ -75,7 +73,6 @@ export default function AIScheduling() {
   
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [viewMode, setViewMode] = useState<ExtendedViewMode>('day');
-  const [isNewJobOpen, setIsNewJobOpen] = useState(false);
   const [isViewOptionsOpen, setIsViewOptionsOpen] = useState(false);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [showUnscheduledOnMap, setShowUnscheduledOnMap] = useState(true);
@@ -637,19 +634,6 @@ export default function AIScheduling() {
           </div>
         )}
       </div>
-
-      <button
-        onClick={() => setIsNewJobOpen(true)}
-        className="fixed bottom-24 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95 z-50"
-      >
-        <Plus className="h-6 w-6" />
-      </button>
-
-      <NewJobSheet
-        open={isNewJobOpen}
-        onOpenChange={setIsNewJobOpen}
-        onJobCreated={() => setIsNewJobOpen(false)}
-      />
 
       <ViewOptionsModal
         isOpen={isViewOptionsOpen}
