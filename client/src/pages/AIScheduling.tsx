@@ -61,7 +61,7 @@ interface Employee {
   role: string;
 }
 
-const HOUR_HEIGHT = 80;
+const HOUR_HEIGHT = 120;
 const START_HOUR = 0;
 const END_HOUR = 24;
 
