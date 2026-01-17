@@ -107,27 +107,10 @@ export default function AIScheduling() {
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
   const selectedDayStr = dateToYmdLocal(selectedDate);
 
-  const { data: rawJobs = [], dataUpdatedAt } = useQuery<JobWithSchedule[]>({
+  const { data: rawJobs = [] } = useQuery<JobWithSchedule[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
-    staleTime: 0, // Always consider data stale
-    refetchOnMount: true, // Refetch when component mounts
   });
-  
-  // Debug: Log raw jobs when they change
-  useEffect(() => {
-    console.log('[Schedule] rawJobs updated at:', new Date(dataUpdatedAt).toISOString(), 'count:', rawJobs.length);
-    if (rawJobs.length > 0) {
-      console.log('[Schedule] rawJobs sample:', rawJobs.slice(0, 3).map(j => ({
-        id: j.id,
-        title: j.title,
-        startDate: j.startDate,
-        startDateType: typeof j.startDate,
-        scheduledTime: j.scheduledTime,
-        status: j.status
-      })));
-    }
-  }, [rawJobs, dataUpdatedAt]);
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/company/members"],
@@ -199,23 +182,8 @@ export default function AIScheduling() {
   const dailyJobs = useMemo(() => {
     if (!Array.isArray(jobs)) return [];
     
-    // Debug: Log all jobs with schedule data
-    console.log('[Schedule] All jobs:', jobs.map(j => ({ 
-      id: j.id, 
-      startDate: j.startDate, 
-      startDateType: typeof j.startDate,
-      scheduledTime: j.scheduledTime,
-      crewAssignments: j.crewAssignments?.length || 0,
-      assignedEmployeeIds: j.assignedEmployeeIds?.length || 0
-    })));
-    console.log('[Schedule] Selected day:', selectedDayStr);
-    console.log('[Schedule] Member filter:', { initialized: memberFilterInitialized, selectedCount: selectedMemberIds.length, selectedIds: selectedMemberIds });
-    
     return jobs.filter((job) => {
-      if (!job.startDate) {
-        console.log('[Schedule] Job', job.id, 'has no startDate, skipping');
-        return false;
-      }
+      if (!job.startDate) return false;
       
       // Handle both string (YYYY-MM-DD) and Date object formats
       const rawDate = job.startDate;
@@ -230,23 +198,12 @@ export default function AIScheduling() {
         jobDateStr = dateToYmdLocal(dateObj);
       }
       
-      console.log('[Schedule] Job', job.id, 'date comparison:', jobDateStr, '===', selectedDayStr, '?', jobDateStr === selectedDayStr);
-      
-      if (jobDateStr !== selectedDayStr) {
-        console.log('[Schedule] Job', job.id, 'date mismatch, skipping');
-        return false;
-      }
+      if (jobDateStr !== selectedDayStr) return false;
       
       // If member filter not initialized yet, show all jobs for the day
-      if (!memberFilterInitialized) {
-        console.log('[Schedule] Job', job.id, 'INCLUDED (member filter not initialized)');
-        return true;
-      }
+      if (!memberFilterInitialized) return true;
       
-      if (selectedMemberIds.length === 0) {
-        console.log('[Schedule] Job', job.id, 'no members selected, skipping');
-        return false;
-      }
+      if (selectedMemberIds.length === 0) return false;
       
       const crew = job.crewAssignments || [];
       const assignedIds = job.assignedEmployeeIds || [];
@@ -255,14 +212,10 @@ export default function AIScheduling() {
         ...assignedIds
       ]));
       
-      if (allAssigned.length === 0) {
-        console.log('[Schedule] Job', job.id, 'INCLUDED (unassigned job)');
-        return true;
-      }
+      // Unassigned jobs show for all selected members
+      if (allAssigned.length === 0) return true;
       
-      const included = allAssigned.some(id => selectedMemberIds.includes(id));
-      console.log('[Schedule] Job', job.id, included ? 'INCLUDED' : 'EXCLUDED by member filter');
-      return included;
+      return allAssigned.some(id => selectedMemberIds.includes(id));
     }).sort((a, b) => {
       const timeA = a.scheduledTime || '99:99';
       const timeB = b.scheduledTime || '99:99';

@@ -1384,19 +1384,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const jobs = await storage.getJobs(company.id);
-      
-      // Debug: Log schedule fields for first job
-      if (jobs.length > 0) {
-        const firstJob = jobs[0];
-        console.log('[API/jobs] First job schedule fields:', {
-          id: firstJob.id,
-          startDate: firstJob.startDate,
-          startDateType: typeof firstJob.startDate,
-          scheduledTime: firstJob.scheduledTime,
-          status: firstJob.status
-        });
-      }
-      
       res.json(jobs);
     } catch (error) {
       console.error("Error fetching jobs:", error);
