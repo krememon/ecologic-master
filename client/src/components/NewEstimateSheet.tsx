@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign
+  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign, MapPin
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -139,6 +139,14 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
   const [jobType, setJobType] = useState<string | null>(null);
+  
+  // Job location state
+  const [jobLocation, setJobLocation] = useState({
+    addressLine1: "",
+    city: "",
+    state: "",
+    zip: ""
+  });
 
   // Modal states
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -149,6 +157,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [jobLocationModalOpen, setJobLocationModalOpen] = useState(false);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -219,6 +228,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       customerEmail?: string;
       customerPhone?: string;
       customerAddress?: string;
+      jobAddressLine1?: string;
+      jobCity?: string;
+      jobState?: string;
+      jobZip?: string;
       taxCents: number;
       assignedEmployeeIds: string[];
       jobType?: string;
@@ -315,6 +328,28 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setTags([]);
     setNewTagInput("");
     setJobType(null);
+    setJobLocation({ addressLine1: "", city: "", state: "", zip: "" });
+  };
+  
+  // Helper to format job location for display
+  const getJobLocationDisplayText = () => {
+    const parts = [jobLocation.addressLine1, jobLocation.city, jobLocation.state, jobLocation.zip].filter(Boolean);
+    if (parts.length === 0) return undefined;
+    if (jobLocation.addressLine1 && jobLocation.city) {
+      return `${jobLocation.addressLine1}, ${jobLocation.city}`;
+    }
+    return parts[0];
+  };
+  
+  // Helper to parse customer address into location fields
+  const parseCustomerAddress = (address: string) => {
+    // Simple parsing - just set address line, user can adjust in modal
+    return {
+      addressLine1: address,
+      city: "",
+      state: "",
+      zip: ""
+    };
   };
 
   const handleSave = async () => {
@@ -376,6 +411,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       customerEmail: selectedCustomer?.email || undefined,
       customerPhone: selectedCustomer?.phone || undefined,
       customerAddress: selectedCustomer?.address || undefined,
+      jobAddressLine1: jobLocation.addressLine1 || undefined,
+      jobCity: jobLocation.city || undefined,
+      jobState: jobLocation.state || undefined,
+      jobZip: jobLocation.zip || undefined,
       taxCents,
       assignedEmployeeIds: assignedEmployees,
       jobType: jobType || undefined,
@@ -549,6 +588,15 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               testId="row-job-type"
             />
 
+            <SectionHeader title="Job Location" />
+            <InfoRow
+              icon={MapPin}
+              label="Add address"
+              value={getJobLocationDisplayText()}
+              onClick={() => setJobLocationModalOpen(true)}
+              testId="row-job-location"
+            />
+
           </div>
         </DialogContent>
       </Dialog>
@@ -640,6 +688,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
                     }`}
                     onClick={() => {
                       setSelectedCustomer(customer);
+                      // Auto-fill job location from customer address
+                      if (customer.address) {
+                        setJobLocation(parseCustomerAddress(customer.address));
+                      }
                       setCustomerModalOpen(false);
                       setCustomerSearch("");
                     }}
@@ -1062,6 +1114,66 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               ))}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* JOB LOCATION Modal */}
+      <Dialog open={jobLocationModalOpen} onOpenChange={setJobLocationModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Job Location</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="addressLine1">Street Address</Label>
+              <Input
+                id="addressLine1"
+                value={jobLocation.addressLine1}
+                onChange={(e) => setJobLocation({ ...jobLocation, addressLine1: e.target.value })}
+                placeholder="123 Main St"
+                data-testid="input-job-address-line1"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={jobLocation.city}
+                onChange={(e) => setJobLocation({ ...jobLocation, city: e.target.value })}
+                placeholder="Anytown"
+                data-testid="input-job-city"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="state">State</Label>
+                <Input
+                  id="state"
+                  value={jobLocation.state}
+                  onChange={(e) => setJobLocation({ ...jobLocation, state: e.target.value })}
+                  placeholder="CA"
+                  data-testid="input-job-state"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="zip">ZIP Code</Label>
+                <Input
+                  id="zip"
+                  value={jobLocation.zip}
+                  onChange={(e) => setJobLocation({ ...jobLocation, zip: e.target.value })}
+                  placeholder="12345"
+                  data-testid="input-job-zip"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setJobLocationModalOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

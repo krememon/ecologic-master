@@ -4322,7 +4322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, taxCents, assignedEmployeeIds, jobId, jobType, requestedStartAt } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, jobAddressLine1, jobCity, jobState, jobZip, taxCents, assignedEmployeeIds, jobId, jobType, requestedStartAt } = req.body;
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -4403,6 +4403,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customerEmail: customerEmail?.trim() || undefined,
           customerPhone: customerPhone?.trim() || undefined,
           customerAddress: customerAddress?.trim() || undefined,
+          jobAddressLine1: jobAddressLine1?.trim() || undefined,
+          jobCity: jobCity?.trim() || undefined,
+          jobState: jobState?.trim() || undefined,
+          jobZip: jobZip?.trim() || undefined,
           taxCents: parsedTaxCents,
           assignedEmployeeIds: Array.isArray(assignedEmployeeIds) ? assignedEmployeeIds : [],
           jobType: jobType?.trim() || undefined,

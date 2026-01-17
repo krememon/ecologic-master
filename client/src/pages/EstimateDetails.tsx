@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2 } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2, MapPin } from "lucide-react";
 import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
@@ -382,11 +382,34 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           </CardHeader>
           <CardContent>
             {estimate.customerName ? (
-              <div className="space-y-1">
-                <p className="font-medium">{estimate.customerName}</p>
-                {estimate.customerEmail && <p className="text-sm text-muted-foreground">{estimate.customerEmail}</p>}
-                {estimate.customerPhone && <p className="text-sm text-muted-foreground">{estimate.customerPhone}</p>}
-                {estimate.customerAddress && <p className="text-sm text-muted-foreground">{estimate.customerAddress}</p>}
+              <div className="space-y-4">
+                <div>
+                  <p className="font-medium">{estimate.customerName}</p>
+                </div>
+                {(() => {
+                  const jobAddress = [
+                    (estimate as any).jobAddressLine1,
+                    (estimate as any).jobCity,
+                    (estimate as any).jobState,
+                    (estimate as any).jobZip
+                  ].filter(Boolean).join(', ');
+                  if (jobAddress) {
+                    return (
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Address</p>
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(jobAddress)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          {jobAddress}
+                        </a>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             ) : (
               <p className="text-muted-foreground">No customer assigned</p>
