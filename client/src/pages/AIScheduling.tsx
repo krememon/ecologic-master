@@ -2,12 +2,28 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, TrendingUp, AlertTriangle, Clock, User, MapPin, Users } from "lucide-react";
-import { startOfWeekLocal, addDaysLocal, fmtWeekOf, fmtDowShort, fmtDayNumber, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { 
+  Calendar, 
+  ChevronDown, 
+  ChevronLeft, 
+  ChevronRight, 
+  Plus, 
+  MapPin, 
+  SlidersHorizontal,
+  List,
+  Map
+} from "lucide-react";
+import { startOfWeekLocal, addDaysLocal, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
+import { NewJobSheet } from "@/components/NewJobSheet";
 
 interface JobWithSchedule {
   id: number;
@@ -37,28 +53,42 @@ interface JobWithSchedule {
   }>;
 }
 
+interface Employee {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  profileImageUrl: string | null;
+  role: string;
+}
+
+type ViewMode = 'day' | 'list' | 'map';
+
+const HOUR_HEIGHT = 60;
+const START_HOUR = 6;
+const END_HOUR = 20;
+
 export default function AIScheduling() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { role } = useCan();
   const [, setLocation] = useLocation();
   
-  const [selectedWeek, setSelectedWeek] = useState<Date>(() => {
-    return startOfWeekLocal(new Date(), 0);
-  });
-  
-  const [selectedDay, setSelectedDay] = useState<string | null>(() => {
-    const today = new Date();
-    const weekStart = startOfWeekLocal(new Date(), 0);
-    const weekEnd = addDaysLocal(weekStart, 6);
-    if (today >= weekStart && today <= weekEnd) {
-      return dateToYmdLocal(today);
-    }
-    return dateToYmdLocal(weekStart);
-  });
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const [isNewJobOpen, setIsNewJobOpen] = useState(false);
+
+  const selectedWeek = useMemo(() => startOfWeekLocal(selectedDate, 0), [selectedDate]);
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
+  const selectedDayStr = dateToYmdLocal(selectedDate);
 
   const { data: rawJobs = [] } = useQuery<JobWithSchedule[]>({
     queryKey: ["/api/jobs"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ["/api/company/members"],
     enabled: isAuthenticated,
   });
 
@@ -87,113 +117,108 @@ export default function AIScheduling() {
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
-      return;
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  useEffect(() => {
-    const today = new Date();
-    const weekEnd = addDaysLocal(selectedWeek, 6);
-    if (today >= selectedWeek && today <= weekEnd) {
-      setSelectedDay(dateToYmdLocal(today));
-    } else {
-      setSelectedDay(dateToYmdLocal(selectedWeek));
-    }
-  }, [selectedWeek]);
-
-  const weekDates = Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i));
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-      case 'active':
-      case 'in_progress':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'completed':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-      default:
-        return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300';
-    }
-  };
-
   const dailyJobs = useMemo(() => {
-    if (!selectedDay || !Array.isArray(jobs)) return [];
+    if (!Array.isArray(jobs)) return [];
     
-    const filtered = jobs.filter((job) => {
+    return jobs.filter((job) => {
       if (!job.startDate) return false;
       const jobDate = parseYmdLocal(job.startDate);
-      return dateToYmdLocal(jobDate) === selectedDay;
-    });
-
-    filtered.sort((a, b) => {
+      return dateToYmdLocal(jobDate) === selectedDayStr;
+    }).sort((a, b) => {
       const timeA = a.scheduledTime || '99:99';
       const timeB = b.scheduledTime || '99:99';
       return timeA.localeCompare(timeB);
     });
+  }, [jobs, selectedDayStr]);
 
-    return filtered;
-  }, [jobs, selectedDay]);
-
-  const weeklyStats = useMemo(() => {
-    if (!Array.isArray(jobs)) return { total: 0, planning: 0, active: 0 };
+  const jobsByEmployee = useMemo(() => {
+    const grouped: Record<string, { employee: { id: string; name: string; profileImageUrl: string | null } | null; jobs: JobWithSchedule[] }> = {};
     
-    const weekJobIds = new Set<number>();
-    weekDates.forEach(date => {
-      const dateStr = dateToYmdLocal(date);
-      jobs.forEach((job) => {
-        if (!job.startDate) return;
-        const jobDate = parseYmdLocal(job.startDate);
-        if (dateToYmdLocal(jobDate) === dateStr) {
-          weekJobIds.add(job.id);
+    grouped['unassigned'] = { employee: null, jobs: [] };
+    
+    if (role === 'TECHNICIAN' && user?.id) {
+      const currentUser = employees.find(e => e.id === user.id);
+      if (currentUser) {
+        const name = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.email;
+        grouped[user.id] = { 
+          employee: { id: user.id, name, profileImageUrl: currentUser.profileImageUrl },
+          jobs: [] 
+        };
+      }
+      
+      dailyJobs.forEach(job => {
+        const crew = job.crewAssignments || [];
+        if (crew.length === 0) {
+          grouped['unassigned'].jobs.push(job);
+        } else {
+          if (grouped[user.id]) {
+            grouped[user.id].jobs.push(job);
+          }
         }
       });
+      
+      return Object.entries(grouped)
+        .filter(([_, data]) => data.jobs.length > 0)
+        .sort((a, b) => {
+          if (a[0] === 'unassigned') return 1;
+          if (b[0] === 'unassigned') return -1;
+          return 0;
+        });
+    }
+    
+    employees.forEach(emp => {
+      const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email;
+      grouped[emp.id] = { 
+        employee: { id: emp.id, name, profileImageUrl: emp.profileImageUrl },
+        jobs: [] 
+      };
     });
 
-    return {
-      total: weekJobIds.size,
-      planning: jobs.filter((j) => j.status === 'planning').length,
-      active: jobs.filter((j) => j.status === 'in_progress' || j.status === 'active').length,
-    };
-  }, [jobs, weekDates]);
-
-  const getEmployeeDisplay = (job: JobWithSchedule) => {
-    const crew = job.crewAssignments || [];
-    if (crew.length === 0) return null;
-
-    return (
-      <div className="flex items-center gap-2">
-        <div className="flex -space-x-2">
-          {crew.slice(0, 3).map((assignment) => {
+    dailyJobs.forEach(job => {
+      const crew = job.crewAssignments || [];
+      if (crew.length === 0) {
+        grouped['unassigned'].jobs.push(job);
+      } else {
+        crew.forEach(assignment => {
+          if (grouped[assignment.userId]) {
+            grouped[assignment.userId].jobs.push(job);
+          } else {
             const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
-            const initials = ((assignment.user.firstName?.[0] || '') + (assignment.user.lastName?.[0] || '')).toUpperCase() || assignment.user.email[0].toUpperCase();
-            
-            return assignment.user.profileImageUrl ? (
-              <img
-                key={assignment.userId}
-                src={assignment.user.profileImageUrl}
-                alt={name}
-                title={name}
-                className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 object-cover"
-              />
-            ) : (
-              <div
-                key={assignment.userId}
-                title={name}
-                className="h-7 w-7 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-700 dark:text-slate-300"
-              >
-                {initials}
-              </div>
-            );
-          })}
-        </div>
-        {crew.length > 3 && (
-          <span className="text-xs text-muted-foreground">+{crew.length - 3}</span>
-        )}
-      </div>
-    );
+            grouped[assignment.userId] = {
+              employee: { id: assignment.userId, name, profileImageUrl: assignment.user.profileImageUrl },
+              jobs: [job]
+            };
+          }
+        });
+      }
+    });
+
+    return Object.entries(grouped)
+      .filter(([_, data]) => data.jobs.length > 0 || data.employee !== null)
+      .sort((a, b) => {
+        if (a[0] === 'unassigned') return 1;
+        if (b[0] === 'unassigned') return -1;
+        return (a[1].employee?.name || '').localeCompare(b[1].employee?.name || '');
+      });
+  }, [dailyJobs, employees, role, user?.id]);
+
+  const navigateMonth = (direction: number) => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setSelectedDate(newDate);
+  };
+
+  const navigateWeek = (direction: number) => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + (direction * 7));
+    setSelectedDate(newDate);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
   };
 
   const formatTime = (time: string | null) => {
@@ -204,6 +229,28 @@ export default function AIScheduling() {
     return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
+  const getTimePosition = (time: string | null) => {
+    if (!time) return null;
+    const [hours, minutes] = time.split(':').map(Number);
+    if (hours < START_HOUR || hours >= END_HOUR) return null;
+    return ((hours - START_HOUR) * HOUR_HEIGHT) + ((minutes / 60) * HOUR_HEIGHT);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'pending': return 'bg-yellow-500';
+      case 'active': case 'in_progress': return 'bg-blue-500';
+      case 'completed': return 'bg-green-500';
+      case 'cancelled': return 'bg-red-500';
+      default: return 'bg-slate-400';
+    }
+  };
+
+  const monthName = selectedDate.toLocaleDateString('en-US', { month: 'long' });
+  const year = selectedDate.getFullYear();
+  const dayOfWeekShort = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+
   if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -213,188 +260,321 @@ export default function AIScheduling() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Weekly Schedule</h1>
-        <p className="text-slate-600 dark:text-slate-400">Manage your team's weekly schedule</p>
+    <div className="flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-slate-900">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigateMonth(-1)}
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-lg font-semibold text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded-lg transition-colors">
+                {monthName} {year}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {Array.from({ length: 12 }, (_, i) => {
+                const d = new Date(year, i, 1);
+                return (
+                  <DropdownMenuItem 
+                    key={i} 
+                    onClick={() => {
+                      const newDate = new Date(selectedDate);
+                      newDate.setMonth(i);
+                      setSelectedDate(newDate);
+                    }}
+                  >
+                    {d.toLocaleDateString('en-US', { month: 'long' })}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            onClick={() => navigateMonth(1)}
+            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          >
+            <ChevronRight className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goToToday}
+            className="px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 rounded-lg transition-colors"
+          >
+            Today
+          </button>
+          <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <Calendar className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <SlidersHorizontal className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+          </button>
+        </div>
       </div>
 
-      <Card className="overflow-visible">
-        <CardHeader className="p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap gap-y-2">
-            <CardTitle className="text-base sm:text-lg">Week of {fmtWeekOf(selectedWeek)}</CardTitle>
-            <div className="inline-flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+      <div className="flex justify-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 p-1">
+          <button
+            onClick={() => setViewMode('day')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              viewMode === 'day'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Day
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              viewMode === 'list'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            List
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              viewMode === 'map'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Map
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between px-2 py-2 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => navigateWeek(-1)}
+          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4 text-slate-500" />
+        </button>
+        
+        <div className="flex gap-1">
+          {weekDates.map((date, idx) => {
+            const dateStr = dateToYmdLocal(date);
+            const isSelected = dateStr === selectedDayStr;
+            const isToday = dateStr === dateToYmdLocal(new Date());
+            const dayNum = date.getDate();
+            
+            return (
               <button
-                type="button"
-                onClick={() => setSelectedWeek(addDaysLocal(selectedWeek, -7))}
-                className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600 active:translate-y-[0.5px] border-0 border-r border-slate-200 dark:border-slate-700 rounded-l-xl text-slate-700 dark:text-slate-300"
-                aria-label="Go to previous week"
+                key={dateStr}
+                onClick={() => setSelectedDate(date)}
+                className="flex flex-col items-center w-10 py-1"
               >
-                Previous Week
+                <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                  {dayOfWeekShort[idx]}
+                </span>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                  isSelected
+                    ? 'bg-blue-600 text-white'
+                    : isToday
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}>
+                  {dayNum}
+                </div>
               </button>
-              <button
-                type="button"
-                onClick={() => setSelectedWeek(addDaysLocal(selectedWeek, 7))}
-                className="px-3 sm:px-4 h-9 sm:h-10 text-sm font-medium bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:focus:ring-slate-600 active:translate-y-[0.5px] border-0 rounded-r-xl text-slate-700 dark:text-slate-300"
-                aria-label="Go to next week"
-              >
-                Next Week
-              </button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-2">
-            {weekDates.map((date) => {
-              const dateStr = dateToYmdLocal(date);
-              const isSelected = selectedDay === dateStr;
-              const dayJobs = jobs.filter((job) => {
-                if (!job.startDate) return false;
-                const jobDate = parseYmdLocal(job.startDate);
-                return dateToYmdLocal(jobDate) === dateStr;
-              });
-              const hasJobs = dayJobs.length > 0;
-              
-              return (
-                <button
-                  key={dateStr}
-                  type="button"
-                  onClick={() => setSelectedDay(dateStr)}
-                  className={`min-h-[100px] sm:min-h-[120px] border rounded-lg p-2 sm:p-3 cursor-pointer transition-all ${
-                    isSelected 
-                      ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700' 
-                      : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700'
-                  }`}
-                >
-                  <div className="flex flex-col items-center h-full">
-                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-2">
-                      {fmtDowShort(date)}
-                    </div>
-                    <div className={`text-xl sm:text-2xl font-bold mb-2 sm:mb-3 ${
-                      isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-slate-100'
-                    }`}>
-                      {fmtDayNumber(date)}
-                    </div>
-                    
-                    <div className="flex-1 flex items-center justify-center">
-                      {hasJobs && (
-                        <div className="flex items-center gap-1">
-                          <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-blue-500 rounded-full"></div>
-                          <span className="text-xs text-slate-600 dark:text-slate-400">{dayJobs.length}</span>
-                        </div>
+            );
+          })}
+        </div>
+        
+        <button
+          onClick={() => navigateWeek(1)}
+          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+        >
+          <ChevronRight className="h-4 w-4 text-slate-500" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        {viewMode === 'day' && (
+          <div className="min-h-full">
+            {jobsByEmployee.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+                <Calendar className="h-16 w-16 mb-4 opacity-30" />
+                <p className="text-lg font-medium">No jobs scheduled</p>
+                <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-200 dark:divide-slate-800">
+                {jobsByEmployee.map(([employeeId, data]) => (
+                  <div key={employeeId} className="relative">
+                    <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                      {data.employee ? (
+                        <>
+                          {data.employee.profileImageUrl ? (
+                            <img
+                              src={data.employee.profileImageUrl}
+                              alt={data.employee.name}
+                              className="h-8 w-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                              {data.employee.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {data.employee.name}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="h-8 w-8 rounded-full bg-slate-400 flex items-center justify-center text-white text-sm font-medium">
+                            ?
+                          </div>
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            Unassigned
+                          </span>
+                        </>
                       )}
+                      <Badge className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs">
+                        {data.jobs.length}
+                      </Badge>
+                    </div>
+
+                    <div className="relative" style={{ height: `${(END_HOUR - START_HOUR) * HOUR_HEIGHT}px` }}>
+                      <div className="absolute inset-0 pointer-events-none">
+                        {hours.map((hour) => (
+                          <div
+                            key={hour}
+                            className="absolute left-0 right-0 border-t border-slate-100 dark:border-slate-800 flex"
+                            style={{ top: `${(hour - START_HOUR) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                          >
+                            <div className="w-14 flex-shrink-0 pr-2 text-right">
+                              <span className="text-xs text-slate-400">
+                                {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="absolute left-14 right-0 top-0 bottom-0">
+                        {data.jobs.map((job) => {
+                          const position = getTimePosition(job.scheduledTime);
+                          
+                          return (
+                            <div
+                              key={job.id}
+                              onClick={() => setLocation(`/jobs/${job.id}`)}
+                              className={`absolute left-2 right-2 px-3 py-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${getStatusColor(job.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(job.status).replace('bg-', 'border-')}`}
+                              style={{ 
+                                top: position !== null ? `${position}px` : '0px',
+                                minHeight: '50px'
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                                    {job.clientName || job.client?.name || job.title}
+                                  </p>
+                                  {job.scheduledTime && (
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                                      {formatTime(job.scheduledTime)}
+                                    </p>
+                                  )}
+                                  {(job.location || job.city) && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                      <MapPin className="h-3 w-3" />
+                                      {job.location || job.city}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Weekly Jobs</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{weeklyStats.total}</div>
-            <p className="text-xs text-muted-foreground">Jobs scheduled this week</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Planning Jobs</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{weeklyStats.planning}</div>
-            <p className="text-xs text-muted-foreground">In planning phase</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
-            <Calendar className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{weeklyStats.active}</div>
-            <p className="text-xs text-muted-foreground">Currently in progress</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Scheduled Jobs
-            {selectedDay && (
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                {(() => {
-                  const d = parseYmdLocal(selectedDay);
-                  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-                })()}
-              </span>
+                ))}
+              </div>
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dailyJobs.length === 0 ? (
-            <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                No jobs scheduled for this day
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {dailyJobs.map((job) => (
+          </div>
+        )}
+
+        {viewMode === 'list' && (
+          <div className="p-4 space-y-3">
+            {dailyJobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+                <List className="h-16 w-16 mb-4 opacity-30" />
+                <p className="text-lg font-medium">No jobs scheduled</p>
+                <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+              </div>
+            ) : (
+              dailyJobs.map((job) => (
                 <div
                   key={job.id}
                   onClick={() => setLocation(`/jobs/${job.id}`)}
-                  className="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 hover:border-slate-300 dark:hover:border-slate-600 transition-all active:scale-[0.99]"
+                  className="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all"
                 >
-                  <div className="flex-shrink-0 w-16 text-center">
+                  <div className="flex-shrink-0 w-16">
                     {job.scheduledTime ? (
-                      <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                        <Clock className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm font-medium">{formatTime(job.scheduledTime)}</span>
-                      </div>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {formatTime(job.scheduledTime)}
+                      </span>
                     ) : (
                       <span className="text-xs text-slate-400">No time</span>
                     )}
                   </div>
-
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {job.clientName || job.client?.name || job.title}
-                      </span>
-                    </div>
+                    <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {job.clientName || job.client?.name || job.title}
+                    </p>
                     {(job.location || job.city) && (
-                      <div className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-                        <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span className="truncate">{job.location || job.city}</span>
-                      </div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {job.location || job.city}
+                      </p>
                     )}
                   </div>
-
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {getEmployeeDisplay(job)}
-                    <Badge className={`${getStatusBadgeClass(job.status)} capitalize text-xs`}>
-                      {job.status?.replace('_', ' ') || 'pending'}
-                    </Badge>
-                  </div>
+                  <Badge className={`capitalize text-xs ${
+                    job.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    job.status === 'active' || job.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {job.status?.replace('_', ' ') || 'pending'}
+                  </Badge>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </div>
+        )}
+
+        {viewMode === 'map' && (
+          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+            <Map className="h-16 w-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">Map View</p>
+            <p className="text-sm">Coming soon</p>
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={() => setIsNewJobOpen(true)}
+        className="fixed bottom-24 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-105 active:scale-95 z-50"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
+      <NewJobSheet
+        open={isNewJobOpen}
+        onOpenChange={setIsNewJobOpen}
+        onJobCreated={() => setIsNewJobOpen(false)}
+      />
     </div>
   );
 }

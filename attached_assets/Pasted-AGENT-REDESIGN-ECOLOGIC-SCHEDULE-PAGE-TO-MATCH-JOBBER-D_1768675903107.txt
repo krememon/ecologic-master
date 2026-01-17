@@ -1,0 +1,95 @@
+AGENT — REDESIGN ECOLOGIC SCHEDULE PAGE TO MATCH JOBBER (DAY / LIST / MAP + TECH ROWS)
+
+CONTEXT:
+EcoLogic already has a Schedule page, but I want it to look and function like Jobber’s Schedule screen (see screenshot):
+- Month selector at top (“January” with dropdown)
+- View toggle segmented control: Day / List / Map
+- Week strip (S M T W T F S) with date pills
+- Day view shows a time grid (12 AM → etc.)
+- Technician/employee row header (e.g., “Peter Pellegrino” with a count bubble)
+- Floating “+” button to add something
+- Bottom nav highlights Schedule
+
+GOAL:
+Update the existing EcoLogic Schedule page to match Jobber’s layout and core behavior:
+1) Day view with time grid and technician rows
+2) List view of scheduled jobs
+3) Map view of scheduled jobs (basic MVP)
+This must be mobile-first and feel like Jobber.
+
+SCOPE (PHASE 1 — BUILD THE UI + DAY VIEW WORKING):
+A) HEADER
+- Left: Month name (e.g., “January”) with dropdown icon
+- Right icons: Calendar, Filters (sliders), Sparkles (optional placeholder)
+  (Icons can be non-functional placeholders for now except Calendar/month picker)
+
+B) VIEW TOGGLE
+- Segmented control: Day / List / Map
+- Default = Day
+- Switching tabs changes the main content area, does not navigate away
+
+C) WEEK STRIP
+- Show 7 days (Sun–Sat) with dates
+- Selected day has a filled circle (like Jobber)
+- Tapping a day updates the view content
+
+D) DAY VIEW (MOST IMPORTANT)
+- Time grid down the left (12 AM, 1 AM, 2 AM... optional to start at 6 AM for MVP, but keep styling similar)
+- Horizontal row header for each employee/tech (at least show one section for “Unassigned” and one for each tech)
+- Each row shows:
+  - Tech name
+  - a small count bubble of how many jobs assigned that day
+- Scheduled jobs render as blocks at their start time (basic MVP can render as list items inside the row, but should align to time grid if possible)
+
+E) FLOATING ACTION BUTTON
+- Bottom-right circular “+”
+- Opens a quick create menu (can be placeholder):
+  - Create Job
+  - Create Estimate
+  - Create Event (optional later)
+For Phase 1, it can just open Create Job.
+
+DATA RULES (PHASE 1):
+- Show JOBS only (not estimates yet)
+- Only include jobs with a scheduledStartAt on the selected date
+- Group jobs by assigned technician
+  - If job has multiple assigned employees, show it under each assigned tech OR under a “Crew” approach (pick ONE and be consistent)
+  - If job has no assigned tech, show under “Unassigned”
+- Sort jobs by time
+
+RBAC RULES:
+- Owner/Admin: see all jobs
+- Dispatcher: see all jobs
+- Technician: only jobs assigned to them
+- Supervisor/Estimator: follow existing job access rules
+- Hidden not disabled
+
+API / FETCHING:
+- Add or reuse an endpoint to fetch scheduled jobs for a day:
+  GET /api/schedule/jobs?date=YYYY-MM-DD
+  return jobs with:
+  - id
+  - scheduledStartAt
+  - duration (optional)
+  - customer name
+  - address
+  - assignedEmployees (ids + names)
+  - status
+- Do NOT fetch all jobs for the whole month for MVP
+
+PHASE 1 DELIVERABLES:
+- Schedule page matches Jobber layout:
+  header + view toggle + week strip + day grid + tech rows + FAB
+- Day view loads jobs for selected day and displays them grouped by tech/unassigned
+- Tapping a job opens Job Details
+
+PHASE 2 (DO NOT BUILD YET — JUST LEAVE HOOKS):
+- Drag & drop jobs to different times/techs
+- Resize duration blocks
+- List view (agenda style)
+- Map view with pins
+- Filters icon functionality
+
+IMPORTANT:
+Do NOT delete the existing Schedule page—refactor/upgrade it.
+Keep styling consistent with EcoLogic cards, but match Jobber layout and interaction patterns closely.
