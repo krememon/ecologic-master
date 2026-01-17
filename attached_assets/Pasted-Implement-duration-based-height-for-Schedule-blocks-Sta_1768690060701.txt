@@ -1,0 +1,89 @@
+Implement duration-based height for Schedule blocks (Start → End time spacing)
+
+CURRENT
+- Schedule blocks now correctly display start and end time (ex: 7:00 AM – 9:00 AM)
+- However, all blocks currently render at a fixed height
+- The visual block does NOT reflect the actual time duration
+
+GOAL
+Schedule blocks must visually span the correct time range.
+Example:
+- 7:00 AM → 9:00 AM = block spans exactly 2 hours
+- 5:00 PM → 7:00 PM = block spans exactly 2 hours
+- 30-minute job = half-height of 1-hour block
+
+This should match how Housecall Pro / Google Calendar style layouts work.
+
+NON-NEGOTIABLE RULES
+- Do NOT change any scheduling data or save logic
+- This is purely a Schedule UI layout calculation
+- Start time still determines vertical position
+- End time determines height
+- If end time is missing, default to 1-hour height (current behavior)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) DEFINE A SINGLE HEIGHT SCALE (VERY IMPORTANT)
+Pick ONE consistent scale and use it everywhere.
+
+Example (recommended):
+- 1 hour = 120px
+- 30 minutes = 60px
+- 15 minutes = 30px
+
+Define a constant:
+const HOUR_HEIGHT = 120;
+
+2) CALCULATE BLOCK TOP OFFSET (START TIME)
+Convert start time to minutes from midnight:
+startMinutes = startHour * 60 + startMinute
+
+topOffsetPx =
+(startMinutes / 60) * HOUR_HEIGHT
+
+(This likely already exists — DO NOT CHANGE IT unless incorrect.)
+
+3) CALCULATE BLOCK HEIGHT (END TIME – START TIME)
+If end time exists:
+- endMinutes = endHour * 60 + endMinute
+- durationMinutes = endMinutes - startMinutes
+
+heightPx =
+(durationMinutes / 60) * HOUR_HEIGHT
+
+If end time does NOT exist:
+- heightPx = HOUR_HEIGHT (default 1 hour)
+
+IMPORTANT:
+- Clamp minimum height (ex: 30px) so very short jobs remain clickable
+- Prevent negative or zero heights
+
+4) APPLY HEIGHT INLINE TO SCHEDULE BLOCK
+Apply calculated height to the schedule block style:
+style={{
+  top: `${topOffsetPx}px`,
+  height: `${heightPx}px`
+}}
+
+Do NOT hardcode height values anymore.
+
+5) VERIFY ALIGNMENT WITH TIME GRID
+Confirm:
+- Block top aligns exactly with the hour lines (7:00 aligns to 7:00)
+- Block bottom aligns with end time (9:00 aligns to 9:00)
+- No drifting due to padding/margins
+
+If needed:
+- Remove internal vertical padding from the block
+- Use inner wrapper for text padding instead
+
+6) HANDLE EDGE CASES SAFELY
+- If end time < start time → block scheduling (or show validation error earlier)
+- If job spans multiple hours → allow tall block
+- If job spans past visible hours → clamp within schedule container
+
+DONE WHEN
+- 7:00 AM → 9:00 AM visually spans exactly two hours
+- Short jobs look shorter, long jobs look longer
+- Blocks align cleanly with hour grid lines
+- No regressions to schedule rendering, scrolling, or clicking

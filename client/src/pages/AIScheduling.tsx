@@ -70,6 +70,7 @@ interface ScheduleItem {
   title: string;
   customerName: string | null;
   scheduledTime: string | null;
+  scheduledEndTime: string | null;
   address: string | null;
   status: string;
 }
@@ -299,6 +300,7 @@ export default function AIScheduling() {
         title: job.title,
         customerName: job.clientName || job.client?.name || null,
         scheduledTime: job.scheduledTime,
+        scheduledEndTime: (job as any).scheduledEndTime || null,
         address: job.location || job.city || null,
         status: job.status
       });
@@ -311,6 +313,7 @@ export default function AIScheduling() {
         title: estimate.title,
         customerName: estimate.customerName,
         scheduledTime: estimate.scheduledTime,
+        scheduledEndTime: estimate.scheduledEndTime || null,
         address: estimate.jobAddressLine1 || estimate.jobCity || null,
         status: estimate.status
       });
@@ -446,6 +449,30 @@ export default function AIScheduling() {
     // Minutes are a fraction of HOUR_HEIGHT (e.g., 30 min = 0.5 * HOUR_HEIGHT)
     const totalMinutes = (hours - START_HOUR) * 60 + minutes;
     return (totalMinutes / 60) * HOUR_HEIGHT;
+  };
+
+  const getBlockHeight = (startTime: string | null, endTime: string | null) => {
+    const MIN_HEIGHT = 40;
+    const DEFAULT_HEIGHT = HOUR_HEIGHT;
+    
+    if (!startTime) return DEFAULT_HEIGHT;
+    if (!endTime) return DEFAULT_HEIGHT;
+    
+    const parseTime = (t: string) => {
+      const parts = t.split(':');
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1] || '0', 10);
+      return h * 60 + m;
+    };
+    
+    const startMinutes = parseTime(startTime);
+    const endMinutes = parseTime(endTime);
+    const durationMinutes = endMinutes - startMinutes;
+    
+    if (durationMinutes <= 0) return DEFAULT_HEIGHT;
+    
+    const heightPx = (durationMinutes / 60) * HOUR_HEIGHT;
+    return Math.max(heightPx, MIN_HEIGHT);
   };
 
   const getStatusColor = (status: string) => {
@@ -638,23 +665,28 @@ export default function AIScheduling() {
                   const position = getTimePosition(item.scheduledTime);
                   if (position === null) return null;
                   
+                  const blockHeight = getBlockHeight(item.scheduledTime, item.scheduledEndTime);
                   const isEstimate = item.type === 'estimate';
                   const bgClass = isEstimate 
                     ? 'bg-purple-100 dark:bg-purple-900/30 border-l-4 border-purple-500' 
                     : `${getStatusColor(item.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(item.status).replace('bg-', 'border-')}`;
                   
+                  const timeDisplay = item.scheduledTime && item.scheduledEndTime
+                    ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
+                    : formatTime(item.scheduledTime);
+                  
                   return (
                     <div
                       key={`${item.type}-${item.id}`}
                       onClick={() => setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`)}
-                      className={`absolute left-2 right-4 px-3 py-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${bgClass}`}
+                      className={`absolute left-2 right-4 px-3 py-1.5 rounded-lg cursor-pointer transition-all hover:shadow-md overflow-hidden ${bgClass}`}
                       style={{ 
                         top: `${position}px`,
-                        minHeight: '60px'
+                        height: `${blockHeight}px`
                       }}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2 h-full">
+                        <div className="min-w-0 flex-1 overflow-hidden">
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
                               {item.customerName || item.title}
@@ -667,10 +699,10 @@ export default function AIScheduling() {
                           </div>
                           {item.scheduledTime && (
                             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                              {isEstimate ? 'Estimate' : 'Job'} • {formatTime(item.scheduledTime)}
+                              {isEstimate ? 'Estimate' : 'Job'} • {timeDisplay}
                             </p>
                           )}
-                          {item.address && (
+                          {blockHeight >= 80 && item.address && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
                               <MapPin className="h-3 w-3" />
                               {item.address}
