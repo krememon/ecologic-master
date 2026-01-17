@@ -111,7 +111,7 @@ function InfoRow({
       data-testid={testId}
     >
       <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
-      <span className="flex-1 text-slate-900 dark:text-slate-100 text-sm">
+      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
       </span>
       <ChevronRight className="h-4 w-4 text-slate-400" />
