@@ -1,0 +1,66 @@
+AGENT — ADD “NOTES” BOX TO JOB DETAILS + SUPPORT NOTES ON JOB CREATE
+
+CONTEXT:
+We are on the Job details page (job card view).
+I want a Notes box inside the job details cards so a user can store important job info.
+It must work two ways:
+1) If notes are added during initial job creation, they should display immediately on the job details page.
+2) If notes are edited later, they should update + persist.
+
+DESIGN (MATCH EXISTING STYLE):
+Use the same style as the Notes card design I’m showing:
+- Card title: “Notes”
+- Right side button: “Edit” (pencil icon) OR “Add Notes” if empty
+- Empty state:
+  “No notes yet”
+  “Add notes for this job.”
+  Button: “Add Notes”
+- When notes exist:
+  Display the notes text inside the card (nice readable spacing)
+  Keep an Edit button top right
+
+FUNCTIONAL REQUIREMENTS:
+A) DATA MODEL
+- Add a field on Job: job.notes (text / nullable)
+- Ensure it’s included in:
+  - create job endpoint response
+  - get job details endpoint
+  - update job endpoint
+
+B) CREATE JOB FLOW
+- In the “Create Job” screen, add a “NOTES” section row like your example list item:
+  Section header: NOTES
+  Row: “Add notes” (document icon + chevron)
+- Tapping “Add notes” opens a Notes editor modal/screen with a textarea.
+- Whatever the user types gets saved into the create job payload as `notes`.
+- When the job is created, the Job details page should display the Notes card immediately.
+
+C) EDIT NOTES ON EXISTING JOB
+- Tapping “Edit” on the Notes card opens the same Notes editor modal/screen.
+- Saving updates job.notes via PATCH/PUT job endpoint.
+- UI must refresh immediately after save (optimistic update or re-fetch job).
+- If notes become empty (user clears text and saves), revert back to the empty state.
+
+D) RBAC / UX RULES
+- Follow “hidden not disabled”.
+- If the user can edit the job, they can edit notes.
+- If they can view the job but not edit, show the Notes card but hide Edit/Add button.
+
+DO NOT:
+- Mix job notes with customer notes
+- Put notes inside line items
+- Change existing layouts outside adding this Notes section/card
+
+TESTS (MUST PASS):
+1) Create job → add notes during creation → save job
+   - Job details page shows Notes card with that exact text.
+2) Edit job notes → save
+   - Notes card updates immediately.
+3) Clear notes → save
+   - Notes card shows “No notes yet” empty state.
+
+DELIVERABLE:
+- Notes field persisted on Job
+- Notes section added to Create Job flow
+- Notes card added to Job details page
+- Notes editor modal/screen used for both create + edit
