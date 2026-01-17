@@ -549,14 +549,6 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               testId="row-job-type"
             />
 
-            <SectionHeader title="Job Tags" />
-            <InfoRow
-              icon={Tag}
-              label="Add job tags"
-              value={tags.length > 0 ? `${tags.length} tags` : undefined}
-              onClick={() => setTagsModalOpen(true)}
-              testId="row-add-job-tags"
-            />
           </div>
         </DialogContent>
       </Dialog>
@@ -1073,64 +1065,6 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
         </DialogContent>
       </Dialog>
 
-      {/* TAGS Modal */}
-      <Dialog open={tagsModalOpen} onOpenChange={setTagsModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Job Tags</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="px-3 py-1 text-sm gap-1"
-                  >
-                    {tag}
-                    <button
-                      onClick={() => removeTag(tag)}
-                      className="ml-1 hover:text-red-500"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Input
-                value={newTagInput}
-                onChange={(e) => setNewTagInput(e.target.value)}
-                placeholder="Enter tag name"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addTag}
-                disabled={!newTagInput.trim()}
-              >
-                Add
-              </Button>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={() => setTagsModalOpen(false)}>
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
