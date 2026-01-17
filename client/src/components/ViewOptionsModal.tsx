@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { X, Search, Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -45,6 +45,16 @@ export function ViewOptionsModal({
   const [localShowUnscheduled, setLocalShowUnscheduled] = useState(showUnscheduledOnMap);
   const [localShowWeekends, setLocalShowWeekends] = useState(showWeekendsOnWeek);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setLocalView(currentView);
+      setLocalSelectedMembers(selectedMembers);
+      setLocalShowUnscheduled(showUnscheduledOnMap);
+      setLocalShowWeekends(showWeekendsOnWeek);
+      setSearchQuery("");
+    }
+  }, [isOpen, currentView, selectedMembers, showUnscheduledOnMap, showWeekendsOnWeek]);
 
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return teamMembers;

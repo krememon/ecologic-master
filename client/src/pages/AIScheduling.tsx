@@ -24,6 +24,7 @@ import { startOfWeekLocal, addDaysLocal, dateToYmdLocal, parseYmdLocal } from "@
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
 import { NewJobSheet } from "@/components/NewJobSheet";
+import { ViewOptionsModal, ExtendedViewMode } from "@/components/ViewOptionsModal";
 
 interface JobWithSchedule {
   id: number;
@@ -62,8 +63,6 @@ interface Employee {
   role: string;
 }
 
-type ViewMode = 'day' | 'list' | 'map';
-
 const HOUR_HEIGHT = 60;
 const START_HOUR = 6;
 const END_HOUR = 20;
@@ -75,8 +74,13 @@ export default function AIScheduling() {
   const [, setLocation] = useLocation();
   
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const [viewMode, setViewMode] = useState<ExtendedViewMode>('day');
   const [isNewJobOpen, setIsNewJobOpen] = useState(false);
+  const [isViewOptionsOpen, setIsViewOptionsOpen] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [showUnscheduledOnMap, setShowUnscheduledOnMap] = useState(true);
+  const [showWeekendsOnWeek, setShowWeekendsOnWeek] = useState(true);
+  const [memberFilterInitialized, setMemberFilterInitialized] = useState(false);
 
   const selectedWeek = useMemo(() => startOfWeekLocal(selectedDate, 0), [selectedDate]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
@@ -120,19 +124,53 @@ export default function AIScheduling() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
+  useEffect(() => {
+    if (!memberFilterInitialized && employees.length > 0) {
+      if (role === 'TECHNICIAN' && user?.id) {
+        setSelectedMemberIds([user.id]);
+      } else {
+        setSelectedMemberIds(employees.map(e => e.id));
+      }
+      setMemberFilterInitialized(true);
+    }
+  }, [employees, memberFilterInitialized, role, user?.id]);
+
+  const teamMembersForModal = useMemo(() => {
+    return employees.map(emp => ({
+      id: emp.id,
+      name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email,
+      profileImageUrl: emp.profileImageUrl
+    }));
+  }, [employees]);
+
   const dailyJobs = useMemo(() => {
     if (!Array.isArray(jobs)) return [];
     
     return jobs.filter((job) => {
       if (!job.startDate) return false;
       const jobDate = parseYmdLocal(job.startDate);
-      return dateToYmdLocal(jobDate) === selectedDayStr;
+      if (dateToYmdLocal(jobDate) !== selectedDayStr) return false;
+      
+      if (selectedMemberIds.length === 0) return false;
+      
+      const crew = job.crewAssignments || [];
+      const assignedIds = job.assignedEmployeeIds || [];
+      const allAssigned = Array.from(new Set([
+        ...crew.map(c => c.userId),
+        ...assignedIds
+      ]));
+      
+      if (allAssigned.length === 0) {
+        return true;
+      }
+      
+      return allAssigned.some(id => selectedMemberIds.includes(id));
     }).sort((a, b) => {
       const timeA = a.scheduledTime || '99:99';
       const timeB = b.scheduledTime || '99:99';
       return timeA.localeCompare(timeB);
     });
-  }, [jobs, selectedDayStr]);
+  }, [jobs, selectedDayStr, selectedMemberIds]);
 
   const jobsByEmployee = useMemo(() => {
     const grouped: Record<string, { employee: { id: string; name: string; profileImageUrl: string | null } | null; jobs: JobWithSchedule[] }> = {};
@@ -169,7 +207,8 @@ export default function AIScheduling() {
         });
     }
     
-    employees.forEach(emp => {
+    const selectedSet = new Set(selectedMemberIds);
+    employees.filter(emp => selectedSet.has(emp.id)).forEach(emp => {
       const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email;
       grouped[emp.id] = { 
         employee: { id: emp.id, name, profileImageUrl: emp.profileImageUrl },
@@ -183,27 +222,32 @@ export default function AIScheduling() {
         grouped['unassigned'].jobs.push(job);
       } else {
         crew.forEach(assignment => {
-          if (grouped[assignment.userId]) {
-            grouped[assignment.userId].jobs.push(job);
-          } else {
-            const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
-            grouped[assignment.userId] = {
-              employee: { id: assignment.userId, name, profileImageUrl: assignment.user.profileImageUrl },
-              jobs: [job]
-            };
+          if (selectedSet.has(assignment.userId)) {
+            if (grouped[assignment.userId]) {
+              grouped[assignment.userId].jobs.push(job);
+            } else {
+              const name = `${assignment.user.firstName || ''} ${assignment.user.lastName || ''}`.trim() || assignment.user.email;
+              grouped[assignment.userId] = {
+                employee: { id: assignment.userId, name, profileImageUrl: assignment.user.profileImageUrl },
+                jobs: [job]
+              };
+            }
           }
         });
       }
     });
 
     return Object.entries(grouped)
-      .filter(([_, data]) => data.jobs.length > 0 || data.employee !== null)
+      .filter(([key, data]) => {
+        if (key === 'unassigned') return data.jobs.length > 0;
+        return selectedSet.has(key);
+      })
       .sort((a, b) => {
         if (a[0] === 'unassigned') return 1;
         if (b[0] === 'unassigned') return -1;
         return (a[1].employee?.name || '').localeCompare(b[1].employee?.name || '');
       });
-  }, [dailyJobs, employees, role, user?.id]);
+  }, [dailyJobs, employees, role, user?.id, selectedMemberIds]);
 
   const navigateMonth = (direction: number) => {
     const newDate = new Date(selectedDate);
@@ -219,6 +263,18 @@ export default function AIScheduling() {
 
   const goToToday = () => {
     setSelectedDate(new Date());
+  };
+
+  const handleApplyViewOptions = (options: {
+    view: ExtendedViewMode;
+    selectedMembers: string[];
+    showUnscheduledOnMap: boolean;
+    showWeekendsOnWeek: boolean;
+  }) => {
+    setViewMode(options.view);
+    setSelectedMemberIds(options.selectedMembers);
+    setShowUnscheduledOnMap(options.showUnscheduledOnMap);
+    setShowWeekendsOnWeek(options.showWeekendsOnWeek);
   };
 
   const formatTime = (time: string | null) => {
@@ -312,7 +368,10 @@ export default function AIScheduling() {
           <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
             <Calendar className="h-5 w-5 text-slate-600 dark:text-slate-400" />
           </button>
-          <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+          <button 
+            onClick={() => setIsViewOptionsOpen(true)}
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          >
             <SlidersHorizontal className="h-5 w-5 text-slate-600 dark:text-slate-400" />
           </button>
         </div>
@@ -554,6 +613,22 @@ export default function AIScheduling() {
           </div>
         )}
 
+        {viewMode === '3day' && (
+          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+            <Calendar className="h-16 w-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">3 Day View</p>
+            <p className="text-sm">Coming soon</p>
+          </div>
+        )}
+
+        {viewMode === 'week' && (
+          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+            <Calendar className="h-16 w-16 mb-4 opacity-30" />
+            <p className="text-lg font-medium">Week View</p>
+            <p className="text-sm">Coming soon</p>
+          </div>
+        )}
+
         {viewMode === 'map' && (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
             <Map className="h-16 w-16 mb-4 opacity-30" />
@@ -574,6 +649,19 @@ export default function AIScheduling() {
         open={isNewJobOpen}
         onOpenChange={setIsNewJobOpen}
         onJobCreated={() => setIsNewJobOpen(false)}
+      />
+
+      <ViewOptionsModal
+        isOpen={isViewOptionsOpen}
+        onClose={() => setIsViewOptionsOpen(false)}
+        currentView={viewMode}
+        selectedMembers={selectedMemberIds}
+        showUnscheduledOnMap={showUnscheduledOnMap}
+        showWeekendsOnWeek={showWeekendsOnWeek}
+        teamMembers={teamMembersForModal}
+        onApply={handleApplyViewOptions}
+        isTechnician={role === 'TECHNICIAN'}
+        currentUserId={user?.id}
       />
     </div>
   );
