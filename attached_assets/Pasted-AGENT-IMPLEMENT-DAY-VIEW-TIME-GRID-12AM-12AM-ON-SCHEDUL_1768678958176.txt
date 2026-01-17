@@ -1,0 +1,63 @@
+AGENT — IMPLEMENT “DAY VIEW” TIME GRID (12AM → 12AM) ON SCHEDULE PAGE
+
+CONTEXT:
+On the Schedule page Day view, I want a full-day time grid like Jobber:
+- Left side shows times from 12 AM through 11 PM (full 24 hours / 12-12 scheduling)
+- Horizontal grid lines for each hour
+- Scrollable timeline
+
+Right now the page does not have the full 12AM–12AM time grid behavior.
+
+GOAL:
+Implement a proper Day View timeline grid that displays every hour of the day (12 AM → 11 PM) with clean spacing, and is scrollable.
+
+SCOPE:
+Schedule page Day view ONLY.
+UI implementation first (jobs can be added onto the grid afterward).
+Do NOT break List or Map views.
+
+UI REQUIREMENTS:
+1) Time Column (left)
+- Show hour labels in 12-hour format:
+  12 AM, 1 AM, 2 AM … 11 AM, 12 PM, 1 PM … 11 PM
+- Align labels with grid lines
+
+2) Grid (main area)
+- 24 hour rows
+- Each hour row has a horizontal divider line
+- Each hour row has a consistent height (ex: 80px per hour — pick a clean value)
+- Background white with subtle grey grid lines
+
+3) Scrolling
+- The timeline area must be vertically scrollable
+- The header (month selector + view toggle + week strip) stays fixed at the top
+- Only the time grid scrolls
+
+4) “Now” behavior (nice-to-have, if easy)
+- On initial load, auto-scroll to around current time (e.g. current time minus 1 hour)
+- If no jobs exist, still show the time grid (do NOT show empty state “No jobs scheduled” in Day view — the grid itself is the view)
+
+5) Floating + button
+- If it still exists, remove it (we already decided it’s useless)
+- Do not add new buttons right now
+
+IMPLEMENTATION NOTES:
+- Use a flex layout:
+  - Page wrapper: full height
+  - Header area: fixed / sticky
+  - Timeline wrapper: flex: 1; overflow-y: auto
+- Build hours array:
+  0..23 mapped to label strings
+- Render each hour row as a div with fixed height
+- Keep performance reasonable (24 rows is fine)
+
+OUT OF SCOPE (DO NOT BUILD YET):
+- Drag & drop scheduling
+- Rendering job blocks on the grid
+- Multi-technician columns
+We will add those after the grid exists.
+
+DELIVERABLE:
+- Day view shows a full 12AM–11PM time grid with hour labels
+- Timeline is scrollable under the fixed header
+- Layout matches a professional scheduling app feel

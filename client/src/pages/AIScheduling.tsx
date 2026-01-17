@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -62,8 +62,8 @@ interface Employee {
 }
 
 const HOUR_HEIGHT = 60;
-const START_HOUR = 6;
-const END_HOUR = 20;
+const START_HOUR = 0;
+const END_HOUR = 24;
 
 export default function AIScheduling() {
   const { toast } = useToast();
@@ -78,6 +78,8 @@ export default function AIScheduling() {
   const [showUnscheduledOnMap, setShowUnscheduledOnMap] = useState(true);
   const [showWeekendsOnWeek, setShowWeekendsOnWeek] = useState(true);
   const [memberFilterInitialized, setMemberFilterInitialized] = useState(false);
+  
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   const selectedWeek = useMemo(() => startOfWeekLocal(selectedDate, 0), [selectedDate]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
@@ -131,6 +133,16 @@ export default function AIScheduling() {
       setMemberFilterInitialized(true);
     }
   }, [employees, memberFilterInitialized, role, user?.id]);
+
+  useEffect(() => {
+    if (viewMode === 'day' && timelineRef.current) {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const scrollToHour = Math.max(0, currentHour - 1);
+      const scrollPosition = scrollToHour * HOUR_HEIGHT;
+      timelineRef.current.scrollTop = scrollPosition;
+    }
+  }, [viewMode]);
 
   const teamMembersForModal = useMemo(() => {
     return employees.map(emp => ({
@@ -452,110 +464,66 @@ export default function AIScheduling() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white dark:bg-slate-900">
+      <div className="flex-1 overflow-hidden bg-white dark:bg-slate-900">
         {viewMode === 'day' && (
-          <div className="min-h-full">
-            {jobsByEmployee.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-slate-500 dark:text-slate-400">
-                <Calendar className="h-16 w-16 mb-4 opacity-30" />
-                <p className="text-lg font-medium">No jobs scheduled</p>
-                <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                {jobsByEmployee.map(([employeeId, data]) => (
-                  <div key={employeeId} className="relative">
-                    <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                      {data.employee ? (
-                        <>
-                          {data.employee.profileImageUrl ? (
-                            <img
-                              src={data.employee.profileImageUrl}
-                              alt={data.employee.name}
-                              className="h-8 w-8 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
-                              {data.employee.name.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <span className="font-medium text-slate-900 dark:text-slate-100">
-                            {data.employee.name}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <div className="h-8 w-8 rounded-full bg-slate-400 flex items-center justify-center text-white text-sm font-medium">
-                            ?
-                          </div>
-                          <span className="font-medium text-slate-900 dark:text-slate-100">
-                            Unassigned
-                          </span>
-                        </>
-                      )}
-                      <Badge className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs">
-                        {data.jobs.length}
-                      </Badge>
-                    </div>
-
-                    <div className="relative" style={{ height: `${(END_HOUR - START_HOUR) * HOUR_HEIGHT}px` }}>
-                      <div className="absolute inset-0 pointer-events-none">
-                        {hours.map((hour) => (
-                          <div
-                            key={hour}
-                            className="absolute left-0 right-0 border-t border-slate-100 dark:border-slate-800 flex"
-                            style={{ top: `${(hour - START_HOUR) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
-                          >
-                            <div className="w-14 flex-shrink-0 pr-2 text-right">
-                              <span className="text-xs text-slate-400">
-                                {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="absolute left-14 right-0 top-0 bottom-0">
-                        {data.jobs.map((job) => {
-                          const position = getTimePosition(job.scheduledTime);
-                          
-                          return (
-                            <div
-                              key={job.id}
-                              onClick={() => setLocation(`/jobs/${job.id}`)}
-                              className={`absolute left-2 right-2 px-3 py-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${getStatusColor(job.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(job.status).replace('bg-', 'border-')}`}
-                              style={{ 
-                                top: position !== null ? `${position}px` : '0px',
-                                minHeight: '50px'
-                              }}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                                    {job.clientName || job.client?.name || job.title}
-                                  </p>
-                                  {job.scheduledTime && (
-                                    <p className="text-xs text-slate-600 dark:text-slate-400">
-                                      {formatTime(job.scheduledTime)}
-                                    </p>
-                                  )}
-                                  {(job.location || job.city) && (
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                                      <MapPin className="h-3 w-3" />
-                                      {job.location || job.city}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+          <div 
+            ref={timelineRef}
+            className="h-full overflow-y-auto"
+          >
+            <div className="relative" style={{ height: `${(END_HOUR - START_HOUR) * HOUR_HEIGHT}px` }}>
+              {hours.map((hour) => (
+                <div
+                  key={hour}
+                  className="absolute left-0 right-0 flex"
+                  style={{ top: `${hour * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                >
+                  <div className="w-16 flex-shrink-0 pr-3 pt-0 text-right">
+                    <span className="text-xs text-slate-400 dark:text-slate-500 -translate-y-2 inline-block">
+                      {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
+                    </span>
                   </div>
-                ))}
+                  <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
+                </div>
+              ))}
+              
+              <div className="absolute left-16 right-0 top-0 bottom-0">
+                {dailyJobs.map((job) => {
+                  const position = getTimePosition(job.scheduledTime);
+                  if (position === null) return null;
+                  
+                  return (
+                    <div
+                      key={job.id}
+                      onClick={() => setLocation(`/jobs/${job.id}`)}
+                      className={`absolute left-2 right-4 px-3 py-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${getStatusColor(job.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(job.status).replace('bg-', 'border-')}`}
+                      style={{ 
+                        top: `${position}px`,
+                        minHeight: '50px'
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                            {job.clientName || job.client?.name || job.title}
+                          </p>
+                          {job.scheduledTime && (
+                            <p className="text-xs text-slate-600 dark:text-slate-400">
+                              {formatTime(job.scheduledTime)}
+                            </p>
+                          )}
+                          {(job.location || job.city) && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                              <MapPin className="h-3 w-3" />
+                              {job.location || job.city}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
         )}
 
