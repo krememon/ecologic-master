@@ -1,0 +1,65 @@
+Fix Create Job scheduling to persist + display End Time (approval scheduling already works)
+
+CURRENT
+- When scheduling a job after approving an estimate, the Job Schedule card shows:
+  “5:00 PM – 7:00 PM” ✅ (start + end)
+- When creating a job normally (Jobs → Create New Job → Add schedule with start+end):
+  the Job Schedule card shows only the start time ❌
+
+This means the “Create Job scheduling” path is NOT saving or returning the job end-time fields the same way the approval scheduling path does.
+
+GOAL
+Any job scheduled from the Create Job flow must:
+- save start time + end time to DB
+- return end time in GET /api/jobs/:id and /api/jobs
+- display “start – end” in the Job Schedule card
+- behave the same as the approval scheduling flow
+
+KEY RULE
+We already have one working path (approval scheduling). The Create Job flow must use the SAME schedule save function + endpoint + field names.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) COMPARE THE TWO SAVE PATHS (MOST IMPORTANT)
+Find where end time is being saved in the working approval flow:
+- likely calls PATCH /api/jobs/:id/schedule with:
+  scheduledDate, scheduledTime, scheduledEndTime (or endDate), timezone
+
+Now find the Create Job “Add schedule” submit handler.
+Confirm it sends the SAME payload fields.
+If Create Job is only sending scheduledTime and NOT scheduledEndTime, that’s the bug.
+
+Fix: Create Job schedule submit MUST include scheduledEndTime in the PATCH request.
+
+2) ENSURE THE CREATE JOB SCHEDULE UI USES THE SAME SHARED ScheduleModal
+If Create Job still uses an older modal or different state keys, swap it to the shared <ScheduleModal />.
+Make sure onSave receives:
+- scheduledDate
+- scheduledTime (start)
+- scheduledEndTime (end)
+and passes them into PATCH /api/jobs/:jobId/schedule exactly.
+
+3) BACKEND: VERIFY PATCH /api/jobs/:id/schedule STORES END TIME FOR ALL CALLERS
+Even if approval flow works, confirm this endpoint:
+- writes endDate and/or scheduledEndTime
+- returns them in response
+
+4) BACKEND: VERIFY JOB FETCH RETURNS END TIME
+Job detail page is showing only start time, which likely means GET /api/jobs/:id is missing:
+- endDate OR scheduledEndTime
+Add those fields to the response serializer/select.
+
+Also ensure GET /api/jobs includes them.
+
+5) FRONTEND: JOB SCHEDULE CARD MUST READ JOB END TIME
+In the Job Schedule card component:
+- Start = job.startDate OR job.scheduledTime
+- End   = job.endDate OR job.scheduledEndTime
+Use the shared formatter that already works in the approval path.
+If end is null => show only start (current)
+
+DONE WHEN
+- Create Job → Add schedule (start+end) → Job Schedule card displays “start – end”
+- Approved estimate → schedule job continues to display “start – end”
+- End time persists after refresh
+- No regressions to schedule page or approval flow

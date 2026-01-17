@@ -1753,10 +1753,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
         };
         
-        // Set startDate and scheduledTime if schedule is provided
+        // Set startDate, scheduledTime, and scheduledEndTime if schedule is provided
         // These are the canonical fields used by the Schedule page
         const startDateValue = scheduleDate || null;
         const scheduledTimeValue = scheduleDate ? normalizeTimeTo15Min(scheduleStartTime || '09:00') : null;
+        const scheduledEndTimeValue = scheduleDate && scheduleEndTime ? normalizeTimeTo15Min(scheduleEndTime) : null;
         
         const [createdJob] = await tx
           .insert(jobs)
@@ -1778,6 +1779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             jobType: jobType || null,
             startDate: startDateValue,
             scheduledTime: scheduledTimeValue,
+            scheduledEndTime: scheduledEndTimeValue,
           } as any)
           .returning();
         
@@ -1959,12 +1961,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
         };
         
-        // Update the job's startDate and scheduledTime fields (canonical for Schedule page)
+        // Update the job's startDate, scheduledTime, and scheduledEndTime fields (canonical for Schedule page)
         if (scheduleDate) {
           const normalizedTime = normalizeTimeTo15Min(scheduleStartTime || '09:00');
+          const normalizedEndTime = scheduleEndTime ? normalizeTimeTo15Min(scheduleEndTime) : null;
           await db.update(jobs).set({
             startDate: scheduleDate,
             scheduledTime: normalizedTime,
+            scheduledEndTime: normalizedEndTime,
             updatedAt: new Date(),
           }).where(eq(jobs.id, jobId));
         } else {
@@ -1972,6 +1976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await db.update(jobs).set({
             startDate: null,
             scheduledTime: null,
+            scheduledEndTime: null,
             updatedAt: new Date(),
           }).where(eq(jobs.id, jobId));
         }
