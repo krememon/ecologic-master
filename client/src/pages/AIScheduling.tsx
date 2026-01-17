@@ -237,6 +237,12 @@ export default function AIScheduling() {
         return false;
       }
       
+      // If member filter not initialized yet, show all jobs for the day
+      if (!memberFilterInitialized) {
+        console.log('[Schedule] Job', job.id, 'INCLUDED (member filter not initialized)');
+        return true;
+      }
+      
       if (selectedMemberIds.length === 0) {
         console.log('[Schedule] Job', job.id, 'no members selected, skipping');
         return false;
@@ -262,7 +268,7 @@ export default function AIScheduling() {
       const timeB = b.scheduledTime || '99:99';
       return timeA.localeCompare(timeB);
     });
-  }, [jobs, selectedDayStr, selectedMemberIds]);
+  }, [jobs, selectedDayStr, selectedMemberIds, memberFilterInitialized]);
 
   const estimates = useMemo(() => {
     if (!Array.isArray(rawEstimates)) return [];
