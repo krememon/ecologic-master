@@ -24,6 +24,17 @@ interface JobDetailsProps {
   jobId: string;
 }
 
+function getReturnUrl(): string {
+  if (typeof window === 'undefined') return '/jobs';
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('from') === 'schedule') {
+    const view = params.get('view') || 'day';
+    const date = params.get('date') || '';
+    return `/schedule?view=${view}&date=${date}`;
+  }
+  return '/jobs';
+}
+
 interface JobWithClient extends Job {
   client?: {
     id: number;
@@ -444,9 +455,9 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       <div className="p-4 md:p-6 max-w-4xl mx-auto">
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold mb-2">Job not found</h2>
-          <Button onClick={() => navigate('/jobs')}>
+          <Button onClick={() => navigate(getReturnUrl())}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Jobs
+            Back
           </Button>
         </div>
       </div>
@@ -461,7 +472,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       <div className="mb-4 space-y-3">
         {/* Row 1: Back arrow + Title */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs')} className="shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => navigate(getReturnUrl())} className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <h1 className="text-xl md:text-2xl font-bold truncate">

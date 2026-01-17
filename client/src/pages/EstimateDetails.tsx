@@ -20,6 +20,17 @@ interface EstimateDetailsProps {
   estimateId: string;
 }
 
+function getReturnUrl(): string {
+  if (typeof window === 'undefined') return '/jobs?tab=estimates';
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('from') === 'schedule') {
+    const view = params.get('view') || 'day';
+    const date = params.get('date') || '';
+    return `/schedule?view=${view}&date=${date}`;
+  }
+  return '/jobs?tab=estimates';
+}
+
 function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -368,9 +379,9 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       <div className="p-6">
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold mb-2">Estimate not found</h2>
-          <Button onClick={() => navigate('/jobs?tab=estimates')}>
+          <Button onClick={() => navigate(getReturnUrl())}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Estimates
+            Back
           </Button>
         </div>
       </div>
@@ -383,7 +394,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs?tab=estimates')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(getReturnUrl())}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>

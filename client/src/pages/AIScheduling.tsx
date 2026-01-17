@@ -89,14 +89,37 @@ const HOUR_HEIGHT = 120;
 const START_HOUR = 0;
 const END_HOUR = 24;
 
+function getInitialViewFromParams(): { view: ExtendedViewMode; date: Date } {
+  if (typeof window === 'undefined') return { view: 'day', date: new Date() };
+  const params = new URLSearchParams(window.location.search);
+  const viewParam = params.get('view');
+  const dateParam = params.get('date');
+  
+  let view: ExtendedViewMode = 'day';
+  if (viewParam === 'list' || viewParam === 'week' || viewParam === 'map') {
+    view = viewParam;
+  }
+  
+  let date = new Date();
+  if (dateParam) {
+    const parsed = new Date(dateParam + 'T12:00:00');
+    if (!isNaN(parsed.getTime())) {
+      date = parsed;
+    }
+  }
+  
+  return { view, date };
+}
+
 export default function AIScheduling() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { role } = useCan();
   const [, setLocation] = useLocation();
   
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
-  const [viewMode, setViewMode] = useState<ExtendedViewMode>('day');
+  const initialParams = useMemo(() => getInitialViewFromParams(), []);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => initialParams.date);
+  const [viewMode, setViewMode] = useState<ExtendedViewMode>(initialParams.view);
   const [isViewOptionsOpen, setIsViewOptionsOpen] = useState(false);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [showUnscheduledOnMap, setShowUnscheduledOnMap] = useState(true);
@@ -847,7 +870,10 @@ export default function AIScheduling() {
                   return (
                     <div
                       key={`${item.type}-${item.id}`}
-                      onClick={() => setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`)}
+                      onClick={() => {
+                        const returnParams = `?from=schedule&view=list&date=${selectedDayStr}`;
+                        setLocation(isEstimate ? `/estimates/${item.id}${returnParams}` : `/jobs/${item.id}${returnParams}`);
+                      }}
                       className="flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all overflow-hidden"
                     >
                       <div className={`w-1.5 flex-shrink-0 ${accentColor}`} />
