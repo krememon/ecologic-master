@@ -2400,7 +2400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
       
-      const { scheduledDate, scheduledTime, timezone } = req.body;
+      const { scheduledDate, scheduledTime, scheduledEndTime, timezone } = req.body;
       
       // Store date and time as separate fields to avoid timezone conversion issues
       // The frontend sends YYYY-MM-DD and HH:mm, we store them as-is
@@ -2414,6 +2414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const incomingTime = scheduledTime || '09:00';
       const timeStr = normalizeTimeTo15Min(incomingTime);
+      const endTimeStr = scheduledEndTime ? normalizeTimeTo15Min(scheduledEndTime) : null;
       
       if (timeStr !== incomingTime) {
         console.log('[ScheduleNormalize]', { incoming: incomingTime, normalized: timeStr });
@@ -2425,6 +2426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .set({
           startDate: scheduledDate || null,
           scheduledTime: scheduledDate ? timeStr : null,
+          scheduledEndTime: endTimeStr,
           updatedAt: new Date(),
         })
         .where(eq(jobs.id, jobId))
@@ -2438,12 +2440,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .set({
             scheduledDate: new Date(scheduledDate + 'T12:00:00'),
             scheduledTime: timeStr,
+            scheduledEndTime: endTimeStr,
             updatedAt: new Date(),
           })
           .where(eq(estimates.convertedJobId, jobId));
       }
       
-      console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime: timeStr, timezone });
+      console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime: timeStr, scheduledEndTime: endTimeStr, timezone });
       res.json(updated);
     } catch (error) {
       console.error("Error scheduling job:", error);
@@ -4386,7 +4389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const companyId = req.companyId;
 
-      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, jobAddressLine1, jobCity, jobState, jobZip, taxCents, assignedEmployeeIds, jobId, jobType, scheduledDate, scheduledTime } = req.body;
+      const { title, notes, items, customerId, customerName, customerEmail, customerPhone, customerAddress, jobAddressLine1, jobCity, jobState, jobZip, taxCents, assignedEmployeeIds, jobId, jobType, scheduledDate, scheduledTime, scheduledEndTime } = req.body;
 
       // Auto-generate title if not provided
       let estimateTitle = title?.trim();
@@ -4474,6 +4477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobType: jobType?.trim() || undefined,
           scheduledDate: scheduledDate || undefined,
           scheduledTime: scheduledTime || undefined,
+          scheduledEndTime: scheduledEndTime || undefined,
           items: normalizedItems 
         },
         companyId,
@@ -4778,11 +4782,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Estimate not found" });
       }
       
-      const { scheduledDate, scheduledTime } = req.body;
+      const { scheduledDate, scheduledTime, scheduledEndTime } = req.body;
       
       // Parse scheduledDate (YYYY-MM-DD string) to Date
       let parsedScheduledDate: Date | null = null;
       let parsedScheduledTime: string | null = null;
+      let parsedScheduledEndTime: string | null = null;
       
       if (scheduledDate) {
         const dateStr = typeof scheduledDate === 'string' 
@@ -4797,12 +4802,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsedScheduledTime = scheduledTime;
       }
       
-      // Update estimate with scheduledDate and scheduledTime
+      if (scheduledEndTime) {
+        parsedScheduledEndTime = scheduledEndTime;
+      }
+      
+      // Update estimate with scheduledDate, scheduledTime, and scheduledEndTime
       const [updated] = await db
         .update(estimates)
         .set({
           scheduledDate: parsedScheduledDate,
           scheduledTime: parsedScheduledTime,
+          scheduledEndTime: parsedScheduledEndTime,
           updatedAt: new Date(),
         })
         .where(eq(estimates.id, estimateId))

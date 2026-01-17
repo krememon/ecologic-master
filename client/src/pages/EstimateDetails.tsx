@@ -57,11 +57,13 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [createdJobId, setCreatedJobId] = useState<number | null>(null);
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledEndTime, setScheduledEndTime] = useState('');
   
   // Estimate schedule editing state (for draft estimates)
   const [isEstimateScheduleModalOpen, setIsEstimateScheduleModalOpen] = useState(false);
   const [estimateScheduleDate, setEstimateScheduleDate] = useState('');
   const [estimateScheduleTime, setEstimateScheduleTime] = useState('');
+  const [estimateScheduleEndTime, setEstimateScheduleEndTime] = useState('');
   
   // Notes editing state
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -173,6 +175,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
         setCreatedJobId(data.jobId);
         setScheduledDate('');
         setScheduledTime('');
+        setScheduledEndTime('');
         setIsScheduleModalOpen(true);
       } else {
         navigate('/jobs', { replace: true });
@@ -185,11 +188,12 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   
   // Schedule job mutation
   const scheduleMutation = useMutation({
-    mutationFn: async ({ jobId, date, time }: { jobId: number; date: string; time: string }) => {
+    mutationFn: async ({ jobId, date, time, endTime }: { jobId: number; date: string; time: string; endTime: string }) => {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const res = await apiRequest('PATCH', `/api/jobs/${jobId}/schedule`, {
         scheduledDate: date || null,
         scheduledTime: time || null,
+        scheduledEndTime: endTime || null,
         timezone,
       });
       return res.json();
@@ -208,7 +212,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   
   const handleScheduleJob = () => {
     if (createdJobId) {
-      scheduleMutation.mutate({ jobId: createdJobId, date: scheduledDate, time: scheduledTime });
+      scheduleMutation.mutate({ jobId: createdJobId, date: scheduledDate, time: scheduledTime, endTime: scheduledEndTime });
     }
   };
   
@@ -221,11 +225,12 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   
   // Estimate schedule mutation (for draft estimates) - sends scheduledDate and scheduledTime directly
   const estimateScheduleMutation = useMutation({
-    mutationFn: async ({ date, time }: { date: string; time: string }) => {
+    mutationFn: async ({ date, time, endTime }: { date: string; time: string; endTime: string }) => {
       // Send date (YYYY-MM-DD) and time (HH:mm) as separate strings to avoid timezone issues
       const res = await apiRequest('PATCH', `/api/estimates/${estimateId}/schedule`, {
         scheduledDate: date || null,
         scheduledTime: time || '09:00',
+        scheduledEndTime: endTime || null,
       });
       return res.json();
     },
@@ -244,6 +249,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     // Pre-populate with existing schedule from scheduledDate and scheduledTime
     const rawDate = (estimate as any)?.scheduledDate;
     const rawTime = (estimate as any)?.scheduledTime;
+    const rawEndTime = (estimate as any)?.scheduledEndTime;
     if (rawDate) {
       // Extract YYYY-MM-DD from scheduledDate (handles both ISO string and Date)
       const dateStr = typeof rawDate === 'string' 
@@ -251,15 +257,17 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
         : new Date(rawDate).toISOString().split('T')[0];
       setEstimateScheduleDate(dateStr);
       setEstimateScheduleTime(rawTime || '09:00');
+      setEstimateScheduleEndTime(rawEndTime || '');
     } else {
       setEstimateScheduleDate('');
       setEstimateScheduleTime('');
+      setEstimateScheduleEndTime('');
     }
     setIsEstimateScheduleModalOpen(true);
   };
   
   const handleSaveEstimateSchedule = () => {
-    estimateScheduleMutation.mutate({ date: estimateScheduleDate, time: estimateScheduleTime });
+    estimateScheduleMutation.mutate({ date: estimateScheduleDate, time: estimateScheduleTime, endTime: estimateScheduleEndTime });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -919,11 +927,19 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Time (optional)</label>
+              <label className="text-sm font-medium">Start Time</label>
               <TimeWheelPicker
                 value={scheduledTime}
                 onChange={setScheduledTime}
-                label="Select Time"
+                label="Select Start Time"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">End Time</label>
+              <TimeWheelPicker
+                value={scheduledEndTime}
+                onChange={setScheduledEndTime}
+                label="Select End Time"
               />
             </div>
           </div>
@@ -965,11 +981,19 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Time (optional)</label>
+              <label className="text-sm font-medium">Start Time</label>
               <TimeWheelPicker
                 value={estimateScheduleTime}
                 onChange={setEstimateScheduleTime}
-                label="Select Time"
+                label="Select Start Time"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">End Time</label>
+              <TimeWheelPicker
+                value={estimateScheduleEndTime}
+                onChange={setEstimateScheduleEndTime}
+                label="Select End Time"
               />
             </div>
           </div>

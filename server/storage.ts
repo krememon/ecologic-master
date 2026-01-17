@@ -1906,6 +1906,7 @@ export class DatabaseStorage implements IStorage {
     // scheduledDate is a YYYY-MM-DD string, scheduledTime is an HH:mm string
     let processedScheduledDate: Date | null = null;
     let processedScheduledTime: string | null = null;
+    let processedScheduledEndTime: string | null = null;
     
     if (payload.scheduledDate) {
       // Convert YYYY-MM-DD string to Date (stored as timestamp, but we only care about the date portion)
@@ -1919,6 +1920,11 @@ export class DatabaseStorage implements IStorage {
     if (payload.scheduledTime) {
       // scheduledTime is already "HH:mm" - use directly
       processedScheduledTime = payload.scheduledTime;
+    }
+    
+    if (payload.scheduledEndTime) {
+      // scheduledEndTime is already "HH:mm" - use directly
+      processedScheduledEndTime = payload.scheduledEndTime;
     }
     
     // Create estimate
@@ -1947,6 +1953,7 @@ export class DatabaseStorage implements IStorage {
         assignedEmployeeIds: payload.assignedEmployeeIds || [],
         scheduledDate: processedScheduledDate,
         scheduledTime: processedScheduledTime,
+        scheduledEndTime: processedScheduledEndTime,
         createdByUserId: userId,
       })
       .returning();

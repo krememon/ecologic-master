@@ -56,7 +56,8 @@ interface CompanyTax {
 
 interface ScheduleData {
   date: string;
-  time: string;
+  startTime: string;
+  endTime: string;
 }
 
 interface EstimateFieldsData {
@@ -140,7 +141,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }
   ]);
-  const [schedule, setSchedule] = useState<ScheduleData>({ date: "", time: "" });
+  const [schedule, setSchedule] = useState<ScheduleData>({ date: "", startTime: "", endTime: "" });
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [estimateFields, setEstimateFields] = useState<EstimateFieldsData>({
     showSubtotal: true,
@@ -410,7 +411,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setNotes("");
     setSelectedCustomer(null);
     setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
-    setSchedule({ date: "", time: "" });
+    setSchedule({ date: "", startTime: "", endTime: "" });
     setAssignedEmployees([]);
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
     setTags([]);
@@ -488,7 +489,8 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     // Send scheduledDate (YYYY-MM-DD) and scheduledTime (HH:mm) as separate strings
     // to avoid timezone conversion issues on the server
     const scheduledDate = schedule.date || null;
-    const scheduledTime = schedule.time || (schedule.date ? '09:00' : null);
+    const scheduledTime = schedule.startTime || (schedule.date ? '09:00' : null);
+    const scheduledEndTime = schedule.endTime || null;
 
     createEstimateMutation.mutate({
       title: autoTitle,
@@ -507,6 +509,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       jobType: jobType || undefined,
       scheduledDate,
       scheduledTime,
+      scheduledEndTime,
       items: validItems.map((item, index) => ({
         name: item.name.trim(),
         description: item.description?.trim() || null,
@@ -713,7 +716,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
             <InfoRow
               icon={Calendar}
               label="Add schedule"
-              value={schedule.date ? `${schedule.date}${schedule.time ? ` at ${schedule.time}` : ''}` : undefined}
+              value={schedule.date ? `${schedule.date}${schedule.startTime ? ` at ${schedule.startTime}` : ''}${schedule.endTime ? ` - ${schedule.endTime}` : ''}` : undefined}
               onClick={() => setScheduleModalOpen(true)}
               testId="row-add-schedule"
             />
@@ -1170,11 +1173,19 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="scheduleTime">Time</Label>
+              <Label>Start Time</Label>
               <TimeWheelPicker
-                value={schedule.time}
-                onChange={(time) => setSchedule({ ...schedule, time })}
-                label="Select Time"
+                value={schedule.startTime}
+                onChange={(time) => setSchedule({ ...schedule, startTime: time })}
+                label="Select Start Time"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>End Time</Label>
+              <TimeWheelPicker
+                value={schedule.endTime}
+                onChange={(time) => setSchedule({ ...schedule, endTime: time })}
+                label="Select End Time"
               />
             </div>
           </div>
