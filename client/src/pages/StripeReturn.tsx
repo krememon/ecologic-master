@@ -52,6 +52,13 @@ export default function StripeReturn() {
           queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
           queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
           queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+          queryClient.invalidateQueries({ predicate: (query) => 
+            Array.isArray(query.queryKey) && 
+            typeof query.queryKey[0] === 'string' && 
+            query.queryKey[0].includes('/api/customers/') && 
+            query.queryKey[0].includes('/jobs')
+          });
         } catch (e) {
           console.error("[StripeReturn] Query invalidation error:", e);
         }

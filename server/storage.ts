@@ -685,6 +685,7 @@ export class DatabaseStorage implements IStorage {
         id: jobs.id,
         title: jobs.title,
         status: jobs.status,
+        paymentStatus: jobs.paymentStatus,
         priority: jobs.priority,
         startDate: jobs.startDate,
         scheduledTime: jobs.scheduledTime,

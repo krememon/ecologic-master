@@ -162,6 +162,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
         queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
         queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].includes('/api/customers/') && 
+          query.queryKey[0].includes('/jobs')
+        });
         setViewState('success');
       } else {
         throw new Error(data.message || "Payment failed");
