@@ -107,10 +107,27 @@ export default function AIScheduling() {
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
   const selectedDayStr = dateToYmdLocal(selectedDate);
 
-  const { data: rawJobs = [] } = useQuery<JobWithSchedule[]>({
+  const { data: rawJobs = [], dataUpdatedAt } = useQuery<JobWithSchedule[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
+    staleTime: 0, // Always consider data stale
+    refetchOnMount: true, // Refetch when component mounts
   });
+  
+  // Debug: Log raw jobs when they change
+  useEffect(() => {
+    console.log('[Schedule] rawJobs updated at:', new Date(dataUpdatedAt).toISOString(), 'count:', rawJobs.length);
+    if (rawJobs.length > 0) {
+      console.log('[Schedule] rawJobs sample:', rawJobs.slice(0, 3).map(j => ({
+        id: j.id,
+        title: j.title,
+        startDate: j.startDate,
+        startDateType: typeof j.startDate,
+        scheduledTime: j.scheduledTime,
+        status: j.status
+      })));
+    }
+  }, [rawJobs, dataUpdatedAt]);
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/company/members"],

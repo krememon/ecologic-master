@@ -1,0 +1,87 @@
+Schedule still not showing approved/rescheduled Jobs — force identify/filter fix
+
+CURRENT
+Even after rescheduling an approved estimate:
+- PATCH /api/jobs/:id/schedule returns 200
+- The job exists and /api/jobs returns it
+But the Schedule page STILL does not display the job.
+
+This confirms the job is being FILTERED OUT in the Schedule UI logic (status/date parsing/data source mismatch).
+
+GOAL
+After scheduling/rescheduling a Job, it MUST show on Schedule reliably.
+No guessing. Add targeted debug logs to find the exact filter failure, then fix.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ADD TARGETED DEBUG LOGS ON THE SCHEDULE PAGE (TEMP)
+On the Schedule page, right after jobs are fetched and right before filtering:
+- console.log("[ScheduleDebug] jobs raw count", jobs.length)
+- console.log("[ScheduleDebug] sample job fields", jobs.slice(0,5).map(j => ({
+    id: j.id,
+    status: j.status,
+    startDate: j.startDate,
+    scheduledDate: j.scheduledDate,
+    scheduledTime: j.scheduledTime,
+    companyId: j.companyId
+})))
+
+Then inside the dailyJobs filter, for the specific jobId being scheduled (ex the latest job):
+- console.log("[ScheduleDebug] job pass/fail", {
+    id: j.id,
+    status: j.status,
+    startDate: j.startDate,
+    scheduledDate: j.scheduledDate,
+    scheduledTime: j.scheduledTime,
+    selectedDay: selectedDate,
+    reason: "..."
+})
+
+This MUST print exactly why it’s failing (status filter, date mismatch, missing field, etc).
+
+2) FIX THE #1 MOST LIKELY ISSUE: STATUS FILTER
+If Schedule page currently filters jobs like:
+- job.status === "scheduled"
+or excludes "active"/"open"/"approved"
+THEN change rule to:
+
+A job should appear on Schedule if it has a scheduled datetime, regardless of status:
+- Include any job where (job.startDate OR job.scheduledDate) exists
+- Do NOT require status === "scheduled"
+
+OPTIONAL (nice):
+When /api/jobs/:id/schedule succeeds, set job.status = "scheduled"
+(But still DO NOT rely on status for rendering.)
+
+3) FIX DATE SOURCE + PARSING (NO AMBIGUITY)
+In Schedule UI, determine scheduled datetime for a job like:
+
+const jobDate =
+  job.startDate ? new Date(job.startDate) :
+  job.scheduledDate ? new Date(job.scheduledDate) :
+  null;
+
+- If jobDate is null => job cannot render.
+- Otherwise, compare jobDate to the selected day using a consistent local-day comparison.
+Do NOT use parseYmdLocal on a Date object incorrectly.
+Ensure it works when job.startDate is ISO and when job.scheduledDate is Date or ISO.
+
+4) BACKEND: ENSURE SCHEDULE ENDPOINT SETS CONSISTENT FIELDS
+In PATCH /api/jobs/:id/schedule:
+- Save scheduledDate + scheduledTime (if those exist)
+- Also set startDate to a real ISO string (derived from scheduledDate+scheduledTime in timezone)
+- Also set status="scheduled" (recommended so other areas match expectations)
+Return { id, startDate, scheduledDate, scheduledTime, status }.
+
+5) SCHEDULE PAGE MUST FETCH JOBS (CONFIRM)
+Confirm Schedule page actually calls /api/jobs (or a schedule endpoint that includes jobs).
+If it only calls /api/estimates, then add jobs fetching + merge display.
+
+6) REMOVE TEMP LOGS AFTER CONFIRMED WORKING
+
+DONE WHEN
+- After approving and rescheduling, the Job appears on Schedule immediately
+- It appears on the correct day/time
+- It persists after refresh
+- Works even if job status is "active" (status is not required)
+- No duplicates (approved estimates with convertedJobId should not render separately)
