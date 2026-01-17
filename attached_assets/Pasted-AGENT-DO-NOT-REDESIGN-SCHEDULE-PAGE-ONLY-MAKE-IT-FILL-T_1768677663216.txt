@@ -1,0 +1,54 @@
+AGENT — DO NOT REDESIGN SCHEDULE PAGE. ONLY MAKE IT FILL THE SCREEN (REMOVE SIDE GREY MARGINS)
+
+CONTEXT:
+The Schedule page layout in the 2nd screenshot looked great.
+However, it looks “small” because the page is centered with extra grey margins around it.
+I want the SAME exact layout, but I want it to feel fuller / more full-screen.
+
+PROBLEM:
+- The Schedule page appears inside a narrow centered container with grey space around it
+- It does not fill the available width/height of the device
+
+GOAL:
+Keep the existing Schedule page UI EXACTLY the same,
+but make the Schedule page container fill the available screen area:
+- Full width (no skinny centered look)
+- Full height (no exposed background below)
+- Still looks good on desktop
+
+SCOPE:
+Schedule page container sizing ONLY.
+Do NOT change:
+- header layout
+- segmented control layout
+- week strip layout
+- empty state design
+- icons placement
+- spacing inside components
+
+WHAT TO DO:
+1) Identify the outer wrapper/container that is constraining the Schedule page width.
+   - Likely a max-width wrapper or centered “page” component.
+2) For the Schedule route/page ONLY:
+   - Set wrapper width to 100%
+   - Remove/reduce max-width constraints
+   - Remove extra horizontal padding/margins causing the grey border look
+   - Ensure the white schedule surface spans the screen
+3) Keep desktop reasonable:
+   - On large screens you can keep a max-width if needed,
+     but it should still feel full (use a larger max-width and less side padding).
+   - On mobile/tablet it should be full-width.
+
+4) Height:
+   - Ensure the page uses full viewport height with flex layout:
+     header fixed, body flex:1, body scroll if needed.
+
+IMPORTANT:
+If there is a shared “PageLayout” wrapper used across the app,
+do NOT change it globally.
+Apply overrides ONLY to Schedule page to avoid breaking other pages.
+
+DELIVERABLE:
+- Schedule page looks identical to before
+- But fills the screen better (no skinny centered container / less grey margins)
+- No other pages are affected

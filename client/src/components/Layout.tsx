@@ -17,8 +17,11 @@ export default function Layout({ children }: LayoutProps) {
     enabled: !!user,
   });
 
-  // Full-screen routes that should not have padding (mobile chat screens)
-  const isFullscreenRoute = location.startsWith('/messages/');
+  // Full-screen routes - no padding, handle nav separately
+  const isMessageRoute = location.startsWith('/messages/');
+  const isScheduleRoute = location === '/schedule' || location.startsWith('/schedule?');
+  const isFullscreenRoute = isMessageRoute || isScheduleRoute;
+  const hideMobileNav = isMessageRoute; // Only hide nav for message threads
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex overflow-hidden">
@@ -33,8 +36,8 @@ export default function Layout({ children }: LayoutProps) {
       </div>
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile Navigation - hide on fullscreen routes */}
-        {!isFullscreenRoute && <MobileNav user={user} company={company} />}
+        {/* Mobile Navigation - hide on message routes only */}
+        {!hideMobileNav && <MobileNav user={user} company={company} />}
 
         {/* Main Content - no padding for fullscreen routes */}
         <main className={`flex-1 min-h-0 overflow-hidden ${isFullscreenRoute ? '' : 'p-6 overflow-y-auto'}`}>
