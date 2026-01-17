@@ -527,39 +527,73 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {estimate.items && estimate.items.length > 0 ? (
-              <div className="space-y-3">
-                {estimate.items.map((item) => (
-                  <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
-                    <div className="flex-1">
-                      <p className="font-medium">{item.name}</p>
-                      {item.description && (
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
-                      )}
-                      <p className="text-sm text-muted-foreground">
-                        {item.quantity} × {formatCurrency(item.unitPriceCents)} / {item.unit}
-                      </p>
+            {estimate.items && estimate.items.length > 0 ? (() => {
+              // Compute tax from line items if server taxCents is 0 but items have tax
+              let computedTaxCents = 0;
+              let computedSubtotalCents = 0;
+              for (const item of estimate.items) {
+                const lineSubtotal = item.lineTotalCents || 0;
+                computedSubtotalCents += lineSubtotal;
+                // Use stored taxCents if available, otherwise calculate from rate
+                if (item.taxCents && item.taxCents > 0) {
+                  computedTaxCents += item.taxCents;
+                } else if (item.taxable && item.taxRatePercentSnapshot) {
+                  const rate = parseFloat(item.taxRatePercentSnapshot) || 0;
+                  computedTaxCents += Math.round(lineSubtotal * rate / 100);
+                }
+              }
+              // Use server values if available, otherwise use computed
+              const displaySubtotal = estimate.subtotalCents || computedSubtotalCents;
+              const displayTax = estimate.taxCents > 0 ? estimate.taxCents : computedTaxCents;
+              const displayTotal = estimate.totalCents || (displaySubtotal + displayTax);
+
+              // Debug log (remove after verified)
+              console.log("ESTIMATE TOTALS DEBUG", {
+                estimateId: estimate.id,
+                serverSubtotal: estimate.subtotalCents,
+                serverTax: estimate.taxCents,
+                serverTotal: estimate.totalCents,
+                computedSubtotal: computedSubtotalCents,
+                computedTax: computedTaxCents,
+                displaySubtotal,
+                displayTax,
+                displayTotal,
+              });
+
+              return (
+                <div className="space-y-3">
+                  {estimate.items.map((item) => (
+                    <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
+                      <div className="flex-1">
+                        <p className="font-medium">{item.name}</p>
+                        {item.description && (
+                          <p className="text-sm text-muted-foreground">{item.description}</p>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          {item.quantity} × {formatCurrency(item.unitPriceCents)} / {item.unit}
+                        </p>
+                      </div>
+                      <p className="font-medium">{formatCurrency(item.lineTotalCents)}</p>
                     </div>
-                    <p className="font-medium">{formatCurrency(item.lineTotalCents)}</p>
+                  ))}
+                  <Separator />
+                  <div className="flex justify-between pt-2">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>{formatCurrency(displaySubtotal)}</span>
                   </div>
-                ))}
-                <Separator />
-                <div className="flex justify-between pt-2">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatCurrency(estimate.subtotalCents)}</span>
-                </div>
-                {estimate.taxCents > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tax</span>
-                    <span>{formatCurrency(estimate.taxCents)}</span>
+                  {displayTax > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span>{formatCurrency(displayTax)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-lg">
+                    <span>Total</span>
+                    <span>{formatCurrency(displayTotal)}</span>
                   </div>
-                )}
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total</span>
-                  <span>{formatCurrency(estimate.totalCents)}</span>
                 </div>
-              </div>
-            ) : (
+              );
+            })() : (
               <p className="text-muted-foreground">No line items</p>
             )}
           </CardContent>

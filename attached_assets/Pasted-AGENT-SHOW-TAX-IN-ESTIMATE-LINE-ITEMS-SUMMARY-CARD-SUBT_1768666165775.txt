@@ -1,0 +1,62 @@
+AGENT — SHOW TAX IN ESTIMATE “LINE ITEMS” SUMMARY CARD (SUBTOTAL + TAX + TOTAL)
+
+CONTEXT:
+In Estimate details, the “Line Items” summary card currently shows:
+- Subtotal
+- Total
+But when a line item is marked Taxable and a tax rate is selected (ex: New York State 8.625%),
+the estimate DOES calculate/apply tax successfully, but the summary card does NOT display it.
+I need the Line Items card to display tax properly.
+
+GOAL:
+If the estimate has any taxable line items with a selected tax rate:
+- Show a “Tax” row in the Line Items summary card between Subtotal and Total.
+- Total must equal Subtotal + Tax.
+If there is no tax, do not show the Tax row (keep UI clean).
+
+REQUIREMENTS:
+1) Compute/derive the tax amount for the estimate:
+   - Prefer using server-provided totals if they exist (most reliable):
+     estimate.taxTotal, estimate.subtotal, estimate.total (or similar)
+   - If not available, compute on frontend:
+     For each line item:
+       lineSubtotal = quantity * unitPrice
+       if taxable && taxRatePercent:
+         lineTax = lineSubtotal * (taxRatePercent / 100)
+     taxTotal = sum(lineTax)
+     subtotal = sum(lineSubtotal)
+     total = subtotal + taxTotal
+
+2) Rendering:
+- Always show “Subtotal”
+- Conditionally show “Tax” ONLY if taxTotal > 0
+- Always show “Total”
+- Format currency to 2 decimals
+
+3) Do NOT change:
+- tax calculation logic in other places
+- line item editor
+- invoice logic
+Only update the Estimate details Line Items summary card display.
+
+DEBUG (TEMP, REMOVE AFTER VERIFIED):
+console.log("ESTIMATE TOTALS DEBUG", {
+  estimateId: estimate.id,
+  subtotal: estimate.subtotal,
+  taxTotal: estimate.taxTotal,
+  total: estimate.total,
+  computedTaxTotal,
+});
+
+TESTS (MUST PASS):
+A) Estimate with NO taxable items:
+- Card shows Subtotal and Total only (no Tax row)
+
+B) Estimate with taxable item + NY tax 8.625%:
+- Subtotal: $350.00
+- Tax: $30.19 (350 * 0.08625 = 30.1875 -> $30.19)
+- Total: $380.19
+
+DELIVERABLE:
+- Estimate Line Items card displays Subtotal + (Tax if any) + Total correctly
+- Remove temp logs after confirmed
