@@ -645,25 +645,33 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             <CardContent>
               {lineItems.length > 0 ? (
                 <div className="space-y-3">
-                  {lineItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
-                      <div className="flex-1">
-                        <p className="font-medium">{item.name}</p>
-                        {item.description && (
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
-                        )}
-                        <p className="text-sm text-muted-foreground">
-                          {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
-                        </p>
-                        {item.taxable && item.taxCents > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            + Tax ({item.taxNameSnapshot || 'Tax'}): ${(item.taxCents / 100).toFixed(2)}
+                  {lineItems.map((item) => {
+                    // Compute line total: prefer lineTotalCents, fallback to unitPriceCents × quantity
+                    const quantity = parseFloat(item.quantity) || 1;
+                    const computedLineTotal = item.lineTotalCents || Math.round(item.unitPriceCents * quantity);
+                    // Total with tax for display
+                    const displayTotal = item.totalCents || (computedLineTotal + (item.taxCents || 0));
+                    
+                    return (
+                      <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
+                        <div className="flex-1">
+                          <p className="font-medium">{item.name}</p>
+                          {item.description && (
+                            <p className="text-sm text-muted-foreground">{item.description}</p>
+                          )}
+                          <p className="text-sm text-muted-foreground">
+                            {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
                           </p>
-                        )}
+                          {item.taxable && item.taxCents > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              + Tax ({item.taxNameSnapshot || 'Tax'}): ${(item.taxCents / 100).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                        <p className="font-medium">${(displayTotal / 100).toFixed(2)}</p>
                       </div>
-                      <p className="font-medium">${(item.totalCents / 100).toFixed(2)}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-muted-foreground text-center py-2">No line items</p>

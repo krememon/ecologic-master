@@ -366,13 +366,6 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       const localDate = new Date(year, month - 1, day, hours, minutes, 0);
       // Convert to ISO string (UTC) - this preserves the correct moment in time
       requestedStartAt = localDate.toISOString();
-      console.log("SCHEDULE PICKED:", { 
-        datePicked: schedule.date, 
-        timePicked: timeStr, 
-        localDateObj: localDate.toString(), 
-        isoToSave: requestedStartAt, 
-        tz: Intl.DateTimeFormat().resolvedOptions().timeZone 
-      });
     }
 
     createEstimateMutation.mutate({
