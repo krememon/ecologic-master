@@ -604,11 +604,15 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                       <h4 className="font-medium text-slate-900 dark:text-slate-100 truncate">
                         {estimate.title}
                       </h4>
-                      {estimate.updatedAt && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Updated {format(new Date(estimate.updatedAt), 'MMM d, yyyy')}
-                        </p>
-                      )}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {(estimate as any).scheduledDate 
+                          ? format(new Date((estimate as any).scheduledDate + 'T12:00:00'), 'MMM d, yyyy')
+                          : estimate.createdAt 
+                            ? format(new Date(estimate.createdAt), 'MMM d, yyyy')
+                            : estimate.updatedAt 
+                              ? format(new Date(estimate.updatedAt), 'MMM d, yyyy')
+                              : 'No date'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <p className="font-semibold text-slate-900 dark:text-slate-100">
