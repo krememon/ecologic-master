@@ -184,8 +184,21 @@ export default function AIScheduling() {
     
     return jobs.filter((job) => {
       if (!job.startDate) return false;
-      const jobDate = parseYmdLocal(job.startDate);
-      if (dateToYmdLocal(jobDate) !== selectedDayStr) return false;
+      
+      // Handle both string (YYYY-MM-DD) and Date object formats
+      const rawDate = job.startDate;
+      let jobDateStr: string;
+      
+      if (typeof rawDate === 'string') {
+        // String like "2026-01-17" or ISO "2026-01-17T00:00:00.000Z"
+        jobDateStr = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+      } else {
+        // Date object - convert to local YYYY-MM-DD
+        const dateObj = new Date(rawDate as any);
+        jobDateStr = dateToYmdLocal(dateObj);
+      }
+      
+      if (jobDateStr !== selectedDayStr) return false;
       
       if (selectedMemberIds.length === 0) return false;
       
