@@ -1434,19 +1434,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profileImageUrl: c.user?.profileImageUrl || null,
       }));
       
-      // Get schedule item for this job if exists
-      const scheduleItemsList = await storage.getScheduleItemsByJob(jobId);
-      const scheduleItem = scheduleItemsList.length > 0 ? scheduleItemsList[0] : null;
+      // Get schedule from job's own fields first (startDate, scheduledTime, scheduledEndTime)
+      // Then fallback to schedule_items table for legacy compatibility
       let scheduleDate = null;
       let scheduleStartTime = null;
       let scheduleEndTime = null;
       
-      if (scheduleItem) {
-        const startDt = new Date(scheduleItem.startDateTime);
-        const endDt = new Date(scheduleItem.endDateTime);
-        scheduleDate = startDt.toISOString().split('T')[0];
-        scheduleStartTime = startDt.toTimeString().slice(0, 5);
-        scheduleEndTime = endDt.toTimeString().slice(0, 5);
+      // Primary source: job's own schedule fields (used by PATCH /api/jobs/:id/schedule)
+      if (job.startDate) {
+        const rawDate = job.startDate;
+        if (typeof rawDate === 'string') {
+          scheduleDate = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
+        } else if (rawDate instanceof Date) {
+          const y = rawDate.getFullYear();
+          const m = (rawDate.getMonth() + 1).toString().padStart(2, '0');
+          const d = rawDate.getDate().toString().padStart(2, '0');
+          scheduleDate = `${y}-${m}-${d}`;
+        }
+        scheduleStartTime = job.scheduledTime || null;
+        scheduleEndTime = job.scheduledEndTime || null;
+      }
+      
+      // Fallback source: schedule_items table (legacy)
+      if (!scheduleDate) {
+        const scheduleItemsList = await storage.getScheduleItemsByJob(jobId);
+        const scheduleItem = scheduleItemsList.length > 0 ? scheduleItemsList[0] : null;
+        
+        if (scheduleItem) {
+          const startDt = new Date(scheduleItem.startDateTime);
+          const endDt = new Date(scheduleItem.endDateTime);
+          scheduleDate = startDt.toISOString().split('T')[0];
+          scheduleStartTime = startDt.toTimeString().slice(0, 5);
+          scheduleEndTime = endDt.toTimeString().slice(0, 5);
+        }
       }
       
       res.json({

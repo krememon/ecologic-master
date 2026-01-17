@@ -1,0 +1,82 @@
+Fix Edit Job to prefill existing data for jobs created from Estimate approval (conversion jobs)
+
+CURRENT
+When I edit a job that was created from approving an estimate:
+- The Edit Job screen does NOT show previously saved info (customer/location/job type/line items/schedule)
+- It looks blank like a new job (ex: “Add schedule” even though job has schedule on the Job page)
+
+However, the Job detail page DOES show the schedule card correctly, meaning data exists in the DB.
+
+GOAL
+Edit Job must always prefill with the existing job’s data for ALL jobs:
+- jobs created normally
+- jobs created from estimate approval (converted jobs)
+
+The edit form should show:
+- Customer (selected)
+- Location/address
+- Line items summary
+- Job type
+- Schedule (date + start + end if exists)
+- Assigned techs (if applicable)
+No regressions.
+
+LIKELY CAUSE
+Edit Job screen is not initializing form state from the job record returned by API,
+or it uses a different field mapping and fails for conversion jobs.
+Common issues:
+- edit screen uses the jobs list stub instead of GET /api/jobs/:id full record
+- schedule mapping is wrong (startDate/endDate vs scheduledDate/scheduledTime/scheduledEndTime)
+- conversion jobs have fields stored on job but edit form expects different keys
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ENSURE EDIT JOB ALWAYS FETCHES THE JOB BY ID
+When Edit Job opens, it MUST call:
+GET /api/jobs/:id
+and use that response as the single source of truth for initializing the form state.
+Do NOT rely on previously cached list row data.
+
+2) PREFILL FORM STATE FROM API RESPONSE
+Set edit form defaults from the job record:
+- customerId / customer object
+- address/location fields
+- jobType
+- line items (or at minimum, the same summary displayed elsewhere)
+- assigned employees (if already supported)
+
+3) FIX SCHEDULE PREFILL MAPPING (IMPORTANT)
+The edit UI should display schedule if it exists.
+
+Jobs may store schedule as:
+- startDate (ISO) + endDate (ISO)
+OR scheduledDate + scheduledTime + scheduledEndTime
+
+When pre-filling the edit schedule section:
+- date should be derived from startDate if present, else scheduledDate
+- start time derived from startDate time or scheduledTime
+- end time derived from endDate time or scheduledEndTime
+
+If schedule exists, Edit Job should NOT show “Add schedule” — it should show the existing date/time and allow editing.
+
+4) LINE ITEMS FOR CONVERTED JOBS
+Jobs created from estimate approval must have their line items copied onto the job.
+If the edit view is blank because job line items aren’t being fetched:
+- Ensure Edit Job calls GET /api/jobs/:id/line-items (if that’s how job details works)
+- Or ensure GET /api/jobs/:id includes line items
+Then render the same “1 item • $350.00” row in edit mode.
+
+5) VERIFY ESTIMATE->JOB CONVERSION SAVES ALL REQUIRED JOB FIELDS
+On approve estimate endpoint:
+PATCH /api/estimates/:id/approve
+Confirm it sets on the created job:
+- customerId
+- address/location
+- line items (or at least they exist via job line-items table)
+- jobType (if estimate had it)
+- schedule fields (startDate/endDate if set after)
+
+6) DONE WHEN
+- Edit Job for converted job shows customer, location, line items summary, job type, and schedule if present
+- Edit Job for normal job still works
+- Scheduling remains unchanged
