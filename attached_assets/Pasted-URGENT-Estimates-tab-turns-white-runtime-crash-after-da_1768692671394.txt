@@ -1,0 +1,64 @@
+URGENT: Estimates tab turns white (runtime crash) after date display changes
+
+CURRENT
+After the recent “estimate date display” update, clicking the Estimates tab makes the page go completely white.
+This indicates the Estimates page is crashing due to a runtime error in the Estimate card/list render.
+
+GOAL
+- Fix the crash immediately
+- Estimates tab must render normally again
+- Date can be displayed, but it must be null-safe and never crash the page
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FIND THE ACTUAL ERROR
+- Open browser DevTools Console and reproduce by clicking Estimates tab
+- Identify the exact error message + stack trace (file + line)
+- Do NOT guess; fix the exact crash source
+
+2) MAKE DATE RENDERING NULL-SAFE
+In the Estimate card component(s) that were edited:
+- Never call Date methods on undefined/null
+- Never call string methods on non-strings
+- scheduledDate may be:
+  - null
+  - ISO string
+  - Date object (depending on Drizzle serialization)
+- createdAt/updatedAt may also be missing or undefined
+
+Implement a safe helper:
+
+function safeToDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+Then compute:
+const scheduled = safeToDate(estimate.scheduledDate);
+const created = safeToDate(estimate.createdAt);
+const updated = safeToDate(estimate.updatedAt);
+const displayDate = scheduled || created || updated;
+
+If displayDate is null:
+- Render no date line (or render “—”)
+But DO NOT crash.
+
+3) ENSURE NO COMPONENT RETURNS “undefined” JSX OR THROWS
+- Wrap only the date line in conditional rendering:
+  {displayDate && <div>...</div>}
+- Keep the rest of the card stable
+
+4) CHECK FOR MULTIPLE ESTIMATE CARD COMPONENTS
+There may be more than one estimate card layout (main estimates tab vs embedded list).
+Ensure ALL estimate card renderers are crash-proof.
+
+5) ADD A TEMP ERROR BOUNDARY (OPTIONAL SAFETY)
+If there’s no global error boundary, add a simple one around Estimates route so white screen never happens again.
+But primary fix is to remove the runtime exception.
+
+DONE WHEN
+- Clicking Estimates tab never produces a white screen
+- Console has no render errors
+- Estimate cards display date when available and gracefully omit it when missing

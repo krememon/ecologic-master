@@ -605,13 +605,24 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                         {estimate.title}
                       </h4>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        {(estimate as any).scheduledDate 
-                          ? format(new Date((estimate as any).scheduledDate + 'T12:00:00'), 'MMM d, yyyy')
-                          : estimate.createdAt 
-                            ? format(new Date(estimate.createdAt), 'MMM d, yyyy')
-                            : estimate.updatedAt 
-                              ? format(new Date(estimate.updatedAt), 'MMM d, yyyy')
-                              : 'No date'}
+                        {(() => {
+                          const safeToDate = (value: any): Date | null => {
+                            if (!value) return null;
+                            if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+                            const d = new Date(value);
+                            return isNaN(d.getTime()) ? null : d;
+                          };
+                          const scheduled = safeToDate((estimate as any).scheduledDate);
+                          const created = safeToDate(estimate.createdAt);
+                          const updated = safeToDate(estimate.updatedAt);
+                          const displayDate = scheduled || created || updated;
+                          if (!displayDate) return '—';
+                          try {
+                            return format(displayDate, 'MMM d, yyyy');
+                          } catch {
+                            return '—';
+                          }
+                        })()}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">

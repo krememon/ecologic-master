@@ -1649,17 +1649,22 @@ export default function Jobs() {
                       </div>
                       <div className="text-xs text-slate-400 pt-1">
                         {(() => {
-                          const scheduledDate = (estimate as any).scheduledDate;
-                          if (scheduledDate) {
-                            return format(new Date(scheduledDate + 'T12:00:00'), 'MMM d, yyyy');
+                          const safeToDate = (value: any): Date | null => {
+                            if (!value) return null;
+                            if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+                            const d = new Date(value);
+                            return isNaN(d.getTime()) ? null : d;
+                          };
+                          const scheduled = safeToDate((estimate as any).scheduledDate);
+                          const created = safeToDate(estimate.createdAt);
+                          const updated = safeToDate(estimate.updatedAt);
+                          const displayDate = scheduled || created || updated;
+                          if (!displayDate) return '—';
+                          try {
+                            return format(displayDate, 'MMM d, yyyy');
+                          } catch {
+                            return '—';
                           }
-                          if (estimate.createdAt) {
-                            return format(new Date(estimate.createdAt), 'MMM d, yyyy');
-                          }
-                          if (estimate.updatedAt) {
-                            return format(new Date(estimate.updatedAt), 'MMM d, yyyy');
-                          }
-                          return 'No date';
                         })()}
                       </div>
                     </CardContent>
