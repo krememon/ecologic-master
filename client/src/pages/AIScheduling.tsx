@@ -884,14 +884,6 @@ export default function AIScheduling() {
           </div>
         )}
 
-        {viewMode === '3day' && (
-          <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
-            <Calendar className="h-16 w-16 mb-4 opacity-30" />
-            <p className="text-lg font-medium">3 Day View</p>
-            <p className="text-sm">Coming soon</p>
-          </div>
-        )}
-
         {viewMode === 'week' && (
           <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
             <Calendar className="h-16 w-16 mb-4 opacity-30" />
