@@ -510,9 +510,14 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       // Save any line items with saveToPriceBook=true to the price book
       await saveToPriceBook(lineItems);
       
+      const jobIdStr = String(initialJob?.id);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', initialJob?.id?.toString()] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobIdStr] });
       queryClient.invalidateQueries({ queryKey: [`/api/jobs/${initialJob?.id}`] });
+      // Invalidate crew assignments query so the JobDetails page shows updated assignments
+      // JobDetails uses string jobId from router, so use string for cache key match
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobIdStr, 'crew'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', initialJob?.id, 'crew'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       // Invalidate customer jobs for both old and new customer if changed
@@ -662,7 +667,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       scheduleDate: schedule.date || undefined,
       scheduleStartTime: schedule.startTime || undefined,
       scheduleEndTime: schedule.endTime || undefined,
-      assignedEmployeeIds: assignedEmployees.length > 0 ? assignedEmployees : undefined,
+      assignedEmployeeIds: isEditMode ? assignedEmployees : (assignedEmployees.length > 0 ? assignedEmployees : undefined),
       notes: notes || undefined,
       jobType: jobType || undefined,
       lineItems: validItems.length > 0 ? validItems.map(item => ({

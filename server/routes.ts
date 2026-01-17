@@ -25,7 +25,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates, crewAssignments } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -1800,9 +1800,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Assign technicians if provided
-        if (assignedEmployeeIds && assignedEmployeeIds.length > 0) {
-          // For now, assign the first technician to the job's assignedTo field
+        // Assign technicians if provided - create crew assignments
+        if (assignedEmployeeIds && Array.isArray(assignedEmployeeIds) && assignedEmployeeIds.length > 0) {
+          // Insert crew assignments for each employee
+          for (const employeeId of assignedEmployeeIds) {
+            await tx.insert(crewAssignments).values({
+              jobId: createdJob.id,
+              userId: employeeId,
+              companyId: company.id,
+              assignedBy: userId,
+            });
+          }
+          // Also set the first technician to the job's assignedTo field for backwards compatibility
           await tx
             .update(jobs)
             .set({ assignedTo: assignedEmployeeIds[0] })

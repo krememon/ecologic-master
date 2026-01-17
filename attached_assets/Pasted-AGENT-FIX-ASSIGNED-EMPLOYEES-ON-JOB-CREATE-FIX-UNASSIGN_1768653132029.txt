@@ -1,0 +1,67 @@
+AGENT — FIX “ASSIGNED EMPLOYEES” ON JOB CREATE + FIX UNASSIGN NOT REMOVING
+
+CONTEXT:
+On the Job details page, the “Assigned Employees” card:
+1) DOES NOT show assigned employees when the job is initially created (it only works after I later Edit Job and assign).
+2) If I assign employees, then later Edit Job and remove/unselect them, they DO NOT get removed from the display card (stale UI / stale data).
+
+GOAL:
+- Assigned employees should show immediately after job creation IF employees were chosen during create.
+- Unassigning employees in Edit Job must immediately remove them from the Assigned Employees display and persist to backend.
+
+DO NOT:
+- Change UI styling
+- Add duplicate assignment systems
+- Break RBAC visibility rules
+- Refactor unrelated code
+
+PART A — SHOW ASSIGNED EMPLOYEES RIGHT AFTER JOB CREATION
+1) Locate the Create Job flow (modal/page) where a user can pick employees.
+2) Ensure the create job request payload includes assigned employee IDs, e.g.:
+   assignedEmployeeIds: ["id1","id2"] (or your existing field name)
+3) Backend: in POST /jobs (or your create job route),
+   - accept the list of employee IDs
+   - persist the relationship (join table or array field)
+   - return the created job including assigned employees (or at least the IDs)
+4) After successful create on frontend:
+   - ensure the job detail page is fetched/refreshed so it renders the returned assigned employees
+   - do NOT rely on stale local state
+
+PART B — FIX UNASSIGN (REMOVING EMPLOYEES) NOT UPDATING
+This is likely one of:
+- the update payload doesn’t include the “removed” employees, so backend never clears them
+- backend merges arrays instead of replacing
+- frontend optimistically keeps old list and doesn’t refresh
+
+Fix requirements:
+1) In Edit Job save handler:
+   - send the FULL final list of assigned employee IDs (after user selections)
+   - if user removes all, send an EMPTY array (important)
+2) Backend update route:
+   - treat assigned employees list as “REPLACE”, not “ADD”
+   - If empty array is sent, clear all assignments in DB
+3) After save:
+   - update UI state with the server response OR re-fetch the job details
+   - Assigned Employees card must reflect the final list immediately
+
+DEBUG LOGS (TEMPORARY, REMOVE AFTER VERIFIED):
+Frontend:
+console.log("JOB CREATE payload assignedEmployeeIds:", payload.assignedEmployeeIds);
+console.log("JOB UPDATE payload assignedEmployeeIds:", payload.assignedEmployeeIds);
+
+Backend:
+console.log("JOB CREATE incoming assignedEmployeeIds:", req.body.assignedEmployeeIds);
+console.log("JOB UPDATE incoming assignedEmployeeIds:", req.body.assignedEmployeeIds);
+
+TESTS (MUST PASS):
+1) Create Job and assign 2 employees during creation:
+   - Immediately after creation, Assigned Employees card shows both names/avatars (no editing required).
+2) Edit Job, unselect one employee, save:
+   - Assigned Employees card shows only remaining employee.
+3) Edit Job, unselect all, save:
+   - Assigned Employees card shows “No employees assigned”.
+
+DELIVERABLE:
+- Assigned employees persist and display on job create
+- Unassign works (remove updates DB + UI)
+- Remove debug logs after confirmed
