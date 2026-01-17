@@ -1,0 +1,60 @@
+AGENT — FIX SCHEDULE BLOCK VERTICAL POSITIONING (10:30AM BLOCK IS NOT CENTERED CORRECTLY)
+
+CONTEXT:
+The estimate is now showing at the correct LABEL time (“10:30 AM”), but the block is visually positioned too low — it’s closer to the 11:00 line than it should be.
+So the time parsing is correct, but the “top offset” math is wrong.
+
+GOAL:
+Make the schedule block render at the correct vertical position on the grid so:
+- 10:00 is aligned with the 10 AM line
+- 10:30 is exactly halfway between 10 AM and 11 AM
+- 10:15 / 10:45 land at correct quarter positions (future-proof)
+
+IMPORTANT:
+Do NOT change schedule data saving.
+This is a UI positioning math fix only.
+
+LIKELY ROOT CAUSES:
+- We are rounding minutes to the nearest hour (or to 30) when calculating top offset
+- We are using the wrong hourRowHeight value (mismatch between rendered row height and math)
+- The top offset is being calculated from the wrong baseline (e.g., starting after padding/header inside the scroll container)
+- CSS transform/translate is shifting blocks down (extra margin/padding in event layer)
+
+WHAT TO DO:
+
+1) ENSURE THE GRID HAS A SINGLE SOURCE OF TRUTH FOR HOUR HEIGHT
+- Identify the actual rendered height of 1 hour row (the div height in CSS).
+- Store that value in ONE constant (ex: HOUR_HEIGHT_PX).
+- Use that exact constant both for rendering rows and for positioning blocks.
+DO NOT hardcode two different values in two different places.
+
+2) FIX TOP OFFSET MATH (NO ROUNDING)
+For an item start time:
+- minutesFromMidnight = hours*60 + minutes
+- top = (minutesFromMidnight / 60) * HOUR_HEIGHT_PX
+
+Example:
+10:30 => minutesFromMidnight = 630
+top = (630/60)*HOUR_HEIGHT = 10.5*HOUR_HEIGHT
+This MUST land halfway between 10 and 11.
+
+No Math.floor / Math.round on minutesFromMidnight.
+No rounding to the nearest hour.
+
+3) FIX BASELINE OFFSET (HEADER/PADDING ISSUES)
+Make sure “top=0” corresponds to the 12 AM line inside the scrollable grid content.
+If there is padding at the top of the grid content area, account for it once:
+top = GRID_TOP_PADDING + computedTop
+Or remove the padding so the first hour line starts at y=0.
+
+Also confirm the event layer container is positioned relative to the same scroll container as the hour rows.
+
+4) VERIFY BLOCK IS CENTERED ON ITS TRUE START TIME
+If your design wants the block to start exactly at the time line, do NOT apply translateY(50%) or centering transforms.
+The block’s top should represent its start time.
+Only height represents duration.
+
+5) DELIVERABLE:
+- A 10:30AM item’s top aligns exactly halfway between 10AM and 11AM lines
+- 10:00 aligns on the 10AM line, 11:00 aligns on 11AM line
+- No drift caused by padding, rounding, or mismatched row height

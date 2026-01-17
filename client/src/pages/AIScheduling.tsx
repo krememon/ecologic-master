@@ -423,9 +423,14 @@ export default function AIScheduling() {
 
   const getTimePosition = (time: string | null) => {
     if (!time) return null;
-    const [hours, minutes] = time.split(':').map(Number);
-    if (hours < START_HOUR || hours >= END_HOUR) return null;
-    return ((hours - START_HOUR) * HOUR_HEIGHT) + ((minutes / 60) * HOUR_HEIGHT);
+    const parts = time.split(':');
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1] || '0', 10);
+    if (isNaN(hours) || hours < START_HOUR || hours >= END_HOUR) return null;
+    // Calculate position: each hour is HOUR_HEIGHT pixels
+    // Minutes are a fraction of HOUR_HEIGHT (e.g., 30 min = 0.5 * HOUR_HEIGHT)
+    const totalMinutes = (hours - START_HOUR) * 60 + minutes;
+    return (totalMinutes / 60) * HOUR_HEIGHT;
   };
 
   const getStatusColor = (status: string) => {
@@ -598,11 +603,11 @@ export default function AIScheduling() {
             className="h-full overflow-y-auto"
           >
             <div className="relative" style={{ height: `${(END_HOUR - START_HOUR) * HOUR_HEIGHT}px` }}>
-              {hours.map((hour) => (
+              {hours.map((hour, idx) => (
                 <div
                   key={hour}
                   className="absolute left-0 right-0 flex"
-                  style={{ top: `${hour * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                  style={{ top: `${idx * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
                 >
                   <div className="w-16 flex-shrink-0 pr-3 pt-0 text-right">
                     <span className="text-xs text-slate-400 dark:text-slate-500 -translate-y-2 inline-block">
