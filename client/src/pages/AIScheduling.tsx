@@ -182,8 +182,20 @@ export default function AIScheduling() {
   const dailyJobs = useMemo(() => {
     if (!Array.isArray(jobs)) return [];
     
+    // Debug: Log all jobs with schedule data
+    console.log('[Schedule] All jobs:', jobs.map(j => ({ 
+      id: j.id, 
+      startDate: j.startDate, 
+      startDateType: typeof j.startDate,
+      scheduledTime: j.scheduledTime 
+    })));
+    console.log('[Schedule] Selected day:', selectedDayStr);
+    
     return jobs.filter((job) => {
-      if (!job.startDate) return false;
+      if (!job.startDate) {
+        console.log('[Schedule] Job', job.id, 'has no startDate, skipping');
+        return false;
+      }
       
       // Handle both string (YYYY-MM-DD) and Date object formats
       const rawDate = job.startDate;
@@ -197,6 +209,8 @@ export default function AIScheduling() {
         const dateObj = new Date(rawDate as any);
         jobDateStr = dateToYmdLocal(dateObj);
       }
+      
+      console.log('[Schedule] Job', job.id, 'date comparison:', jobDateStr, '===', selectedDayStr, '?', jobDateStr === selectedDayStr);
       
       if (jobDateStr !== selectedDayStr) return false;
       

@@ -1,0 +1,79 @@
+Fix Approved Estimate → Reschedule Job so it appears on Schedule (stop “disappearing”)
+
+CURRENT
+- When I create an Estimate, it appears on the Schedule (good).
+- After I approve the Estimate, I can set/reschedule the Job date/time in the Estimate page.
+- It shows “Scheduled” success toast.
+- BUT the schedule does NOT reflect the updated Job schedule (the item does not appear / looks like it disappears).
+
+This is happening consistently: estimate schedule renders, but job reschedule after approval does not show on schedule.
+
+ROOT CAUSE (LIKELY)
+We have TWO different schedule sources:
+1) Schedule page renders Estimates using estimate.scheduledDate/scheduledTime (or estimate.scheduledAt) ✅ works
+2) After approval, reschedule updates the JOB fields (job.scheduledDate/scheduledTime or job.startDate) ❌ but Schedule page filters/reads jobs using a different field name (ex: startDate vs scheduledDate vs scheduledAt), OR schedule is still showing the estimate entry which is now stale/cleared.
+
+GOAL
+When an Estimate is Approved:
+- The scheduled time shown on Schedule must come from the JOB (source of truth)
+- Rescheduling after approval MUST update the Job schedule and Schedule page must show it immediately + after refresh
+- Avoid duplicates (don’t show both estimate + job for same thing)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY EXACT FIELDS USED BY SCHEDULE PAGE
+Open Schedule page code and find:
+- dailyEstimates logic: what field does it use? (scheduledDate/scheduledTime OR scheduledAt)
+- dailyJobs logic: what field does it use? (startDate? scheduledDate? scheduledAt?)
+
+Write down the exact field names being read for each.
+
+2) MAKE JOB SCHEDULING CONSISTENT (ONE FIELD PREFERRED)
+Pick ONE canonical job schedule field and use it everywhere:
+- preferred: job.scheduledAt (ISO datetime string)
+If existing DB already uses scheduledDate + scheduledTime, still derive scheduledAt on write OR on read.
+
+REQUIREMENT:
+- When rescheduling from the approved estimate page, the backend MUST save job.scheduledAt (or the canonical field)
+- The /api/jobs endpoint MUST return that field consistently.
+
+3) FIX SCHEDULE PAGE JOB FILTERING/RENDERING
+Update dailyJobs logic so it:
+- Uses the canonical job schedule field (scheduledAt)
+- Correctly parses both string/Date formats (no mismatches)
+- Filters jobs into the correct day
+- Uses the same parse logic style as dailyEstimates
+
+DO NOT rely on a field like startDate if the backend is storing scheduledDate/scheduledAt.
+
+4) STOP SHOWING ESTIMATE SCHEDULE ONCE APPROVED (PREVENT DISAPPEAR / DUPES)
+Once an estimate is approved, Schedule should no longer use estimate scheduling as the primary display.
+
+Implement one of these (choose the cleanest for current architecture):
+OPTION A (preferred):
+- When approving an estimate, ensure it has a linked jobId
+- Schedule page rule: If estimate.status === "approved" (or has jobId), do NOT include it in dailyEstimates
+- Only show the Job for approved estimates
+
+OPTION B:
+- On approval, copy estimate schedule into the job and CLEAR estimate scheduled fields so only job shows
+  (avoid duplicate schedule entries)
+
+5) ENSURE RESCHEDULE CALL IS TARGETING JOB, NOT ESTIMATE
+From Approved Estimate page:
+- Confirm the reschedule action calls /api/jobs/:jobId/schedule (or PATCH /api/jobs/:id)
+- NOT /api/estimates/:id/schedule
+- Confirm the ID used is jobId, not estimateId
+
+6) REFRESH SCHEDULE DATA AFTER RESCHEDULE
+After successful reschedule:
+- Invalidate/refetch schedule query/cache
+OR
+- Ensure navigating to schedule shows updated job immediately without refresh.
+
+DONE WHEN
+- Create estimate → appears on schedule
+- Approve estimate → schedule source becomes the linked job (no duplicate estimate entry)
+- Reschedule after approval → job appears on schedule at the new date/time immediately
+- Persists after refresh
+- No RBAC regressions
