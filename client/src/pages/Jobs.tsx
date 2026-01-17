@@ -688,7 +688,9 @@ export default function Jobs() {
       setIsEstimateSelectionMode(false);
       setEstimateDeleteConfirmOpen(false);
       
-      if (successCount > 0 && failedResults.length > 0) {
+      if (failedResults.length === 0) {
+        // All deletes succeeded - no toast needed (per user request)
+      } else if (successCount > 0) {
         toast({
           title: "Partially deleted",
           description: `Deleted ${successCount}, but ${failedResults.length} failed: ${failedResults[0].error}`,
