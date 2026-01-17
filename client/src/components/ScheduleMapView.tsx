@@ -128,7 +128,7 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
 
     const bounds = new google.maps.LatLngBounds();
     markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
-    mapRef.current.fitBounds(bounds, { padding: 50 });
+    mapRef.current.fitBounds(bounds, 50);
 
     if (markers.length === 1) {
       mapRef.current.setZoom(15);
