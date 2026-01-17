@@ -1,0 +1,96 @@
+Implement Schedule “Map” view using Google Maps (premium/luxury feel like Housecall Pro)
+
+CURRENT
+Schedule page has Day / List / Map tabs.
+Map view currently shows “Coming soon”.
+We want a real map that displays scheduled Jobs/Estimates for the selected day.
+
+GOAL
+On Schedule → Map tab:
+- Show Google Map
+- Plot markers for every scheduled item on the selected day (jobs + estimates)
+- If multiple items share the same address/nearby, cluster them (like the reference screenshot “2 / Multiple”)
+- Clicking a marker opens a small info card (title + customer + time range + address)
+- Tapping the info card navigates to the Job/Estimate detail page
+- Must feel “luxury” (clean UI, smooth, modern)
+
+IMPORTANT CONSTRAINTS
+- Respect RBAC (only show items user can access)
+- Do NOT show unscheduled items on map (for now)
+- If an item has no valid address/latLng, skip it gracefully
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) GOOGLE MAPS SETUP
+- Use Google Maps JavaScript API (or @react-google-maps/api)
+- Store API key in Replit Secrets:
+  GOOGLE_MAPS_API_KEY
+- Load Maps with required libraries:
+  - places (optional for geocoding/autocomplete)
+  - marker (optional)
+- Add a Map container in the Map tab that fills remaining screen height.
+
+2) DATA: REUSE SAME “events for selected day”
+- Use the same normalized events list already used by Day/List view:
+  events = scheduled jobs + scheduled estimates for selected day
+Each event should include:
+  id, type, title, customerName, address, startMinutes, endMinutes
+
+3) GEOCODING STRATEGY (MUST BE PRACTICAL)
+We need lat/lng for each address.
+Implement caching so we don’t spam the API.
+
+- Add DB fields:
+  latitude (float), longitude (float) on:
+    customers (preferred) OR jobs/estimates (ok)
+Preferred:
+- Geocode customer address once and store on customer record.
+
+When Map tab loads:
+- For each event:
+  - get its customer address
+  - if customer has lat/lng, use it
+  - else geocode address via Google Geocoding API
+  - save lat/lng back to customer in DB
+  - then render marker
+
+If geocoding fails, log once and skip marker.
+
+4) MARKERS + CLUSTERING
+- Render markers for each event location
+- Use marker clustering:
+  - If using @react-google-maps/api, use a clusterer library compatible
+  - Or use Google’s markerclusterer package
+- Cluster style should look premium (simple circle with count)
+
+5) MARKER CLICK → INFO CARD (LUXURY UI)
+When user taps a marker:
+- Show a bottom sheet / floating card:
+  - Title (bold)
+  - Customer
+  - Time range (start–end)
+  - Address
+  - Badge “Job” or “Estimate”
+- If marker represents a cluster, show “Multiple” and list up to 3 items with “View all” (optional)
+
+6) MAP DEFAULTS
+- Auto-fit bounds to show all markers for the day
+- If no markers:
+  - show a clean empty state: “No scheduled jobs with locations”
+- Keep the schedule header + date picker visible above the map like the reference.
+
+7) UX POLISH (PREMIUM FEEL)
+- Use subtle rounded corners on the info card
+- Smooth animations for opening/closing info card
+- Disable extra map UI clutter:
+  - hide map type
+  - keep zoom controls minimal
+- Keep consistent EcoLogic spacing + typography
+
+DONE WHEN
+- Map tab loads Google Map
+- Scheduled items for selected day appear as markers
+- Clustering works (shows count)
+- Click marker shows info card
+- Click info card navigates to correct detail page
+- Addresses are geocoded and cached so it gets faster over time

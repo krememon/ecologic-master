@@ -142,6 +142,8 @@ export const customers = pgTable("customers", {
   companyNumber: varchar("company_number", { length: 100 }),
   jobTitle: varchar("job_title", { length: 100 }),
   notes: text("notes"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
