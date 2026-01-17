@@ -73,6 +73,7 @@ interface ScheduleItem {
   scheduledEndTime: string | null;
   address: string | null;
   status: string;
+  jobType?: string | null;
 }
 
 interface Employee {
@@ -302,7 +303,8 @@ export default function AIScheduling() {
         scheduledTime: job.scheduledTime,
         scheduledEndTime: (job as any).scheduledEndTime || null,
         address: job.location || job.city || null,
-        status: job.status
+        status: job.status,
+        jobType: (job as any).jobType || null
       });
     });
     
@@ -824,49 +826,60 @@ export default function AIScheduling() {
         )}
 
         {viewMode === 'list' && (
-          <div className="p-4 space-y-3 min-h-full">
-            {dailyJobs.length === 0 ? (
+          <div className="p-4 space-y-3 min-h-full overflow-y-auto">
+            {layoutItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-slate-500 dark:text-slate-400">
                 <List className="h-16 w-16 mb-4 opacity-30" />
                 <p className="text-lg font-medium">No jobs scheduled</p>
                 <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
               </div>
             ) : (
-              dailyJobs.map((job) => (
-                <div
-                  key={job.id}
-                  onClick={() => setLocation(`/jobs/${job.id}`)}
-                  className="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all"
-                >
-                  <div className="flex-shrink-0 w-16">
-                    {job.scheduledTime ? (
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        {formatTime(job.scheduledTime)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">No time</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                      {job.clientName || job.client?.name || job.title}
-                    </p>
-                    {(job.location || job.city) && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {job.location || job.city}
-                      </p>
-                    )}
-                  </div>
-                  <Badge className={`capitalize text-xs ${
-                    job.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    job.status === 'active' || job.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {job.status?.replace('_', ' ') || 'pending'}
-                  </Badge>
-                </div>
-              ))
+              [...layoutItems]
+                .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes || (a.title || '').localeCompare(b.title || ''))
+                .map((item) => {
+                  const isEstimate = item.type === 'estimate';
+                  const timeDisplay = item.scheduledTime && item.scheduledEndTime
+                    ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
+                    : formatTime(item.scheduledTime) || 'No time';
+                  
+                  const accentColor = isEstimate ? 'bg-purple-500' : 'bg-green-500';
+                  
+                  return (
+                    <div
+                      key={`${item.type}-${item.id}`}
+                      onClick={() => setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`)}
+                      className="flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all overflow-hidden"
+                    >
+                      <div className={`w-1.5 flex-shrink-0 ${accentColor}`} />
+                      <div className="flex-1 p-4 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                              {item.jobType || item.title || 'Untitled'}
+                            </p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                              {item.customerName || 'No customer'}
+                            </p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                              {timeDisplay}
+                            </p>
+                            {item.address && (
+                              <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                                {item.address}
+                              </p>
+                            )}
+                          </div>
+                          {isEstimate && (
+                            <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 rounded">
+                              Estimate
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
             )}
           </div>
         )}
