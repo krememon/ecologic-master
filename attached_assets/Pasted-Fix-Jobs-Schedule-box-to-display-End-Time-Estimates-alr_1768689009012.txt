@@ -1,0 +1,62 @@
+Fix Jobs Schedule box to display End Time (Estimates already working)
+
+CURRENT
+- Estimates Schedule box shows time range correctly (ex: 9:00 AM – 11:00 AM)
+- Jobs Schedule box only shows start time (ex: 6:00 AM) and does NOT show end time
+So end time formatting works, but Jobs UI is missing the job end-time source.
+
+GOAL
+Jobs Schedule box must show:
+- “Start – End” when end time exists
+- Start only if no end time
+Matching the Estimates schedule box behavior/style.
+
+MOST LIKELY CAUSE
+Job end time is stored differently than estimates:
+- Jobs may store end as endDate (ISO) OR scheduledEndTime (HH:mm)
+But the Job schedule card is only passing start into the formatter, or the backend isn’t returning the end field.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CONFIRM WHAT JOB FIELDS EXIST + ARE RETURNED
+In the backend:
+- Check the jobs table/schema and job schedule endpoint:
+  PATCH /api/jobs/:id/schedule
+Confirm we store one of:
+- endDate (ISO) OR scheduledEndTime (HH:mm)
+
+Then confirm GET endpoints include it:
+- GET /api/jobs
+- GET /api/jobs/:id
+If end field exists in DB but not in response, add it to the select/serializer.
+
+2) FIX THE JOB SCHEDULE CARD DATA MAPPING
+Find the component that renders the Job “Schedule” box/card.
+Right now it likely does something like:
+formatTimeRange(job.startDate || job.scheduledTime, null)
+
+Update it to pass BOTH start and end:
+
+Start source (preferred):
+- job.startDate (ISO) else job.scheduledTime
+
+End source (preferred):
+- job.endDate (ISO) else job.scheduledEndTime
+
+Then call the shared formatter util:
+formatScheduleTimeRange(start, end)
+
+3) FALLBACK BEHAVIOR (DO NOT BREAK)
+- If job end time is missing/null, still show only start time (current behavior)
+- If end exists, show “start – end”
+
+4) VERIFY END TIME IS ACTUALLY SAVING ON JOBS
+If you discover end time is not being saved for jobs:
+- Update PATCH /api/jobs/:id/schedule to save end time
+- Ensure it persists and is returned
+
+DONE WHEN
+- Job schedule box shows “9:00 AM – 11:00 AM” when end time exists
+- Estimate schedule box continues working
+- Refresh does not remove end time
+- No UI regressions
