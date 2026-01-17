@@ -361,9 +361,9 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       <div className="p-6">
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold mb-2">Estimate not found</h2>
-          <Button onClick={() => navigate('/jobs')}>
+          <Button onClick={() => navigate('/jobs?tab=estimates')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Jobs
+            Back to Estimates
           </Button>
         </div>
       </div>
@@ -376,7 +376,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/jobs?tab=estimates')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>

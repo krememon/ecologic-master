@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Job, type Client, type Estimate, type Customer } from "@shared/schema";
@@ -60,6 +60,15 @@ export default function Jobs() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { role } = useCan();
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  
+  // Parse URL search params to get initial tab
+  const getInitialTab = (): 'jobs' | 'estimates' => {
+    const params = new URLSearchParams(searchString);
+    const tabParam = params.get('tab');
+    if (tabParam === 'estimates') return 'estimates';
+    return 'jobs';
+  };
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
@@ -78,7 +87,7 @@ export default function Jobs() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
   const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals'>('documents');
-  const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>('jobs');
+  const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>(getInitialTab());
   
   // Estimates tab filters
   const [estimatesCustomerFilter, setEstimatesCustomerFilter] = useState<'all' | number>('all');
@@ -129,6 +138,17 @@ export default function Jobs() {
   
   // Check if user can access estimates (Technician cannot)
   const canAccessEstimates = role !== 'TECHNICIAN';
+  
+  // Sync mainPageTab with URL search params when they change (e.g., browser back/forward)
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const tabParam = params.get('tab');
+    if (tabParam === 'estimates' && canAccessEstimates) {
+      setMainPageTab('estimates');
+    } else if (tabParam === 'jobs' || !tabParam) {
+      setMainPageTab('jobs');
+    }
+  }, [searchString, canAccessEstimates]);
   
   // Defensive: reset main page tab to 'jobs' if user cannot access estimates
   useEffect(() => {
