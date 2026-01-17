@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign, MapPin
+  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign, MapPin, StickyNote
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -158,6 +158,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [jobTypeModalOpen, setJobTypeModalOpen] = useState(false);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
   const [jobLocationModalOpen, setJobLocationModalOpen] = useState(false);
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -595,6 +596,15 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               value={jobType || undefined}
               onClick={() => setJobTypeModalOpen(true)}
               testId="row-job-type"
+            />
+
+            <SectionHeader title="Notes" />
+            <InfoRow
+              icon={StickyNote}
+              label="Add notes"
+              value={notes ? notes.substring(0, 30) + (notes.length > 30 ? '...' : '') : undefined}
+              onClick={() => setNotesModalOpen(true)}
+              testId="row-add-notes"
             />
 
           </div>
@@ -1174,6 +1184,27 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               Done
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* NOTES Modal */}
+      <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Estimate Notes</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              placeholder="Add notes about this estimate..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              data-testid="textarea-notes"
+            />
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button onClick={() => setNotesModalOpen(false)}>Done</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

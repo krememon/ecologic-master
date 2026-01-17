@@ -4662,6 +4662,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/estimates/:id/notes - Update estimate notes
+  app.patch('/api/estimates/:id/notes', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {
+    try {
+      const companyId = req.companyId;
+      const estimateId = parseInt(req.params.id);
+      
+      // Verify estimate exists and belongs to company
+      const estimate = await storage.getEstimate(estimateId);
+      if (!estimate || estimate.companyId !== companyId) {
+        return res.status(404).json({ message: "Estimate not found" });
+      }
+      
+      const { notes } = req.body;
+      
+      // Update estimate with notes
+      const [updated] = await db
+        .update(estimates)
+        .set({
+          notes: notes || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(estimates.id, estimateId))
+        .returning();
+      
+      console.log(`[Estimates] notes updated estimateId=${estimateId}`);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating estimate notes:", error);
+      res.status(500).json({ message: "Failed to update estimate notes" });
+    }
+  });
+
   // PATCH /api/estimates/:id/schedule - Save schedule to estimate (for draft estimates)
   // Uses requestedStartAt as single source of truth
   app.patch('/api/estimates/:id/schedule', isAuthenticated, requirePerm('estimates.create'), async (req: any, res) => {

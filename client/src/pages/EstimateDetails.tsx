@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2, MapPin } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, Paperclip, Upload, Trash2, CheckCircle, Pen, X, Users, Share2, MapPin, Edit, StickyNote } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import type { EstimateWithItems, EstimateAttachment } from "@shared/schema";
 import { ShareEstimateModal } from "@/components/ShareEstimateModal";
 import { TimeWheelPicker } from "@/components/TimeWheelPicker";
@@ -62,8 +63,16 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [estimateScheduleDate, setEstimateScheduleDate] = useState('');
   const [estimateScheduleTime, setEstimateScheduleTime] = useState('');
   
+  // Notes editing state
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [editedNotes, setEditedNotes] = useState('');
+  const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+  
   // RBAC: Owner, Supervisor, Estimator can share estimates
   const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
+  
+  // RBAC: Owner, Supervisor, Dispatcher, Estimator can edit estimates
+  const canEditEstimate = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
 
   const { data: estimate, isLoading, error } = useQuery<EstimateWithItems>({
     queryKey: [`/api/estimates/${estimateId}`],
@@ -117,6 +126,33 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       toast({ title: "Attachment deleted" });
     },
   });
+
+  const updateNotesMutation = useMutation({
+    mutationFn: async (notes: string) => {
+      const response = await apiRequest('PATCH', `/api/estimates/${estimateId}/notes`, { notes });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update notes');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/estimates/${estimateId}`] });
+      setIsNotesModalOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to update notes", variant: "destructive" });
+    },
+  });
+
+  const openNotesModal = () => {
+    setEditedNotes(estimate?.notes || '');
+    setIsNotesModalOpen(true);
+  };
+
+  const saveNotes = () => {
+    updateNotesMutation.mutate(editedNotes);
+  };
 
   const approveMutation = useMutation({
     mutationFn: async (signatureDataUrl: string) => {
@@ -601,6 +637,55 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
           </CardContent>
         </Card>
 
+        {/* Notes Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <StickyNote className="h-5 w-5" />
+                Notes
+              </div>
+              {canEditEstimate && estimate.notes && (
+                <Button variant="ghost" size="sm" onClick={openNotesModal}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {estimate.notes ? (
+              <div>
+                <p 
+                  className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                    !isNotesExpanded ? 'line-clamp-5' : ''
+                  }`}
+                >
+                  {estimate.notes}
+                </p>
+                {estimate.notes.length > 200 && (
+                  <button 
+                    onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+                    className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+                  >
+                    {isNotesExpanded ? 'Show less' : 'Read more'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground mb-1">No notes yet</p>
+                <p className="text-sm text-muted-foreground mb-3">Add notes for this estimate.</p>
+                {canEditEstimate && (
+                  <Button variant="outline" size="sm" onClick={openNotesModal}>
+                    Add Notes
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {estimate.status === 'approved' && estimate.signatureDataUrl && (
           <Card>
             <CardHeader>
@@ -825,6 +910,35 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               {estimateScheduleMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes Modal */}
+      <Dialog open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Estimate Notes</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              placeholder="Add notes about this estimate..."
+              value={editedNotes}
+              onChange={(e) => setEditedNotes(e.target.value)}
+              rows={6}
+              className="resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setIsNotesModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveNotes}
+              disabled={updateNotesMutation.isPending}
+            >
+              {updateNotesMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
