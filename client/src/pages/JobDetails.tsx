@@ -628,54 +628,50 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </Card>
           )}
 
-          {/* Schedule Card */}
-          {(job.startDate || job.endDate) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Schedule
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+          {/* Schedule Card - Always visible */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Schedule
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {job.startDate ? (
                 <div className="space-y-1">
-                  {job.startDate && (
-                    <>
-                      <p className="font-medium">
-                        {(() => {
-                          try {
-                            const rawDate = job.startDate as any;
-                            if (rawDate instanceof Date) {
-                              return format(rawDate, 'EEEE, MMMM d, yyyy');
-                            } else if (typeof rawDate === 'string' && rawDate) {
-                              const dateStr = rawDate.split('T')[0];
-                              return format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
-                            }
-                            return format(new Date(rawDate), 'EEEE, MMMM d, yyyy');
-                          } catch {
-                            return 'Scheduled';
-                          }
-                        })()}
-                      </p>
-                      {job.scheduledTime && (
-                        <p className="text-muted-foreground">
-                          {(() => {
-                            const startTime = job.scheduledTime;
-                            const endTime = (job as any).scheduledEndTime;
-                            const formatTime = (t: string) => {
-                              const [h, m] = t.split(':').map(Number);
-                              const period = h >= 12 ? 'PM' : 'AM';
-                              const displayH = h % 12 || 12;
-                              return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
-                            };
-                            if (startTime && endTime) {
-                              return `${formatTime(startTime)} – ${formatTime(endTime)}`;
-                            }
-                            return formatTime(startTime);
-                          })()}
-                        </p>
-                      )}
-                    </>
+                  <p className="font-medium">
+                    {(() => {
+                      try {
+                        const rawDate = job.startDate as any;
+                        if (rawDate instanceof Date) {
+                          return format(rawDate, 'EEEE, MMMM d, yyyy');
+                        } else if (typeof rawDate === 'string' && rawDate) {
+                          const dateStr = rawDate.split('T')[0];
+                          return format(new Date(dateStr + 'T12:00:00'), 'EEEE, MMMM d, yyyy');
+                        }
+                        return format(new Date(rawDate), 'EEEE, MMMM d, yyyy');
+                      } catch {
+                        return 'Scheduled';
+                      }
+                    })()}
+                  </p>
+                  {job.scheduledTime && (
+                    <p className="text-muted-foreground">
+                      {(() => {
+                        const startTime = job.scheduledTime;
+                        const endTime = (job as any).scheduledEndTime;
+                        const formatTime = (t: string) => {
+                          const [h, m] = t.split(':').map(Number);
+                          const period = h >= 12 ? 'PM' : 'AM';
+                          const displayH = h % 12 || 12;
+                          return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+                        };
+                        if (startTime && endTime) {
+                          return `${formatTime(startTime)} – ${formatTime(endTime)}`;
+                        }
+                        return formatTime(startTime);
+                      })()}
+                    </p>
                   )}
                   {job.endDate && job.startDate !== job.endDate && (
                     <p className="text-sm text-muted-foreground">
@@ -696,9 +692,11 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                     </p>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <p className="text-muted-foreground">Not scheduled</p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Assigned Employees Card */}
           <Card>
