@@ -1892,6 +1892,13 @@ export class DatabaseStorage implements IStorage {
     // Create line items
     const createdItems: EstimateItem[] = [];
     for (const item of itemsWithTotals) {
+      // Calculate tax cents for this item
+      let itemTaxCents = 0;
+      if (item.taxable && item.taxRatePercentSnapshot) {
+        const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+        itemTaxCents = Math.round(item.lineTotalCents * taxRate / 100);
+      }
+      
       const [createdItem] = await db
         .insert(estimateItems)
         .values({
@@ -1903,6 +1910,10 @@ export class DatabaseStorage implements IStorage {
           unitPriceCents: item.unitPriceCents,
           unit: item.unit || 'each',
           taxable: item.taxable ?? false,
+          taxId: item.taxId || null,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+          taxNameSnapshot: item.taxNameSnapshot || null,
+          taxCents: itemTaxCents,
           lineTotalCents: item.lineTotalCents,
           sortOrder: item.sortOrder,
         })
@@ -1953,6 +1964,13 @@ export class DatabaseStorage implements IStorage {
       await db.delete(estimateItems).where(eq(estimateItems.estimateId, id));
 
       for (const item of itemsWithTotals) {
+        // Calculate tax cents for this item
+        let itemTaxCents = 0;
+        if (item.taxable && item.taxRatePercentSnapshot) {
+          const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+          itemTaxCents = Math.round(item.lineTotalCents * taxRate / 100);
+        }
+        
         await db.insert(estimateItems).values({
           estimateId: id,
           name: item.name,
@@ -1962,6 +1980,10 @@ export class DatabaseStorage implements IStorage {
           unitPriceCents: item.unitPriceCents,
           unit: item.unit || 'each',
           taxable: item.taxable ?? false,
+          taxId: item.taxId || null,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+          taxNameSnapshot: item.taxNameSnapshot || null,
+          taxCents: itemTaxCents,
           lineTotalCents: item.lineTotalCents,
           sortOrder: item.sortOrder,
         });

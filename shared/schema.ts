@@ -1153,6 +1153,9 @@ export const updateEstimateSchema = z.object({
     unitPriceCents: z.number().int().min(0, "Unit price must be positive"),
     unit: z.string().optional().default("each"),
     taxable: z.boolean().optional().default(false),
+    taxId: z.number().int().positive().nullable().optional(),
+    taxRatePercentSnapshot: z.string().nullable().optional(),
+    taxNameSnapshot: z.string().nullable().optional(),
     sortOrder: z.number().int().optional(),
   })).optional(),
 });
