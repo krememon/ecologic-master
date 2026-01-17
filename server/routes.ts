@@ -4827,9 +4827,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           scheduledTime: estimateScheduledTime || null,
         }).returning();
 
-        // 3. Copy line items from estimate to job
+        // 3. Copy line items from estimate to job (including tax fields)
         const estimateLineItems = estimate.items || [];
+        console.log("EST->JOB tax copy", estimateLineItems.map((li: any) => ({
+          name: li.name,
+          taxable: li.taxable,
+          taxId: li.taxId,
+          taxRatePercentSnapshot: li.taxRatePercentSnapshot,
+          taxNameSnapshot: li.taxNameSnapshot,
+          taxCents: li.taxCents,
+        })));
+        
         for (const item of estimateLineItems) {
+          // Calculate tax cents if taxable and has rate
+          const qty = parseFloat(String(item.quantity)) || 1;
+          const lineTotalCents = item.lineTotalCents || Math.round(qty * (item.unitPriceCents || 0));
+          let taxCents = item.taxCents || 0;
+          if (item.taxable && item.taxRatePercentSnapshot && !taxCents) {
+            const rate = parseFloat(item.taxRatePercentSnapshot) || 0;
+            taxCents = Math.round(lineTotalCents * (rate / 100));
+          }
+          const totalCents = lineTotalCents + taxCents;
+          
           await tx.insert(jobLineItems).values({
             jobId: newJob.id,
             name: item.name,
@@ -4839,7 +4858,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             unitPriceCents: item.unitPriceCents,
             unit: item.unit || 'each',
             taxable: item.taxable || false,
-            lineTotalCents: item.lineTotalCents || 0,
+            taxId: item.taxId || null,
+            taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+            taxNameSnapshot: item.taxNameSnapshot || null,
+            lineTotalCents: lineTotalCents,
+            taxCents: taxCents,
+            totalCents: totalCents,
             sortOrder: item.sortOrder || 0,
           });
         }

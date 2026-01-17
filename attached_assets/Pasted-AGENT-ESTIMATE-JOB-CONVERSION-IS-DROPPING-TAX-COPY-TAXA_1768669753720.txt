@@ -1,0 +1,82 @@
+AGENT — ESTIMATE → JOB CONVERSION IS DROPPING TAX (COPY TAXABLE + TAX RATE INTO JOB LINE ITEMS)
+
+CONFIRMED BUG:
+- Estimate has taxable line item + selected tax rate and displays tax correctly.
+- After approving estimate and creating a job, the job line items show subtotal/total but NO tax.
+=> The estimate-to-job creation pipeline is NOT carrying over tax settings.
+
+GOAL:
+When a Job is created from an Estimate, the Job must inherit:
+- lineItem.taxable
+- lineItem.taxRateId (or stored tax percent/name object)
+so the Job can compute/show:
+Subtotal + Tax + Total, just like the Estimate.
+
+STEP 1 — FIND THE EXACT PLACE JOB LINE ITEMS ARE CREATED
+Locate the backend handler/service for “Approve Estimate” / “Convert estimate to job”.
+Find the mapping that does something like:
+jobLineItems = estimate.lineItems.map(...)
+
+STEP 2 — COPY TAX FIELDS DURING MAPPING (THIS IS THE FIX)
+For EACH line item, copy these fields:
+- name/description/unit/unitPrice/quantity (already)
+- taxable (boolean)
+- taxRateId (IMPORTANT)
+- If your system stores taxRatePercent/taxRateName inline, copy those too
+- If line items store a taxRate object, ensure it is persisted or re-hydrated by id
+
+Example mapping logic (conceptually):
+jobItem.taxable = estItem.taxable
+jobItem.taxRateId = estItem.taxRateId
+(jobItem.taxRatePercent = estItem.taxRatePercent if applicable)
+
+IMPORTANT:
+Do NOT rely on calculating tax totals only at estimate level.
+The job needs the per-line tax config so it can display tax.
+
+STEP 3 — DB / API MUST RETURN THESE FIELDS FOR JOBS
+- Ensure job line item schema includes taxable + taxRateId.
+- Ensure GET /jobs/:id returns job.lineItems with taxable + taxRateId.
+- If you use joins to taxRates, ensure job line items include taxRate info (or can resolve by id).
+
+STEP 4 — JOB DETAILS “LINE ITEMS” CARD MUST SHOW TAX ROW (IF taxTotal > 0)
+Right now job card only shows Total.
+Update job line items summary card to match the estimate card behavior:
+- Subtotal row
+- Tax row (only if taxTotal > 0)
+- Total row
+Use same helper used for estimate totals if available.
+
+DEBUG (TEMP, REQUIRED):
+1) In backend right before saving new job from estimate:
+console.log("EST->JOB tax copy", estimate.lineItems.map(li => ({
+  name: li.name,
+  taxable: li.taxable,
+  taxRateId: li.taxRateId,
+  unitPrice: li.unitPrice,
+  qty: li.quantity
+})));
+
+console.log("JOB items to save", jobLineItems.map(li => ({
+  name: li.name,
+  taxable: li.taxable,
+  taxRateId: li.taxRateId
+})));
+
+2) In frontend job details after fetch:
+console.log("JOB FETCHED lineItems", job.lineItems);
+
+TEST (MUST PASS):
+1) Create estimate: 1 item $350, taxable NY 8.625%
+   Estimate shows Tax $30.19, Total $380.19
+2) Approve estimate → creates job
+3) Open job:
+   Job line items card shows:
+   - Subtotal $350.00
+   - Tax $30.19
+   - Total $380.19
+
+DELIVERABLE:
+- Tax config copied from estimate to job on approval
+- Job details displays tax properly
+- Remove debug logs after verified

@@ -681,8 +681,16 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                     // Compute line total: prefer lineTotalCents, fallback to unitPriceCents × quantity
                     const quantity = parseFloat(item.quantity) || 1;
                     const computedLineTotal = item.lineTotalCents || Math.round(item.unitPriceCents * quantity);
+                    
+                    // Compute tax for this line item
+                    let itemTaxCents = item.taxCents || 0;
+                    if (item.taxable && item.taxRatePercentSnapshot && !itemTaxCents) {
+                      const rate = parseFloat(item.taxRatePercentSnapshot) || 0;
+                      itemTaxCents = Math.round(computedLineTotal * (rate / 100));
+                    }
+                    
                     // Total with tax for display
-                    const displayTotal = item.totalCents || (computedLineTotal + (item.taxCents || 0));
+                    const displayTotal = item.totalCents || (computedLineTotal + itemTaxCents);
                     
                     return (
                       <div key={item.id} className="flex justify-between items-start py-2 border-b last:border-0">
@@ -694,9 +702,9 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                           <p className="text-sm text-muted-foreground">
                             {item.quantity} × ${(item.unitPriceCents / 100).toFixed(2)} / {item.unit}
                           </p>
-                          {item.taxable && item.taxCents > 0 && (
+                          {item.taxable && itemTaxCents > 0 && (
                             <p className="text-xs text-muted-foreground">
-                              + Tax ({item.taxNameSnapshot || 'Tax'}): ${(item.taxCents / 100).toFixed(2)}
+                              + Tax ({item.taxNameSnapshot || 'Tax'}): ${(itemTaxCents / 100).toFixed(2)}
                             </p>
                           )}
                         </div>
@@ -710,9 +718,27 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               )}
               <Separator className="my-3" />
               {(() => {
-                const subtotal = lineItems.reduce((sum, item) => sum + (item.subtotalCents || item.lineTotalCents), 0);
-                const totalTax = lineItems.reduce((sum, item) => sum + (item.taxCents || 0), 0);
-                const grandTotal = lineItems.reduce((sum, item) => sum + (item.totalCents || item.lineTotalCents), 0);
+                // Compute subtotal from line items (before tax)
+                const subtotal = lineItems.reduce((sum, item) => {
+                  const qty = parseFloat(item.quantity) || 1;
+                  const lineSubtotal = item.subtotalCents || item.lineTotalCents || Math.round(qty * (item.unitPriceCents || 0));
+                  return sum + lineSubtotal;
+                }, 0);
+                
+                // Compute total tax from line items
+                const totalTax = lineItems.reduce((sum, item) => {
+                  const qty = parseFloat(item.quantity) || 1;
+                  const lineSubtotal = item.lineTotalCents || Math.round(qty * (item.unitPriceCents || 0));
+                  let itemTax = item.taxCents || 0;
+                  // If taxable with rate but no taxCents, compute it
+                  if (item.taxable && item.taxRatePercentSnapshot && !itemTax) {
+                    const rate = parseFloat(item.taxRatePercentSnapshot) || 0;
+                    itemTax = Math.round(lineSubtotal * (rate / 100));
+                  }
+                  return sum + itemTax;
+                }, 0);
+                
+                const grandTotal = subtotal + totalTax;
                 return (
                   <div className="space-y-1">
                     {totalTax > 0 && (
