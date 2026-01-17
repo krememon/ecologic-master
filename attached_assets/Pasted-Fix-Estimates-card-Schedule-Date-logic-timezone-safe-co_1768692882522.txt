@@ -1,0 +1,77 @@
+Fix Estimates card “Schedule” + Date logic (timezone-safe + consistent)
+
+CURRENT
+Estimate cards are inconsistently displaying schedule/date:
+- Server logs confirm estimates have scheduledDate + scheduledTime
+  Example: scheduledDate=2026-01-17T12:00:00.000Z, scheduledTime="09:00"
+- But the card UI can still show “Not scheduled” or display the wrong date logic.
+This is a UI logic mismatch + possible timezone parsing issue.
+
+GOAL
+On the Estimates list card:
+- If estimate has scheduledDate (and optionally scheduledTime), it must NOT show “Not scheduled”
+- It must display the scheduled date (correct day) and schedule state consistently
+- Date formatting must be timezone-safe (no off-by-one day)
+
+IMPLEMENTATION (DO IN THIS ORDER)
+
+1) SINGLE SOURCE OF TRUTH FOR SCHEDULED STATE
+In the EstimateCard component, define:
+const hasSchedule = !!estimate.scheduledDate;
+
+Use hasSchedule for BOTH:
+- Showing “Not scheduled” vs showing time range
+- Choosing which date to display (scheduled vs created/updated fallback)
+
+No separate logic branches that can disagree.
+
+2) TIMEZONE-SAFE DATE FORMATTING (IMPORTANT)
+scheduledDate is coming back like: 2026-01-17T12:00:00.000Z (noon UTC).
+Do NOT format it by blindly doing new Date(scheduledDate) and local formatting if it shifts.
+
+Instead, derive a stable “YYYY-MM-DD” date key from scheduledDate:
+- If scheduledDate is a Date object: format it using local YEAR/MONTH/DAY from that Date object
+- If scheduledDate is a string: take the first 10 chars if ISO ("YYYY-MM-DD")
+
+Implement helper:
+function getYmd(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth()+1).padStart(2,"0");
+    const d = String(value.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof value === "string") {
+    // handle ISO
+    if (value.length >= 10) return value.slice(0,10);
+  }
+  return null;
+}
+
+Then format the YMD into “Jan 17, 2026” using an existing formatter that treats YMD as a local date (parseYmdLocal).
+
+3) ESTIMATE CARD DISPLAY RULES
+- Schedule line:
+  if (!hasSchedule) show “Not scheduled”
+  else show time range:
+    start = scheduledTime
+    end = scheduledEndTime (optional)
+    render “9:00 AM – 11:00 AM” OR “9:00 AM”
+
+- Date line at bottom:
+  if (hasSchedule) show scheduled date (from YMD)
+  else show createdAt/updatedAt fallback (safe)
+
+4) VERIFY WITH LOGGED EXAMPLE
+Test with estimate from logs:
+scheduledDate=2026-01-17T12:00:00.000Z, scheduledTime="09:00"
+Expected card:
+Schedule: “9:00 AM” (or range if end exists)
+Date: “Jan 17, 2026”
+And it must NOT show “Not scheduled”
+
+DONE WHEN
+- Estimates list card shows correct schedule state and date for scheduled estimates
+- No off-by-one day due to timezone
+- “Not scheduled” only appears when scheduledDate is truly null

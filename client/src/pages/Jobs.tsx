@@ -1621,7 +1621,7 @@ export default function Jobs() {
                           <span className="truncate">{estimate.customerName}</span>
                         </div>
                       )}
-                      {/* Schedule Box - Always visible (display-only) - reads ONLY from requestedStartAt */}
+                      {/* Schedule Box - Always visible (display-only) - uses scheduledDate + scheduledTime */}
                       <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                           <Calendar className="h-3.5 w-3.5 shrink-0" />
@@ -1629,13 +1629,36 @@ export default function Jobs() {
                         </div>
                         <div className="mt-1 text-sm">
                           {(() => {
-                            const scheduleInfo = formatEstimateRequestedSchedule({ id: estimate.id, requestedStartAt: (estimate as any).requestedStartAt });
-                            if (!scheduleInfo) {
+                            const scheduledDate = (estimate as any).scheduledDate;
+                            const scheduledTime = (estimate as any).scheduledTime;
+                            const scheduledEndTime = (estimate as any).scheduledEndTime;
+                            
+                            if (!scheduledDate) {
                               return <span className="text-slate-400 dark:text-slate-500">Not scheduled</span>;
                             }
+                            
+                            const formatTimeDisplay = (time: string | null) => {
+                              if (!time) return null;
+                              try {
+                                const [hours, minutes] = time.split(':').map(Number);
+                                const period = hours >= 12 ? 'PM' : 'AM';
+                                const displayHours = hours % 12 || 12;
+                                return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+                              } catch {
+                                return time;
+                              }
+                            };
+                            
+                            const startDisplay = formatTimeDisplay(scheduledTime);
+                            const endDisplay = formatTimeDisplay(scheduledEndTime);
+                            
+                            const timeStr = startDisplay && endDisplay 
+                              ? `${startDisplay} – ${endDisplay}`
+                              : startDisplay || 'Scheduled';
+                            
                             return (
                               <span className="text-slate-900 dark:text-slate-100">
-                                {scheduleInfo.full}
+                                {timeStr}
                               </span>
                             );
                           })()}
@@ -1649,16 +1672,47 @@ export default function Jobs() {
                       </div>
                       <div className="text-xs text-slate-400 pt-1">
                         {(() => {
+                          const scheduledDateVal = (estimate as any).scheduledDate;
+                          
+                          const getYmd = (value: any): string | null => {
+                            if (!value) return null;
+                            if (value instanceof Date) {
+                              if (isNaN(value.getTime())) return null;
+                              const y = value.getFullYear();
+                              const m = String(value.getMonth() + 1).padStart(2, '0');
+                              const d = String(value.getDate()).padStart(2, '0');
+                              return `${y}-${m}-${d}`;
+                            }
+                            if (typeof value === 'string' && value.length >= 10) {
+                              return value.slice(0, 10);
+                            }
+                            return null;
+                          };
+                          
+                          const formatYmd = (ymd: string): string => {
+                            try {
+                              const [y, m, d] = ymd.split('-').map(Number);
+                              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                              return `${months[m - 1]} ${d}, ${y}`;
+                            } catch {
+                              return ymd;
+                            }
+                          };
+                          
+                          const scheduledYmd = getYmd(scheduledDateVal);
+                          if (scheduledYmd) {
+                            return formatYmd(scheduledYmd);
+                          }
+                          
                           const safeToDate = (value: any): Date | null => {
                             if (!value) return null;
                             if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
                             const d = new Date(value);
                             return isNaN(d.getTime()) ? null : d;
                           };
-                          const scheduled = safeToDate((estimate as any).scheduledDate);
                           const created = safeToDate(estimate.createdAt);
                           const updated = safeToDate(estimate.updatedAt);
-                          const displayDate = scheduled || created || updated;
+                          const displayDate = created || updated;
                           if (!displayDate) return '—';
                           try {
                             return format(displayDate, 'MMM d, yyyy');
