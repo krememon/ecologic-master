@@ -561,6 +561,15 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               testId="row-add-line-items"
             />
 
+            <SectionHeader title="Job Location" />
+            <InfoRow
+              icon={MapPin}
+              label="Add address"
+              value={getJobLocationDisplayText()}
+              onClick={() => setJobLocationModalOpen(true)}
+              testId="row-job-location"
+            />
+
             <SectionHeader title="Schedule" />
             <InfoRow
               icon={Calendar}
@@ -586,15 +595,6 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               value={jobType || undefined}
               onClick={() => setJobTypeModalOpen(true)}
               testId="row-job-type"
-            />
-
-            <SectionHeader title="Job Location" />
-            <InfoRow
-              icon={MapPin}
-              label="Add address"
-              value={getJobLocationDisplayText()}
-              onClick={() => setJobLocationModalOpen(true)}
-              testId="row-job-location"
             />
 
           </div>
