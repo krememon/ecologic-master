@@ -23,6 +23,7 @@ import { startOfWeekLocal, addDaysLocal, dateToYmdLocal, parseYmdLocal } from "@
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
 import { ViewOptionsModal, ExtendedViewMode } from "@/components/ViewOptionsModal";
+import { ScheduleMapView } from "@/components/ScheduleMapView";
 
 interface JobWithSchedule {
   id: number;
@@ -921,10 +922,16 @@ export default function AIScheduling() {
         )}
 
         {viewMode === 'map' && (
-          <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
-            <Map className="h-16 w-16 mb-4 opacity-30" />
-            <p className="text-lg font-medium">Map View</p>
-            <p className="text-sm">Coming soon</p>
+          <div className="flex-1 h-full min-h-[500px]">
+            <ScheduleMapView 
+              items={itemsForSelectedDay.map(item => ({
+                ...item,
+                customerId: item.type === 'estimate' ? (item as any).customerId : (item as any).customerId,
+                latitude: (item as any).latitude,
+                longitude: (item as any).longitude
+              }))}
+              selectedDate={selectedDate}
+            />
           </div>
         )}
       </div>

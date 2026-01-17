@@ -6593,6 +6593,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Geocoding endpoint - geocodes address and caches coordinates
+  app.post('/api/geocode', isAuthenticated, async (req: any, res) => {
+    try {
+      const { address, customerId } = req.body;
+      
+      if (!address) {
+        return res.status(400).json({ message: "Address is required" });
+      }
+
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ message: "Geocoding service not configured" });
+      }
+
+      const encodedAddress = encodeURIComponent(address);
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${apiKey}`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.status !== 'OK' || !data.results?.length) {
+        return res.status(404).json({ message: "Could not geocode address", status: data.status });
+      }
+
+      const location = data.results[0].geometry.location;
+      const result = { latitude: location.lat, longitude: location.lng };
+
+      // Cache coordinates on customer if customerId provided
+      if (customerId) {
+        await db.update(customers)
+          .set({ latitude: result.latitude, longitude: result.longitude })
+          .where(eq(customers.id, customerId));
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      res.status(500).json({ message: "Failed to geocode address" });
+    }
+  });
+
   // Payments routes
   app.get('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
