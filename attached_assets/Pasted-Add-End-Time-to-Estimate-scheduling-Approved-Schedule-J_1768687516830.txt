@@ -1,0 +1,105 @@
+Add End Time to Estimate scheduling + Approved “Schedule Job” modal (without breaking existing flow)
+
+CURRENT (3 scheduling UIs exist)
+1) New Job scheduling modal = ✅ has Date + Start Time + End Time (this is the correct one)
+2) Estimate create scheduling = Date + Time (single time) (needs End Time)
+3) After approval “Schedule Job” modal = Date + Time (single time) (needs End Time)
+
+GOAL
+Use the SAME scheduling UX everywhere:
+- Date
+- Start Time
+- End Time
+And do it WITHOUT breaking:
+- existing schedule save logic
+- Schedule page rendering
+- approve/reschedule flow
+- estimate create flow
+
+IMPORTANT RULES (DO NOT BREAK FLOW)
+- Keep old API fields working (scheduledTime etc.) while we add end time
+- If end time is not set, everything should behave exactly as it does today
+- No unexpected redirects
+
+DATA MODEL RULE (BACKWARD COMPATIBLE)
+We will ADD end time support without removing anything.
+
+For Jobs:
+- Keep existing: scheduledDate, scheduledTime (start), startDate (ISO)
+- ADD: scheduledEndTime (string "HH:mm") OR endDate (ISO) (pick ONE approach)
+Recommended:
+- Store start as startDate ISO (already used)
+- Store end as endDate ISO (new, derived from date + end time)
+Also keep scheduledEndTime for display if needed.
+
+For Estimates:
+- Keep existing: scheduledDate, scheduledTime (start)
+- ADD: scheduledEndTime ("HH:mm")
+(Estimates don’t need ISO endDate unless we want it later — keep simple)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY THE “GOOD” MODAL (NEW JOB START/END)
+- Locate the modal/component that already supports:
+  - Date
+  - Start Time
+  - End Time
+This is the source-of-truth UI.
+We will reuse it (or extract a shared component) for the other two flows.
+
+2) UPDATE APPROVED “SCHEDULE JOB” MODAL TO INCLUDE END TIME
+- Reuse the same component behavior as New Job modal:
+  - Date
+  - Start Time
+  - End Time
+- On submit, call PATCH /api/jobs/:id/schedule with:
+  - scheduledDate (YYYY-MM-DD)
+  - scheduledTime (start time)
+  - scheduledEndTime (end time)   <-- NEW
+  - timezone
+- Backend must store end time safely (see step 4)
+
+3) UPDATE ESTIMATE “SELECT TIME” SCHEDULING TO INCLUDE END TIME
+- In estimate creation/edit scheduling UI:
+  - Add End Time field (same look + behavior)
+- When saving estimate schedule:
+  - Continue saving scheduledDate + scheduledTime (start)
+  - ALSO save scheduledEndTime (new)
+- If user doesn’t set end time, keep scheduledEndTime null and behave exactly as before.
+
+4) BACKEND: UPDATE JOB SCHEDULE ENDPOINT (NON-BREAKING)
+In PATCH /api/jobs/:id/schedule:
+- Continue supporting the existing payload (scheduledDate + scheduledTime)
+- Add support for scheduledEndTime (optional)
+- Save:
+  - startDate (ISO) from scheduledDate + scheduledTime + timezone
+  - endDate (ISO) from scheduledDate + scheduledEndTime + timezone (ONLY if provided)
+  - Also keep scheduledEndTime string if column exists (or add it)
+- If end time is before start time, auto-handle:
+  - either block with error OR assume next day (choose simplest: block with clear error toast)
+
+5) BACKEND: UPDATE ESTIMATE SAVE ENDPOINT (NON-BREAKING)
+Where estimates are created/updated:
+- Accept scheduledEndTime (optional)
+- Store it in DB
+- Do not change existing scheduledTime behavior
+
+6) SCHEDULE PAGE DISPLAY (SAFE CHANGE)
+Schedule should still place blocks based on START time (no breaking layout).
+Optional enhancement:
+- If end time exists, use it to compute block height/duration.
+But for now:
+- Ensure schedule still renders even if end time is missing.
+
+7) MIGRATION (IF NEEDED)
+If DB schema doesn’t have fields:
+- Add scheduledEndTime for estimates
+- Add endDate OR scheduledEndTime for jobs
+- Keep defaults null so existing rows work.
+
+DONE WHEN
+- New Job scheduling still works exactly as before
+- Approved “Schedule Job” now has Start + End time and saves both
+- Estimate scheduling now has Start + End time and saves both
+- If end time is not set, everything behaves exactly like current
+- Schedule page still renders all items correctly (no disappear issues)

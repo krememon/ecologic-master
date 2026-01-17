@@ -190,6 +190,7 @@ export const jobs = pgTable("jobs", {
   jobType: varchar("job_type", { length: 100 }), // Same job types as estimates
   assignedTo: varchar("assigned_to").references(() => users.id), // Assigned user/technician
   scheduledTime: varchar("scheduled_time", { length: 10 }), // HH:mm format, stored separately to avoid timezone issues
+  scheduledEndTime: varchar("scheduled_end_time", { length: 10 }), // HH:mm format for end time
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -754,6 +755,7 @@ export const estimates = pgTable("estimates", {
   signatureDataUrl: text("signature_data_url"),
   scheduledDate: timestamp("scheduled_date"),
   scheduledTime: varchar("scheduled_time", { length: 10 }),
+  scheduledEndTime: varchar("scheduled_end_time", { length: 10 }), // HH:mm format for end time
   // Unified field for requested schedule (ISO timestamp) - this is the source of truth
   requestedStartAt: timestamp("requested_start_at"),
   // Job conversion (idempotency - one estimate can only create one job)
