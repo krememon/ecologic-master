@@ -316,7 +316,7 @@ export default function AIScheduling() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-slate-900">
+    <div className="flex flex-col min-h-screen h-screen bg-white dark:bg-slate-900">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2">
           <button
@@ -458,11 +458,11 @@ export default function AIScheduling() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto bg-white dark:bg-slate-900">
         {viewMode === 'day' && (
           <div className="min-h-full">
             {jobsByEmployee.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+              <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-slate-500 dark:text-slate-400">
                 <Calendar className="h-16 w-16 mb-4 opacity-30" />
                 <p className="text-lg font-medium">No jobs scheduled</p>
                 <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
@@ -566,9 +566,9 @@ export default function AIScheduling() {
         )}
 
         {viewMode === 'list' && (
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-3 min-h-full">
             {dailyJobs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+              <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-slate-500 dark:text-slate-400">
                 <List className="h-16 w-16 mb-4 opacity-30" />
                 <p className="text-lg font-medium">No jobs scheduled</p>
                 <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
@@ -614,7 +614,7 @@ export default function AIScheduling() {
         )}
 
         {viewMode === '3day' && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+          <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
             <Calendar className="h-16 w-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">3 Day View</p>
             <p className="text-sm">Coming soon</p>
@@ -622,7 +622,7 @@ export default function AIScheduling() {
         )}
 
         {viewMode === 'week' && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+          <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
             <Calendar className="h-16 w-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">Week View</p>
             <p className="text-sm">Coming soon</p>
@@ -630,7 +630,7 @@ export default function AIScheduling() {
         )}
 
         {viewMode === 'map' && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+          <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
             <Map className="h-16 w-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">Map View</p>
             <p className="text-sm">Coming soon</p>

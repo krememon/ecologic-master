@@ -1,0 +1,59 @@
+AGENT — FIX SCHEDULE PAGE HEIGHT (FULL SCREEN FILL)
+
+CONTEXT:
+On the Schedule page, the content does NOT fill the full available viewport.
+There is visible light-grey background showing below the content, making the page feel “cut off” and not truly full screen.
+This is especially noticeable on mobile.
+
+GOAL:
+Make the Schedule page content fill the entire available screen height so it feels like a true full-screen page, matching Jobber’s scheduling UI.
+
+SCOPE:
+Schedule page only.
+Do NOT redesign layout or components.
+This is a sizing / layout fix only.
+
+ISSUE SUMMARY:
+- The main Schedule page container does not stretch to full viewport height
+- Content stops early, leaving unused grey space at the bottom
+- Floating “+” button appears detached instead of anchored to a full-height layout
+
+REQUIREMENTS:
+1) Full viewport height
+- The Schedule page root container should use full available height:
+  - 100vh (or equivalent using safe viewport units)
+  - Respect mobile browser safe areas (iOS Safari)
+
+2) Proper layout structure
+- Header (month selector, arrows, Today, icons) stays at top
+- View selector + date row remain fixed at top of content
+- Main schedule body expands to fill remaining vertical space
+- Empty states (e.g. “3 Day View — Coming soon”) should be vertically centered within available space
+
+3) Background consistency
+- The light-grey page background should only appear where intended
+- No exposed background below the main schedule container
+- White schedule surface should visually fill the screen
+
+4) Floating Action Button (“+”)
+- Keep it fixed to bottom-right
+- Ensure it sits relative to the viewport, not a short container
+- It should feel anchored to a full-height page, not floating over empty space
+
+IMPLEMENTATION NOTES:
+- Use a flex column layout:
+  - Page wrapper: min-height: 100vh
+  - Header: flex-shrink: 0
+  - Schedule body: flex: 1; overflow-y: auto
+- Avoid hardcoded pixel heights
+- Use safe-area insets for iOS if applicable
+
+DO NOT:
+- Do not add scrollbars unnecessarily
+- Do not change schedule logic or views
+- Do not alter Jobber-like UI decisions
+
+SUCCESS CRITERIA:
+- Schedule page visually fills the entire screen on mobile and desktop
+- No visible empty grey area below content
+- Page feels “solid” and full screen like Jobber
