@@ -1,0 +1,75 @@
+AGENT — AUTO-ADD JOBS + ESTIMATES TO SCHEDULE WHEN A DATE/TIME IS SET (CREATE + ESTIMATE→JOB)
+
+CONTEXT:
+We now have a Schedule Day View grid.
+I want scheduling to be automatic based on the date/time the user sets during:
+1) Creating a Job
+2) Creating an Estimate
+3) Approving/Converting an Estimate into a Job (the job schedule step)
+
+Right now, the schedule grid is not reliably populated from those date/time fields.
+
+GOAL:
+Whenever a user sets a date/time on a Job or Estimate, that record should automatically appear on the Schedule page at that exact date/time.
+
+HOW IT SHOULD WORK (SOURCE OF TRUTH):
+- If a Job has schedule date/time set → it appears on Schedule.
+- If an Estimate has schedule date/time set → it appears on Schedule (as an Estimate type).
+- When an Estimate is converted to a Job:
+  - the created Job MUST inherit the scheduled date/time
+  - the created Job MUST appear on Schedule immediately.
+
+REQUIREMENTS (DATA + PERSISTENCE):
+1) Standardize fields (do not create multiple schedule fields):
+- Job uses: job.scheduledStartAt (ISO datetime) (or your existing equivalent)
+- Estimate uses: estimate.scheduledStartAt (ISO datetime) (or your existing equivalent)
+
+2) On CREATE JOB:
+- When user sets schedule date/time and saves:
+  - Persist scheduledStartAt on the job record in DB
+  - Return it from the create job endpoint
+
+3) On CREATE ESTIMATE:
+- When user sets schedule date/time and saves:
+  - Persist scheduledStartAt on the estimate record in DB
+  - Return it from the create estimate endpoint
+
+4) On ESTIMATE → JOB conversion:
+- When converting/approving estimate:
+  A) If the estimate already has scheduledStartAt set:
+     - Copy that exact datetime onto the new job.scheduledStartAt
+  B) If the flow forces the user to pick a job schedule date/time:
+     - Save that datetime on the job.scheduledStartAt
+     - (Optionally also update estimate.scheduledStartAt, but not required)
+  IMPORTANT: Job schedule must not end up blank.
+
+SCHEDULE PAGE REQUIREMENTS:
+- The Schedule page should read ONLY from these fields:
+  - job.scheduledStartAt
+  - estimate.scheduledStartAt
+- Any record with a scheduledStartAt on the selected date must render as a block.
+- Immediately after saving/creating:
+  - UI should refresh so it appears on Schedule without manual refresh
+  (invalidate/refetch schedule query)
+
+EDGE CASES:
+- If user edits the job/estimate schedule later, it should move on the Schedule grid.
+- If schedule is removed (cleared), it should disappear from Schedule.
+
+RBAC:
+- Follow existing access rules (hidden not disabled)
+
+TESTS (MUST PASS):
+1) Create Job with schedule 01/17/2026 at 9:00 AM
+   → Job appears on Schedule Day View at 9:00 AM
+2) Create Estimate with schedule 01/17/2026 at 1:00 PM
+   → Estimate appears on Schedule Day View at 1:00 PM
+3) Convert that estimate to a job
+   → New Job inherits schedule and appears at the correct time
+4) Edit schedule time on a job
+   → Block moves to new time on Schedule
+
+DELIVERABLE:
+- Schedule grid is automatically populated from Job/Estimate schedule fields
+- Estimate→Job conversion correctly carries schedule datetime into the Job
+- Schedule view updates immediately after create/convert/edit
