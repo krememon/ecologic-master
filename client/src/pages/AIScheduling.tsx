@@ -585,34 +585,46 @@ export default function AIScheduling() {
               ))}
               
               <div className="absolute left-16 right-0 top-0 bottom-0">
-                {dailyJobs.map((job) => {
-                  const position = getTimePosition(job.scheduledTime);
+                {scheduleItems.map((item) => {
+                  const position = getTimePosition(item.scheduledTime);
                   if (position === null) return null;
+                  
+                  const isEstimate = item.type === 'estimate';
+                  const bgClass = isEstimate 
+                    ? 'bg-purple-100 dark:bg-purple-900/30 border-l-4 border-purple-500' 
+                    : `${getStatusColor(item.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(item.status).replace('bg-', 'border-')}`;
                   
                   return (
                     <div
-                      key={job.id}
-                      onClick={() => setLocation(`/jobs/${job.id}`)}
-                      className={`absolute left-2 right-4 px-3 py-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${getStatusColor(job.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(job.status).replace('bg-', 'border-')}`}
+                      key={`${item.type}-${item.id}`}
+                      onClick={() => setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`)}
+                      className={`absolute left-2 right-4 px-3 py-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${bgClass}`}
                       style={{ 
                         top: `${position}px`,
-                        minHeight: '50px'
+                        minHeight: '60px'
                       }}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                            {job.clientName || job.client?.name || job.title}
-                          </p>
-                          {job.scheduledTime && (
-                            <p className="text-xs text-slate-600 dark:text-slate-400">
-                              {formatTime(job.scheduledTime)}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                              {item.customerName || item.title}
+                            </p>
+                            {isEstimate && (
+                              <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-200 rounded">
+                                Estimate
+                              </span>
+                            )}
+                          </div>
+                          {item.scheduledTime && (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                              {isEstimate ? 'Estimate' : 'Job'} • {formatTime(item.scheduledTime)}
                             </p>
                           )}
-                          {(job.location || job.city) && (
+                          {item.address && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
                               <MapPin className="h-3 w-3" />
-                              {job.location || job.city}
+                              {item.address}
                             </p>
                           )}
                         </div>
