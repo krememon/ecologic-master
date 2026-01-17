@@ -1,0 +1,54 @@
+Fix Approve Estimate → Schedule Job flow routing + ensure item appears on Schedule
+
+CURRENT
+After I approve an Estimate and set a job Date/Time, the app routes weird:
+- It suddenly navigates me to the Schedule tab/page.
+- Even worse: the scheduled item still may not appear correctly on the Schedule.
+
+GOAL
+When I approve an Estimate and set the job date/time:
+- The scheduling is SAVED correctly (DB write)
+- The scheduled item ALWAYS shows up on Schedule (immediately + after refresh)
+- The UI does NOT auto-navigate me away unless I explicitly choose to go to Schedule
+  (Keep me in the current context: the Estimate / Job / Approval flow screen)
+
+IMPORTANT UX RULE
+Do NOT automatically redirect to /schedule after scheduling.
+If there is currently a navigate('/schedule') or similar, remove it.
+If we want a way to go to schedule, add a secondary button/link like “View on Schedule” (optional), but default behavior = stay put.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FIND & REMOVE THE AUTO-ROUTE
+- Search codebase for:
+  - navigate('/schedule')
+  - router.push('/schedule')
+  - window.location = '/schedule'
+  - setTab('schedule') / setActiveTab('schedule')
+  - anything triggered inside approve/schedule handlers
+- Remove the forced route/tab switch after scheduling succeeds.
+
+2) ENSURE SCHEDULING STILL PERSISTS + SHOWS ON SCHEDULE
+- Confirm the Schedule Job modal submits to the correct endpoint with correct ID (estimateId vs jobId)
+- Confirm backend writes scheduledAt (or scheduledDate+time combined) to the correct record
+- Confirm schedule feed query includes approved scheduled records
+- After successful scheduling:
+  - Invalidate/refetch schedule cache (if using react-query) OR
+  - Update relevant state so Schedule will show it immediately when user goes there
+
+3) KEEP MODAL + PAGE STATE CLEAN
+After user clicks “Schedule”:
+- Close the modal
+- Show a small success toast: “Scheduled”
+- Keep them on the Estimate/Job page they were on
+
+4) ADD A SAFE OPTIONAL CTA (OPTIONAL)
+Add a subtle button/link after success:
+- “View on Schedule”
+This should be user-initiated navigation only.
+
+DONE WHEN
+- Approve estimate + set date/time → modal closes, success toast shows, NO auto navigation
+- The scheduled item appears on Schedule when I go there
+- Persists after refresh
+- No RBAC regressions

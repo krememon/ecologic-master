@@ -199,7 +199,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       setIsScheduleModalOpen(false);
-      navigate('/schedule', { replace: true });
+      toast({ title: "Scheduled" });
     },
     onError: () => {
       toast({ title: "Failed to schedule job", variant: "destructive" });
