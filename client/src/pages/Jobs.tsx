@@ -1648,7 +1648,19 @@ export default function Jobs() {
                         </span>
                       </div>
                       <div className="text-xs text-slate-400 pt-1">
-                        {estimate.updatedAt ? format(new Date(estimate.updatedAt), 'MMM d, yyyy') : ''}
+                        {(() => {
+                          const scheduledDate = (estimate as any).scheduledDate;
+                          if (scheduledDate) {
+                            return format(new Date(scheduledDate + 'T12:00:00'), 'MMM d, yyyy');
+                          }
+                          if (estimate.createdAt) {
+                            return format(new Date(estimate.createdAt), 'MMM d, yyyy');
+                          }
+                          if (estimate.updatedAt) {
+                            return format(new Date(estimate.updatedAt), 'MMM d, yyyy');
+                          }
+                          return 'No date';
+                        })()}
                       </div>
                     </CardContent>
                   </Card>
