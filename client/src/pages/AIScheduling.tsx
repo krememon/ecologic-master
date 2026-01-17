@@ -870,11 +870,13 @@ export default function AIScheduling() {
                               </p>
                             )}
                           </div>
-                          {isEstimate && (
-                            <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 rounded">
-                              Estimate
-                            </span>
-                          )}
+                          <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded ${
+                            isEstimate 
+                              ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200'
+                              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
+                          }`}>
+                            {isEstimate ? 'Estimate' : 'Job'}
+                          </span>
                         </div>
                       </div>
                     </div>
