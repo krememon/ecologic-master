@@ -492,23 +492,29 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
             {(() => {
               const rawDate = (estimate as any)?.scheduledDate;
               const rawTime = (estimate as any)?.scheduledTime;
+              const rawEndTime = (estimate as any)?.scheduledEndTime;
               if (!rawDate) {
                 return <p className="text-muted-foreground">Not scheduled</p>;
               }
-              // Format date for display
               const dateStr = typeof rawDate === 'string' ? rawDate.split('T')[0] : new Date(rawDate).toISOString().split('T')[0];
               const [year, month, day] = dateStr.split('-').map(Number);
               const dateFormatted = new Date(year, month - 1, day).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-              // Format time for display
-              const timeStr = rawTime || '09:00';
-              const [hours, minutes] = timeStr.split(':').map(Number);
-              const period = hours >= 12 ? 'PM' : 'AM';
-              const displayHours = hours % 12 || 12;
-              const timeFormatted = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+              const formatTime = (t: string) => {
+                const [h, m] = t.split(':').map(Number);
+                const period = h >= 12 ? 'PM' : 'AM';
+                const displayH = h % 12 || 12;
+                return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+              };
+              let timeFormatted = '';
+              if (rawTime && rawEndTime) {
+                timeFormatted = `${formatTime(rawTime)} – ${formatTime(rawEndTime)}`;
+              } else if (rawTime) {
+                timeFormatted = formatTime(rawTime);
+              }
               return (
                 <div className="space-y-1">
                   <p className="font-medium">{dateFormatted}</p>
-                  <p className="text-muted-foreground">{timeFormatted}</p>
+                  {timeFormatted && <p className="text-muted-foreground">{timeFormatted}</p>}
                 </div>
               );
             })()}
