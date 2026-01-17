@@ -1,0 +1,71 @@
+AGENT — ESTIMATE DETAILS LINE ITEMS CARD IGNORING TAX (EDITOR SHOWS TAX BUT CARD DOESN’T)
+
+OBSERVED:
+- In Estimate Line Item editor modal, tax works:
+  Subtotal $350, Tax (8.625%) $30.19, Total $380.19
+- After saving estimate, Estimate Details “Line Items” summary card still shows:
+  Subtotal $350, Total $350 (no tax)
+=> Tax is either not being persisted/returned OR the card is ignoring it.
+
+GOAL:
+Estimate Details “Line Items” card must display tax and correct total when tax exists:
+Subtotal $350
+Tax $30.19
+Total $380.19
+
+STEP 1 — PROVE WHAT IS STORED (NO MORE GUESSING)
+A) After saving an estimate with taxable + tax rate, inspect the estimate record used by Estimate Details page.
+Add a TEMP console log right after fetching estimate details:
+console.log("ESTIMATE DETAILS RAW", estimate);
+
+B) Specifically confirm for each estimate line item:
+- taxable (true/false)
+- taxRateId OR taxRatePercent OR taxRate object
+And confirm if estimate has:
+- subtotal / taxTotal / total fields
+
+STEP 2 — FIX PERSISTENCE IF DATA IS MISSING
+If the fetched estimate DOES NOT include taxable/taxRate info:
+1) Frontend: ensure save payload for estimate line items includes:
+   taxable: true
+   taxRateId: <selectedRateId>
+2) Backend: ensure estimate create/update persists those fields on estimate line items
+3) Backend: ensure GET estimate details returns those fields
+
+NOTE:
+The editor showing tax is not enough — it may be computing tax locally without persisting the taxRateId.
+
+STEP 3 — FIX LINE ITEMS SUMMARY CARD CALCULATION (IF DATA EXISTS BUT UI IGNORES)
+If fetched estimate DOES include taxable + taxRate info:
+Update the Estimate Details “Line Items” summary card to compute totals INCLUDING tax:
+- subtotal = sum(qty * unitPrice)
+- taxTotal = sum((qty * unitPrice) * (taxRatePercent/100)) for taxable lines
+- total = subtotal + taxTotal
+
+Render:
+- Always show Subtotal
+- Show Tax row ONLY if taxTotal > 0
+- Always show Total
+
+IMPORTANT:
+Tax percent should come from the selected tax rate:
+- via taxRate object on line item
+- OR by looking up taxRateId in the saved taxRates list
+Do not hardcode.
+
+STEP 4 — VERIFY WITH NUMBERS
+Test: 1 item, $350, taxable, NY 8.625%
+Expected:
+Tax = $30.19
+Total = $380.19
+The summary card must match the editor.
+
+DO NOT:
+- Change the editor UI
+- Create a second tax system
+- Hide tax (we need it displayed)
+
+DELIVERABLE:
+- Estimate details “Line Items” card shows Tax row + correct Total when tax exists
+- If tax data was missing, it is now persisted and returned reliably
+- Remove temp logs after verified

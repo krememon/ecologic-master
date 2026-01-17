@@ -4271,6 +4271,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           unitPriceCents,
           unit: item.unit?.trim() || 'each',
           taxable: item.taxable ?? false,
+          taxId: item.taxId || null,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+          taxNameSnapshot: item.taxNameSnapshot || null,
+          taxCents: item.taxCents ?? 0,
           sortOrder: item.sortOrder,
         });
       }
@@ -4383,6 +4387,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           unitPriceCents,
           unit: item.unit?.trim() || 'each',
           taxable: item.taxable ?? false,
+          taxId: item.taxId || null,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+          taxNameSnapshot: item.taxNameSnapshot || null,
+          taxCents: item.taxCents ?? 0,
           sortOrder: item.sortOrder,
         });
       }
@@ -4499,8 +4507,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           normalizedItems.push({
             id: item.id,
             name: item.name.trim(),
+            description: item.description?.trim() || null,
+            taskCode: item.taskCode?.trim() || null,
             quantity,
             unitPriceCents,
+            unit: item.unit?.trim() || 'each',
+            taxable: item.taxable ?? false,
+            taxId: item.taxId || null,
+            taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
+            taxNameSnapshot: item.taxNameSnapshot || null,
+            taxCents: item.taxCents ?? 0,
             sortOrder: item.sortOrder,
           });
         }
