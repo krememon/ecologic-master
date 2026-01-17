@@ -1,0 +1,58 @@
+AGENT — FIX DUPLICATE LINE ITEMS IN “ADD LINE ITEMS” (TOGGLE SELECT LIKE CHECKBOX)
+
+CONTEXT:
+In the “Add Line Items” picker modal (price book list) for Estimates:
+- If I tap the same line item multiple times, it adds duplicates.
+Example: tap “Snake Drain Line” 5 times → it adds 5 separate Snake Drain Line items.
+This is a bug.
+
+DESIRED BEHAVIOR:
+Treat the list like a multi-select toggle:
+- Tap a line item once → it is SELECTED and will be added (1 instance)
+- Tap the same line item again → it is UNSELECTED and will be removed (0 instances)
+- Result: Each price book item can appear at most once in the estimate line items list from this picker.
+
+UI REQUIREMENTS:
+- Add a clear selected state (like Jobs picker if it has one):
+  - highlight row, checkmark, or subtle background change
+- Do NOT add extra buttons; selection should be by tapping the row.
+- “Done” should apply the selected set.
+
+LOGIC REQUIREMENTS:
+1) Use a Set/deduped structure keyed by a stable identifier:
+   - priceBookItemId (preferred)
+   - or lineItemTemplateId
+   - fallback: name+unit+unitPrice only if no id exists (but prefer id)
+
+2) When a row is tapped:
+   - if id is not selected → add to selected set
+   - if id is already selected → remove from selected set
+
+3) When “Done” is pressed:
+   - Replace the estimate’s lineItems with:
+     - existing manual line items that were already in the estimate (if applicable) PLUS selected price book items
+   OR (simpler for now if the picker is only for adding from price book):
+     - only add selected price book items that are not already present, and remove ones that were deselected
+   IMPORTANT: The final result should contain each selected price book item at most once.
+
+4) When reopening the Add Line Items modal:
+   - Items already present in the estimate should show as selected automatically.
+
+DO NOT:
+- Allow duplicates to be created by repeated taps
+- Break “Create new line item” flow
+- Break pricing/tax calculations
+
+TESTS (MUST PASS):
+1) Open Add Line Items → tap “Snake Drain Line” once → Done
+   - Estimate has exactly 1 Snake Drain Line item
+2) Open Add Line Items again → tap “Snake Drain Line” once (to unselect) → Done
+   - Snake Drain Line is removed from estimate
+3) Tap 3 different items → Done
+   - Estimate has exactly 3 items (no duplicates)
+4) Tap an item rapidly multiple times
+   - It should just toggle selected/unselected, never create duplicates
+
+DELIVERABLE:
+- Add Line Items modal behaves like toggle multi-select
+- No duplicate line items possible from the picker

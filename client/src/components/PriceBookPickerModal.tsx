@@ -26,12 +26,14 @@ interface LineItem {
   taxRatePercentSnapshot: string | null;
   taxNameSnapshot: string | null;
   saveToPriceBook: boolean;
+  priceBookItemId?: number | null;
 }
 
 interface PriceBookPickerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAddItem: (item: LineItem) => void;
+  onRemoveItemByPriceBookId?: (priceBookItemId: number) => void;
   existingItems: LineItem[];
 }
 
@@ -48,12 +50,14 @@ export function PriceBookPickerModal({
   open, 
   onOpenChange, 
   onAddItem,
+  onRemoveItemByPriceBookId,
   existingItems 
 }: PriceBookPickerModalProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [addedItemIds, setAddedItemIds] = useState<Set<number>>(new Set());
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
+  const [initialSelectedIds, setInitialSelectedIds] = useState<Set<number>>(new Set());
   const [priceDisplay, setPriceDisplay] = useState("");
   const [newItem, setNewItem] = useState({
     name: "",
@@ -70,6 +74,21 @@ export function PriceBookPickerModal({
     enabled: open,
   });
 
+  // When modal opens, initialize selected items from existing line items by priceBookItemId
+  useEffect(() => {
+    if (open && catalogItems.length > 0) {
+      const matchingIds = new Set<number>();
+      for (const existingItem of existingItems) {
+        // Use priceBookItemId if available (reliable), otherwise skip
+        if (existingItem.priceBookItemId) {
+          matchingIds.add(existingItem.priceBookItemId);
+        }
+      }
+      setSelectedItemIds(matchingIds);
+      setInitialSelectedIds(matchingIds);
+    }
+  }, [open, catalogItems, existingItems]);
+
   const createMutation = useMutation({
     mutationFn: async (data: typeof newItem) => {
       const res = await apiRequest('POST', '/api/service-catalog', data);
@@ -78,6 +97,7 @@ export function PriceBookPickerModal({
     onSuccess: (createdItem: ServiceCatalogItem) => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
       
+      // Immediately add the newly created item (not toggle-based)
       const lineItem: LineItem = {
         name: createdItem.name,
         description: createdItem.description || "",
@@ -91,10 +111,11 @@ export function PriceBookPickerModal({
         taxRatePercentSnapshot: null,
         taxNameSnapshot: null,
         saveToPriceBook: false,
+        priceBookItemId: createdItem.id,
       };
       onAddItem(lineItem);
-      setAddedItemIds(prev => new Set(prev).add(createdItem.id));
-      // No success toast per user preference - visual feedback via checkmark in UI
+      setSelectedItemIds(prev => new Set(prev).add(createdItem.id));
+      setInitialSelectedIds(prev => new Set(prev).add(createdItem.id));
       
       resetCreateForm();
       setShowCreateForm(false);
@@ -121,29 +142,62 @@ export function PriceBookPickerModal({
     if (!open) {
       setSearchQuery("");
       setShowCreateForm(false);
-      setAddedItemIds(new Set());
+      setSelectedItemIds(new Set());
+      setInitialSelectedIds(new Set());
       resetCreateForm();
     }
   }, [open]);
 
-  const handleAddFromCatalog = (item: ServiceCatalogItem) => {
-    const lineItem: LineItem = {
-      name: item.name,
-      description: item.description || "",
-      taskCode: item.taskCode || "",
-      quantity: "1",
-      unitPriceCents: item.defaultPriceCents,
-      priceDisplay: (item.defaultPriceCents / 100).toFixed(2),
-      unit: item.unit,
-      taxable: item.taxable,
-      taxId: null,
-      taxRatePercentSnapshot: null,
-      taxNameSnapshot: null,
-      saveToPriceBook: false,
-    };
-    onAddItem(lineItem);
-    setAddedItemIds(prev => new Set(prev).add(item.id));
-    // No success toast per user preference - visual feedback via checkmark in UI
+  // Toggle selection of a catalog item
+  const handleToggleSelection = (item: ServiceCatalogItem) => {
+    setSelectedItemIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(item.id)) {
+        newSet.delete(item.id);
+      } else {
+        newSet.add(item.id);
+      }
+      return newSet;
+    });
+  };
+
+  // Apply selections on Done
+  const handleDone = () => {
+    // Find newly selected items (not in initial set)
+    for (const itemId of selectedItemIds) {
+      if (!initialSelectedIds.has(itemId)) {
+        const catalogItem = catalogItems.find(c => c.id === itemId);
+        if (catalogItem) {
+          const lineItem: LineItem = {
+            name: catalogItem.name,
+            description: catalogItem.description || "",
+            taskCode: catalogItem.taskCode || "",
+            quantity: "1",
+            unitPriceCents: catalogItem.defaultPriceCents,
+            priceDisplay: (catalogItem.defaultPriceCents / 100).toFixed(2),
+            unit: catalogItem.unit,
+            taxable: catalogItem.taxable,
+            taxId: null,
+            taxRatePercentSnapshot: null,
+            taxNameSnapshot: null,
+            saveToPriceBook: false,
+            priceBookItemId: catalogItem.id,
+          };
+          onAddItem(lineItem);
+        }
+      }
+    }
+    
+    // Find deselected items (were in initial set but no longer selected)
+    if (onRemoveItemByPriceBookId) {
+      for (const itemId of initialSelectedIds) {
+        if (!selectedItemIds.has(itemId)) {
+          onRemoveItemByPriceBookId(itemId);
+        }
+      }
+    }
+    
+    onOpenChange(false);
   };
 
   const handleCreateItem = () => {
@@ -349,13 +403,13 @@ export function PriceBookPickerModal({
           ) : (
             <div className="space-y-1 py-2">
               {filteredItems.map((item) => {
-                const isAdded = addedItemIds.has(item.id);
+                const isSelected = selectedItemIds.has(item.id);
                 return (
                   <button
                     key={item.id}
-                    onClick={() => handleAddFromCatalog(item)}
+                    onClick={() => handleToggleSelection(item)}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                      isAdded 
+                      isSelected 
                         ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800' 
                         : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
                     }`}
@@ -377,7 +431,7 @@ export function PriceBookPickerModal({
                           )}
                         </div>
                       </div>
-                      {isAdded && (
+                      {isSelected && (
                         <div className="flex-shrink-0 mt-1">
                           <Check className="h-5 w-5 text-teal-600" />
                         </div>
@@ -400,7 +454,7 @@ export function PriceBookPickerModal({
             Create new line item
           </Button>
           
-          <Button onClick={() => onOpenChange(false)} className="w-full">
+          <Button onClick={handleDone} className="w-full">
             Done
           </Button>
         </div>

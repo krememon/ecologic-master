@@ -43,6 +43,7 @@ interface LineItem {
   taxRatePercentSnapshot: string | null;
   taxNameSnapshot: string | null;
   saveToPriceBook: boolean;
+  priceBookItemId?: number | null;
 }
 
 interface CompanyTax {
@@ -550,6 +551,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     }
   };
 
+  const removeLineItemByPriceBookId = (priceBookItemId: number) => {
+    setLineItems(prev => prev.filter(item => item.priceBookItemId !== priceBookItemId));
+  };
+
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     if (field === 'unitPriceCents') {
@@ -566,9 +571,11 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       updated[index][field] = value as boolean;
     } else if (field === 'taxId') {
       updated[index][field] = value as number | null;
+    } else if (field === 'priceBookItemId') {
+      updated[index].priceBookItemId = value as number | null | undefined;
     } else if (field === 'taxRatePercentSnapshot' || field === 'taxNameSnapshot') {
       updated[index][field] = value as string | null;
-    } else {
+    } else if (field === 'name' || field === 'description' || field === 'taskCode' || field === 'quantity' || field === 'priceDisplay' || field === 'unit') {
       updated[index][field] = value as string;
     }
     setLineItems(updated);
@@ -1147,6 +1154,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
         open={priceBookPickerOpen}
         onOpenChange={setPriceBookPickerOpen}
         onAddItem={addLineItemFromPriceBook}
+        onRemoveItemByPriceBookId={removeLineItemByPriceBookId}
         existingItems={lineItems}
       />
 
