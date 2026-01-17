@@ -302,7 +302,11 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               <>
                 {visibleItems.map((item, index) => {
                   const qty = parseFloat(item.quantity) || 1;
-                  const lineTotalWithTax = (item.totalCents ?? (item.lineTotalCents || 0)) / 100;
+                  // Compute line total from quantity and unitPriceCents, with fallbacks
+                  const computedLineTotalCents = Math.round(qty * (item.unitPriceCents || 0));
+                  const lineTotalCents = item.lineTotalCents || item.subtotalCents || computedLineTotalCents;
+                  const taxCents = item.taxCents || 0;
+                  const lineTotalWithTax = (lineTotalCents + taxCents) / 100;
                   const isLast = index === visibleItems.length - 1 && !hasMoreItems;
                   
                   return (
@@ -321,9 +325,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
                             Qty: {qty}
                           </div>
                         )}
-                        {item.taxable && item.taxCents && item.taxCents > 0 && (
+                        {item.taxable && taxCents > 0 && (
                           <div className="text-xs text-gray-500 dark:text-gray-400">
-                            incl. tax: {formatCurrency(item.taxCents / 100)}
+                            incl. tax: {formatCurrency(taxCents / 100)}
                           </div>
                         )}
                       </div>
