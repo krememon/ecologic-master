@@ -122,18 +122,6 @@ export default function AIScheduling() {
     enabled: isAuthenticated,
   });
   
-  // Debug: trace estimate data flow
-  console.log("[SCHEDULE-DEBUG] rawEstimates:", {
-    count: rawEstimates?.length,
-    isLoading: estimatesLoading,
-    isAuthenticated,
-    sample: rawEstimates?.slice(0, 2)?.map(e => ({
-      id: e.id,
-      scheduledDate: e.scheduledDate,
-      scheduledTime: e.scheduledTime
-    }))
-  });
-
   const jobs = useMemo(() => {
     if (!Array.isArray(rawJobs)) return [];
     
@@ -247,60 +235,44 @@ export default function AIScheduling() {
   const dailyEstimates = useMemo(() => {
     if (!Array.isArray(estimates)) return [];
     
-    console.log("[SCHEDULE-DEBUG] dailyEstimates filter:", {
-      estimatesCount: estimates.length,
-      selectedDayStr,
-      selectedMemberIdsCount: selectedMemberIds.length
-    });
-    
     return estimates.filter((estimate) => {
-      if (!estimate.scheduledDate) {
-        console.log("[SCHEDULE-DEBUG] estimate SKIP (no scheduledDate):", estimate.id);
-        return false;
-      }
+      if (!estimate.scheduledDate) return false;
       
+      // Extract date-only string from scheduledDate (handles both ISO strings and Date objects)
       const rawDate = estimate.scheduledDate;
       let estDateStr: string;
       
       if (typeof rawDate === 'string') {
-        if (rawDate.includes('T')) {
-          estDateStr = rawDate.split('T')[0];
-        } else {
-          estDateStr = rawDate;
-        }
+        // ISO string like "2026-01-17T14:00:00.000Z" - extract date part before 'T'
+        estDateStr = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate;
       } else {
+        // Date object - convert to local YYYY-MM-DD
         const estDate = new Date(rawDate as any);
         estDateStr = dateToYmdLocal(estDate);
       }
       
-      console.log("[SCHEDULE-DEBUG] estimate date check:", {
-        id: estimate.id,
-        rawDate,
-        estDateStr,
-        selectedDayStr,
-        match: estDateStr === selectedDayStr
-      });
-      
+      // Date must match selected day
       if (estDateStr !== selectedDayStr) return false;
       
+      // If member filter not initialized yet (employees still loading), show all estimates for the day
+      if (!memberFilterInitialized) return true;
+      
+      // If no members selected, hide the estimate
       if (selectedMemberIds.length === 0) return false;
       
       const assignedIds = (estimate.assignedEmployeeIds as string[]) || [];
       
-      if (assignedIds.length === 0) {
-        return true;
-      }
+      // If no employees assigned to estimate, show it (unassigned estimates visible to all)
+      if (assignedIds.length === 0) return true;
       
+      // Otherwise, check if any assigned employee is in the selected filter
       return assignedIds.some(id => selectedMemberIds.includes(id));
     }).sort((a, b) => {
       const timeA = a.scheduledTime || '99:99';
       const timeB = b.scheduledTime || '99:99';
       return timeA.localeCompare(timeB);
     });
-  }, [estimates, selectedDayStr, selectedMemberIds]);
-  
-  // Debug: log final daily estimates
-  console.log("[SCHEDULE-DEBUG] dailyEstimates result:", dailyEstimates.length, dailyEstimates.map(e => ({ id: e.id, title: e.title })));
+  }, [estimates, selectedDayStr, selectedMemberIds, memberFilterInitialized]);
 
   const scheduleItems = useMemo((): ScheduleItem[] => {
     const items: ScheduleItem[] = [];

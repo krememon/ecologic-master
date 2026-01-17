@@ -1,0 +1,64 @@
+AGENT — FIX ESTIMATES NOT APPEARING ON /SCHEDULE (NO NEW MODALS, NO DEBUG UI)
+
+CONTEXT:
+Estimates are saving schedule data correctly (scheduledDate + scheduledTime).
+But they still do NOT appear on the /schedule Day View grid.
+
+This is NOT a “missing modal” problem.
+We just need /schedule to fetch estimates and render them.
+
+GOAL:
+Make scheduled Estimates appear on the Schedule Day View grid using their saved scheduledDate + scheduledTime.
+
+IMPORTANT:
+- Do NOT build any new modals for schedule.
+- Do NOT add visible debug elements to the UI.
+- Do NOT ask the user to test; user will test.
+
+STEP 1 — CONFIRM /SCHEDULE IS FETCHING ESTIMATES
+On /schedule page, verify there is an actual request being made when the Schedule page loads.
+If /schedule only fetches jobs, add an estimates fetch:
+- Either call GET /api/estimates and filter client-side
+- OR add support for GET /api/estimates?scheduledDate=YYYY-MM-DD
+
+REQUIRED: /schedule must fetch estimates (not relying on the Jobs/Estimates page cache).
+
+STEP 2 — FIX DATE MATCHING (TIMEZONE BUG)
+From logs, estimate fields look like:
+scheduledDate: 2026-01-17T14:00:00.000Z
+scheduledTime: "14:00"
+
+This means scheduledDate is stored as a Date with a UTC time component.
+If /schedule compares raw Date objects to selectedDate, it will fail due to timezone shifting.
+
+Fix by converting estimate.scheduledDate to a DATE-ONLY string before matching:
+- dateOnly = toLocalYYYYMMDD(estimate.scheduledDate)
+- selectedDateOnly = selectedDate in YYYY-MM-DD
+- include estimate if dateOnly === selectedDateOnly
+
+DO NOT compare full Date objects with time.
+
+STEP 3 — NORMALIZE START TIME FOR GRID PLACEMENT
+To position blocks, build a local start datetime from:
+- dateOnly (YYYY-MM-DD derived from scheduledDate)
+- scheduledTime ("HH:mm")
+
+Example:
+startAtLocal = new Date(`${dateOnly}T${scheduledTime}:00`)  // local time
+Then compute minutesFromMidnight from startAtLocal.
+
+DO NOT use scheduledDate’s time portion for placement (it’s polluted by UTC).
+
+STEP 4 — MERGE INTO SCHEDULE ITEMS + RENDER
+- Merge jobs + estimates into one array of scheduleItems
+- Ensure estimates are not filtered out by status (draft scheduled estimates should still show)
+- Render estimate blocks just like job blocks (can be slightly different style or a small “Estimate” chip)
+
+STEP 5 — REFRESH AFTER CREATION
+After creating an estimate, invalidate/refetch the schedule query for the selected date so it appears immediately.
+(This can be done with existing query invalidation or a simple refetch trigger when navigating to /schedule.)
+
+DELIVERABLE:
+- /schedule reliably shows scheduled estimates on the correct day/time
+- No new modal added
+- No debug UI left behind
