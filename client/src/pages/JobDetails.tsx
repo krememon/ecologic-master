@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
@@ -104,8 +105,12 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; id?: number } | null>(null);
   const [attachmentToDelete, setAttachmentToDelete] = useState<{ id: number; title: string } | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [editedNotes, setEditedNotes] = useState("");
+  const [isNotesExpanded, setIsNotesExpanded] = useState(false);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
+  const canEditJob = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
   const canCreatePaymentLink = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
 
   const { data: job, isLoading, error } = useQuery<JobWithClient>({
@@ -328,6 +333,33 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       setAttachmentToDelete(null);
     },
   });
+
+  const updateNotesMutation = useMutation({
+    mutationFn: async (notes: string) => {
+      const response = await apiRequest('PATCH', `/api/jobs/${jobId}`, { notes });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to update notes');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}`] });
+      setIsNotesModalOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to update notes", variant: "destructive" });
+    },
+  });
+
+  const openNotesModal = () => {
+    setEditedNotes(job?.notes || "");
+    setIsNotesModalOpen(true);
+  };
+
+  const saveNotes = () => {
+    updateNotesMutation.mutate(editedNotes);
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -707,33 +739,53 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           </Card>
 
           {/* Notes Card */}
-          {job.description && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
                   Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p 
-                  className={`text-sm leading-relaxed ${
-                    !isDescriptionExpanded ? 'line-clamp-3' : ''
-                  }`}
-                >
-                  {job.description}
-                </p>
-                {job.description.length > 150 && (
-                  <button 
-                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                    className="text-sm text-blue-600 hover:text-blue-800 mt-2"
-                  >
-                    {isDescriptionExpanded ? 'Show less' : 'Read more'}
-                  </button>
+                </div>
+                {canEditJob && job.notes && (
+                  <Button variant="ghost" size="sm" onClick={openNotesModal}>
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
                 )}
-              </CardContent>
-            </Card>
-          )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {job.notes ? (
+                <div>
+                  <p 
+                    className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                      !isNotesExpanded ? 'line-clamp-5' : ''
+                    }`}
+                  >
+                    {job.notes}
+                  </p>
+                  {job.notes.length > 200 && (
+                    <button 
+                      onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+                      className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+                    >
+                      {isNotesExpanded ? 'Show less' : 'Read more'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground mb-1">No notes yet</p>
+                  <p className="text-sm text-muted-foreground mb-3">Add notes for this job.</p>
+                  {canEditJob && (
+                    <Button variant="outline" size="sm" onClick={openNotesModal}>
+                      Add Notes
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Attachments Card */}
           <Card>
@@ -912,6 +964,35 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
         customerEmail={job?.client?.email}
         customerFirstName={job?.clientName?.split(' ')[0]}
       />
+
+      {/* Notes Modal */}
+      <Dialog open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen}>
+        <DialogContent className="w-[95vw] max-w-md">
+          <DialogHeader>
+            <DialogTitle>Job Notes</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              placeholder="Add notes about this job..."
+              value={editedNotes}
+              onChange={(e) => setEditedNotes(e.target.value)}
+              rows={6}
+              className="resize-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setIsNotesModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveNotes}
+              disabled={updateNotesMutation.isPending}
+            >
+              {updateNotesMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
