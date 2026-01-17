@@ -756,11 +756,51 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Merge primary line item and isPaid into jobs
+    // Fetch crew assignments for all jobs
+    const allCrewAssignments = await db
+      .select({
+        jobId: crewAssignments.jobId,
+        userId: crewAssignments.userId,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userEmail: users.email,
+        userProfileImageUrl: users.profileImageUrl,
+      })
+      .from(crewAssignments)
+      .leftJoin(users, eq(crewAssignments.userId, users.id))
+      .where(inArray(crewAssignments.jobId, jobIds));
+    
+    // Group crew assignments by job
+    const crewByJob: Record<number, Array<{
+      userId: string;
+      user: {
+        firstName: string | null;
+        lastName: string | null;
+        email: string;
+        profileImageUrl: string | null;
+      };
+    }>> = {};
+    for (const crew of allCrewAssignments) {
+      if (!crewByJob[crew.jobId]) {
+        crewByJob[crew.jobId] = [];
+      }
+      crewByJob[crew.jobId].push({
+        userId: crew.userId,
+        user: {
+          firstName: crew.userFirstName,
+          lastName: crew.userLastName,
+          email: crew.userEmail || '',
+          profileImageUrl: crew.userProfileImageUrl,
+        },
+      });
+    }
+    
+    // Merge primary line item, isPaid, and crew assignments into jobs
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
       isPaid: paidStatusByJob[job.id] || false,
+      crewAssignments: crewByJob[job.id] || [],
     }));
   }
 

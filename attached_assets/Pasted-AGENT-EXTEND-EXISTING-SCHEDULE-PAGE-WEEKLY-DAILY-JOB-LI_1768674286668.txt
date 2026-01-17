@@ -1,0 +1,84 @@
+AGENT — EXTEND EXISTING “SCHEDULE” PAGE (WEEKLY → DAILY JOB LIST)
+
+CONTEXT:
+We already have a Schedule page with:
+- “Weekly Schedule” header
+- Week selector (Previous / Next week)
+- Day pills (Sun–Sat with dates)
+- Weekly summary cards:
+  - Weekly Jobs
+  - Planning Jobs
+  - Active Jobs
+
+This page currently does NOT show the actual scheduled jobs for each day.
+
+GOAL:
+Enhance the existing Schedule page so users can tap a day and see the actual Jobs scheduled for that date.
+
+DO NOT rebuild the Schedule page.
+DO NOT remove or redesign existing UI.
+Only ADD functionality and UI below the day selector.
+
+SCOPE (PHASE 2):
+- Extend the current Schedule page
+- Add a “Daily Schedule” section under the week/day selector
+- Show scheduled Jobs for the selected day
+
+UI REQUIREMENTS:
+1) Day Selection
+- When a user taps a day pill (e.g. Tue 13):
+  - Highlight it as active
+  - Load jobs scheduled for that date
+
+2) Daily Schedule Section
+- Appears below the week/day selector
+- Title: “Scheduled Jobs”
+- If no jobs: friendly empty state
+  - “No jobs scheduled for this day”
+
+3) Job Row Design (reuse existing Job Card styles)
+Each scheduled job row should show:
+- Scheduled time (left side)
+- Customer name
+- Address
+- Status pill (pending / active / completed)
+- Assigned employee avatar bubbles (if assigned)
+
+Tapping a job:
+- Navigates to the Job Details page
+
+DATA REQUIREMENTS:
+- Use existing job schedule fields (scheduledStartAt / scheduledDate)
+- Only show jobs that fall on the selected date
+- Sort by scheduled start time (earliest → latest)
+
+RBAC RULES (IMPORTANT):
+- Owner/Admin: see all jobs
+- Dispatcher: see all jobs
+- Technician: ONLY jobs assigned to them
+- Supervisor/Estimator: follow existing job visibility rules
+- Hide jobs the user does not have access to (hidden, not disabled)
+
+BACKEND / DATA FETCHING:
+- Prefer reusing existing jobs API
+- Filter by selected date (startOfDay → endOfDay)
+- DO NOT fetch all jobs for all dates
+
+STATE MANAGEMENT:
+- Default selected day = today (if today is in current week)
+- When switching weeks:
+  - Auto-select first day of that week
+- Changing day should NOT reset week
+
+OUT OF SCOPE (DO NOT BUILD YET):
+- Drag & drop scheduling
+- Technician-specific timelines
+- Calendar month view
+- Rescheduling via drag
+- Estimates on schedule (jobs only for now)
+
+DELIVERABLES:
+- Daily job list appears under the week selector
+- Clicking days updates the list correctly
+- Clicking a job opens job details
+- No existing Schedule UI is broken
