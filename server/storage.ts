@@ -1829,16 +1829,27 @@ export class DatabaseStorage implements IStorage {
     companyId: number,
     userId: string
   ): Promise<EstimateWithItems> {
-    // Calculate totals from items
+    // Calculate totals from items (server-side calculation for accuracy)
     let subtotalCents = 0;
+    let totalTaxCents = 0;
     const itemsWithTotals = payload.items.map((item, index) => {
       const quantity = parseFloat(item.quantity);
       const lineTotalCents = Math.round(quantity * item.unitPriceCents);
       subtotalCents += lineTotalCents;
+      
+      // Use provided taxCents or calculate from rate snapshot
+      let itemTaxCents = item.taxCents ?? 0;
+      if (itemTaxCents === 0 && item.taxable && item.taxRatePercentSnapshot) {
+        const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+        itemTaxCents = Math.round(lineTotalCents * taxRate / 100);
+      }
+      totalTaxCents += itemTaxCents;
+      
       return {
         ...item,
         quantity: item.quantity,
         lineTotalCents,
+        itemTaxCents,
         sortOrder: item.sortOrder ?? index,
       };
     });
@@ -1846,8 +1857,8 @@ export class DatabaseStorage implements IStorage {
     // Get next estimate number
     const estimateNumber = await this.getNextEstimateNumber(companyId);
 
-    // Calculate total with tax
-    const taxCents = payload.taxCents || 0;
+    // Server-side calculated totals (not trusting payload.taxCents)
+    const taxCents = totalTaxCents;
     const totalCents = subtotalCents + taxCents;
 
     // Process requestedStartAt - convert to Date if string
@@ -1892,13 +1903,6 @@ export class DatabaseStorage implements IStorage {
     // Create line items
     const createdItems: EstimateItem[] = [];
     for (const item of itemsWithTotals) {
-      // Calculate tax cents for this item
-      let itemTaxCents = 0;
-      if (item.taxable && item.taxRatePercentSnapshot) {
-        const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
-        itemTaxCents = Math.round(item.lineTotalCents * taxRate / 100);
-      }
-      
       const [createdItem] = await db
         .insert(estimateItems)
         .values({
@@ -1913,8 +1917,9 @@ export class DatabaseStorage implements IStorage {
           taxId: item.taxId || null,
           taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
           taxNameSnapshot: item.taxNameSnapshot || null,
-          taxCents: itemTaxCents,
+          taxCents: item.itemTaxCents,
           lineTotalCents: item.lineTotalCents,
+          totalCents: item.lineTotalCents + item.itemTaxCents,
           sortOrder: item.sortOrder,
         })
         .returning();
@@ -1945,32 +1950,37 @@ export class DatabaseStorage implements IStorage {
     // If items are provided, recalculate totals
     if (payload.items) {
       let subtotalCents = 0;
+      let totalTaxCents = 0;
       const itemsWithTotals = payload.items.map((item, index) => {
         const quantity = parseFloat(item.quantity);
         const lineTotalCents = Math.round(quantity * item.unitPriceCents);
         subtotalCents += lineTotalCents;
+        
+        // Use provided taxCents or calculate from rate snapshot
+        let itemTaxCents = item.taxCents ?? 0;
+        if (itemTaxCents === 0 && item.taxable && item.taxRatePercentSnapshot) {
+          const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+          itemTaxCents = Math.round(lineTotalCents * taxRate / 100);
+        }
+        totalTaxCents += itemTaxCents;
+        
         return {
           ...item,
           quantity: item.quantity,
           lineTotalCents,
+          itemTaxCents,
           sortOrder: item.sortOrder ?? index,
         };
       });
 
       updateData.subtotalCents = subtotalCents;
-      updateData.totalCents = subtotalCents;
+      updateData.taxCents = totalTaxCents;
+      updateData.totalCents = subtotalCents + totalTaxCents;
 
       // Delete existing items and create new ones
       await db.delete(estimateItems).where(eq(estimateItems.estimateId, id));
 
       for (const item of itemsWithTotals) {
-        // Calculate tax cents for this item
-        let itemTaxCents = 0;
-        if (item.taxable && item.taxRatePercentSnapshot) {
-          const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
-          itemTaxCents = Math.round(item.lineTotalCents * taxRate / 100);
-        }
-        
         await db.insert(estimateItems).values({
           estimateId: id,
           name: item.name,
@@ -1983,8 +1993,9 @@ export class DatabaseStorage implements IStorage {
           taxId: item.taxId || null,
           taxRatePercentSnapshot: item.taxRatePercentSnapshot || null,
           taxNameSnapshot: item.taxNameSnapshot || null,
-          taxCents: itemTaxCents,
+          taxCents: item.itemTaxCents,
           lineTotalCents: item.lineTotalCents,
+          totalCents: item.lineTotalCents + item.itemTaxCents,
           sortOrder: item.sortOrder,
         });
       }

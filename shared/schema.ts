@@ -776,8 +776,9 @@ export const estimateItems = pgTable("estimate_items", {
   taxId: integer("tax_id").references(() => companyTaxes.id, { onDelete: "set null" }),
   taxRatePercentSnapshot: decimal("tax_rate_percent_snapshot", { precision: 5, scale: 3 }),
   taxNameSnapshot: varchar("tax_name_snapshot", { length: 40 }),
-  lineTotalCents: integer("line_total_cents").notNull().default(0),
-  taxCents: integer("tax_cents").notNull().default(0),
+  lineTotalCents: integer("line_total_cents").notNull().default(0), // Subtotal (qty × price)
+  taxCents: integer("tax_cents").notNull().default(0), // Calculated tax amount
+  totalCents: integer("total_cents").notNull().default(0), // lineTotalCents + taxCents
   sortOrder: integer("sort_order").notNull().default(0),
 });
 
@@ -1100,6 +1101,7 @@ export const insertEstimateItemSchema = createInsertSchema(estimateItems).omit({
   estimateId: true,
   lineTotalCents: true,
   taxCents: true,
+  totalCents: true,
 });
 
 // Create estimate with items schema (for API) - jobId is optional for standalone estimates
@@ -1135,6 +1137,7 @@ export const createEstimateSchema = z.object({
     taxId: z.number().int().positive().nullable().optional(),
     taxRatePercentSnapshot: z.string().nullable().optional(),
     taxNameSnapshot: z.string().nullable().optional(),
+    taxCents: z.number().int().min(0).optional(),
     sortOrder: z.number().int().optional(),
   })).min(1, "At least one line item is required"),
 });
@@ -1156,6 +1159,7 @@ export const updateEstimateSchema = z.object({
     taxId: z.number().int().positive().nullable().optional(),
     taxRatePercentSnapshot: z.string().nullable().optional(),
     taxNameSnapshot: z.string().nullable().optional(),
+    taxCents: z.number().int().min(0).optional(),
     sortOrder: z.number().int().optional(),
   })).optional(),
 });

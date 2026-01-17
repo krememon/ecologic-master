@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, List, Calendar, Users, SlidersHorizontal, Tag, ChevronRight, 
-  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign, MapPin, StickyNote
+  Plus, Trash2, Search, X, ArrowLeft, Check, DollarSign, MapPin, StickyNote, Percent, Loader2
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,7 +39,18 @@ interface LineItem {
   priceDisplay: string;
   unit: string;
   taxable: boolean;
+  taxId: number | null;
+  taxRatePercentSnapshot: string | null;
+  taxNameSnapshot: string | null;
   saveToPriceBook: boolean;
+}
+
+interface CompanyTax {
+  id: number;
+  companyId: number;
+  name: string;
+  ratePercent: string;
+  createdAt: string;
 }
 
 interface ScheduleData {
@@ -126,7 +137,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [notes, setNotes] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([
-    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }
+    { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }
   ]);
   const [schedule, setSchedule] = useState<ScheduleData>({ date: "", time: "" });
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
@@ -160,6 +171,14 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const [jobLocationModalOpen, setJobLocationModalOpen] = useState(false);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
 
+  // Tax picker modal state
+  const [taxPickerOpen, setTaxPickerOpen] = useState(false);
+  const [taxPickerLineItemIndex, setTaxPickerLineItemIndex] = useState<number | null>(null);
+  const [taxPickerShowCreate, setTaxPickerShowCreate] = useState(false);
+  const [newTaxName, setNewTaxName] = useState("");
+  const [newTaxRate, setNewTaxRate] = useState("");
+  const [newTaxError, setNewTaxError] = useState<string | null>(null);
+
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
 
@@ -186,6 +205,11 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     queryKey: ['/api/org/users'],
   });
   const allEmployees = employeesData?.users || [];
+
+  // Fetch company taxes
+  const { data: companyTaxes = [] } = useQuery<CompanyTax[]>({
+    queryKey: ['/api/company/taxes'],
+  });
 
   // Employee search
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -237,7 +261,20 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       assignedEmployeeIds: string[];
       jobType?: string;
       requestedStartAt?: string | null;
-      items: { name: string; quantity: string; unitPriceCents: number }[];
+      items: { 
+        name: string; 
+        quantity: string; 
+        unitPriceCents: number;
+        description?: string | null;
+        taskCode?: string | null;
+        unit?: string;
+        taxable?: boolean;
+        taxId?: number;
+        taxRatePercentSnapshot?: string;
+        taxNameSnapshot?: string;
+        taxCents?: number;
+        sortOrder?: number;
+      }[];
     }) => {
       const response = await apiRequest('POST', '/api/estimates', data);
       return response.json();
@@ -257,6 +294,54 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       });
     }
   });
+
+  // Create tax mutation
+  const createTaxMutation = useMutation({
+    mutationFn: async (data: { name: string; ratePercent: string }) => {
+      const res = await apiRequest('POST', '/api/company/taxes', data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to create tax');
+      }
+      return res.json();
+    },
+    onSuccess: (createdTax: CompanyTax) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/company/taxes'] });
+      if (taxPickerLineItemIndex !== null) {
+        setLineItemTax(taxPickerLineItemIndex, createdTax);
+      }
+      setNewTaxName("");
+      setNewTaxRate("");
+      setNewTaxError(null);
+      setTaxPickerShowCreate(false);
+    },
+    onError: (err: Error) => {
+      setNewTaxError(err.message);
+    },
+  });
+
+  const handleCreateTax = () => {
+    setNewTaxError(null);
+    const trimmedName = newTaxName.trim();
+    if (!trimmedName) {
+      setNewTaxError("Tax name is required");
+      return;
+    }
+    if (trimmedName.length < 2 || trimmedName.length > 40) {
+      setNewTaxError("Tax name must be 2-40 characters");
+      return;
+    }
+    const rate = parseFloat(newTaxRate);
+    if (isNaN(rate)) {
+      setNewTaxError("Please enter a valid percentage");
+      return;
+    }
+    if (rate < 0 || rate > 20) {
+      setNewTaxError("Rate must be between 0 and 20");
+      return;
+    }
+    createTaxMutation.mutate({ name: trimmedName, ratePercent: rate.toString() });
+  };
 
   // Filter customers by search using useMemo
   const filteredCustomers = useMemo(() => {
@@ -322,7 +407,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
   const resetForm = () => {
     setNotes("");
     setSelectedCustomer(null);
-    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems([{ name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
     setSchedule({ date: "", time: "" });
     setAssignedEmployees([]);
     setEstimateFields({ showSubtotal: true, showTax: true, taxRate: "0", validDays: "30" });
@@ -330,6 +415,15 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setNewTagInput("");
     setJobType(null);
     setJobLocation({ addressLine1: "", city: "", state: "", zip: "" });
+  };
+
+  // Set tax on line item
+  const setLineItemTax = (index: number, tax: CompanyTax) => {
+    const updated = [...lineItems];
+    updated[index].taxId = tax.id;
+    updated[index].taxRatePercentSnapshot = tax.ratePercent;
+    updated[index].taxNameSnapshot = tax.name;
+    setLineItems(updated);
   };
   
   // Helper to format job location for display
@@ -386,10 +480,8 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
       ? `${selectedCustomer.firstName || ''} ${selectedCustomer.lastName || ''} – Estimate`.trim()
       : "Estimate";
 
-    // Create estimate via standalone API (no job required)
-    const taxRate = parseFloat(estimateFields.taxRate) || 0;
-    const subtotal = calculateSubtotal();
-    const taxCents = Math.round(subtotal * (taxRate / 100));
+    // Calculate tax from per-line-item taxes (matching Jobs flow)
+    const taxCents = calculateTotalTax();
 
     // Combine date + time into single ISO string for requestedStartAt
     // We create a Date object from local date/time components, then convert to ISO
@@ -428,6 +520,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
         unitPriceCents: item.unitPriceCents,
         unit: item.unit,
         taxable: item.taxable,
+        taxId: item.taxable && item.taxId ? item.taxId : undefined,
+        taxRatePercentSnapshot: item.taxable && item.taxRatePercentSnapshot ? item.taxRatePercentSnapshot : undefined,
+        taxNameSnapshot: item.taxable && item.taxNameSnapshot ? item.taxNameSnapshot : undefined,
+        taxCents: calculateLineTax(item),
         sortOrder: index,
       })),
     });
@@ -435,7 +531,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
 
   // Line item helpers
   const addLineItem = () => {
-    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, saveToPriceBook: false }]);
+    setLineItems([...lineItems, { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }]);
   };
 
   const addLineItemFromPriceBook = (item: LineItem) => {
@@ -454,12 +550,24 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     }
   };
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean) => {
+  const updateLineItem = (index: number, field: keyof LineItem, value: string | number | boolean | null) => {
     const updated = [...lineItems];
     if (field === 'unitPriceCents') {
       updated[index][field] = typeof value === 'number' ? value : Math.round(parseFloat(String(value)) * 100) || 0;
-    } else if (field === 'taxable' || field === 'saveToPriceBook') {
+    } else if (field === 'taxable') {
       updated[index][field] = value as boolean;
+      // Clear tax selection when taxable is turned off
+      if (!value) {
+        updated[index].taxId = null;
+        updated[index].taxRatePercentSnapshot = null;
+        updated[index].taxNameSnapshot = null;
+      }
+    } else if (field === 'saveToPriceBook') {
+      updated[index][field] = value as boolean;
+    } else if (field === 'taxId') {
+      updated[index][field] = value as number | null;
+    } else if (field === 'taxRatePercentSnapshot' || field === 'taxNameSnapshot') {
+      updated[index][field] = value as string | null;
     } else {
       updated[index][field] = value as string;
     }
@@ -492,13 +600,42 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
     setLineItems(updated);
   };
 
-  const calculateLineTotal = (item: LineItem): number => {
+  const calculateLineSubtotal = (item: LineItem): number => {
     const qty = parseFloat(item.quantity) || 0;
     return Math.round(qty * item.unitPriceCents);
   };
 
+  const calculateLineTax = (item: LineItem): number => {
+    if (!item.taxable || !item.taxRatePercentSnapshot) return 0;
+    const subtotal = calculateLineSubtotal(item);
+    const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+    return Math.round(subtotal * taxRate / 100);
+  };
+
+  const calculateLineTotal = (item: LineItem): number => {
+    return calculateLineSubtotal(item) + calculateLineTax(item);
+  };
+
   const calculateSubtotal = (): number => {
-    return lineItems.reduce((sum, item) => sum + calculateLineTotal(item), 0);
+    return lineItems.reduce((sum, item) => sum + calculateLineSubtotal(item), 0);
+  };
+
+  const calculateTotalTax = (): number => {
+    return lineItems.reduce((sum, item) => sum + calculateLineTax(item), 0);
+  };
+
+  const calculateGrandTotal = (): number => {
+    return calculateSubtotal() + calculateTotalTax();
+  };
+
+  const getLineItemsSummary = () => {
+    const validItems = lineItems.filter(i => i.name.trim());
+    if (validItems.length === 0) return undefined;
+    const grandTotal = calculateGrandTotal();
+    if (grandTotal > 0) {
+      return `${validItems.length} item${validItems.length > 1 ? 's' : ''} • ${formatCurrency(grandTotal)}`;
+    }
+    return `${validItems.length} item${validItems.length > 1 ? 's' : ''}`;
   };
 
   // Tag helpers
@@ -550,7 +687,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
             <InfoRow
               icon={List}
               label="Add line items"
-              value={lineItems.filter(i => i.name.trim()).length > 0 ? `${lineItems.filter(i => i.name.trim()).length} items` : undefined}
+              value={getLineItemsSummary()}
               onClick={() => {
                 const hasItems = lineItems.filter(i => i.name.trim()).length > 0;
                 if (hasItems) {
@@ -906,6 +1043,26 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
                     onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
                   />
                 </div>
+                {item.taxable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTaxPickerLineItemIndex(index);
+                      setTaxPickerOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between py-2 px-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md transition-colors"
+                  >
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Tax rate</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {item.taxNameSnapshot 
+                          ? `${item.taxNameSnapshot} (${parseFloat(item.taxRatePercentSnapshot || '0').toFixed(3)}%)`
+                          : 'Select tax rate'}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                    </div>
+                  </button>
+                )}
                 <div className="flex items-center justify-between py-1 border-t pt-2">
                   <div>
                     <Label className="text-sm font-normal">Save to Price Book</Label>
@@ -916,9 +1073,23 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
                     onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
                   />
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
-                  <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
+                <div className="pt-2 border-t space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500 dark:text-slate-400">Subtotal</span>
+                    <span className="text-sm">{formatCurrency(calculateLineSubtotal(item))}</span>
+                  </div>
+                  {item.taxable && item.taxRatePercentSnapshot && calculateLineTax(item) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        Tax ({parseFloat(item.taxRatePercentSnapshot).toFixed(3)}%)
+                      </span>
+                      <span className="text-sm">{formatCurrency(calculateLineTax(item))}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-1">
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
+                    <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -945,10 +1116,20 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
               </Button>
             </div>
 
-            <div className="pt-4 border-t">
-              <div className="flex justify-between text-base font-semibold">
-                <span>Subtotal</span>
+            <div className="pt-4 border-t space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600 dark:text-slate-400">Subtotal</span>
                 <span>{formatCurrency(calculateSubtotal())}</span>
+              </div>
+              {calculateTotalTax() > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600 dark:text-slate-400">Tax</span>
+                  <span>{formatCurrency(calculateTotalTax())}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-base font-semibold pt-1 border-t">
+                <span>Total</span>
+                <span>{formatCurrency(calculateGrandTotal())}</span>
               </div>
             </div>
           </div>
@@ -1205,6 +1386,140 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
           <div className="flex justify-end pt-4">
             <Button onClick={() => setNotesModalOpen(false)}>Done</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* TAX PICKER Modal - Full Screen */}
+      <Dialog open={taxPickerOpen} onOpenChange={(open) => {
+        setTaxPickerOpen(open);
+        if (!open) {
+          setTaxPickerShowCreate(false);
+          setNewTaxName("");
+          setNewTaxRate("");
+          setNewTaxError(null);
+        }
+      }}>
+        <DialogContent hideCloseButton className="w-full h-full max-w-none max-h-none md:max-w-[640px] md:max-h-[85vh] md:h-auto rounded-none md:rounded-xl flex flex-col p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                if (taxPickerShowCreate) {
+                  setTaxPickerShowCreate(false);
+                  setNewTaxName("");
+                  setNewTaxRate("");
+                  setNewTaxError(null);
+                } else {
+                  setTaxPickerOpen(false);
+                  setTaxPickerLineItemIndex(null);
+                }
+              }}
+              className="text-sm text-teal-600 hover:text-teal-700 font-medium"
+            >
+              {taxPickerShowCreate ? "Back" : "Cancel"}
+            </button>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {taxPickerShowCreate ? "New Tax" : "Tax rates"}
+            </h2>
+            {!taxPickerShowCreate ? (
+              <button
+                type="button"
+                onClick={() => setTaxPickerShowCreate(true)}
+                className="p-1 text-teal-600 hover:text-teal-700"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            ) : (
+              <div className="w-6" />
+            )}
+          </div>
+
+          {taxPickerShowCreate ? (
+            <div className="flex-1 overflow-auto p-4">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="newTaxName">Tax Name</Label>
+                  <Input
+                    id="newTaxName"
+                    value={newTaxName}
+                    onChange={(e) => setNewTaxName(e.target.value)}
+                    placeholder="e.g., NY State Tax"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newTaxRate">Percentage</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      id="newTaxRate"
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      max="20"
+                      value={newTaxRate}
+                      onChange={(e) => setNewTaxRate(e.target.value)}
+                      placeholder="8.625"
+                      className="pr-8"
+                    />
+                    <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+                {newTaxError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{newTaxError}</p>
+                )}
+                <Button
+                  type="button"
+                  onClick={handleCreateTax}
+                  disabled={createTaxMutation.isPending}
+                  className="w-full bg-teal-600 hover:bg-teal-700"
+                >
+                  {createTaxMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <ScrollArea className="flex-1">
+              <div className="p-2">
+                {companyTaxes.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500 dark:text-slate-400">
+                    <Percent className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" />
+                    <p className="text-sm font-medium">No tax rates yet</p>
+                    <p className="text-xs mt-1">Tap + to create your first tax rate</p>
+                  </div>
+                ) : (
+                  companyTaxes.map((tax) => {
+                    const isSelected = taxPickerLineItemIndex !== null && 
+                      lineItems[taxPickerLineItemIndex]?.taxId === tax.id;
+                    return (
+                      <button
+                        key={tax.id}
+                        type="button"
+                        onClick={() => {
+                          if (taxPickerLineItemIndex !== null) {
+                            setLineItemTax(taxPickerLineItemIndex, tax);
+                            setTaxPickerOpen(false);
+                            setTaxPickerLineItemIndex(null);
+                          }
+                        }}
+                        className="w-full flex items-center justify-between py-3.5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                      >
+                        <div className="text-left">
+                          <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{tax.name}</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">({parseFloat(tax.ratePercent).toFixed(3)}%)</span>
+                        </div>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-teal-600" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          )}
         </DialogContent>
       </Dialog>
 
