@@ -4747,17 +4747,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('[Estimates] schedule PATCH received:', { estimateId, requestedStartAt });
       
-      // Update estimate with requestedStartAt
+      // Parse requestedStartAt and also compute scheduledDate/scheduledTime for backward compatibility
+      let parsedRequestedStartAt: Date | null = null;
+      let parsedScheduledDate: Date | null = null;
+      let parsedScheduledTime: string | null = null;
+      
+      if (requestedStartAt) {
+        parsedRequestedStartAt = new Date(requestedStartAt);
+        if (!isNaN(parsedRequestedStartAt.getTime())) {
+          parsedScheduledDate = parsedRequestedStartAt;
+          const hours = parsedRequestedStartAt.getHours().toString().padStart(2, '0');
+          const minutes = parsedRequestedStartAt.getMinutes().toString().padStart(2, '0');
+          parsedScheduledTime = `${hours}:${minutes}`;
+        }
+      }
+      
+      // Update estimate with requestedStartAt AND scheduledDate/scheduledTime
       const [updated] = await db
         .update(estimates)
         .set({
-          requestedStartAt: requestedStartAt ? new Date(requestedStartAt) : null,
+          requestedStartAt: parsedRequestedStartAt,
+          scheduledDate: parsedScheduledDate,
+          scheduledTime: parsedScheduledTime,
           updatedAt: new Date(),
         })
         .where(eq(estimates.id, estimateId))
         .returning();
       
-      console.log(`[Estimates] schedule SAVED estimateId=${estimateId} requestedStartAt=${updated.requestedStartAt}`);
+      console.log(`[Estimates] schedule SAVED estimateId=${estimateId} requestedStartAt=${updated.requestedStartAt} scheduledDate=${updated.scheduledDate} scheduledTime=${updated.scheduledTime}`);
       res.json(updated);
     } catch (error) {
       console.error("Error saving estimate schedule:", error);

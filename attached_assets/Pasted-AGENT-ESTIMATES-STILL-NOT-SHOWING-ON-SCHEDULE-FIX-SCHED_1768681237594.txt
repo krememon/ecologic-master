@@ -1,0 +1,88 @@
+AGENT — ESTIMATES STILL NOT SHOWING ON SCHEDULE (FIX SCHEDULE QUERY + FIELD SOURCE MISMATCH)
+
+CONTEXT:
+I just created a NEW estimate with a schedule date/time (it shows on the estimate card),
+but it STILL does NOT appear on the Schedule Day View.
+
+So the issue is NOT only “old estimates missing scheduledDate”.
+This is a CURRENT data wiring problem between Estimates and the Schedule page.
+
+GOAL:
+Make NEW scheduled estimates appear on the Schedule page immediately.
+
+IMPORTANT:
+- Do NOT ask me to test. I will test.
+- Do NOT add mock data.
+- Do NOT claim it’s fixed unless the schedule is actually reading estimate schedule fields correctly.
+
+WHAT TO DO (REQUIRED, STEP BY STEP):
+
+1) CONFIRM WHAT THE SCHEDULE PAGE IS ACTUALLY RENDERING
+In the schedule data load function (the code that supplies schedule items to the grid), add TEMP logs:
+- Log the selected day:
+  console.log("SCHEDULE selectedDate", selectedDate)
+- Log counts:
+  console.log("SCHEDULE counts", { jobs: jobs?.length, estimates: estimates?.length })
+- Log first 3 estimates:
+  console.log("SCHEDULE estimates sample", estimates?.slice(0,3))
+
+This will prove whether estimates are being fetched at all.
+
+2) IF ESTIMATES ARE NOT BEING FETCHED → FIX THE FETCH
+Right now the schedule view is likely only calling a jobs endpoint.
+Implement ONE of these solutions:
+A) Add schedule endpoint:
+   GET /api/schedule?date=YYYY-MM-DD
+   returns both jobs + estimates
+OR
+B) Add estimate fetch inside schedule page:
+   GET /api/estimates?scheduledDate=YYYY-MM-DD (or equivalent)
+   Then merge with jobs client-side.
+
+DO NOT fetch all estimates. Only fetch for the selected date/week range.
+
+3) FIX FIELD MAPPING / SOURCE OF TRUTH
+We have multiple estimate schedule fields floating around:
+- requestedStartAt
+- scheduledDate
+- scheduledTime
+- scheduledStartAt
+
+The schedule page MUST use the fields that are ACTUALLY populated when an estimate is created.
+
+So:
+- When schedule modal saves, confirm which fields are actually being stored on the estimate record in DB.
+- Update schedule page normalization to compute a datetime using whichever is non-null:
+  Priority order:
+  1) estimate.scheduledStartAt (if exists)
+  2) combine(estimate.scheduledDate + estimate.scheduledTime)
+  3) estimate.requestedStartAt (fallback, if this is the real populated field)
+
+Then convert that to minutes-from-midnight for placement.
+
+4) ENSURE THE FILTER MATCHES THE CORRECT DAY
+If estimates are stored as date-only:
+- Filter by scheduledDate == YYYY-MM-DD
+
+If estimates are stored as datetime:
+- Filter by startOfDay/endOfDay in America/New_York
+
+The most common failure here is:
+- schedule page is filtering by scheduledDate but the estimate is only saving requestedStartAt
+OR
+- schedule page is filtering by requestedStartAt but estimate saves scheduledDate/scheduledTime
+
+Fix the mismatch.
+
+5) ENSURE ESTIMATES ARE NOT FILTERED OUT IN UI
+- After merging schedule items, confirm estimates are not being dropped by a type filter.
+- Make sure render supports type === "estimate".
+
+6) REMOVE TEMP LOGS AFTER
+After confirmed fixed, remove the console logs.
+
+DELIVERABLE:
+- Schedule page fetches estimates for the selected day
+- Schedule page normalizes estimate schedule datetime correctly (even if stored as split date/time)
+- NEW scheduled estimates appear on the schedule grid immediately
+- Jobs continue to work normally

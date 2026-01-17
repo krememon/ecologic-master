@@ -238,17 +238,9 @@ export default function AIScheduling() {
           estDateStr = rawDate;
         }
       } else {
-        const estDate = new Date(rawDate);
+        const estDate = new Date(rawDate as any);
         estDateStr = dateToYmdLocal(estDate);
       }
-      
-      console.log("SCHEDULE DEBUG - estimate filter:", {
-        id: estimate.id,
-        rawDate,
-        estDateStr,
-        selectedDayStr,
-        matches: estDateStr === selectedDayStr
-      });
       
       if (estDateStr !== selectedDayStr) return false;
       
