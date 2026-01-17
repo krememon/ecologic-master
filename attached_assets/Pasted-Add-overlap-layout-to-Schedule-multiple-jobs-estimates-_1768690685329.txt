@@ -1,0 +1,95 @@
+Add overlap layout to Schedule (multiple jobs/estimates in same timeslot)
+
+CURRENT
+Schedule blocks render with correct:
+- top position (start time)
+- height (duration from start → end)
+But if multiple items overlap in time (same timeslot), they should not cover each other.
+We need to display overlapping jobs/estimates side-by-side in columns like a real dispatch calendar.
+
+GOAL
+When 2+ schedule items overlap in time:
+- They should be arranged into columns
+- Each item’s width shrinks so all visible
+- Items keep correct top/height
+- No overlaps hiding cards
+- Works for both Jobs and Estimates (whatever is currently displayed on schedule)
+
+DEFINITIONS
+Each item has:
+- startMinutes (from start time)
+- endMinutes (from end time; if missing, default end = start + 60 min)
+Two items overlap if:
+startA < endB AND startB < endA
+
+IMPLEMENTATION (DO IN THIS ORDER)
+
+1) NORMALIZE EVENTS INTO ONE LIST FOR THE DAY
+On schedule day view, build a single array:
+events = [...jobsForDay, ...estimatesForDay]
+Each event should have:
+{
+  id,
+  type: "job" | "estimate",
+  title/customer/address,
+  startMinutes,
+  endMinutes,
+  topPx,
+  heightPx
+}
+
+2) GROUP EVENTS BY OVERLAP (CLUSTERS)
+Build “clusters” of events where any event overlaps with any other (transitively).
+Example:
+If A overlaps B, and B overlaps C, then A/B/C are one cluster.
+
+3) ASSIGN COLUMNS INSIDE EACH CLUSTER
+For each cluster:
+- Sort events by startMinutes asc, then longer duration first
+- Greedy column assignment:
+  columns = []
+  for event in cluster:
+    place it in the first column where it does NOT overlap the last event in that column
+    if none, create a new column
+Store:
+event.columnIndex
+event.columnCount = total columns in that cluster
+
+4) RENDER WITH LEFT + WIDTH BASED ON COLUMN
+Keep current:
+top = topPx
+height = heightPx
+
+Add:
+const gap = 6 (px)
+const columnWidth = (containerWidth - gap*(columnCount-1)) / columnCount
+left = columnIndex * (columnWidth + gap)
+width = columnWidth
+
+Apply inline style:
+style={{
+  top: `${topPx}px`,
+  height: `${heightPx}px`,
+  left: `${left}px`,
+  width: `${width}px`,
+  position: "absolute"
+}}
+
+IMPORTANT:
+- The schedule “lane” container must be position: relative
+- Cards must not exceed container width
+- Keep rounded corners and current UI
+
+5) EDGE CASES
+- If endMinutes <= startMinutes, force endMinutes = startMinutes + 60
+- Clamp minimum height (clickable)
+- Many overlaps (3–5+) should still be readable:
+  - reduce internal padding slightly if columnCount >= 3
+  - optionally reduce font size slightly for narrow cards (ONLY if needed)
+
+6) DONE WHEN
+- Two jobs at 5–7 PM show as two side-by-side green blocks
+- Three overlapping items show as three columns
+- Non-overlapping items stay full width
+- Top/height remain accurate
+- Works consistently for both Jobs and Estimates

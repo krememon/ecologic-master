@@ -485,6 +485,101 @@ export default function AIScheduling() {
     }
   };
 
+  const parseTimeToMinutes = (time: string | null) => {
+    if (!time) return null;
+    const parts = time.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1] || '0', 10);
+    return h * 60 + m;
+  };
+
+  const computeOverlapLayout = (items: ScheduleItem[]) => {
+    const DEFAULT_DURATION = 60;
+    
+    const events = items.map((item) => {
+      const startMins = parseTimeToMinutes(item.scheduledTime);
+      if (startMins === null) return null;
+      
+      let endMins = parseTimeToMinutes(item.scheduledEndTime);
+      if (endMins === null || endMins <= startMins) {
+        endMins = startMins + DEFAULT_DURATION;
+      }
+      
+      return {
+        ...item,
+        startMinutes: startMins,
+        endMinutes: endMins,
+        columnIndex: 0,
+        columnCount: 1,
+      };
+    }).filter(Boolean) as (ScheduleItem & { startMinutes: number; endMinutes: number; columnIndex: number; columnCount: number })[];
+    
+    if (events.length === 0) return [];
+    
+    const overlaps = (a: { startMinutes: number; endMinutes: number }, b: { startMinutes: number; endMinutes: number }) => {
+      return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
+    };
+    
+    events.sort((a, b) => a.startMinutes - b.startMinutes || (b.endMinutes - b.startMinutes) - (a.endMinutes - a.startMinutes));
+    
+    const visited = new Set<number>();
+    const clusters: (typeof events)[] = [];
+    
+    for (let i = 0; i < events.length; i++) {
+      if (visited.has(i)) continue;
+      
+      const cluster: typeof events = [];
+      const queue = [i];
+      visited.add(i);
+      
+      while (queue.length > 0) {
+        const idx = queue.shift()!;
+        cluster.push(events[idx]);
+        
+        for (let j = 0; j < events.length; j++) {
+          if (!visited.has(j) && overlaps(events[idx], events[j])) {
+            visited.add(j);
+            queue.push(j);
+          }
+        }
+      }
+      
+      clusters.push(cluster);
+    }
+    
+    for (const cluster of clusters) {
+      cluster.sort((a, b) => a.startMinutes - b.startMinutes || (b.endMinutes - b.startMinutes) - (a.endMinutes - a.startMinutes));
+      
+      const columns: (typeof cluster[0])[][] = [];
+      
+      for (const event of cluster) {
+        let placed = false;
+        for (let col = 0; col < columns.length; col++) {
+          const lastInCol = columns[col][columns[col].length - 1];
+          if (!overlaps(lastInCol, event)) {
+            columns[col].push(event);
+            event.columnIndex = col;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          event.columnIndex = columns.length;
+          columns.push([event]);
+        }
+      }
+      
+      const columnCount = columns.length;
+      for (const event of cluster) {
+        event.columnCount = columnCount;
+      }
+    }
+    
+    return events;
+  };
+
+  const layoutItems = useMemo(() => computeOverlapLayout(scheduleItems), [scheduleItems]);
+
   const monthName = selectedDate.toLocaleDateString('en-US', { month: 'long' });
   const year = selectedDate.getFullYear();
   const dayOfWeekShort = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -660,8 +755,8 @@ export default function AIScheduling() {
                 </div>
               ))}
               
-              <div className="absolute left-16 right-0 top-0 bottom-0">
-                {scheduleItems.map((item) => {
+              <div className="absolute left-16 right-0 top-0 bottom-0 pr-4">
+                {layoutItems.map((item) => {
                   const position = getTimePosition(item.scheduledTime);
                   if (position === null) return null;
                   
@@ -675,34 +770,44 @@ export default function AIScheduling() {
                     ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
                     : formatTime(item.scheduledTime);
                   
+                  const gap = 6;
+                  const columnCount = item.columnCount;
+                  const columnIndex = item.columnIndex;
+                  const widthPercent = (100 - (gap * (columnCount - 1)) / 3) / columnCount;
+                  const leftPercent = columnIndex * (widthPercent + gap / 3);
+                  
+                  const isNarrow = columnCount >= 3;
+                  
                   return (
                     <div
                       key={`${item.type}-${item.id}`}
                       onClick={() => setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`)}
-                      className={`absolute left-2 right-4 px-3 py-1.5 rounded-lg cursor-pointer transition-all hover:shadow-md overflow-hidden ${bgClass}`}
+                      className={`absolute rounded-lg cursor-pointer transition-all hover:shadow-md overflow-hidden ${bgClass} ${isNarrow ? 'px-2 py-1' : 'px-3 py-1.5'}`}
                       style={{ 
                         top: `${position}px`,
-                        height: `${blockHeight}px`
+                        height: `${blockHeight}px`,
+                        left: `calc(${leftPercent}% + 8px)`,
+                        width: `calc(${widthPercent}% - 8px)`,
                       }}
                     >
-                      <div className="flex items-start justify-between gap-2 h-full">
+                      <div className="flex items-start justify-between gap-1 h-full">
                         <div className="min-w-0 flex-1 overflow-hidden">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                          <div className="flex items-center gap-1">
+                            <p className={`font-medium text-slate-900 dark:text-slate-100 truncate ${isNarrow ? 'text-xs' : 'text-sm'}`}>
                               {item.customerName || item.title}
                             </p>
-                            {isEstimate && (
+                            {isEstimate && !isNarrow && (
                               <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-200 rounded">
                                 Estimate
                               </span>
                             )}
                           </div>
                           {item.scheduledTime && (
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                              {isEstimate ? 'Estimate' : 'Job'} • {timeDisplay}
+                            <p className={`text-slate-600 dark:text-slate-400 mt-0.5 ${isNarrow ? 'text-[10px]' : 'text-xs'}`}>
+                              {isNarrow ? timeDisplay : `${isEstimate ? 'Estimate' : 'Job'} • ${timeDisplay}`}
                             </p>
                           )}
-                          {blockHeight >= 80 && item.address && (
+                          {blockHeight >= 80 && item.address && !isNarrow && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
                               <MapPin className="h-3 w-3" />
                               {item.address}
