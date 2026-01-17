@@ -1745,6 +1745,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create the job
         // Note: jobs.clientId references the old 'clients' table, but NewJobSheet uses 'customers'
         // We only set clientName (text field) to store the customer name for display
+        // Normalize time to 15-minute intervals for consistency
+        const normalizeTimeTo15Min = (time: string): string => {
+          if (!time) return '09:00';
+          const [hours, mins] = time.split(':').map(Number);
+          const normalizedMins = Math.floor(mins / 15) * 15;
+          return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
+        };
+        
+        // Set startDate and scheduledTime if schedule is provided
+        // These are the canonical fields used by the Schedule page
+        const startDateValue = scheduleDate || null;
+        const scheduledTimeValue = scheduleDate ? normalizeTimeTo15Min(scheduleStartTime || '09:00') : null;
+        
         const [createdJob] = await tx
           .insert(jobs)
           .values({
@@ -1763,6 +1776,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             clientName: customerName || `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
             notes: notes || null,
             jobType: jobType || null,
+            startDate: startDateValue,
+            scheduledTime: scheduledTimeValue,
           } as any)
           .returning();
         
@@ -1936,6 +1951,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update schedule if provided
       if (scheduleDate !== undefined) {
+        // Normalize time to 15-minute intervals for consistency
+        const normalizeTimeTo15Min = (time: string): string => {
+          if (!time) return '09:00';
+          const [hours, mins] = time.split(':').map(Number);
+          const normalizedMins = Math.floor(mins / 15) * 15;
+          return `${hours.toString().padStart(2, '0')}:${normalizedMins.toString().padStart(2, '0')}`;
+        };
+        
+        // Update the job's startDate and scheduledTime fields (canonical for Schedule page)
+        if (scheduleDate) {
+          const normalizedTime = normalizeTimeTo15Min(scheduleStartTime || '09:00');
+          await db.update(jobs).set({
+            startDate: scheduleDate,
+            scheduledTime: normalizedTime,
+            updatedAt: new Date(),
+          }).where(eq(jobs.id, jobId));
+        } else {
+          // Clear schedule
+          await db.update(jobs).set({
+            startDate: null,
+            scheduledTime: null,
+            updatedAt: new Date(),
+          }).where(eq(jobs.id, jobId));
+        }
+        
         const existingScheduleItems = await storage.getScheduleItemsByJob(jobId);
         
         if (scheduleDate) {

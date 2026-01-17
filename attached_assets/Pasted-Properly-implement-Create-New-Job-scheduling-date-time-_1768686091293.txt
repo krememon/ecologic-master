@@ -1,0 +1,65 @@
+Properly implement “Create New Job” scheduling (date + time) so jobs appear on Schedule correctly
+
+CURRENT
+- Estimate scheduling + approved rescheduling is working now.
+- But when creating a brand new Job (Jobs tab → Create New Job), the schedule fields are not properly handled end-to-end.
+- Inside a Job, there is a “Schedule” section with “Add schedule” that should set the job’s date/time.
+
+GOAL
+When creating a new Job and scheduling it:
+- User can set Date + optional Time (same UI behavior as the estimate scheduling modal)
+- It saves correctly to the DB
+- The job appears on the Schedule page at the correct date/time immediately
+- It persists after refresh
+- No auto-navigation to /schedule unless user chooses
+
+CANONICAL RULE
+Jobs should use ONE source-of-truth datetime field for schedule rendering:
+- job.startDate (ISO datetime) is canonical for Schedule display
+Also keep scheduledDate + scheduledTime if they exist, but startDate must always be populated when scheduled.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FRONTEND: WIRE “Add schedule” IN JOB DETAILS
+- When user taps “Add schedule” inside a Job:
+  - Open a Schedule Job modal (same component if possible)
+  - Allow selecting Date and optional Time
+  - On submit, call PATCH /api/jobs/:jobId/schedule with:
+    - scheduledDate (YYYY-MM-DD)
+    - scheduledTime (HH:mm or null)
+    - timezone (America/New_York)
+- Show success toast “Scheduled”
+- Close modal
+- Update the Job details UI to show the chosen date/time (replace “Add schedule” with the date/time display)
+
+2) BACKEND: ENSURE PATCH /api/jobs/:id/schedule SETS startDate
+In the schedule endpoint:
+- Save scheduledDate, scheduledTime
+- Compute and save startDate as ISO (using timezone)
+- If scheduledTime is missing, set a default startDate time (choose one consistent behavior):
+  OPTION A: default 9:00 AM local
+  OPTION B: treat as “all day” and store 00:00 local
+Pick ONE and apply consistently across Schedule + UI.
+
+Return updated job with startDate/scheduledDate/scheduledTime.
+
+3) SCHEDULE PAGE: JOBS MUST RENDER FROM startDate
+- Ensure the Schedule page uses job.startDate (fallback to scheduledDate if needed)
+- Ensure the newly scheduled job appears immediately without refresh:
+  - invalidate/refetch schedule query OR
+  - update schedule state
+
+4) CREATE NEW JOB FLOW (IMPORTANT)
+When creating a job:
+- If the creation form includes date/time fields, ensure they are saved using the SAME schedule endpoint logic
+OR
+- If schedule is only set after creation via “Add schedule”, ensure job is created first then scheduled.
+
+No partial state: if the UI shows it scheduled, DB must match.
+
+DONE WHEN
+- Create New Job → open job → Add schedule → pick date/time → save
+- Job details shows scheduled date/time
+- Job appears on Schedule at correct date/time immediately
+- Persists after refresh
+- No unexpected redirects
