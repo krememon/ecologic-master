@@ -214,6 +214,7 @@ export default function AIScheduling() {
     if (role === 'TECHNICIAN' && user?.id) {
       return rawEstimates.filter((estimate) => {
         const assignedIds = (estimate.assignedEmployeeIds as string[]) || [];
+        if (assignedIds.length === 0) return true;
         return assignedIds.includes(user.id);
       });
     }
