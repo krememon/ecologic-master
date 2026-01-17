@@ -1,0 +1,54 @@
+AGENT — MAKE ESTIMATE “ASSIGNED EMPLOYEES” CARD MATCH JOBS STYLE (AVATARS + INLINE NAMES + EDIT)
+
+CONTEXT:
+Jobs “Assigned Employees” card looks great:
+- avatar bubbles with initials
+- names displayed inline on one line (e.g., “Phone Tester, Code Test”)
+- small “Edit” button in the top-right
+
+Estimates “Assigned Employees” card currently looks different:
+- just a vertical list of names
+- no avatar bubbles
+- no matching header layout
+
+GOAL:
+Update the Estimate details “Assigned Employees” card UI to look EXACTLY like the Jobs “Assigned Employees” card.
+
+SCOPE:
+- Estimate details page only
+- UI/layout only (do not change the assignment logic or endpoints)
+- Keep RBAC “hidden not disabled”
+
+WHAT TO DO:
+1) Locate the Jobs Assigned Employees card component (the one that renders bubbles + inline names + Edit).
+2) Reuse that SAME component for Estimates if possible, or copy its styling/structure so the estimate card matches 1:1.
+
+RENDERING REQUIREMENTS (MATCH JOBS):
+- Title: “Assigned Employees”
+- Top-right action:
+  - show “Edit” (icon + text) if user can edit estimate assignments
+  - hide if view-only
+- Body:
+  - Left: avatar bubbles for assigned employees (initials)
+  - Right: single-line text list of employee names separated by comma
+  - If 0 employees: show the same empty-state pattern Jobs uses (or “No employees assigned” in the same style)
+
+DATA NOTES:
+- Estimate already has assigned employees available (since it’s showing names now).
+- Use the same data fields Jobs uses for initials + display name.
+- Ensure the order is consistent (e.g., alphabetical or assignment order) and stable.
+
+DO NOT:
+- Change how employees are assigned to estimates
+- Remove existing estimate assignment functionality
+- Change Jobs UI
+
+TESTS (MUST PASS):
+1) Estimate with 2 assigned employees:
+   - shows avatar bubbles + “Name, Name” inline like Jobs
+   - shows Edit button (if permitted)
+2) Estimate with 0 assigned employees:
+   - shows empty state in clean style (no broken layout)
+
+DELIVERABLE:
+- Estimate “Assigned Employees” card matches Jobs card visually and structurally

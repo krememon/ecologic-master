@@ -79,7 +79,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
     enabled: !!estimateId,
   });
 
-  const { data: orgUsersData } = useQuery<{ users: Array<{ id: string; firstName: string | null; lastName: string | null; email: string }> }>({
+  const { data: orgUsersData } = useQuery<{ users: Array<{ id: string; firstName: string | null; lastName: string | null; email: string; profileImageUrl?: string | null }> }>({
     queryKey: ['/api/org/users'],
   });
   
@@ -499,20 +499,51 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Assigned Employees
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Assigned Employees
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {assignedEmployees.length > 0 ? (
-              <ul className="space-y-1">
-                {assignedEmployees.map((emp) => (
-                  <li key={emp.id} className="text-sm">
-                    {`${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email}
-                  </li>
-                ))}
-              </ul>
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-2 flex-shrink-0">
+                  {assignedEmployees.slice(0, 4).map((emp) => {
+                    const name = `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.email;
+                    const initials = (emp.firstName?.[0] || '') + (emp.lastName?.[0] || '') || emp.email[0].toUpperCase();
+                    return emp.profileImageUrl ? (
+                      <img
+                        key={emp.id}
+                        src={emp.profileImageUrl}
+                        alt={name}
+                        title={name}
+                        className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 object-cover"
+                      />
+                    ) : (
+                      <div
+                        key={emp.id}
+                        title={name}
+                        className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300"
+                      >
+                        {initials}
+                      </div>
+                    );
+                  })}
+                  {assignedEmployees.length > 4 && (
+                    <div className="h-8 w-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-medium">
+                      +{assignedEmployees.length - 4}
+                    </div>
+                  )}
+                </div>
+                <div className="text-sm">
+                  {assignedEmployees.map(e => 
+                    `${e.firstName || ''} ${e.lastName || ''}`.trim() || e.email.split('@')[0]
+                  ).slice(0, 3).join(', ')}
+                  {assignedEmployees.length > 3 && ` +${assignedEmployees.length - 3} more`}
+                </div>
+              </div>
             ) : (
               <p className="text-muted-foreground">No employees assigned</p>
             )}
