@@ -11,7 +11,9 @@ import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -90,6 +92,15 @@ interface JobDocument {
   createdAt: string;
 }
 
+interface Employee {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  role: string;
+  profileImageUrl?: string | null;
+}
+
 export default function JobDetails({ jobId }: JobDetailsProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -108,6 +119,10 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [editedNotes, setEditedNotes] = useState("");
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
+  const [employeesModalOpen, setEmployeesModalOpen] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [isSavingCrew, setIsSavingCrew] = useState(false);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
   const canEditJob = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
@@ -174,6 +189,72 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const invoiceStatus = invoice?.status;
   const isPaid = invoiceStatus?.toLowerCase() === 'paid';
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+
+  // Fetch company employees for assignment
+  const { data: employeesData, isLoading: employeesLoading } = useQuery<{ users: Employee[]; total: number }>({
+    queryKey: ['/api/org/users'],
+    enabled: isAuthenticated,
+  });
+  const allEmployees = employeesData?.users || [];
+  
+  // Filter employees by search
+  const filteredEmployees = allEmployees.filter((emp) => {
+    const searchLower = employeeSearch.toLowerCase();
+    const fullName = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
+    return fullName.includes(searchLower) || emp.email.toLowerCase().includes(searchLower);
+  });
+  
+  // Toggle employee selection
+  const toggleEmployee = (id: string) => {
+    setSelectedEmployees(prev => 
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
+    );
+  };
+  
+  // Open employee picker modal
+  const openEmployeePicker = () => {
+    // Initialize with currently assigned employees
+    setSelectedEmployees(crewAssignments.map(a => a.userId));
+    setEmployeeSearch("");
+    setEmployeesModalOpen(true);
+  };
+  
+  // Save crew assignments
+  const saveCrewAssignments = async () => {
+    setIsSavingCrew(true);
+    try {
+      // Get current assigned user IDs
+      const currentIds = new Set(crewAssignments.map(a => a.userId));
+      const newIds = new Set(selectedEmployees);
+      
+      // IDs to add
+      const toAdd = selectedEmployees.filter(id => !currentIds.has(id));
+      // IDs to remove
+      const toRemove = crewAssignments.filter(a => !newIds.has(a.userId)).map(a => a.userId);
+      
+      // Add new crew members
+      for (const userId of toAdd) {
+        await apiRequest("POST", `/api/jobs/${jobId}/crew`, { userId });
+      }
+      
+      // Remove crew members
+      for (const userId of toRemove) {
+        await apiRequest("POST", `/api/jobs/${jobId}/crew/remove`, { userId });
+      }
+      
+      // Refresh crew list
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'crew'] });
+      setEmployeesModalOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update crew assignments",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingCrew(false);
+    }
+  };
 
   // Helper to ensure invoice exists (creates if needed, returns invoice)
   const ensureInvoice = async (): Promise<{ id: number; invoiceNumber: string } | null> => {
@@ -617,9 +698,17 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           {/* Assigned Employees Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Assigned Employees
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Assigned Employees
+                </div>
+                {canEditJob && crewAssignments.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={openEmployeePicker}>
+                    <Edit className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -661,7 +750,19 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                   </div>
                 </div>
               ) : (
-                <p className="text-muted-foreground">No employees assigned</p>
+                canEditJob ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openEmployeePicker}
+                    className="gap-2"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Select Employee
+                  </Button>
+                ) : (
+                  <p className="text-muted-foreground">No employees assigned</p>
+                )
               )}
             </CardContent>
           </Card>
@@ -1017,6 +1118,86 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               {updateNotesMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Employee Picker Modal */}
+      <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
+        <DialogContent 
+          className="w-[95vw] max-w-md p-0 gap-0" 
+          hideCloseButton
+          onInteractOutside={(e) => e.preventDefault()}
+          preventAutoFocus
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <button 
+              onClick={() => setEmployeesModalOpen(false)} 
+              className="text-sm text-blue-500 font-medium"
+              disabled={isSavingCrew}
+            >
+              Cancel
+            </button>
+            <DialogTitle className="text-base font-semibold">ASSIGN TECHNICIANS</DialogTitle>
+            <button 
+              onClick={saveCrewAssignments} 
+              className="text-sm text-blue-500 font-medium"
+              disabled={isSavingCrew}
+            >
+              {isSavingCrew ? 'Saving...' : 'Done'}
+            </button>
+          </div>
+
+          <div className="p-4 border-b">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by name"
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          <ScrollArea className="max-h-64">
+            <div className="py-2">
+              {employeesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                </div>
+              ) : filteredEmployees.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                  <p className="font-medium">No team members found</p>
+                </div>
+              ) : (
+                filteredEmployees.map((employee) => (
+                  <button
+                    key={employee.id}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
+                      selectedEmployees.includes(employee.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
+                    onClick={() => toggleEmployee(employee.id)}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                      <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}
+                      </p>
+                      <p className="text-xs text-slate-500 capitalize">{employee.role?.toLowerCase()}</p>
+                    </div>
+                    {selectedEmployees.includes(employee.id) && (
+                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>

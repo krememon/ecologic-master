@@ -1,0 +1,59 @@
+AGENT — MAKE “NO EMPLOYEES ASSIGNED” CLICKABLE: SHOW “SELECT EMPLOYEE” BUTTON + OPEN ASSIGN EMPLOYEES PICKER
+
+CONTEXT:
+On the Job details page, the “Assigned Employees” card currently shows:
+“No employees assigned”
+I want this to be actionable so dispatching is faster.
+
+GOAL:
+When there are no employees assigned:
+- Replace the plain text with a small button/pill inside the card that says:
+  “Select Employee”
+- Tapping it opens a picker screen/modal where the user can select 1 or more employees
+- Saving updates the job assignments immediately and the card displays the selected employees
+
+DESIGN (MATCH ECOLOGIC STYLE):
+- Keep the card title “Assigned Employees”
+- When empty, show a small rounded button inside the card (not huge), centered/left aligned and clean:
+  Button label: “Select Employee”
+- When employees exist, show the list as it does now (names / avatar bubbles if you have them)
+- Optional: still allow editing via the existing Edit Job flow, but this is a faster shortcut
+
+FUNCTIONAL REQUIREMENTS:
+1) Reuse existing employee assignment UI if it already exists (Edit Job → Assign technicians).
+   - Ideally open the same component/modal.
+   - Do NOT build a totally separate assignment system.
+
+2) Multi-select behavior:
+- Show list of company employees (the same list used elsewhere)
+- Search + checkboxes (if already implemented)
+- User can select multiple employees
+- “Done/Save” applies changes
+
+3) Persistence:
+- On save, call the existing job update endpoint to update assigned employees.
+- It must REPLACE the list (empty array clears assignments).
+- After save, refresh UI immediately (update local state or refetch job).
+
+RBAC / ACCESS:
+- Follow “hidden not disabled”
+- Only users who can edit the job should see the “Select Employee” button and be able to assign.
+- Users who can view but not edit should just see the empty state text (or disabled button hidden).
+
+ERROR HANDLING:
+- If save fails, show an error toast (only on real failure).
+
+TESTS (MUST PASS):
+1) Open job with no assigned employees:
+   - See “Select Employee” button (instead of plain “No employees assigned” text)
+2) Tap button:
+   - Employee picker opens
+3) Select 2 employees → Save:
+   - Card immediately shows those 2 employees
+4) Remove all employees → Save:
+   - Card returns to empty state and shows “Select Employee” button again
+
+DELIVERABLE:
+- Empty state is actionable (“Select Employee”)
+- Uses existing multi-assign picker
+- Updates persist + UI refresh works
