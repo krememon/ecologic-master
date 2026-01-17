@@ -1,0 +1,82 @@
+AGENT — ADD JOB LOCATION TO CREATE ESTIMATE + AUTO-FILL ADDRESS FROM CUSTOMER + MATCH JOBS CUSTOMER CARD UI
+
+CONTEXT:
+On the Estimate details screen, the “Customer” card currently shows too much (name + email + phone).
+On the Jobs screen, the Customer card is cleaner and shows ADDRESS nicely.
+We also need a Job Location (address) during Estimate creation.
+
+GOALS:
+1) During Create Estimate, allow setting a Job Location (address).
+2) If the user selects an existing customer, the Job Location should auto-fill from that customer’s saved address.
+3) Update the Estimate “Customer” card UI to match the Jobs “Customer” card style (cleaner, with ADDRESS label).
+
+REQUIREMENTS:
+
+A) CREATE ESTIMATE — JOB LOCATION FIELD
+- Add a new section on the “New Estimate” screen:
+  SECTION HEADER: JOB LOCATION (or just LOCATION)
+  ROW: “Add address” (pin/location icon + chevron)
+- Tapping opens an address editor modal/screen (same style as other pickers):
+  Fields:
+    - Address line (street)
+    - City
+    - State
+    - ZIP
+  (If you already have an address component used in Jobs, reuse it.)
+- When saved, show a preview in the row (e.g., “321 Astor Dr”).
+
+B) AUTO-FILL ADDRESS WHEN PICKING EXISTING CUSTOMER
+- When user selects an existing customer in Create Estimate:
+  - If customer has an address saved, auto-populate the estimate’s jobLocation fields immediately.
+  - The Job Location row should update to show that address without the user doing anything.
+- If customer has no address, leave blank and still allow manual entry.
+
+IMPORTANT:
+- Customer address and Estimate job location can start the same, but Estimate should store its own jobLocation snapshot
+  (so if customer address changes later, the estimate keeps what was used at time of creation).
+
+C) BACKEND / DATA MODEL
+- Ensure Estimate has fields for job location, e.g.:
+  estimate.jobAddressLine1
+  estimate.jobCity
+  estimate.jobState
+  estimate.jobZip
+  (or an estimate.jobAddress object if that’s your pattern)
+- Include these fields in:
+  - create estimate payload + endpoint
+  - estimate fetch endpoints (list + detail)
+- Do NOT break job model or job creation.
+
+D) ESTIMATE DETAILS — CUSTOMER CARD UI MATCH JOBS
+Update the Estimate details “Customer” card to match the Jobs Customer card look:
+- Title: Customer
+- Show only:
+  - Customer name
+  - ADDRESS label + clickable blue address line (like Jobs)
+- Remove email/phone from the Customer card in estimate (keep them accessible elsewhere if you already have them, but not here)
+- Ensure spacing, fonts, and label style match the Jobs Customer card exactly.
+
+E) DISPLAY JOB LOCATION ON ESTIMATE DETAILS
+- On Estimate details screen, add a “Location” card/row similar to Jobs if needed OR include the address under Customer like Jobs does.
+- It should display the estimate job location fields (not customer’s live address).
+- If no location set, show “No address” or similar.
+
+TESTS (MUST PASS):
+1) Create estimate, select existing customer with address:
+   - Job Location auto-fills
+   - After save, estimate details shows address properly
+2) Create estimate, select customer with no address:
+   - Job Location remains empty
+   - User can add it manually
+3) Create estimate, override the auto-filled address:
+   - Saved estimate retains the overridden address
+
+DO NOT:
+- Add Job Tags back
+- Change unrelated estimate flows
+- Remove customer selection features
+
+DELIVERABLES:
+- Job Location section added to Create Estimate + saved to DB
+- Auto-fill from customer address when selecting existing customer
+- Estimate Customer card matches Jobs Customer card styling/content

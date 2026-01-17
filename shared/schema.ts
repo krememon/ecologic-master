@@ -732,6 +732,11 @@ export const estimates = pgTable("estimates", {
   customerEmail: varchar("customer_email", { length: 255 }), // Snapshot field for history
   customerPhone: varchar("customer_phone", { length: 50 }), // Snapshot field for history
   customerAddress: text("customer_address"), // Snapshot field for history
+  // Job location fields - snapshot of address for the estimate (independent of customer)
+  jobAddressLine1: varchar("job_address_line1", { length: 255 }),
+  jobCity: varchar("job_city", { length: 100 }),
+  jobState: varchar("job_state", { length: 50 }),
+  jobZip: varchar("job_zip", { length: 20 }),
   notes: text("notes"),
   jobType: varchar("job_type", { length: 100 }),
   status: estimateStatusEnum("status").notNull().default("draft"),
