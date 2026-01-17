@@ -1,0 +1,104 @@
+AGENT — SHOW REAL JOBS + ESTIMATES ON SCHEDULE (DAY VIEW GRID)
+
+CONTEXT:
+The Schedule Day View UI is now clean and set up with a full 12AM–11PM time grid.
+Right now it is only an empty grid.
+We need real Jobs and Estimates to actually appear on the Schedule.
+
+GOAL:
+Display scheduled Jobs and scheduled Estimates on the Schedule Day View grid for the selected date.
+They should show at the correct time and be clickable.
+
+SCOPE (PHASE 1 — DISPLAY ONLY):
+- Schedule page Day view ONLY
+- Read-only display (no drag/drop yet)
+- Show Jobs + Estimates as blocks positioned by start time
+- Clicking a block opens the correct details page
+
+DATA SOURCES:
+1) Jobs:
+- Use the existing job schedule fields (scheduled date + time)
+- Only include jobs that have a schedule set for the selected date
+
+2) Estimates:
+- Use the estimate schedule fields set during estimate creation
+- Only include estimates that have a schedule set for the selected date
+- Visually differentiate estimate blocks vs job blocks (small chip “Estimate” or different border)
+
+IMPORTANT RBAC:
+- Owner/Admin: see all
+- Dispatcher: see all jobs (and estimates if allowed)
+- Technician: only jobs assigned to them (and estimates assigned to them if applicable)
+- Follow “hidden not disabled”: do not show items the user cannot access
+
+BACKEND / API (PREFERRED):
+Create ONE endpoint for schedule items:
+GET /api/schedule?date=YYYY-MM-DD
+Return normalized items:
+[
+  {
+    type: "job" | "estimate",
+    id: string,
+    title: string,          // customer name or “Job for ___”
+    startAt: ISO string,    // includes time
+    endAt: ISO string (optional),
+    addressLine: string,
+    assignedUsers: [{ id, name }] (optional),
+    status: string (optional)
+  }
+]
+
+If building a new endpoint is too much, then:
+- Fetch scheduled jobs for that day
+- Fetch scheduled estimates for that day
+- Merge client-side into a single list of scheduleItems
+
+RENDERING RULES (DAY GRID):
+1) Position blocks by start time:
+- Compute minutes from midnight
+- Convert to “top offset” using your hour row height
+- Example:
+  top = (minutesFromMidnight / 60) * HOUR_ROW_HEIGHT
+
+2) Default duration:
+- If no duration exists, use 60 minutes for display
+- height = (durationMinutes / 60) * HOUR_ROW_HEIGHT
+- Keep minimum height so it’s clickable
+
+3) Block contents (compact, modern):
+- Primary line: Customer name
+- Secondary line: Job/Estimate label + time (e.g. “Job • 9:00 AM”)
+- Optional: address in tiny text if space
+- Make it tappable
+
+4) Visual styling:
+- Jobs: solid light background + left accent bar
+- Estimates: different accent color or outline
+- Keep consistent with EcoLogic modern style
+
+CLICK BEHAVIOR:
+- If type === "job": navigate to /jobs/:id
+- If type === "estimate": navigate to /estimates/:id
+- No long-press, no drag yet
+
+EMPTY STATE:
+- If no schedule items for the day:
+  show “No jobs scheduled for {date}” (keep current empty state)
+- If items exist, hide the empty state
+
+TESTS (MUST PASS):
+1) Create a Job scheduled for today at 9:00 AM
+   → It appears on Day View at 9:00 AM
+2) Create an Estimate scheduled for today at 1:00 PM
+   → It appears on Day View at 1:00 PM with “Estimate” styling
+3) Click each block
+   → Opens the correct detail page
+4) Switch day using week strip
+   → Items update for that day correctly
+5) RBAC:
+   Technician only sees assigned jobs
+
+DELIVERABLE:
+- Schedule Day View displays real Jobs + Estimates positioned by time
+- Click opens details
+- No regressions to Schedule UI polish

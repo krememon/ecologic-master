@@ -52,6 +52,28 @@ interface JobWithSchedule {
   }>;
 }
 
+interface EstimateWithSchedule {
+  id: number;
+  title: string;
+  status: string;
+  scheduledDate: string | null;
+  scheduledTime: string | null;
+  customerName: string | null;
+  jobAddressLine1: string | null;
+  jobCity: string | null;
+  assignedEmployeeIds?: string[];
+}
+
+interface ScheduleItem {
+  type: 'job' | 'estimate';
+  id: number;
+  title: string;
+  customerName: string | null;
+  scheduledTime: string | null;
+  address: string | null;
+  status: string;
+}
+
 interface Employee {
   id: string;
   firstName: string | null;
@@ -92,6 +114,11 @@ export default function AIScheduling() {
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/company/members"],
+    enabled: isAuthenticated,
+  });
+
+  const { data: rawEstimates = [] } = useQuery<EstimateWithSchedule[]>({
+    queryKey: ["/api/estimates"],
     enabled: isAuthenticated,
   });
 
@@ -180,6 +207,77 @@ export default function AIScheduling() {
       return timeA.localeCompare(timeB);
     });
   }, [jobs, selectedDayStr, selectedMemberIds]);
+
+  const estimates = useMemo(() => {
+    if (!Array.isArray(rawEstimates)) return [];
+    
+    if (role === 'TECHNICIAN' && user?.id) {
+      return rawEstimates.filter((estimate) => {
+        const assignedIds = (estimate.assignedEmployeeIds as string[]) || [];
+        return assignedIds.includes(user.id);
+      });
+    }
+    
+    return rawEstimates;
+  }, [rawEstimates, role, user?.id]);
+
+  const dailyEstimates = useMemo(() => {
+    if (!Array.isArray(estimates)) return [];
+    
+    return estimates.filter((estimate) => {
+      if (!estimate.scheduledDate) return false;
+      const estDate = new Date(estimate.scheduledDate);
+      if (dateToYmdLocal(estDate) !== selectedDayStr) return false;
+      
+      if (selectedMemberIds.length === 0) return false;
+      
+      const assignedIds = (estimate.assignedEmployeeIds as string[]) || [];
+      
+      if (assignedIds.length === 0) {
+        return true;
+      }
+      
+      return assignedIds.some(id => selectedMemberIds.includes(id));
+    }).sort((a, b) => {
+      const timeA = a.scheduledTime || '99:99';
+      const timeB = b.scheduledTime || '99:99';
+      return timeA.localeCompare(timeB);
+    });
+  }, [estimates, selectedDayStr, selectedMemberIds]);
+
+  const scheduleItems = useMemo((): ScheduleItem[] => {
+    const items: ScheduleItem[] = [];
+    
+    dailyJobs.forEach(job => {
+      items.push({
+        type: 'job',
+        id: job.id,
+        title: job.title,
+        customerName: job.clientName || job.client?.name || null,
+        scheduledTime: job.scheduledTime,
+        address: job.location || job.city || null,
+        status: job.status
+      });
+    });
+    
+    dailyEstimates.forEach(estimate => {
+      items.push({
+        type: 'estimate',
+        id: estimate.id,
+        title: estimate.title,
+        customerName: estimate.customerName,
+        scheduledTime: estimate.scheduledTime,
+        address: estimate.jobAddressLine1 || estimate.jobCity || null,
+        status: estimate.status
+      });
+    });
+    
+    return items.sort((a, b) => {
+      const timeA = a.scheduledTime || '99:99';
+      const timeB = b.scheduledTime || '99:99';
+      return timeA.localeCompare(timeB);
+    });
+  }, [dailyJobs, dailyEstimates]);
 
   const jobsByEmployee = useMemo(() => {
     const grouped: Record<string, { employee: { id: string; name: string; profileImageUrl: string | null } | null; jobs: JobWithSchedule[] }> = {};
