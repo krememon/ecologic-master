@@ -1,0 +1,96 @@
+AGENT — SCHEDULE PAGE “VIEW OPTIONS” MODAL (COPY JOBBER FILTERS SCREEN)
+
+CONTEXT:
+On our Schedule page, there is a “sliders” icon (three lines) in the top right (see screenshot).
+When Jobber users tap that icon, it opens a “View Options” modal/screen that includes:
+- View selector: Day / List / 3 Day / Week / Map
+- Toggles:
+  - Show unscheduled appointments on map view
+  - Show weekends on week view
+- Team Members section:
+  - Search bar
+  - “X selected” count + “Deselect all”
+  - List of team members with checkmarks
+- Big “Apply” button at bottom
+
+GOAL:
+When the user taps the sliders icon on EcoLogic Schedule page,
+open a modal that looks and functions like Jobber’s “View Options” screen.
+
+SCOPE:
+Schedule page only.
+Do NOT redesign the Schedule page itself right now.
+Only build the View Options modal and wire it to filter what is shown.
+
+UI REQUIREMENTS (COPY JOBBER):
+1) Modal header:
+- Left: “X” close button
+- Title: “View Options”
+
+2) View section:
+- Label: “View”
+- Segmented control with options:
+  - Day
+  - List
+  - 3 Day
+  - Week
+  - Map
+(These control which schedule view is active.)
+
+3) Toggles:
+- “Show unscheduled appointments on map view” (toggle)
+- “Show weekends on week view” (toggle)
+
+4) Team Members section:
+- Label: “Team Members”
+- Search input
+- Row beneath search:
+  - Left: “X selected”
+  - Right: “Deselect all”
+- List of team members:
+  - Name on left
+  - Checkmark box on right
+  - Multi-select behavior
+
+5) Bottom button:
+- Full-width green “Apply” button fixed to bottom
+- Tapping Apply closes modal and applies selections to schedule page
+
+FUNCTIONAL REQUIREMENTS:
+A) View selection
+- Selecting a view updates local state in the modal
+- Apply commits it to Schedule page state:
+  - Day / List / Map already exist
+  - Add placeholders for 3 Day and Week (can show “Coming soon” for now)
+  - BUT the selection should still persist
+
+B) Team member filtering
+- Default: all team members selected (or at least the current user selected, choose what matches current behavior)
+- When one or more members selected:
+  - Schedule displays ONLY jobs assigned to selected members
+- Include “Unassigned” jobs:
+  - If no members selected, show none (or show unassigned only — pick simplest: show none)
+  - Optionally include a pseudo-member “Unassigned” later (not required now)
+
+C) Toggles behavior
+- “Show weekends on week view”:
+  - When Week view is built, use this toggle to show/hide Sat/Sun
+  - For now, store setting and do nothing else (safe)
+- “Show unscheduled appointments on map view”:
+  - If Map view exists, show unscheduled jobs as pins when enabled
+  - For now, store setting and do nothing else (safe)
+
+DATA:
+- Team members list should come from existing company employees/users already used in Assign Technicians
+- Must respect RBAC:
+  - If user is Technician, only show themselves selectable
+  - If Dispatcher/Admin, show all employees
+
+IMPORTANT UX:
+- DO NOT autofocus the search input when modal opens (avoid iPhone keyboard auto pop)
+- Search filters the team member list in real time
+
+DELIVERABLE:
+- Sliders icon opens View Options modal that matches Jobber layout
+- View selection + team member filtering work after tapping Apply
+- Settings persist while navigating within Schedule page
