@@ -223,24 +223,10 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const saveCrewAssignments = async () => {
     setIsSavingCrew(true);
     try {
-      // Get current assigned user IDs
-      const currentIds = new Set(crewAssignments.map(a => a.userId));
-      const newIds = new Set(selectedEmployees);
+      // Send the complete list of selected employees (empty array clears assignments)
+      console.log("ASSIGN TECHS submit", { jobId, userIds: selectedEmployees });
       
-      // IDs to add
-      const toAdd = selectedEmployees.filter(id => !currentIds.has(id));
-      // IDs to remove
-      const toRemove = crewAssignments.filter(a => !newIds.has(a.userId)).map(a => a.userId);
-      
-      // Add new crew members
-      for (const userId of toAdd) {
-        await apiRequest("POST", `/api/jobs/${jobId}/crew`, { userId });
-      }
-      
-      // Remove crew members
-      for (const userId of toRemove) {
-        await apiRequest("POST", `/api/jobs/${jobId}/crew/remove`, { userId });
-      }
+      await apiRequest("POST", `/api/jobs/${jobId}/crew`, { userIds: selectedEmployees });
       
       // Refresh crew list
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'crew'] });

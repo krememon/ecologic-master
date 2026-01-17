@@ -2185,7 +2185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jobId = parseInt(req.params.jobId);
       const { userIds } = req.body;
       
-      if (!Array.isArray(userIds) || userIds.length === 0) {
+      if (!Array.isArray(userIds)) {
         return res.status(400).json({ message: "userIds array is required" });
       }
       
@@ -2195,7 +2195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Job not found" });
       }
       
-      // Verify all users are in the company
+      // Verify all users are in the company (if any are provided)
       for (const uid of userIds) {
         const userMember = await storage.getCompanyMember(company.id, uid);
         if (!userMember) {
@@ -2203,9 +2203,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      const result = await storage.addJobCrewAssignments(jobId, userIds, company.id, userId);
+      // SET/REPLACE approach: get current assignments, compute adds and removes
+      const currentAssignments = await storage.getJobCrewAssignments(jobId);
+      const currentIds = new Set(currentAssignments.map((a: any) => a.userId));
+      const newIds = new Set(userIds);
       
-      res.json({ ok: true, added: result.added });
+      // IDs to add
+      const toAdd = userIds.filter((id: string) => !currentIds.has(id));
+      // IDs to remove
+      const toRemove = currentAssignments.filter((a: any) => !newIds.has(a.userId)).map((a: any) => a.userId);
+      
+      // Remove unselected crew members
+      if (toRemove.length > 0) {
+        await storage.removeJobCrewAssignments(jobId, toRemove);
+      }
+      
+      // Add new crew members
+      let added = 0;
+      if (toAdd.length > 0) {
+        const result = await storage.addJobCrewAssignments(jobId, toAdd, company.id, userId);
+        added = result.added;
+      }
+      
+      res.json({ ok: true, added, removed: toRemove.length });
     } catch (error) {
       console.error("Error assigning crew:", error);
       res.status(500).json({ message: "Failed to assign crew members" });
