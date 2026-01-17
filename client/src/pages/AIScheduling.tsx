@@ -117,9 +117,21 @@ export default function AIScheduling() {
     enabled: isAuthenticated,
   });
 
-  const { data: rawEstimates = [] } = useQuery<EstimateWithSchedule[]>({
+  const { data: rawEstimates = [], isLoading: estimatesLoading } = useQuery<EstimateWithSchedule[]>({
     queryKey: ["/api/estimates"],
     enabled: isAuthenticated,
+  });
+  
+  // Debug: trace estimate data flow
+  console.log("[SCHEDULE-DEBUG] rawEstimates:", {
+    count: rawEstimates?.length,
+    isLoading: estimatesLoading,
+    isAuthenticated,
+    sample: rawEstimates?.slice(0, 2)?.map(e => ({
+      id: e.id,
+      scheduledDate: e.scheduledDate,
+      scheduledTime: e.scheduledTime
+    }))
   });
 
   const jobs = useMemo(() => {
@@ -211,22 +223,41 @@ export default function AIScheduling() {
   const estimates = useMemo(() => {
     if (!Array.isArray(rawEstimates)) return [];
     
+    // Filter out approved estimates that have been converted to jobs
+    // (those should show as Jobs, not Estimates)
+    let filtered = rawEstimates.filter((estimate: any) => {
+      // If estimate is approved and has convertedJobId, it's now a Job
+      if (estimate.status === 'approved' && estimate.convertedJobId) {
+        return false;
+      }
+      return true;
+    });
+    
     if (role === 'TECHNICIAN' && user?.id) {
-      return rawEstimates.filter((estimate) => {
+      filtered = filtered.filter((estimate) => {
         const assignedIds = (estimate.assignedEmployeeIds as string[]) || [];
         if (assignedIds.length === 0) return true;
         return assignedIds.includes(user.id);
       });
     }
     
-    return rawEstimates;
+    return filtered;
   }, [rawEstimates, role, user?.id]);
 
   const dailyEstimates = useMemo(() => {
     if (!Array.isArray(estimates)) return [];
     
+    console.log("[SCHEDULE-DEBUG] dailyEstimates filter:", {
+      estimatesCount: estimates.length,
+      selectedDayStr,
+      selectedMemberIdsCount: selectedMemberIds.length
+    });
+    
     return estimates.filter((estimate) => {
-      if (!estimate.scheduledDate) return false;
+      if (!estimate.scheduledDate) {
+        console.log("[SCHEDULE-DEBUG] estimate SKIP (no scheduledDate):", estimate.id);
+        return false;
+      }
       
       const rawDate = estimate.scheduledDate;
       let estDateStr: string;
@@ -241,6 +272,14 @@ export default function AIScheduling() {
         const estDate = new Date(rawDate as any);
         estDateStr = dateToYmdLocal(estDate);
       }
+      
+      console.log("[SCHEDULE-DEBUG] estimate date check:", {
+        id: estimate.id,
+        rawDate,
+        estDateStr,
+        selectedDayStr,
+        match: estDateStr === selectedDayStr
+      });
       
       if (estDateStr !== selectedDayStr) return false;
       
@@ -259,6 +298,9 @@ export default function AIScheduling() {
       return timeA.localeCompare(timeB);
     });
   }, [estimates, selectedDayStr, selectedMemberIds]);
+  
+  // Debug: log final daily estimates
+  console.log("[SCHEDULE-DEBUG] dailyEstimates result:", dailyEstimates.length, dailyEstimates.map(e => ({ id: e.id, title: e.title })));
 
   const scheduleItems = useMemo((): ScheduleItem[] => {
     const items: ScheduleItem[] = [];

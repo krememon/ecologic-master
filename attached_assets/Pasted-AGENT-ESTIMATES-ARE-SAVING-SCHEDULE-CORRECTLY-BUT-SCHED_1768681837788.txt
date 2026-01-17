@@ -1,0 +1,86 @@
+AGENT — ESTIMATES ARE SAVING SCHEDULE CORRECTLY, BUT SCHEDULE PAGE IS NOT READING THEM (FIX FETCH + NORMALIZATION)
+
+CONTEXT:
+I provided server console logs. NEW estimates are being saved and returned from /api/estimates with schedule fields:
+
+Example from logs:
+[Estimates] first estimate schedule: {
+  id: 53,
+  status: 'draft',
+  convertedJobId: null,
+  scheduledDate: 2026-01-17T14:00:00.000Z,
+  scheduledTime: '14:00'
+}
+
+So the estimate DOES have schedule data, but it still does NOT appear on the Schedule page.
+
+GOAL:
+Make scheduled estimates appear on the Schedule Day View grid.
+
+IMPORTANT:
+- Do NOT ask me to test. I will test.
+- Do NOT add mock data.
+- Do NOT claim it’s fixed without wiring Schedule page to real estimate schedule fields.
+
+ROOT CAUSE (MOST LIKELY FROM LOGS):
+1) The Schedule page is NOT fetching estimates at all (only Jobs).
+   The console shows GET /api/estimates, but that may be from Jobs & Estimates page — not from /schedule.
+2) The schedule grid may be filtering incorrectly or building the datetime wrong because:
+   - scheduledDate is being stored with a time component (14:00:00.000Z)
+   - scheduledTime is also “14:00”
+   If the grid “combines” both, it can break positioning or date matching.
+
+WHAT TO DO:
+
+A) CONFIRM SCHEDULE ROUTE FETCHING
+1) Open the Schedule page code and find the data-loading function for Day View.
+2) Ensure that when visiting /schedule, the app makes a request for estimates.
+   REQUIRED: There must be a network request triggered by /schedule for estimates.
+   (Not just /jobs or /estimates pages.)
+
+B) ADD ESTIMATES FETCH INTO SCHEDULE PAGE (IF MISSING)
+On the Schedule page data layer:
+- Fetch jobs for selected date (existing)
+- ALSO fetch estimates for selected date:
+  GET /api/estimates  (then filter client-side by selected date)
+  OR add query support:
+  GET /api/estimates?scheduledDate=YYYY-MM-DD  (preferred for efficiency)
+
+Then merge into scheduleItems.
+
+C) NORMALIZE ESTIMATE START DATETIME IN ONE PLACE
+Do NOT let the grid guess or “combine” inconsistently.
+Create ONE normalized field for schedule placement:
+
+For each estimate, compute:
+- estimateStartAt = combineDateAndTime(datePart(scheduledDate), scheduledTime)
+
+IMPORTANT DETAIL:
+Because scheduledDate currently contains a time in UTC (2026-01-17T14:00:00.000Z),
+you MUST strip it to date-only first before applying scheduledTime:
+- Use ONLY the date portion (YYYY-MM-DD) from scheduledDate
+- Then apply scheduledTime (“HH:mm”) to build the final startAt in local timezone
+
+Example logic requirement:
+- dateOnly = format scheduledDate as YYYY-MM-DD (ignore time)
+- startAt = new Date(`${dateOnly}T${scheduledTime}:00`) (local)
+(or use your date library, but the key is: strip time from scheduledDate first)
+
+D) FILTERING MUST MATCH THE SELECTED DAY
+When deciding which estimates belong to the selected day:
+- Use the dateOnly (YYYY-MM-DD) derived from scheduledDate for comparison
+- NOT raw Date object comparisons that may shift across timezones
+
+E) RENDERING
+- Ensure schedule grid includes type === "estimate" items
+- Position block using normalized estimateStartAt
+- Do NOT require estimates to be “approved” to show — drafts should show too if scheduled
+
+F) CLEAN UP AFTER
+- Remove temporary logs after you confirm scheduleItems includes estimates
+
+DELIVERABLE:
+- Schedule page /schedule fetches estimates (confirmed by network call)
+- Estimates are normalized into a usable startAt datetime
+- Scheduled estimates appear on the Day View grid at the correct time
+- Jobs still work normally
