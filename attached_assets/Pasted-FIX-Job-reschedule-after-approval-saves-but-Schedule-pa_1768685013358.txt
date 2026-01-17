@@ -1,0 +1,57 @@
+FIX: Job reschedule after approval saves, but Schedule page doesn’t show job
+
+EVIDENCE (FROM LOGS)
+- Approve estimate creates a job: createdJobId=415
+- Reschedule hits PATCH /api/jobs/415/schedule and returns 200
+- /api/jobs returns the job list after scheduling
+So scheduling IS saving, but Schedule UI filtering is not picking it up.
+
+ROOT CAUSE (MOST LIKELY)
+Schedule page filters jobs by job.startDate (or job.scheduledAt)
+BUT our schedule endpoint /api/jobs/:id/schedule is saving scheduledDate + scheduledTime ONLY
+Meaning startDate/scheduledAt is null/undefined so the job never passes dailyJobs filter.
+
+GOAL
+When an approved estimate is scheduled/rescheduled, the JOB must appear on Schedule at the correct date/time.
+
+IMPLEMENTATION (DO THIS EXACTLY)
+
+1) STANDARDIZE JOB SCHEDULE FIELD (CANONICAL)
+Use job.startDate as the canonical datetime for schedule rendering (since Schedule UI already references it).
+When we save a schedule, ALWAYS populate job.startDate as a real ISO string.
+
+2) BACKEND: UPDATE /api/jobs/:id/schedule
+In PATCH /api/jobs/:id/schedule:
+- Accept scheduledDate (YYYY-MM-DD), scheduledTime ("HH:mm"), timezone
+- Construct a datetime using the timezone
+- Save BOTH:
+  - job.startDate = ISO datetime (canonical)
+  - job.scheduledDate + job.scheduledTime (if those columns exist and you want to keep them)
+Return startDate in the response so frontend can use it immediately.
+
+Example behavior:
+scheduledDate=2026-01-17, scheduledTime=11:00, timezone=America/New_York
+=> startDate should represent 11:00 AM local time, stored as ISO.
+
+3) BACKEND: ENSURE /api/jobs RETURNS startDate
+Confirm GET /api/jobs includes startDate in the job payload.
+If it’s missing, add it to the serializer/selection.
+
+4) FRONTEND: SCHEDULE PAGE MUST USE ONE FIELD CONSISTENTLY
+In Schedule page dailyJobs filter/render:
+- Use job.startDate (preferred)
+- Parse ISO safely
+- Do not use scheduledDate/scheduledTime for job filtering anymore (unless startDate missing, then fallback).
+
+5) PREVENT DUPLICATES: APPROVED ESTIMATES SHOULD NOT ALSO RENDER AS SCHEDULE ITEMS
+Once an estimate is approved and convertedJobId exists:
+- Remove it from dailyEstimates on the Schedule page
+- The job is the source of truth after approval
+This prevents the “estimate shows but job doesn’t” confusion and prevents double entries.
+
+DONE WHEN
+- Approve estimate -> job created
+- Reschedule job -> PATCH /api/jobs/:id/schedule 200
+- Job now appears on Schedule at the correct new date/time
+- No duplicates (approved estimate no longer renders separately)
+- Persists after refresh

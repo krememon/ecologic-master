@@ -187,9 +187,12 @@ export default function AIScheduling() {
       id: j.id, 
       startDate: j.startDate, 
       startDateType: typeof j.startDate,
-      scheduledTime: j.scheduledTime 
+      scheduledTime: j.scheduledTime,
+      crewAssignments: j.crewAssignments?.length || 0,
+      assignedEmployeeIds: j.assignedEmployeeIds?.length || 0
     })));
     console.log('[Schedule] Selected day:', selectedDayStr);
+    console.log('[Schedule] Member filter:', { initialized: memberFilterInitialized, selectedCount: selectedMemberIds.length, selectedIds: selectedMemberIds });
     
     return jobs.filter((job) => {
       if (!job.startDate) {
@@ -212,9 +215,15 @@ export default function AIScheduling() {
       
       console.log('[Schedule] Job', job.id, 'date comparison:', jobDateStr, '===', selectedDayStr, '?', jobDateStr === selectedDayStr);
       
-      if (jobDateStr !== selectedDayStr) return false;
+      if (jobDateStr !== selectedDayStr) {
+        console.log('[Schedule] Job', job.id, 'date mismatch, skipping');
+        return false;
+      }
       
-      if (selectedMemberIds.length === 0) return false;
+      if (selectedMemberIds.length === 0) {
+        console.log('[Schedule] Job', job.id, 'no members selected, skipping');
+        return false;
+      }
       
       const crew = job.crewAssignments || [];
       const assignedIds = job.assignedEmployeeIds || [];
@@ -224,10 +233,13 @@ export default function AIScheduling() {
       ]));
       
       if (allAssigned.length === 0) {
+        console.log('[Schedule] Job', job.id, 'INCLUDED (unassigned job)');
         return true;
       }
       
-      return allAssigned.some(id => selectedMemberIds.includes(id));
+      const included = allAssigned.some(id => selectedMemberIds.includes(id));
+      console.log('[Schedule] Job', job.id, included ? 'INCLUDED' : 'EXCLUDED by member filter');
+      return included;
     }).sort((a, b) => {
       const timeA = a.scheduledTime || '99:99';
       const timeB = b.scheduledTime || '99:99';
