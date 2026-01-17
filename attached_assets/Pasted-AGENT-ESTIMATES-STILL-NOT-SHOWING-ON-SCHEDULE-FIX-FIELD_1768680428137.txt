@@ -1,0 +1,85 @@
+AGENT — ESTIMATES STILL NOT SHOWING ON SCHEDULE (FIX FIELD MAPPING + SCHEDULE QUERY)
+
+CONTEXT:
+I created an Estimate with a schedule (date + time) and it shows correctly on the Estimate card.
+BUT it is NOT appearing on the Schedule Day View grid.
+
+The agent message claims scheduling is already implemented using:
+- Jobs: startDate + scheduledTime
+- Estimates: scheduledDate + scheduledTime
+
+So the Schedule page is likely expecting a different field (ex: scheduledStartAt) OR it’s only querying jobs OR it’s not converting estimate date+time into a datetime to render on the grid.
+
+GOAL:
+Make scheduled Estimates reliably appear on the Schedule Day View grid at the correct time.
+
+IMPORTANT:
+Do NOT tell me to test it. I will test.
+Do NOT add any fake/demo data.
+Fix the real data wiring.
+
+WHAT TO DO (NO GUESSING):
+
+1) CONFIRM WHAT THE SCHEDULE PAGE IS ACTUALLY RENDERING
+- In the Schedule page data fetch (where it loads schedule items), add TEMP logs:
+  console.log("SCHEDULE selectedDate", selectedDate);
+  console.log("SCHEDULE items raw", scheduleItems);
+
+- Confirm if scheduleItems currently contains only jobs, or if estimates are missing entirely.
+
+2) FIX DATA FETCH TO INCLUDE ESTIMATES
+If the schedule endpoint/query only fetches jobs:
+- Update it to also fetch estimates that match the selected date (scheduledDate).
+- Return both jobs and estimates to the frontend.
+
+If the frontend fetches jobs+estimates separately:
+- Ensure it is actually calling the estimates fetch and merging results.
+
+3) NORMALIZE ESTIMATE SCHEDULE FIELDS INTO A REAL DATETIME FOR THE GRID
+Right now estimates store:
+- scheduledDate (date)
+- scheduledTime (time string)
+But the schedule grid needs a single datetime to position items.
+
+So for each estimate, create a normalized startAt ISO datetime:
+- startAt = combine(scheduledDate + scheduledTime) in local timezone
+Example output:
+- "2026-01-17T09:00:00-05:00" (or ISO without offset if that’s how the app stores it)
+
+Do the same normalization for jobs if they also use split fields.
+
+IMPORTANT:
+Do NOT rely on the grid to guess how to combine date/time.
+Normalize it once in the schedule data layer.
+
+4) ENSURE THE FILTER IS CORRECT FOR THE SELECTED DAY
+Make sure the query matches the selected day:
+- If selectedDate is "2026-01-17"
+  estimates should match scheduledDate == "2026-01-17"
+- Avoid timezone off-by-one errors:
+  - Use date-only matching for the DB query if the DB stores scheduledDate as date
+  - If using datetime comparisons, use startOfDay/endOfDay correctly in America/New_York
+
+5) FRONTEND RENDERING
+- Ensure estimates are not being filtered out accidentally:
+  - type === "estimate" should render a block (even if styling differs)
+- Blocks must position based on startAt:
+  - minutesFromMidnight computed from startAt
+  - top offset computed from hourRowHeight
+
+6) DELIVERABLE (NO TEST INSTRUCTIONS)
+- Scheduled Estimates appear on the Schedule Day View
+- Scheduled Jobs continue to appear normally
+- Both are positioned correctly by time
+
+TEMP DEBUG (REMOVE AFTER FIX CONFIRMED):
+- Log counts:
+  console.log("SCHEDULE counts", { jobs: jobItems.length, estimates: estimateItems.length });
+- Log one estimate:
+  console.log("SCHEDULE sample estimate", estimateItems[0]);
+
+DO NOT:
+- Change how estimates are created
+- Change the schedule UI
+- Remove RBAC filtering
+- Add “test steps” for me to run

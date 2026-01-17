@@ -227,8 +227,30 @@ export default function AIScheduling() {
     
     return estimates.filter((estimate) => {
       if (!estimate.scheduledDate) return false;
-      const estDate = new Date(estimate.scheduledDate);
-      if (dateToYmdLocal(estDate) !== selectedDayStr) return false;
+      
+      const rawDate = estimate.scheduledDate;
+      let estDateStr: string;
+      
+      if (typeof rawDate === 'string') {
+        if (rawDate.includes('T')) {
+          estDateStr = rawDate.split('T')[0];
+        } else {
+          estDateStr = rawDate;
+        }
+      } else {
+        const estDate = new Date(rawDate);
+        estDateStr = dateToYmdLocal(estDate);
+      }
+      
+      console.log("SCHEDULE DEBUG - estimate filter:", {
+        id: estimate.id,
+        rawDate,
+        estDateStr,
+        selectedDayStr,
+        matches: estDateStr === selectedDayStr
+      });
+      
+      if (estDateStr !== selectedDayStr) return false;
       
       if (selectedMemberIds.length === 0) return false;
       

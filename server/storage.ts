@@ -1904,11 +1904,22 @@ export class DatabaseStorage implements IStorage {
 
     // Process requestedStartAt - convert to Date if string
     let processedRequestedStartAt: Date | null = null;
+    let processedScheduledDate: Date | null = null;
+    let processedScheduledTime: string | null = null;
+    
     if (payload.requestedStartAt) {
       if (typeof payload.requestedStartAt === 'string') {
         processedRequestedStartAt = new Date(payload.requestedStartAt);
       } else if (payload.requestedStartAt instanceof Date) {
         processedRequestedStartAt = payload.requestedStartAt;
+      }
+      
+      // Also set scheduledDate and scheduledTime for backward compatibility
+      if (processedRequestedStartAt && !isNaN(processedRequestedStartAt.getTime())) {
+        processedScheduledDate = processedRequestedStartAt;
+        const hours = processedRequestedStartAt.getHours().toString().padStart(2, '0');
+        const minutes = processedRequestedStartAt.getMinutes().toString().padStart(2, '0');
+        processedScheduledTime = `${hours}:${minutes}`;
       }
     }
     
@@ -1937,6 +1948,8 @@ export class DatabaseStorage implements IStorage {
         totalCents,
         assignedEmployeeIds: payload.assignedEmployeeIds || [],
         requestedStartAt: processedRequestedStartAt,
+        scheduledDate: processedScheduledDate,
+        scheduledTime: processedScheduledTime,
         createdByUserId: userId,
       })
       .returning();
