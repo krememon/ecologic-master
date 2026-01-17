@@ -1,0 +1,80 @@
+AGENT — MAKE “TAXABLE” WORK IN ESTIMATE LINE ITEMS (MATCH JOBS FLOW + USE SAVED TAX RATES)
+
+CONTEXT:
+In Jobs → Line Items editor:
+- There is a “Taxable” toggle
+- When turned ON, an extra row/section appears (“Tax rate” / “Select tax rate”)
+- Tapping “Select tax rate” opens the Tax rates screen/list
+- User picks a saved tax rate (ex: New York State 8.625%)
+- That selection is saved on the line item and used in totals
+
+In Estimates → Line Items editor:
+- We have a “Taxable” toggle, but it doesn’t fully work / doesn’t reveal “Tax rate” / doesn’t apply saved tax rates.
+We need the exact same UX + wiring as Jobs.
+
+GOAL:
+In the Estimate creation Line Items modal/editor:
+1) “Taxable” toggle works
+2) Turning it ON reveals the “Tax rate” row (dropdown/chevron) exactly like Jobs
+3) Tapping “Tax rate” opens the SAME Tax rates list screen (with existing saved rates)
+4) Selecting a tax rate saves it to the estimate line item
+5) Totals/subtotals include tax correctly (per-line and overall), consistent with Jobs
+
+IMPORTANT:
+- Reuse the existing Tax Rates system (no new tax tables).
+- Do NOT create duplicate tax rate screens.
+- Keep UI styling identical to Jobs.
+
+DATA REQUIREMENTS:
+1) Estimate line items must store:
+   - taxable (boolean)
+   - taxRateId (or taxRatePercent + name, depending on your existing pattern)
+   Use the SAME shape as job line items if possible.
+
+2) Backend:
+   - Ensure estimate line item create/update endpoints accept taxable + taxRateId
+   - Ensure estimate fetch endpoints return taxable + taxRateId
+   - Ensure tax rates endpoint used by Jobs is reused by Estimates
+
+IMPLEMENTATION STEPS:
+A) UI/UX parity
+- Locate Jobs line item editor component and copy the exact “Taxable -> Tax rate dropdown reveal” logic.
+- Implement the same in Estimate line item editor.
+- The “Tax rate” row should only appear when taxable = true.
+
+B) Tax rates picker
+- On tap “Select tax rate”, navigate/open the same TaxRates screen used by Jobs.
+- Show existing saved tax rates (New Jersey 6.625%, New York State 8.625%, etc.).
+- On selection, store the chosen taxRateId on the estimate line item.
+
+C) Calculations
+- If taxable is true and taxRateId exists, apply the selected percent:
+  lineTax = lineSubtotal * (taxRatePercent / 100)
+- Include tax in the estimate totals shown in the estimate creation flow and in the saved estimate.
+- If taxable true but no rate selected, either:
+  - default to company default tax rate if one exists, OR
+  - show “Select tax rate” as required before saving (choose the simplest that matches Jobs).
+
+D) Persistence
+- When saving the estimate, ensure each line item includes taxable + taxRateId in the payload.
+- Confirm it persists and reloads correctly when reopening the estimate.
+
+DO NOT:
+- Break the Jobs taxable feature
+- Add a second tax rate system
+- Hardcode tax rates
+- Change existing tax rate management UI
+
+TESTS (MUST PASS):
+1) Create estimate → add line item → toggle Taxable ON
+   - “Tax rate” row appears
+2) Tap “Select tax rate” → pick “New York State (8.625%)”
+   - Returns and shows selected rate
+3) Save estimate → reopen estimate line items
+   - taxable is still ON and the selected tax rate is still selected
+4) Totals correctly include tax based on selected rate
+
+DELIVERABLE:
+- Estimate Line Items taxable + tax rate selection works exactly like Jobs
+- Uses existing saved tax rates
+- Tax persists and affects totals correctly
