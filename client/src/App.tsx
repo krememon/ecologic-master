@@ -43,6 +43,7 @@ import PaySuccess from "@/pages/PaySuccess";
 import PayCancel from "@/pages/PayCancel";
 import StripeReturn from "@/pages/StripeReturn";
 import PaymentReview from "@/pages/PaymentReview";
+import PublicInvoicePay from "@/pages/PublicInvoicePay";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -55,11 +56,27 @@ function PaymentRouter() {
   );
 }
 
+// Public invoice payment page - NO auth required
+function PublicInvoiceRouter() {
+  return (
+    <Switch>
+      <Route path="/invoice/:id/pay">
+        {(params) => <PublicInvoicePay invoiceId={params.id} />}
+      </Route>
+    </Switch>
+  );
+}
+
 function Router() {
   // Check for public payment/stripe routes BEFORE any auth hooks
   const path = window.location.pathname;
   if (path.startsWith('/pay/') || path.startsWith('/stripe/')) {
     return <PaymentRouter />;
+  }
+  
+  // Public invoice payment page - NO auth required
+  if (path.match(/^\/invoice\/\d+\/pay$/)) {
+    return <PublicInvoiceRouter />;
   }
 
   const { isAuthenticated, isLoading, user } = useAuth();

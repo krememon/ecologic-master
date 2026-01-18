@@ -10,7 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, CheckCircle, XCircle, Loader2, CreditCard, Banknote } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail } from "lucide-react";
 import { format } from "date-fns";
 
 interface InvoiceDetailsProps {
@@ -68,6 +70,7 @@ interface InvoiceData {
     firstName: string;
     lastName: string;
     email?: string | null;
+    phone?: string | null;
   } | null;
 }
 
@@ -97,36 +100,17 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { role } = useCan();
   
-  const [isMarkPaidDialogOpen, setIsMarkPaidDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [sendTo, setSendTo] = useState('');
+  const [isSending, setIsSending] = useState(false);
   
-  const canMarkAsPaid = role === 'OWNER' || role === 'SUPERVISOR';
   const canVoidInvoice = role === 'OWNER' || role === 'SUPERVISOR';
 
   const { data: invoice, isLoading, error } = useQuery<InvoiceData>({
     queryKey: [`/api/invoices/${invoiceId}`],
     enabled: !!invoiceId && isAuthenticated,
-  });
-
-  const markPaidMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('PATCH', `/api/invoices/${invoiceId}`, {
-        status: 'paid',
-        paidAt: new Date().toISOString(),
-      });
-      if (!res.ok) throw new Error('Failed to mark as paid');
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      setIsMarkPaidDialogOpen(false);
-      toast({ title: "Invoice marked as paid" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update invoice", variant: "destructive" });
-    },
   });
 
   const voidMutation = useMutation({
@@ -173,6 +157,36 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     }
   };
 
+  const openSendDialog = () => {
+    setSendTo(invoice?.customer?.email || invoice?.client?.email || '');
+    setIsSendDialogOpen(true);
+  };
+
+  const handleSendInvoice = async () => {
+    if (!sendTo.trim()) return;
+    setIsSending(true);
+    try {
+      const res = await apiRequest('POST', `/api/invoices/${invoiceId}/send/email`, {
+        email: sendTo.trim(),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to send invoice');
+      }
+      
+      queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      setIsSendDialogOpen(false);
+      setSendTo('');
+      toast({ title: "Invoice sent" });
+    } catch (error: any) {
+      toast({ title: error.message || "Failed to send invoice", variant: "destructive" });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   if (isLoading || authLoading) {
     return (
       <div className="p-6">
@@ -203,7 +217,8 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     : invoice.client?.name || 'No customer';
 
   const lineItems = invoice.lineItems || [];
-  const canMarkPaid = invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled';
+  const canPay = invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled';
+  const canSend = invoice.status !== 'void' && invoice.status !== 'cancelled';
   const canVoid = invoice.status !== 'void' && invoice.status !== 'cancelled';
 
   return (
@@ -238,7 +253,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       )}
 
       {/* Primary Pay Button - Shows for unpaid invoices with amount > 0 */}
-      {canMarkPaid && invoice.totalCents > 0 && (
+      {canPay && invoice.totalCents > 0 && (
         <Button 
           onClick={handlePayWithCard}
           disabled={isCheckoutLoading}
@@ -253,15 +268,15 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         </Button>
       )}
 
-      {/* Secondary Mark as Paid - Owner/Supervisor only for cash/check payments */}
-      {canMarkAsPaid && canMarkPaid && (
+      {/* Secondary Send Invoice Button */}
+      {canSend && invoice.status !== 'paid' && (
         <Button 
           variant="outline"
-          onClick={() => setIsMarkPaidDialogOpen(true)}
-          className="w-full mb-4 text-green-600 border-green-200 hover:bg-green-50 dark:border-green-800 dark:hover:bg-green-950"
+          onClick={openSendDialog}
+          className="w-full mb-4"
         >
-          <Banknote className="h-4 w-4 mr-2" />
-          Mark as Paid (Cash/Check)
+          <Send className="h-4 w-4 mr-2" />
+          Send Invoice
         </Button>
       )}
 
@@ -280,6 +295,9 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
             )}
             {invoice.client?.email && !invoice.customer && (
               <p className="text-sm text-muted-foreground">{invoice.client.email}</p>
+            )}
+            {invoice.customer?.phone && (
+              <p className="text-sm text-muted-foreground">{invoice.customer.phone}</p>
             )}
           </CardContent>
         </Card>
@@ -482,30 +500,67 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         )}
       </div>
 
-      <Dialog open={isMarkPaidDialogOpen} onOpenChange={setIsMarkPaidDialogOpen}>
+      {/* Send Invoice Dialog */}
+      <Dialog open={isSendDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsSendDialogOpen(false);
+          setSendTo('');
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark Invoice as Paid</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Send Invoice
+            </DialogTitle>
             <DialogDescription>
-              Are you sure you want to mark this invoice as paid? This will update the status to "Paid".
+              Send {invoice.invoiceNumber} for {formatCurrency(invoice.totalCents)} to your customer.
+              {invoice.dueDate && ` Due: ${format(new Date(invoice.dueDate), 'MMM d, yyyy')}`}
             </DialogDescription>
           </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="sendTo">Email Address</Label>
+            <Input
+              id="sendTo"
+              type="email"
+              placeholder="customer@example.com"
+              value={sendTo}
+              onChange={(e) => setSendTo(e.target.value)}
+              className="mt-2"
+            />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsMarkPaidDialogOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsSendDialogOpen(false);
+                setSendTo('');
+              }}
+            >
               Cancel
             </Button>
             <Button 
-              onClick={() => markPaidMutation.mutate()}
-              disabled={markPaidMutation.isPending}
-              className="bg-green-600 hover:bg-green-700"
+              onClick={handleSendInvoice}
+              disabled={isSending || !sendTo.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              {markPaidMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirm
+              {isSending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Invoice
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Void Invoice Dialog */}
       <Dialog open={isVoidDialogOpen} onOpenChange={setIsVoidDialogOpen}>
         <DialogContent>
           <DialogHeader>

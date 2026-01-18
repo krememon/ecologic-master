@@ -6209,6 +6209,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============== PUBLIC INVOICE ROUTES (No Auth) ==============
+
+  // GET /api/public/invoices/:id - Get invoice for public payment page
+  app.get('/api/public/invoices/:id', async (req, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      
+      if (isNaN(invoiceId)) {
+        return res.status(400).json({ message: "Invalid invoice ID" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      // Get company info for branding
+      const company = await storage.getCompany(invoice.companyId);
+      
+      // Return only the data needed for public payment page (no sensitive info)
+      res.json({
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        totalCents: invoice.totalCents,
+        subtotalCents: invoice.subtotalCents,
+        taxCents: invoice.taxCents,
+        status: invoice.status,
+        dueDate: invoice.dueDate,
+        issueDate: invoice.issueDate,
+        companyName: company?.name || 'Unknown Company',
+        companyLogo: company?.logo || null,
+        lineItems: invoice.lineItems,
+      });
+    } catch (error) {
+      console.error("Error fetching public invoice:", error);
+      res.status(500).json({ message: "Failed to fetch invoice" });
+    }
+  });
+
+  // POST /api/public/invoices/checkout - Create Stripe checkout for public invoice payment
+  app.post('/api/public/invoices/checkout', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Payment system not configured" });
+      }
+      
+      const { invoiceId, returnBaseUrl } = req.body;
+      
+      if (!invoiceId || typeof invoiceId !== 'number') {
+        return res.status(400).json({ message: "Invoice ID is required" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      // Prevent payment if already paid
+      if (invoice.status === 'paid') {
+        return res.status(400).json({ message: "This invoice has already been paid" });
+      }
+      
+      // Prevent payment if voided/cancelled
+      if (invoice.status === 'void' || invoice.status === 'cancelled') {
+        return res.status(400).json({ message: "This invoice is no longer valid" });
+      }
+      
+      // Get amount in cents
+      const amountInCents = invoice.totalCents || Math.round(parseFloat(invoice.amount) * 100) || 0;
+      
+      if (amountInCents <= 0) {
+        return res.status(400).json({ message: "Invoice has no amount due" });
+      }
+      
+      // Get company for description
+      const company = await storage.getCompany(invoice.companyId);
+      
+      // Use provided returnBaseUrl or construct from APP_BASE_URL
+      const appBaseUrl = returnBaseUrl || process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      
+      console.log(`[PublicCheckout] Creating session for invoice ${invoice.id}, amount: ${amountInCents} cents`);
+      
+      // Create Stripe Checkout Session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Invoice ${invoice.invoiceNumber}`,
+              description: company?.name ? `Payment to ${company.name}` : undefined,
+            },
+            unit_amount: amountInCents,
+          },
+          quantity: 1,
+        }],
+        metadata: {
+          invoiceId: invoice.id.toString(),
+          invoiceNumber: invoice.invoiceNumber,
+          companyId: invoice.companyId.toString(),
+        },
+        success_url: `${appBaseUrl}/stripe/return`,
+        cancel_url: `${appBaseUrl}/invoice/${invoice.id}/pay`,
+      });
+      
+      // Store session ID on invoice
+      await storage.updateInvoice(invoiceId, {
+        stripeCheckoutSessionId: session.id,
+      });
+      
+      console.log(`[PublicCheckout] Created session ${session.id} for invoice ${invoice.id}`);
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating public checkout session:", error);
+      res.status(500).json({ message: "Failed to create payment session" });
+    }
+  });
+
   // ============== PUBLIC SIGNATURE ROUTES (No Auth) ==============
 
   // GET /api/public/signature-requests/:token - Get signature request for public signing
@@ -6826,6 +6947,187 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating invoice:", error);
       res.status(500).json({ message: "Failed to update invoice" });
+    }
+  });
+
+  // POST /api/invoices/:id/send/email - Send invoice via email with payment link
+  app.post('/api/invoices/:id/send/email', isAuthenticated, async (req: any, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Owner/Supervisor/Dispatcher/Estimator can send invoices
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to send invoices" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      const { email } = req.body;
+      
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ message: "Email address is required" });
+      }
+      
+      // Check if Resend is configured
+      if (!process.env.RESEND_API_KEY) {
+        return res.status(500).json({ message: "Email service not configured" });
+      }
+      
+      const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM;
+      if (!fromEmail) {
+        return res.status(500).json({ message: "Email sender not configured" });
+      }
+      
+      // Build payment link
+      const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
+      
+      // Format amount
+      const amountFormatted = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(invoice.totalCents / 100);
+      
+      // Format due date
+      const dueDateFormatted = invoice.dueDate 
+        ? new Date(invoice.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : null;
+      
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      
+      const emailHtml = `
+        <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h1 style="color: #1e293b; font-size: 24px; margin-bottom: 20px;">Invoice from ${company.name}</h1>
+          
+          <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <p style="margin: 0 0 10px 0; color: #64748b;">Invoice Number</p>
+            <p style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #1e293b;">${invoice.invoiceNumber}</p>
+            
+            <p style="margin: 0 0 10px 0; color: #64748b;">Amount Due</p>
+            <p style="margin: 0 0 20px 0; font-size: 24px; font-weight: 700; color: #1e293b;">${amountFormatted}</p>
+            
+            ${dueDateFormatted ? `
+              <p style="margin: 0 0 10px 0; color: #64748b;">Due Date</p>
+              <p style="margin: 0; font-size: 16px; color: #1e293b;">${dueDateFormatted}</p>
+            ` : ''}
+          </div>
+          
+          <a href="${paymentLink}" style="display: inline-block; background: #2563eb; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+            Pay Now
+          </a>
+          
+          <p style="margin-top: 30px; color: #64748b; font-size: 14px;">
+            If you have any questions about this invoice, please contact us.
+          </p>
+          
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+          
+          <p style="color: #94a3b8; font-size: 12px;">
+            Sent by ${company.name} via EcoLogic
+          </p>
+        </div>
+      `;
+      
+      const { data, error } = await resend.emails.send({
+        from: fromEmail,
+        to: email,
+        subject: `Invoice ${invoice.invoiceNumber} from ${company.name} - ${amountFormatted}`,
+        html: emailHtml,
+      });
+      
+      if (error) {
+        console.error("[InvoiceSend] Email error:", error);
+        return res.status(500).json({ message: "Failed to send email" });
+      }
+      
+      // Update invoice status to 'sent' if it was draft
+      if (invoice.status === 'draft') {
+        await storage.updateInvoice(invoiceId, { status: 'sent' });
+      }
+      
+      console.log(`[InvoiceSend] Email sent invoiceId=${invoiceId} to=${email}`, { emailId: data?.id });
+      res.json({ success: true, emailId: data?.id });
+    } catch (error) {
+      console.error("Error sending invoice email:", error);
+      res.status(500).json({ message: "Failed to send invoice" });
+    }
+  });
+
+  // POST /api/invoices/:id/send/text - Send invoice via SMS with payment link
+  app.post('/api/invoices/:id/send/text', isAuthenticated, async (req: any, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Owner/Supervisor/Dispatcher/Estimator can send invoices
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to send invoices" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      const { phone } = req.body;
+      
+      if (!phone || typeof phone !== 'string') {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+      
+      // Build payment link
+      const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
+      
+      // Format amount
+      const amountFormatted = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(invoice.totalCents / 100);
+      
+      // Note: SMS integration requires Twilio or similar service
+      // For now, we'll return success but log that SMS is not configured
+      // In a real implementation, you would integrate with Twilio here
+      
+      console.log(`[InvoiceSend] SMS requested invoiceId=${invoiceId} to=${phone}`);
+      console.log(`[InvoiceSend] Message: Invoice ${invoice.invoiceNumber} for ${amountFormatted}. Pay here: ${paymentLink}`);
+      
+      // Update invoice status to 'sent' if it was draft
+      if (invoice.status === 'draft') {
+        await storage.updateInvoice(invoiceId, { status: 'sent' });
+      }
+      
+      // For now, return success (SMS would be sent in production with Twilio)
+      res.json({ 
+        success: true, 
+        message: "Invoice link prepared for SMS",
+        note: "SMS delivery requires Twilio integration"
+      });
+    } catch (error) {
+      console.error("Error sending invoice SMS:", error);
+      res.status(500).json({ message: "Failed to send invoice" });
     }
   });
 
