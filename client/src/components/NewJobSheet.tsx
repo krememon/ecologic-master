@@ -1091,7 +1091,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
       {/* LOCATION Modal */}
       <Dialog open={locationModalOpen} onOpenChange={setLocationModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md">
           <DialogHeader>
             <DialogTitle>Job Location</DialogTitle>
           </DialogHeader>
@@ -1133,7 +1133,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
       {/* SCHEDULE Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md">
           <DialogHeader>
             <DialogTitle>Schedule</DialogTitle>
           </DialogHeader>
@@ -1244,7 +1244,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
       {/* NOTES Modal */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md">
           <DialogHeader>
             <DialogTitle>Job Notes</DialogTitle>
           </DialogHeader>

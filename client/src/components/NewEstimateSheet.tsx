@@ -1383,7 +1383,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewE
 
       {/* NOTES Modal */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md">
           <DialogHeader>
             <DialogTitle>Estimate Notes</DialogTitle>
           </DialogHeader>

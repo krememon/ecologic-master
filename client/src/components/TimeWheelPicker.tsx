@@ -212,7 +212,7 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
       </button>
       
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[300px] p-5">
+        <DialogContent hideCloseButton className="sm:max-w-[300px] p-5">
           <DialogHeader className="pb-3">
             <DialogTitle className="text-center text-lg">{label || 'Select Time'}</DialogTitle>
           </DialogHeader>

@@ -807,7 +807,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
 
       {/* Schedule Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent hideCloseButton className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle>Schedule Invoice</DialogTitle>
           </DialogHeader>
@@ -848,7 +848,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
 
       {/* Tags Modal */}
       <Dialog open={tagsModalOpen} onOpenChange={setTagsModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent hideCloseButton className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle>Job Tags</DialogTitle>
           </DialogHeader>
