@@ -174,7 +174,6 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   // Valid line items (non-empty)
   const validLineItems = lineItems.filter(item => item.name.trim() && item.unitPriceCents > 0);
   const hasValidLineItems = validLineItems.length > 0;
-  const isFormValid = selectedCustomer && hasValidLineItems;
 
   // Create customer mutation
   const createCustomerMutation = useMutation({
@@ -427,14 +426,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
               Cancel
             </button>
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">NEW INVOICE</h2>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!isFormValid || createInvoiceMutation.isPending}
-              className={`text-sm font-medium ${isFormValid && !createInvoiceMutation.isPending ? 'text-blue-600' : 'text-slate-400'}`}
-            >
-              {createInvoiceMutation.isPending ? 'Saving...' : 'Done'}
-            </button>
+            <div className="w-12"></div>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-20">
