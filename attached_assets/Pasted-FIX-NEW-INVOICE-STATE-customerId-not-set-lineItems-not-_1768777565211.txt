@@ -1,0 +1,72 @@
+FIX NEW INVOICE STATE: customerId not set + lineItems not considered valid (totalCents stays 0)
+
+CURRENT (FROM DEBUG READOUT)
+- customerId: none
+- lineItems.length: 1
+- hasValidLineItems: false
+- totalCents: 0
+- isFormValid: null
+Done remains disabled because the New Invoice screen never sees a selected customerId and line items are not being counted as valid.
+
+GOAL
+Make the New Invoice screen state update correctly so:
+- Selecting a customer sets customerId immediately
+- Adding a line item with name + price sets totalCents > 0 AND hasValidLineItems true
+- Done enables (EcoLogic blue) once customerId exists + valid line items exist
+- Pressing Done saves and closes
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FIX CUSTOMER PICKER RETURN VALUE
+- In the "Add customer" row flow, ensure the customer selection callback updates parent state:
+  setCustomerId(selectedCustomer.id)
+  setCustomerSummary(selectedCustomer) (optional for display)
+- If using a modal/sheet, make sure onSelect passes back to NewInvoiceSheet before closing.
+- Verify debug readout shows customerId != none after selecting.
+
+2) ALIGN LINE ITEM SHAPE + VALIDATION
+Right now lineItems exist but validator says invalid and totalCents=0.
+Do one of these approaches (pick ONE and be consistent):
+
+A) Normalize line items when returning from LineItems modal:
+- Ensure each saved line item has:
+  - name (string, non-empty)
+  - qty (number >= 1)
+  - unit (string)
+  - priceCents (integer > 0)  <-- IMPORTANT
+- In NewInvoice state, store normalized items using priceCents
+- Compute totalCents = sum(qty * priceCents)
+
+OR
+
+B) Change validator + total calculation to match current stored fields:
+- If items currently store price as string/number like "350.00", convert to cents:
+  const priceCents = Math.round(Number(price) * 100)
+- hasValidLineItems should check:
+  li.name?.trim().length > 0 AND priceCents > 0
+- totalCents computed from converted cents
+
+3) UPDATE DISPLAY + SUMMARY
+- The Line Items row should show "1 item • $X.XX" based on computed totals.
+- Only show that when totalCents > 0.
+
+4) DONE ENABLE LOGIC (SOURCE OF TRUTH)
+Set:
+  const canSubmit = Boolean(customerId) && totalCents > 0
+- Use canSubmit for:
+  - Done disabled state
+  - Done color (EcoLogic blue when enabled)
+
+5) VERIFY WITH DEBUG PANEL
+- After selecting customer: customerId should populate
+- After adding line item w/ name + price: hasValidLineItems true, totalCents > 0
+- isFormValid true (or canSubmit true)
+- Done turns blue and becomes clickable
+
+6) CLEANUP
+- Remove the yellow debug panel after verified working
+
+DELIVERABLE
+- customerId updates correctly from picker
+- line items become valid and totalCents updates
+- Done enables and saves/closes successfully

@@ -372,7 +372,10 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   };
 
   const updateLineItem = (index: number, updates: Partial<LineItem>) => {
-    setLineItems(lineItems.map((item, i) => i === index ? { ...item, ...updates } : item));
+    console.log("[NewInvoice] updateLineItem", index, updates);
+    const newItems = lineItems.map((item, i) => i === index ? { ...item, ...updates } : item);
+    console.log("[NewInvoice] new lineItems:", newItems.map(i => ({ name: i.name, unitPriceCents: i.unitPriceCents })));
+    setLineItems(newItems);
   };
 
   const handlePriceChange = (index: number, value: string) => {
@@ -566,6 +569,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                     key={customer.id}
                     type="button"
                     onClick={() => {
+                      console.log("[NewInvoice] Customer selected:", customer.id, customer.firstName, customer.lastName);
                       setSelectedCustomer(customer);
                       setCustomerModalOpen(false);
                     }}
