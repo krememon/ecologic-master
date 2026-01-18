@@ -206,7 +206,7 @@ export default function Invoicing() {
                     View PDF
                   </a>
                 )}
-                {(invoice.tags as string[] | null)?.length > 0 && (
+                {((invoice.tags as string[] | null)?.length ?? 0) > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1">
                     {(invoice.tags as string[]).map((tag: string, i: number) => (
                       <span 
