@@ -6744,6 +6744,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= Standalone Invoice Routes =============
+
+  // GET /api/invoices - Get all invoices for company
+  app.get('/api/invoices', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const invoiceList = await storage.getInvoices(company.id);
+      res.json(invoiceList);
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      res.status(500).json({ message: "Failed to fetch invoices" });
+    }
+  });
+
+  // POST /api/invoices - Create standalone invoice (not job-linked)
+  app.post('/api/invoices', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canCreateInvoices(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to create invoices" });
+      }
+
+      const { 
+        customerId, 
+        invoiceNumber, 
+        amount, 
+        subtotalCents, 
+        taxCents, 
+        totalCents, 
+        status, 
+        issueDate, 
+        dueDate, 
+        scheduledAt, 
+        tags, 
+        notes,
+        lineItems 
+      } = req.body;
+
+      // Validate required fields
+      if (!customerId) {
+        return res.status(400).json({ message: "Customer is required" });
+      }
+      if (!invoiceNumber) {
+        return res.status(400).json({ message: "Invoice number is required" });
+      }
+
+      // Create invoice
+      const invoice = await storage.createInvoice({
+        companyId: company.id,
+        customerId,
+        invoiceNumber,
+        amount: amount || "0",
+        subtotalCents: subtotalCents || 0,
+        taxCents: taxCents || 0,
+        totalCents: totalCents || 0,
+        status: status || 'draft',
+        issueDate: issueDate || new Date().toISOString().split('T')[0],
+        dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        tags: tags || [],
+        notes: notes || null,
+      });
+
+      console.log(`[Invoice] Created standalone invoice`, { invoiceId: invoice.id, customerId, companyId: company.id });
+      res.status(201).json(invoice);
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      res.status(500).json({ message: "Failed to create invoice" });
+    }
+  });
+
   // Invoice scanning route with OpenAI vision
   app.post('/api/scan-invoice', isAuthenticated, async (req: any, res) => {
     try {
