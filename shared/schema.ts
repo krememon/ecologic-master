@@ -270,6 +270,16 @@ export const invoices = pgTable("invoices", {
   scheduledAt: timestamp("scheduled_at"),
   notes: text("notes"),
   tags: jsonb("tags").$type<string[]>().default([]),
+  lineItems: jsonb("line_items").$type<{
+    name: string;
+    description?: string;
+    quantity: number;
+    unitPrice: number;
+    unit?: string;
+    taxId?: number;
+    taxRatePercentSnapshot?: number;
+    taxNameSnapshot?: string;
+  }[]>().default([]),
   pdfUrl: varchar("pdf_url"),
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id"),
