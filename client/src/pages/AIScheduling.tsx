@@ -346,11 +346,12 @@ export default function AIScheduling() {
       
       // Priority 2: Customer's structured address fields (address + city + state + zip)
       if (!fullAddress && job.customer?.address) {
+        const cust = job.customer as { address: string | null; city?: string | null; state?: string | null; zip?: string | null };
         const customerParts = [
-          job.customer.address,
-          job.customer.city,
-          job.customer.state,
-          job.customer.zip
+          cust.address,
+          cust.city,
+          cust.state,
+          cust.zip
         ].filter(Boolean);
         fullAddress = customerParts.length > 0 ? customerParts.join(', ') : null;
       }
