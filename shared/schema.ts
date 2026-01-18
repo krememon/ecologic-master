@@ -255,6 +255,7 @@ export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+  estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "cascade" }),
   clientId: integer("client_id").references(() => clients.id),
   invoiceNumber: varchar("invoice_number").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
@@ -266,6 +267,7 @@ export const invoices = pgTable("invoices", {
   dueDate: date("due_date").notNull(),
   paidDate: date("paid_date"),
   notes: text("notes"),
+  pdfUrl: varchar("pdf_url"),
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id"),
   paidAt: timestamp("paid_at"),
@@ -496,6 +498,10 @@ export const invoicesRelations = relations(invoices, ({ one }) => ({
   job: one(jobs, {
     fields: [invoices.jobId],
     references: [jobs.id],
+  }),
+  estimate: one(estimates, {
+    fields: [invoices.estimateId],
+    references: [estimates.id],
   }),
   client: one(clients, {
     fields: [invoices.clientId],

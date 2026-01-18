@@ -1,0 +1,81 @@
+AUTO-SAVE GENERATED INVOICES TO INVOICES TAB (FROM JOB / ESTIMATE)
+
+CURRENT
+We have a "Generate Invoice PDF" flow inside a Job/Estimate that generates a PDF for the customer.
+However, generating an invoice does NOT reliably create/save an invoice record that appears in the Invoices tab, which makes invoice tracking impossible.
+
+GOAL
+Every time an invoice is generated from a Job or Estimate:
+- Create (or update) a real Invoice record in the database
+- Store the generated PDF in our existing storage system
+- Save the invoice metadata (invoice number, total, status, customerId, jobId/estimateId, pdfUrl)
+- The new invoice must automatically appear in the Invoices tab immediately (no refresh needed)
+
+DEFINITION OF DONE
+1) Generate Invoice from Job/Estimate
+2) Invoice record is created in DB
+3) pdfUrl is stored on invoice record
+4) Invoice appears in Invoices tab list instantly
+5) Invoice persists after refresh
+6) Duplicate prevention: repeated clicks should NOT create duplicates (should reuse/update the same invoice for that job/estimate unless user explicitly creates a new one)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) DATA MODEL CHECK
+- Confirm invoices table/model exists
+- Ensure it supports:
+  - id
+  - invoiceNumber (unique)
+  - customerId
+  - jobId (nullable)
+  - estimateId (nullable)
+  - status (Draft/Sent/Paid/Void)
+  - totalAmount
+  - pdfUrl
+  - createdAt/updatedAt
+
+2) BACKEND: CREATE/UPSERT INVOICE ON GENERATE
+- When "Generate Invoice" is clicked:
+  a) Generate the PDF
+  b) Upload/store PDF to existing storage
+  c) Create or update the invoice record:
+     - Key rule: if invoice already exists for this job/estimate, update it (do not create duplicate)
+     - Save pdfUrl + totals + status="Draft" by default
+- Return the invoice object to frontend
+
+3) FRONTEND: UPDATE UI IMMEDIATELY
+- After successful response:
+  - Close modal
+  - Show success toast
+  - Update invoice state/cache so Invoices tab list includes the new invoice instantly
+  - If using React Query / SWR:
+    - invalidate/refetch invoices query
+  - If using local state store:
+    - push invoice into store or refetch
+
+4) INVOICES TAB LIST
+- Ensure the Invoices tab pulls from DB invoices list endpoint
+- Confirm the new invoice appears with:
+  - customer name
+  - linked job/estimate label
+  - total
+  - status = Draft
+  - view/download pdf action using pdfUrl
+
+5) DUPLICATE PREVENTION
+- Enforce one invoice per job/estimate by default:
+  - DB unique constraint on (jobId) where jobId not null
+  - DB unique constraint on (estimateId) where estimateId not null
+  - or enforce in code via upsert query
+- Also add frontend protection:
+  - disable Generate button while generating
+
+LOGGING (KEEP IT LIGHT)
+- Add ONE log on backend success/fail:
+  console.log("[InvoiceGenerate] saved invoice", { invoiceId, jobId, estimateId })
+- Remove noisy logs after verified
+
+DELIVERABLES
+- Generating invoice from Job or Estimate creates/updates a saved invoice record
+- Invoice appears in Invoices tab immediately and persists after refresh
+- No duplicates from repeated generate clicks
