@@ -1,0 +1,73 @@
+INVOICING: Add "Select" Button + Multi-Select Mode (Match Clients Page Behavior)
+
+CURRENT
+The Invoicing page has "All Invoices (X)" with an "Add Invoice" button, but it does NOT have a select/multi-select mode like the Clients page.
+Clients page has a select button next to the header that toggles selection mode and enables bulk actions.
+
+GOAL
+Add a Select button to the Invoicing page that works exactly like the Clients page:
+- Same placement (left of Add button, next to the "All Invoices (X)" row)
+- Toggling enables multi-select for invoice cards
+- Bulk action bar appears when 1+ invoices are selected
+- Hidden-not-disabled RBAC respected
+
+UI REQUIREMENTS (MATCH CLIENTS PAGE)
+Header row should look like:
+- Left: "All Invoices (X)"
+- Right controls (same as Clients):
+  1) Select button (square/check icon button)
+  2) Add Invoice pill button
+
+When Select mode is ON:
+- Invoice cards become selectable
+- Show selection state on cards (check indicator like Clients)
+- Tap card toggles selection instead of opening Invoice Details
+- Add Invoice button remains visible OR can be hidden in select mode (match Clients behavior exactly)
+
+BULK ACTIONS (MATCH CLIENTS PATTERN)
+When 1+ selected:
+- Show bottom aligned bulk action bar (same styling as Clients)
+Actions:
+- Delete (if we allow deleting invoices)
+- OR if deleting is not allowed yet:
+  - "Void" (Owner/Admin only)
+  - "Mark Paid" (Owner/Admin only)
+  - "Download PDFs" (optional later)
+Keep it simple: implement at least ONE bulk action + "Cancel selection" behavior.
+
+IMPORTANT BEHAVIOR
+- When Select mode is OFF:
+  - Clicking an invoice opens Invoice Details (existing behavior we’re building)
+- When Select mode is ON:
+  - Clicking an invoice toggles selection (does NOT open details)
+
+RBAC (HIDDEN NOT DISABLED)
+- Users who cannot perform bulk actions should still be able to select only if it’s useful.
+- Owner/Admin: can select + see bulk actions (Void/Delete/Mark Paid depending what exists)
+- Other roles: can select only if an allowed bulk action exists; otherwise hide select button.
+- Technician: should not see invoicing page at all (existing rules)
+
+DATA / API
+- If bulk delete/void/mark paid endpoints exist, use them.
+- If not, implement minimal endpoints for the chosen bulk action:
+  - POST /api/invoices/bulk-void OR
+  - POST /api/invoices/bulk-mark-paid OR
+  - DELETE /api/invoices/bulk
+- After bulk action:
+  - Refresh invoice list immediately (invalidate/refetch)
+  - Clear selection mode
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+1) Find Clients select mode implementation and reuse same approach/components
+2) Add Select button in Invoicing header row (same styling/size)
+3) Add selection state for invoice list (selectedIds, isSelecting)
+4) Update invoice card click behavior based on isSelecting
+5) Add bulk action bar (reuse Clients bulk bar styling)
+6) Wire at least one bulk action + list refresh
+7) Verify no regressions to Add Invoice button and invoice list layout
+
+DELIVERABLE
+- Invoicing page has Select button identical to Clients
+- Select mode toggles multi-select on invoice cards
+- Bulk action bar appears for selected invoices
+- Selection mode does not conflict with opening invoice details

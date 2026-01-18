@@ -6829,6 +6829,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/invoices/bulk-void - Bulk void invoices (Owner/Supervisor only)
+  app.post('/api/invoices/bulk-void', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Only Owner/Supervisor can void invoices
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
+        return res.status(403).json({ message: "You do not have permission to void invoices" });
+      }
+      
+      const { invoiceIds } = req.body;
+      
+      if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+        return res.status(400).json({ message: "invoiceIds array is required" });
+      }
+      
+      let voidedCount = 0;
+      
+      for (const invoiceId of invoiceIds) {
+        const invoice = await storage.getInvoice(invoiceId);
+        
+        // Skip if invoice doesn't exist or belongs to different company
+        if (!invoice || invoice.companyId !== company.id) {
+          continue;
+        }
+        
+        // Skip already voided or paid invoices
+        if (invoice.status === 'void' || invoice.status === 'paid') {
+          continue;
+        }
+        
+        await storage.updateInvoice(invoiceId, { status: 'void' });
+        voidedCount++;
+      }
+      
+      console.log(`[Invoice] Bulk voided ${voidedCount} invoices`, { userId, invoiceIds });
+      res.json({ success: true, voidedCount });
+    } catch (error) {
+      console.error("Error bulk voiding invoices:", error);
+      res.status(500).json({ message: "Failed to void invoices" });
+    }
+  });
+
   // POST /api/invoices - Create standalone invoice (not job-linked)
   app.post('/api/invoices', isAuthenticated, async (req: any, res) => {
     try {

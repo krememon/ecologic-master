@@ -1,15 +1,17 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, DollarSign, Calendar, ExternalLink } from "lucide-react";
+import { Plus, FileText, DollarSign, Calendar, ExternalLink, CheckSquare, X, Check, Ban } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Invoice } from "@shared/schema";
 import { NewInvoiceSheet } from "@/components/NewInvoiceSheet";
 import { useTranslation } from "react-i18next";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Invoicing() {
   const { toast } = useToast();
@@ -18,6 +20,9 @@ export default function Invoicing() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [, setLocation] = useLocation();
   const searchString = useSearch();
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set());
+  const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
 
   // Handle create=true URL param from global create menu
   useEffect(() => {
@@ -48,9 +53,57 @@ export default function Invoicing() {
     enabled: isAuthenticated,
   });
 
-  // RBAC: Check if user can create invoices
+  // RBAC: Check user permissions
   const userRole = user?.role?.toLowerCase() || '';
   const canCreateInvoice = ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(userRole);
+  const canManageInvoices = ['owner', 'supervisor'].includes(userRole);
+
+  // Bulk void mutation
+  const bulkVoidMutation = useMutation({
+    mutationFn: async (invoiceIds: number[]) => {
+      const res = await apiRequest("POST", "/api/invoices/bulk-void", { invoiceIds });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      const count = data.voidedCount || 0;
+      toast({
+        title: "Voided",
+        description: `Voided ${count} invoice${count !== 1 ? 's' : ''}`,
+      });
+      exitSelectMode();
+      setVoidConfirmOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to void invoices",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle invoice selection
+  const toggleInvoiceSelection = (invoiceId: number) => {
+    const newSelected = new Set(selectedInvoiceIds);
+    if (newSelected.has(invoiceId)) {
+      newSelected.delete(invoiceId);
+    } else {
+      newSelected.add(invoiceId);
+    }
+    setSelectedInvoiceIds(newSelected);
+  };
+
+  // Exit select mode
+  const exitSelectMode = () => {
+    setIsSelectMode(false);
+    setSelectedInvoiceIds(new Set());
+  };
+
+  const handleBulkVoid = () => {
+    const idsToVoid = Array.from(selectedInvoiceIds);
+    bulkVoidMutation.mutate(idsToVoid);
+  };
 
   if (isLoading) {
     return (
@@ -124,18 +177,83 @@ export default function Invoicing() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
           All Invoices ({invoices.length})
         </h3>
-        {canCreateInvoice && (
-          <Button 
-            id="add-invoice-pill"
-            data-testid="add-invoice-pill"
-            onClick={() => setIsSheetOpen(true)}
-            className="rounded-full px-4 flex-shrink-0"
-          >
-            <Plus className="w-[18px] h-[18px] mr-2" />
-            Add Invoice
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isSelectMode ? (
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={exitSelectMode}
+              className="h-10 w-10 bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+            >
+              <X className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </Button>
+          ) : (
+            <>
+              {invoices.length > 0 && canManageInvoices && (
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => setIsSelectMode(true)}
+                  className="h-10 w-10"
+                >
+                  <CheckSquare className="h-5 w-5" />
+                </Button>
+              )}
+              {canCreateInvoice && (
+                <Button 
+                  id="add-invoice-pill"
+                  data-testid="add-invoice-pill"
+                  onClick={() => setIsSheetOpen(true)}
+                  className="rounded-full px-4 flex-shrink-0"
+                >
+                  <Plus className="w-[18px] h-[18px] mr-2" />
+                  Add Invoice
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {isSelectMode && (
+        <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {selectedInvoiceIds.size} selected
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={selectedInvoiceIds.size === 0}
+            onClick={() => setVoidConfirmOpen(true)}
+          >
+            <Ban className="h-4 w-4 mr-1.5" />
+            Void
+          </Button>
+        </div>
+      )}
+
+      {/* Bulk Void Confirmation Dialog */}
+      <AlertDialog open={voidConfirmOpen} onOpenChange={setVoidConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void {selectedInvoiceIds.size} invoice{selectedInvoiceIds.size > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark the selected invoices as voided. Voided invoices cannot be paid or sent.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleBulkVoid}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={bulkVoidMutation.isPending}
+            >
+              {bulkVoidMutation.isPending ? "Voiding..." : "Void"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {invoices.length === 0 ? (
         <Card>
@@ -161,13 +279,36 @@ export default function Invoicing() {
           {invoices.map((invoice: any) => (
             <Card 
               key={invoice.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setLocation(`/invoicing/${invoice.id}`)}
+              className={`hover:shadow-md transition-shadow cursor-pointer ${
+                isSelectMode && selectedInvoiceIds.has(invoice.id) 
+                  ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500' 
+                  : ''
+              }`}
+              onClick={() => {
+                if (isSelectMode) {
+                  toggleInvoiceSelection(invoice.id);
+                } else {
+                  setLocation(`/invoicing/${invoice.id}`);
+                }
+              }}
             >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                    {isSelectMode && (
+                      <div 
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          selectedInvoiceIds.has(invoice.id)
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'border-slate-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {selectedInvoiceIds.has(invoice.id) && (
+                          <Check className="h-3 w-3 text-white" />
+                        )}
+                      </div>
+                    )}
+                    {!isSelectMode && <FileText className="h-5 w-5 text-slate-600 dark:text-slate-400" />}
                     {invoice.invoiceNumber || `Invoice #${invoice.id}`}
                   </CardTitle>
                   <Badge variant={getStatusBadgeVariant(invoice.status)}>
