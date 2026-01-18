@@ -3702,20 +3702,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         uploadedBy: userId,
       });
 
-      // Create invoice record for payment tracking
+      // Create or update invoice record for payment tracking (upsert to prevent duplicates)
       const today = new Date().toISOString().split('T')[0];
       const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const invoice = await storage.createInvoice({
-        companyId: company.id,
-        jobId: jobId,
-        clientId: customer?.id || null,
-        invoiceNumber: invoiceNumber,
-        amount: total.toFixed(2),
-        status: 'pending',
-        issueDate: today,
-        dueDate: dueDate,
-        notes: `Generated from job: ${job.title}`,
-      });
+      
+      // Check if invoice already exists for this job
+      const existingInvoice = await storage.getInvoiceByJobId(jobId, company.id);
+      
+      let invoice;
+      if (existingInvoice) {
+        // Update existing invoice
+        invoice = await storage.updateInvoice(existingInvoice.id, {
+          amount: total.toFixed(2),
+          subtotalCents,
+          taxCents: 0,
+          totalCents: subtotalCents,
+          pdfUrl: fileUrl,
+          notes: `Generated from job: ${job.title}`,
+          updatedAt: new Date(),
+        });
+        console.log(`[InvoiceGenerate] updated invoice`, { invoiceId: invoice.id, jobId });
+      } else {
+        // Create new invoice
+        invoice = await storage.createInvoice({
+          companyId: company.id,
+          jobId: jobId,
+          clientId: customer?.id || null,
+          invoiceNumber: invoiceNumber,
+          amount: total.toFixed(2),
+          subtotalCents,
+          taxCents: 0,
+          totalCents: subtotalCents,
+          status: 'pending',
+          issueDate: today,
+          dueDate: dueDate,
+          pdfUrl: fileUrl,
+          notes: `Generated from job: ${job.title}`,
+        });
+        console.log(`[InvoiceGenerate] saved invoice`, { invoiceId: invoice.id, jobId });
+      }
 
       console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${fileName} docId=${document.id} invoiceId=${invoice.id}`);
       res.json({ 
