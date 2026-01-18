@@ -64,13 +64,24 @@ export default function Invoicing() {
       const res = await apiRequest("POST", "/api/invoices/bulk-void", { invoiceIds });
       return res.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+    onSuccess: async (data) => {
+      // Force refetch to get updated data from server
+      await queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/invoices"] });
+      
       const count = data.voidedCount || 0;
-      toast({
-        title: "Voided",
-        description: `Voided ${count} invoice${count !== 1 ? 's' : ''}`,
-      });
+      if (count > 0) {
+        toast({
+          title: "Voided",
+          description: `Voided ${count} invoice${count !== 1 ? 's' : ''}`,
+        });
+      } else {
+        toast({
+          title: "No changes",
+          description: "No invoices were voided (already voided or paid)",
+          variant: "default",
+        });
+      }
       exitSelectMode();
       setVoidConfirmOpen(false);
     },
@@ -142,6 +153,9 @@ export default function Invoicing() {
       case 'draft':
         return 'outline';
       case 'overdue':
+        return 'destructive';
+      case 'void':
+      case 'voided':
         return 'destructive';
       default:
         return 'secondary';

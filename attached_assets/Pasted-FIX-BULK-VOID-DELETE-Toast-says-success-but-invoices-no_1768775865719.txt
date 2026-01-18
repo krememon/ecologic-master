@@ -1,0 +1,58 @@
+FIX BULK VOID/DELETE: Toast says success but invoices not removed/updated in list
+
+CURRENT
+In Invoicing select mode, bulk action (void/delete) shows a success toast (e.g. "Voided 1 invoice"),
+but the invoice cards do NOT update/remove afterward. It looks like nothing changed.
+
+GOAL
+After a bulk action succeeds:
+- The DB must be updated correctly (invoice status changes OR invoice deleted)
+- The UI must immediately reflect the change (remove cards or update status pill)
+- Selection state must clear
+- No lying success toasts
+
+IMPORTANT CLARITY
+Decide what the action is:
+A) BULK VOID (recommended): invoice remains but status becomes "voided"
+B) BULK DELETE: invoice record is deleted
+Implement whichever is currently wired, but make it consistent across backend + frontend + UI copy.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) BACKEND: VERIFY REAL DB UPDATE
+- In the bulk endpoint (e.g. POST /api/invoices/bulk-void or bulk-delete):
+  - Log inputs: ids length + ids
+  - Perform DB operation using companyId guard
+  - Return { updatedCount, updatedIds } (or deletedCount)
+- After update, fetch the updated rows and confirm status changed in DB (voided)
+- Ensure correct status value (use a consistent enum like "voided" not "void" unless UI matches)
+- If updatedCount === 0, return 400 and do NOT show success toast
+
+2) FRONTEND: DO NOT RELY ON TOAST ONLY
+After successful response:
+- Clear selection state (selectedInvoiceIds = [])
+- Exit select mode
+- Force list refresh:
+  - If using React Query/SWR: invalidate invoices query key and await refetch
+  - If using local state: optimistically update/remove items based on updatedIds
+- IMPORTANT: Do the refresh BEFORE showing the success toast OR show toast after state update
+
+3) UI: REFLECT CHANGE
+If action is VOID:
+- Card should update to status pill "voided"
+- Optional: move voided invoices to bottom or grey them out
+If action is DELETE:
+- Card should disappear immediately from list
+
+4) VERIFY END-TO-END
+- Void/delete 1 invoice -> list updates instantly without refresh
+- Void/delete multiple -> all affected update/remove
+- After action, selection is cleared and checkbox mode exits
+
+5) REMOVE NOISY LOGS
+- Keep one clean backend log on success/fail, remove spam
+
+DELIVERABLE
+- Bulk action actually changes DB
+- UI updates immediately and accurately
+- No false success toasts
