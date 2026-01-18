@@ -1,0 +1,93 @@
+Add Global "+" Create Menu in Header (Light Overlay Action Menu)
+
+CURRENT
+EcoLogic does not have a global create (+) action. Users must navigate into specific pages to create Jobs, Estimates, Invoices, Leads, or Events.
+
+GOAL
+Add a global "+" button in the top-right of the header that opens a light white overlay with a vertical floating action menu.
+After clicking an option, the user is routed to the correct creation flow.
+
+REQUIREMENTS
+- Mobile-first behavior
+- Matches EcoLogic styling
+- Uses "hidden, not disabled" RBAC rules
+- No duplicate create buttons
+- No auto-creating records
+
+UI / UX BEHAVIOR
+- "+" button appears in the top-right of the main header
+- Icon-only circular button
+- On click:
+  - Fade in a light white overlay (background visible but de-emphasized)
+  - Show a vertical action menu aligned to the right side
+  - Prevent background interaction
+  - Close menu on outside click
+- Smooth open/close animation (150–200ms)
+
+ACTION MENU LAYOUT
+- Vertical stack
+- Each row:
+  - Text label on the left
+  - Circular icon button on the right
+- Spacing and style inspired by provided reference image
+- Thumb-friendly on mobile
+
+MENU OPTIONS (TOP TO BOTTOM)
+- Job
+- Estimate
+- Invoice
+- Lead
+- Event
+
+ROUTING BEHAVIOR
+- Job → existing Create Job flow
+- Estimate → existing Create Estimate flow
+- Invoice → existing Create Invoice flow
+- Lead → existing Create Lead flow
+- Event → existing Create Event flow
+- Do NOT auto-create records
+
+RBAC VISIBILITY (HIDDEN, NOT DISABLED)
+- Owner / Admin:
+  - See "+" button
+  - See all menu options
+- Dispatcher:
+  - See "+" button
+  - Job, Event only
+- Estimator:
+  - See "+" button
+  - Estimate only
+- Technician:
+  - Do NOT see "+" button
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) HEADER
+- Add circular "+" icon button to header right section
+- Ensure consistent alignment with existing header icons
+
+2) OVERLAY
+- Create full-screen light white overlay (rgba white)
+- Disable background interaction
+- Fade in/out animation
+
+3) ACTION MENU
+- Render vertical floating menu on right side
+- Dynamically filter menu options based on user role
+- Close on outside click
+
+4) ROUTING
+- Wire each menu option to existing create flows
+- Ensure overlay closes before navigation
+
+5) POLISH
+- Match EcoLogic fonts, spacing, and colors
+- Ensure no layout shift
+- Ensure mobile + desktop both work
+
+DELIVERABLES
+- Global header "+" button
+- Light overlay
+- Floating action menu
+- RBAC filtering
+- Correct routing

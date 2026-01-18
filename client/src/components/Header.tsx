@@ -4,6 +4,7 @@ import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 import LanguageSelector from "./LanguageSelector";
 import { ThemeToggle } from "./ThemeToggle";
+import { GlobalCreateMenu } from "./GlobalCreateMenu";
 
 interface HeaderProps {
   title: string;
@@ -41,9 +42,10 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
         </div>
       </div>
       
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-3">
         <LanguageSelector variant="button" showLabel={false} />
         <ThemeToggle />
+        <GlobalCreateMenu />
       </div>
     </header>
   );
