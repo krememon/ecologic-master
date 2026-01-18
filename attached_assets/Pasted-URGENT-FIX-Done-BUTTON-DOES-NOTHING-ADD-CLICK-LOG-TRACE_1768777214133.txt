@@ -1,0 +1,64 @@
+URGENT FIX: "Done" BUTTON DOES NOTHING (ADD CLICK LOG + TRACE SAVE + GUARANTEE CLOSE)
+
+CURRENT
+On NEW INVOICE screen, tapping "Done" does nothing. It does not save and does not close.
+This is still broken.
+
+GOAL
+Make Done reliably:
+- run validation
+- save invoice to DB
+- close the New Invoice screen
+- refresh invoices list
+
+NO GUESSING: We must prove where it breaks using minimal logs.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) PROVE THE CLICK FIRES
+- In the Done button onClick, add:
+  console.log("[NewInvoice] Done clicked")
+If this log does NOT appear, the Done button is not wired/clickable (wrong element, pointer-events, disabled, overlay).
+
+2) TRACE VALIDATION PATH
+Right after the click log, add logs:
+  console.log("[NewInvoice] state snapshot", {
+    customerId,
+    lineItemsCount: lineItems?.length,
+    hasValidLine: lineItems?.some(li => li?.name && Number(li?.price) > 0),
+  })
+If validation fails, show a small inline error OR temporarily console.log("[NewInvoice] validation failed") and DO NOT silently return.
+
+3) TRACE API CALL
+- Wrap save/create call in try/catch:
+  console.log("[NewInvoice] saving...")
+  const res = await apiCreateInvoice(payload)
+  console.log("[NewInvoice] save result", res)
+- In catch:
+  console.error("[NewInvoice] save failed", err)
+  show error toast ONLY on failure
+
+4) GUARANTEE CLOSE ON SUCCESS
+After a confirmed success response:
+- Call the close function explicitly (whatever your app uses):
+  - closeModal()
+  - onClose()
+  - navigate(-1)
+  - setOpen(false)
+Add:
+  console.log("[NewInvoice] closing sheet now")
+If close is conditional, remove the condition.
+
+5) FIX THE ROOT CAUSE ONCE FOUND
+Based on which step fails:
+A) No click log -> Done button not a real button / disabled / overlay blocking / pointer-events none
+B) Click log but validation fails -> fix validation conditions so it matches required fields you intend
+C) API fails -> fix endpoint/payload
+D) API succeeds but no close -> fix onClose wiring / navigation target
+
+6) CLEANUP
+- After confirmed working, remove most logs leaving at most one guarded debug log.
+
+DELIVERABLE
+- Tapping Done saves invoice and closes the screen every time (when required fields are met)
+- Invoices list updates immediately after closing

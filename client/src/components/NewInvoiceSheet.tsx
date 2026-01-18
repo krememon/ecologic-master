@@ -210,6 +210,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       return res.json();
     },
     onSuccess: (invoice) => {
+      console.log("[NewInvoice] mutation onSuccess - invoice created:", invoice);
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
@@ -218,9 +219,11 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       });
       onInvoiceCreated?.(invoice);
       resetForm();
+      console.log("[NewInvoice] closing sheet now via onOpenChange(false)");
       onOpenChange(false);
     },
     onError: (error: Error) => {
+      console.error("[NewInvoice] mutation onError:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -287,8 +290,21 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   };
 
   const handleSubmit = () => {
-    if (!isFormValid) return;
+    console.log("[NewInvoice] Done clicked");
+    console.log("[NewInvoice] state snapshot", {
+      selectedCustomer: selectedCustomer?.id,
+      lineItemsCount: lineItems?.length,
+      validLineItemsCount: validLineItems?.length,
+      isFormValid,
+      hasValidLineItems,
+    });
+    
+    if (!isFormValid) {
+      console.log("[NewInvoice] validation failed - isFormValid is false");
+      return;
+    }
 
+    console.log("[NewInvoice] validation passed, preparing invoice data...");
     const today = new Date();
     const dueDate = new Date(today);
     dueDate.setDate(dueDate.getDate() + 30);
@@ -325,6 +341,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       })),
     };
 
+    console.log("[NewInvoice] calling createInvoiceMutation.mutate with:", invoiceData);
     createInvoiceMutation.mutate(invoiceData);
   };
 
