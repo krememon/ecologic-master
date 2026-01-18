@@ -922,9 +922,12 @@ export class DatabaseStorage implements IStorage {
         issueDate: invoices.issueDate,
         pdfUrl: invoices.pdfUrl,
         clientId: invoices.clientId,
+        customerId: invoices.customerId,
         jobId: invoices.jobId,
         estimateId: invoices.estimateId,
         companyId: invoices.companyId,
+        scheduledAt: invoices.scheduledAt,
+        tags: invoices.tags,
         createdAt: invoices.createdAt,
         updatedAt: invoices.updatedAt,
         client: {
@@ -936,10 +939,17 @@ export class DatabaseStorage implements IStorage {
           id: jobs.id,
           title: jobs.title,
         },
+        customer: {
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          email: customers.email,
+        },
       })
       .from(invoices)
       .leftJoin(clients, eq(invoices.clientId, clients.id))
       .leftJoin(jobs, eq(invoices.jobId, jobs.id))
+      .leftJoin(customers, eq(invoices.customerId, customers.id))
       .where(eq(invoices.companyId, companyId))
       .orderBy(desc(invoices.createdAt));
   }
@@ -958,9 +968,12 @@ export class DatabaseStorage implements IStorage {
         issueDate: invoices.issueDate,
         pdfUrl: invoices.pdfUrl,
         clientId: invoices.clientId,
+        customerId: invoices.customerId,
         jobId: invoices.jobId,
         estimateId: invoices.estimateId,
         companyId: invoices.companyId,
+        scheduledAt: invoices.scheduledAt,
+        tags: invoices.tags,
         stripeCheckoutSessionId: invoices.stripeCheckoutSessionId,
         stripePaymentIntentId: invoices.stripePaymentIntentId,
         paidAt: invoices.paidAt,
@@ -975,10 +988,17 @@ export class DatabaseStorage implements IStorage {
           id: jobs.id,
           title: jobs.title,
         },
+        customer: {
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          email: customers.email,
+        },
       })
       .from(invoices)
       .leftJoin(clients, eq(invoices.clientId, clients.id))
       .leftJoin(jobs, eq(invoices.jobId, jobs.id))
+      .leftJoin(customers, eq(invoices.customerId, customers.id))
       .where(eq(invoices.id, id));
     return invoice;
   }
