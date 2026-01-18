@@ -6,7 +6,6 @@ import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 
 interface ScheduleItem {
   type: 'job' | 'estimate';
@@ -139,13 +138,13 @@ function createEstimateMarkerIcon(): string {
 
 function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
@@ -160,14 +159,40 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     libraries: ['places']
   });
 
-  const requestUserLocation = useCallback((centerOnUser = false) => {
+  const getGeoErrorMessage = (error: GeolocationPositionError): string => {
+    const codeNames: Record<number, string> = {
+      1: 'PERMISSION_DENIED',
+      2: 'POSITION_UNAVAILABLE',
+      3: 'TIMEOUT'
+    };
+    const codeName = codeNames[error.code] || 'UNKNOWN';
+    
+    switch (error.code) {
+      case 1:
+        return `Location blocked (${codeName}). Click the lock icon in browser → Location → Allow.`;
+      case 2:
+        return `Location unavailable (${codeName}). Turn on Location Services on your device.`;
+      case 3:
+        return `Location request timed out (${codeName}). Try again.`;
+      default:
+        return `Location error: ${error.message} (code: ${error.code})`;
+    }
+  };
+
+  const requestUserLocation = useCallback(() => {
     if (!navigator.geolocation) {
+      setGeoError('Geolocation is not supported by this browser.');
       return;
     }
 
     setIsLocating(true);
+    setGeoError(null);
+    
+    console.log('[Geolocation] Requesting user location...');
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        console.log('[Geolocation] Success:', position.coords);
         const coords = {
           lat: position.coords.latitude,
           lng: position.coords.longitude
@@ -175,31 +200,22 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         setUserLocation(coords);
         setUserAccuracy(position.coords.accuracy);
         setIsLocating(false);
+        setGeoError(null);
         
-        if (centerOnUser && mapRef.current) {
+        if (mapRef.current) {
           mapRef.current.panTo(coords);
           mapRef.current.setZoom(15);
         }
       },
       (error) => {
+        console.error('[Geolocation] Error:', error.code, error.message);
         setIsLocating(false);
-        if (error.code === error.PERMISSION_DENIED) {
-          toast({
-            title: "Location permission denied",
-            description: "Enable location access to see your position on the map",
-            variant: "destructive"
-          });
-        }
+        const errorMsg = getGeoErrorMessage(error);
+        setGeoError(errorMsg);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, [toast]);
-
-  useEffect(() => {
-    if (isLoaded) {
-      requestUserLocation(false);
-    }
-  }, [isLoaded, requestUserLocation]);
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || !isLoaded || !userLocation) return;
@@ -234,11 +250,11 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   }, [userLocation, isLoaded]);
 
   const handleLocateMe = () => {
-    if (userLocation && mapRef.current) {
+    if (userLocation && mapRef.current && !geoError) {
       mapRef.current.panTo(userLocation);
       mapRef.current.setZoom(15);
     } else {
-      requestUserLocation(true);
+      requestUserLocation();
     }
   };
 
@@ -524,10 +540,28 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         </div>
       )}
 
-      {showEmptyOverlay && (
+      {showEmptyOverlay && !geoError && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-slate-400" />
           <span className="text-sm text-slate-600 dark:text-slate-300">No scheduled appointments</span>
+        </div>
+      )}
+
+      {geoError && (
+        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-amber-800 dark:text-amber-200">{geoError}</p>
+          </div>
+          <button 
+            onClick={() => setGeoError(null)}
+            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          >
+            <span className="sr-only">Dismiss</span>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
