@@ -107,6 +107,35 @@ function formatTimeDisplay(time: string | null): string {
   }
 }
 
+function createJobMarkerIcon(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+    <defs>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+      </filter>
+    </defs>
+    <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill="#16a34a" filter="url(#shadow)"/>
+    <circle cx="18" cy="16" r="12" fill="#ffffff" fill-opacity="0.2"/>
+    <path d="M12 14h12v2H12v-2zm0 4h8v2h-8v-2zm10-6h-8v-2h8v2z" fill="#ffffff" transform="translate(0, 2)"/>
+    <path d="M24 16l-2-2h-4v4h6v-2zm-8 0v-2h-4l-2 2v2h6v-2z" fill="#ffffff" transform="translate(0, 2)"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+
+function createEstimateMarkerIcon(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+    <defs>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+      </filter>
+    </defs>
+    <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill="#9333ea" filter="url(#shadow)"/>
+    <circle cx="18" cy="16" r="12" fill="#ffffff" fill-opacity="0.2"/>
+    <text x="18" y="21" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" font-family="Arial, sans-serif">$</text>
+  </svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+
 function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
@@ -178,15 +207,16 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     const newGoogleMarkers: google.maps.Marker[] = [];
 
     markers.forEach((markerData) => {
+      const iconUrl = markerData.type === 'estimate' 
+        ? createEstimateMarkerIcon() 
+        : createJobMarkerIcon();
+      
       const googleMarker = new google.maps.Marker({
         position: { lat: markerData.lat, lng: markerData.lng },
         icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 12,
-          fillColor: markerData.type === 'estimate' ? '#9333ea' : '#16a34a',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 3
+          url: iconUrl,
+          scaledSize: new google.maps.Size(36, 44),
+          anchor: new google.maps.Point(18, 44)
         }
       });
 

@@ -1,0 +1,110 @@
+Make Schedule Map view plot real jobs/estimates by address + show “scheduled icons” (luxury pins)
+
+CURRENT
+- Map tab loads and always shows the map (good)
+- It currently does NOT place pins from Jobs/Estimates addresses reliably
+- We want the map to automatically connect to the address stored on each scheduled Job/Estimate and drop pins.
+- We also want “scheduled little icons” to appear (truck/job icon for jobs, $/estimate icon for estimates), like the reference.
+
+GOAL
+For the selected day:
+- Every scheduled Job with an address shows a GREEN “truck/job” pin
+- Every scheduled Estimate with an address shows a PURPLE “estimate/$” pin
+- Multiple items close together cluster
+- Tapping a pin shows a small info card (title, customer, time, address) and can navigate to the item
+- No “no locations” blocking state (map always visible)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) NORMALIZE “MAP EVENTS” FOR THE SELECTED DAY
+In the same place you build schedule items for Day/List:
+Create mapEvents = scheduled jobs + scheduled estimates for that date.
+Each mapEvent should include:
+{
+  id,
+  type: "job" | "estimate",
+  title,
+  customerName,
+  addressLine1,
+  city,
+  state,
+  zip,
+  fullAddressString,
+  startTimeLabel,
+  endTimeLabel,
+  lat,
+  lng
+}
+
+2) BUILD A RELIABLE fullAddressString
+Do not pass only “321 Astor Dr”.
+Construct:
+- If city/state exist: “321 Astor Dr, Sayville, NY 11782”
+- If missing city/state: fallback to “321 Astor Dr, Long Island, NY”
+(temporary default region so geocoder succeeds)
+
+3) ADD COORDINATE CACHING (REQUIRED FOR PERFORMANCE)
+Pick ONE place to store lat/lng:
+Preferred: Customers table
+- customers.lat
+- customers.lng
+Because multiple jobs use the same customer address.
+
+Map event coordinate resolution rules:
+- If customer.lat/lng exists → use it (no API call)
+- Else geocode fullAddressString → save lat/lng back to customer → use it
+
+4) BACKEND: GEOCODE ENDPOINT (SERVER-SIDE ONLY)
+Create:
+POST /api/geocode
+Body: { address: string }
+Returns: { lat, lng, formattedAddress }
+
+Use server env var: GOOGLE_MAPS_API_KEY
+Handle errors safely:
+- If no results: return 404 with message “Could not geocode”
+- Log failures once
+Do NOT expose server key to the frontend.
+
+5) FRONTEND: RESOLVE COORDS BEFORE RENDERING MARKERS
+In ScheduleMapView:
+- Start with mapEvents from API (jobs/estimates/customers)
+- For events missing coords:
+  - call /api/geocode(address)
+  - update local state so markers appear without refresh
+  - trigger saving lat/lng in DB via backend
+
+IMPORTANT: Map should still render immediately; markers can appear progressively.
+
+6) RENDER CUSTOM “ICON PINS” (THE LITTLE SCHEDULED ICONS)
+Replace default markers with custom icons:
+- Jobs: green pin with a white “truck” icon (or “briefcase/wrench” if truck is hard)
+- Estimates: purple pin with a white “$” icon
+
+Implementation options:
+A) Use Google Maps marker icon as an SVG data URL
+B) Use AdvancedMarkerElement with a custom HTML div (best “luxury” look)
+
+Pins should be small and clean like the reference.
+
+7) CLUSTERING
+Use marker clustering so close pins show a count bubble.
+Cluster style should match EcoLogic (neutral/clean).
+
+8) PIN CLICK → INFO CARD
+When pin clicked:
+Show a small bottom sheet / overlay card:
+- Title
+- Customer
+- Time range
+- Address
+- Badge “Job” or “Estimate”
+Tapping card navigates to /jobs/:id or /estimates/:id
+
+DONE WHEN
+- Scheduled jobs/estimates for the day appear as pins using their stored addresses
+- Pins are custom icons (job truck + estimate $)
+- Pins cluster when close together
+- Pins appear even if only street is stored (fallback region prevents geocode failures)
+- Lat/lng is cached so next load is instant
+- Map always displays (no blocking empty state)
