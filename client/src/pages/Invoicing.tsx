@@ -124,9 +124,12 @@ export default function Invoicing() {
           All Invoices ({invoices.length})
         </h3>
         {canCreateInvoice && (
-          <Button onClick={() => setIsSheetOpen(true)}>
+          <Button 
+            onClick={() => setIsSheetOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4"
+          >
             <Plus className="w-4 h-4 mr-2" />
-            Create Invoice
+            Add Invoice
           </Button>
         )}
       </div>
@@ -140,9 +143,12 @@ export default function Invoicing() {
               Start billing your clients by creating your first invoice.
             </p>
             {canCreateInvoice && (
-              <Button onClick={() => setIsSheetOpen(true)}>
+              <Button 
+                onClick={() => setIsSheetOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4"
+              >
                 <Plus className="w-4 h-4 mr-2" />
-                Create Your First Invoice
+                Add Invoice
               </Button>
             )}
           </CardContent>
