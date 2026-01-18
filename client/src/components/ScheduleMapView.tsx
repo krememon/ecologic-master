@@ -343,6 +343,7 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   };
 
   const geocodeAddresses = useCallback(async () => {
+    console.log('[Map] Starting geocode, items count:', items.length);
     if (!items.length) {
       setMarkers([]);
       return;
@@ -352,27 +353,40 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     const geocoded: MarkerData[] = [];
 
     for (const item of items) {
-      if (!item.address) continue;
+      console.log('[Map] Processing item:', item.type, item.id, 'address:', item.address, 'lat/lng:', item.latitude, item.longitude);
+      
+      if (!item.address && !item.latitude) {
+        console.log('[Map] Skipping item - no address or coords');
+        continue;
+      }
 
       if (item.latitude && item.longitude) {
+        console.log('[Map] Using cached coords:', item.latitude, item.longitude);
         geocoded.push({ ...item, lat: item.latitude, lng: item.longitude });
         continue;
       }
 
+      if (!item.address) continue;
+
       try {
+        console.log('[Map] Geocoding address:', item.address);
         const response = await apiRequest('POST', '/api/geocode', {
           address: item.address,
           customerId: item.customerId
         });
         if (response.ok) {
           const data = await response.json();
+          console.log('[Map] Geocode result:', data.latitude, data.longitude);
           geocoded.push({ ...item, lat: data.latitude, lng: data.longitude });
+        } else {
+          console.warn('[Map] Geocode failed:', response.status, await response.text());
         }
       } catch (error) {
-        console.warn(`Failed to geocode: ${item.address}`);
+        console.warn('[Map] Failed to geocode:', item.address, error);
       }
     }
 
+    console.log('[Map] Final markers count:', geocoded.length);
     setMarkers(geocoded);
     setIsGeocoding(false);
   }, [items]);

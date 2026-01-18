@@ -796,12 +796,34 @@ export class DatabaseStorage implements IStorage {
       });
     }
     
-    // Merge primary line item, isPaid, and crew assignments into jobs
+    // Fetch customers for jobs that have customerId (for address/lat/lng fallback)
+    const customerIds = jobsList.map(j => j.customerId).filter((id): id is number => id !== null);
+    const customerMap: Record<number, { id: number; firstName: string | null; lastName: string | null; address: string | null; latitude: number | null; longitude: number | null }> = {};
+    if (customerIds.length > 0) {
+      const customerData = await db
+        .select({
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          address: customers.address,
+          latitude: customers.latitude,
+          longitude: customers.longitude,
+        })
+        .from(customers)
+        .where(inArray(customers.id, customerIds));
+      
+      for (const cust of customerData) {
+        customerMap[cust.id] = cust;
+      }
+    }
+    
+    // Merge primary line item, isPaid, crew assignments, and customer into jobs
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
       isPaid: paidStatusByJob[job.id] || false,
       crewAssignments: crewByJob[job.id] || [],
+      customer: job.customerId ? customerMap[job.customerId] || null : null,
     }));
   }
 

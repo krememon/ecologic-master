@@ -31,10 +31,22 @@ interface JobWithSchedule {
   status: string;
   startDate: string | null;
   scheduledTime: string | null;
+  scheduledEndTime?: string | null;
   location: string | null;
   city: string | null;
+  postalCode?: string | null;
+  locationLat?: string | null;
+  locationLng?: string | null;
   clientName: string | null;
   customerId: number | null;
+  customer?: {
+    id: number;
+    firstName: string | null;
+    lastName: string | null;
+    address: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  } | null;
   client?: {
     id: number;
     name: string;
@@ -64,7 +76,10 @@ interface EstimateWithSchedule {
   jobAddressLine1: string | null;
   jobCity: string | null;
   jobState: string | null;
+  jobZip?: string | null;
   customerId?: number | null;
+  customerLatitude?: number | null;
+  customerLongitude?: number | null;
   assignedEmployeeIds?: string[];
 }
 
@@ -79,6 +94,8 @@ interface ScheduleItem {
   status: string;
   jobType?: string | null;
   customerId?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface Employee {
@@ -323,17 +340,35 @@ export default function AIScheduling() {
     const items: ScheduleItem[] = [];
     
     dailyJobs.forEach(job => {
+      const addressParts = [job.location, job.city, job.postalCode].filter(Boolean);
+      let fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null;
+      if (!fullAddress && job.customer?.address) {
+        fullAddress = job.customer.address;
+      }
+      
+      let lat: number | null = null;
+      let lng: number | null = null;
+      if (job.locationLat && job.locationLng) {
+        lat = parseFloat(job.locationLat);
+        lng = parseFloat(job.locationLng);
+      } else if (job.customer?.latitude && job.customer?.longitude) {
+        lat = job.customer.latitude;
+        lng = job.customer.longitude;
+      }
+      
       items.push({
         type: 'job',
         id: job.id,
         title: job.title,
         customerName: job.clientName || job.client?.name || null,
         scheduledTime: job.scheduledTime,
-        scheduledEndTime: (job as any).scheduledEndTime || null,
-        address: job.location || job.city || null,
+        scheduledEndTime: job.scheduledEndTime || null,
+        address: fullAddress,
         status: job.status,
         jobType: (job as any).jobType || null,
-        customerId: job.customerId
+        customerId: job.customerId,
+        latitude: lat,
+        longitude: lng
       });
     });
     
@@ -341,7 +376,8 @@ export default function AIScheduling() {
       const addressParts = [
         estimate.jobAddressLine1,
         estimate.jobCity,
-        estimate.jobState
+        estimate.jobState,
+        estimate.jobZip
       ].filter(Boolean);
       const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null;
       
@@ -354,8 +390,10 @@ export default function AIScheduling() {
         scheduledEndTime: estimate.scheduledEndTime || null,
         address: fullAddress,
         status: estimate.status,
-        customerId: estimate.customerId
-      } as ScheduleItem);
+        customerId: estimate.customerId,
+        latitude: estimate.customerLatitude || null,
+        longitude: estimate.customerLongitude || null
+      });
     });
     
     return items.sort((a, b) => {

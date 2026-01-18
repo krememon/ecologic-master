@@ -1,0 +1,101 @@
+Make Job/Estimate pins actually appear on the map at their real addresses (geocode + cache + render)
+
+CURRENT
+- Map loads and shows “No scheduled appointments”
+- Blue dot works in full browser tab (good)
+- BUT scheduled Jobs/Estimates are NOT dropping pins based on their addresses
+
+GOAL
+On Schedule → Map (for the selected day):
+- Every scheduled Job with an address shows a GREEN pin at the correct location
+- Every scheduled Estimate with an address shows a PURPLE pin at the correct location
+- If multiple items share the same location, they cluster
+- Clicking a pin shows an info card and can navigate to the item
+
+ROOT PROBLEM (LIKELY)
+We do not have lat/lng stored for jobs/estimates/customers, and/or geocoding is failing due to incomplete address strings or the map view isn’t using the results.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) STANDARDIZE ADDRESS FIELDS (VERY IMPORTANT)
+For BOTH jobs and estimates, determine the address source in this priority order:
+
+A) If item has explicit address fields (recommended):
+- addressLine1
+- city
+- state
+- zip
+
+B) Else fallback to customer address fields
+
+Construct fullAddress like:
+"${addressLine1}, ${city}, ${state} ${zip}"
+If city/state/zip missing, use safe fallback:
+"${addressLine1}, Long Island, NY"
+(temporary fallback so geocoder can resolve)
+
+2) ADD COORDS STORAGE (CACHE) — PICK ONE PLACE
+Preferred cache location: CUSTOMERS
+Add fields:
+- customers.latitude (float)
+- customers.longitude (float)
+
+Reason: many jobs share the same address, and we want geocode once.
+
+(If customers already have lat/lng fields, use them.)
+
+3) BACKEND: CREATE/VERIFY GEOCODING ENDPOINT WORKS
+Endpoint:
+POST /api/geocode
+Body: { address: string }
+Response: { lat, lng, formattedAddress }
+
+Use server env:
+GOOGLE_MAPS_API_KEY
+
+Must:
+- return lat/lng for valid addresses
+- return 404 for invalid addresses
+- NEVER expose the server key to frontend
+
+4) BACKEND: SAVE COORDS TO CUSTOMER AFTER GEOCODE
+After successful geocode:
+- Update customer.latitude/customer.longitude
+- Optionally update customer.city/state/zip if missing using formattedAddress parsing (optional)
+
+5) FRONTEND: MAP VIEW COORD RESOLUTION PIPELINE (NO MORE “NO LOCATIONS” WHEN DATA EXISTS)
+In Map view:
+- Build mapEvents for selected day (jobs + estimates)
+- Attach customerId and fullAddress for each event
+- For each event:
+  - If customer has lat/lng => use it
+  - Else call POST /api/geocode(fullAddress)
+    - On success, update local state to add lat/lng immediately (pins appear without refresh)
+    - Backend will also persist to customer
+
+While geocoding is running:
+- Still show the map
+- Show small overlay: “Finding locations…” (not blocking)
+
+6) RENDER MARKERS ONCE COORDS EXIST
+- Create markers from events with lat/lng
+- Jobs = green marker
+- Estimates = purple marker
+- Add clustering (markerclusterer)
+- Fit map bounds to markers if there is at least 1 marker
+
+7) DEBUGGING (ONLY UNTIL WORKING)
+Add temporary logs:
+- console.log("[Map] events count", mapEvents.length)
+- console.log("[Map] events with coords", eventsWithCoords.length)
+- console.log("[Map] geocode request", address)
+- console.log("[Map] geocode result", lat,lng)
+
+Remove logs after verified.
+
+DONE WHEN
+- Schedule → Map shows pins for scheduled items
+- Pins appear at correct addresses (not random)
+- Pins persist after refresh (because coords cached)
+- If 2+ pins overlap, clustering shows a count bubble
+- Map still shows even if 0 items exist
