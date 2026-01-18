@@ -416,7 +416,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
+        <DialogContent hideCloseButton className="max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <button 
               type="button"
