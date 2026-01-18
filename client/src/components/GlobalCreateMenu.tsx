@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Briefcase, FileText, Receipt, X } from "lucide-react";
+import { Plus, Briefcase, FileText, Receipt, UserPlus, CalendarPlus, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ const menuItems: MenuItem[] = [
   { id: "job", label: "Job", icon: Briefcase, permission: "jobs.create", route: "/jobs?create=true" },
   { id: "estimate", label: "Estimate", icon: FileText, permission: "estimates.create", route: "/jobs?createEstimate=true" },
   { id: "invoice", label: "Invoice", icon: Receipt, permission: "invoicing.manage", route: "/invoicing?create=true" },
+  { id: "lead", label: "Lead", icon: UserPlus, permission: "leads.convert", route: "/leads?create=true" },
+  { id: "event", label: "Event", icon: CalendarPlus, permission: "schedule.manage", route: "/schedule?createEvent=true" },
 ];
 
 export function GlobalCreateMenu() {
