@@ -6605,10 +6605,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('[Geocode] Original address:', address);
       
       // Add region fallback if address doesn't contain state/city indicators
+      // Use "Long Island, NY" as broad fallback (not a specific town like Sayville)
       const hasRegion = /,\s*(NY|New York|NJ|CT|PA|CA|FL|TX|Long Island)/i.test(address);
+      let usedFallback = false;
       if (!hasRegion) {
-        address = `${address}, Sayville, NY`;
-        console.log('[Geocode] Added fallback region:', address);
+        address = `${address}, Long Island, NY`;
+        usedFallback = true;
+        console.log('[Geocode] Added broad fallback region:', address);
       }
 
       const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -6646,16 +6649,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const location = data.results[0].geometry.location;
       const result = { latitude: location.lat, longitude: location.lng };
       
-      console.log('[Geocode] Success:', result.latitude, result.longitude);
+      console.log('[Geocode] Success:', result.latitude, result.longitude, 'precision:', usedFallback ? 'approximate' : 'exact');
 
       // Cache coordinates on customer if customerId provided
       if (customerId) {
         await db.update(customers)
-          .set({ latitude: result.latitude, longitude: result.longitude })
+          .set({ 
+            latitude: result.latitude, 
+            longitude: result.longitude,
+            geocodePrecision: usedFallback ? 'approximate' : 'exact'
+          })
           .where(eq(customers.id, customerId));
       }
 
-      res.json(result);
+      res.json({ ...result, precision: usedFallback ? 'approximate' : 'exact' });
     } catch (error) {
       console.error("Geocoding error:", error);
       res.status(500).json({ message: "Failed to geocode address" });

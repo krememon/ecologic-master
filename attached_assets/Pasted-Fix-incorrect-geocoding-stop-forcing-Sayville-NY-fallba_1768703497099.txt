@@ -1,0 +1,55 @@
+Fix incorrect geocoding: stop forcing “Sayville, NY” fallback and geocode using real customer city/state/zip (North Babylon issue)
+
+CURRENT
+- Map pins are showing, but some addresses are wrong.
+Example: “3 Ida Lane” is being pinned near Sayville, but it should be in North Babylon.
+This is happening because we are appending a hardcoded fallback like “Sayville, NY” when city/state are missing.
+
+GOAL
+- Pins must be accurate.
+- Never hardcode “Sayville, NY” as the fallback for unknown addresses.
+- Use real city/state/zip from Customer/Job when available.
+- Only use a broad fallback as last resort (ex: “Long Island, NY” or company default), and clearly mark those as “approximate.”
+
+IMPLEMENTATION (DO IN THIS ORDER)
+
+1) CHANGE ADDRESS PRIORITY
+When building fullAddress for geocoding:
+A) Prefer Job location fields if present:
+   job.addressLine1 + job.city + job.state + job.zip
+B) Else use Customer fields:
+   customer.addressLine1 + customer.city + customer.state + customer.zip
+C) If ONLY street exists and no city/state:
+   fallback to:
+   `${street}, Long Island, NY`
+NOT Sayville.
+
+2) ADD/ENSURE CUSTOMER HAS CITY/STATE/ZIP FIELDS
+If customer schema does not include:
+- city
+- state
+- zip
+Add them (DB + API + forms).
+Update customer creation/edit UI so city/state is collected (zip optional but recommended).
+
+3) FIX EXISTING DATA
+For the specific customer/address “3 Ida Lane”:
+- Update that customer’s city to “North Babylon”
+- state to “NY”
+- zip if known (optional)
+
+4) SHOW “APPROXIMATE” ONLY WHEN FALLBACK USED
+If we had to use fallback (no city/state available):
+- Still drop a pin, but treat it as approximate:
+  - use a lighter marker or a small “approx” hint in the pin’s info card:
+    “Approximate location — add city/state for accuracy”
+
+5) CACHE COORDS PER CUSTOMER
+When geocode succeeds:
+- Save customer.lat/lng
+- Also save a flag customer.geocodePrecision = “exact” if city/state provided, otherwise “approx”
+
+DONE WHEN
+- 3 Ida Lane geocodes to North Babylon (not Sayville)
+- No more forced Sayville fallback
+- New customers/jobs collect city/state so pins are accurate by default

@@ -138,13 +138,17 @@ export const customers = pgTable("customers", {
   lastName: varchar("last_name", { length: 100 }).notNull(),
   email: varchar("email", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
-  address: text("address"),
+  address: text("address"), // Street address line
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 50 }),
+  zip: varchar("zip", { length: 20 }),
   companyName: varchar("company_name", { length: 255 }),
   companyNumber: varchar("company_number", { length: 100 }),
   jobTitle: varchar("job_title", { length: 100 }),
   notes: text("notes"),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
+  geocodePrecision: varchar("geocode_precision", { length: 20 }), // 'exact' or 'approximate'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
