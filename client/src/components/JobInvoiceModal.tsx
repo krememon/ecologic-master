@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -115,6 +115,10 @@ export function JobInvoiceModal({
       setPreviewLoading(true);
       setPreviewError(false);
       setErrorMessage(null);
+      
+      // Invalidate invoices cache so it appears in Invoices tab immediately
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      
       toast({
         title: "Invoice Generated",
         description: `${data.fileName} is ready to send.`,
