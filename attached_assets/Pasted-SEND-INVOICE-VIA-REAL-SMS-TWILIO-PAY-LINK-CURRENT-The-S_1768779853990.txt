@@ -1,0 +1,72 @@
+SEND INVOICE VIA REAL SMS (TWILIO) + PAY LINK
+
+CURRENT
+The Send Invoice modal has Email/Text toggle and a phone input, but Text mode does not actually send a real SMS yet.
+
+GOAL
+When user selects "Text" and taps "Send Invoice":
+- EcoLogic sends a REAL SMS to the entered phone number
+- SMS includes invoice number, amount, due date, and a secure payment link
+- On success:
+  - close modal
+  - set invoice status to "Sent"
+- On failure:
+  - show an error toast (only on failure)
+
+PROVIDER
+Use Twilio for SMS sending.
+
+BACKEND IMPLEMENTATION
+1) Add env vars (Replit Secrets):
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_FROM_NUMBER (a Twilio phone number that can send SMS)
+- APP_BASE_URL (public base URL used to build pay links)
+
+2) Install Twilio SDK
+- Add twilio dependency to server
+
+3) Add API route
+POST /api/invoices/:id/send
+Body:
+{
+  "method": "sms" | "email",
+  "to": "string"   // phone or email
+}
+Server must:
+- Validate invoice exists + belongs to company
+- Validate method === "sms" for this task
+- Normalize phone number to E.164 (US default if needed)
+- Generate/lookup a secure pay link for this invoice:
+  - Prefer a tokenized public route like /pay/:token
+  - If not available yet, create a signed token stored in DB (invoice_pay_tokens table) with expiry
+- Compose SMS:
+  "EcoLogic Invoice INV-XXXX for $350.00 is ready. Due Feb 16, 2026. Pay here: <link>"
+- Send SMS via Twilio
+- Save activity:
+  - invoice.status = "sent" (if not paid)
+  - invoice.sentAt = now
+  - invoice.lastSentMethod = "sms"
+  - invoice.lastSentTo = phone
+Return:
+{ success: true }
+
+FRONTEND IMPLEMENTATION
+- In Text mode, on "Send Invoice" click:
+  - call POST /api/invoices/:id/send with method="sms" and to=phone
+  - disable button while sending
+  - on success: close modal and refresh invoice details/list
+  - on error: show error toast
+
+VALIDATION
+- Require a valid phone number before enabling Send
+- Display formatted number (###-###-####) but send normalized E.164 to backend
+
+SECURITY / RBAC
+- Only roles allowed to send invoices can use this (Owner/Admin/Dispatcher as you decide)
+- Technicians should not be able to send
+
+DELIVERABLE
+- Enter a real phone number -> tap Send -> phone receives SMS with pay link
+- Invoice status updates to Sent
+- Errors show only on failure
