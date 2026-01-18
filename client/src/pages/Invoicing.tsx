@@ -51,9 +51,6 @@ export default function Invoicing() {
   // RBAC: Check if user can create invoices
   const userRole = user?.role?.toLowerCase() || '';
   const canCreateInvoice = ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(userRole);
-  
-  // DEBUG: Log once when component mounts
-  console.log("[Invoicing] RBAC check", { role: user?.role, userRole, canCreateInvoice });
 
   if (isLoading) {
     return (
@@ -123,8 +120,8 @@ export default function Invoicing() {
         }}
       />
 
-      <div className="flex items-center justify-between gap-3" style={{ border: '2px dashed green', padding: '8px' }}>
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
           All Invoices ({invoices.length})
         </h3>
         {canCreateInvoice && (
@@ -132,10 +129,9 @@ export default function Invoicing() {
             id="add-invoice-pill"
             data-testid="add-invoice-pill"
             onClick={() => setIsSheetOpen(true)}
-            style={{ background: 'hotpink', outline: '3px solid red', minWidth: '120px' }}
-            className="text-white rounded-full px-4 flex-shrink-0"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full px-4 h-10 flex-shrink-0 shadow-sm"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-[18px] h-[18px] mr-2" />
             Add Invoice
           </Button>
         )}
