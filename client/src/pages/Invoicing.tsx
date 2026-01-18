@@ -49,7 +49,11 @@ export default function Invoicing() {
   });
 
   // RBAC: Check if user can create invoices
-  const canCreateInvoice = user?.role && ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(user.role);
+  const userRole = user?.role?.toLowerCase() || '';
+  const canCreateInvoice = ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(userRole);
+  
+  // DEBUG: Log once when component mounts
+  console.log("[Invoicing] RBAC check", { role: user?.role, userRole, canCreateInvoice });
 
   if (isLoading) {
     return (
@@ -119,24 +123,22 @@ export default function Invoicing() {
         }}
       />
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3" style={{ border: '2px dashed green', padding: '8px' }}>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Invoices ({invoices.length})
         </h3>
-        {(() => {
-          console.log("[Invoicing] render Add Invoice pill", { canCreateInvoice, role: user?.role });
-          return canCreateInvoice && (
-            <Button 
-              data-testid="page-add-invoice"
-              onClick={() => setIsSheetOpen(true)}
-              style={{ background: 'hotpink', outline: '3px solid red' }}
-              className="text-white rounded-full px-4 flex-shrink-0"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Invoice
-            </Button>
-          );
-        })()}
+        {canCreateInvoice && (
+          <Button 
+            id="add-invoice-pill"
+            data-testid="add-invoice-pill"
+            onClick={() => setIsSheetOpen(true)}
+            style={{ background: 'hotpink', outline: '3px solid red', minWidth: '120px' }}
+            className="text-white rounded-full px-4 flex-shrink-0"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Invoice
+          </Button>
+        )}
       </div>
 
       {invoices.length === 0 ? (

@@ -1,0 +1,62 @@
+FIX: "Add Invoice" PILL BUTTON NOT RENDERING (DOM VERIFY + CSS/RESPONSIVE FIX)
+
+CURRENT
+On /invoicing, the "Add Invoice" pill button (next to “All Invoices (X)”) is NOT visible at all.
+I only see the floating blue + in the top-right. The agent claimed it added a hotpink debug button, but it still does not appear in the UI.
+
+GOAL
+Make the "Add Invoice" pill button visibly appear next to "All Invoices (X)" on mobile.
+Do not rely on guesses — verify by inspecting the DOM and computed styles.
+
+REQUIREMENTS
+- The pill MUST be visible without opening any menu
+- Location: inline on the same row as "All Invoices (X)" (right side)
+- Must render on mobile viewport
+- Must not be clipped/hidden by overflow
+- Must not be blocked by RBAC incorrectly
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ADD HARD DOM MARKER (NO EXCUSES)
+- In the pill button element, add:
+  data-testid="add-invoice-pill"
+  id="add-invoice-pill"
+  and text content exactly: "Add Invoice"
+This lets us search the DOM instantly.
+
+2) VERIFY IT EXISTS IN DOM
+- Open the page and in devtools console run:
+  document.querySelector('#add-invoice-pill')
+- If null, the button is NOT being rendered. Fix the render logic (conditional, wrong component, wrong breakpoint).
+
+3) IF IT EXISTS BUT NOT VISIBLE: FIX STYLES
+- In devtools, inspect the element and check computed styles:
+  display, visibility, opacity, position, z-index, transform
+- Common fixes:
+  - Remove any `hidden`, `md:hidden`, `sm:hidden`, `lg:flex` issues
+  - Ensure parent containers are not `overflow: hidden` clipping it
+  - Ensure the row container is `display:flex; justify-content:space-between; align-items:center;`
+  - Ensure the button has `flex-shrink:0;`
+  - Ensure it is not positioned offscreen
+
+4) IF IT DOES NOT EXIST: FIX RENDER PATH
+- Find the exact component rendering the “All Invoices (X)” header row.
+- Insert the pill button there (NOT somewhere else).
+- Do not attach it to the floating + menu component.
+
+5) RBAC CHECK (LOG ONCE, THEN REMOVE)
+- Add one temporary log:
+  console.log("[Invoices] role=", currentUser?.role, "canCreateInvoice=", canCreateInvoice)
+- Ensure the pill is shown for roles allowed to create invoices (Owner/Admin, and any others we allow).
+- If role is not allowed, hide it (EcoLogic hidden-not-disabled rule).
+
+6) FINAL VERIFY
+- On /invoicing mobile preview:
+  - "All Invoices (1)" left
+  - "Add Invoice" pill button right
+- Clicking pill opens the new invoice flow/modal.
+
+DELIVERABLE
+- "Add Invoice" pill is visible next to All Invoices on mobile
+- Verified via DOM query (#add-invoice-pill exists)
+- No regressions to invoice list
