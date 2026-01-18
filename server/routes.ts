@@ -6623,12 +6623,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = await response.json();
       
       console.log('[Geocode] Google response status:', data.status, 'results:', data.results?.length || 0);
+      if (data.error_message) {
+        console.log('[Geocode] Google error message:', data.error_message);
+      }
       
       if (data.status !== 'OK' || !data.results?.length) {
+        let userMessage = "Could not geocode address";
+        if (data.status === 'REQUEST_DENIED') {
+          userMessage = "Geocoding API not enabled. Please enable it in Google Cloud Console.";
+          console.log('[Geocode] REQUEST_DENIED - API key may need Geocoding API enabled or has referrer restrictions');
+        } else if (data.status === 'ZERO_RESULTS') {
+          userMessage = "Address not found";
+        }
         return res.status(404).json({ 
-          message: "Could not geocode address", 
+          message: userMessage, 
           attemptedAddress: address,
-          status: data.status 
+          status: data.status,
+          error: data.error_message 
         });
       }
 

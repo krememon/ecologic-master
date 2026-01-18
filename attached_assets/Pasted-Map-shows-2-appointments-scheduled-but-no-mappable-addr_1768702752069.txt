@@ -1,0 +1,70 @@
+Map shows “2 appointments scheduled, but no mappable addresses” — make geocoding actually produce markers + persist lat/lng
+
+CURRENT
+Map correctly detects 2 scheduled items, but still shows mappableCount=0.
+So either:
+- /api/geocode is still returning 404 OR
+- we are not applying the lat/lng results to mapEvents/markers OR
+- we are not persisting coords and reusing them.
+
+GOAL
+- Pins must appear on the map for scheduled jobs/estimates
+- Geocoding should run once per unique address and then cache lat/lng
+- After geocode succeeds, markers should render immediately without refresh
+
+DO THIS (IN ORDER)
+
+1) LOG EXACT GEOCODE INPUT + OUTPUT (REQUIRED)
+Frontend (before calling /api/geocode):
+console.log("[Map] geocode input:", fullAddress)
+
+Backend /api/geocode:
+console.log("[Geocode] attempting:", address)
+console.log("[Geocode] success:", lat, lng, formattedAddress)
+console.log("[Geocode] fail status:", status, "address:", address)
+
+2) FIX FULL ADDRESS BUILD (MAKE IT ALWAYS GEOCODABLE)
+For each event:
+- Build fullAddress from job/customer fields
+- If missing city/state, append EXACT fallback:
+  ", Sayville, NY 11782"
+(not just “Sayville, NY”)
+
+So “3 Ida Lane” becomes:
+“3 Ida Lane, Sayville, NY 11782”
+
+3) APPLY GEOCODE RESULTS TO MARKERS IMMEDIATELY (DON’T WAIT FOR DB)
+When /api/geocode returns {lat,lng}:
+- update local mapEvents state:
+  mapEvents[i].lat = lat
+  mapEvents[i].lng = lng
+- recompute markers from eventsWithCoords and render them right away
+
+This must happen even if DB caching is not finished yet.
+
+4) CACHE COORDS FOR NEXT TIME (PERSIST)
+Choose the cache location:
+Preferred: customers table:
+- customers.latitude
+- customers.longitude
+
+When geocode succeeds:
+- call backend endpoint to persist coords for the customerId
+OR
+- have /api/geocode accept {customerId, address} and persist automatically
+
+5) DE-DUPE GEOCODE CALLS
+If multiple events share same address/customer:
+- Only geocode once
+- Reuse cached lat/lng from customer
+
+6) FIX BANNER RULE (NOW THAT PINS WILL EXIST)
+- If scheduledCount>0 and geocoding is currently running: show “Finding locations…” overlay
+- If geocoding done and still 0 coords: show the current “no mappable addresses”
+- Once at least 1 pin exists: hide banner
+
+DONE WHEN
+- At least one pin appears for the scheduled job(s)
+- /api/geocode returns 200 for the fallback address format
+- Markers render immediately after geocode success
+- Reloading the page still shows pins (cached lat/lng)
