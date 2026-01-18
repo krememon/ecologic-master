@@ -1,0 +1,54 @@
+REGRESSION FIX: "Done" BUTTON NO LONGER SAVES/CLOSES + LOST ECOLOGIC BLUE
+
+CURRENT
+After removing the X overlay, the "Done" button regressed:
+1) Pressing Done does NOT save and close the New Invoice screen anymore.
+2) The Done text/button is no longer EcoLogic blue (it looks grey).
+
+GOAL
+Restore the Done button to:
+- Visually match EcoLogic (blue primary action)
+- Function correctly: validate -> save invoice -> close screen
+- Keep the X removed
+
+REQUIREMENTS
+- Done must be clickable (not disabled unless required fields missing)
+- Done must call the same save/create logic as before (create invoice draft or final)
+- On success: close modal/screen AND refresh invoices list
+- Keep error handling if save fails
+- Styling: Done should use EcoLogic primary blue (same as other primary actions)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) RESTORE ONCLICK / HANDLER
+- Find the New Invoice header right action (Done)
+- Ensure it is a real <button> with an onClick wired to the save handler
+- Confirm it calls the create/save function (API call) and then closes/navigates back on success
+- Do NOT replace with a static <div>/<span>
+
+2) RESTORE ENABLE/DISABLE LOGIC
+- Done should be disabled ONLY when required fields are missing:
+  - customer selected
+  - line items present (or total > 0)
+- If those are satisfied, Done must be enabled
+
+3) RESTORE ECOLOGIC BLUE STYLING
+- Use the existing EcoLogic primary blue token/class (same as other CTAs)
+- Done should appear blue when enabled
+- If disabled, it can be greyed out
+
+4) CLOSE BEHAVIOR
+- After successful save:
+  - close the New Invoice screen/modal
+  - refresh invoices list immediately (invalidate/refetch or update state)
+- No success toast required unless the app already uses one
+
+5) VERIFY
+- Add customer + add line item -> Done turns blue/enabled
+- Press Done -> invoice saves AND screen closes
+- New invoice appears in Invoices list
+
+DELIVERABLE
+- Done button is EcoLogic blue when enabled
+- Done saves and closes correctly
+- X remains removed with no regressions
