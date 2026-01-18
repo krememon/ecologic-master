@@ -1,0 +1,44 @@
+Fix: Global "+" Create Menu not visible on Schedule (Debug + Wire Correct Header)
+
+CURRENT
+The agent claims it added the global "+" create menu to the header, but on the Schedule page (mobile preview) there is no + icon visible anywhere in the top-right.
+
+GOAL
+Make the "+" icon visibly appear in the actual header used on the Schedule page (mobile), and ensure it opens the light overlay + action menu.
+
+MOST LIKELY CAUSES (CHECK ALL)
+1) Added to the wrong header component (Schedule uses a different top bar than the global app header)
+2) RBAC is hiding it (verify my current role and log it once)
+3) CSS issue: hidden by overflow, z-index, or responsive classes (hidden on mobile)
+4) Icon exists but is not visible due to color/background
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FIND THE REAL HEADER USED ON SCHEDULE
+- Locate the Schedule page component and identify the header/top bar it actually renders in mobile preview
+- Confirm which header component is being used (e.g., ScheduleHeader vs AppHeader)
+- Add GlobalCreateMenu button to THAT header
+
+2) ADD TEMP DEBUG (REMOVE AFTER FIX)
+- Log once on render:
+  console.log("[GlobalCreateMenu] role=", currentUser?.role, "canSeePlus=", boolean)
+- Also add a temporary data-testid="global-create-plus" to the + button so we can find it in DOM
+
+3) FIX CSS VISIBILITY
+- Ensure the + button container is not clipped:
+  - If header has overflow-hidden, move button inside visible area or adjust overflow
+- Ensure z-index above header content (and overlay above everything)
+- Ensure it is not hidden on mobile (no hidden md:block mistakes)
+
+4) CONFIRM IN MOBILE PREVIEW
+- The + icon must be clearly visible in the top-right on Schedule page
+- Clicking opens the light overlay + right-aligned vertical menu
+- Outside tap closes
+
+5) CLEANUP
+- Remove any temporary debug logs after confirming it works (or leave one guarded log behind a dev flag)
+
+DELIVERABLE
+- Working visible + button on Schedule page header in mobile preview
+- Working overlay + menu open/close
+- RBAC respected (Technician hidden, others visible)

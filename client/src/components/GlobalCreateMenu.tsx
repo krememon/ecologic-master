@@ -64,6 +64,7 @@ export function GlobalCreateMenu() {
         onClick={() => setIsOpen(true)}
         className="relative w-9 h-9 flex items-center justify-center rounded-full bg-green-600 hover:bg-green-700 text-white shadow-md transition-all duration-150 hover:scale-105 active:scale-95"
         aria-label="Create new"
+        data-testid="global-create-plus"
       >
         <Plus className="h-5 w-5" />
       </button>

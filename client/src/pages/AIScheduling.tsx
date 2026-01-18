@@ -24,6 +24,7 @@ import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
 import { ViewOptionsModal, ExtendedViewMode } from "@/components/ViewOptionsModal";
 import { ScheduleMapView } from "@/components/ScheduleMapView";
+import { GlobalCreateMenu } from "@/components/GlobalCreateMenu";
 
 interface JobWithSchedule {
   id: number;
@@ -736,6 +737,7 @@ export default function AIScheduling() {
           >
             <SlidersHorizontal className="h-5 w-5 text-slate-600 dark:text-slate-400" />
           </button>
+          <GlobalCreateMenu />
         </div>
       </div>
 
