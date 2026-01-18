@@ -1,0 +1,62 @@
+Make My Location auto-show (no button needed after permission is granted)
+
+GOAL
+- On Map tab open, automatically show the user’s location blue dot if browser permission is already granted.
+- No user needs to press the location button once permission exists.
+- If permission is NOT granted yet, show a small non-blocking banner asking to enable location (one-time).
+
+IMPORTANT BROWSER REALITY
+We can’t force a permission prompt automatically. The first permission request must be user-initiated.
+So we:
+- auto-start only when permission already granted
+- otherwise show a banner with an “Enable location” action
+
+IMPLEMENTATION (DO IN THIS ORDER)
+
+1) Detect iframe (Replit preview blocks geolocation)
+const inIframe = window.self !== window.top;
+
+If inIframe:
+- don’t attempt geolocation
+- show banner: “Location isn’t available in preview. Open in new tab to enable GPS.”
+- button: Open in new tab
+
+2) If NOT iframe: check permission status first (best UX)
+Use Permissions API when available:
+if (navigator.permissions?.query) {
+  const perm = await navigator.permissions.query({ name: "geolocation" });
+  if (perm.state === "granted") startWatchingLocation();
+  if (perm.state === "prompt") show subtle banner (Enable location)
+  if (perm.state === "denied") show subtle banner (Location blocked → click lock icon)
+}
+
+Fallback (if permissions API not supported):
+- try startWatchingLocation once, catch errors, show banner if denied
+
+3) Auto-watch location when granted
+startWatchingLocation() should use watchPosition:
+watchId = navigator.geolocation.watchPosition(
+  (pos) => setUserLatLng + accuracy,
+  (err) => setGeoError(err),
+  { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+);
+
+4) Render blue dot + accuracy circle whenever userLatLng exists
+- blue dot marker
+- accuracy circle (radius = accuracy meters)
+- do NOT hide the map if location missing
+
+5) Add a tiny “Locate” button ONLY as backup (optional)
+Even if you don’t want it, keep it as a small icon for re-centering.
+But auto-location should work without pressing it.
+
+BANNERS (NON-BLOCKING)
+- If prompt: “Enable location to show your position” with a button “Enable”
+  Button triggers a one-time getCurrentPosition() (user gesture)
+- If denied: “Location blocked — click the lock icon → Location → Allow”
+- If granted: no banner
+
+DONE WHEN
+- On Map open (in full .replit.dev tab), blue dot appears automatically after user has granted permission once
+- On first-time users, banner appears and one tap enables it
+- In Replit embedded preview, shows “open in new tab” message instead of failing

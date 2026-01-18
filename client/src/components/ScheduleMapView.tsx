@@ -144,11 +144,13 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<'unknown' | 'granted' | 'prompt' | 'denied' | 'iframe'>('unknown');
   const [geoError, setGeoError] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
   const userMarkerRef = useRef<google.maps.Marker | null>(null);
+  const watchIdRef = useRef<number | null>(null);
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
@@ -158,26 +160,6 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     googleMapsApiKey: apiKey,
     libraries: ['places']
   });
-
-  const getGeoErrorMessage = (error: GeolocationPositionError): string => {
-    const codeNames: Record<number, string> = {
-      1: 'PERMISSION_DENIED',
-      2: 'POSITION_UNAVAILABLE',
-      3: 'TIMEOUT'
-    };
-    const codeName = codeNames[error.code] || 'UNKNOWN';
-    
-    switch (error.code) {
-      case 1:
-        return `Location blocked (${codeName}). Click the lock icon in browser → Location → Allow.`;
-      case 2:
-        return `Location unavailable (${codeName}). Turn on Location Services on your device.`;
-      case 3:
-        return `Location request timed out (${codeName}). Try again.`;
-      default:
-        return `Location error: ${error.message} (code: ${error.code})`;
-    }
-  };
 
   const isInIframe = (): boolean => {
     try {
@@ -191,9 +173,52 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     window.open(window.location.href, '_blank', 'noopener,noreferrer');
   };
 
-  const requestUserLocation = useCallback(() => {
+  const startWatchingLocation = useCallback(() => {
+    if (watchIdRef.current !== null) return;
+    if (!navigator.geolocation) return;
+
+    console.log('[Geolocation] Starting watchPosition...');
+    setIsLocating(true);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        console.log('[Geolocation] Position update:', position.coords);
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserLocation(coords);
+        setUserAccuracy(position.coords.accuracy);
+        setIsLocating(false);
+        setGeoError(null);
+        setGeoStatus('granted');
+      },
+      (error) => {
+        console.error('[Geolocation] Watch error:', error.code, error.message);
+        setIsLocating(false);
+        if (error.code === 1) {
+          setGeoStatus('denied');
+          setGeoError('denied');
+        } else if (error.code === 2) {
+          setGeoError('Location unavailable. Turn on Location Services on your device.');
+        } else if (error.code === 3) {
+          setGeoError('Location request timed out. Try again.');
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+  }, []);
+
+  const stopWatchingLocation = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  }, []);
+
+  const requestLocationPermission = useCallback(() => {
     if (isInIframe()) {
-      setGeoError('iframe');
+      setGeoStatus('iframe');
       return;
     }
 
@@ -203,36 +228,76 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     }
 
     setIsLocating(true);
-    setGeoError(null);
-    
-    console.log('[Geolocation] Requesting user location...');
-    
+    console.log('[Geolocation] Requesting permission via getCurrentPosition...');
+
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        console.log('[Geolocation] Success:', position.coords);
-        const coords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-        setUserLocation(coords);
-        setUserAccuracy(position.coords.accuracy);
-        setIsLocating(false);
-        setGeoError(null);
-        
-        if (mapRef.current) {
-          mapRef.current.panTo(coords);
-          mapRef.current.setZoom(15);
-        }
+        console.log('[Geolocation] Permission granted:', position.coords);
+        setGeoStatus('granted');
+        startWatchingLocation();
       },
       (error) => {
-        console.error('[Geolocation] Error:', error.code, error.message);
+        console.error('[Geolocation] Permission error:', error.code, error.message);
         setIsLocating(false);
-        const errorMsg = getGeoErrorMessage(error);
-        setGeoError(errorMsg);
+        if (error.code === 1) {
+          setGeoStatus('denied');
+          setGeoError('denied');
+        } else {
+          setGeoError('Could not get location. Please try again.');
+        }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
-  }, []);
+  }, [startWatchingLocation]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    if (isInIframe()) {
+      setGeoStatus('iframe');
+      return;
+    }
+
+    const checkPermissionAndStart = async () => {
+      if (navigator.permissions?.query) {
+        try {
+          const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+          console.log('[Geolocation] Permission state:', perm.state);
+          
+          if (perm.state === 'granted') {
+            setGeoStatus('granted');
+            startWatchingLocation();
+          } else if (perm.state === 'prompt') {
+            setGeoStatus('prompt');
+          } else if (perm.state === 'denied') {
+            setGeoStatus('denied');
+          }
+
+          perm.addEventListener('change', () => {
+            console.log('[Geolocation] Permission changed to:', perm.state);
+            if (perm.state === 'granted') {
+              setGeoStatus('granted');
+              startWatchingLocation();
+            } else if (perm.state === 'denied') {
+              setGeoStatus('denied');
+              stopWatchingLocation();
+            }
+          });
+        } catch (e) {
+          console.log('[Geolocation] Permissions API not supported, will prompt on button click');
+          setGeoStatus('prompt');
+        }
+      } else {
+        setGeoStatus('prompt');
+      }
+    };
+
+    checkPermissionAndStart();
+
+    return () => {
+      stopWatchingLocation();
+    };
+  }, [isLoaded, startWatchingLocation, stopWatchingLocation]);
 
   useEffect(() => {
     if (!mapRef.current || !isLoaded || !userLocation) return;
@@ -267,11 +332,13 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   }, [userLocation, isLoaded]);
 
   const handleLocateMe = () => {
-    if (userLocation && mapRef.current && !geoError) {
+    if (userLocation && mapRef.current) {
       mapRef.current.panTo(userLocation);
       mapRef.current.setZoom(15);
-    } else {
-      requestUserLocation();
+    } else if (geoStatus === 'prompt' || geoStatus === 'unknown') {
+      requestLocationPermission();
+    } else if (geoStatus === 'iframe') {
+      openInNewTab();
     }
   };
 
@@ -564,26 +631,77 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         </div>
       )}
 
-      {geoError && (
+      {geoStatus === 'iframe' && (
+        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
+          <MapPin className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+              Location isn't available in embedded preview. Open EcoLogic in a new tab to enable GPS.
+            </p>
+            <button
+              onClick={openInNewTab}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+            >
+              <Navigation className="h-4 w-4" />
+              Open in new tab
+            </button>
+          </div>
+        </div>
+      )}
+
+      {geoStatus === 'prompt' && !userLocation && (
+        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
+          <LocateFixed className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+              Enable location to show your position on the map.
+            </p>
+            <button
+              onClick={requestLocationPermission}
+              disabled={isLocating}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
+            >
+              {isLocating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Enabling...
+                </>
+              ) : (
+                <>
+                  <LocateFixed className="h-4 w-4" />
+                  Enable location
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {geoStatus === 'denied' && (
         <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            {geoError === 'iframe' ? (
-              <>
-                <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
-                  Location isn't available in embedded preview. Open EcoLogic in a new tab to enable GPS.
-                </p>
-                <button
-                  onClick={openInNewTab}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                >
-                  <Navigation className="h-4 w-4" />
-                  Open in new tab
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-amber-800 dark:text-amber-200">{geoError}</p>
-            )}
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              Location blocked — click the lock icon in the address bar → Location → Allow.
+            </p>
+          </div>
+          <button 
+            onClick={() => setGeoStatus('unknown')}
+            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+          >
+            <span className="sr-only">Dismiss</span>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {geoError && geoError !== 'denied' && geoStatus !== 'iframe' && (
+        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-amber-800 dark:text-amber-200">{geoError}</p>
           </div>
           <button 
             onClick={() => setGeoError(null)}
