@@ -1,0 +1,67 @@
+HARD REPLACE "DONE" BUTTON: Make it Save + Close No Matter What (Stop Using Current Header Done)
+
+CURRENT
+The Done button on NEW INVOICE is broken and keeps staying disabled / not saving / not closing due to state/handler issues.
+I do not want more debugging. I want the Done control replaced with a fresh Done button that works.
+
+GOAL
+Replace the existing Done implementation with a new, reliable Done button that:
+- is clickable
+- validates minimally
+- saves invoice
+- closes the New Invoice screen on success
+This should bypass the current broken header wiring.
+
+NON-NEGOTIABLE BEHAVIOR
+When user taps Done:
+1) If missing customer -> show inline error or toast: "Select a customer"
+2) If missing valid line items/total -> show: "Add at least one line item with a price"
+3) If valid -> call API to create invoice -> on success close screen and refresh invoices list
+
+IMPLEMENTATION PLAN (DO IN THIS ORDER)
+
+1) REMOVE/IGNORE EXISTING "Done" HEADER ACTION
+- In NewInvoice screen header component, remove the current Done element/handler OR stop using its props/state entirely.
+
+2) ADD NEW DONE BUTTON (FRESH)
+Option A (preferred): Add a real <button> in the header right slot:
+- label: Done
+- always renders as a proper button
+- no overlay icons, no close X
+- uses EcoLogic primary blue when enabled
+
+Option B: If header is too buggy, place a sticky primary "Done" button at bottom (like other EcoLogic forms).
+Either is acceptable, but it MUST be reliable.
+
+3) NEW CAN-SUBMIT LOGIC (SIMPLE + CORRECT)
+Define:
+- hasCustomer = Boolean(customerId)
+- hasLine = lineItems.some(li => li.name?.trim() && Number(li.price || li.priceCents) > 0)
+- totalCents = compute from lineItems if not already
+- canSubmit = hasCustomer && (totalCents > 0 || hasLine)
+
+Done is disabled only if !canSubmit.
+(Do not require schedule/tags.)
+
+4) NEW SAVE HANDLER (DIRECT)
+Create handleSubmitInvoice():
+- console.log("[NewInvoice] submit", { customerId, lineItemsCount: lineItems.length, totalCents })
+- build payload with customerId, lineItems, scheduledAt, tags
+- await POST /api/invoices (or existing create endpoint)
+- on success:
+  - close NewInvoice screen (navigate back / close sheet)
+  - refresh invoices list (invalidate/refetch)
+
+5) GUARANTEE STATE IS NOT RESET ON EVERY INTERACTION
+- Ensure no close handler resets form unless the screen is actually closing.
+- Do not call reset() when opening customer picker or line items modal.
+
+6) VERIFY
+- Select customer + add a priced line item -> Done becomes enabled blue
+- Tap Done -> invoice is created, screen closes, invoice appears in list
+- No X overlay, no grey stuck state
+
+DELIVERABLE
+- A replaced Done button that reliably saves and closes
+- No more broken enable/disable behavior
+- Remove the yellow debug box after verified

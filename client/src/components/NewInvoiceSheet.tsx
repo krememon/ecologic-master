@@ -210,7 +210,6 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       return res.json();
     },
     onSuccess: (invoice) => {
-      console.log("[NewInvoice] mutation onSuccess - invoice created:", invoice);
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
@@ -219,11 +218,9 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       });
       onInvoiceCreated?.(invoice);
       resetForm();
-      console.log("[NewInvoice] closing sheet now via onOpenChange(false)");
       onOpenChange(false);
     },
     onError: (error: Error) => {
-      console.error("[NewInvoice] mutation onError:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -290,21 +287,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   };
 
   const handleSubmit = () => {
-    console.log("[NewInvoice] Done clicked");
-    console.log("[NewInvoice] state snapshot", {
-      selectedCustomer: selectedCustomer?.id,
-      lineItemsCount: lineItems?.length,
-      validLineItemsCount: validLineItems?.length,
-      isFormValid,
-      hasValidLineItems,
-    });
-    
-    if (!isFormValid) {
-      console.log("[NewInvoice] validation failed - isFormValid is false");
-      return;
-    }
-
-    console.log("[NewInvoice] validation passed, preparing invoice data...");
+    if (!selectedCustomer || !hasValidLineItems) return;
     const today = new Date();
     const dueDate = new Date(today);
     dueDate.setDate(dueDate.getDate() + 30);
@@ -341,7 +324,6 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       })),
     };
 
-    console.log("[NewInvoice] calling createInvoiceMutation.mutate with:", invoiceData);
     createInvoiceMutation.mutate(invoiceData);
   };
 
@@ -374,10 +356,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   };
 
   const updateLineItem = (index: number, updates: Partial<LineItem>) => {
-    console.log("[NewInvoice] updateLineItem", index, updates);
-    const newItems = lineItems.map((item, i) => i === index ? { ...item, ...updates } : item);
-    console.log("[NewInvoice] new lineItems:", newItems.map(i => ({ name: i.name, unitPriceCents: i.unitPriceCents })));
-    setLineItems(newItems);
+    setLineItems(lineItems.map((item, i) => i === index ? { ...item, ...updates } : item));
   };
 
   const handlePriceChange = (index: number, value: string) => {
@@ -458,17 +437,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-              {/* TEMP DEBUG - REMOVE AFTER FIX */}
-              <div className="bg-yellow-100 dark:bg-yellow-900 p-2 text-xs font-mono border-b">
-                <div>customerId: {selectedCustomer?.id || 'none'}</div>
-                <div>lineItems.length: {lineItems.length}</div>
-                <div>hasValidLineItems: {String(hasValidLineItems)}</div>
-                <div>validLineItems: {validLineItems.map(i => `${i.name}:${i.unitPriceCents}`).join(', ') || 'none'}</div>
-                <div>totalCents: {totalCents}</div>
-                <div>isFormValid: {String(isFormValid)}</div>
-              </div>
-              {/* END TEMP DEBUG */}
+          <div className="flex-1 overflow-y-auto pb-20">
               <SectionHeader title="Customer" />
               <InfoRow
                 icon={User}
@@ -525,6 +494,28 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 </>
               )}
           </div>
+
+          {/* Sticky Bottom Done Button */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+            <Button
+              type="button"
+              onClick={() => {
+                if (!selectedCustomer) {
+                  toast({ title: "Select a customer", variant: "destructive" });
+                  return;
+                }
+                if (!hasValidLineItems) {
+                  toast({ title: "Add at least one line item with a price", variant: "destructive" });
+                  return;
+                }
+                handleSubmit();
+              }}
+              disabled={createInvoiceMutation.isPending}
+              className="w-full h-12 text-base font-semibold"
+            >
+              {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -571,7 +562,6 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                     key={customer.id}
                     type="button"
                     onClick={() => {
-                      console.log("[NewInvoice] Customer selected:", customer.id, customer.firstName, customer.lastName);
                       setSelectedCustomer(customer);
                       setCustomerModalOpen(false);
                     }}
