@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, Calendar, ChevronRight, 
-  Plus, Search, X, Tag, List, Trash2, DollarSign, Percent, Loader2, Check
+  Plus, Search, X, Tag, List, Trash2, DollarSign, Percent, Loader2, Check, Bookmark
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useCan } from "@/hooks/useCan";
 import { TimeWheelPicker } from "./TimeWheelPicker";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import type { Customer } from "@shared/schema";
@@ -90,6 +91,8 @@ function InfoRow({
 
 export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInvoiceSheetProps) {
   const { toast } = useToast();
+  const { can } = useCan();
+  const canEditPriceBook = can('customize.manage');
 
   // Form state
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -269,6 +272,40 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       return;
     }
     createTaxMutation.mutate({ name: newTaxName.trim(), ratePercent: rate.toFixed(3) });
+  };
+
+  // Save line item to Price Book mutation
+  const saveToPriceBookMutation = useMutation({
+    mutationFn: async (item: LineItem) => {
+      const res = await apiRequest('POST', '/api/service-catalog/save-from-line-item', {
+        name: item.name.trim(),
+        description: item.description || null,
+        defaultPriceCents: item.unitPriceCents,
+        unit: item.unit,
+        taxable: item.taxable,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save to Price Book');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
+      if (data.alreadyExists) {
+        toast({ title: "Already saved", description: "This item is already in your Price Book" });
+      } else {
+        toast({ title: "Saved", description: "Item added to Price Book" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSaveToPriceBook = (item: LineItem) => {
+    if (!item.name.trim() || item.unitPriceCents <= 0) return;
+    saveToPriceBookMutation.mutate(item);
   };
 
   const resetForm = () => {
@@ -642,11 +679,11 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
 
       {/* Line Items Modal */}
       <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
-        <DialogContent className="max-w-md h-[85vh] p-0 flex flex-col rounded-2xl overflow-hidden">
-          <DialogHeader className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 shrink-0">
+        <DialogContent className="max-w-md max-h-[85vh] p-0 flex flex-col rounded-2xl overflow-hidden">
+          <DialogHeader className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 shrink-0">
             <DialogTitle className="text-base">Line Items</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-3 py-3">
+          <ScrollArea className="flex-1 min-h-0 px-3 py-2">
             <div className="space-y-3">
               {lineItems.map((item, index) => (
                 <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2">
@@ -750,8 +787,25 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                     </button>
                   )}
 
-                  <div className="text-right text-xs font-medium text-slate-700 dark:text-slate-300 pt-0.5">
-                    Line Total: {formatCurrency(item.unitPriceCents * (parseFloat(item.quantity) || 1))}
+                  <div className="flex items-center justify-between pt-1">
+                    {canEditPriceBook && item.name.trim() && item.unitPriceCents > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveToPriceBook(item)}
+                        disabled={saveToPriceBookMutation.isPending}
+                        className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50"
+                      >
+                        {saveToPriceBookMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Bookmark className="h-3 w-3" />
+                        )}
+                        Save to Price Book
+                      </button>
+                    )}
+                    <div className={`text-xs font-medium text-slate-700 dark:text-slate-300 ${!canEditPriceBook || !item.name.trim() || item.unitPriceCents <= 0 ? 'ml-auto' : ''}`}>
+                      Line Total: {formatCurrency(item.unitPriceCents * (parseFloat(item.quantity) || 1))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -780,24 +834,24 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
               </div>
             </div>
           </ScrollArea>
-          <div className="px-3 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
-            <div className="flex justify-between text-xs mb-1">
+          <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
+            <div className="flex justify-between text-xs">
               <span className="text-slate-500">Subtotal</span>
               <span className="font-medium">{formatCurrency(subtotalCents)}</span>
             </div>
             {taxCents > 0 && (
-              <div className="flex justify-between text-xs mb-1">
+              <div className="flex justify-between text-xs mt-0.5">
                 <span className="text-slate-500">Tax</span>
                 <span className="font-medium">{formatCurrency(taxCents)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm font-semibold pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between text-sm font-semibold mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
               <span>Total</span>
               <span>{formatCurrency(totalCents)}</span>
             </div>
             <Button
               onClick={() => setLineItemsModalOpen(false)}
-              className="w-full mt-2.5 h-9"
+              className="w-full mt-2 h-9"
             >
               Done
             </Button>

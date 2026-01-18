@@ -1,0 +1,94 @@
+LINE ITEMS MODAL: Add "Save to Price Book" + Fix Excess Bottom Spacing
+
+CURRENT
+The Line Items modal has two problems:
+1) There is no way to save a newly created line item to the Price Book from this screen.
+2) There is excessive empty vertical space near the bottom of the modal, making the layout feel stretched and unfinished.
+
+GOAL
+Improve the Line Items modal by:
+- Adding a clear option to save a line item to the Price Book
+- Fixing layout spacing so the bottom of the modal is tight, clean, and intentional
+- Keeping the same EcoLogic modern aesthetic and existing functionality
+
+────────────────────────
+PART 1: SAVE LINE ITEM TO PRICE BOOK
+────────────────────────
+
+REQUIREMENTS
+- Allow the user to save a line item to the Price Book directly from the Line Items modal
+- This should be optional (not forced)
+- Behavior should match EcoLogic patterns (simple, clear, reusable)
+
+UI CHANGE
+- Add a secondary action near the bottom of the line item card:
+  - Button or row-style action:
+    "Save to Price Book"
+- Placement:
+  - Below the line item fields
+  - Above the Add Item / Price Book buttons OR integrated cleanly into the item card
+- Style:
+  - Secondary action (outlined or subtle, not primary blue)
+  - Icon optional (bookmark or tag style)
+
+LOGIC
+- Only enable "Save to Price Book" when:
+  - Item name is filled
+  - Price > 0
+- On click:
+  - Save item to Price Book with:
+    - name
+    - description (if provided)
+    - unit
+    - price
+    - taxable flag
+    - default tax behavior (do not hardcode tax rate)
+  - Prevent duplicate price book items by name (company-scoped)
+  - Show success feedback (toast/snackbar)
+  - Do NOT close the modal
+
+RBAC
+- Only roles that can edit Price Book should see this action
+- If user does not have permission, hide the action (do not disable)
+
+────────────────────────
+PART 2: FIX BOTTOM SPACING / LAYOUT
+────────────────────────
+
+ISSUE
+There is too much empty space between:
+- The line item section
+- The totals section
+- The Done button
+
+This makes the modal unnecessarily tall and visually unbalanced.
+
+LAYOUT FIXES (DO NOT REDESIGN, JUST TIGHTEN)
+- Reduce bottom padding of the scrollable content area
+- Ensure the content area height does NOT force extra whitespace when there are few items
+- The modal body should:
+  - Size to content
+  - Scroll only when needed
+- Totals + Done button should be in a sticky footer with:
+  - Reduced vertical padding
+  - No large blank gap above it
+
+SPECIFIC ADJUSTMENTS
+- Remove any `min-height` or hardcoded height causing extra space
+- Reduce padding-bottom on the main content container
+- Ensure footer height is only as tall as needed
+- The white space below the Done button should be minimal and consistent with other EcoLogic modals
+
+────────────────────────
+VERIFICATION CHECKLIST
+────────────────────────
+- Line Items modal feels compact and intentional
+- No excessive blank space at the bottom
+- "Save to Price Book" appears and works correctly
+- Saving to Price Book persists and item is reusable later
+- No regressions to totals calculation or Done behavior
+
+DELIVERABLE
+- Clean, compact Line Items modal
+- Ability to save a line item to Price Book
+- Professional, production-ready spacing
