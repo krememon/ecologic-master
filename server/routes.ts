@@ -7066,7 +7066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/invoices/:id/send/text - Send invoice via SMS with payment link
+  // POST /api/invoices/:id/send/text - Send invoice via SMS with payment link (Twilio)
   app.post('/api/invoices/:id/send/text', isAuthenticated, async (req: any, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
@@ -7097,6 +7097,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Phone number is required" });
       }
       
+      // Validate Twilio credentials
+      const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
+      
+      if (!twilioAccountSid || !twilioAuthToken || !twilioFromNumber) {
+        console.error("[InvoiceSend] Twilio credentials not configured");
+        return res.status(500).json({ message: "SMS service not configured" });
+      }
+      
+      // Normalize phone to E.164 format (assume US if no country code)
+      const digitsOnly = phone.replace(/\D/g, '');
+      let e164Phone: string;
+      if (digitsOnly.length === 10) {
+        e164Phone = `+1${digitsOnly}`;
+      } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+        e164Phone = `+${digitsOnly}`;
+      } else if (digitsOnly.startsWith('1') && digitsOnly.length > 11) {
+        e164Phone = `+${digitsOnly}`;
+      } else {
+        e164Phone = `+${digitsOnly}`;
+      }
+      
+      // Validate phone has at least 10 digits
+      if (digitsOnly.length < 10) {
+        return res.status(400).json({ message: "Invalid phone number - must have at least 10 digits" });
+      }
+      
       // Build payment link
       const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
@@ -7107,26 +7135,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: 'USD',
       }).format(invoice.totalCents / 100);
       
-      // Note: SMS integration requires Twilio or similar service
-      // For now, we'll return success but log that SMS is not configured
-      // In a real implementation, you would integrate with Twilio here
+      // Format due date if present
+      let dueDateStr = '';
+      if (invoice.dueDate) {
+        const dueDate = new Date(invoice.dueDate);
+        dueDateStr = ` Due ${dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`;
+      }
       
-      console.log(`[InvoiceSend] SMS requested invoiceId=${invoiceId} to=${phone}`);
-      console.log(`[InvoiceSend] Message: Invoice ${invoice.invoiceNumber} for ${amountFormatted}. Pay here: ${paymentLink}`);
+      // Compose SMS message
+      const smsBody = `${company.name} Invoice ${invoice.invoiceNumber} for ${amountFormatted} is ready.${dueDateStr} Pay here: ${paymentLink}`;
+      
+      // Send SMS via Twilio
+      const twilio = await import('twilio');
+      const twilioClient = twilio.default(twilioAccountSid, twilioAuthToken);
+      
+      console.log(`[InvoiceSend] Sending SMS invoiceId=${invoiceId} to=${e164Phone}`);
+      
+      const message = await twilioClient.messages.create({
+        body: smsBody,
+        from: twilioFromNumber,
+        to: e164Phone,
+      });
+      
+      console.log(`[InvoiceSend] SMS sent invoiceId=${invoiceId} sid=${message.sid}`);
       
       // Update invoice status to 'sent' if it was draft
       if (invoice.status === 'draft') {
         await storage.updateInvoice(invoiceId, { status: 'sent' });
       }
       
-      // For now, return success (SMS would be sent in production with Twilio)
       res.json({ 
         success: true, 
-        message: "Invoice link prepared for SMS",
-        note: "SMS delivery requires Twilio integration"
+        messageSid: message.sid
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending invoice SMS:", error);
+      
+      // Check for Twilio-specific errors
+      if (error.code && error.message) {
+        return res.status(400).json({ message: `SMS failed: ${error.message}` });
+      }
+      
       res.status(500).json({ message: "Failed to send invoice" });
     }
   });

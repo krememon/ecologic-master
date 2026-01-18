@@ -42,6 +42,8 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
 - **Line Item Tax Selection**: Job line items support per-item tax selection. When "Taxable" toggle is ON, a tax selector row appears. Users can tap to open a Tax Picker modal showing saved company taxes with checkmark selection. Tax data is stored per line item (taxId, taxRatePercentSnapshot, taxNameSnapshot) to preserve the rate at selection time even if the tax rate changes later. Toggling Taxable OFF clears the selected tax.
 - **Payment Collection**: Multi-method payment collection on the Payment Review screen. Supports Cash, Check, and Card (Stripe) payments. Cash/Check flow: confirmation modal → processing screen → success screen showing paid amount → navigate to Jobs. Backend endpoint `POST /api/payments/manual` with idempotency (prevents double-charging). Card flow continues to use Stripe Checkout. RBAC enforced (Owner, Supervisor, Dispatcher, Estimator).
 
+- **Invoice Sending**: Invoices can be sent via Email (Resend) or SMS (Twilio). The Send Invoice modal has an Email/Text segmented toggle. Email mode sends branded HTML emails. Text mode sends SMS via Twilio with invoice details and a payment link. Requires Twilio credentials stored as Replit Secrets (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER). Phone numbers are normalized to E.164 format for sending. Note: Twilio integration was configured manually with user-provided credentials (not via Replit integration system).
+
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)
 - **ORM**: Drizzle ORM
@@ -49,6 +51,7 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
 - **AI**: OpenAI API
 - **Weather**: OpenWeather API
 - **Email**: Nodemailer, Resend
+- **SMS**: Twilio (for invoice text messages)
 - **File Uploads**: Multer
 - **WebSockets**: `ws` library
 - **UI Libraries**: Tailwind CSS, shadcn/ui, Radix UI, Framer Motion
