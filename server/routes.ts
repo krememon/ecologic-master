@@ -6596,10 +6596,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Geocoding endpoint - geocodes address and caches coordinates
   app.post('/api/geocode', isAuthenticated, async (req: any, res) => {
     try {
-      const { address, customerId } = req.body;
+      let { address, customerId } = req.body;
       
       if (!address) {
         return res.status(400).json({ message: "Address is required" });
+      }
+
+      console.log('[Geocode] Original address:', address);
+      
+      // Add region fallback if address doesn't contain state/city indicators
+      const hasRegion = /,\s*(NY|New York|NJ|CT|PA|CA|FL|TX|Long Island)/i.test(address);
+      if (!hasRegion) {
+        address = `${address}, Sayville, NY`;
+        console.log('[Geocode] Added fallback region:', address);
       }
 
       const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -6613,12 +6622,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const response = await fetch(url);
       const data = await response.json();
       
+      console.log('[Geocode] Google response status:', data.status, 'results:', data.results?.length || 0);
+      
       if (data.status !== 'OK' || !data.results?.length) {
-        return res.status(404).json({ message: "Could not geocode address", status: data.status });
+        return res.status(404).json({ 
+          message: "Could not geocode address", 
+          attemptedAddress: address,
+          status: data.status 
+        });
       }
 
       const location = data.results[0].geometry.location;
       const result = { latitude: location.lat, longitude: location.lng };
+      
+      console.log('[Geocode] Success:', result.latitude, result.longitude);
 
       // Cache coordinates on customer if customerId provided
       if (customerId) {

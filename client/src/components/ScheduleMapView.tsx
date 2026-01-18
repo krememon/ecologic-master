@@ -543,7 +543,10 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     ? { lat: markers[0].lat, lng: markers[0].lng }
     : defaultCenter;
 
-  const showEmptyOverlay = markers.length === 0 && !isGeocoding;
+  const hasScheduledItems = items.length > 0;
+  const hasMappableLocations = markers.length > 0;
+  const showNoAppointments = !hasScheduledItems && !isGeocoding;
+  const showNoMappableLocations = hasScheduledItems && !hasMappableLocations && !isGeocoding;
 
   return (
     <div className="h-full w-full relative rounded-lg overflow-hidden">
@@ -638,10 +641,19 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         </div>
       )}
 
-      {showEmptyOverlay && !geoError && (
+      {showNoAppointments && !geoError && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-slate-400" />
           <span className="text-sm text-slate-600 dark:text-slate-300">No scheduled appointments</span>
+        </div>
+      )}
+
+      {showNoMappableLocations && !geoError && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-2 flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-amber-500" />
+          <span className="text-sm text-amber-700 dark:text-amber-300">
+            {items.length} appointment{items.length > 1 ? 's' : ''} scheduled, but no mappable addresses
+          </span>
         </div>
       )}
 

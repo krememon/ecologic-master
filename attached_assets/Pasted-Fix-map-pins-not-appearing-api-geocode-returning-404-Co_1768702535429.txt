@@ -1,0 +1,60 @@
+Fix map pins not appearing: /api/geocode returning 404 “Could not geocode address”
+
+CURRENT
+Schedule Map tries to geocode addresses but server logs show repeated:
+POST /api/geocode 404 … {"message":"Could not geocode address"}
+So markers never get lat/lng, so the map shows no appointments/pins.
+
+GOAL
+- Geocoding should succeed for our stored job/estimate/customer addresses
+- If address is incomplete (ex: “3 Ida Lane”), add fallback context automatically (Long Island, NY)
+- Map should NOT say “No scheduled appointments” if there are scheduled items; it should say “No mappable locations” (different message) until geocode succeeds.
+
+DO THIS (IN ORDER)
+
+1) LOG THE EXACT ADDRESS STRING BEING GEOCODED (SERVER + CLIENT)
+Frontend before calling /api/geocode:
+console.log("[Map] geocode request address:", address)
+
+Backend /api/geocode before calling Google:
+console.log("[Geocode] address:", address)
+
+This is required so we can confirm what string is failing.
+
+2) BUILD A BETTER FULL ADDRESS STRING (CLIENT SIDE)
+When constructing fullAddress:
+- Start with addressLine1 (or job.address)
+- If city/state/zip missing, append a default region:
+  ", Sayville, NY" OR ", Long Island, NY"
+Use this exact priority:
+A) If job has city/state -> `${line1}, ${city}, ${state} ${zip||""}`
+B) else if customer has city/state -> `${line1}, ${custCity}, ${custState} ${custZip||""}`
+C) else -> `${line1}, Long Island, NY`
+(We can later make this company-based, but hardcode for now)
+
+3) SERVER-SIDE GEOCODE SHOULD USE GOOGLE FORMATTED ADDRESS + RETURN DEBUG INFO ON FAILURE
+In /api/geocode:
+- If no results:
+  return 404 with payload that includes:
+    { message:"Could not geocode address", attemptedAddress: <address>, status: <google status if available> }
+So we can see exactly what failed.
+
+4) DO NOT TREAT “NO COORDS” AS “NO APPOINTMENTS”
+In Map UI logic:
+- scheduledCount = number of scheduled items for day (jobs+estimates)
+- mappableCount = number with valid lat/lng (or successful geocode)
+
+Banner rules:
+- If scheduledCount === 0 -> show “No scheduled appointments”
+- If scheduledCount > 0 AND mappableCount === 0 -> show “Appointments scheduled, but no mappable addresses yet”
+(And keep trying geocode in background)
+
+5) OPTIONAL QUICK WIN: TEMPORARILY HARD-DEFAULT NY
+For our test data, default to:
+", Sayville, NY"
+because your sample addresses are in Sayville area.
+
+DONE WHEN
+- /api/geocode returns 200 for “3 Ida Lane, Sayville, NY”
+- At least one marker appears on the map for scheduled items
+- Banner messaging is correct (scheduled vs mappable)
