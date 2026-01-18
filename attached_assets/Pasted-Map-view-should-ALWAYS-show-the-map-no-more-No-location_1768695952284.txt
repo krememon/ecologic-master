@@ -1,0 +1,54 @@
+Map view should ALWAYS show the map (no more “No locations available” full-screen)
+
+CURRENT
+Map tab sometimes shows a blank/empty-state screen:
+“No locations available — Scheduled items don’t have valid addresses…”
+But I want the Map to ALWAYS display like Housecall Pro (map is always visible), even if there are 0 scheduled pins.
+
+GOAL
+- Map tab ALWAYS shows the Google Map tiles (full height)
+- If there are no scheduled items with valid coords:
+  - still show map centered on a default area (Long Island / company area)
+  - show a small, non-blocking banner/toast overlay:
+    “No scheduled appointments” (like the screenshot)
+- Never replace the map with an empty-state page again
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ALWAYS RENDER THE MAP CONTAINER
+In the Map tab component:
+- Remove any early return that renders “No locations available” instead of the map
+- The <GoogleMap> component should render as long as the API key is present and loaded
+- If there are 0 markers, render just the map
+
+2) DEFAULT CENTER + ZOOM
+If we have no markers to fit bounds:
+- Center the map on a sensible default:
+  OPTION A (best): company default location if available (company city/state)
+  OPTION B: hardcode a temporary default center for now:
+    Sayville, NY / Long Island
+- Use a comfortable zoom (ex: 11–13) so it looks like the reference screenshot
+
+3) NON-BLOCKING EMPTY MESSAGE (OVERLAY)
+If markers.length === 0:
+- Show a small rounded “pill” overlay near the top of the map:
+  Text: “No scheduled appointments”
+- It should float over the map and not block interactions
+- Use subtle shadow + white background
+
+4) WHEN MARKERS EXIST
+- Keep map rendered
+- Place markers + clustering
+- Fit bounds to markers (only when there is at least 1 marker)
+- Hide the “No scheduled appointments” overlay
+
+5) DO NOT DEPEND ON GEOCODING TO SHOW MAP
+Even if geocoding fails or address missing:
+- Still show map
+- Just show the overlay message
+
+DONE WHEN
+- Map tab always shows Google map tiles
+- If no scheduled items, user still sees map + “No scheduled appointments” overlay
+- If scheduled items exist, pins show and overlay disappears
+- No full-screen “No locations available” screen anywhere

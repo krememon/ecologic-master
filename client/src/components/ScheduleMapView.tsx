@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
 import { GoogleMap, useJsApiLoader, InfoWindow } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,7 +88,7 @@ const containerStyle = {
   minHeight: '400px'
 };
 
-const defaultCenter = { lat: 39.8283, lng: -98.5795 };
+const defaultCenter = { lat: 40.7282, lng: -73.0861 };
 
 const mapStyles = [
   { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
@@ -119,17 +119,11 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
   
-  console.log('[ScheduleMapView] Initializing, hasApiKey:', hasApiKey);
-  
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey,
     libraries: ['places']
   });
-
-  useEffect(() => {
-    console.log('[ScheduleMapView] Load state:', { isLoaded, loadError: loadError?.message });
-  }, [isLoaded, loadError]);
 
   const geocodeAddresses = useCallback(async () => {
     if (!items.length) {
@@ -251,7 +245,6 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   }, [markers, isLoaded]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
-    console.log('[ScheduleMapView] Map loaded successfully');
     mapRef.current = map;
   }, []);
 
@@ -305,37 +298,11 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     );
   }
 
-  if (!isLoaded || isGeocoding) {
+  if (!isLoaded) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-        <p className="text-sm text-slate-500">
-          {isGeocoding ? 'Loading locations...' : 'Loading map...'}
-        </p>
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
-        <MapPin className="h-16 w-16 text-slate-300 dark:text-slate-600 mb-4" />
-        <p className="text-lg font-medium text-slate-600 dark:text-slate-400">No scheduled items</p>
-        <p className="text-sm text-slate-500 mt-2">
-          There are no jobs or estimates scheduled for this day.
-        </p>
-      </div>
-    );
-  }
-
-  if (markers.length === 0 && !isGeocoding) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
-        <MapPin className="h-16 w-16 text-slate-300 dark:text-slate-600 mb-4" />
-        <p className="text-lg font-medium text-slate-600 dark:text-slate-400">No locations available</p>
-        <p className="text-sm text-slate-500 mt-2 text-center">
-          Scheduled items don't have valid addresses to display on the map.
-        </p>
+        <p className="text-sm text-slate-500">Loading map...</p>
       </div>
     );
   }
@@ -344,12 +311,14 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     ? { lat: markers[0].lat, lng: markers[0].lng }
     : defaultCenter;
 
+  const showEmptyOverlay = markers.length === 0 && !isGeocoding;
+
   return (
     <div className="h-full w-full relative rounded-lg overflow-hidden">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
-        zoom={12}
+        zoom={markers.length > 0 ? 12 : 11}
         onLoad={onLoad}
         onUnmount={onUnmount}
         options={{
@@ -416,18 +385,34 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         )}
       </GoogleMap>
 
-      <div className="absolute bottom-4 left-4 bg-white dark:bg-slate-800 rounded-lg shadow-lg px-3 py-2">
-        <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span className="text-slate-600 dark:text-slate-300">Jobs ({markers.filter(m => m.type === 'job').length})</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-purple-500" />
-            <span className="text-slate-600 dark:text-slate-300">Estimates ({markers.filter(m => m.type === 'estimate').length})</span>
+      {isGeocoding && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 text-primary animate-spin" />
+          <span className="text-sm text-slate-600 dark:text-slate-300">Finding locations...</span>
+        </div>
+      )}
+
+      {showEmptyOverlay && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-slate-400" />
+          <span className="text-sm text-slate-600 dark:text-slate-300">No scheduled appointments</span>
+        </div>
+      )}
+
+      {markers.length > 0 && (
+        <div className="absolute bottom-4 left-4 bg-white dark:bg-slate-800 rounded-lg shadow-lg px-3 py-2">
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span className="text-slate-600 dark:text-slate-300">Jobs ({markers.filter(m => m.type === 'job').length})</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-purple-500" />
+              <span className="text-slate-600 dark:text-slate-300">Estimates ({markers.filter(m => m.type === 'estimate').length})</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
