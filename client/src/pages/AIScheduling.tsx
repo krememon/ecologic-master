@@ -974,15 +974,23 @@ export default function AIScheduling() {
 
         {viewMode === 'map' && (
           <div className="flex-1 h-full min-h-[500px]">
-            <ScheduleMapView 
-              items={scheduleItems.map(item => ({
+            {(() => {
+              const mapItems = scheduleItems.map(item => ({
                 ...item,
-                customerId: (item as any).customerId,
-                latitude: (item as any).latitude,
-                longitude: (item as any).longitude
-              }))}
-              selectedDate={selectedDate}
-            />
+                customerId: item.customerId,
+                latitude: item.latitude,
+                longitude: item.longitude
+              }));
+              console.log('[AIScheduling] Map view selectedDate:', selectedDate);
+              console.log('[AIScheduling] scheduleItems for map:', scheduleItems.length, scheduleItems);
+              console.log('[AIScheduling] mapItems:', mapItems.length, mapItems);
+              return (
+                <ScheduleMapView 
+                  items={mapItems}
+                  selectedDate={selectedDate}
+                />
+              );
+            })()}
           </div>
         )}
       </div>

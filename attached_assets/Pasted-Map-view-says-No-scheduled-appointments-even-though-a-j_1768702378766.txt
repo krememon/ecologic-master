@@ -1,0 +1,65 @@
+Map view says “No scheduled appointments” even though a job exists (fix schedule filtering + data source)
+
+CURRENT
+- Schedule Map view shows “No scheduled appointments”
+- But Schedule List/Day view shows a Job for Linda Graziano scheduled 10:00 PM – 12:00 PM on the selected date
+So Map view is not using the same schedule items source or is filtering by date incorrectly.
+
+GOAL
+Map view must use the SAME “scheduled items for selected day” logic as List/Day view.
+If the day has scheduled jobs/estimates, the banner should disappear and pins should attempt to render.
+
+IMPLEMENTATION (DO IN THIS ORDER)
+
+1) USE THE SAME SOURCE AS LIST/DAY
+In AIScheduling / Schedule page, there is already a normalized array used for List/Day (ex: scheduleItems or eventsForSelectedDay).
+Map view must use THAT SAME array, not a separate query or different filtering.
+
+Do not recompute map-only filtering from raw jobs/estimates if scheduleItems already exists.
+
+2) FIX DATE MATCHING TO HANDLE Date OBJECTS + STRINGS + TIMEZONES
+Create a helper used across Day/List/Map:
+
+function toYmd(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth()+1).padStart(2,"0");
+    const d = String(value.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof value === "string") return value.slice(0,10); // ISO
+  return null;
+}
+
+selectedYmd should be the selected day in "YYYY-MM-DD".
+
+When filtering items for Map:
+- For JOBS use:
+  startDate if exists (preferred) else scheduledDate
+- For ESTIMATES use:
+  scheduledDate
+
+Compute itemYmd = toYmd(item.startDate || item.scheduledDate)
+
+Match:
+itemYmd === selectedYmd
+
+3) HANDLE END-TIME EDGE CASE (10 PM – 12 AM)
+If an item has start time but end time is "12:00 AM" / crosses midnight:
+- Ensure it still counts as scheduled for the start day (selectedYmd should match the start)
+Map view should include it for that day.
+
+4) DEBUG LOG TEMPORARILY (UNTIL FIXED)
+Add logs in Map view:
+console.log("[Map] selectedYmd", selectedYmd)
+console.log("[Map] scheduleItems total", scheduleItems.length)
+console.log("[Map] mapItems after filter", mapItems.length)
+console.log("[Map] first item sample", mapItems[0])
+
+Remove logs once working.
+
+DONE WHEN
+- Map view no longer says “No scheduled appointments” when the list shows a scheduled job that day
+- The mapItems array includes that job
+- Pins can then be geocoded/rendered
