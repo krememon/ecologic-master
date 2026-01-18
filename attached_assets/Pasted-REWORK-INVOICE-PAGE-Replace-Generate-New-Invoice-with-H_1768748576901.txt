@@ -1,0 +1,85 @@
+REWORK INVOICE PAGE: Replace "Generate New Invoice" with Housecall-Style New Invoice Flow + Add Schedule Row
+
+CURRENT
+Invoices page has a "Generate New Invoice" flow (with scan invoice AI / amount / dates / notes). I want to REMOVE this entire UI and rework it completely.
+We also already have a separate "Generate Invoice PDF" flow from Job/Estimate, but this task is specifically about the "Create Invoice" page/modal on the Invoices tab.
+
+GOAL
+Rebuild the New Invoice flow to match the Housecall-style layout:
+- A simple "NEW INVOICE" screen with clean grouped rows
+- Rows navigate to sub-screens/modals (customer picker, line items editor, schedule picker, tags, etc.)
+- Add an additional row: "Schedule" (not in the reference) that lets user pick date/time for the invoice (or link to scheduled job if applicable)
+
+NON-GOALS (REMOVE)
+- Remove "Scan Invoice with AI"
+- Remove "Take Photo / Upload Image"
+- Remove the current "Invoice Number / Amount / Issue Date / Due Date / Notes" form layout
+- Do NOT keep the old Generate New Invoice UI in any form
+
+NEW UI (MATCH REFERENCE STYLE)
+Header (iOS-style):
+- Left: Cancel
+- Center: NEW INVOICE
+- Right: Done (disabled until minimum required fields are set)
+
+Sections + Rows:
+1) CUSTOMER INFO
+- Row: "Add customer" (opens customer picker / add customer flow)
+
+2) INVOICE
+- Row: "Add line items" (opens line items editor)
+- Row: "Schedule" (NEW) (opens date/time picker screen)
+  - When set, show chosen date/time summary on the right side of the row (like a value)
+  - Default empty: "Not scheduled"
+
+3) JOB TAGS
+- Row: "Add job tags" (opens tags picker)
+
+(Keep this structure minimal and clean like Housecall; do not add extra fields unless specified.)
+
+MINIMUM REQUIRED FIELDS (for Done button)
+- Customer must be selected
+- At least 1 line item (or a total > 0 if your data model is total-based)
+When these are not met:
+- Done button should be disabled (grey)
+
+DATA MODEL / SAVE BEHAVIOR
+On Done:
+- Create an invoice record in DB with:
+  - customerId (required)
+  - lineItems (required)
+  - scheduledAt (optional)  <-- NEW FIELD
+  - tags (optional)
+  - status defaults to "Draft"
+- After create success:
+  - Close screen
+  - Invoices tab list updates immediately (no refresh)
+  - New invoice appears at top of list
+
+SCHEDULE FIELD (NEW)
+- Add scheduledAt (datetime) to invoice model if not present
+- UI row opens a picker:
+  - date + time
+  - 15-minute increments (match EcoLogic scheduling pattern)
+- This is NOT assigning crew or dispatching yet; it’s just a scheduled datetime for the invoice (used for reminders / linking later)
+
+RBAC (HIDDEN NOT DISABLED)
+- Only roles who can create invoices should see the Create Invoice button and this flow
+- Technicians should not see invoice creation UI
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+1) Delete/replace the existing "Generate New Invoice" UI component(s)
+2) Build the new "NEW INVOICE" screen with sections/rows matching the reference
+3) Wire customer picker
+4) Wire line items editor
+5) Implement Schedule row + picker (save scheduledAt)
+6) Wire job tags picker
+7) Implement Done button validation + create invoice API call
+8) Ensure Invoices list refreshes immediately after creation
+
+DELIVERABLES
+- Old Generate New Invoice UI removed
+- New Housecall-style New Invoice flow implemented
+- Schedule row added + saves scheduledAt
+- Done button validation works
+- Invoice saves to DB and appears in Invoices list immediately

@@ -256,17 +256,20 @@ export const invoices = pgTable("invoices", {
   companyId: integer("company_id").notNull().references(() => companies.id),
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   estimateId: integer("estimate_id").references(() => estimates.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").references(() => customers.id),
   clientId: integer("client_id").references(() => clients.id),
   invoiceNumber: varchar("invoice_number").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   subtotalCents: integer("subtotal_cents").notNull().default(0),
   taxCents: integer("tax_cents").notNull().default(0),
   totalCents: integer("total_cents").notNull().default(0),
-  status: varchar("status").notNull().default("pending"), // pending, paid, overdue, cancelled
+  status: varchar("status").notNull().default("draft"), // draft, pending, sent, paid, overdue, cancelled
   issueDate: date("issue_date").notNull(),
   dueDate: date("due_date").notNull(),
   paidDate: date("paid_date"),
+  scheduledAt: timestamp("scheduled_at"),
   notes: text("notes"),
+  tags: jsonb("tags").$type<string[]>().default([]),
   pdfUrl: varchar("pdf_url"),
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id"),
@@ -502,6 +505,10 @@ export const invoicesRelations = relations(invoices, ({ one }) => ({
   estimate: one(estimates, {
     fields: [invoices.estimateId],
     references: [estimates.id],
+  }),
+  customer: one(customers, {
+    fields: [invoices.customerId],
+    references: [customers.id],
   }),
   client: one(clients, {
     fields: [invoices.clientId],
