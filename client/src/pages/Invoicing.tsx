@@ -6,7 +6,7 @@ import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, DollarSign, Calendar, ExternalLink, CheckSquare, X, Check, Ban } from "lucide-react";
+import { Plus, FileText, DollarSign, Calendar, ExternalLink, CheckSquare, X, Check, Trash2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Invoice } from "@shared/schema";
 import { NewInvoiceSheet } from "@/components/NewInvoiceSheet";
@@ -22,7 +22,7 @@ export default function Invoicing() {
   const searchString = useSearch();
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set());
-  const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Handle create=true URL param from global create menu
   useEffect(() => {
@@ -58,10 +58,10 @@ export default function Invoicing() {
   const canCreateInvoice = ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(userRole);
   const canManageInvoices = ['owner', 'supervisor'].includes(userRole);
 
-  // Bulk void mutation
-  const bulkVoidMutation = useMutation({
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
     mutationFn: async (invoiceIds: number[]) => {
-      const res = await apiRequest("POST", "/api/invoices/bulk-void", { invoiceIds });
+      const res = await apiRequest("POST", "/api/invoices/bulk-delete", { invoiceIds });
       return res.json();
     },
     onSuccess: async (data) => {
@@ -69,26 +69,26 @@ export default function Invoicing() {
       await queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       await queryClient.refetchQueries({ queryKey: ["/api/invoices"] });
       
-      const count = data.voidedCount || 0;
+      const count = data.deletedCount || 0;
       if (count > 0) {
         toast({
-          title: "Voided",
-          description: `Voided ${count} invoice${count !== 1 ? 's' : ''}`,
+          title: "Deleted",
+          description: `Deleted ${count} invoice${count !== 1 ? 's' : ''}`,
         });
       } else {
         toast({
           title: "No changes",
-          description: "No invoices were voided (already voided or paid)",
+          description: "No invoices were deleted",
           variant: "default",
         });
       }
       exitSelectMode();
-      setVoidConfirmOpen(false);
+      setDeleteConfirmOpen(false);
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to void invoices",
+        description: error.message || "Failed to delete invoices",
         variant: "destructive",
       });
     },
@@ -111,9 +111,9 @@ export default function Invoicing() {
     setSelectedInvoiceIds(new Set());
   };
 
-  const handleBulkVoid = () => {
-    const idsToVoid = Array.from(selectedInvoiceIds);
-    bulkVoidMutation.mutate(idsToVoid);
+  const handleBulkDelete = () => {
+    const idsToDelete = Array.from(selectedInvoiceIds);
+    bulkDeleteMutation.mutate(idsToDelete);
   };
 
   if (isLoading) {
@@ -153,9 +153,6 @@ export default function Invoicing() {
       case 'draft':
         return 'outline';
       case 'overdue':
-        return 'destructive';
-      case 'void':
-      case 'voided':
         return 'destructive';
       default:
         return 'secondary';
@@ -239,31 +236,31 @@ export default function Invoicing() {
             variant="destructive"
             size="sm"
             disabled={selectedInvoiceIds.size === 0}
-            onClick={() => setVoidConfirmOpen(true)}
+            onClick={() => setDeleteConfirmOpen(true)}
           >
-            <Ban className="h-4 w-4 mr-1.5" />
-            Void
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            Delete
           </Button>
         </div>
       )}
 
-      {/* Bulk Void Confirmation Dialog */}
-      <AlertDialog open={voidConfirmOpen} onOpenChange={setVoidConfirmOpen}>
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Void {selectedInvoiceIds.size} invoice{selectedInvoiceIds.size > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {selectedInvoiceIds.size} invoice{selectedInvoiceIds.size > 1 ? 's' : ''}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark the selected invoices as voided. Voided invoices cannot be paid or sent.
+              This will permanently delete the selected invoice{selectedInvoiceIds.size > 1 ? 's' : ''}. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleBulkVoid}
+              onClick={handleBulkDelete}
               className="bg-red-600 hover:bg-red-700"
-              disabled={bulkVoidMutation.isPending}
+              disabled={bulkDeleteMutation.isPending}
             >
-              {bulkVoidMutation.isPending ? "Voiding..." : "Void"}
+              {bulkDeleteMutation.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

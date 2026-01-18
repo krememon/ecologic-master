@@ -1,0 +1,65 @@
+CHANGE INVOICING SELECT MODE ACTION: VOID -> PERMANENT DELETE (REMOVE COMPLETELY)
+
+CURRENT
+Select mode on Invoicing currently performs a bulk "void" action and shows a "void" status pill.
+I DO NOT want invoices to be voided. I want selected invoices to be DELETED entirely.
+
+GOAL
+Replace the bulk action with PERMANENT DELETE:
+- Selected invoices are removed from the database
+- Cards disappear from the invoice list immediately (no refresh needed, but also refetch afterward)
+- Remove all "void" UI/status logic, badges, and endpoints
+
+NON-NEGOTIABLE
+- No "void" status anywhere
+- Deleted invoices should be gone entirely
+- Success toast must match reality ("Deleted X invoices")
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) UI: UPDATE BULK ACTION LABEL + TOAST
+- Replace any "Void" button text with "Delete"
+- Toast message: "Deleted {count} invoice(s)"
+- Add a confirmation dialog before deleting:
+  - Title: "Delete invoices?"
+  - Body: "This will permanently delete {count} invoice(s). This can’t be undone."
+  - Buttons: Cancel / Delete
+
+2) BACKEND: IMPLEMENT BULK DELETE ENDPOINT
+- Add endpoint (choose one consistent pattern):
+  - DELETE /api/invoices/bulk
+  OR
+  - POST /api/invoices/bulk-delete
+Request payload: { invoiceIds: string[] }
+Server must:
+- Validate invoiceIds non-empty
+- Enforce company scoping + RBAC (only allowed roles can delete)
+- Delete rows from invoices table where id in invoiceIds AND companyId matches
+- Also delete dependent rows if applicable (invoice line items, etc.) OR use cascading deletes
+Return: { success: true, deletedCount, deletedIds }
+
+If deletedCount === 0:
+- return 400/403 and do NOT show success toast
+
+3) FRONTEND: UPDATE LIST IMMEDIATELY
+After delete success:
+- Optimistically remove deletedIds from the local list state OR update React Query cache
+- Then invalidate/refetch invoices query to confirm source of truth
+- Clear selectedInvoiceIds and exit select mode
+
+4) CLEANUP: REMOVE VOID LOGIC EVERYWHERE
+- Remove "void" status values and badge variants
+- Remove any bulk void endpoint and client calls
+- Remove any UI that displays "void" pills
+- Ensure invoice status pills only include real statuses you still want (draft/sent/paid/overdue/etc.)
+
+5) VERIFY
+- Select 1 invoice -> Delete -> invoice disappears immediately
+- Refresh page -> invoice is still gone
+- Select multiple -> all deleted
+- No "void" badge appears anywhere
+
+DELIVERABLE
+- Select mode bulk action permanently deletes invoices
+- UI updates instantly and accurately
+- All void-related logic removed

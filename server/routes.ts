@@ -6829,8 +6829,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/invoices/bulk-void - Bulk void invoices (Owner/Supervisor only)
-  app.post('/api/invoices/bulk-void', isAuthenticated, async (req: any, res) => {
+  // POST /api/invoices/bulk-delete - Bulk delete invoices (Owner/Supervisor only)
+  app.post('/api/invoices/bulk-delete', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
@@ -6842,9 +6842,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Only Owner/Supervisor can void invoices
+      // RBAC: Only Owner/Supervisor can delete invoices
       if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
-        return res.status(403).json({ message: "You do not have permission to void invoices" });
+        return res.status(403).json({ message: "You do not have permission to delete invoices" });
       }
       
       const { invoiceIds } = req.body;
@@ -6853,7 +6853,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "invoiceIds array is required" });
       }
       
-      let voidedCount = 0;
+      let deletedCount = 0;
+      const deletedIds: number[] = [];
       
       for (const invoiceId of invoiceIds) {
         const invoice = await storage.getInvoice(invoiceId);
@@ -6863,20 +6864,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue;
         }
         
-        // Skip already voided or paid invoices
-        if (invoice.status === 'void' || invoice.status === 'paid') {
-          continue;
-        }
-        
-        await storage.updateInvoice(invoiceId, { status: 'void' });
-        voidedCount++;
+        await storage.deleteInvoice(invoiceId);
+        deletedCount++;
+        deletedIds.push(invoiceId);
       }
       
-      console.log(`[Invoice] Bulk voided ${voidedCount} invoices`, { userId, invoiceIds });
-      res.json({ success: true, voidedCount });
+      console.log(`[Invoice] Bulk deleted ${deletedCount} invoices`, { userId, deletedIds });
+      res.json({ success: true, deletedCount, deletedIds });
     } catch (error) {
-      console.error("Error bulk voiding invoices:", error);
-      res.status(500).json({ message: "Failed to void invoices" });
+      console.error("Error bulk deleting invoices:", error);
+      res.status(500).json({ message: "Failed to delete invoices" });
     }
   });
 
