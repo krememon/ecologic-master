@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -307,6 +308,18 @@ export default function Invoicing() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
+
+  // Handle create=true URL param from global create menu
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get('create') === 'true') {
+      setIsDialogOpen(true);
+      // Clear the param from URL
+      setLocation('/invoicing', { replace: true });
+    }
+  }, [searchString, setLocation]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

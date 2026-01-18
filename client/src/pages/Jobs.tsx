@@ -150,6 +150,26 @@ export default function Jobs() {
     }
   }, [searchString, canAccessEstimates]);
   
+  // Handle create=true and createEstimate=true URL params from global create menu
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get('create') === 'true') {
+      setIsDialogOpen(true);
+      // Clear the param from URL
+      params.delete('create');
+      const newSearch = params.toString();
+      setLocation(newSearch ? `/jobs?${newSearch}` : '/jobs', { replace: true });
+    }
+    if (params.get('createEstimate') === 'true' && canAccessEstimates) {
+      setIsNewEstimateSheetOpen(true);
+      setMainPageTab('estimates');
+      // Clear the param from URL
+      params.delete('createEstimate');
+      const newSearch = params.toString();
+      setLocation(newSearch ? `/jobs?${newSearch}` : '/jobs?tab=estimates', { replace: true });
+    }
+  }, [searchString, canAccessEstimates, setLocation]);
+  
   // Defensive: reset main page tab to 'jobs' if user cannot access estimates
   useEffect(() => {
     if (!canAccessEstimates && mainPageTab === 'estimates') {
