@@ -129,7 +129,7 @@ export default function Invoicing() {
             id="add-invoice-pill"
             data-testid="add-invoice-pill"
             onClick={() => setIsSheetOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-full px-4 h-10 flex-shrink-0 shadow-sm"
+            className="rounded-full px-4 flex-shrink-0"
           >
             <Plus className="w-[18px] h-[18px] mr-2" />
             Add Invoice
@@ -148,7 +148,7 @@ export default function Invoicing() {
             {canCreateInvoice && (
               <Button 
                 onClick={() => setIsSheetOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4"
+                className="rounded-full px-4"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Invoice
