@@ -1,7 +1,7 @@
-import { useCallback, useState, useMemo, useRef, useEffect } from "react";
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from "@react-google-maps/api";
+import { useCallback, useState, useRef, useEffect } from "react";
+import { GoogleMap, useJsApiLoader, InfoWindow } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, Building2, ChevronRight, Loader2 } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
@@ -38,7 +38,7 @@ const containerStyle = {
 
 const defaultCenter = { lat: 39.8283, lng: -98.5795 };
 
-const mapStyles = [
+const mapStyles: google.maps.MapTypeStyle[] = [
   { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] }
 ];
@@ -60,9 +60,9 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
-  const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
+  const googleMarkersRef = useRef<google.maps.Marker[]>([]);
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   
@@ -79,7 +79,6 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
     }
 
     setIsGeocoding(true);
-    setGeocodeError(null);
     const geocoded: MarkerData[] = [];
 
     for (const item of items) {
@@ -112,32 +111,96 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
     geocodeAddresses();
   }, [geocodeAddresses]);
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-  }, []);
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded || markers.length === 0) return;
 
-  const onUnmount = useCallback(() => {
+    googleMarkersRef.current.forEach(m => m.setMap(null));
+    googleMarkersRef.current = [];
     if (clustererRef.current) {
       clustererRef.current.clearMarkers();
     }
-    mapRef.current = null;
-  }, []);
 
-  useEffect(() => {
-    if (!mapRef.current || !markers.length) return;
+    const newGoogleMarkers: google.maps.Marker[] = [];
+
+    markers.forEach((markerData) => {
+      const googleMarker = new google.maps.Marker({
+        position: { lat: markerData.lat, lng: markerData.lng },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 12,
+          fillColor: markerData.type === 'estimate' ? '#9333ea' : '#16a34a',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3
+        }
+      });
+
+      googleMarker.addListener('click', () => {
+        setSelectedMarker(markerData);
+      });
+
+      newGoogleMarkers.push(googleMarker);
+    });
+
+    googleMarkersRef.current = newGoogleMarkers;
+
+    clustererRef.current = new MarkerClusterer({
+      map: mapRef.current,
+      markers: newGoogleMarkers,
+      renderer: {
+        render: ({ count, position }) => {
+          return new google.maps.Marker({
+            position,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 18,
+              fillColor: '#3b82f6',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 3
+            },
+            label: {
+              text: String(count),
+              color: '#ffffff',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            },
+            zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count
+          });
+        }
+      }
+    });
 
     const bounds = new google.maps.LatLngBounds();
     markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
     mapRef.current.fitBounds(bounds, 50);
 
     if (markers.length === 1) {
-      mapRef.current.setZoom(15);
+      setTimeout(() => {
+        mapRef.current?.setZoom(15);
+      }, 100);
     }
+
+    return () => {
+      googleMarkersRef.current.forEach(m => m.setMap(null));
+      if (clustererRef.current) {
+        clustererRef.current.clearMarkers();
+      }
+    };
   }, [markers, isLoaded]);
 
-  const handleMarkerClick = (marker: MarkerData) => {
-    setSelectedMarker(marker);
-  };
+  const onLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
+  const onUnmount = useCallback(() => {
+    googleMarkersRef.current.forEach(m => m.setMap(null));
+    if (clustererRef.current) {
+      clustererRef.current.clearMarkers();
+      clustererRef.current = null;
+    }
+    mapRef.current = null;
+  }, []);
 
   const handleInfoCardClick = (marker: MarkerData) => {
     const dateStr = selectedDate.toISOString().split('T')[0];
@@ -235,22 +298,6 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
           }
         }}
       >
-        {markers.map((marker) => (
-          <Marker
-            key={`${marker.type}-${marker.id}`}
-            position={{ lat: marker.lat, lng: marker.lng }}
-            onClick={() => handleMarkerClick(marker)}
-            icon={{
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 12,
-              fillColor: marker.type === 'estimate' ? '#9333ea' : '#16a34a',
-              fillOpacity: 1,
-              strokeColor: '#ffffff',
-              strokeWeight: 3
-            }}
-          />
-        ))}
-
         {selectedMarker && (
           <InfoWindow
             position={{ lat: selectedMarker.lat, lng: selectedMarker.lng }}
