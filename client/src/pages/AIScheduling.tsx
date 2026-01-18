@@ -340,10 +340,19 @@ export default function AIScheduling() {
     const items: ScheduleItem[] = [];
     
     dailyJobs.forEach(job => {
+      // Priority 1: Job's own location fields
       const addressParts = [job.location, job.city, job.postalCode].filter(Boolean);
       let fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null;
+      
+      // Priority 2: Customer's structured address fields (address + city + state + zip)
       if (!fullAddress && job.customer?.address) {
-        fullAddress = job.customer.address;
+        const customerParts = [
+          job.customer.address,
+          job.customer.city,
+          job.customer.state,
+          job.customer.zip
+        ].filter(Boolean);
+        fullAddress = customerParts.length > 0 ? customerParts.join(', ') : null;
       }
       
       let lat: number | null = null;

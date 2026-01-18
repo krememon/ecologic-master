@@ -798,7 +798,7 @@ export class DatabaseStorage implements IStorage {
     
     // Fetch customers for jobs that have customerId (for address/lat/lng fallback)
     const customerIds = jobsList.map(j => j.customerId).filter((id): id is number => id !== null);
-    const customerMap: Record<number, { id: number; firstName: string | null; lastName: string | null; address: string | null; latitude: number | null; longitude: number | null }> = {};
+    const customerMap: Record<number, { id: number; firstName: string | null; lastName: string | null; address: string | null; city: string | null; state: string | null; zip: string | null; latitude: number | null; longitude: number | null }> = {};
     if (customerIds.length > 0) {
       const customerData = await db
         .select({
@@ -806,6 +806,9 @@ export class DatabaseStorage implements IStorage {
           firstName: customers.firstName,
           lastName: customers.lastName,
           address: customers.address,
+          city: customers.city,
+          state: customers.state,
+          zip: customers.zip,
           latitude: customers.latitude,
           longitude: customers.longitude,
         })
