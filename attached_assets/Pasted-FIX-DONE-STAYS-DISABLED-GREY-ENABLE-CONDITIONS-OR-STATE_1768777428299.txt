@@ -1,0 +1,56 @@
+FIX: "DONE" STAYS DISABLED/GREY (ENABLE CONDITIONS OR STATE NOT UPDATING)
+
+CURRENT
+On NEW INVOICE screen, "Done" stays grey/disabled even after I add customer and line items.
+So the screen never reaches a “ready to save” state.
+
+GOAL
+Make Done enable correctly when the invoice is valid, and ensure the state updates immediately when customer/line items are set.
+
+DEFINITION OF VALID (USE THIS EXACTLY)
+Done is enabled when:
+- customerId is set
+AND
+- (invoiceTotal > 0 OR at least one line item has: name.trim() AND price > 0)
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) ADD A TEMP DEBUG READOUT (REMOVE AFTER FIX)
+On the NEW INVOICE screen (under the header or at bottom), temporarily render:
+- customerId value (or "none")
+- lineItems.length
+- computed hasValidLineItem boolean
+- computed invoiceTotal number
+- computed canSubmit boolean
+This will prove what the UI thinks the state is.
+
+2) FIX THE STATE WIRING
+Ensure the New Invoice screen actually receives updates from:
+- customer picker (onSelect sets customerId in NewInvoice state)
+- line items screen/modal (onDone returns line items + totals back to NewInvoice state)
+Common bug: line items modal updates local state but does not propagate back to parent.
+
+3) FIX THE CAN-SUBMIT LOGIC
+- Implement canSubmit as a derived value from current state:
+  const hasValidLineItem = lineItems.some(li => li.name?.trim() && Number(li.price) > 0)
+  const canSubmit = Boolean(customerId) && (invoiceTotal > 0 || hasValidLineItem)
+- Do not require fields that we aren’t collecting on this screen (no issue date/due date/tags required).
+
+4) FIX DONE STYLING + DISABLED ATTR
+- When canSubmit is true:
+  - Done should be EcoLogic blue and clickable
+- When false:
+  - Done grey and disabled
+
+5) VERIFY
+- Select customer -> Done still disabled until line item exists
+- Add 1 line item with name + price -> Done turns blue immediately
+- Tap Done -> saves invoice and closes screen
+
+6) CLEANUP
+- Remove the temporary debug readout once verified working
+
+DELIVERABLE
+- Done enables correctly based on customer + line items
+- No more permanently greyed out Done
+- Save + close works once enabled

@@ -454,6 +454,16 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
           </div>
 
           <div className="flex-1 overflow-y-auto">
+              {/* TEMP DEBUG - REMOVE AFTER FIX */}
+              <div className="bg-yellow-100 dark:bg-yellow-900 p-2 text-xs font-mono border-b">
+                <div>customerId: {selectedCustomer?.id || 'none'}</div>
+                <div>lineItems.length: {lineItems.length}</div>
+                <div>hasValidLineItems: {String(hasValidLineItems)}</div>
+                <div>validLineItems: {validLineItems.map(i => `${i.name}:${i.unitPriceCents}`).join(', ') || 'none'}</div>
+                <div>totalCents: {totalCents}</div>
+                <div>isFormValid: {String(isFormValid)}</div>
+              </div>
+              {/* END TEMP DEBUG */}
               <SectionHeader title="Customer" />
               <InfoRow
                 icon={User}
