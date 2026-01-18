@@ -345,9 +345,11 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
     createInvoiceMutation.mutate(invoiceData);
   };
 
-  const handleClose = () => {
-    resetForm();
-    onOpenChange(false);
+  const handleClose = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetForm();
+      onOpenChange(false);
+    }
   };
 
   const addLineItem = () => {
@@ -440,7 +442,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <button 
               type="button"
-              onClick={handleClose}
+              onClick={() => handleClose(false)}
               className="text-blue-600 text-sm font-medium"
             >
               Cancel

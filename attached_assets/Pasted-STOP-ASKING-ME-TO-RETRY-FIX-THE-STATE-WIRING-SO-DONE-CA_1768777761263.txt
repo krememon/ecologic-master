@@ -1,0 +1,69 @@
+STOP ASKING ME TO RETRY — FIX THE STATE WIRING SO DONE CAN ENABLE
+
+CURRENT (PROVEN BY DEBUG BOX)
+- customerId stays "none" even after using the customer picker
+- lineItems.length is 1 but hasValidLineItems is false and totalCents stays 0
+Result: Done never enables, so invoice can never be saved.
+
+GOAL
+Make Done enable by fixing the underlying state wiring:
+- Selecting a customer MUST set customerId in the NewInvoice screen state
+- Saving line items MUST update the NewInvoice screen state with a valid item + totalCents > 0
+- Done uses canSubmit = customerId && totalCents > 0
+
+NON-NEGOTIABLE
+Do NOT respond with “try selecting again”. This must be fixed in code so the state updates correctly.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) CUSTOMER PICKER: GUARANTEE CALLBACK RETURNS TO PARENT
+- Find the component used when tapping "Add customer".
+- Ensure the onSelect handler calls back into NewInvoice screen:
+  onSelectCustomer(customer) {
+    setCustomerId(customer.id)
+    setSelectedCustomer(customer) // optional display
+    closeCustomerPicker()
+  }
+- Add ONE log inside the handler:
+  console.log("[NewInvoice] selected customer", customer.id)
+- If this log never prints, the picker is not using the handler. Fix that.
+
+2) LINE ITEMS MODAL: RETURN REAL ITEMS + TOTAL
+Right now the parent has lineItems.length=1 but it’s not valid and totalCents=0.
+That means the modal is returning a placeholder item OR not returning the edited values.
+Fix by making LineItems modal return a normalized payload on Done:
+  onDone({ items, totalCents }) => {
+    setLineItems(items)
+    setTotalCents(totalCents)
+    closeLineItemsModal()
+  }
+
+Normalization rules:
+- each item must include: name (trimmed), qty >= 1, priceCents > 0
+- totalCents = sum(qty * priceCents)
+
+If the modal currently stores price as "350.00", convert it to cents on Done.
+
+3) DONE ENABLE LOGIC (SOURCE OF TRUTH)
+- Replace any existing isFormValid logic with:
+  const canSubmit = Boolean(customerId) && totalCents > 0
+- Done disabled={!canSubmit}
+- Done color blue only when canSubmit true
+
+4) VERIFY USING DEBUG BOX
+After fixes:
+- Selecting a customer should change customerId from "none" to a real id
+- Adding line items w/ name + price should set:
+  hasValidLineItems: true
+  totalCents > 0
+  isFormValid/canSubmit: true
+- Done becomes enabled (blue)
+
+5) DONE CLICK BEHAVIOR
+- When enabled and clicked, create invoice via API
+- On success: close New Invoice screen + refresh invoices list
+
+DELIVERABLE
+- customerId updates properly on selection
+- line item edits persist back to NewInvoice state and totalCents updates
+- Done enables and successfully saves/closes
