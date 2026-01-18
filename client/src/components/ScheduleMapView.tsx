@@ -1,9 +1,10 @@
-import { useCallback, useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
 import { GoogleMap, useJsApiLoader, InfoWindow } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, ChevronRight, Loader2 } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 
 interface ScheduleItem {
@@ -30,6 +31,57 @@ interface MarkerData extends ScheduleItem {
   lng: number;
 }
 
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  onRetry: () => void;
+}
+
+class MapErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Map Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
+          <AlertCircle className="h-16 w-16 text-red-400 dark:text-red-500 mb-4" />
+          <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Map couldn't load</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-4 max-w-md">
+            {this.state.error?.message || 'An unexpected error occurred while loading the map.'}
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              this.props.onRetry();
+            }}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const containerStyle = {
   width: '100%',
   height: '100%',
@@ -38,7 +90,7 @@ const containerStyle = {
 
 const defaultCenter = { lat: 39.8283, lng: -98.5795 };
 
-const mapStyles: google.maps.MapTypeStyle[] = [
+const mapStyles = [
   { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] }
 ];
@@ -55,7 +107,7 @@ function formatTimeDisplay(time: string | null): string {
   }
 }
 
-export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
+function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
@@ -65,12 +117,19 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const hasApiKey = Boolean(apiKey);
+  
+  console.log('[ScheduleMapView] Initializing, hasApiKey:', hasApiKey);
   
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey,
     libraries: ['places']
   });
+
+  useEffect(() => {
+    console.log('[ScheduleMapView] Load state:', { isLoaded, loadError: loadError?.message });
+  }, [isLoaded, loadError]);
 
   const geocodeAddresses = useCallback(async () => {
     if (!items.length) {
@@ -108,8 +167,10 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
   }, [items]);
 
   useEffect(() => {
-    geocodeAddresses();
-  }, [geocodeAddresses]);
+    if (isLoaded) {
+      geocodeAddresses();
+    }
+  }, [geocodeAddresses, isLoaded]);
 
   useEffect(() => {
     if (!mapRef.current || !isLoaded || markers.length === 0) return;
@@ -190,6 +251,7 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
   }, [markers, isLoaded]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
+    console.log('[ScheduleMapView] Map loaded successfully');
     mapRef.current = map;
   }, []);
 
@@ -219,13 +281,13 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
     return 'Scheduled';
   };
 
-  if (!apiKey) {
+  if (!hasApiKey) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
-        <MapPin className="h-16 w-16 text-slate-300 dark:text-slate-600 mb-4" />
-        <p className="text-lg font-medium text-slate-600 dark:text-slate-400">Map view requires setup</p>
-        <p className="text-sm text-slate-500 dark:text-slate-500 mt-2 text-center">
-          Please add your Google Maps API key to enable the map view.
+        <MapPin className="h-16 w-16 text-amber-400 dark:text-amber-500 mb-4" />
+        <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Map API Key Missing</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">
+          The Google Maps API key (VITE_GOOGLE_MAPS_API_KEY) is not configured. Please add it in the Secrets panel to enable the map view.
         </p>
       </div>
     );
@@ -234,9 +296,11 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
   if (loadError) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
-        <MapPin className="h-16 w-16 text-red-300 dark:text-red-600 mb-4" />
-        <p className="text-lg font-medium text-red-600 dark:text-red-400">Failed to load map</p>
-        <p className="text-sm text-slate-500 mt-2">{loadError.message}</p>
+        <AlertCircle className="h-16 w-16 text-red-400 dark:text-red-500 mb-4" />
+        <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Failed to load Google Maps</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">
+          {loadError.message || 'The Google Maps API could not be loaded. Please check your API key and try again.'}
+        </p>
       </div>
     );
   }
@@ -294,7 +358,7 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
           streetViewControl: false,
           fullscreenControl: false,
           zoomControlOptions: {
-            position: google.maps.ControlPosition.RIGHT_CENTER
+            position: window.google?.maps?.ControlPosition?.RIGHT_CENTER
           }
         }}
       >
@@ -365,5 +429,15 @@ export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
+  const [retryKey, setRetryKey] = useState(0);
+  
+  return (
+    <MapErrorBoundary onRetry={() => setRetryKey(k => k + 1)}>
+      <ScheduleMapViewInner key={retryKey} items={items} selectedDate={selectedDate} />
+    </MapErrorBoundary>
   );
 }

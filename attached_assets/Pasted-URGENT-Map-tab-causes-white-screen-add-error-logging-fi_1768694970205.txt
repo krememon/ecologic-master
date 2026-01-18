@@ -1,0 +1,63 @@
+URGENT: Map tab causes white screen — add error logging + fix Google Maps load/env key issues
+
+CURRENT
+Clicking Schedule → Map view makes the screen go completely white.
+This indicates a frontend runtime crash in the Map view (React error) or Maps script load failure.
+
+GOAL
+- Map tab must never crash the whole page
+- If Maps fails to load, show a friendly fallback with the real error
+- Fix the underlying issue so the map renders successfully
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) GET THE REAL ERROR (DO NOT GUESS)
+- Open browser DevTools Console
+- Click Map tab to reproduce
+- Identify the first red error + stack trace (file + line)
+- Add console.error logging inside Map view initialization to print:
+  - whether the Google script loaded
+  - what API key env var value exists (boolean only, do NOT print key)
+  - the error thrown
+
+2) ADD AN ERROR BOUNDARY AROUND MAP VIEW (PREVENT WHITE SCREEN)
+Wrap Schedule Map view component in an ErrorBoundary so the entire Schedule page doesn't go blank.
+On error:
+- render a clean card that says:
+  “Map couldn’t load”
+  and show the error message text (safe)
+- include a “Retry” button that re-mounts the map component
+
+3) FIX MOST COMMON REPLIT ENV ISSUE (VITE vs SERVER)
+Confirm frontend uses:
+  import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+NOT process.env or GOOGLE_MAPS_API_KEY.
+The browser will only have VITE_ vars.
+
+Backend geocoding should use:
+  process.env.GOOGLE_MAPS_API_KEY
+
+If Map view is reading the wrong env var, it will be undefined and crash.
+
+4) GUARD AGAINST MISSING KEY
+Before trying to load Google Maps, check:
+- if (!apiKey) render a message:
+  “Missing VITE_GOOGLE_MAPS_API_KEY”
+and do NOT attempt to render the map.
+
+5) GUARD AGAINST GOOGLE NOT LOADED
+If using @react-google-maps/api:
+- useLoadScript returns isLoaded + loadError
+Handle:
+- if loadError: show error UI
+- if !isLoaded: show spinner
+Only render <GoogleMap> when isLoaded is true.
+
+6) REMOVE ANY SERVER-SIDE IMPORTS IN CLIENT MAP CODE
+Ensure Map view does not import server-only modules (Node libs, fs, etc.)
+This can cause white screen builds.
+
+DONE WHEN
+- Clicking Map no longer blanks the page
+- If key missing or restricted, user sees a readable error message
+- If key is correct, Google map renders
