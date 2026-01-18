@@ -1,0 +1,57 @@
+POLISH LINE ITEMS MODAL UI (Reduce Spacing, Cleaner Layout, Same EcoLogic Aesthetic)
+
+CURRENT
+The Line Items modal looks too spaced out and tall. There is excessive vertical padding/margins between elements which makes it feel clunky and “empty”.
+We need to tighten the layout while keeping the same modern EcoLogic aesthetic (rounded, clean, readable).
+
+GOAL
+Make the Line Items screen look cleaner and more compact:
+- Reduce wasted vertical space
+- Improve grouping and alignment
+- Keep all functionality exactly the same
+- Mobile-first: should fit comfortably without excessive scrolling
+
+DO NOT CHANGE
+- Fields and logic (title, description, qty, unit, price, taxable toggle, tax rate picker, line total, add item, from price book)
+- Totals calculation (subtotal/tax/total)
+- "Done" button behavior
+- Overall visual style (EcoLogic modern look)
+
+SPECIFIC UI FIXES (APPLY THESE)
+1) TIGHTEN VERTICAL SPACING
+- Reduce padding inside the main card/container (ex: from p-6 to p-4)
+- Reduce spacing between inputs (ex: gap-6 -> gap-3/4)
+- Reduce input heights slightly (keep touch-friendly)
+- Remove unnecessary blank areas between sections
+
+2) CLEAN GROUPING
+- Group “Qty / Unit / Price” into one row with consistent widths and tighter gap
+- Put “Taxable” label + toggle on the same row (left label, right toggle) with less padding
+- Tax rate row should be tighter and look like a settings row (icon + label + value, chevron)
+- Line Total should be smaller and aligned right, not taking too much space
+
+3) FIX BUTTON ROW
+- “Add Item” and “From Price Book” should be same height and tighter spacing
+- Reduce the padding around that button row so it doesn’t push everything down
+
+4) IMPROVE MODAL STRUCTURE
+- Keep header “Line Items” but reduce header height/padding slightly
+- The content area should scroll if needed
+- Bottom summary + Done button should be sticky at the bottom (if not already), with reduced padding
+
+5) BOTTOM TOTALS SECTION (MAKE IT CLEANER)
+- Make Subtotal/Tax lines smaller and tighter
+- Keep Total prominent
+- Reduce whitespace above the totals block
+- Ensure totals block feels connected to the modal (not floating far away)
+
+IMPLEMENTATION STEPS
+1) Adjust spacing classes in the Line Items modal layout (padding, gap, margins)
+2) Normalize input heights and row layouts
+3) Tighten totals + sticky footer spacing
+4) Verify on mobile: less scrolling, cleaner density, still tap-friendly
+
+DELIVERABLE
+- A tighter, cleaner Line Items modal that looks premium and modern
+- No functional changes
+- Significantly less vertical whitespace (more content fits on screen)

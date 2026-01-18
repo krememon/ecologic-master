@@ -642,57 +642,56 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
 
       {/* Line Items Modal */}
       <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
-        <DialogContent className="max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
-          <DialogHeader className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-            <DialogTitle>Line Items</DialogTitle>
+        <DialogContent className="max-w-md h-[85vh] p-0 flex flex-col rounded-2xl overflow-hidden">
+          <DialogHeader className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 shrink-0">
+            <DialogTitle className="text-base">Line Items</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-4 py-4">
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 px-3 py-3">
+            <div className="space-y-3">
               {lineItems.map((item, index) => (
-                <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <span className="text-xs font-medium text-slate-500">Item {index + 1}</span>
+                <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Item {index + 1}</span>
                     {lineItems.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeLineItem(index)}
-                        className="text-red-500 hover:text-red-600"
+                        className="text-red-500 hover:text-red-600 p-0.5"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
                   
-                  <div>
-                    <Input
-                      placeholder="Item name *"
-                      value={item.name}
-                      onChange={(e) => updateLineItem(index, { name: e.target.value })}
-                    />
-                  </div>
+                  <Input
+                    placeholder="Item name *"
+                    value={item.name}
+                    onChange={(e) => updateLineItem(index, { name: e.target.value })}
+                    className="h-9"
+                  />
                   
-                  <div>
-                    <Input
-                      placeholder="Description (optional)"
-                      value={item.description}
-                      onChange={(e) => updateLineItem(index, { description: e.target.value })}
-                    />
-                  </div>
+                  <Input
+                    placeholder="Description (optional)"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(index, { description: e.target.value })}
+                    className="h-9 text-sm"
+                  />
                   
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     <div>
-                      <label className="text-xs text-slate-500">Qty</label>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wide">Qty</label>
                       <Input
                         type="number"
                         min="1"
                         value={item.quantity}
                         onChange={(e) => updateLineItem(index, { quantity: e.target.value })}
+                        className="h-9"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Unit</label>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wide">Unit</label>
                       <Select value={item.unit} onValueChange={(v) => updateLineItem(index, { unit: v })}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-9">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -706,20 +705,20 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                       </Select>
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Price *</label>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wide">Price</label>
                       <div className="relative">
-                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                         <Input
                           placeholder="0.00"
                           value={item.priceDisplay}
                           onChange={(e) => handlePriceChange(index, e.target.value)}
-                          className="pl-7"
+                          className="pl-6 h-9"
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between py-1 px-1">
                     <span className="text-sm text-slate-600 dark:text-slate-400">Taxable</span>
                     <Switch
                       checked={item.taxable}
@@ -739,64 +738,66 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                         setTaxPickerLineItemIndex(index);
                         setTaxPickerOpen(true);
                       }}
-                      className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm"
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-md text-sm"
                     >
-                      <span className="flex items-center gap-2">
-                        <Percent className="h-4 w-4 text-slate-400" />
-                        <span className="text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center gap-1.5">
+                        <Percent className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-slate-600 dark:text-slate-400 text-xs">
                           {item.taxNameSnapshot ? `${item.taxNameSnapshot} (${item.taxRatePercentSnapshot}%)` : 'Select tax rate'}
                         </span>
                       </span>
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                      <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                     </button>
                   )}
 
-                  <div className="text-right text-sm font-medium text-slate-900 dark:text-slate-100">
+                  <div className="text-right text-xs font-medium text-slate-700 dark:text-slate-300 pt-0.5">
                     Line Total: {formatCurrency(item.unitPriceCents * (parseFloat(item.quantity) || 1))}
                   </div>
                 </div>
               ))}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-1">
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={addLineItem}
-                  className="flex-1"
+                  className="flex-1 h-9"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
                   Add Item
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={() => setPriceBookPickerOpen(true)}
-                  className="flex-1"
+                  className="flex-1 h-9"
                 >
-                  <List className="h-4 w-4 mr-2" />
-                  From Price Book
+                  <List className="h-3.5 w-3.5 mr-1.5" />
+                  Price Book
                 </Button>
               </div>
             </div>
           </ScrollArea>
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <div className="flex justify-between text-sm mb-2">
+          <div className="px-3 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
+            <div className="flex justify-between text-xs mb-1">
               <span className="text-slate-500">Subtotal</span>
               <span className="font-medium">{formatCurrency(subtotalCents)}</span>
             </div>
             {taxCents > 0 && (
-              <div className="flex justify-between text-sm mb-2">
+              <div className="flex justify-between text-xs mb-1">
                 <span className="text-slate-500">Tax</span>
                 <span className="font-medium">{formatCurrency(taxCents)}</span>
               </div>
             )}
-            <div className="flex justify-between text-base font-semibold">
+            <div className="flex justify-between text-sm font-semibold pt-1 border-t border-slate-100 dark:border-slate-800">
               <span>Total</span>
               <span>{formatCurrency(totalCents)}</span>
             </div>
             <Button
               onClick={() => setLineItemsModalOpen(false)}
-              className="w-full mt-4"
+              className="w-full mt-2.5 h-9"
             >
               Done
             </Button>
