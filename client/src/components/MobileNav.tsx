@@ -21,6 +21,7 @@ import {
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
+import { GlobalCreateMenu } from "./GlobalCreateMenu";
 import type { Permission } from "@shared/permissions";
 
 // Navigation items with permission requirements - must match Sidebar.tsx
@@ -100,7 +101,9 @@ export default function MobileNav({ user, company }: MobileNavProps) {
           
           <EcoLogicLogo size={32} showText={false} />
           
-          <div className="w-10" />
+          <div className="w-10 flex items-center justify-end">
+            <GlobalCreateMenu />
+          </div>
         </div>
       </div>
 

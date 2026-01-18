@@ -1,0 +1,54 @@
+MOVE "+" BUTTON TO THE REAL TOP HEADER (HAMBURGER ROW) — NOT SCHEDULE SUB-HEADER
+
+CURRENT
+The "+" button was added to the Schedule page UI near the “Today” / filter icons area. That is wrong.
+I need the "+" button in the GLOBAL top header — the same header row that contains the hamburger (3 lines) icon.
+
+GOAL
+Place the circular "+" icon button in the TOP RIGHT corner of the main app header (hamburger row) across the app (not just Schedule).
+It must open the light white overlay + right-aligned vertical action menu.
+
+NON-NEGOTIABLE PLACEMENT
+- The "+" must sit in the top header bar where the hamburger icon is.
+- It must NOT be in the Schedule page’s date controls row (the row with Today / filters).
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) IDENTIFY GLOBAL HEADER COMPONENT
+- Find the component that renders the top bar with the hamburger icon (ex: AppHeader / MobileHeader / TopNav).
+- This is the only place the "+" should be mounted.
+
+2) REMOVE WRONG PLACEMENT
+- Remove the "+" button from the Schedule page sub-header/date-controls area entirely.
+
+3) ADD "+" TO GLOBAL HEADER (TOP RIGHT)
+- Add a circular icon button with "+" to the right side of the global header.
+- Ensure alignment matches the hamburger icon row (same padding / vertical centering).
+
+4) OVERLAY + MENU (KEEP EXISTING)
+- Reuse the existing overlay/menu implementation already created.
+- Light white overlay (white wash, not dark).
+- Right-aligned vertical menu with labels left + circular icon buttons right.
+
+5) MENU OPTIONS (KEEP ECOLOGIC OPTIONS)
+- Job
+- Estimate
+- Invoice
+- Lead
+- Event
+
+6) RBAC (HIDDEN, NOT DISABLED)
+- Owner/Admin: show + and all options
+- Dispatcher: show +, only Job + Event
+- Estimator: show +, only Estimate
+- Technician: hide + completely
+
+7) VERIFY
+- Confirm the + is visible on Schedule AND other pages because it’s in the global header.
+- Confirm it appears in the TOP RIGHT next to the hamburger header row.
+- Confirm clicking opens/closes correctly and routes correctly.
+
+DELIVERABLE
+- "+" is in the global top header (hamburger row), top-right corner
+- Removed from Schedule sub-header row
+- Overlay/menu works and RBAC is respected
