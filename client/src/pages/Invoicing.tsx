@@ -1,12 +1,13 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, DollarSign, Calendar, ExternalLink, CheckSquare, X, Check, Trash2 } from "lucide-react";
+import { Plus, FileText, DollarSign, Calendar, ExternalLink, CheckSquare, X, Check, Trash2, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Invoice } from "@shared/schema";
 import { NewInvoiceSheet } from "@/components/NewInvoiceSheet";
@@ -23,6 +24,7 @@ export default function Invoicing() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Handle create=true URL param from global create menu
   useEffect(() => {
@@ -57,6 +59,33 @@ export default function Invoicing() {
   const userRole = user?.role?.toLowerCase() || '';
   const canCreateInvoice = ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(userRole);
   const canManageInvoices = ['owner', 'supervisor'].includes(userRole);
+
+  // Filter invoices by search query
+  const filteredInvoices = useMemo(() => {
+    if (!invoices || invoices.length === 0) return [];
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return invoices;
+    
+    return invoices.filter((invoice: any) => {
+      const invoiceNumber = (invoice.invoiceNumber || `Invoice #${invoice.id}`).toLowerCase();
+      const customerName = invoice.customer 
+        ? `${invoice.customer.firstName || ''} ${invoice.customer.lastName || ''}`.toLowerCase()
+        : '';
+      const clientName = invoice.client?.name?.toLowerCase() || '';
+      const amount = invoice.totalCents 
+        ? (invoice.totalCents / 100).toFixed(2)
+        : invoice.amount || '';
+      const status = (invoice.status || '').toLowerCase();
+      const tags = ((invoice.tags as string[] | null) || []).join(' ').toLowerCase();
+      
+      return invoiceNumber.includes(query) || 
+             customerName.includes(query) || 
+             clientName.includes(query) ||
+             amount.includes(query) ||
+             status.includes(query) ||
+             tags.includes(query);
+    });
+  }, [invoices, searchQuery]);
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
@@ -212,6 +241,27 @@ export default function Invoicing() {
         </div>
       </div>
 
+      {/* Search Bar */}
+      {invoices.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search invoices..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 pr-10 h-10 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-lg"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full bg-slate-300 dark:bg-slate-600 hover:bg-slate-400 dark:hover:bg-slate-500 transition-colors"
+            >
+              <X className="h-3 w-3 text-slate-600 dark:text-slate-300" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Bulk Action Bar */}
       {isSelectMode && (
         <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -271,9 +321,26 @@ export default function Invoicing() {
             )}
           </CardContent>
         </Card>
+      ) : filteredInvoices.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-slate-400 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No invoices found</h3>
+            <p className="text-slate-600 dark:text-slate-400 text-center mb-4">
+              Try adjusting your search terms
+            </p>
+            <Button 
+              variant="outline"
+              onClick={() => setSearchQuery("")}
+              className="rounded-full px-4"
+            >
+              Clear Search
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {invoices.map((invoice: any) => (
+          {filteredInvoices.map((invoice: any) => (
             <Card 
               key={invoice.id} 
               className={`hover:shadow-md transition-shadow cursor-pointer ${
