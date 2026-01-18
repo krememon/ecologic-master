@@ -1,0 +1,92 @@
+Map view now loads but shows “No locations available” — make pins appear by geocoding + storing lat/lng
+
+CURRENT
+Map tab no longer crashes (good).
+Now it shows:
+“No locations available — Scheduled items don't have valid addresses to display on the map.”
+
+This means we are not providing lat/lng coordinates for scheduled jobs/estimates.
+
+GOAL
+Map view should show real Google Map + pins for scheduled items on the selected day:
+- Jobs = green pins
+- Estimates = purple pins
+- If multiple items close together, cluster them
+- Tapping a pin shows an info card and can navigate to job/estimate
+
+IMPLEMENTATION (DO IN THIS ORDER)
+
+1) CONFIRM ADDRESS SOURCE FOR EACH ITEM
+For each schedule item (job/estimate), determine the best address string:
+- Prefer job.address (or job.locationAddress)
+- Else fallback to customer.address
+- Construct a single string like:
+  "321 Astor Dr, Sayville, NY" (include city/state if stored; if not, just street is ok)
+
+If an item has no address, skip it but keep the map working.
+
+2) ADD COORDINATES STORAGE (CACHE)
+We need to stop geocoding every time.
+Add latitude/longitude fields (floats) in ONE place (pick the best):
+OPTION A (preferred): Customers table
+- customers.latitude
+- customers.longitude
+Because many jobs share the same customer address.
+
+OPTION B: Jobs + Estimates tables
+- jobs.latitude/longitude
+- estimates.latitude/longitude
+
+Pick Option A unless schema makes it hard.
+
+3) BACKEND: CREATE A GEOCODE ENDPOINT
+Add a server endpoint:
+POST /api/geocode
+Body: { address: string }
+Returns: { lat: number, lng: number }
+
+Implementation:
+- Use GOOGLE_MAPS_API_KEY (server secret)
+- Call Google Geocoding API
+- Handle errors gracefully:
+  - if no results, return 404-like response
+  - log once per address
+
+SECURITY:
+- Do NOT expose server key to frontend.
+- All geocoding happens server-side.
+
+4) BACKEND: SAVE COORDINATES
+When geocoding succeeds:
+- Save lat/lng on the customer (or job/estimate depending on chosen option)
+- Next time Map loads, it should use cached lat/lng and skip geocoding.
+
+5) FRONTEND: MAP VIEW COORDINATE RESOLUTION
+In Map view:
+- Build mapItems for selected day
+- For each item:
+  - if it already has lat/lng → use it
+  - else call POST /api/geocode with its address
+  - then update local state and optionally refetch customers/jobs to reflect saved coords
+While resolving, show a loading state (“Finding locations…”).
+
+6) RENDER MAP + MARKERS
+Once at least 1 item has coords:
+- Render Google Map
+- Fit bounds to markers
+- Render markers:
+  - job = green
+  - estimate = purple
+- Add clustering (markerclusterer) once markers render.
+
+7) EMPTY STATE RULE (KEEP CURRENT)
+Only show “No locations available” when:
+- there are scheduled items but NONE could resolve to coords
+OR
+- there are no scheduled items
+
+DONE WHEN
+- Map tab shows Google Map
+- At least one scheduled item with address appears as a pin
+- Pins persist on refresh (because coords are saved)
+- If two items share an address, they cluster

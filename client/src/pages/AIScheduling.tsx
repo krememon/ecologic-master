@@ -59,9 +59,12 @@ interface EstimateWithSchedule {
   status: string;
   scheduledDate: string | null;
   scheduledTime: string | null;
+  scheduledEndTime?: string | null;
   customerName: string | null;
   jobAddressLine1: string | null;
   jobCity: string | null;
+  jobState: string | null;
+  customerId?: number | null;
   assignedEmployeeIds?: string[];
 }
 
@@ -75,6 +78,7 @@ interface ScheduleItem {
   address: string | null;
   status: string;
   jobType?: string | null;
+  customerId?: number | null;
 }
 
 interface Employee {
@@ -328,11 +332,19 @@ export default function AIScheduling() {
         scheduledEndTime: (job as any).scheduledEndTime || null,
         address: job.location || job.city || null,
         status: job.status,
-        jobType: (job as any).jobType || null
+        jobType: (job as any).jobType || null,
+        customerId: job.customerId
       });
     });
     
     dailyEstimates.forEach(estimate => {
+      const addressParts = [
+        estimate.jobAddressLine1,
+        estimate.jobCity,
+        estimate.jobState
+      ].filter(Boolean);
+      const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : null;
+      
       items.push({
         type: 'estimate',
         id: estimate.id,
@@ -340,9 +352,10 @@ export default function AIScheduling() {
         customerName: estimate.customerName,
         scheduledTime: estimate.scheduledTime,
         scheduledEndTime: estimate.scheduledEndTime || null,
-        address: estimate.jobAddressLine1 || estimate.jobCity || null,
-        status: estimate.status
-      });
+        address: fullAddress,
+        status: estimate.status,
+        customerId: estimate.customerId
+      } as ScheduleItem);
     });
     
     return items.sort((a, b) => {
