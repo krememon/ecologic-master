@@ -64,24 +64,10 @@ export default function Invoicing() {
       const res = await apiRequest("POST", "/api/invoices/bulk-delete", { invoiceIds });
       return res.json();
     },
-    onSuccess: async (data) => {
+    onSuccess: async () => {
       // Force refetch to get updated data from server
       await queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       await queryClient.refetchQueries({ queryKey: ["/api/invoices"] });
-      
-      const count = data.deletedCount || 0;
-      if (count > 0) {
-        toast({
-          title: "Deleted",
-          description: `Deleted ${count} invoice${count !== 1 ? 's' : ''}`,
-        });
-      } else {
-        toast({
-          title: "No changes",
-          description: "No invoices were deleted",
-          variant: "default",
-        });
-      }
       exitSelectMode();
       setDeleteConfirmOpen(false);
     },
