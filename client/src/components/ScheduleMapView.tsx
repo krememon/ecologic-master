@@ -1,11 +1,12 @@
 import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
-import { GoogleMap, useJsApiLoader, InfoWindow } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, InfoWindow, Circle } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, Navigation, LocateFixed } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface ScheduleItem {
   type: 'job' | 'estimate';
@@ -138,12 +139,17 @@ function createEstimateMarkerIcon(): string {
 
 function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
+  const userMarkerRef = useRef<google.maps.Marker | null>(null);
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
@@ -153,6 +159,88 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     googleMapsApiKey: apiKey,
     libraries: ['places']
   });
+
+  const requestUserLocation = useCallback((centerOnUser = false) => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserLocation(coords);
+        setUserAccuracy(position.coords.accuracy);
+        setIsLocating(false);
+        
+        if (centerOnUser && mapRef.current) {
+          mapRef.current.panTo(coords);
+          mapRef.current.setZoom(15);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          toast({
+            title: "Location permission denied",
+            description: "Enable location access to see your position on the map",
+            variant: "destructive"
+          });
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, [toast]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      requestUserLocation(false);
+    }
+  }, [isLoaded, requestUserLocation]);
+
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded || !userLocation) return;
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setPosition(userLocation);
+    } else {
+      const blueDotSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" fill="#4285F4" fill-opacity="0.2" stroke="#4285F4" stroke-width="2"/>
+        <circle cx="12" cy="12" r="6" fill="#4285F4"/>
+        <circle cx="12" cy="12" r="3" fill="#ffffff"/>
+      </svg>`;
+      
+      userMarkerRef.current = new google.maps.Marker({
+        position: userLocation,
+        map: mapRef.current,
+        icon: {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(blueDotSvg),
+          scaledSize: new google.maps.Size(24, 24),
+          anchor: new google.maps.Point(12, 12)
+        },
+        zIndex: 999
+      });
+    }
+
+    return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+        userMarkerRef.current = null;
+      }
+    };
+  }, [userLocation, isLoaded]);
+
+  const handleLocateMe = () => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.panTo(userLocation);
+      mapRef.current.setZoom(15);
+    } else {
+      requestUserLocation(true);
+    }
+  };
 
   const geocodeAddresses = useCallback(async () => {
     if (!items.length) {
@@ -361,6 +449,20 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
           }
         }}
       >
+        {userLocation && userAccuracy && (
+          <Circle
+            center={userLocation}
+            radius={userAccuracy}
+            options={{
+              fillColor: '#4285F4',
+              fillOpacity: 0.1,
+              strokeColor: '#4285F4',
+              strokeOpacity: 0.3,
+              strokeWeight: 1
+            }}
+          />
+        )}
+        
         {selectedMarker && (
           <InfoWindow
             position={{ lat: selectedMarker.lat, lng: selectedMarker.lng }}
@@ -443,6 +545,19 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
           </div>
         </div>
       )}
+
+      <button
+        onClick={handleLocateMe}
+        disabled={isLocating}
+        className="absolute bottom-4 right-4 w-10 h-10 bg-white dark:bg-slate-800 rounded-lg shadow-lg flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+        title="My location"
+      >
+        {isLocating ? (
+          <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+        ) : (
+          <LocateFixed className={`h-5 w-5 ${userLocation ? 'text-blue-500' : 'text-slate-500'}`} />
+        )}
+      </button>
     </div>
   );
 }
