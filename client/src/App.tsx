@@ -35,6 +35,7 @@ import CompanyProfile from "@/pages/CompanyProfile";
 import Taxes from "@/pages/Taxes";
 import IndustryOnboarding from "@/pages/IndustryOnboarding";
 import EstimateDetails from "@/pages/EstimateDetails";
+import InvoiceDetails from "@/pages/InvoiceDetails";
 import JobDetails from "@/pages/JobDetails";
 import JobEdit from "@/pages/JobEdit";
 import ClientDetail from "@/pages/ClientDetail";
@@ -118,6 +119,9 @@ function Router() {
           {(params) => <ClientDetail customerId={params.id} />}
         </Route>
         <Route path="/invoicing" component={Invoicing} />
+        <Route path="/invoicing/:id">
+          {(params) => <InvoiceDetails invoiceId={params.id} />}
+        </Route>
         <Route path="/payments" component={PaymentsPage} />
         <Route path="/documents" component={Documents} />
         <Route path="/messages" component={MessagesDirectory} />

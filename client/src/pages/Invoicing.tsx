@@ -159,7 +159,11 @@ export default function Invoicing() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {invoices.map((invoice: any) => (
-            <Card key={invoice.id} className="hover:shadow-md transition-shadow">
+            <Card 
+              key={invoice.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => setLocation(`/invoicing/${invoice.id}`)}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -204,6 +208,7 @@ export default function Invoicing() {
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     <ExternalLink className="h-4 w-4" />
                     View PDF

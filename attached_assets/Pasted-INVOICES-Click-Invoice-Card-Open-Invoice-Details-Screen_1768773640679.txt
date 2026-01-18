@@ -1,0 +1,81 @@
+INVOICES: Click Invoice Card -> Open Invoice Details Screen (Like Job/Estimate)
+
+CURRENT
+On the Invoicing page, invoice cards are displayed in a list, but clicking them does not open a dedicated Invoice Details screen like we have for Jobs and Estimates. We need a proper details view that shows all invoice info.
+
+GOAL
+When a user clicks an invoice card, open a dedicated Invoice Details screen (modal or full page) that matches the style/UX of Job and Estimate details. It should display all invoice information and provide key actions.
+
+UX REQUIREMENTS (MATCH EXISTING PATTERN)
+- Same interaction style as opening a Job card / Estimate card
+- Smooth open/close
+- Clean header with back/close
+- Mobile-first layout
+
+INVOICE DETAILS SCREEN CONTENT
+Show these sections clearly:
+
+1) Header Summary
+- Invoice Number (ex: INV-123)
+- Status pill (Draft / Sent / Pending / Paid / Overdue / Void)
+- Total amount
+- Customer name (and company if exists)
+- Linked Job/Estimate (if present)
+
+2) Key Dates
+- Created date
+- Issue date (if used)
+- Due date
+- Scheduled date/time (if your invoice flow includes schedule)
+
+3) Line Items (read-only list)
+- Item name, qty, unit, price, line total
+- Taxable indicator
+- Tax rate used (if applicable)
+
+4) Totals
+- Subtotal
+- Tax
+- Total
+- Amount paid (if implemented)
+- Balance due
+
+5) Notes / Terms (if present)
+
+6) Attachments / PDF
+- Primary action: "View PDF" (opens existing pdfUrl)
+- Secondary: "Download PDF" (if supported)
+
+ACTIONS (ROLE BASED, HIDDEN NOT DISABLED)
+- Owner/Admin:
+  - Mark as Paid (manual)
+  - Void invoice
+  - Edit invoice (optional phase 2)
+- Dispatcher:
+  - View only (no mark paid / void)
+- Estimator (if allowed):
+  - View only
+- Technician:
+  - Should not access invoices (follow existing RBAC)
+
+DATA + ROUTING
+- Add route: /invoicing/:invoiceId OR open as modal from list
+- Fetch full invoice details from API:
+  - GET /api/invoices/:id (include customer, line items, totals, pdfUrl, status, dates, links)
+- Ensure list remains unchanged and performs well:
+  - list uses summary fields
+  - details uses full fetch
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+1) Add click handler to invoice cards (whole card clickable, not just View PDF)
+2) Create InvoiceDetails component (match Job/Estimate details UI patterns)
+3) Add API endpoint GET /api/invoices/:id if missing
+4) Render all invoice info + View PDF action
+5) Enforce RBAC in both UI and API (hidden not disabled + server check)
+6) Add loading + error states (clean and minimal)
+
+DELIVERABLE
+- Clicking an invoice card opens Invoice Details
+- Invoice Details shows all invoice information + totals + pdf actions
+- RBAC enforced
+- No regressions to invoice list

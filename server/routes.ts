@@ -6764,6 +6764,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/invoices/:id - Get single invoice details
+  app.get('/api/invoices/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      res.json(invoice);
+    } catch (error) {
+      console.error("Error fetching invoice:", error);
+      res.status(500).json({ message: "Failed to fetch invoice" });
+    }
+  });
+
+  // PATCH /api/invoices/:id - Update invoice (mark as paid, void, etc.)
+  app.patch('/api/invoices/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Only Owner/Supervisor can update invoices
+      if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
+        return res.status(403).json({ message: "You do not have permission to update invoices" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      const { status, paidAt } = req.body;
+      
+      const updateData: any = {};
+      if (status) updateData.status = status;
+      if (paidAt) updateData.paidAt = new Date(paidAt);
+      
+      const updatedInvoice = await storage.updateInvoice(invoiceId, updateData);
+      
+      console.log(`[Invoice] Updated invoice`, { invoiceId, status, userId });
+      res.json(updatedInvoice);
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      res.status(500).json({ message: "Failed to update invoice" });
+    }
+  });
+
   // POST /api/invoices - Create standalone invoice (not job-linked)
   app.post('/api/invoices', isAuthenticated, async (req: any, res) => {
     try {
