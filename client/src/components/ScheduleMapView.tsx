@@ -179,7 +179,24 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     }
   };
 
+  const isInIframe = (): boolean => {
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      return true;
+    }
+  };
+
+  const openInNewTab = () => {
+    window.open(window.location.href, '_blank', 'noopener,noreferrer');
+  };
+
   const requestUserLocation = useCallback(() => {
+    if (isInIframe()) {
+      setGeoError('iframe');
+      return;
+    }
+
     if (!navigator.geolocation) {
       setGeoError('Geolocation is not supported by this browser.');
       return;
@@ -551,7 +568,22 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-sm text-amber-800 dark:text-amber-200">{geoError}</p>
+            {geoError === 'iframe' ? (
+              <>
+                <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+                  Location isn't available in embedded preview. Open EcoLogic in a new tab to enable GPS.
+                </p>
+                <button
+                  onClick={openInNewTab}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Open in new tab
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-amber-800 dark:text-amber-200">{geoError}</p>
+            )}
           </div>
           <button 
             onClick={() => setGeoError(null)}
