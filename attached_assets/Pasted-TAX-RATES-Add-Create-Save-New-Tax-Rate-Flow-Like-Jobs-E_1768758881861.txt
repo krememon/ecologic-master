@@ -1,0 +1,86 @@
+TAX RATES: Add "Create + Save New Tax Rate" Flow (Like Jobs/Estimates pickers)
+
+CURRENT
+We have a "Select Tax Rate" UI that shows a list of preset tax rates (e.g., Connecticut 8.250%, New Jersey 6.625%, New York 8.625%).
+But the user cannot create and save a new tax rate from this screen.
+
+GOAL
+When the user goes to Select Tax Rate, they must be able to:
+- Tap a "+" button
+- Create a new tax rate (name + percentage)
+- Save it to the database
+- Immediately see it in the tax rate list
+- Select it and apply it to the invoice/estimate/job they were editing
+
+UX (MATCH EXISTING PATTERN)
+- Same behavior as our customer pickers in Jobs/Estimates:
+  - List screen with existing items
+  - "+" in the header
+  - Create form in a modal or separate screen
+  - On save: return to list and show the new item immediately
+
+SCREENS
+1) Tax Rates List Screen
+- Title: "Tax rates"
+- Left: Cancel/back
+- Right: "+" button
+- List shows: Name + (Rate %) like "New York State (8.625%)"
+- Tapping a row selects it and returns to prior screen
+
+2) Create Tax Rate Screen/Modal
+Fields:
+- Name (required) e.g. "Suffolk County"
+- Rate percent (required) e.g. 8.625
+Validation:
+- Percent must be 0 to 20 (or reasonable bound)
+- Allow up to 3 decimals (8.625)
+- Store as decimal safely (see data notes below)
+Actions:
+- Cancel
+- Save
+
+DATA MODEL
+- Create a TaxRate entity/table if it doesn’t exist:
+  - id
+  - companyId (important: tax rates are per company)
+  - name
+  - rate (store as basis points int OR decimal string)
+  - createdAt/updatedAt
+Rules:
+- Tax rates must be company-scoped (not global)
+- Prevent duplicates by name per company (optional but preferred)
+
+API
+- GET /api/tax-rates (by companyId / current company)
+- POST /api/tax-rates (create)
+- (Optional) DELETE /api/tax-rates/:id later
+
+INTEGRATION (INVOICE/ESTIMATE/JOB FORMS)
+- Wherever "Select tax rate" is used:
+  - Selected tax rate should store taxRateId + rate snapshot used for calculations
+  - When returning from tax rate picker, update the form state immediately
+  - Recalculate totals (subtotal, tax, total) instantly
+
+STATE/REFRESH
+- After creating a tax rate:
+  - List should update immediately (no refresh)
+  - Use query invalidation or push into local list state
+
+RBAC (HIDDEN NOT DISABLED)
+- Only roles allowed to edit financial settings can create tax rates
+- If user can select but not create:
+  - Hide the "+" button
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+1) Add/confirm TaxRate model/table (company-scoped)
+2) Build GET/POST endpoints
+3) Build Tax Rates List screen with header "+" button
+4) Build Create Tax Rate modal/screen with validation
+5) Wire save -> return -> list updates immediately
+6) Wire selection -> returns value to invoice/estimate/job and recalculates totals
+
+DELIVERABLES
+- Tax rate picker supports creating and saving new tax rates
+- New tax rate appears instantly in the list
+- Selecting a rate applies it to the current invoice/estimate/job
+- Persists after refresh (DB-backed)

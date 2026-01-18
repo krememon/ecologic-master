@@ -4,6 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, Calendar, ChevronRight, 
@@ -107,6 +108,10 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
   const [taxPickerOpen, setTaxPickerOpen] = useState(false);
   const [taxPickerLineItemIndex, setTaxPickerLineItemIndex] = useState<number | null>(null);
+  const [taxPickerShowCreate, setTaxPickerShowCreate] = useState(false);
+  const [newTaxName, setNewTaxName] = useState("");
+  const [newTaxRate, setNewTaxRate] = useState("");
+  const [newTaxError, setNewTaxError] = useState<string | null>(null);
 
   // Customer search
   const [customerSearch, setCustomerSearch] = useState("");
@@ -224,6 +229,48 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
     },
   });
 
+  // Create tax mutation
+  const createTaxMutation = useMutation({
+    mutationFn: async (data: { name: string; ratePercent: string }) => {
+      const res = await apiRequest('POST', '/api/company/taxes', data);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to create tax');
+      }
+      return res.json();
+    },
+    onSuccess: (newTax) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/company/taxes'] });
+      setNewTaxName("");
+      setNewTaxRate("");
+      setNewTaxError(null);
+      setTaxPickerShowCreate(false);
+      // Auto-select the newly created tax
+      if (taxPickerLineItemIndex !== null) {
+        setLineItemTax(taxPickerLineItemIndex, newTax);
+        setTaxPickerOpen(false);
+        setTaxPickerLineItemIndex(null);
+      }
+    },
+    onError: (error: Error) => {
+      setNewTaxError(error.message);
+    },
+  });
+
+  const handleCreateTax = () => {
+    setNewTaxError(null);
+    if (!newTaxName.trim()) {
+      setNewTaxError("Tax name is required");
+      return;
+    }
+    const rate = parseFloat(newTaxRate);
+    if (isNaN(rate) || rate < 0 || rate > 20) {
+      setNewTaxError("Rate must be between 0 and 20%");
+      return;
+    }
+    createTaxMutation.mutate({ name: newTaxName.trim(), ratePercent: rate.toFixed(3) });
+  };
+
   const resetForm = () => {
     setSelectedCustomer(null);
     setScheduledAt({ date: "", time: "" });
@@ -233,6 +280,10 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
     ]);
     setCustomerSearch("");
     setTagInput("");
+    setTaxPickerShowCreate(false);
+    setNewTaxName("");
+    setNewTaxRate("");
+    setNewTaxError(null);
   };
 
   const handleSubmit = () => {
@@ -843,31 +894,137 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
         </DialogContent>
       </Dialog>
 
-      {/* Tax Picker Modal */}
-      <Dialog open={taxPickerOpen} onOpenChange={setTaxPickerOpen}>
-        <DialogContent className="max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Select Tax Rate</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            {companyTaxes.length === 0 ? (
-              <p className="text-center text-sm text-slate-500 py-4">
-                No tax rates configured. Add taxes in Settings → Taxes.
-              </p>
+      {/* Tax Picker Modal - Full Screen */}
+      <Dialog open={taxPickerOpen} onOpenChange={(open) => {
+        setTaxPickerOpen(open);
+        if (!open) {
+          setTaxPickerShowCreate(false);
+          setNewTaxName("");
+          setNewTaxRate("");
+          setNewTaxError(null);
+        }
+      }}>
+        <DialogContent hideCloseButton className="w-full h-full max-w-none max-h-none md:max-w-[640px] md:max-h-[85vh] md:h-auto rounded-none md:rounded-xl flex flex-col p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => {
+                if (taxPickerShowCreate) {
+                  setTaxPickerShowCreate(false);
+                  setNewTaxName("");
+                  setNewTaxRate("");
+                  setNewTaxError(null);
+                } else {
+                  setTaxPickerOpen(false);
+                  setTaxPickerLineItemIndex(null);
+                }
+              }}
+              className="text-sm text-primary hover:text-primary/80 font-medium"
+            >
+              {taxPickerShowCreate ? "Back" : "Cancel"}
+            </button>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {taxPickerShowCreate ? "New Tax" : "Tax rates"}
+            </h2>
+            {!taxPickerShowCreate ? (
+              <button
+                type="button"
+                onClick={() => setTaxPickerShowCreate(true)}
+                className="p-1 text-primary hover:text-primary/80"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
             ) : (
-              companyTaxes.map((tax) => (
-                <button
-                  key={tax.id}
-                  type="button"
-                  onClick={() => setLineItemTax(taxPickerLineItemIndex!, tax)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
-                >
-                  <span className="text-sm text-slate-900 dark:text-slate-100">{tax.name}</span>
-                  <span className="text-sm text-slate-500">{tax.ratePercent}%</span>
-                </button>
-              ))
+              <div className="w-6" />
             )}
           </div>
+
+          {taxPickerShowCreate ? (
+            <div className="flex-1 overflow-auto p-4">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="newTaxName">Tax Name</Label>
+                  <Input
+                    id="newTaxName"
+                    value={newTaxName}
+                    onChange={(e) => setNewTaxName(e.target.value)}
+                    placeholder="e.g., NY State Tax"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newTaxRate">Percentage</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      id="newTaxRate"
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      max="20"
+                      value={newTaxRate}
+                      onChange={(e) => setNewTaxRate(e.target.value)}
+                      placeholder="8.625"
+                      className="pr-8"
+                    />
+                    <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+                {newTaxError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{newTaxError}</p>
+                )}
+                <Button
+                  type="button"
+                  onClick={handleCreateTax}
+                  disabled={createTaxMutation.isPending}
+                  className="w-full"
+                >
+                  {createTaxMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <ScrollArea className="flex-1">
+              <div className="p-2">
+                {companyTaxes.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500 dark:text-slate-400">
+                    <Percent className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" />
+                    <p className="text-sm font-medium">No tax rates yet</p>
+                    <p className="text-xs mt-1">Tap + to create your first tax rate</p>
+                  </div>
+                ) : (
+                  companyTaxes.map((tax) => {
+                    const isSelected = taxPickerLineItemIndex !== null && 
+                      lineItems[taxPickerLineItemIndex]?.taxId === tax.id;
+                    return (
+                      <button
+                        key={tax.id}
+                        type="button"
+                        onClick={() => {
+                          if (taxPickerLineItemIndex !== null) {
+                            setLineItemTax(taxPickerLineItemIndex, tax);
+                            setTaxPickerOpen(false);
+                            setTaxPickerLineItemIndex(null);
+                          }
+                        }}
+                        className="w-full flex items-center justify-between py-3.5 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                      >
+                        <div className="text-left">
+                          <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{tax.name}</span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">({parseFloat(tax.ratePercent).toFixed(3)}%)</span>
+                        </div>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-primary" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          )}
         </DialogContent>
       </Dialog>
 
