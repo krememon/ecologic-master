@@ -924,9 +924,9 @@ export default function AIScheduling() {
         {viewMode === 'map' && (
           <div className="flex-1 h-full min-h-[500px]">
             <ScheduleMapView 
-              items={itemsForSelectedDay.map(item => ({
+              items={scheduleItems.map(item => ({
                 ...item,
-                customerId: item.type === 'estimate' ? (item as any).customerId : (item as any).customerId,
+                customerId: (item as any).customerId,
                 latitude: (item as any).latitude,
                 longitude: (item as any).longitude
               }))}
