@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, CheckCircle, XCircle, Loader2, CreditCard, Banknote } from "lucide-react";
 import { format } from "date-fns";
 
 interface InvoiceDetailsProps {
@@ -99,6 +99,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   
   const [isMarkPaidDialogOpen, setIsMarkPaidDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   
   const canMarkAsPaid = role === 'OWNER' || role === 'SUPERVISOR';
   const canVoidInvoice = role === 'OWNER' || role === 'SUPERVISOR';
@@ -146,6 +147,31 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       toast({ title: "Failed to void invoice", variant: "destructive" });
     },
   });
+
+  const handlePayWithCard = async () => {
+    if (isCheckoutLoading) return;
+    setIsCheckoutLoading(true);
+    try {
+      const returnBaseUrl = window.location.origin;
+      const res = await apiRequest('POST', '/api/payments/checkout', {
+        invoiceId: parseInt(invoiceId),
+        returnBaseUrl,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to create checkout session');
+      }
+      const { url } = await res.json();
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
+    } catch (error: any) {
+      toast({ title: error.message || "Payment failed", variant: "destructive" });
+      setIsCheckoutLoading(false);
+    }
+  };
 
   if (isLoading || authLoading) {
     return (
@@ -211,13 +237,31 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         </a>
       )}
 
+      {/* Primary Pay Button - Shows for unpaid invoices with amount > 0 */}
+      {canMarkPaid && invoice.totalCents > 0 && (
+        <Button 
+          onClick={handlePayWithCard}
+          disabled={isCheckoutLoading}
+          className="w-full mb-2 bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          {isCheckoutLoading ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <CreditCard className="h-4 w-4 mr-2" />
+          )}
+          {isCheckoutLoading ? 'Processing...' : 'Pay'}
+        </Button>
+      )}
+
+      {/* Secondary Mark as Paid - Owner/Supervisor only for cash/check payments */}
       {canMarkAsPaid && canMarkPaid && (
         <Button 
+          variant="outline"
           onClick={() => setIsMarkPaidDialogOpen(true)}
-          className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white"
+          className="w-full mb-4 text-green-600 border-green-200 hover:bg-green-50 dark:border-green-800 dark:hover:bg-green-950"
         >
-          <CheckCircle className="h-4 w-4 mr-2" />
-          Mark as Paid
+          <Banknote className="h-4 w-4 mr-2" />
+          Mark as Paid (Cash/Check)
         </Button>
       )}
 
