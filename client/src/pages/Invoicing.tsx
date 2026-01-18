@@ -119,19 +119,24 @@ export default function Invoicing() {
         }}
       />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Invoices ({invoices.length})
         </h3>
-        {canCreateInvoice && (
-          <Button 
-            onClick={() => setIsSheetOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Invoice
-          </Button>
-        )}
+        {(() => {
+          console.log("[Invoicing] render Add Invoice pill", { canCreateInvoice, role: user?.role });
+          return canCreateInvoice && (
+            <Button 
+              data-testid="page-add-invoice"
+              onClick={() => setIsSheetOpen(true)}
+              style={{ background: 'hotpink', outline: '3px solid red' }}
+              className="text-white rounded-full px-4 flex-shrink-0"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Invoice
+            </Button>
+          );
+        })()}
       </div>
 
       {invoices.length === 0 ? (
