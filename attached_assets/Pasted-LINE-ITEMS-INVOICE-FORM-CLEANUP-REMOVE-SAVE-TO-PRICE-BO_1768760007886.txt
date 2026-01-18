@@ -1,0 +1,77 @@
+LINE ITEMS / INVOICE FORM CLEANUP:
+REMOVE "SAVE TO PRICE BOOK" + MATCH JOBS FORM SPACING
+
+CURRENT
+1) A "Save to Price Book" action was added to the Line Items flow.
+2) The spacing between "Add line items" and "Schedule" in the Invoice form is too large and does not match the spacing used in the Jobs form schedule section.
+
+GOAL
+- Completely remove the "Save to Price Book" action and any related UI or logic.
+- Adjust spacing so the Invoice form section layout matches the Jobs form layout exactly (clean, tight, consistent rows).
+
+────────────────────────
+PART 1: REMOVE SAVE TO PRICE BOOK
+────────────────────────
+
+REQUIREMENTS
+- Remove the "Save to Price Book" button/link entirely.
+- Remove any associated logic, handlers, or conditionals.
+- Do NOT keep it hidden or disabled — fully remove it.
+- No backend or DB changes needed for this part.
+
+VERIFY
+- Line Items modal contains ONLY:
+  - Item fields
+  - Add Item
+  - From Price Book (if already existing and intentional)
+  - Totals
+  - Done button
+
+────────────────────────
+PART 2: FIX SPACING BETWEEN "ADD LINE ITEMS" AND "SCHEDULE"
+────────────────────────
+
+ISSUE
+The vertical spacing between:
+- Invoice → "Add line items"
+- Schedule → "Add schedule"
+
+is larger than it should be and does not match the Jobs form layout.
+
+REFERENCE
+Use the Jobs form schedule section as the spacing reference:
+- Same padding
+- Same divider usage
+- Same row height
+- Same visual rhythm
+
+REQUIREMENTS
+- Invoice form rows should visually match Jobs form rows
+- No large gaps between sections
+- Sections should feel grouped, not floating
+
+SPECIFIC LAYOUT RULES
+- Use consistent section headers (INVOICE, SCHEDULE)
+- Each row should:
+  - Have equal vertical padding
+  - Use the same divider style as Jobs form
+- Remove any extra margin-top / margin-bottom causing excess space
+- Do NOT change typography or icons — spacing only
+
+IMPLEMENTATION STEPS
+1) Inspect Jobs form layout (Add line items → Schedule)
+2) Copy spacing values (padding, margin, gap)
+3) Apply the same values to the Invoice form
+4) Remove any hardcoded spacing causing visual inconsistency
+
+────────────────────────
+FINAL VERIFICATION
+────────────────────────
+- "Save to Price Book" is gone everywhere
+- Invoice form spacing matches Jobs form spacing
+- "Add line items" and "Add schedule" feel like adjacent, related rows
+- UI looks clean, compact, and intentional
+
+DELIVERABLE
+- Simplified Line Items flow (no price book save)
+- Invoice form spacing visually consistent with Jobs form
