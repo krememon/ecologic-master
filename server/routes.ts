@@ -6950,10 +6950,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/invoices/:id/send/email - Send invoice via email with payment link
+  // POST /api/invoices/:id/send/email - Send invoice via email with payment link (Resend)
   app.post('/api/invoices/:id/send/email', isAuthenticated, async (req: any, res) => {
     try {
       const invoiceId = parseInt(req.params.id);
+      const { email } = req.body;
+      
+      console.log("[EmailSend] start", { 
+        invoiceId, 
+        to: email,
+        hasResendKey: !!process.env.RESEND_API_KEY,
+        hasEmailFrom: !!process.env.EMAIL_FROM,
+        hasAppBaseUrl: !!process.env.APP_BASE_URL
+      });
+      
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
       
@@ -6975,25 +6985,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Invoice not found" });
       }
       
-      const { email } = req.body;
-      
       if (!email || typeof email !== 'string') {
         return res.status(400).json({ message: "Email address is required" });
       }
       
-      // Check if Resend is configured
-      if (!process.env.RESEND_API_KEY) {
-        return res.status(500).json({ message: "Email service not configured" });
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: "Invalid email address format" });
       }
       
-      const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM;
-      if (!fromEmail) {
-        return res.status(500).json({ message: "Email sender not configured" });
+      // Check if Resend is configured
+      if (!process.env.RESEND_API_KEY) {
+        console.error("[EmailSend] Missing RESEND_API_KEY");
+        return res.status(500).json({ message: "Email service not configured: missing RESEND_API_KEY" });
       }
+      
+      // Use EMAIL_FROM or fallback to Resend test sender for development
+      const fromEmail = process.env.EMAIL_FROM || "EcoLogic <onboarding@resend.dev>";
       
       // Build payment link
       const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
+      
+      console.log("[EmailSend] building email", { from: fromEmail, paymentLink });
       
       // Format amount
       const amountFormatted = new Intl.NumberFormat('en-US', {
@@ -7029,6 +7044,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             Pay Now
           </a>
           
+          <p style="margin-top: 20px; color: #64748b; font-size: 14px;">
+            Or copy this link: <a href="${paymentLink}" style="color: #2563eb;">${paymentLink}</a>
+          </p>
+          
           <p style="margin-top: 30px; color: #64748b; font-size: 14px;">
             If you have any questions about this invoice, please contact us.
           </p>
@@ -7041,28 +7060,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         </div>
       `;
       
-      const { data, error } = await resend.emails.send({
-        from: fromEmail,
-        to: email,
-        subject: `Invoice ${invoice.invoiceNumber} from ${company.name} - ${amountFormatted}`,
-        html: emailHtml,
+      try {
+        const { data, error } = await resend.emails.send({
+          from: fromEmail,
+          to: email,
+          subject: `Invoice ${invoice.invoiceNumber} from ${company.name} - ${amountFormatted}`,
+          html: emailHtml,
+        });
+        
+        if (error) {
+          console.error("[EmailSend] Resend error:", error);
+          return res.status(500).json({ 
+            message: "Failed to send email",
+            detail: error.message,
+            name: error.name
+          });
+        }
+        
+        // Update invoice status to 'sent' if it was draft
+        if (invoice.status === 'draft') {
+          await storage.updateInvoice(invoiceId, { status: 'sent' });
+        }
+        
+        console.log("[EmailSend] sent successfully", { invoiceId, to: email, resendId: data?.id });
+        res.json({ success: true, emailId: data?.id });
+      } catch (resendError: any) {
+        console.error("[EmailSend] Resend exception:", resendError);
+        return res.status(500).json({ 
+          message: "Failed to send email",
+          detail: resendError?.message,
+          name: resendError?.name,
+          statusCode: resendError?.statusCode,
+          type: resendError?.type
+        });
+      }
+    } catch (error: any) {
+      console.error("[EmailSend] Unexpected error:", error);
+      res.status(500).json({ 
+        message: "Failed to send invoice",
+        detail: error?.message 
       });
-      
-      if (error) {
-        console.error("[InvoiceSend] Email error:", error);
-        return res.status(500).json({ message: "Failed to send email" });
-      }
-      
-      // Update invoice status to 'sent' if it was draft
-      if (invoice.status === 'draft') {
-        await storage.updateInvoice(invoiceId, { status: 'sent' });
-      }
-      
-      console.log(`[InvoiceSend] Email sent invoiceId=${invoiceId} to=${email}`, { emailId: data?.id });
-      res.json({ success: true, emailId: data?.id });
-    } catch (error) {
-      console.error("Error sending invoice email:", error);
-      res.status(500).json({ message: "Failed to send invoice" });
     }
   });
 

@@ -1,0 +1,54 @@
+EMAIL NOT SENDING: Add real logging + return Resend error + verify secrets + fix FROM address
+
+CURRENT
+"Send Invoice" Email flow does not send any real email. UI says it's implemented, but nothing arrives.
+
+GOAL
+Make email sending work end-to-end and expose the real failure reason if it doesn’t.
+
+IMPLEMENTATION STEPS (DO IN THIS ORDER)
+
+1) FRONTEND: PROVE REQUEST IS FIRING
+- In the Send Invoice modal (Email tab), when clicking "Send Invoice":
+  - console.log("[SendInvoice] sending email", { invoiceId, to })
+- Ensure it calls:
+  POST /api/invoices/:id/send
+  body: { method: "email", to }
+- If it’s not calling, fix the onClick wiring.
+
+2) BACKEND: STOP SWALLOWING ERRORS
+In the /api/invoices/:id/send route (email path):
+- Add logs:
+  console.log("[EmailSend] start", { invoiceId, to, from: process.env.EMAIL_FROM, baseUrl: process.env.APP_BASE_URL })
+- Wrap Resend call in try/catch and on failure:
+  console.error("[EmailSend] resend error", err)
+  return res.status(500).json({
+    message: "Failed to send email",
+    detail: err?.message,
+    name: err?.name,
+    statusCode: err?.statusCode,
+    type: err?.type
+  })
+- On success:
+  console.log("[EmailSend] sent", { invoiceId, to, resendId: result?.id })
+  return { success: true }
+
+3) VERIFY SECRETS EXIST AT RUNTIME
+- If RESEND_API_KEY / EMAIL_FROM / APP_BASE_URL is missing, return 500 with message telling which is missing.
+- Also log whether they’re present (never print the key itself).
+
+4) FIX EMAIL_FROM TO A KNOWN-WORKING SENDER
+Most common reason for silent failure: EMAIL_FROM is not verified.
+- For now set EMAIL_FROM to:
+  "EcoLogic <onboarding@resend.dev>"
+(This works for testing without domain verification.)
+- Later we can switch to billing@yourdomain.com after verifying domain in Resend.
+
+5) RETURN CLEAR RESULT TO UI
+- If backend returns non-200, show error toast with returned message/detail.
+- If 200, close modal and update invoice status to "sent".
+
+DELIVERABLE
+- Clicking Send triggers an API call (verified by logs)
+- Backend either sends email successfully OR returns a detailed Resend error
+- Using onboarding@resend.dev sender makes test emails actually deliver

@@ -188,6 +188,8 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     const value = sendMode === 'email' ? emailValue.trim() : phoneValue.replace(/\D/g, '');
     if (!value) return;
     
+    console.log("[SendInvoice] sending", { invoiceId, mode: sendMode, to: value });
+    
     setIsSending(true);
     try {
       const endpoint = sendMode === 'email' 
@@ -202,8 +204,15 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to send invoice');
+        console.error("[SendInvoice] error response", errorData);
+        const errorMsg = errorData.detail 
+          ? `${errorData.message}: ${errorData.detail}` 
+          : errorData.message || 'Failed to send invoice';
+        throw new Error(errorMsg);
       }
+      
+      const result = await res.json();
+      console.log("[SendInvoice] success", result);
       
       queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
@@ -211,6 +220,7 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       setEmailValue('');
       setPhoneValue('');
     } catch (error: any) {
+      console.error("[SendInvoice] error", error);
       toast({ title: error.message || "Failed to send invoice", variant: "destructive" });
     } finally {
       setIsSending(false);
