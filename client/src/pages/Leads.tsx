@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Search, User, Phone, Mail, MapPin, Calendar, Loader2, MoreVertical, Trash2, Pencil } from "lucide-react";
+import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, X } from "lucide-react";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -21,15 +20,9 @@ interface Lead {
   lastName: string | null;
   email: string | null;
   phone: string | null;
-  addressLine1: string | null;
-  city: string | null;
-  state: string | null;
-  postalCode: string | null;
-  source: string | null;
-  status: string;
+  description: string | null;
   notes: string | null;
-  estimatedValue: number | null;
-  serviceType: string | null;
+  status: string;
   createdAt: string;
 }
 
@@ -41,25 +34,27 @@ const statusColors: Record<string, string> = {
   lost: "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300",
 };
 
+const formatPhoneNumber = (value: string): string => {
+  const digits = value.replace(/\D/g, "").slice(0, 10);
+  if (digits.length === 0) return "";
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+};
+
 export default function Leads() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [formErrors, setFormErrors] = useState<{ description?: string; contact?: string }>({});
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
-    addressLine1: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    source: "",
-    status: "new",
+    description: "",
     notes: "",
-    serviceType: "",
-    estimatedValue: "",
   });
 
   const { data: leads = [], isLoading } = useQuery<Lead[]>({
@@ -68,11 +63,7 @@ export default function Leads() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const payload = {
-        ...data,
-        estimatedValue: data.estimatedValue ? Math.round(parseFloat(data.estimatedValue) * 100) : null,
-      };
-      const res = await apiRequest("POST", "/api/leads", payload);
+      const res = await apiRequest("POST", "/api/leads", data);
       if (!res.ok) throw new Error("Failed to create lead");
       return res.json();
     },
@@ -88,11 +79,7 @@ export default function Leads() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
-      const payload = {
-        ...data,
-        estimatedValue: data.estimatedValue ? Math.round(parseFloat(data.estimatedValue) * 100) : null,
-      };
-      const res = await apiRequest("PATCH", `/api/leads/${id}`, payload);
+      const res = await apiRequest("PATCH", `/api/leads/${id}`, data);
       if (!res.ok) throw new Error("Failed to update lead");
       return res.json();
     },
@@ -125,16 +112,10 @@ export default function Leads() {
       lastName: "",
       email: "",
       phone: "",
-      addressLine1: "",
-      city: "",
-      state: "",
-      postalCode: "",
-      source: "",
-      status: "new",
+      description: "",
       notes: "",
-      serviceType: "",
-      estimatedValue: "",
     });
+    setFormErrors({});
   };
 
   const openEditDialog = (lead: Lead) => {
@@ -144,19 +125,30 @@ export default function Leads() {
       lastName: lead.lastName || "",
       email: lead.email || "",
       phone: lead.phone || "",
-      addressLine1: lead.addressLine1 || "",
-      city: lead.city || "",
-      state: lead.state || "",
-      postalCode: lead.postalCode || "",
-      source: lead.source || "",
-      status: lead.status,
+      description: lead.description || "",
       notes: lead.notes || "",
-      serviceType: lead.serviceType || "",
-      estimatedValue: lead.estimatedValue ? (lead.estimatedValue / 100).toString() : "",
     });
+    setFormErrors({});
+  };
+
+  const validateForm = (): boolean => {
+    const errors: { description?: string; contact?: string } = {};
+    
+    if (!formData.description.trim()) {
+      errors.description = "Description is required";
+    }
+    
+    if (!formData.email.trim() && !formData.phone.trim()) {
+      errors.contact = "Phone or email is required";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = () => {
+    if (!validateForm()) return;
+    
     if (editingLead) {
       updateMutation.mutate({ id: editingLead.id, data: formData });
     } else {
@@ -171,16 +163,9 @@ export default function Leads() {
       name.includes(searchLower) ||
       lead.email?.toLowerCase().includes(searchLower) ||
       lead.phone?.includes(searchQuery) ||
-      lead.serviceType?.toLowerCase().includes(searchLower)
+      lead.description?.toLowerCase().includes(searchLower)
     );
   });
-
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
-  };
 
   if (isLoading) {
     return (
@@ -244,12 +229,13 @@ export default function Leads() {
                       <Badge className={statusColors[lead.status] || statusColors.new}>
                         {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
                       </Badge>
-                      {lead.estimatedValue && (
-                        <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                          {formatCurrency(lead.estimatedValue)}
-                        </span>
-                      )}
                     </div>
+
+                    {lead.description && (
+                      <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
+                        {lead.description}
+                      </p>
+                    )}
 
                     <div className="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-slate-400">
                       {lead.email && (
@@ -264,12 +250,6 @@ export default function Leads() {
                           {lead.phone}
                         </span>
                       )}
-                      {(lead.city || lead.state) && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {[lead.city, lead.state].filter(Boolean).join(", ")}
-                        </span>
-                      )}
                       {lead.createdAt && (
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5" />
@@ -278,13 +258,8 @@ export default function Leads() {
                       )}
                     </div>
 
-                    {lead.serviceType && (
-                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
-                        Service: {lead.serviceType}
-                      </p>
-                    )}
-                    {lead.source && (
-                      <p className="text-xs text-slate-400 mt-1">Source: {lead.source}</p>
+                    {lead.notes && (
+                      <p className="text-xs text-slate-400 mt-2 italic">{lead.notes}</p>
                     )}
                   </div>
 
@@ -326,11 +301,11 @@ export default function Leads() {
           }
         }}
       >
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingLead ? "Edit Lead" : "Add Lead"}</DialogTitle>
             <DialogDescription>
-              {editingLead ? "Update lead information" : "Enter the lead's contact information"}
+              Enter the lead's contact information
             </DialogDescription>
           </DialogHeader>
 
@@ -340,6 +315,7 @@ export default function Leads() {
                 <Label htmlFor="firstName">First Name</Label>
                 <Input
                   id="firstName"
+                  placeholder="John"
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                   className="mt-1"
@@ -349,6 +325,7 @@ export default function Leads() {
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input
                   id="lastName"
+                  placeholder="Doe"
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   className="mt-1"
@@ -357,135 +334,82 @@ export default function Leads() {
             </div>
 
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">
+                Email
+                {formErrors.contact && !formData.phone && (
+                  <span className="text-red-500 text-xs ml-2">(required if no phone)</span>
+                )}
+              </Label>
               <Input
                 id="email"
                 type="email"
+                placeholder="john@example.com"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="mt-1"
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (formErrors.contact) setFormErrors({ ...formErrors, contact: undefined });
+                }}
+                className={`mt-1 ${formErrors.contact && !formData.phone ? "border-red-500" : ""}`}
               />
             </div>
 
             <div>
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone">
+                Phone
+                {formErrors.contact && !formData.email && (
+                  <span className="text-red-500 text-xs ml-2">(required if no email)</span>
+                )}
+              </Label>
               <Input
                 id="phone"
+                placeholder="555-123-4567"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="mt-1"
+                onChange={(e) => {
+                  setFormData({ ...formData, phone: formatPhoneNumber(e.target.value) });
+                  if (formErrors.contact) setFormErrors({ ...formErrors, contact: undefined });
+                }}
+                className={`mt-1 ${formErrors.contact && !formData.email ? "border-red-500" : ""}`}
               />
             </div>
+
+            {formErrors.contact && (
+              <p className="text-red-500 text-sm">{formErrors.contact}</p>
+            )}
 
             <div>
-              <Label htmlFor="addressLine1">Address</Label>
-              <Input
-                id="addressLine1"
-                value={formData.addressLine1}
-                onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
-                className="mt-1"
+              <Label htmlFor="description">
+                Description <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="description"
+                placeholder="What service is the lead interested in?"
+                value={formData.description}
+                onChange={(e) => {
+                  setFormData({ ...formData, description: e.target.value });
+                  if (formErrors.description) setFormErrors({ ...formErrors, description: undefined });
+                }}
+                className={`mt-1 ${formErrors.description ? "border-red-500" : ""}`}
+                rows={3}
               />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="state">State</Label>
-                <Input
-                  id="state"
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="postalCode">ZIP</Label>
-                <Input
-                  id="postalCode"
-                  value={formData.postalCode}
-                  onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) => setFormData({ ...formData, status: value })}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="contacted">Contacted</SelectItem>
-                    <SelectItem value="qualified">Qualified</SelectItem>
-                    <SelectItem value="converted">Converted</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="source">Source</Label>
-                <Input
-                  id="source"
-                  placeholder="e.g., Website, Referral"
-                  value={formData.source}
-                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="serviceType">Service Type</Label>
-                <Input
-                  id="serviceType"
-                  placeholder="e.g., Plumbing, HVAC"
-                  value={formData.serviceType}
-                  onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="estimatedValue">Estimated Value ($)</Label>
-                <Input
-                  id="estimatedValue"
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={formData.estimatedValue}
-                  onChange={(e) => setFormData({ ...formData, estimatedValue: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
+              {formErrors.description && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.description}</p>
+              )}
             </div>
 
             <div>
               <Label htmlFor="notes">Notes</Label>
               <Textarea
                 id="notes"
+                placeholder="Additional notes (optional)"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 className="mt-1"
-                rows={3}
+                rows={2}
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => {
@@ -503,7 +427,7 @@ export default function Leads() {
               {(createMutation.isPending || updateMutation.isPending) && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
-              {editingLead ? "Save Changes" : "Add Lead"}
+              {editingLead ? "Save Changes" : "Create Lead"}
             </Button>
           </DialogFooter>
         </DialogContent>

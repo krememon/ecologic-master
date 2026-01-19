@@ -1318,17 +1318,18 @@ export const leads = pgTable("leads", {
   lastName: varchar("last_name", { length: 100 }),
   email: varchar("email"),
   phone: varchar("phone"),
+  description: text("description"),
+  notes: text("notes"),
+  status: varchar("status", { length: 50 }).default("new").notNull(), // new, contacted, qualified, converted, lost
   addressLine1: varchar("address_line_1"),
   addressLine2: varchar("address_line_2"),
   city: varchar("city"),
   state: varchar("state"),
   postalCode: varchar("postal_code"),
   source: varchar("source", { length: 100 }), // e.g., "Website", "Referral", "Google Ads"
-  status: varchar("status", { length: 50 }).default("new").notNull(), // new, contacted, qualified, converted, lost
-  notes: text("notes"),
   estimatedValue: integer("estimated_value"), // in cents
-  serviceType: varchar("service_type", { length: 100 }), // what service they're interested in
-  preferredContactMethod: varchar("preferred_contact_method", { length: 50 }), // email, phone, text
+  serviceType: varchar("service_type", { length: 100 }),
+  preferredContactMethod: varchar("preferred_contact_method", { length: 50 }),
   convertedToCustomerId: integer("converted_to_customer_id").references(() => customers.id),
   convertedToJobId: integer("converted_to_job_id").references(() => jobs.id),
   assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
