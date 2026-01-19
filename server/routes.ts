@@ -7001,14 +7001,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Email service not configured: missing RESEND_API_KEY" });
       }
       
-      // Use EMAIL_FROM or fallback to Resend test sender for development
-      const fromEmail = process.env.EMAIL_FROM || "EcoLogic <onboarding@resend.dev>";
+      // Validate EMAIL_FROM is an email, not a URL - fallback to Resend test sender
+      const emailFromEnv = process.env.EMAIL_FROM || "";
+      const isValidEmailFrom = emailFromEnv.includes('@') && !emailFromEnv.startsWith('http');
+      const fromEmail = isValidEmailFrom ? emailFromEnv : "EcoLogic <onboarding@resend.dev>";
       
-      // Build payment link
+      // Build payment link using APP_BASE_URL (this is the public URL for links, not for email "from")
       const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
       
-      console.log("[EmailSend] building email", { from: fromEmail, paymentLink });
+      console.log("[EmailSend] building email", { from: fromEmail, paymentLink, emailFromEnvValid: isValidEmailFrom });
       
       // Format amount
       const amountFormatted = new Intl.NumberFormat('en-US', {
