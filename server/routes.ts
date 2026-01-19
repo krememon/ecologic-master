@@ -789,6 +789,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // =====================
+  // LEADS ROUTES
+  // =====================
+
+  // Get all leads for company
+  app.get('/api/leads', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'leads.view')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const leads = await storage.getLeads(member.companyId);
+      res.json(leads);
+    } catch (error: any) {
+      console.error('Error fetching leads:', error);
+      res.status(500).json({ error: 'Failed to fetch leads' });
+    }
+  });
+
+  // Get single lead
+  app.get('/api/leads/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'leads.view')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const leadId = parseInt(req.params.id);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ error: 'Invalid lead ID' });
+      }
+      
+      const lead = await storage.getLead(leadId);
+      if (!lead || lead.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+      
+      res.json(lead);
+    } catch (error: any) {
+      console.error('Error fetching lead:', error);
+      res.status(500).json({ error: 'Failed to fetch lead' });
+    }
+  });
+
+  // Create lead
+  app.post('/api/leads', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'leads.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const leadData = {
+        ...req.body,
+        createdByUserId: userId,
+      };
+      
+      const lead = await storage.createLead(member.companyId, leadData);
+      console.log('[Leads] created', { leadId: lead.id, companyId: member.companyId, userId });
+      res.status(201).json(lead);
+    } catch (error: any) {
+      console.error('Error creating lead:', error);
+      res.status(500).json({ error: 'Failed to create lead' });
+    }
+  });
+
+  // Update lead
+  app.patch('/api/leads/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'leads.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const leadId = parseInt(req.params.id);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ error: 'Invalid lead ID' });
+      }
+      
+      const existingLead = await storage.getLead(leadId);
+      if (!existingLead || existingLead.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+      
+      const lead = await storage.updateLead(leadId, req.body);
+      console.log('[Leads] updated', { leadId, userId });
+      res.json(lead);
+    } catch (error: any) {
+      console.error('Error updating lead:', error);
+      res.status(500).json({ error: 'Failed to update lead' });
+    }
+  });
+
+  // Delete lead
+  app.delete('/api/leads/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'leads.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const leadId = parseInt(req.params.id);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ error: 'Invalid lead ID' });
+      }
+      
+      const existingLead = await storage.getLead(leadId);
+      if (!existingLead || existingLead.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+      
+      await storage.deleteLead(leadId);
+      console.log('[Leads] deleted', { leadId, userId });
+      res.status(204).send();
+    } catch (error: any) {
+      console.error('Error deleting lead:', error);
+      res.status(500).json({ error: 'Failed to delete lead' });
+    }
+  });
+
   // Set company industry and seed price book presets (Owner only - onboarding)
   app.patch('/api/company/industry', isAuthenticated, async (req: any, res) => {
     try {

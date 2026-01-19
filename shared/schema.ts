@@ -1309,3 +1309,44 @@ export const finalizeJobSchema = z.object({
 });
 
 export type FinalizeJobPayload = z.infer<typeof finalizeJobSchema>;
+
+// Leads table - potential customers/jobs before conversion
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  email: varchar("email"),
+  phone: varchar("phone"),
+  addressLine1: varchar("address_line_1"),
+  addressLine2: varchar("address_line_2"),
+  city: varchar("city"),
+  state: varchar("state"),
+  postalCode: varchar("postal_code"),
+  source: varchar("source", { length: 100 }), // e.g., "Website", "Referral", "Google Ads"
+  status: varchar("status", { length: 50 }).default("new").notNull(), // new, contacted, qualified, converted, lost
+  notes: text("notes"),
+  estimatedValue: integer("estimated_value"), // in cents
+  serviceType: varchar("service_type", { length: 100 }), // what service they're interested in
+  preferredContactMethod: varchar("preferred_contact_method", { length: 50 }), // email, phone, text
+  convertedToCustomerId: integer("converted_to_customer_id").references(() => customers.id),
+  convertedToJobId: integer("converted_to_job_id").references(() => jobs.id),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  lastContactedAt: timestamp("last_contacted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("leads_company_id_idx").on(table.companyId),
+  index("leads_status_idx").on(table.status),
+]);
+
+export const insertLeadSchema = createInsertSchema(leads).omit({
+  id: true,
+  companyId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = z.infer<typeof insertLeadSchema>;

@@ -25,6 +25,7 @@ import {
   companyCounters,
   serviceCatalogItems,
   companyTaxes,
+  leads,
   type User,
   type UpsertUser,
   type Company,
@@ -65,6 +66,8 @@ import {
   type InsertServiceCatalogItem,
   type CompanyTax,
   type InsertCompanyTax,
+  type Lead,
+  type InsertLead,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -280,6 +283,13 @@ export interface IStorage {
   getCompanyTaxes(companyId: number): Promise<CompanyTax[]>;
   createCompanyTax(tax: InsertCompanyTax): Promise<CompanyTax>;
   deleteCompanyTax(id: number): Promise<void>;
+  
+  // Leads operations
+  getLeads(companyId: number): Promise<Lead[]>;
+  getLead(id: number): Promise<Lead | undefined>;
+  createLead(companyId: number, lead: InsertLead): Promise<Lead>;
+  updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
+  deleteLead(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2316,6 +2326,44 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCompanyTax(id: number): Promise<void> {
     await db.delete(companyTaxes).where(eq(companyTaxes.id, id));
+  }
+
+  // Leads operations
+  async getLeads(companyId: number): Promise<Lead[]> {
+    return await db
+      .select()
+      .from(leads)
+      .where(eq(leads.companyId, companyId))
+      .orderBy(desc(leads.createdAt));
+  }
+
+  async getLead(id: number): Promise<Lead | undefined> {
+    const [lead] = await db
+      .select()
+      .from(leads)
+      .where(eq(leads.id, id));
+    return lead;
+  }
+
+  async createLead(companyId: number, lead: InsertLead): Promise<Lead> {
+    const [created] = await db
+      .insert(leads)
+      .values({ ...lead, companyId })
+      .returning();
+    return created;
+  }
+
+  async updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined> {
+    const [updated] = await db
+      .update(leads)
+      .set({ ...lead, updatedAt: new Date() })
+      .where(eq(leads.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteLead(id: number): Promise<void> {
+    await db.delete(leads).where(eq(leads.id, id));
   }
 }
 

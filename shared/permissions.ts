@@ -18,7 +18,9 @@ export type Permission =
   | "routes.manage"
   | "estimates.create"
   | "estimates.send"
-  | "leads.convert"
+  | "leads.view"            // view leads list
+  | "leads.manage"          // create/edit/delete leads
+  | "leads.convert"         // convert lead to job/customer
   | "clients.manage"
   | "invoicing.manage"
   | "documents.view"
@@ -43,6 +45,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "routes.manage",
     "estimates.create",
     "estimates.send",
+    "leads.view",
+    "leads.manage",
     "leads.convert",
     "clients.manage",
     "invoicing.manage",
@@ -66,6 +70,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "routes.manage",
     "estimates.create",
     "estimates.send",
+    "leads.view",
+    "leads.manage",
     "leads.convert",
     "clients.manage",
     "invoicing.manage",
@@ -88,11 +94,16 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "jobs.edit",
     "jobs.delete",
     "jobs.create",
+    "leads.view",
+    "leads.manage",
+    "leads.convert",
     "documents.view",
   ],
   ESTIMATOR: [
     "estimates.create",
     "estimates.send",
+    "leads.view",
+    "leads.manage",
     "leads.convert",
     "clients.manage",
     "jobs.view.all",

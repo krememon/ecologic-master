@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench } from "lucide-react";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ const getNavigation = (t: any) => [
   { name: t('navigation.home'), href: "/", icon: LayoutDashboard, permission: null },
   { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
   { name: t('navigation.jobs'), href: "/jobs", icon: Building2, permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
+  { name: "Leads", href: "/leads", icon: Target, permission: "leads.view" as Permission },
   { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users, permission: "clients.manage" as Permission },
   { name: t('navigation.clients'), href: "/clients", icon: UserCheck, permission: "clients.manage" as Permission },
   { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText, permission: "invoicing.manage" as Permission },

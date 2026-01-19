@@ -16,7 +16,8 @@ import {
   LogOut,
   Brain,
   UsersIcon,
-  Wrench
+  Wrench,
+  Target
 } from "lucide-react";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
@@ -29,6 +30,7 @@ const getNavigation = (t: any) => [
   { href: "/", icon: LayoutDashboard, label: t('navigation.home'), permission: null },
   { href: "/schedule", icon: Brain, label: t('navigation.schedule'), permission: "schedule.view" as Permission },
   { href: "/jobs", icon: Building2, label: t('navigation.jobs'), permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
+  { href: "/leads", icon: Target, label: "Leads", permission: "leads.view" as Permission },
   { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors'), permission: "clients.manage" as Permission },
   { href: "/clients", icon: Users, label: t('navigation.clients'), permission: "clients.manage" as Permission },
   { href: "/invoicing", icon: FileText, label: t('navigation.invoicing'), permission: "invoicing.manage" as Permission },

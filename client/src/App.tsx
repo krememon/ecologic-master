@@ -44,6 +44,7 @@ import PayCancel from "@/pages/PayCancel";
 import StripeReturn from "@/pages/StripeReturn";
 import PaymentReview from "@/pages/PaymentReview";
 import PublicInvoicePay from "@/pages/PublicInvoicePay";
+import Leads from "@/pages/Leads";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -130,6 +131,7 @@ function Router() {
         <Route path="/choose-plan" component={ChoosePlan} />
         <Route path="/" component={Home} />
         <Route path="/jobs" component={Jobs} />
+        <Route path="/leads" component={Leads} />
         <Route path="/subcontractors" component={Contractors} />
         <Route path="/clients" component={Clients} />
         <Route path="/clients/:id">
