@@ -44,6 +44,8 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
 
 - **Invoice Sending**: Invoices can be sent via Email (Resend) or SMS (Twilio). The Send Invoice modal has an Email/Text segmented toggle. Email mode sends branded HTML emails. Text mode sends SMS via Twilio with invoice details and a payment link. Requires Twilio credentials stored as Replit Secrets (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER). Phone numbers are normalized to E.164 format for sending. Note: Twilio integration was configured manually with user-provided credentials (not via Replit integration system).
 
+- **Leads Management**: A dedicated section for tracking potential customers before conversion. Features include contact information (name, email, phone), source tracking (referral, website, social media, advertisement, cold call, other), status workflow (new → contacted → qualified → proposal → won/lost), service type, estimated value, notes, and timestamps. RBAC enforced: Owner, Supervisor, Dispatcher, and Estimator can view and manage leads; Technicians cannot see the Leads tab. API endpoints: GET/POST/PATCH/DELETE `/api/leads`. Stored in `leads` table with company-scoped data isolation.
+
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)
 - **ORM**: Drizzle ORM
