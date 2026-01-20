@@ -236,14 +236,15 @@ export default function Leads() {
   };
 
   const filteredLeads = leads.filter((lead) => {
+    if (!searchQuery.trim()) return true;
     const searchLower = searchQuery.toLowerCase();
     const customerName = lead.customer 
       ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.toLowerCase()
       : "";
     return (
       customerName.includes(searchLower) ||
-      lead.customer?.email?.toLowerCase().includes(searchLower) ||
-      lead.description?.toLowerCase().includes(searchLower)
+      (lead.customer?.email?.toLowerCase()?.includes(searchLower) ?? false) ||
+      (lead.description?.toLowerCase()?.includes(searchLower) ?? false)
     );
   });
 
