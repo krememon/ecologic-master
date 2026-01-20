@@ -43,7 +43,7 @@ const formatPhoneNumber = (value: string): string => {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+    <div className="px-4 py-3 mt-4 first:mt-0 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
       {title}
     </div>
   );
@@ -55,25 +55,23 @@ function InfoRow({
   value, 
   onClick,
   required = false,
-  hasError = false,
 }: { 
   icon: React.ElementType; 
   label: string; 
   value?: string; 
   onClick?: () => void;
   required?: boolean;
-  hasError?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left ${hasError ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+      className="w-full flex items-center gap-3 px-4 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
     >
-      <Icon className={`h-5 w-5 flex-shrink-0 ${hasError ? 'text-red-500' : 'text-slate-400'}`} />
-      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : hasError ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+      <Icon className="h-5 w-5 flex-shrink-0 text-slate-400" />
+      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
-        {required && !value && <span className="text-red-500 ml-1">*</span>}
+        {required && !value && <span className="text-slate-400 ml-1">*</span>}
       </span>
       <ChevronRight className="h-4 w-4 text-slate-400" />
     </button>
@@ -106,6 +104,7 @@ export default function Leads() {
   const [tempEmail, setTempEmail] = useState("");
   const [tempDescription, setTempDescription] = useState("");
   const [tempNotes, setTempNotes] = useState("");
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
 
   const { data: leads = [], isLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -169,10 +168,12 @@ export default function Leads() {
     setIsAddSheetOpen(false);
     setEditingLead(null);
     resetForm();
+    setHasAttemptedSave(false);
   };
 
   const openAddSheet = () => {
     resetForm();
+    setHasAttemptedSave(false);
     setIsAddSheetOpen(true);
   };
 
@@ -196,6 +197,7 @@ export default function Leads() {
   };
 
   const handleSave = () => {
+    setHasAttemptedSave(true);
     if (!isFormValid()) return;
     
     if (editingLead) {
@@ -270,9 +272,6 @@ export default function Leads() {
   const nameDisplay = formData.firstName || formData.lastName
     ? `${formData.firstName} ${formData.lastName}`.trim()
     : undefined;
-
-  const hasContactError = !formData.email.trim() && !formData.phone.trim();
-  const hasDescriptionError = !formData.description.trim();
 
   if (isLoading) {
     return (
@@ -440,14 +439,12 @@ export default function Leads() {
               label="Add phone"
               value={formData.phone || undefined}
               onClick={openPhoneModal}
-              hasError={hasContactError}
             />
             <InfoRow
               icon={Mail}
               label="Add email"
               value={formData.email || undefined}
               onClick={openEmailModal}
-              hasError={hasContactError}
             />
 
             <SectionHeader title="Details" />
@@ -457,7 +454,6 @@ export default function Leads() {
               value={formData.description || undefined}
               onClick={openDescriptionModal}
               required
-              hasError={hasDescriptionError}
             />
             <InfoRow
               icon={StickyNote}
@@ -466,10 +462,10 @@ export default function Leads() {
               onClick={openNotesModal}
             />
 
-            {(hasContactError || hasDescriptionError) && (
-              <div className="px-4 py-3 text-sm text-red-500">
-                {hasDescriptionError && <p>Description is required</p>}
-                {hasContactError && <p>Phone or email is required</p>}
+            {hasAttemptedSave && !isFormValid() && (
+              <div className="px-4 py-4 mt-4 text-sm text-slate-500 dark:text-slate-400">
+                {!formData.description.trim() && <p>Add a description</p>}
+                {!formData.email.trim() && !formData.phone.trim() && <p>Add a phone number or email</p>}
               </div>
             )}
           </div>
