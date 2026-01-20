@@ -1314,6 +1314,7 @@ export type FinalizeJobPayload = z.infer<typeof finalizeJobSchema>;
 export const leads = pgTable("leads", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").references(() => customers.id),
   firstName: varchar("first_name", { length: 100 }),
   lastName: varchar("last_name", { length: 100 }),
   email: varchar("email"),
