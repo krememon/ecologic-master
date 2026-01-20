@@ -2329,20 +2329,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Leads operations
-  async getLeads(companyId: number): Promise<Lead[]> {
-    return await db
-      .select()
+  async getLeads(companyId: number): Promise<(Lead & { customer?: Customer })[]> {
+    const results = await db
+      .select({
+        lead: leads,
+        customer: customers,
+      })
       .from(leads)
+      .leftJoin(customers, eq(leads.customerId, customers.id))
       .where(eq(leads.companyId, companyId))
       .orderBy(desc(leads.createdAt));
+    
+    return results.map(r => ({
+      ...r.lead,
+      customer: r.customer || undefined,
+    }));
   }
 
-  async getLead(id: number): Promise<Lead | undefined> {
-    const [lead] = await db
-      .select()
+  async getLead(id: number): Promise<(Lead & { customer?: Customer }) | undefined> {
+    const results = await db
+      .select({
+        lead: leads,
+        customer: customers,
+      })
       .from(leads)
+      .leftJoin(customers, eq(leads.customerId, customers.id))
       .where(eq(leads.id, id));
-    return lead;
+    
+    if (results.length === 0) return undefined;
+    return {
+      ...results[0].lead,
+      customer: results[0].customer || undefined,
+    };
   }
 
   async createLead(companyId: number, lead: InsertLead): Promise<Lead> {
