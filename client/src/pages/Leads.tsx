@@ -11,10 +11,13 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, FileText, StickyNote } from "lucide-react";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { SelectCustomerModal } from "@/components/CustomerModals";
+import type { Customer } from "@shared/schema";
 
 interface Lead {
   id: number;
   companyId: number;
+  customerId: number | null;
   firstName: string | null;
   lastName: string | null;
   email: string | null;
@@ -23,6 +26,7 @@ interface Lead {
   notes: string | null;
   status: string;
   createdAt: string;
+  customer?: Customer;
 }
 
 const statusColors: Record<string, string> = {
@@ -84,24 +88,16 @@ export default function Leads() {
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
+    customerId: null as number | null,
     description: "",
     notes: "",
   });
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
-  const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
-  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [descriptionModalOpen, setDescriptionModalOpen] = useState(false);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
 
-  const [tempFirstName, setTempFirstName] = useState("");
-  const [tempLastName, setTempLastName] = useState("");
-  const [tempPhone, setTempPhone] = useState("");
-  const [tempEmail, setTempEmail] = useState("");
   const [tempDescription, setTempDescription] = useState("");
   const [tempNotes, setTempNotes] = useState("");
   const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
@@ -111,7 +107,7 @@ export default function Leads() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: { customerId: number; description: string; notes: string }) => {
       const res = await apiRequest("POST", "/api/leads", data);
       if (!res.ok) throw new Error("Failed to create lead");
       return res.json();
@@ -126,7 +122,7 @@ export default function Leads() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
+    mutationFn: async ({ id, data }: { id: number; data: { customerId?: number; description?: string; notes?: string } }) => {
       const res = await apiRequest("PATCH", `/api/leads/${id}`, data);
       if (!res.ok) throw new Error("Failed to update lead");
       return res.json();
@@ -155,13 +151,11 @@ export default function Leads() {
 
   const resetForm = () => {
     setFormData({
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
+      customerId: null,
       description: "",
       notes: "",
     });
+    setSelectedCustomer(null);
   };
 
   const closeSheet = () => {
@@ -180,20 +174,18 @@ export default function Leads() {
   const openEditSheet = (lead: Lead) => {
     setEditingLead(lead);
     setFormData({
-      firstName: lead.firstName || "",
-      lastName: lead.lastName || "",
-      email: lead.email || "",
-      phone: lead.phone || "",
+      customerId: lead.customerId,
       description: lead.description || "",
       notes: lead.notes || "",
     });
+    setSelectedCustomer(lead.customer || null);
     setIsAddSheetOpen(true);
   };
 
   const isFormValid = () => {
+    const hasCustomer = formData.customerId !== null;
     const hasDescription = formData.description.trim().length > 0;
-    const hasContact = formData.email.trim().length > 0 || formData.phone.trim().length > 0;
-    return hasDescription && hasContact;
+    return hasCustomer && hasDescription;
   };
 
   const handleSave = () => {
@@ -201,41 +193,26 @@ export default function Leads() {
     if (!isFormValid()) return;
     
     if (editingLead) {
-      updateMutation.mutate({ id: editingLead.id, data: formData });
+      updateMutation.mutate({ 
+        id: editingLead.id, 
+        data: {
+          customerId: formData.customerId!,
+          description: formData.description,
+          notes: formData.notes,
+        }
+      });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate({
+        customerId: formData.customerId!,
+        description: formData.description,
+        notes: formData.notes,
+      });
     }
   };
 
-  const openNameModal = () => {
-    setTempFirstName(formData.firstName);
-    setTempLastName(formData.lastName);
-    setNameModalOpen(true);
-  };
-
-  const saveNameModal = () => {
-    setFormData({ ...formData, firstName: tempFirstName, lastName: tempLastName });
-    setNameModalOpen(false);
-  };
-
-  const openPhoneModal = () => {
-    setTempPhone(formData.phone);
-    setPhoneModalOpen(true);
-  };
-
-  const savePhoneModal = () => {
-    setFormData({ ...formData, phone: tempPhone });
-    setPhoneModalOpen(false);
-  };
-
-  const openEmailModal = () => {
-    setTempEmail(formData.email);
-    setEmailModalOpen(true);
-  };
-
-  const saveEmailModal = () => {
-    setFormData({ ...formData, email: tempEmail });
-    setEmailModalOpen(false);
+  const handleSelectCustomer = (customer: Customer) => {
+    setFormData({ ...formData, customerId: customer.id });
+    setSelectedCustomer(customer);
   };
 
   const openDescriptionModal = () => {
@@ -260,17 +237,18 @@ export default function Leads() {
 
   const filteredLeads = leads.filter((lead) => {
     const searchLower = searchQuery.toLowerCase();
-    const name = `${lead.firstName || ""} ${lead.lastName || ""}`.toLowerCase();
+    const customerName = lead.customer 
+      ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.toLowerCase()
+      : "";
     return (
-      name.includes(searchLower) ||
-      lead.email?.toLowerCase().includes(searchLower) ||
-      lead.phone?.includes(searchQuery) ||
+      customerName.includes(searchLower) ||
+      lead.customer?.email?.toLowerCase().includes(searchLower) ||
       lead.description?.toLowerCase().includes(searchLower)
     );
   });
 
-  const nameDisplay = formData.firstName || formData.lastName
-    ? `${formData.firstName} ${formData.lastName}`.trim()
+  const customerDisplay = selectedCustomer 
+    ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`.trim()
     : undefined;
 
   if (isLoading) {
@@ -328,9 +306,9 @@ export default function Leads() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="font-semibold text-slate-900 dark:text-slate-100">
-                        {lead.firstName || lead.lastName
-                          ? `${lead.firstName || ""} ${lead.lastName || ""}`.trim()
-                          : "Unnamed Lead"}
+                        {lead.customer
+                          ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
+                          : "No customer"}
                       </h3>
                       <Badge className={statusColors[lead.status] || statusColors.new}>
                         {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
@@ -344,16 +322,16 @@ export default function Leads() {
                     )}
 
                     <div className="flex flex-wrap gap-4 text-sm text-slate-500 dark:text-slate-400">
-                      {lead.email && (
+                      {lead.customer?.email && (
                         <span className="flex items-center gap-1">
                           <Mail className="h-3.5 w-3.5" />
-                          {lead.email}
+                          {lead.customer.email}
                         </span>
                       )}
-                      {lead.phone && (
+                      {lead.customer?.phone && (
                         <span className="flex items-center gap-1">
                           <Phone className="h-3.5 w-3.5" />
-                          {lead.phone}
+                          {lead.customer.phone}
                         </span>
                       )}
                       {lead.createdAt && (
@@ -427,24 +405,13 @@ export default function Leads() {
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
-            <SectionHeader title="Contact" />
+            <SectionHeader title="Customer" />
             <InfoRow
               icon={User}
-              label="Add name"
-              value={nameDisplay}
-              onClick={openNameModal}
-            />
-            <InfoRow
-              icon={Phone}
-              label="Add phone"
-              value={formData.phone || undefined}
-              onClick={openPhoneModal}
-            />
-            <InfoRow
-              icon={Mail}
-              label="Add email"
-              value={formData.email || undefined}
-              onClick={openEmailModal}
+              label="Select customer"
+              value={customerDisplay}
+              onClick={() => setCustomerModalOpen(true)}
+              required
             />
 
             <SectionHeader title="Details" />
@@ -464,97 +431,21 @@ export default function Leads() {
 
             {hasAttemptedSave && !isFormValid() && (
               <div className="px-4 py-4 mt-4 text-sm text-slate-500 dark:text-slate-400">
+                {!formData.customerId && <p>Select a customer</p>}
                 {!formData.description.trim() && <p>Add a description</p>}
-                {!formData.email.trim() && !formData.phone.trim() && <p>Add a phone number or email</p>}
               </div>
             )}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Name Edit Modal */}
-      <Dialog open={nameModalOpen} onOpenChange={setNameModalOpen}>
-        <DialogContent className="max-w-sm">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setNameModalOpen(false)} className="text-blue-600 text-sm font-medium">
-              Cancel
-            </button>
-            <h3 className="text-base font-semibold">Name</h3>
-            <button onClick={saveNameModal} className="text-blue-600 text-sm font-medium">
-              Done
-            </button>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">First Name</label>
-              <Input
-                value={tempFirstName}
-                onChange={(e) => setTempFirstName(e.target.value)}
-                placeholder="John"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Last Name</label>
-              <Input
-                value={tempLastName}
-                onChange={(e) => setTempLastName(e.target.value)}
-                placeholder="Doe"
-                className="mt-1"
-              />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Phone Edit Modal */}
-      <Dialog open={phoneModalOpen} onOpenChange={setPhoneModalOpen}>
-        <DialogContent className="max-w-sm">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setPhoneModalOpen(false)} className="text-blue-600 text-sm font-medium">
-              Cancel
-            </button>
-            <h3 className="text-base font-semibold">Phone</h3>
-            <button onClick={savePhoneModal} className="text-blue-600 text-sm font-medium">
-              Done
-            </button>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone Number</label>
-            <Input
-              value={tempPhone}
-              onChange={(e) => setTempPhone(formatPhoneNumber(e.target.value))}
-              placeholder="555-123-4567"
-              className="mt-1"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Email Edit Modal */}
-      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
-        <DialogContent className="max-w-sm">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setEmailModalOpen(false)} className="text-blue-600 text-sm font-medium">
-              Cancel
-            </button>
-            <h3 className="text-base font-semibold">Email</h3>
-            <button onClick={saveEmailModal} className="text-blue-600 text-sm font-medium">
-              Done
-            </button>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
-            <Input
-              type="email"
-              value={tempEmail}
-              onChange={(e) => setTempEmail(e.target.value)}
-              placeholder="john@example.com"
-              className="mt-1"
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Select Customer Modal */}
+      <SelectCustomerModal
+        open={customerModalOpen}
+        onOpenChange={setCustomerModalOpen}
+        onSelectCustomer={handleSelectCustomer}
+        canCreateCustomer={true}
+      />
 
       {/* Description Edit Modal */}
       <Dialog open={descriptionModalOpen} onOpenChange={setDescriptionModalOpen}>
