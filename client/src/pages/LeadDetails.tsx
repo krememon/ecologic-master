@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck } from "lucide-react";
 import { format } from "date-fns";
+import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 import type { Customer } from "@shared/schema";
 
 interface LeadDetailsProps {
@@ -22,6 +25,7 @@ interface Lead {
 
 export default function LeadDetails({ leadId }: LeadDetailsProps) {
   const [, navigate] = useLocation();
+  const [estimateSheetOpen, setEstimateSheetOpen] = useState(false);
 
   const { data: lead, isLoading, error } = useQuery<Lead>({
     queryKey: [`/api/leads/${leadId}`],
@@ -54,6 +58,15 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
     ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
     : "Lead";
 
+  const handleConvertToEstimate = () => {
+    setEstimateSheetOpen(true);
+  };
+
+  const handleEstimateCreated = () => {
+    setEstimateSheetOpen(false);
+    navigate("/leads");
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
@@ -64,13 +77,23 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
           >
             <ArrowLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />
           </button>
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate flex-1">
             {customerName}
           </h1>
         </div>
       </div>
 
       <div className="p-4 space-y-4 max-w-2xl mx-auto">
+        {lead.customer && (
+          <Button 
+            onClick={handleConvertToEstimate}
+            className="w-full"
+          >
+            <FileCheck className="h-4 w-4 mr-2" />
+            Convert to Estimate
+          </Button>
+        )}
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -143,6 +166,13 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
           </CardContent>
         </Card>
       </div>
+
+      <NewEstimateSheet
+        open={estimateSheetOpen}
+        onOpenChange={setEstimateSheetOpen}
+        onEstimateCreated={handleEstimateCreated}
+        initialCustomer={lead.customer || null}
+      />
     </div>
   );
 }

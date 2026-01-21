@@ -1,0 +1,52 @@
+LEADS: Add "Convert to Estimate" button on Lead Details (prefill customer)
+
+CURRENT
+Lead Details page shows:
+- Customer card
+- Description card
+No way to convert the lead into an Estimate.
+
+GOAL
+Add a button on Lead Details: "Convert to Estimate"
+When clicked:
+- Open the existing Create Estimate form (same screen as New Estimate)
+- Automatically prefill the Estimate customer with the Lead’s selected customer
+- User continues filling out estimate normally
+
+UI REQUIREMENTS
+- Add a primary CTA button near the top of Lead Details (under the title area), like:
+  "Convert to Estimate"
+- Style should match EcoLogic primary button styling (same as other CTAs)
+- Keep Lead Details minimal (don’t add extra sections)
+
+BEHAVIOR
+On click:
+1) Navigate to the Create Estimate screen/route/modal used in the app
+2) Pass the Lead’s customerId into the Estimate creation flow
+3) The "Add customer" row should already show the customer name (selected), not empty
+4) User can change customer if they want (optional), but default is pre-selected
+
+DATA / LINKING (IMPORTANT)
+- When an estimate is created from a lead:
+  - Save leadId on the estimate (estimate.leadId) OR store convertedEstimateId on the lead
+  - Update lead status to "converted" (or "won") (optional but recommended)
+- At minimum: the estimate is created successfully with the correct customer prefilled
+
+IMPLEMENTATION NOTES
+- Reuse existing customer picker / create estimate components
+- Do NOT duplicate create estimate UI
+- Prefill should be done by:
+  - passing initialCustomerId prop/state OR
+  - query param like /estimates/new?customerId=XXX&leadId=YYY
+  - then Create Estimate reads this and sets default selected customer state
+
+VERIFY
+- Open a lead with customer selected
+- Tap Convert to Estimate
+- Create Estimate screen opens with customer already selected
+- Saving estimate works and does not break existing estimate creation
+
+DELIVERABLE
+- Convert to Estimate button works
+- Customer is automatically copied from Lead into Estimate form
+- (Optional) leadId linkage stored for future tracing

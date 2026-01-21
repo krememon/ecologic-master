@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,7 @@ interface NewEstimateSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEstimateCreated?: () => void;
+  initialCustomer?: Customer | null;
 }
 
 function formatCurrency(cents: number): string {
@@ -132,12 +133,19 @@ function InfoRow({
   );
 }
 
-export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated }: NewEstimateSheetProps) {
+export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initialCustomer }: NewEstimateSheetProps) {
   const { toast } = useToast();
 
   // Form state
   const [notes, setNotes] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  
+  // Set initial customer when sheet opens with one
+  useEffect(() => {
+    if (open && initialCustomer) {
+      setSelectedCustomer(initialCustomer);
+    }
+  }, [open, initialCustomer]);
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { name: "", description: "", taskCode: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, saveToPriceBook: false }
   ]);
