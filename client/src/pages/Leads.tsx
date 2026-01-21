@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,8 +78,17 @@ function InfoRow({
 export default function Leads() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("create") === "true") {
+      setIsAddSheetOpen(true);
+      navigate("/leads", { replace: true });
+    }
+  }, [search, navigate]);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formData, setFormData] = useState({
     customerId: null as number | null,
