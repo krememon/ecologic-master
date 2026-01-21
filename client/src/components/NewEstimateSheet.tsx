@@ -140,10 +140,19 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
   const [notes, setNotes] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   
-  // Set initial customer when sheet opens with one
+  // Set initial customer and address when sheet opens with one
   useEffect(() => {
     if (open && initialCustomer) {
       setSelectedCustomer(initialCustomer);
+      // Prefill address from customer if available
+      if (initialCustomer.address) {
+        setJobLocation({
+          addressLine1: initialCustomer.address,
+          city: "",
+          state: "",
+          zip: ""
+        });
+      }
     }
   }, [open, initialCustomer]);
   const [lineItems, setLineItems] = useState<LineItem[]>([
