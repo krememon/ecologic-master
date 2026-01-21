@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -30,13 +29,6 @@ interface Lead {
   customer?: Customer;
 }
 
-const statusColors: Record<string, string> = {
-  new: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-  contacted: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-  qualified: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  converted: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-  lost: "bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-300",
-};
 
 const formatPhoneNumber = (value: string): string => {
   const digits = value.replace(/\D/g, "").slice(0, 10);
@@ -296,9 +288,6 @@ export default function Leads() {
                           ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
                           : "No customer"}
                       </h3>
-                      <Badge className={statusColors[lead.status] || statusColors.new}>
-                        {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
-                      </Badge>
                     </div>
 
                     {lead.description && (
