@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck } from "lucide-react";
 import { format } from "date-fns";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Customer } from "@shared/schema";
 
 interface LeadDetailsProps {
@@ -58,12 +59,24 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
     ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
     : "Lead";
 
+  const updateLeadStatusMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/leads/${leadId}`, { status: "won" });
+      if (!res.ok) throw new Error("Failed to update lead status");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+    },
+  });
+
   const handleConvertToEstimate = () => {
     setEstimateSheetOpen(true);
   };
 
   const handleEstimateCreated = () => {
     setEstimateSheetOpen(false);
+    updateLeadStatusMutation.mutate();
     navigate("/leads");
   };
 

@@ -303,7 +303,6 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
       resetForm();
       onOpenChange(false);
-      toast({ title: "Estimate created", description: "Your estimate has been saved successfully." });
       onEstimateCreated?.();
     },
     onError: (error: Error) => {

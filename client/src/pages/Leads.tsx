@@ -282,12 +282,17 @@ export default function Leads() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-semibold text-slate-900 dark:text-slate-100">
                         {lead.customer
                           ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
                           : "No customer"}
                       </h3>
+                      {lead.status === "won" && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                          Won
+                        </span>
+                      )}
                     </div>
 
                     {lead.description && (
