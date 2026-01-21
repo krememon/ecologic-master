@@ -8,7 +8,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, FileText, StickyNote } from "lucide-react";
+import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, StickyNote } from "lucide-react";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SelectCustomerModal } from "@/components/CustomerModals";
@@ -47,7 +47,7 @@ const formatPhoneNumber = (value: string): string => {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 py-3 mt-4 first:mt-0 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+    <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
       {title}
     </div>
   );
@@ -70,12 +70,12 @@ function InfoRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
+      className="w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
     >
-      <Icon className="h-5 w-5 flex-shrink-0 text-slate-400" />
+      <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
       <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
-        {required && !value && <span className="text-slate-400 ml-1">*</span>}
+        {required && !value && <span className="text-red-500 ml-1">*</span>}
       </span>
       <ChevronRight className="h-4 w-4 text-slate-400" />
     </button>
@@ -90,24 +90,20 @@ export default function Leads() {
   const [formData, setFormData] = useState({
     customerId: null as number | null,
     description: "",
-    notes: "",
   });
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [descriptionModalOpen, setDescriptionModalOpen] = useState(false);
-  const [notesModalOpen, setNotesModalOpen] = useState(false);
 
   const [tempDescription, setTempDescription] = useState("");
-  const [tempNotes, setTempNotes] = useState("");
-  const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
 
   const { data: leads = [], isLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { customerId: number; description: string; notes: string }) => {
+    mutationFn: async (data: { customerId: number; description: string }) => {
       const res = await apiRequest("POST", "/api/leads", data);
       if (!res.ok) throw new Error("Failed to create lead");
       return res.json();
@@ -122,7 +118,7 @@ export default function Leads() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: { customerId?: number; description?: string; notes?: string } }) => {
+    mutationFn: async ({ id, data }: { id: number; data: { customerId?: number; description?: string } }) => {
       const res = await apiRequest("PATCH", `/api/leads/${id}`, data);
       if (!res.ok) throw new Error("Failed to update lead");
       return res.json();
@@ -153,7 +149,6 @@ export default function Leads() {
     setFormData({
       customerId: null,
       description: "",
-      notes: "",
     });
     setSelectedCustomer(null);
   };
@@ -162,12 +157,10 @@ export default function Leads() {
     setIsAddSheetOpen(false);
     setEditingLead(null);
     resetForm();
-    setHasAttemptedSave(false);
   };
 
   const openAddSheet = () => {
     resetForm();
-    setHasAttemptedSave(false);
     setIsAddSheetOpen(true);
   };
 
@@ -176,7 +169,6 @@ export default function Leads() {
     setFormData({
       customerId: lead.customerId,
       description: lead.description || "",
-      notes: lead.notes || "",
     });
     setSelectedCustomer(lead.customer || null);
     setIsAddSheetOpen(true);
@@ -189,7 +181,6 @@ export default function Leads() {
   };
 
   const handleSave = () => {
-    setHasAttemptedSave(true);
     if (!isFormValid()) return;
     
     if (editingLead) {
@@ -198,14 +189,12 @@ export default function Leads() {
         data: {
           customerId: formData.customerId!,
           description: formData.description,
-          notes: formData.notes,
         }
       });
     } else {
       createMutation.mutate({
         customerId: formData.customerId!,
         description: formData.description,
-        notes: formData.notes,
       });
     }
   };
@@ -223,16 +212,6 @@ export default function Leads() {
   const saveDescriptionModal = () => {
     setFormData({ ...formData, description: tempDescription });
     setDescriptionModalOpen(false);
-  };
-
-  const openNotesModal = () => {
-    setTempNotes(formData.notes);
-    setNotesModalOpen(true);
-  };
-
-  const saveNotesModal = () => {
-    setFormData({ ...formData, notes: tempNotes });
-    setNotesModalOpen(false);
   };
 
   const filteredLeads = leads.filter((lead) => {
@@ -342,10 +321,6 @@ export default function Leads() {
                         </span>
                       )}
                     </div>
-
-                    {lead.notes && (
-                      <p className="text-xs text-slate-400 mt-2 italic">{lead.notes}</p>
-                    )}
                   </div>
 
                   <DropdownMenu>
@@ -417,25 +392,12 @@ export default function Leads() {
 
             <SectionHeader title="Details" />
             <InfoRow
-              icon={FileText}
+              icon={StickyNote}
               label="Add description"
               value={formData.description || undefined}
               onClick={openDescriptionModal}
               required
             />
-            <InfoRow
-              icon={StickyNote}
-              label="Add notes"
-              value={formData.notes || undefined}
-              onClick={openNotesModal}
-            />
-
-            {hasAttemptedSave && !isFormValid() && (
-              <div className="px-4 py-4 mt-4 text-sm text-slate-500 dark:text-slate-400">
-                {!formData.customerId && <p>Select a customer</p>}
-                {!formData.description.trim() && <p>Add a description</p>}
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -468,31 +430,6 @@ export default function Leads() {
               value={tempDescription}
               onChange={(e) => setTempDescription(e.target.value)}
               placeholder="What service is the lead interested in?"
-              className="mt-1"
-              rows={4}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Notes Edit Modal */}
-      <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
-        <DialogContent className="max-w-sm">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setNotesModalOpen(false)} className="text-blue-600 text-sm font-medium">
-              Cancel
-            </button>
-            <h3 className="text-base font-semibold">Notes</h3>
-            <button onClick={saveNotesModal} className="text-blue-600 text-sm font-medium">
-              Done
-            </button>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Notes (optional)</label>
-            <Textarea
-              value={tempNotes}
-              onChange={(e) => setTempNotes(e.target.value)}
-              placeholder="Additional notes..."
               className="mt-1"
               rows={4}
             />
