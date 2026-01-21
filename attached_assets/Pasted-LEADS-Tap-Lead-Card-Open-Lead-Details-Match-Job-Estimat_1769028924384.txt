@@ -1,0 +1,57 @@
+LEADS: Tap Lead Card -> Open Lead Details (Match Job/Estimate Card Expand UX, Minimal Content)
+
+CURRENT
+Leads show as cards in a list, but tapping them does not expand/open a details screen like Jobs and Estimates.
+
+GOAL
+When a user taps a Lead card, open a Lead Details screen using the SAME pattern as Job/Estimate details (same animation/shell/layout style),
+but keep the content minimal:
+- Customer info
+- Lead description
+Nothing else.
+
+UI / UX REQUIREMENTS
+- Tapping a lead card opens a dedicated details view (modal/page) like Job/Estimate cards
+- Same header style (back arrow + title)
+- Title can be: customer name or "Lead"
+- Keep EcoLogic styling consistent (cards, spacing, typography)
+
+LEAD DETAILS CONTENT (ONLY)
+1) CUSTOMER CARD
+- Customer name
+- Customer email (if exists)
+- Customer phone (if exists)
+- Customer address (if exists)
+(Use the same Customer card styling used in Job details)
+
+2) DESCRIPTION CARD
+- Header: "Description"
+- Show the full lead description text (multi-line)
+- Optional: show created date in small text if already available, but not required
+
+NO OTHER SECTIONS
+- Do not show Pay/Invoice buttons
+- Do not show schedule
+- Do not show assigned employees
+- Do not show tabs like Documents/E-signature
+
+DATA
+- Lead must already store customerId + description
+- Lead Details fetch should join customer data:
+  GET /api/leads/:id -> include customer fields needed for display
+
+CLICK BEHAVIOR
+- In normal mode: tapping lead card opens details
+- If you later add select-mode for leads, selection mode should override tap (not required now)
+
+IMPLEMENTATION STEPS
+1) Add onClick handler to LeadCard to navigate/open LeadDetails
+2) Create LeadDetails component using Job/Estimate details shell as base
+3) Fetch lead + customer data
+4) Render ONLY the two sections described above
+5) Verify back navigation works and list state doesn’t reset
+
+DELIVERABLE
+- Lead cards are tappable
+- Lead opens into a clean detail view (job/estimate style)
+- Only customer info + description are shown

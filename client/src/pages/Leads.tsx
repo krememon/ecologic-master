@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,6 +85,7 @@ function InfoRow({
 
 export default function Leads() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -280,7 +282,11 @@ export default function Leads() {
       ) : (
         <div className="space-y-3">
           {filteredLeads.map((lead) => (
-            <Card key={lead.id} className="hover:shadow-md transition-shadow">
+            <Card 
+              key={lead.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => navigate(`/leads/${lead.id}`)}
+            >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -325,11 +331,16 @@ export default function Leads() {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenuItem onClick={() => openEditSheet(lead)}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Edit
