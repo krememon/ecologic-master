@@ -412,7 +412,7 @@ export default function Leads() {
 
       {/* Description Edit Modal */}
       <Dialog open={descriptionModalOpen} onOpenChange={setDescriptionModalOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent hideCloseButton className="max-w-sm">
           <div className="flex items-center justify-between mb-4">
             <button onClick={() => setDescriptionModalOpen(false)} className="text-blue-600 text-sm font-medium">
               Cancel
