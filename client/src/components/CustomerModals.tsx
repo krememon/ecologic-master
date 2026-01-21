@@ -79,101 +79,84 @@ export function SelectCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden" preventAutoFocus>
-        <DialogHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-primary font-normal p-0 h-auto"
-            onClick={handleClose}
+      <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden" preventAutoFocus>
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <button 
+            onClick={handleClose} 
+            className="text-sm text-blue-500 font-medium"
             data-testid="button-cancel-select-customer"
           >
             Cancel
-          </Button>
-          <DialogTitle className="text-sm font-semibold tracking-wide uppercase">
-            Select Customer
-          </DialogTitle>
-          {canCreateCustomer ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setShowAddCustomer(true)}
-              data-testid="button-add-customer"
-            >
-              <Plus className="h-5 w-5" />
-            </Button>
-          ) : (
-            <div className="w-8" />
-          )}
-        </DialogHeader>
+          </button>
+          <DialogTitle className="text-base font-semibold">SELECT CUSTOMER</DialogTitle>
+          <button 
+            onClick={handleClose} 
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-        <div className="px-4 py-3 border-b">
+        <div className="p-4 border-b">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Search by name"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-10"
               data-testid="input-search-customer"
             />
           </div>
         </div>
 
-        <ScrollArea className="h-[300px]">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <User className="h-12 w-12 text-muted-foreground/50 mb-3" />
-              <p className="text-muted-foreground text-sm">
-                {customers.length === 0 ? "No customers yet" : "No matching customers"}
-              </p>
-              {canCreateCustomer && customers.length === 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => setShowAddCustomer(true)}
-                  data-testid="button-add-first-customer"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Customer
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="divide-y">
-              {filteredCustomers.map((customer) => (
+        <ScrollArea className="max-h-64">
+          <div className="py-2">
+            {canCreateCustomer && (
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => setShowAddCustomer(true)}
+                data-testid="button-add-customer"
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                  <Plus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <span className="font-medium text-blue-600 dark:text-blue-400">+ Add Customer</span>
+              </button>
+            )}
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              </div>
+            ) : filteredCustomers.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                <User className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                <p className="font-medium">No customers found</p>
+              </div>
+            ) : (
+              filteredCustomers.map((customer) => (
                 <button
                   key={customer.id}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                   onClick={() => handleSelectCustomer(customer)}
                   data-testid={`customer-row-${customer.id}`}
                 >
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-medium text-primary">
-                      {customer.firstName?.[0]?.toUpperCase() || ""}
-                      {customer.lastName?.[0]?.toUpperCase() || ""}
-                    </span>
+                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">
-                      {customer.firstName} {customer.lastName}
+                      {`${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed'}
                     </p>
-                    {customer.companyName && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {customer.companyName}
-                      </p>
+                    {customer.email && (
+                      <p className="text-sm text-slate-500 truncate">{customer.email}</p>
                     )}
                   </div>
                 </button>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </ScrollArea>
       </DialogContent>
     </Dialog>
