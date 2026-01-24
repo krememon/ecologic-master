@@ -285,8 +285,8 @@ export interface IStorage {
   deleteCompanyTax(id: number): Promise<void>;
   
   // Leads operations
-  getLeads(companyId: number): Promise<Lead[]>;
-  getLead(id: number): Promise<Lead | undefined>;
+  getLeads(companyId: number): Promise<(Lead & { customer?: Customer })[]>;
+  getLead(id: number): Promise<(Lead & { customer?: Customer }) | undefined>;
   createLead(companyId: number, lead: InsertLead): Promise<Lead>;
   updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
   deleteLead(id: number): Promise<void>;

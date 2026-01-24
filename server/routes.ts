@@ -833,6 +833,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const lead = await storage.getLead(leadId);
+      console.log('[DEBUG] getLead result:', JSON.stringify(lead, null, 2));
       if (!lead || lead.companyId !== member.companyId) {
         return res.status(404).json({ error: 'Lead not found' });
       }
