@@ -10,6 +10,9 @@ import { eq } from "drizzle-orm";
 
 const app = express();
 
+// Disable ETags to prevent 304 responses which break JSON parsing
+app.set("etag", false);
+
 // Initialize Stripe for webhook (needs to be before JSON parsing)
 const stripe = process.env.STRIPE_SECRET_KEY 
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-04-30.basil" as any })
