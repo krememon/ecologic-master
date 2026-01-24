@@ -1,13 +1,54 @@
-import { useState } from "react";
+import { useState, Component, ErrorInfo, ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Customer } from "@shared/schema";
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  onBack: () => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class LeadDetailsErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('LeadDetails error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
+          <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+          <p className="text-slate-700 dark:text-slate-300 mb-4">Something went wrong loading this lead.</p>
+          <Button variant="outline" onClick={this.props.onBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Leads
+          </Button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface LeadDetailsProps {
   leadId: string;
@@ -24,7 +65,18 @@ interface Lead {
   customer?: Customer;
 }
 
-export default function LeadDetails({ leadId }: LeadDetailsProps) {
+function safeFormatDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+    return format(date, "MMM d, yyyy");
+  } catch {
+    return null;
+  }
+}
+
+function LeadDetailsContent({ leadId }: LeadDetailsProps) {
   const [, navigate] = useLocation();
   const [estimateSheetOpen, setEstimateSheetOpen] = useState(false);
 
@@ -43,20 +95,19 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
 
   if (error || !lead) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <p className="text-red-500 mb-4">Failed to load lead details</p>
-        <button
-          onClick={() => navigate("/leads")}
-          className="text-blue-600 hover:underline"
-        >
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <p className="text-slate-700 dark:text-slate-300 mb-4">Lead not found</p>
+        <Button variant="outline" onClick={() => navigate("/leads")}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Leads
-        </button>
+        </Button>
       </div>
     );
   }
 
   const customerName = lead.customer
-    ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim()
+    ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim() || "Customer"
     : "Lead";
 
   const updateLeadStatusMutation = useMutation({
@@ -171,9 +222,9 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
               <p className="text-sm text-slate-500 italic">No description provided</p>
             )}
             
-            {lead.createdAt && (
+            {safeFormatDate(lead.createdAt) && (
               <p className="text-xs text-slate-400 mt-4">
-                Created {format(new Date(lead.createdAt), "MMM d, yyyy")}
+                Created {safeFormatDate(lead.createdAt)}
               </p>
             )}
           </CardContent>
@@ -187,5 +238,15 @@ export default function LeadDetails({ leadId }: LeadDetailsProps) {
         initialCustomer={lead.customer || null}
       />
     </div>
+  );
+}
+
+export default function LeadDetails({ leadId }: LeadDetailsProps) {
+  const [, navigate] = useLocation();
+  
+  return (
+    <LeadDetailsErrorBoundary onBack={() => navigate("/leads")}>
+      <LeadDetailsContent leadId={leadId} />
+    </LeadDetailsErrorBoundary>
   );
 }

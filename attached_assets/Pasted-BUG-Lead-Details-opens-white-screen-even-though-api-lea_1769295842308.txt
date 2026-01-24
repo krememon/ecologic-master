@@ -1,0 +1,58 @@
+BUG: Lead Details opens white screen even though /api/leads/:id returns OK (frontend crash)
+
+EVIDENCE
+Server logs show clicking lead triggers:
+GET /api/leads/2 304 OK
+So backend is not failing. The UI is crashing while rendering LeadDetails.
+
+GOAL
+Lead Details must never white-screen. It should render Customer + Description reliably.
+
+ROOT CAUSE (likely)
+LeadDetails expects lead.customer (email/phone/address), but /api/leads/:id returns only lead fields (customerId) without a joined customer object.
+Rendering lead.customer.* causes runtime exception -> blank white screen.
+
+IMPLEMENTATION FIX (DO THIS)
+
+1) BACKEND: Return customer data with the lead
+Update GET /api/leads/:id to include customer info in the response:
+{
+  ...lead,
+  customer: {
+    id, firstName, lastName, email, phone, address
+  }
+}
+Use a DB join on customerId.
+If join not possible quickly, then do step 2 instead (frontend fetch customer separately).
+
+2) FRONTEND: Add robust rendering guards + loading/error UI
+In LeadDetails:
+- Render a loading skeleton while lead/customer is loading
+- If lead fetch fails -> show "Lead not found" with Back button
+- NEVER access nested fields without guards:
+  customer?.email
+  customer?.phone
+  customer?.address
+- If customer is missing, show a fallback:
+  "Customer info unavailable"
+
+If backend does not return lead.customer:
+- Add a second fetch:
+  GET /api/customers/:customerId
+and use that to populate the customer card.
+
+3) ADD AN ERROR BOUNDARY (to prevent blank screens)
+Wrap the LeadDetails route in a simple ErrorBoundary that renders:
+- "Something went wrong" + Back button
+- console.error the stack
+This ensures no route can white-screen again.
+
+4) VERIFY
+- Tap lead card -> LeadDetails renders every time
+- Customer card shows real email/phone/address when available
+- No white screen even if customer data is missing
+
+DELIVERABLE
+- LeadDetails no longer white-screens
+- Customer + Description render consistently
+- Proper loading + error state shown instead of blank screen
