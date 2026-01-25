@@ -1,0 +1,120 @@
+Add “Review & Fix” Timesheets Editing (Manager-Only) + Audit Trail
+
+CURRENT
+Timesheets page shows time entries and totals. Auto clock-out prevents runaway sessions.
+But real life still causes mistakes:
+- tech forgot to clock out
+- clock-in was late
+- break wasn’t tracked
+We need a manager-only way to correct entries while keeping an audit trail.
+
+GOAL
+Add a manager-only “Edit Entry” flow that allows correcting a time entry:
+- Edit start time + end time
+- Require a note/reason for any edit
+- Mark the entry as Edited with a visible tag
+- Store who edited it and when (audit trail)
+Technicians must NOT be able to edit timesheets.
+
+RBAC (STRICT / HIDDEN NOT DISABLED)
+- Owner/Admin/Supervisor/Manager:
+  - Can edit time entries for employees they can access
+  - Can see edit history fields
+- Technician:
+  - Can ONLY view their own entries
+  - Cannot edit
+  - Can see “Edited” tag on their entries if it was changed by a manager
+- Dispatcher/Estimator:
+  - No access (unless explicitly allowed)
+
+UI REQUIREMENTS (TIMESHEETS PAGE)
+1) Add an action menu per entry row (Managers only)
+- Example: small “⋯” button on the right side of each time entry row
+- Menu options:
+  - Edit entry
+(Do not show this menu to technicians)
+
+2) Edit Entry Modal / Sheet
+When manager taps “Edit entry”:
+- Open a modal/sheet consistent with EcoLogic UI
+- Show employee name + job/category + date at the top (read-only)
+- Editable fields:
+  - Start time (use SAME time picker component as Jobs/Estimates)
+  - End time (use SAME time picker component as Jobs/Estimates)
+- Required field:
+  - Reason / Note (text input)
+    Placeholder: “Forgot to clock out…”
+    Must be required to Save
+- Buttons:
+  - Cancel
+  - Save Changes
+
+3) Validation (Frontend + Backend)
+- Start must be before end
+- Duration cannot be negative or zero
+- Prevent unrealistic entries (optional guard):
+  - cap edited duration to <= 16 hours unless owner/admin (optional)
+- If invalid, show inline error (no crash)
+
+4) Visual Tagging
+For any edited entry:
+- Show a subtle pill/tag on the row: “Edited”
+- Optionally show subtext:
+  “Edited by {Name}”
+- Keep it calm, not alarming
+
+DATA MODEL (REQUIRED)
+Add fields to time_entries:
+- editedAt (timestamp nullable)
+- editedByUserId (string/int nullable)
+- editReason (text nullable)
+- originalStartAt (timestamp nullable)  (optional but recommended)
+- originalEndAt (timestamp nullable)    (optional but recommended)
+
+RULES
+- On first edit, store originalStartAt/originalEndAt if not already present
+- Update startAt/endAt to new values
+- Set editedAt = now
+- Set editedByUserId = current manager user id
+- Set editReason = required note
+
+BACKEND API
+Add a manager-only endpoint:
+- PATCH /api/time/entries/:id
+Body:
+  { startAt, endAt, editReason }
+
+Server must:
+- Enforce RBAC (only manager roles)
+- Verify the manager can access that employee/job
+- Validate times
+- Persist audit fields
+- Return updated entry
+
+IMPORTANT: Auto clock-out logic must still work
+- If an entry was autoClosed and later edited by manager, keep:
+  autoClosed=true (or optionally set autoClosed=false but still preserve history)
+- Either way, show “Edited” tag if edited.
+
+TIMESHEET TOTALS RE-CALC
+After saving an edit:
+- Update totals immediately on the page (refetch entries or update state)
+- Ensure employee totals + overall totals reflect edits
+
+ERROR HANDLING
+- If save fails, show inline error and do not change UI
+- Never white-screen
+- No console errors
+
+DELIVERABLES
+- Managers can edit any entry they’re allowed to access
+- Edit requires a note
+- Entries show “Edited” tag after changes
+- Audit trail stored (who/when/reason + original times)
+- Technicians cannot edit and never see edit controls
+
+SUCCESS CRITERIA
+- Owner can fix timesheets for payroll without leaving EcoLogic
+- Data stays trustworthy (audit trail)
+- UI stays clean and modern
+- RBAC not violated

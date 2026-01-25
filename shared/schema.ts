@@ -1370,6 +1370,11 @@ export const timeLogs = pgTable("time_logs", {
   notes: text("notes"),
   autoClosed: boolean("auto_closed").default(false),
   autoClosedReason: varchar("auto_closed_reason", { length: 50 }),
+  editedAt: timestamp("edited_at"),
+  editedByUserId: varchar("edited_by_user_id").references(() => users.id),
+  editReason: text("edit_reason"),
+  originalClockInAt: timestamp("original_clock_in_at"),
+  originalClockOutAt: timestamp("original_clock_out_at"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("time_logs_company_id_idx").on(table.companyId),

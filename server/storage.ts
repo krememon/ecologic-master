@@ -307,6 +307,8 @@ export interface IStorage {
   autoCloseExpiredTimeEntries(userId: string, companyId: number): Promise<TimeLog | null>;
   autoCloseExpiredTimeEntriesForCompany(companyId: number): Promise<number>;
   updateCompanyAutoClockOutTime(companyId: number, time: string): Promise<void>;
+  getTimeEntryById(id: number): Promise<TimeLog | null>;
+  updateTimeEntry(id: number, data: { clockInAt: Date; clockOutAt: Date; editedByUserId: string; editReason: string }): Promise<TimeLog | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2738,6 +2740,45 @@ export class DatabaseStorage implements IStorage {
       .update(companies)
       .set({ autoClockOutTime: time })
       .where(eq(companies.id, companyId));
+  }
+
+  async getTimeEntryById(id: number): Promise<TimeLog | null> {
+    const [entry] = await db
+      .select()
+      .from(timeLogs)
+      .where(eq(timeLogs.id, id));
+    return entry || null;
+  }
+
+  async updateTimeEntry(
+    id: number,
+    data: { clockInAt: Date; clockOutAt: Date; editedByUserId: string; editReason: string }
+  ): Promise<TimeLog | null> {
+    const entry = await this.getTimeEntryById(id);
+    if (!entry) return null;
+
+    const updateData: any = {
+      clockInAt: data.clockInAt,
+      clockOutAt: data.clockOutAt,
+      editedAt: new Date(),
+      editedByUserId: data.editedByUserId,
+      editReason: data.editReason,
+    };
+
+    if (!entry.originalClockInAt) {
+      updateData.originalClockInAt = entry.clockInAt;
+    }
+    if (!entry.originalClockOutAt && entry.clockOutAt) {
+      updateData.originalClockOutAt = entry.clockOutAt;
+    }
+
+    const [updated] = await db
+      .update(timeLogs)
+      .set(updateData)
+      .where(eq(timeLogs.id, id))
+      .returning();
+
+    return updated || null;
   }
 }
 
