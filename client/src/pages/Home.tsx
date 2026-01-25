@@ -10,9 +10,11 @@ import {
   FileText, 
   DollarSign, 
   AlertCircle,
-  Clock,
   ChevronRight,
-  Loader2
+  Loader2,
+  Calendar,
+  Users,
+  ClipboardList
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
@@ -74,7 +76,7 @@ export default function Home() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
@@ -107,26 +109,21 @@ export default function Home() {
     ? jobs.filter(job => isAssignedToMe(job))
     : jobs;
 
-  const jobsScheduledToday = myJobs.filter(job => {
+  const jobsToday = myJobs.filter(job => {
     const date = getJobDate(job);
     return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
   });
 
-  const leadsCreatedToday = leads.filter(lead => {
-    if (!lead.createdAt) return false;
-    const createdDate = parseISO(lead.createdAt as unknown as string);
-    return isToday(createdDate);
-  });
-
-  const estimatesSentToday = estimates.filter(estimate => {
-    if (estimate.status !== 'sent' && estimate.status !== 'approved') return false;
-    if (!estimate.createdAt) return false;
-    const createdDate = parseISO(estimate.createdAt as unknown as string);
-    return isToday(createdDate);
-  });
-
   const openJobs = myJobs.filter(job => 
     job.status !== 'completed' && job.status !== 'cancelled'
+  );
+
+  const leadsInFlow = leads.filter(lead => 
+    lead.status !== 'won' && lead.status !== 'lost'
+  );
+
+  const draftEstimates = estimates.filter(estimate => 
+    estimate.status === 'draft'
   );
 
   const openEstimates = estimates.filter(estimate => 
@@ -179,11 +176,23 @@ export default function Home() {
     }
   })();
 
+  const todayJobs = myJobs
+    .filter(job => {
+      const date = getJobDate(job);
+      return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
+    })
+    .sort((a, b) => {
+      const dateA = getJobDate(a);
+      const dateB = getJobDate(b);
+      if (!dateA || !dateB) return 0;
+      return dateA.getTime() - dateB.getTime();
+    });
+
   const upcomingJobs = myJobs
     .filter(job => {
       const date = getJobDate(job);
       if (!date) return false;
-      return date >= today && job.status !== 'completed' && job.status !== 'cancelled';
+      return date > today && job.status !== 'completed' && job.status !== 'cancelled';
     })
     .sort((a, b) => {
       const dateA = getJobDate(a);
@@ -195,39 +204,41 @@ export default function Home() {
 
   const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || (canSeeEstimates && estimatesLoading) || (isAdmin && invoicesLoading);
 
-  const todayGlanceItems: Array<{ label: string; value: number }> = [];
+  const statusStripItems: Array<{ icon: React.ElementType; value: number; label: string; route: string }> = [];
   
   if (!isEstimator) {
-    todayGlanceItems.push({ label: 'Jobs scheduled', value: jobsScheduledToday.length });
+    statusStripItems.push({ icon: Calendar, value: jobsToday.length, label: 'Jobs Today', route: '/jobs' });
+    statusStripItems.push({ icon: Briefcase, value: openJobs.length, label: 'Open Jobs', route: '/jobs' });
   }
   
   if (canSeeLeads) {
-    todayGlanceItems.push({ label: 'Leads created', value: leadsCreatedToday.length });
+    statusStripItems.push({ icon: Users, value: leadsInFlow.length, label: 'Leads In Flow', route: '/leads' });
   }
   
   if (canSeeEstimates) {
-    todayGlanceItems.push({ label: 'Estimates sent', value: estimatesSentToday.length });
+    statusStripItems.push({ icon: ClipboardList, value: draftEstimates.length, label: 'Draft Estimates', route: '/jobs?tab=estimates' });
   }
 
   const greeting = getGreeting();
   const firstName = user?.firstName || 'there';
+  const dateDisplay = format(new Date(), 'EEEE · MMM d');
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
-      <div className="px-4 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Home</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+      <div className="px-4 pt-6 pb-5">
+        <p className="text-sm text-slate-500 dark:text-slate-400">{dateDisplay}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
           {greeting}, {firstName}
-        </p>
+        </h1>
       </div>
 
       {hasDataError && (
         <div className="px-4 mb-4">
-          <Card className="bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800">
-            <CardContent className="p-4 flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-              <span className="text-red-700 dark:text-red-300 text-sm">
-                Some data couldn't be loaded. Pull down to refresh.
+          <Card className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50">
+            <CardContent className="p-3 flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-amber-700 dark:text-amber-300 text-sm">
+                Some data couldn't be loaded
               </span>
             </CardContent>
           </Card>
@@ -235,53 +246,38 @@ export default function Home() {
       )}
 
       {dataLoading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
         </div>
       ) : (
         <>
-          <div className="px-4 mb-6">
-            <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-              Today at a Glance
-            </h2>
-            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-              <CardContent className="p-4">
-                <div className="flex justify-around">
-                  {todayGlanceItems.map((item, index) => (
-                    <div key={index} className="text-center">
-                      <p className="text-2xl font-semibold text-slate-900 dark:text-white">
-                        {item.value}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        {item.label}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => navigate(isEstimator ? '/leads' : '/jobs')}
-                  className="w-full mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1"
-                >
-                  View details
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </CardContent>
-            </Card>
+          <div className="mb-6 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-3 px-4 pb-1">
+              {statusStripItems.map((item, index) => (
+                <StatusPill
+                  key={index}
+                  icon={item.icon}
+                  value={item.value}
+                  label={item.label}
+                  onClick={() => navigate(item.route)}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="px-4 mb-6">
-            <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+            <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
               Business Snapshot
             </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <SnapshotCard
+            <div className="space-y-2">
+              <SnapshotRow
                 icon={Briefcase}
                 label="Open Jobs"
                 value={openJobs.length}
                 onClick={() => navigate('/jobs')}
               />
               {canSeeEstimates && (
-                <SnapshotCard
+                <SnapshotRow
                   icon={FileText}
                   label="Open Estimates"
                   value={openEstimates.length}
@@ -289,7 +285,7 @@ export default function Home() {
                 />
               )}
               {isAdmin && (
-                <SnapshotCard
+                <SnapshotRow
                   icon={DollarSign}
                   label="Outstanding Invoices"
                   value={outstandingInvoices.length}
@@ -301,33 +297,32 @@ export default function Home() {
 
           {isOwner && (
             <div className="px-4 mb-6">
-              <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                This Week Pulse
+              <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+                This Week
               </h2>
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                <CardContent className="p-4">
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 overflow-hidden">
+                <CardContent className="p-0">
                   {pulseLoading ? (
-                    <div className="flex justify-center py-4">
+                    <div className="flex justify-center py-6">
                       <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
                     </div>
                   ) : pulseError ? (
-                    <div className="flex items-center justify-center gap-2 py-3 text-slate-500 dark:text-slate-400">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">Couldn't load pulse data</span>
+                    <div className="flex items-center justify-center gap-2 py-5 text-slate-400">
+                      <span className="text-sm">Data unavailable</span>
                     </div>
                   ) : pulseMetrics ? (
-                    <div className="grid grid-cols-3 gap-4">
-                      <PulseMetric
+                    <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800">
+                      <PulseCell
                         label="Revenue"
                         value={pulseMetrics.revenue7d > 0 ? `$${(pulseMetrics.revenue7d / 100).toLocaleString()}` : '$0'}
                         onClick={() => navigate('/invoicing')}
                       />
-                      <PulseMetric
-                        label="Invoices Paid"
+                      <PulseCell
+                        label="Paid"
                         value={pulseMetrics.invoicesPaid7d.toString()}
                         onClick={() => navigate('/invoicing')}
                       />
-                      <PulseMetric
+                      <PulseCell
                         label="Win Rate"
                         value={pulseMetrics.winRate7d !== null ? `${pulseMetrics.winRate7d}%` : '—'}
                         onClick={() => navigate('/leads')}
@@ -340,43 +335,64 @@ export default function Home() {
           )}
 
           <div className="px-4">
-            <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-              {isTechnician ? 'My Schedule' : 'Today & Upcoming'}
+            <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+              {isTechnician ? 'My Schedule' : 'Workstream'}
             </h2>
             
-            {upcomingJobs.length === 0 ? (
+            {todayJobs.length === 0 && upcomingJobs.length === 0 ? (
               <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-slate-400" />
-                  <span className="text-slate-500 dark:text-slate-400 text-sm">
-                    No upcoming jobs scheduled
-                  </span>
+                <CardContent className="py-8 text-center">
+                  <Calendar className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    No jobs scheduled
+                  </p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-2">
-                {upcomingJobs.map(job => {
-                  const jobDate = getJobDate(job);
-                  let dateLabel = '';
-                  if (jobDate) {
-                    if (isToday(jobDate)) {
-                      dateLabel = 'Today';
-                    } else if (isTomorrow(jobDate)) {
-                      dateLabel = 'Tomorrow';
-                    } else {
-                      dateLabel = format(jobDate, 'EEE, MMM d');
-                    }
-                  }
-                  return (
-                    <ScheduleCard
-                      key={job.id}
-                      title={job.title || `Job #${job.id}`}
-                      subtitle={dateLabel}
-                      status={job.status}
-                      onClick={() => navigate(`/jobs/${job.id}`)}
-                    />
-                  );
-                })}
+              <div className="space-y-4">
+                {todayJobs.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 ml-1">Today</p>
+                    <div className="space-y-2">
+                      {todayJobs.map(job => (
+                        <JobCard
+                          key={job.id}
+                          title={job.title || `Job #${job.id}`}
+                          status={job.status}
+                          onClick={() => navigate(`/jobs/${job.id}`)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {upcomingJobs.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 ml-1">Upcoming</p>
+                    <div className="space-y-2">
+                      {upcomingJobs.map(job => {
+                        const jobDate = getJobDate(job);
+                        let dateLabel = '';
+                        if (jobDate) {
+                          if (isTomorrow(jobDate)) {
+                            dateLabel = 'Tomorrow';
+                          } else {
+                            dateLabel = format(jobDate, 'EEE, MMM d');
+                          }
+                        }
+                        return (
+                          <JobCard
+                            key={job.id}
+                            title={job.title || `Job #${job.id}`}
+                            subtitle={dateLabel}
+                            status={job.status}
+                            onClick={() => navigate(`/jobs/${job.id}`)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -393,40 +409,60 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-function SnapshotCard({ 
+function StatusPill({ 
+  icon: Icon, 
+  value, 
+  label, 
+  onClick 
+}: { 
+  icon: React.ElementType; 
+  value: number; 
+  label: string; 
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-colors whitespace-nowrap shadow-sm"
+    >
+      <Icon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+      <span className="text-lg font-semibold text-slate-900 dark:text-white">{value}</span>
+      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+    </button>
+  );
+}
+
+function SnapshotRow({ 
   icon: Icon, 
   label, 
   value, 
-  onClick,
-  className = ""
+  onClick 
 }: { 
   icon: React.ElementType; 
   label: string; 
   value: number; 
   onClick: () => void;
-  className?: string;
 }) {
   return (
-    <Card 
-      className={`cursor-pointer hover:shadow-md transition-shadow bg-white dark:bg-slate-900 ${className}`}
+    <button
       onClick={onClick}
+      className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
     >
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-            <Icon className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-          </div>
-          <div>
-            <p className="text-xl font-semibold text-slate-900 dark:text-white">{value}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
+          <Icon className="h-4 w-4 text-slate-600 dark:text-slate-400" />
         </div>
-      </CardContent>
-    </Card>
+        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-lg font-semibold text-slate-900 dark:text-white">{value}</span>
+        <ChevronRight className="h-4 w-4 text-slate-400" />
+      </div>
+    </button>
   );
 }
 
-function PulseMetric({ 
+function PulseCell({ 
   label, 
   value, 
   onClick 
@@ -438,56 +474,57 @@ function PulseMetric({
   return (
     <button
       onClick={onClick}
-      className="text-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+      className="py-5 px-3 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
     >
       <p className="text-xl font-semibold text-slate-900 dark:text-white">
         {value}
       </p>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
         {label}
       </p>
     </button>
   );
 }
 
-function ScheduleCard({ 
+function JobCard({ 
   title, 
-  subtitle, 
+  subtitle,
   status,
   onClick 
 }: { 
   title: string; 
-  subtitle: string; 
+  subtitle?: string;
   status: string;
   onClick: () => void;
 }) {
-  const statusColors: Record<string, string> = {
-    new: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    scheduled: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
-    in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-    active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
-    completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  const statusStyles: Record<string, { bg: string; text: string }> = {
+    new: { bg: 'bg-blue-100 dark:bg-blue-900/50', text: 'text-blue-700 dark:text-blue-300' },
+    scheduled: { bg: 'bg-indigo-100 dark:bg-indigo-900/50', text: 'text-indigo-700 dark:text-indigo-300' },
+    in_progress: { bg: 'bg-amber-100 dark:bg-amber-900/50', text: 'text-amber-700 dark:text-amber-300' },
+    pending: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400' },
+    active: { bg: 'bg-emerald-100 dark:bg-emerald-900/50', text: 'text-emerald-700 dark:text-emerald-300' },
   };
 
+  const style = statusStyles[status] || statusStyles.pending;
   const displayStatus = status.replace(/_/g, ' ');
-  const colorClass = statusColors[status] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
 
   return (
     <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow bg-white dark:bg-slate-900"
+      className="cursor-pointer hover:shadow-md transition-shadow bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
       onClick={onClick}
     >
-      <CardContent className="p-3 flex items-center gap-3">
+      <CardContent className="p-4 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
             {title}
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {subtitle}
-          </p>
+          {subtitle && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {subtitle}
+            </p>
+          )}
         </div>
-        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${colorClass}`}>
+        <span className={`px-2.5 py-1 text-xs font-medium rounded-full capitalize ${style.bg} ${style.text}`}>
           {displayStatus}
         </span>
         <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />

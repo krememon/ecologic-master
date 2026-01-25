@@ -1,0 +1,177 @@
+Build the FINAL EcoLogic Homepage – Modern / Techy Command Center
+
+CURRENT
+EcoLogic has a functional homepage, but the structure feels dated and task-heavy.
+We want a modern, premium, tech-forward homepage inspired by best-in-class SaaS
+(Apple / Stripe / Linear), NOT Jobber-style lists or dashboards.
+
+GOAL
+Create a calm, modern homepage that communicates:
+- Business state (not task pressure)
+- Momentum and flow
+- Owner-level clarity
+- Fast situational awareness
+
+This is NOT:
+- A task list
+- A nag screen
+- An analytics dashboard
+
+NO charts.
+NO popups.
+NO fake data.
+NO redesign of existing components.
+
+━━━━━━━━━━━━━━━━━━
+NON-NEGOTIABLE PRINCIPLES
+━━━━━━━━━━━━━━━━━━
+- Hidden, not disabled (never render restricted content)
+- Mobile-first, iPhone-style UI
+- Card-based layouts with generous spacing
+- Minimal copy, strong hierarchy
+- Calm, modern SaaS feel
+- Must visually match existing EcoLogic pages:
+  Jobs, Estimates, Invoices, Leads
+
+━━━━━━━━━━━━━━━━━━
+RBAC (STRICT — DO NOT VIOLATE)
+━━━━━━━━━━━━━━━━━━
+- Owner/Admin: full visibility
+- Supervisor: jobs, leads, schedule
+- Dispatcher: jobs, leads, schedule
+- Estimator: leads + estimates ONLY
+- Technician: assigned jobs ONLY
+  (NO leads, NO estimates, NO invoices, NO financial analytics)
+
+━━━━━━━━━━━━━━━━━━
+PAGE STRUCTURE (FINAL)
+━━━━━━━━━━━━━━━━━━
+
+1) CONTEXT HEADER (NO CARD)
+--------------------------------
+At top of page render:
+- Small muted date (e.g. "Sunday · Jan 25")
+- Large greeting:
+  "Good morning, {FirstName}"
+
+RULES
+- No container card
+- Feels calm and human
+- No actions here
+
+━━━━━━━━━━━━━━━━━━
+2) STATUS STRIP (MODERN AWARENESS)
+━━━━━━━━━━━━━━━━━━
+Horizontal, scrollable mini-cards (pill-style or soft cards).
+
+Purpose:
+Quick situational awareness, not urgency.
+
+METRICS (render only if role allows):
+- Jobs Today
+- Open Jobs
+- Leads In Flow
+- Draft Estimates
+
+RULES
+- Icon + number + label
+- No borders or heavy dividers
+- Tappable → routes to existing filtered pages
+- Hide items entirely if role does not allow
+- Technician sees job-related items only
+- Zero values still render cleanly
+
+━━━━━━━━━━━━━━━━━━
+3) BUSINESS SNAPSHOT
+━━━━━━━━━━━━━━━━━━
+This replaces "Needs Attention" entirely.
+
+Purpose:
+High-level state of the business right now.
+
+CONTENT (role-aware):
+- Open Jobs
+- Open Estimates
+- Outstanding Invoices (Owner/Admin only)
+
+RULES
+- Neutral wording only
+- No alert language
+- No red / warning colors
+- Each item is tappable
+- Uses existing card styles
+- Hide items not permitted by RBAC
+
+━━━━━━━━━━━━━━━━━━
+4) THIS WEEK PULSE (OWNER / ADMIN ONLY)
+━━━━━━━━━━━━━━━━━━
+Single premium analytics card.
+
+METRICS (3 MAX):
+- Revenue Collected (last 7 days) IF reliable data exists
+- Invoices Paid (last 7 days)
+- Win Rate (last 7 days) = Won Leads / Total Leads
+
+RULES
+- No charts
+- No trend arrows
+- Large values, muted labels
+- Thin dividers or subtle grid
+- If a metric is unavailable, show “—” without breaking layout
+- Hidden entirely for non-owner roles
+- Tappable:
+  - Revenue / Invoices → Invoices page
+  - Win Rate → Leads page
+
+━━━━━━━━━━━━━━━━━━
+5) WORKSTREAM (TODAY & UPCOMING)
+━━━━━━━━━━━━━━━━━━
+Modern replacement for map/calendar-heavy layouts.
+
+CONTENT
+- Card list grouped by:
+  - Today
+  - Upcoming
+- Uses existing Job card components
+- No calendar grid
+- No map on Home
+
+ROLE RULES
+- Technician: assigned jobs only
+- Dispatcher/Supervisor: scheduled jobs
+- Estimator: relevant leads/estimates if supported
+- Owner/Admin: jobs today + upcoming
+
+━━━━━━━━━━━━━━━━━━
+6) OPTIONAL SMART NUDGE (LOW PRIORITY)
+━━━━━━━━━━━━━━━━━━
+Optional lightweight callout (NOT alert).
+
+Example:
+"You have 1 estimate ready to send"
+
+RULES
+- Soft styling
+- Dismissible
+- No warning colors
+- No blocking UX
+
+━━━━━━━━━━━━━━━━━━
+DATA & TECH RULES
+━━━━━━━━━━━━━━━━━━
+- Use existing API routes only
+- Each section fetches independently
+- Loading, empty, and error states required
+- Never show a blank white screen
+- Friendly error cards only
+- No console errors
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+- Homepage feels modern and tech-forward
+- No task-nagging language
+- Clear sense of business state
+- Owner feels in control
+- Technician feels focused
+- Looks and feels native to EcoLogic
