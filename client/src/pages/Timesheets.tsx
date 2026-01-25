@@ -231,8 +231,8 @@ export default function Timesheets() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                  <Calendar className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm font-medium">{weekLabel}</span>
+                  <Calendar className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                  <span className="text-sm font-medium whitespace-nowrap">{weekLabel}</span>
                 </div>
                 <Button
                   variant="outline"
