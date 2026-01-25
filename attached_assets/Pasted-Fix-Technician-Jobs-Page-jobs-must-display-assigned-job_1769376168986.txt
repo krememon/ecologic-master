@@ -1,0 +1,97 @@
+Fix Technician Jobs Page: jobs must display (assigned jobs only, RBAC “hidden not disabled”)
+
+CURRENT
+- On Technician account, Jobs page shows “No jobs found”
+- Technicians should be able to see jobs, but ONLY jobs assigned to them
+- Owner/Office users can see jobs normally
+
+GOAL
+Technicians must see their assigned jobs on the Jobs page:
+- Show ONLY jobs where the technician is assigned (crew assignment)
+- No access to unassigned jobs
+- Hidden, not disabled (no locked cards)
+- Mobile-first UI remains clean
+- No fake data
+- No console errors
+- No unrelated refactors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC RULES (DO NOT VIOLATE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician:
+- Can view ONLY jobs they are assigned to
+- Cannot see company-wide jobs list
+- Cannot see office-only financial details if those exist on the card
+
+Owner/Admin/Supervisor/Dispatcher:
+- Keep existing behavior (see all jobs)
+
+Estimator:
+- Keep existing behavior (whatever it currently is), do not broaden access
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — FIND WHY TECH GETS ZERO JOBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Locate the Jobs page data source:
+- Which API endpoint does Jobs page call?
+  Example: GET /api/jobs or /api/jobs?status=...
+- Confirm what the backend currently returns for Technician role
+
+Most likely causes:
+A) Backend always filters by company role incorrectly and returns empty for tech
+B) Tech assignments are stored in a different table (job_assignments) but endpoint doesn’t join it
+C) Frontend applies an extra filter that removes all jobs for tech
+D) The assignment uses employeeId but auth uses userId (mismatch)
+
+Do NOT guess. Follow the actual code path.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — BACKEND: RETURN ASSIGNED JOBS FOR TECH ROLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Update the jobs list endpoint so:
+- If user.role == "Technician":
+  - Return jobs where user is assigned to the job
+  - Use the actual assignment source of truth (job_assignments table OR jobs.assignedCrew)
+  - Ensure it uses the SAME id type as notifications (recipientUserId / users.id)
+  - Sort newest first (or same sorting used now)
+
+- For non-tech roles:
+  - Keep existing behavior unchanged
+
+IMPORTANT:
+- Do not leak unassigned jobs to techs
+- Do not include office-only docs or internal-only fields if the jobs list returns them
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — FRONTEND: ENSURE JOBS LIST RENDERS FOR TECH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Confirm the Jobs page is not hiding jobs due to a frontend-only filter
+- If there is a filter like “officeOnly” or “status != cancelled”, ensure it does not wipe all tech jobs
+- If the tech has jobs but UI still shows empty:
+  - Fix state handling so list renders correctly
+
+No UI redesign. Just make it work.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — QUICK VALIDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Test steps:
+1) Log in as Owner, assign Technician to a job
+2) Log in as Technician
+3) Open Jobs page
+4) Technician sees that job card
+5) Technician does NOT see other jobs they are not assigned to
+
+Also test:
+- Cancelled jobs behavior follows your existing rules (do not change unless required)
+- No console errors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician Jobs page shows assigned jobs
+- Technician never sees unassigned jobs
+- Owner/Office roles unchanged
+- No fake data
+- No popups/toasts
+- Mobile UI unchanged

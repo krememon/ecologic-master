@@ -433,9 +433,12 @@ export default function Jobs() {
       return false;
     }
     
-    // For TECHNICIAN role, only show jobs assigned to them
-    if (role === 'TECHNICIAN' && job.assignedTo !== user?.id) {
-      return false;
+    // For TECHNICIAN role, only show jobs assigned to them (via crew assignments)
+    if (role === 'TECHNICIAN') {
+      const assignedIds = (job as any).assignedEmployeeIds || [];
+      if (!assignedIds.includes(user?.id)) {
+        return false;
+      }
     }
     
     // Then apply search filter

@@ -2002,8 +2002,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      const jobs = await storage.getJobs(company.id);
-      res.json(jobs);
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = member?.role?.toUpperCase() || '';
+      
+      let jobs = await storage.getJobs(company.id);
+      
+      // For technicians, only return jobs they are assigned to
+      if (userRole === 'TECHNICIAN') {
+        const assignedJobIds = new Set<number>();
+        
+        // Get all crew assignments for this user
+        for (const job of jobs) {
+          const crewAssignments = await storage.getJobCrewAssignments(job.id);
+          if (crewAssignments.some(c => c.userId === userId)) {
+            assignedJobIds.add(job.id);
+          }
+        }
+        
+        jobs = jobs.filter(job => assignedJobIds.has(job.id));
+      }
+      
+      // Include crew assignment info for frontend filtering
+      const jobsWithCrew = await Promise.all(jobs.map(async (job) => {
+        const crewAssignments = await storage.getJobCrewAssignments(job.id);
+        return {
+          ...job,
+          assignedEmployeeIds: crewAssignments.map(c => c.userId),
+        };
+      }));
+      
+      res.json(jobsWithCrew);
     } catch (error) {
       console.error("Error fetching jobs:", error);
       res.status(500).json({ message: "Failed to fetch jobs" });
