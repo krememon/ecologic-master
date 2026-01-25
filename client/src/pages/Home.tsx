@@ -251,6 +251,20 @@ export default function Home() {
         </div>
       ) : (
         <>
+          <div className="mb-6 overflow-x-auto scrollbar-hide">
+            <div className="flex gap-3 px-4 pb-1">
+              {statusStripItems.map((item, index) => (
+                <StatusPill
+                  key={index}
+                  icon={item.icon}
+                  value={item.value}
+                  label={item.label}
+                  onClick={() => navigate(item.route)}
+                />
+              ))}
+            </div>
+          </div>
+
           <div className="px-4 mb-6">
             <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
               Today
@@ -276,20 +290,6 @@ export default function Home() {
                 ))}
               </div>
             )}
-          </div>
-
-          <div className="mb-6 overflow-x-auto scrollbar-hide">
-            <div className="flex gap-3 px-4 pb-1">
-              {statusStripItems.map((item, index) => (
-                <StatusPill
-                  key={index}
-                  icon={item.icon}
-                  value={item.value}
-                  label={item.label}
-                  onClick={() => navigate(item.route)}
-                />
-              ))}
-            </div>
           </div>
 
           <div className="px-4 mb-6">

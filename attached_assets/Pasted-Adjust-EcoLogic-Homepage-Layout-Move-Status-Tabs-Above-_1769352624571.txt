@@ -1,0 +1,113 @@
+Adjust EcoLogic Homepage Layout – Move Status Tabs Above “Today” Section
+
+CURRENT
+The homepage shows the “Today / Jobs Scheduled Today” section
+before the horizontal status tabs (Jobs Today, Open Jobs, etc.).
+
+GOAL
+Reorder the homepage so that the horizontal status tabs
+appear ABOVE the “Today” (jobs scheduled today) section.
+
+This provides quick business context first,
+followed immediately by the user’s actual work for the day.
+
+DO NOT redesign components.
+This is a layout order change only.
+
+━━━━━━━━━━━━━━━━━━
+FINAL PAGE ORDER (UPDATED)
+━━━━━━━━━━━━━━━━━━
+
+1) CONTEXT HEADER
+- Small muted date (e.g. "Sunday · Jan 25")
+- Large greeting: "Good morning, {FirstName}"
+- No card container
+
+━━━━━━━━━━━━━━━━━━
+2) STATUS TABS (MOVED HERE)
+━━━━━━━━━━━━━━━━━━
+Horizontal, scrollable pill-style cards.
+
+CONTENT (role-aware):
+- Jobs Today
+- Open Jobs
+- Leads In Flow
+- Draft Estimates
+
+RULES
+- Same styling as existing tabs
+- Icon + number + label
+- Tappable → routes to existing filtered pages
+- Hide tabs entirely if role does not allow
+- Zero values render cleanly
+
+━━━━━━━━━━━━━━━━━━
+3) TODAY (JOBS SCHEDULED TODAY)
+━━━━━━━━━━━━━━━━━━
+This remains the primary work section,
+but now appears AFTER the status tabs.
+
+CONTENT
+- List of jobs scheduled for today
+- Use existing Job card components
+- Sorted by scheduled time
+- Fully tappable → job details
+
+EMPTY STATE
+- Show clean card with:
+  Calendar icon
+  Text: "No jobs scheduled today"
+
+ROLE RULES
+- Technician: assigned jobs only
+- Dispatcher/Supervisor: scheduled jobs
+- Owner/Admin: all jobs today
+- No calendar grid
+- No map
+
+━━━━━━━━━━━━━━━━━━
+4) BUSINESS SNAPSHOT
+━━━━━━━━━━━━━━━━━━
+Unchanged.
+
+CONTENT (role-aware):
+- Open Jobs
+- Open Estimates
+- Outstanding Invoices (Owner/Admin only)
+
+RULES
+- Neutral wording
+- No alert language
+- Cards are tappable
+- Hide unauthorized items
+
+━━━━━━━━━━━━━━━━━━
+5) THIS WEEK PULSE (Owner/Admin only)
+━━━━━━━━━━━━━━━━━━
+Unchanged.
+
+METRICS
+- Revenue Collected (7 days) if available
+- Invoices Paid (7 days)
+- Win Rate (7 days)
+
+RULES
+- No charts
+- Premium compact card
+- Hidden for non-owner roles
+
+━━━━━━━━━━━━━━━━━━
+TECH RULES
+━━━━━━━━━━━━━━━━━━
+- Use existing APIs only
+- Each section loads independently
+- Loading, empty, and error states required
+- No blank white screens
+- No console errors
+- Hidden, not disabled (strict RBAC)
+
+SUCCESS
+- User gets instant context from tabs
+- Then sees today’s real work
+- Homepage feels modern, intentional, and calm
+- No regression in functionality or RBAC
