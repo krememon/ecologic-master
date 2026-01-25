@@ -550,7 +550,6 @@ export default function Jobs() {
           query.queryKey[0].startsWith('/api/schedule-items')
       });
       setJobToDelete(null);
-      toast({ title: "Job deleted successfully" });
     },
     onError: (error: Error) => {
       if (error.message === 'Unauthorized') {
@@ -1039,12 +1038,20 @@ export default function Jobs() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
                 {selectedJob && (
-                  <Badge 
-                    variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
-                    className="text-sm capitalize"
-                  >
-                    {selectedJob.status}
-                  </Badge>
+                  selectedJob.isPaid ? (
+                    <Badge 
+                      className="text-sm bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100"
+                    >
+                      Paid
+                    </Badge>
+                  ) : (
+                    <Badge 
+                      variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
+                      className="text-sm capitalize"
+                    >
+                      {selectedJob.status}
+                    </Badge>
+                  )
                 )}
               </div>
             </div>
