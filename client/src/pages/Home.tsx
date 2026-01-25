@@ -17,7 +17,7 @@ import {
   Loader2,
   Circle
 } from "lucide-react";
-import { format, isToday, isTomorrow, parseISO, startOfDay } from "date-fns";
+import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
 
 interface JobWithClient extends Job {
@@ -84,6 +84,7 @@ export default function Home() {
   }
 
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
+  const isOwner = role === 'OWNER';
   const canSeeLeads = role !== 'TECHNICIAN';
   const canSeeEstimates = role !== 'TECHNICIAN';
   const isTechnician = role === 'TECHNICIAN';
@@ -127,6 +128,50 @@ export default function Home() {
     const dueDate = parseISO(inv.dueDate as unknown as string);
     return dueDate < today;
   });
+
+  const sevenDaysAgo = subDays(today, 7);
+
+  const pulseLoading = isOwner && (invoicesLoading || leadsLoading);
+  const pulseError = isOwner && (invoicesError || leadsError);
+
+  const pulseMetrics = (() => {
+    if (!isOwner) return null;
+    if (pulseLoading || pulseError) return null;
+
+    try {
+      const paidInvoices7d = invoices.filter(inv => {
+        if (inv.status !== 'paid' || !inv.paidAt) return false;
+        const paidDate = parseISO(inv.paidAt as unknown as string);
+        return isAfter(paidDate, sevenDaysAgo);
+      });
+
+      const revenue7d = paidInvoices7d.reduce((sum, inv) => {
+        const amount = inv.totalCents || 0;
+        return sum + amount;
+      }, 0);
+
+      const invoicesPaid7d = paidInvoices7d.length;
+
+      const leadsCreated7d = leads.filter(lead => {
+        if (!lead.createdAt) return false;
+        const createdDate = parseISO(lead.createdAt as unknown as string);
+        return isAfter(createdDate, sevenDaysAgo);
+      });
+
+      const leadsWon7d = leadsCreated7d.filter(lead => lead.status === 'won').length;
+      const totalLeads7d = leadsCreated7d.length;
+      const winRate7d = totalLeads7d > 0 ? Math.round((leadsWon7d / totalLeads7d) * 100) : null;
+
+      return {
+        revenue7d,
+        invoicesPaid7d,
+        winRate7d,
+        hasData: true,
+      };
+    } catch {
+      return null;
+    }
+  })();
 
   const needsAttentionItems: Array<{
     id: string;
@@ -309,6 +354,46 @@ export default function Home() {
             </div>
           )}
 
+          {isOwner && (
+            <div className="px-4 mb-6">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
+                This Week Pulse
+              </h2>
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4">
+                  {pulseLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                    </div>
+                  ) : pulseError ? (
+                    <div className="flex items-center justify-center gap-2 py-3 text-slate-500 dark:text-slate-400">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-sm">Couldn't load pulse data</span>
+                    </div>
+                  ) : pulseMetrics ? (
+                    <div className="grid grid-cols-3 gap-4">
+                      <PulseMetric
+                        label="Revenue"
+                        value={pulseMetrics.revenue7d > 0 ? `$${(pulseMetrics.revenue7d / 100).toLocaleString()}` : '$0'}
+                        onClick={() => navigate('/invoicing')}
+                      />
+                      <PulseMetric
+                        label="Invoices Paid"
+                        value={pulseMetrics.invoicesPaid7d.toString()}
+                        onClick={() => navigate('/invoicing')}
+                      />
+                      <PulseMetric
+                        label="Win Rate"
+                        value={pulseMetrics.winRate7d !== null ? `${pulseMetrics.winRate7d}%` : '—'}
+                        onClick={() => navigate('/leads')}
+                      />
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <div className="px-4">
             <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
               {isTechnician ? 'My Schedule' : 'Today & Upcoming'}
@@ -374,6 +459,30 @@ function BriefItem({ text, onClick }: { text: string; onClick: () => void }) {
         {text}
       </span>
       <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+    </button>
+  );
+}
+
+function PulseMetric({ 
+  label, 
+  value, 
+  onClick 
+}: { 
+  label: string; 
+  value: string; 
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+    >
+      <p className="text-xl font-bold text-slate-900 dark:text-white">
+        {value}
+      </p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        {label}
+      </p>
     </button>
   );
 }

@@ -1,0 +1,88 @@
+Add Owner/Admin “This Week Pulse” Analytics Card to EcoLogic Homepage
+
+CURRENT
+Homepage is being built as a daily command center (KPIs + Needs Attention + Today/Upcoming).
+User wants ONE lightweight analytics element mixed in:
+“This Week Pulse” with 3 numbers max.
+No charts. No dashboard takeover.
+
+GOAL
+Add a single “This Week Pulse” card (Owner/Admin only) showing:
+1) Revenue Collected (last 7 days) — only if we already have reliable invoice/payment data
+2) Invoices Paid (last 7 days)
+3) Win Rate (last 7 days) = Won Leads / Total Leads
+
+The card must:
+- Use existing EcoLogic card styles (same spacing/radius/typography)
+- Be compact and premium-feeling
+- Be role-gated (hidden, not disabled)
+- Never crash Home if any metric is unavailable
+- Be tappable (routes to relevant pages)
+
+RBAC (STRICT)
+- ONLY Owner/Admin can see This Week Pulse.
+- Supervisors/Dispatchers/Estimators/Technicians must not see it at all.
+- Especially: Technicians must never see revenue, invoices, or leads analytics.
+
+PLACEMENT
+Insert “This Week Pulse” between:
+Needs Attention
+and
+Today / Upcoming
+
+DATA SOURCES (IMPORTANT)
+Use existing APIs ONLY if available.
+
+Preferred approach:
+A) Revenue Collected (7d)
+- If invoices have a “paid” status and a numeric “amountPaid/total” field OR payment records exist:
+  Sum paid amounts for invoices with paidAt within last 7 days.
+- If we do NOT have reliable paid amounts: DO NOT show revenue metric.
+  Replace with a “—” placeholder OR hide only that metric row while keeping the card.
+
+B) Invoices Paid (7d)
+- Count invoices where status = paid AND paidAt is within last 7 days.
+
+C) Win Rate (7d)
+- Leads won / total leads created in last 7 days (or leads updated to won within last 7 days if that’s what we have).
+- If either numerator or denominator cannot be determined, show “—” (never crash).
+
+If date filtering exists server-side, use it.
+If not, fetch minimal lists and filter client-side carefully (limit size, avoid heavy loads).
+
+IF (AND ONLY IF) existing APIs cannot support this cleanly:
+- Add ONE minimal backend endpoint like:
+  GET /api/home/pulse
+that returns role-safe Owner/Admin-only values:
+{ revenue7d, invoicesPaid7d, winRate7d }
+This endpoint must enforce RBAC server-side and never return data to non-owner roles.
+
+UI SPEC
+- Title row: “This Week Pulse”
+- 3 compact metric blocks (no charts):
+  - Revenue Collected
+  - Invoices Paid
+  - Win Rate
+- Show large value + small label
+- If a metric is unavailable, show “—” and keep the UI stable (no layout shift)
+- Tap behavior:
+  - Revenue/Invoices Paid → route to Invoices page (optionally with paid filter if exists)
+  - Win Rate → route to Leads page (optionally with status filter if exists)
+
+ERROR / LOADING / EMPTY STATES
+- Show skeleton/placeholder while loading
+- If request fails: show a friendly small error card inside Pulse area (“Couldn’t load Pulse right now”)
+- Home page must still render all other sections
+
+DELIVERABLES
+- Homepage now includes Owner/Admin-only This Week Pulse card
+- Uses existing styling components
+- RBAC verified (hidden for non-owner roles)
+- No console errors
+- No charts, no redesign
+
+SUCCESS CRITERIA
+Owner logs in and instantly sees:
+Revenue collected (if available), invoices paid, win rate
+in a clean premium card that feels like EcoLogic.
+Non-owners never see it.
