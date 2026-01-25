@@ -1285,6 +1285,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to get time entries' });
     }
   });
+
+  // Edit a time entry (Managers only)
+  app.patch('/api/time/entries/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const entryId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      const role = member.role as UserRole;
+      
+      // Only managers can edit time entries (Owner, Supervisor)
+      if (role === 'TECHNICIAN' || role === 'ESTIMATOR' || role === 'DISPATCHER') {
+        return res.status(403).json({ error: 'Only managers can edit time entries' });
+      }
+      
+      // Get the entry to verify it belongs to this company
+      const entry = await storage.getTimeEntryById(entryId);
+      if (!entry) {
+        return res.status(404).json({ error: 'Time entry not found' });
+      }
+      
+      if (entry.companyId !== member.companyId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      const { clockInAt, clockOutAt, editReason } = req.body;
+      
+      // Validate required fields
+      if (!clockInAt || !clockOutAt || !editReason) {
+        return res.status(400).json({ error: 'clockInAt, clockOutAt, and editReason are required' });
+      }
+      
+      if (typeof editReason !== 'string' || editReason.trim().length === 0) {
+        return res.status(400).json({ error: 'A reason is required for editing time entries' });
+      }
+      
+      const startTime = new Date(clockInAt);
+      const endTime = new Date(clockOutAt);
+      
+      // Validate times
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        return res.status(400).json({ error: 'Invalid time format' });
+      }
+      
+      if (startTime >= endTime) {
+        return res.status(400).json({ error: 'Start time must be before end time' });
+      }
+      
+      // Check duration is reasonable (max 16 hours)
+      const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+      if (durationHours > 16) {
+        return res.status(400).json({ error: 'Duration cannot exceed 16 hours' });
+      }
+      
+      const updated = await storage.updateTimeEntry(entryId, {
+        clockInAt: startTime,
+        clockOutAt: endTime,
+        editedByUserId: userId,
+        editReason: editReason.trim(),
+      });
+      
+      if (!updated) {
+        return res.status(500).json({ error: 'Failed to update time entry' });
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Error updating time entry:', error);
+      res.status(500).json({ error: 'Failed to update time entry' });
+    }
+  });
   
   // Get labor totals for a job
   app.get('/api/jobs/:jobId/labor', isAuthenticated, async (req: any, res) => {
