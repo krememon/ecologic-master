@@ -1005,6 +1005,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get user's assigned job IDs (for clock-in job picker)
+  app.get('/api/time/my-assignments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      // Get crew assignments for this user
+      const crewAssignments = await storage.getUserJobAssignments(userId);
+      const crewJobIds = new Set(crewAssignments.map(a => a.jobId));
+      
+      // Also get jobs where user is directly assigned via job.assignedTo
+      const allJobs = await storage.getJobs(member.companyId);
+      const directJobIds = allJobs
+        .filter(j => j.assignedTo === userId)
+        .map(j => j.id);
+      
+      // Combine both sets
+      directJobIds.forEach(id => crewJobIds.add(id));
+      const assignedJobIds = Array.from(crewJobIds);
+      
+      res.json({ assignedJobIds });
+    } catch (error: any) {
+      console.error('Error fetching assignments:', error);
+      res.status(500).json({ error: 'Unable to fetch assignments' });
+    }
+  });
+  
   // Clock in (Technicians only)
   app.post('/api/time/clock-in', isAuthenticated, async (req: any, res) => {
     try {
@@ -1029,9 +1059,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate jobId if provided - tech must be assigned to the job
       if (jobId) {
+        // Check crew assignments
         const assignments = await storage.getUserJobAssignments(userId);
-        const isAssigned = assignments.some(a => a.jobId === jobId);
-        if (!isAssigned) {
+        const isCrewAssigned = assignments.some(a => a.jobId === jobId);
+        
+        // Also check direct job.assignedTo field
+        const job = await storage.getJob(jobId);
+        const isDirectlyAssigned = job?.assignedTo === userId;
+        
+        if (!isCrewAssigned && !isDirectlyAssigned) {
           return res.status(403).json({ error: 'Not assigned to this job' });
         }
       }
@@ -1069,9 +1105,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate jobId if provided - tech must be assigned to the job
       if (jobId) {
+        // Check crew assignments
         const assignments = await storage.getUserJobAssignments(userId);
-        const isAssigned = assignments.some(a => a.jobId === jobId);
-        if (!isAssigned) {
+        const isCrewAssigned = assignments.some(a => a.jobId === jobId);
+        
+        // Also check direct job.assignedTo field
+        const job = await storage.getJob(jobId);
+        const isDirectlyAssigned = job?.assignedTo === userId;
+        
+        if (!isCrewAssigned && !isDirectlyAssigned) {
           return res.status(403).json({ error: 'Not assigned to this job' });
         }
       }

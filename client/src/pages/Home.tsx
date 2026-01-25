@@ -120,6 +120,11 @@ export default function Home() {
     refetchInterval: 60000,
   });
 
+  const { data: assignmentsData } = useQuery<{ assignedJobIds: number[] }>({
+    queryKey: ["/api/time/my-assignments"],
+    enabled: isAuthenticated && role === 'TECHNICIAN',
+  });
+
   const [showJobPicker, setShowJobPicker] = useState(false);
   const [jobPickerMode, setJobPickerMode] = useState<'clockIn' | 'switch'>('clockIn');
   const [jobSearchQuery, setJobSearchQuery] = useState('');
@@ -228,7 +233,10 @@ export default function Home() {
 
   const isAssignedToMe = (job: JobWithClient): boolean => {
     if (!userId) return false;
-    return job.assignedTo === userId;
+    // Check both direct assignment and crew assignments
+    if (job.assignedTo === userId) return true;
+    if (assignmentsData?.assignedJobIds?.includes(job.id)) return true;
+    return false;
   };
 
   const myJobs = isTechnician 

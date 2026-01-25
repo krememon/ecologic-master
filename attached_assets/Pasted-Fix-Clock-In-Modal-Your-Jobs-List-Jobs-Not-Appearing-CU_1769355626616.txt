@@ -1,0 +1,70 @@
+Fix Clock In Modal “Your Jobs” List — Jobs Not Appearing
+
+CURRENT
+Clock In modal shows “No jobs available” under “Your Jobs”.
+This prevents users from clocking into a job.
+
+GOAL
+Make “Your Jobs” reliably show the correct job list based on RBAC:
+- Technicians see assigned jobs only
+- Owner/Admin/Dispatcher/Supervisor see jobs they have access to (today/upcoming/open)
+- Estimators should not see clock in/out at all (v1), so modal should never open for them
+
+IMPORTANT
+Do NOT break Hidden-not-disabled.
+Only show jobs the user is allowed to access.
+
+IMPLEMENTATION REQUIREMENTS
+
+1) Determine current user role in the Clock In modal
+Use the same auth/user context used elsewhere in EcoLogic.
+
+2) Update the jobs query logic for the modal
+
+TECHNICIAN
+- Fetch assigned jobs only:
+  - jobs where current user is on assigned crew
+- Include jobs scheduled today and upcoming if assigned
+
+OWNER/ADMIN, DISPATCHER, SUPERVISOR
+- Fetch jobs the user can access:
+  - Prefer: jobs scheduled today + next 7 days
+  - Also include open jobs if needed
+  - Limit results to 25–50 for performance
+- Must not require “assigned crew” for these roles
+
+ESTIMATOR
+- Should not have clock in/out controls in v1
+- Ensure the Clock In UI is hidden (do not show modal trigger)
+
+3) Search behavior
+- Search box should filter within fetched jobs
+- Optional enhancement: if user types, hit the jobs endpoint with a search query param if supported
+- Must still show “Other Activities” even if jobs list is empty
+
+4) API usage
+- Use existing jobs endpoint(s) and filters if available
+- If no endpoint supports “today + upcoming”, add ONE minimal endpoint:
+  GET /api/jobs/clock-in-options
+  returning role-safe jobs list
+  with server-side RBAC enforcement
+
+5) UX requirements
+- If jobs list is empty:
+  - Keep “Other Activities” visible
+  - Show a friendly empty message:
+    “No jobs available for clock-in”
+- Do not show “No jobs available” if it’s actually a loading state
+
+DEBUGGING (TEMPORARY)
+Add targeted logs:
+- role
+- endpoint used
+- number of jobs returned
+Remove noisy logs after fix.
+
+SUCCESS
+- For Owner/Admin: at least open/scheduled jobs appear in “Your Jobs”
+- For Technician: assigned jobs appear
+- Estimator never sees the clock-in modal trigger
+- No console errors
