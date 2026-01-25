@@ -689,6 +689,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =====================
+  // Company Time Settings Routes
+  // =====================
+
+  // Get auto clock-out time setting (Owners and Supervisors only)
+  app.get('/api/company/time-settings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      const role = member.role as UserRole;
+      // Block Dispatchers and Estimators from viewing time settings
+      if (role === 'DISPATCHER' || role === 'ESTIMATOR') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      res.json({
+        autoClockOutTime: company?.autoClockOutTime || "18:00",
+      });
+    } catch (error: any) {
+      console.error('Error getting time settings:', error);
+      res.status(500).json({ error: 'Failed to get time settings' });
+    }
+  });
+
+  // Update auto clock-out time setting (Owner only)
+  app.patch('/api/company/time-settings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const { autoClockOutTime } = req.body;
+      
+      // Validate time format (HH:MM)
+      if (!autoClockOutTime || !/^\d{2}:\d{2}$/.test(autoClockOutTime)) {
+        return res.status(400).json({ error: 'Invalid time format. Use HH:MM (e.g., 18:00)' });
+      }
+      
+      await storage.updateCompanyAutoClockOutTime(member.companyId, autoClockOutTime);
+      
+      res.json({ autoClockOutTime });
+    } catch (error: any) {
+      console.error('Error updating time settings:', error);
+      res.status(500).json({ error: 'Failed to update time settings' });
+    }
+  });
+
+  // =====================
   // Company Taxes Routes
   // =====================
 
@@ -949,6 +1007,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Not a company member' });
       }
       
+      // Auto-close any expired time entries before returning data
+      await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
+      
       const today = new Date().toISOString().split('T')[0];
       const role = member.role as UserRole;
       const now = Date.now();
@@ -1096,6 +1157,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Not a company member' });
       }
       
+      // Auto-close any expired time entries before switching
+      await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
+      
       // Only technicians can switch jobs
       if (member.role !== 'TECHNICIAN') {
         return res.status(403).json({ error: 'Only technicians can switch jobs' });
@@ -1148,6 +1212,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!member) {
         return res.status(403).json({ error: 'Not a company member' });
       }
+      
+      // Auto-close any expired time entries before clocking out
+      await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
       
       // Only technicians can clock out
       if (member.role !== 'TECHNICIAN') {
@@ -1202,13 +1269,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'startDate and endDate are required' });
       }
 
-      // Technicians can only see their own entries
+      // Technicians can only see their own entries - auto-close their own first
       if (role === 'TECHNICIAN') {
+        await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
         const entries = await storage.getTimeEntriesForUser(userId, member.companyId, startDate, endDate);
         return res.json({ role: 'technician', entries });
       }
 
-      // Owner, Supervisor, Dispatcher see all entries
+      // Managers see all entries - auto-close all company entries first
+      await storage.autoCloseExpiredTimeEntriesForCompany(member.companyId);
       const entries = await storage.getTimeEntriesForCompany(member.companyId, startDate, endDate);
       return res.json({ role: 'manager', entries });
     } catch (error: any) {

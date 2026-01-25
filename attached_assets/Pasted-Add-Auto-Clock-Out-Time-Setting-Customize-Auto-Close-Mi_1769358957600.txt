@@ -1,0 +1,102 @@
+Add “Auto Clock-Out Time” Setting (Customize) + Auto-Close Missed Clock-Outs
+
+CURRENT
+Clock in/out works and time entries are stored, but if a worker forgets to clock out,
+the time entry can remain open and inflate hours incorrectly.
+
+GOAL
+Implement daily auto clock-out at a fixed time (company setting):
+- Company setting: Auto clock-out time (default 6:00 PM)
+- If a user is still clocked in past that time, the system auto-closes the active entry:
+  - endAt = that day’s auto clock-out time
+  - autoClosed = true
+  - autoClosedReason = "auto_clock_out_time"
+- Timesheets should display a small “Auto-closed” tag on that entry
+- Must be RBAC-safe and never crash
+
+RBAC (STRICT / HIDDEN NOT DISABLED)
+- Owner/Admin:
+  - Can view and edit the Auto Clock-Out Time in Customize
+  - Sees auto-closed tags for all employees
+- Supervisor/Manager:
+  - Can view Auto Clock-Out Time (optional) but cannot edit unless already allowed
+  - Sees auto-closed tags on timesheets
+- Technician:
+  - Cannot edit this setting
+  - Can see “Auto-closed” tag only on their own entries
+- Dispatcher/Estimator:
+  - No access
+
+DATA MODEL CHANGES
+1) Company settings (persist in DB)
+- company.autoClockOutTime (string, e.g. "18:00" in 24h format)
+- Default: "18:00"
+
+2) Time entries
+Add fields:
+- autoClosed (boolean default false)
+- autoClosedReason (string nullable)
+
+AUTO-CLOSE LOGIC (BACKEND) — IMPORTANT
+Implement a server-side check that runs whenever time data is fetched OR time actions occur.
+No cron required for v1.
+
+When handling any of these endpoints:
+- GET /api/time/today
+- GET /api/time/entries
+- POST /api/time/clock-out
+- POST /api/time/switch
+Optionally also on:
+- GET /api/jobs/:id (labor totals)
+
+Before returning results:
+1) Find active entry for the user (endAt is null)
+2) Determine company autoClockOutTime (default 18:00)
+3) If current time is after the autoClockOutTime AND the active entry started earlier that day:
+   - set endAt = that day at autoClockOutTime
+   - set autoClosed = true
+   - set autoClosedReason = "auto_clock_out_time"
+4) Save, then proceed to return data normally
+
+EDGE CASE RULES
+- Only auto-close entries for the SAME DAY they started
+  (do not auto-close multi-day entries by guessing; if entry spans days, close at start-day auto clock-out time)
+- Never create negative durations
+- If someone clocks in after the autoClockOutTime, do not auto-close immediately (let it run until next check, but only if same-day rules apply)
+
+CUSTOMIZE PAGE UI (OWNER/ADMIN EDIT)
+Add a section to Customize:
+Title: “Time Tracking”
+Setting: “Auto Clock-Out Time”
+- Time picker (15-min increments)
+- Default shown: 6:00 PM
+- Helper text:
+  “If someone forgets to clock out, EcoLogic will automatically end their shift at this time.”
+
+UI RULES
+- Must match EcoLogic clean card style
+- Small and simple, not a giant form
+- Save button persists to DB
+- Show success via subtle inline state (no popup)
+
+TIMESHEETS UI
+For any entry with autoClosed = true:
+- Show a small pill/tag: “Auto-closed”
+- Keep it subtle (muted background)
+- If possible, show in subtext:
+  “Auto-closed at 6:00 PM”
+
+JOB DETAILS (LABOR) — OPTIONAL BUT RECOMMENDED
+If showing time segments in Job labor views:
+- Mark segments that were auto-closed with the same tag
+
+ERROR HANDLING
+- If company setting fails to load, default to 6:00 PM and do not crash
+- If auto-close fails, log once and continue returning data (do not white-screen)
+
+SUCCESS CRITERIA
+- Owner can set Auto Clock-Out Time in Customize
+- If tech forgets to clock out, entry auto-closes at that time
+- Timesheets shows “Auto-closed” tag
+- Hours do not inflate overnight
+- RBAC preserved, no console errors

@@ -304,6 +304,9 @@ export interface IStorage {
   getJobLaborTotals(jobId: number): Promise<{ totalMinutes: number; laborByUser: { userId: string; minutes: number }[] }>;
   getTimeEntriesForUser(userId: string, companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null })[]>;
   getTimeEntriesForCompany(companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null; user?: { id: string; firstName: string | null; lastName: string | null } })[]>;
+  autoCloseExpiredTimeEntries(userId: string, companyId: number): Promise<TimeLog | null>;
+  autoCloseExpiredTimeEntriesForCompany(companyId: number): Promise<number>;
+  updateCompanyAutoClockOutTime(companyId: number, time: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2566,6 +2569,8 @@ export class DatabaseStorage implements IStorage {
         clockOutAt: timeLogs.clockOutAt,
         date: timeLogs.date,
         notes: timeLogs.notes,
+        autoClosed: timeLogs.autoClosed,
+        autoClosedReason: timeLogs.autoClosedReason,
         createdAt: timeLogs.createdAt,
         job: {
           id: jobs.id,
@@ -2603,6 +2608,8 @@ export class DatabaseStorage implements IStorage {
         clockOutAt: timeLogs.clockOutAt,
         date: timeLogs.date,
         notes: timeLogs.notes,
+        autoClosed: timeLogs.autoClosed,
+        autoClosedReason: timeLogs.autoClosedReason,
         createdAt: timeLogs.createdAt,
         job: {
           id: jobs.id,
@@ -2631,6 +2638,106 @@ export class DatabaseStorage implements IStorage {
       ...log,
       job: log.job?.id ? log.job : null,
     }));
+  }
+
+  async autoCloseExpiredTimeEntries(userId: string, companyId: number): Promise<TimeLog | null> {
+    try {
+      const activeLog = await this.getActiveTimeLog(userId, companyId);
+      if (!activeLog) return null;
+
+      const company = await this.getCompany(companyId);
+      const autoClockOutTime = company?.autoClockOutTime || "18:00";
+
+      const now = new Date();
+      const entryDate = activeLog.date;
+      const [hours, minutes] = autoClockOutTime.split(":").map(Number);
+
+      const autoCloseTime = new Date(entryDate + "T00:00:00");
+      autoCloseTime.setHours(hours, minutes, 0, 0);
+
+      const clockInTime = new Date(activeLog.clockInAt);
+      const clockInDateStr = clockInTime.toISOString().split('T')[0];
+
+      if (clockInDateStr !== entryDate) {
+        return null;
+      }
+
+      if (now > autoCloseTime && clockInTime < autoCloseTime) {
+        const [updated] = await db
+          .update(timeLogs)
+          .set({
+            clockOutAt: autoCloseTime,
+            autoClosed: true,
+            autoClosedReason: "auto_clock_out_time",
+          })
+          .where(eq(timeLogs.id, activeLog.id))
+          .returning();
+        return updated;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("[auto-close] Error auto-closing time entry:", error);
+      return null;
+    }
+  }
+
+  async autoCloseExpiredTimeEntriesForCompany(companyId: number): Promise<number> {
+    try {
+      const company = await this.getCompany(companyId);
+      const autoClockOutTime = company?.autoClockOutTime || "18:00";
+      const [hours, minutes] = autoClockOutTime.split(":").map(Number);
+      const now = new Date();
+
+      const activeLogs = await db
+        .select()
+        .from(timeLogs)
+        .where(
+          and(
+            eq(timeLogs.companyId, companyId),
+            sql`${timeLogs.clockOutAt} IS NULL`
+          )
+        );
+
+      let closedCount = 0;
+
+      for (const log of activeLogs) {
+        const entryDate = log.date;
+        const autoCloseTime = new Date(entryDate + "T00:00:00");
+        autoCloseTime.setHours(hours, minutes, 0, 0);
+
+        const clockInTime = new Date(log.clockInAt);
+        const clockInDateStr = clockInTime.toISOString().split('T')[0];
+
+        if (clockInDateStr !== entryDate) {
+          continue;
+        }
+
+        if (now > autoCloseTime && clockInTime < autoCloseTime) {
+          await db
+            .update(timeLogs)
+            .set({
+              clockOutAt: autoCloseTime,
+              autoClosed: true,
+              autoClosedReason: "auto_clock_out_time",
+            })
+            .where(eq(timeLogs.id, log.id));
+          closedCount++;
+        }
+      }
+
+      return closedCount;
+    } catch (error) {
+      console.error("[auto-close] Error auto-closing company time entries:", error);
+      return 0;
+    }
+  }
+
+  async updateCompanyAutoClockOutTime(companyId: number, time: string): Promise<void> {
+    await db
+      .update(companies)
+      .set({ autoClockOutTime: time })
+      .where(eq(companies.id, companyId));
   }
 }
 

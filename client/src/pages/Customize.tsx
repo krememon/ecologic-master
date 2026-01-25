@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock } from "lucide-react";
 
 export default function Customize() {
   const { isLoading: authLoading } = useAuth();
@@ -47,6 +47,12 @@ export default function Customize() {
       title: "Taxes",
       description: "Create custom tax rates for invoices",
       href: "/customize/taxes",
+    },
+    {
+      icon: Clock,
+      title: "Time Tracking",
+      description: "Configure auto clock-out and time settings",
+      href: "/customize/time-tracking",
     },
   ];
 

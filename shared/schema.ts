@@ -96,6 +96,7 @@ export const companies = pgTable("companies", {
   onboardingCompleted: boolean("onboarding_completed").default(false),
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),
+  autoClockOutTime: varchar("auto_clock_out_time", { length: 5 }).default("18:00"),
   ownerId: varchar("owner_id").notNull().references(() => users.id),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: varchar("subscription_status").default("inactive"), // active, past_due, canceled, incomplete, trialing, inactive
@@ -1367,6 +1368,8 @@ export const timeLogs = pgTable("time_logs", {
   clockOutAt: timestamp("clock_out_at"),
   date: date("date").notNull(),
   notes: text("notes"),
+  autoClosed: boolean("auto_closed").default(false),
+  autoClosedReason: varchar("auto_closed_reason", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("time_logs_company_id_idx").on(table.companyId),

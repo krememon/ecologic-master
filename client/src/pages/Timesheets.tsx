@@ -16,6 +16,8 @@ interface TimeEntry {
   clockInAt: string;
   clockOutAt: string;
   date: string;
+  autoClosed?: boolean | null;
+  autoClosedReason?: string | null;
   job?: { id: number; title: string | null } | null;
   user?: { id: string; firstName: string | null; lastName: string | null };
 }
@@ -344,9 +346,16 @@ export default function Timesheets() {
                             className="px-4 py-3 flex items-center justify-between gap-2"
                           >
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                                {getJobOrCategory(entry)}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                                  {getJobOrCategory(entry)}
+                                </p>
+                                {entry.autoClosed && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                    Auto-closed
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-sm text-slate-500 dark:text-slate-400">
                                 {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
                               </p>
@@ -397,9 +406,16 @@ export default function Timesheets() {
                                   className="px-4 py-2.5 flex items-center justify-between gap-2"
                                 >
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                                      {getJobOrCategory(entry)}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                                        {getJobOrCategory(entry)}
+                                      </p>
+                                      {entry.autoClosed && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                          Auto-closed
+                                        </span>
+                                      )}
+                                    </div>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">
                                       {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
                                     </p>

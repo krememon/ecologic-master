@@ -47,6 +47,7 @@ import PublicInvoicePay from "@/pages/PublicInvoicePay";
 import Leads from "@/pages/Leads";
 import LeadDetails from "@/pages/LeadDetails";
 import Timesheets from "@/pages/Timesheets";
+import TimeTrackingSettings from "@/pages/TimeTrackingSettings";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -166,6 +167,7 @@ function Router() {
         <Route path="/customize/company-profile" component={CompanyProfile} />
         <Route path="/customize/price-book" component={PriceBook} />
         <Route path="/customize/taxes" component={Taxes} />
+        <Route path="/customize/time-tracking" component={TimeTrackingSettings} />
         <Route path="/estimates/:id">
           {(params) => <EstimateDetails estimateId={params.id} />}
         </Route>
