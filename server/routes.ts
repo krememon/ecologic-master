@@ -9418,6 +9418,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ NOTIFICATIONS API ============
+
+  // GET /api/notifications - Get current user's notifications
+  app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const notifications = await storage.getNotifications(userId, limit);
+      res.json(notifications);
+    } catch (error: any) {
+      console.error('Error fetching notifications:', error);
+      res.status(500).json({ message: 'Failed to fetch notifications' });
+    }
+  });
+
+  // GET /api/notifications/unread-count - Get unread notification count
+  app.get('/api/notifications/unread-count', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const count = await storage.getUnreadNotificationCount(userId);
+      res.json({ unreadCount: count });
+    } catch (error: any) {
+      console.error('Error fetching unread count:', error);
+      res.status(500).json({ message: 'Failed to fetch unread count' });
+    }
+  });
+
+  // POST /api/notifications/:id/read - Mark a notification as read
+  app.post('/api/notifications/:id/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const notificationId = parseInt(req.params.id);
+      if (isNaN(notificationId)) {
+        return res.status(400).json({ message: 'Invalid notification ID' });
+      }
+      const notification = await storage.markNotificationRead(notificationId, userId);
+      if (!notification) {
+        return res.status(404).json({ message: 'Notification not found' });
+      }
+      res.json(notification);
+    } catch (error: any) {
+      console.error('Error marking notification read:', error);
+      res.status(500).json({ message: 'Failed to mark notification as read' });
+    }
+  });
+
+  // POST /api/notifications/read-all - Mark all notifications as read
+  app.post('/api/notifications/read-all', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      await storage.markAllNotificationsRead(userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error marking all notifications read:', error);
+      res.status(500).json({ message: 'Failed to mark all as read' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
