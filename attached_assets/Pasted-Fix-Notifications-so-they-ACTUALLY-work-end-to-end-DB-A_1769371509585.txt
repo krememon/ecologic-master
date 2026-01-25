@@ -1,0 +1,155 @@
+Fix Notifications so they ACTUALLY work end-to-end (DB → API → UI) and trigger on real events
+
+CURRENT
+- Notifications bell + inbox UI exists
+- Inbox always shows empty state
+- No notifications are created in the database
+- Unread badge never appears
+- Assigning a technician to a job does NOT create a notification
+
+GOAL
+Implement a real, role-based, in-app notifications system that:
+- Creates real notification rows in the database
+- Delivers notifications only to allowed users (RBAC, hidden-not-disabled)
+- Supports read/unread state and unread badge count
+- Deep-links to the relevant page
+- Updates UI immediately with no refresh
+- Has ZERO fake data and ZERO noisy triggers
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATA MODEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create table: notifications
+
+Fields:
+- id (uuid, primary key)
+- companyId (uuid)
+- recipientUserId (uuid, required)
+- type (string enum)
+- title (string)
+- body (string)
+- entityType (job | invoice | timesheet | addwork | schedule)
+- entityId (uuid)
+- linkUrl (string)
+- createdAt (timestamp, default now)
+- readAt (timestamp, nullable)
+- meta (jsonb, nullable)
+
+One notification row per recipient user (fan-out at creation time).
+Do NOT store role-only notifications without user resolution.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add endpoints:
+
+GET /api/notifications
+- Returns current user’s notifications
+- Sorted newest first
+- Limit 50
+- User can ONLY see their own notifications
+
+GET /api/notifications/unread-count
+- Returns unreadCount integer for current user
+
+POST /api/notifications/:id/read
+- Sets readAt for that notification
+- Only if it belongs to current user
+
+POST /api/notifications/read-all
+- Sets readAt for all of current user’s notifications
+
+NO success popups.
+NO console errors.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI (Notifications Inbox)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Inbox must display:
+- Title
+- Body (single line)
+- Relative timestamp
+- Unread dot if readAt is null
+
+Bell behavior:
+- Show dot if unreadCount > 0
+- Update immediately after notification is created or read
+
+Tap notification:
+- Navigate to linkUrl
+- Mark notification as read silently
+
+Empty state:
+- “No notifications yet”
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ROLE TARGETING RULES (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician:
+- ONLY receives notifications for jobs they are assigned to
+- NEVER receives office-only or financial notifications except:
+  - Payment collected confirmation for their job
+  - Add-work approved
+
+Manager / Office roles:
+- Owner
+- Admin
+- Supervisor
+- Dispatcher (only where specified)
+
+Estimator:
+- Do NOT receive notifications by default
+
+Notifications must NEVER be visible to users who cannot access the underlying entity.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EVENT TRIGGERS (IMPLEMENT THESE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1) New Job Assigned (Tech)
+Trigger:
+- When a technician is newly added to a job’s crew
+Recipients:
+- Newly added technician(s) ONLY
+Title:
+- “New job assigned”
+Link:
+- /jobs/:jobId
+
+IMPORTANT:
+- Do NOT notify existing crew members
+- Do NOT notify on job creation unless assignment changed
+
+2) Job Rescheduled (Tech + Office)
+Trigger:
+- Scheduled date or time changes
+Recipients:
+- Assigned technicians
+- Manager roles + Dispatcher
+Link:
+- /jobs/:jobId or /schedule
+
+3) Job Cancelled (Tech)
+Trigger:
+- Job status changes to cancelled
+Recipients:
+- Assigned technicians
+Link:
+- /jobs/:jobId
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ANTI-SPAM RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Only trigger notifications on meaningful changes
+- Do NOT notify on saves that do not change tracked fields
+- Do NOT create duplicate notifications for the same event
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Assigning a technician to a job creates a notification row
+- That technician immediately sees it in the inbox
+- Bell badge updates with unread dot
+- Clicking notification deep-links and marks it read
+- No fake data
+- No regressions to jobs, time tracking, or payments
