@@ -760,7 +760,7 @@ export default function Home() {
                 Your Jobs
               </p>
               <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                {jobs
+                {myJobs
                   .filter(job => 
                     job.status !== 'completed' && 
                     job.status !== 'cancelled' &&
@@ -786,7 +786,7 @@ export default function Home() {
                       )}
                     </button>
                   ))}
-                {jobs.filter(job => 
+                {myJobs.filter(job => 
                   job.status !== 'completed' && 
                   job.status !== 'cancelled' &&
                   (jobSearchQuery === '' || 
