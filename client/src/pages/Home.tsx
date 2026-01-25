@@ -249,8 +249,8 @@ export default function Home() {
   });
 
   const openJobs = myJobs.filter(job => {
-    // Exclude completed/cancelled jobs
-    if (job.status === 'completed' || job.status === 'cancelled') {
+    // Exclude completed/cancelled/archived jobs
+    if (job.status === 'completed' || job.status === 'cancelled' || job.status === 'archived') {
       return false;
     }
     // Exclude fully paid jobs

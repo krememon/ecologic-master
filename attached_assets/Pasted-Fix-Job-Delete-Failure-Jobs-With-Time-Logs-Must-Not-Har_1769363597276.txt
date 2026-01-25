@@ -1,0 +1,71 @@
+Fix Job Delete Failure: Jobs With Time Logs Must Not Hard Delete (Use Archive + Friendly Messaging)
+
+CURRENT
+Deleting a job fails with:
+violates foreign key constraint time_logs_job_id_fkey
+Key (id) is still referenced from table "time_logs"
+
+This happens because time tracking now links time_logs to jobs.
+
+GOAL
+Make job removal behavior correct and safe:
+- Do NOT allow hard delete if job has time logs (or other dependencies)
+- Provide “Archive job” (or “Cancel job”) instead
+- Keep UI clean (hidden not disabled)
+- No server 500 errors for expected cases
+
+BUSINESS RULE
+A job can only be hard-deleted if it has NO related records.
+If it has any related records, it must be archived instead.
+
+IMPLEMENTATION PLAN
+
+1) BACKEND: Safe delete endpoint behavior
+Update DELETE /api/jobs/:id:
+- Before deleting, check if job has any references:
+  - time_logs where jobId = :id
+  - invoices where jobId = :id (if applicable)
+  - documents where jobId = :id
+  - estimates converted to this job (if applicable)
+- If references exist:
+  - Return 409 Conflict (not 500)
+  - Response message: “This job has time logs or related records and cannot be deleted. Archive it instead.”
+- If no references:
+  - Proceed with delete as normal
+
+2) BACKEND: Add archive capability (if not present)
+Add PATCH /api/jobs/:id/archive (or /status):
+- Set job.status = 'archived' OR job.archivedAt = now
+- Ensure archived jobs are hidden from default “Open Jobs” and main job list unless user filters archived
+
+3) FRONTEND: Update Job card actions
+On the Jobs list card where the trash icon exists:
+- If job has references:
+  - Replace Delete with “Archive” (or show Archive action)
+  - Do NOT show a delete button for jobs that cannot be deleted (hidden, not disabled)
+- If job has no references:
+  - Show Delete button as normal
+
+To do this cleanly:
+- Add a boolean on job list response: job.canDelete (true/false)
+  OR job.hasTimeLogs (true/false)
+- Compute server-side so UI doesn’t guess
+
+4) USER FEEDBACK (NO RED ERROR)
+When user tries to delete but it’s blocked:
+- Show a calm message:
+  “Jobs with time logs can’t be deleted. Use Archive instead.”
+- Do NOT show scary red “Failed to delete job” for expected behavior
+
+5) LIST UPDATES
+After archive:
+- Remove job from Open Jobs count
+- Remove from default jobs list (unless “Archived” filter is enabled)
+- Ensure UI refreshes immediately
+
+SUCCESS CRITERIA
+- No more 500 errors for this scenario
+- Jobs with time logs cannot be deleted, only archived
+- Delete works only for jobs without references
+- UI feels intentional and professional
+- Open Jobs KPI updates correctly

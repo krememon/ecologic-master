@@ -158,6 +158,7 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, job: Partial<InsertJob>): Promise<Job>;
   deleteJob(id: number): Promise<void>;
+  jobHasReferences(id: number): Promise<boolean>;
   
   // Invoice operations
   getInvoices(companyId: number): Promise<any[]>;
@@ -935,6 +936,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: number): Promise<void> {
     await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  async jobHasReferences(id: number): Promise<boolean> {
+    // Check for time logs
+    const timeLogCount = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(timeLogs)
+      .where(eq(timeLogs.jobId, id));
+    
+    if (timeLogCount[0]?.count > 0) {
+      return true;
+    }
+    
+    return false;
   }
 
   async getInvoices(companyId: number): Promise<any[]> {

@@ -72,6 +72,7 @@ export default function Jobs() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobWithClient | null>(null);
   const [jobToDelete, setJobToDelete] = useState<{ id: number; title: string } | null>(null);
+  const [jobToArchive, setJobToArchive] = useState<{ id: number; title: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -427,6 +428,11 @@ export default function Jobs() {
 
   // Filter jobs based on role and search query
   const filteredJobs = jobs.filter(job => {
+    // Hide archived jobs from main list
+    if (job.status === 'archived') {
+      return false;
+    }
+    
     // For TECHNICIAN role, only show jobs assigned to them
     if (role === 'TECHNICIAN' && job.assignedTo !== user?.id) {
       return false;
@@ -524,21 +530,25 @@ export default function Jobs() {
       const res = await apiRequest("DELETE", `/api/jobs/${jobId}`);
       // Handle both 200 and 204 responses
       if (res.status === 204) {
-        return; // No content to return
+        return { success: true };
       } else if (res.status === 200) {
         return await res.json();
+      } else if (res.status === 409) {
+        const data = await res.json();
+        throw new Error(data.code === 'JOB_HAS_REFERENCES' ? 'HAS_REFERENCES' : data.message);
       }
+      throw new Error('Failed to delete job');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      // Invalidate all schedule queries (with any date range) to remove ghost events
       queryClient.invalidateQueries({ 
         predicate: (query) => 
           typeof query.queryKey[0] === 'string' && 
           query.queryKey[0].startsWith('/api/schedule-items')
       });
-      setJobToDelete(null); // Reset modal state
+      setJobToDelete(null);
+      toast({ title: "Job deleted successfully" });
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -552,9 +562,39 @@ export default function Jobs() {
         }, 500);
         return;
       }
+      if (error.message === 'HAS_REFERENCES') {
+        setJobToArchive(jobToDelete);
+        setJobToDelete(null);
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to delete job",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const archiveJobMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${jobId}/archive`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/schedule-items')
+      });
+      setJobToArchive(null);
+      toast({ title: "Job archived successfully" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to archive job",
         variant: "destructive",
       });
     },
@@ -2095,6 +2135,32 @@ export default function Jobs() {
               disabled={deleteJobMutation.isPending}
             >
               {deleteJobMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Archive Confirmation Modal - For jobs with time logs */}
+      <AlertDialog open={!!jobToArchive} onOpenChange={(open) => !open && setJobToArchive(null)}>
+        <AlertDialogContent className="sm:max-w-[380px] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive Job Instead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{jobToArchive?.title}" has time logs or related records and cannot be deleted. Would you like to archive it instead? Archived jobs are hidden from your main list but preserved for records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (jobToArchive) {
+                  archiveJobMutation.mutate(jobToArchive.id);
+                }
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+              disabled={archiveJobMutation.isPending}
+            >
+              {archiveJobMutation.isPending ? "Archiving..." : "Archive"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

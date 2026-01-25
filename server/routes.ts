@@ -2756,6 +2756,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Check if job has references that prevent deletion
+      const hasReferences = await storage.jobHasReferences(jobId);
+      if (hasReferences) {
+        return res.status(409).json({ 
+          message: "This job has time logs or related records and cannot be deleted. Archive it instead.",
+          code: "JOB_HAS_REFERENCES" 
+        });
+      }
+      
       // Delete job (CASCADE will remove related schedule items, photos, etc.)
       await storage.deleteJob(jobId);
       
@@ -2763,6 +2772,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting job:", error);
       res.status(500).json({ message: "Failed to delete job" });
+    }
+  });
+
+  // Archive job (for jobs with time logs or other references)
+  app.patch('/api/jobs/:id/archive', isAuthenticated, requirePerm("jobs.delete"), async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      const companyId = req.companyId;
+      
+      const job = await storage.getJob(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      if (job.companyId !== companyId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      // Archive by setting status to 'archived'
+      const archivedJob = await storage.updateJob(jobId, { status: 'archived' } as any);
+      
+      res.json(archivedJob);
+    } catch (error) {
+      console.error("Error archiving job:", error);
+      res.status(500).json({ message: "Failed to archive job" });
     }
   });
 
