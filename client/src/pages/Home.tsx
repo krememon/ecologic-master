@@ -10,14 +10,14 @@ import {
   Users, 
   FileText, 
   DollarSign, 
-  Calendar,
   AlertCircle,
   CheckCircle2,
   Clock,
   ChevronRight,
-  Loader2
+  Loader2,
+  Circle
 } from "lucide-react";
-import { format, isToday, isTomorrow, isThisWeek, parseISO, startOfDay } from "date-fns";
+import { format, isToday, isTomorrow, parseISO, startOfDay } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
 
 interface JobWithClient extends Job {
@@ -112,10 +112,6 @@ export default function Home() {
     return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
   });
 
-  const openJobs = myJobs.filter(job => 
-    job.status !== 'completed' && job.status !== 'cancelled'
-  );
-
   const newLeads = leads.filter(lead => lead.status === 'new');
   
   const unsentEstimates = estimates.filter(estimate => 
@@ -125,6 +121,12 @@ export default function Home() {
   const unpaidInvoices = invoices.filter(invoice => 
     invoice.status !== 'paid' && invoice.status !== 'cancelled'
   );
+
+  const overdueInvoices = unpaidInvoices.filter(inv => {
+    if (!inv.dueDate) return false;
+    const dueDate = parseISO(inv.dueDate as unknown as string);
+    return dueDate < today;
+  });
 
   const needsAttentionItems: Array<{
     id: string;
@@ -164,35 +166,17 @@ export default function Home() {
     });
   }
 
-  jobsToday.slice(0, 3).forEach(job => {
-    needsAttentionItems.push({
-      id: `job-${job.id}`,
-      type: 'job',
-      title: job.title || `Job #${job.id}`,
-      subtitle: isTechnician ? 'Your job today' : 'Scheduled for today',
-      urgency: 'medium',
-      route: `/jobs/${job.id}`,
-    });
-  });
-
   if (isAdmin) {
-    unpaidInvoices
-      .filter(inv => {
-        if (!inv.dueDate) return false;
-        const dueDate = parseISO(inv.dueDate as unknown as string);
-        return dueDate < today;
-      })
-      .slice(0, 3)
-      .forEach(invoice => {
-        needsAttentionItems.push({
-          id: `invoice-${invoice.id}`,
-          type: 'invoice',
-          title: invoice.invoiceNumber || `Invoice #${invoice.id}`,
-          subtitle: 'Overdue',
-          urgency: 'high',
-          route: `/invoicing/${invoice.id}`,
-        });
+    overdueInvoices.slice(0, 3).forEach(invoice => {
+      needsAttentionItems.push({
+        id: `invoice-${invoice.id}`,
+        type: 'invoice',
+        title: invoice.invoiceNumber || `Invoice #${invoice.id}`,
+        subtitle: 'Overdue',
+        urgency: 'high',
+        route: `/invoicing/${invoice.id}`,
       });
+    });
   }
 
   const upcomingJobs = myJobs
@@ -209,19 +193,49 @@ export default function Home() {
     })
     .slice(0, 5);
 
-  const leadsNeedingFollowUp = leads
-    .filter(lead => lead.status === 'contacted' || lead.status === 'new')
-    .slice(0, 5);
-
   const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || (canSeeEstimates && estimatesLoading) || (isAdmin && invoicesLoading);
+
+  const briefItems: Array<{ text: string; count: number; route: string }> = [];
+  
+  if (jobsToday.length > 0) {
+    briefItems.push({
+      text: jobsToday.length === 1 ? '1 job scheduled today' : `${jobsToday.length} jobs scheduled today`,
+      count: jobsToday.length,
+      route: '/jobs',
+    });
+  }
+
+  if (canSeeLeads && newLeads.length > 0) {
+    briefItems.push({
+      text: newLeads.length === 1 ? '1 new lead awaiting contact' : `${newLeads.length} new leads awaiting contact`,
+      count: newLeads.length,
+      route: '/leads',
+    });
+  }
+
+  if (canSeeEstimates && unsentEstimates.length > 0) {
+    briefItems.push({
+      text: unsentEstimates.length === 1 ? '1 estimate ready to send' : `${unsentEstimates.length} estimates ready to send`,
+      count: unsentEstimates.length,
+      route: '/jobs?tab=estimates',
+    });
+  }
+
+  if (isAdmin && unpaidInvoices.length > 0) {
+    briefItems.push({
+      text: unpaidInvoices.length === 1 ? '1 unpaid invoice' : `${unpaidInvoices.length} unpaid invoices`,
+      count: unpaidInvoices.length,
+      route: '/invoicing',
+    });
+  }
+
+  const greeting = getGreeting();
+  const firstName = user?.firstName || 'there';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
-      <div className="px-4 pt-6 pb-4">
+      <div className="px-4 pt-6 pb-2">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Home</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-          Welcome back, {user?.firstName || 'there'}
-        </p>
       </div>
 
       {hasDataError && (
@@ -238,67 +252,48 @@ export default function Home() {
       )}
 
       {dataLoading ? (
-        <div className="flex justify-center py-8">
+        <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
         </div>
       ) : (
         <>
           <div className="px-4 mb-6">
-            <div className="grid grid-cols-2 gap-3">
-              <KPICard
-                icon={Calendar}
-                label="Jobs Today"
-                value={jobsToday.length}
-                onClick={() => navigate('/jobs')}
-              />
-              <KPICard
-                icon={Briefcase}
-                label="Open Jobs"
-                value={openJobs.length}
-                onClick={() => navigate('/jobs')}
-              />
-              {canSeeLeads && (
-                <KPICard
-                  icon={Users}
-                  label="New Leads"
-                  value={newLeads.length}
-                  onClick={() => navigate('/leads')}
-                />
-              )}
-              {canSeeEstimates && (
-                <KPICard
-                  icon={FileText}
-                  label="Unsent Estimates"
-                  value={unsentEstimates.length}
-                  onClick={() => navigate('/jobs?tab=estimates')}
-                />
-              )}
-              {isAdmin && (
-                <KPICard
-                  icon={DollarSign}
-                  label="Unpaid Invoices"
-                  value={unpaidInvoices.length}
-                  onClick={() => navigate('/invoicing')}
-                  className="col-span-2 sm:col-span-1"
-                />
-              )}
-            </div>
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+              <CardContent className="p-5">
+                <p className="text-lg text-slate-700 dark:text-slate-300 mb-1">
+                  {greeting}, {firstName}
+                </p>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
+                  Here's what's happening today
+                </p>
+                
+                {briefItems.length === 0 ? (
+                  <div className="flex items-center gap-3 py-2">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    <span className="text-slate-600 dark:text-slate-400 text-sm">
+                      Your day looks clear. Enjoy!
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {briefItems.map((item, index) => (
+                      <BriefItem 
+                        key={index}
+                        text={item.text}
+                        onClick={() => navigate(item.route)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="px-4 mb-6">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">
-              Needs Attention
-            </h2>
-            {needsAttentionItems.length === 0 ? (
-              <Card className="bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-emerald-700 dark:text-emerald-300 text-sm font-medium">
-                    All caught up! Nothing needs your attention right now.
-                  </span>
-                </CardContent>
-              </Card>
-            ) : (
+          {needsAttentionItems.length > 0 && (
+            <div className="px-4 mb-6">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
+                Needs Attention
+              </h2>
               <div className="space-y-2">
                 {needsAttentionItems.map(item => (
                   <AttentionCard
@@ -311,64 +306,48 @@ export default function Home() {
                   />
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="px-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">
-              {isTechnician ? 'My Schedule' : (role === 'ESTIMATOR' ? 'Leads to Follow Up' : 'Today & Upcoming')}
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
+              {isTechnician ? 'My Schedule' : 'Today & Upcoming'}
             </h2>
             
-            {role === 'ESTIMATOR' ? (
-              leadsNeedingFollowUp.length === 0 ? (
-                <EmptyStateCard message="No leads need follow-up right now" />
-              ) : (
-                <div className="space-y-2">
-                  {leadsNeedingFollowUp.map(lead => {
-                    const customerName = lead.customer 
-                      ? `${lead.customer.firstName || ''} ${lead.customer.lastName || ''}`.trim() 
-                      : 'Lead';
-                    return (
-                      <ScheduleCard
-                        key={lead.id}
-                        title={customerName || 'Lead'}
-                        subtitle={lead.description || 'No description'}
-                        status={lead.status}
-                        onClick={() => navigate(`/leads/${lead.id}`)}
-                      />
-                    );
-                  })}
-                </div>
-              )
+            {upcomingJobs.length === 0 ? (
+              <Card className="bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <Clock className="h-5 w-5 text-slate-400" />
+                  <span className="text-slate-500 dark:text-slate-400 text-sm">
+                    No upcoming jobs scheduled
+                  </span>
+                </CardContent>
+              </Card>
             ) : (
-              upcomingJobs.length === 0 ? (
-                <EmptyStateCard message="No upcoming jobs scheduled" />
-              ) : (
-                <div className="space-y-2">
-                  {upcomingJobs.map(job => {
-                    const jobDate = getJobDate(job);
-                    let dateLabel = '';
-                    if (jobDate) {
-                      if (isToday(jobDate)) {
-                        dateLabel = 'Today';
-                      } else if (isTomorrow(jobDate)) {
-                        dateLabel = 'Tomorrow';
-                      } else {
-                        dateLabel = format(jobDate, 'EEE, MMM d');
-                      }
+              <div className="space-y-2">
+                {upcomingJobs.map(job => {
+                  const jobDate = getJobDate(job);
+                  let dateLabel = '';
+                  if (jobDate) {
+                    if (isToday(jobDate)) {
+                      dateLabel = 'Today';
+                    } else if (isTomorrow(jobDate)) {
+                      dateLabel = 'Tomorrow';
+                    } else {
+                      dateLabel = format(jobDate, 'EEE, MMM d');
                     }
-                    return (
-                      <ScheduleCard
-                        key={job.id}
-                        title={job.title || `Job #${job.id}`}
-                        subtitle={dateLabel}
-                        status={job.status}
-                        onClick={() => navigate(`/jobs/${job.id}`)}
-                      />
-                    );
-                  })}
-                </div>
-              )
+                  }
+                  return (
+                    <ScheduleCard
+                      key={job.id}
+                      title={job.title || `Job #${job.id}`}
+                      subtitle={dateLabel}
+                      status={job.status}
+                      onClick={() => navigate(`/jobs/${job.id}`)}
+                    />
+                  );
+                })}
+              </div>
             )}
           </div>
         </>
@@ -377,36 +356,25 @@ export default function Home() {
   );
 }
 
-function KPICard({ 
-  icon: Icon, 
-  label, 
-  value, 
-  onClick,
-  className = ""
-}: { 
-  icon: React.ElementType; 
-  label: string; 
-  value: number; 
-  onClick: () => void;
-  className?: string;
-}) {
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function BriefItem({ text, onClick }: { text: string; onClick: () => void }) {
   return (
-    <Card 
-      className={`cursor-pointer hover:shadow-md transition-shadow bg-white dark:bg-slate-900 ${className}`}
+    <button
       onClick={onClick}
+      className="w-full flex items-center gap-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors -mx-2 px-2"
     >
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-            <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      <Circle className="h-2 w-2 text-blue-500 fill-blue-500 flex-shrink-0" />
+      <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">
+        {text}
+      </span>
+      <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
+    </button>
   );
 }
 
@@ -473,10 +441,10 @@ function ScheduleCard({
 }) {
   const statusColors: Record<string, string> = {
     new: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    contacted: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
     scheduled: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
     in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
     pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+    active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
     completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
   };
 
@@ -501,19 +469,6 @@ function ScheduleCard({
           {displayStatus}
         </span>
         <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
-      </CardContent>
-    </Card>
-  );
-}
-
-function EmptyStateCard({ message }: { message: string }) {
-  return (
-    <Card className="bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-      <CardContent className="p-4 flex items-center gap-3">
-        <Clock className="h-5 w-5 text-slate-400" />
-        <span className="text-slate-500 dark:text-slate-400 text-sm">
-          {message}
-        </span>
       </CardContent>
     </Card>
   );
