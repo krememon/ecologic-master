@@ -574,6 +574,17 @@ export class DatabaseStorage implements IStorage {
     return member;
   }
 
+  async getCompanyMembers(companyId: number): Promise<Array<{ userId: string; companyId: number; role: string }>> {
+    return db
+      .select({
+        userId: companyMembers.userId,
+        companyId: companyMembers.companyId,
+        role: companyMembers.role,
+      })
+      .from(companyMembers)
+      .where(eq(companyMembers.companyId, companyId));
+  }
+
   async getJobCrewAssignments(jobId: number): Promise<any[]> {
     const assignments = await db
       .select({
