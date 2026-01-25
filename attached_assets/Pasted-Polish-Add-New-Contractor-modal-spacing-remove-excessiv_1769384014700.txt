@@ -1,0 +1,59 @@
+Polish “Add New Contractor” modal spacing (remove excessive white space, mobile-first clean layout)
+
+CURRENT
+- “Add New Contractor” modal has large empty white space above the form
+- Fields start too low on the screen, making the modal feel awkward and unfinished
+- Overall spacing looks sloppy on iPhone-sized view
+
+GOAL
+Make the modal layout look tight, clean, and professional:
+- Reduce unnecessary top padding/empty space
+- Bring the form fields higher (closer to the title)
+- Maintain comfortable spacing between fields (not cramped)
+- Keep it perfectly mobile-first (iPhone view priority)
+- No functionality changes, only layout polish
+- No console errors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESIGN REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Title row (“Add New Contractor” + X) stays at top
+- Form should begin shortly under title (no giant blank gap)
+- Use consistent vertical rhythm:
+  - Label spacing
+  - Input spacing
+  - Section spacing
+- CTA button (“Add Contractor”) should stay pinned near bottom of modal content area
+- Modal should scroll naturally if keyboard opens (no fields hidden behind keyboard)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPLEMENTATION NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Inspect modal container styles:
+  - padding-top
+  - margin-top
+  - min-height / height
+  - justify-content settings (common culprit: flex with justify-between/center)
+- Ensure the form container uses:
+  - align-items: stretch
+  - justify-content: flex-start (NOT center)
+- If there is a spacer div pushing content down, remove it
+- Keep safe-area padding at bottom for iPhone
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEYBOARD BEHAVIOR (CRITICAL ON MOBILE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- When keyboard opens:
+  - Modal must scroll to keep active input visible
+  - CTA button should not cover inputs
+  - No jumping layout
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Form starts near the top under the title (no huge blank space)
+- Spacing looks clean and consistent
+- CTA button positioned nicely (not floating awkwardly)
+- Works well on iPhone preview with keyboard open
+- No UI regressions in other modals
+- No console errors
