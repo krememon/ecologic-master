@@ -1,0 +1,86 @@
+Update Subcontractors (Contractors) “Add New Contractor” form fields + remove Availability Status
+
+CURRENT
+- Subcontractors/Contractors page exists
+- “Add New Contractor” modal includes fields:
+  - Name
+  - Email
+  - Phone
+  - Skills & Notes
+  - Availability Status (dropdown)
+- This is not the data we want to capture for subcontractors
+
+GOAL
+In the “Add New Contractor” modal, change the form to ONLY include:
+- Name (required)
+- Email (optional)
+- Phone (optional)
+- Company Name (optional)
+- Company Website (optional)
+
+Remove:
+- Availability Status (entirely)
+- Skills & Notes field (remove it)
+No placeholders pretending to be real data.
+Mobile-first layout must stay clean.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATA + BACKEND REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Ensure the subcontractor record supports the new fields:
+- companyName
+- companyWebsite
+
+If these columns/fields do not exist yet:
+- Add them to the database table/model used for contractors/subcontractors
+- Keep migration minimal and safe (no refactors)
+
+2) Remove Availability Status from storage:
+- Do NOT write availability status to DB anymore
+- If the DB currently has availabilityStatus column:
+  - Leave it unused for now (do not break old rows)
+  - Do not require it on create/update
+
+3) Validation
+- Name is required
+- If email is provided, validate basic email format
+- If website is provided:
+  - Accept with or without https://
+  - Normalize and store as a clean URL string
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Modal UI:
+- Replace fields with exactly:
+  1) Name
+  2) Email
+  3) Phone
+  4) Company Name
+  5) Company Website
+- Remove Availability Status dropdown completely
+- Remove Skills & Notes completely
+- Keep “Add Contractor” button behavior the same
+- Silent success (no success popup) — just close modal and list updates
+
+Phone formatting:
+- When typing phone, auto-format with dashes like: 555-123-4567 (same behavior used elsewhere in app)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIST VIEW (OPTIONAL QUICK POLISH)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+On the subcontractors list cards/rows:
+- Display Name (primary)
+- Display Company Name (secondary if present)
+- Display Phone/Email icons only if present
+- Do NOT show Availability anywhere
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- “Add New Contractor” modal shows only the 5 requested fields
+- Availability Status is gone everywhere
+- Contractor saves correctly in DB with new fields
+- Contractor appears in list immediately after save (no refresh)
+- No console errors
+- Mobile layout unchanged

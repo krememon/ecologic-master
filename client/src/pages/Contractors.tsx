@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, UserCheck, Mail, Phone, Star, Edit, Trash2 } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertSubcontractorSchema, type InsertSubcontractor, type Subcontractor } from "@shared/schema";
 import { formatPhoneInput } from "@shared/phoneUtils";
@@ -15,9 +15,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTranslation } from "react-i18next";
+
+function normalizeWebsite(url: string): string {
+  if (!url) return '';
+  let normalized = url.trim();
+  if (normalized && !normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = 'https://' + normalized;
+  }
+  return normalized;
+}
 
 function ContractorForm({ 
   onSubmit, 
@@ -30,36 +37,32 @@ function ContractorForm({
   initialData?: any;
   isEdit?: boolean;
 }) {
-  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
     email: initialData?.email || "",
     phone: initialData?.phone || "",
-    notes: initialData?.notes || "",
-    isAvailable: initialData?.isAvailable !== undefined ? initialData.isAvailable : true,
+    companyName: initialData?.companyName || "",
+    companyWebsite: initialData?.companyWebsite || "",
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Simple form submitted with data:", formData);
     
     const processedData = {
       name: formData.name,
       email: formData.email || null,
       phone: formData.phone || null,
-      skills: formData.notes ? formData.notes.split(',').map((skill: string) => skill.trim()).filter(Boolean) : [],
-      isAvailable: formData.isAvailable,
-      notes: null // Remove notes field since we're using skills array
+      companyName: formData.companyName || null,
+      companyWebsite: normalizeWebsite(formData.companyWebsite) || null,
     };
     
-    console.log("Processed data:", processedData);
     onSubmit(processedData);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-none">
       <div className="space-y-2">
-        <label className="text-sm font-medium block">Name</label>
+        <label className="text-sm font-medium block">Name <span className="text-red-500">*</span></label>
         <Input 
           placeholder="John Smith" 
           value={formData.name}
@@ -93,30 +96,27 @@ function ContractorForm({
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium block">Skills & Notes</label>
-        <Textarea 
-          placeholder="Plumbing, Electrical, Carpentry..." 
-          value={formData.notes}
-          onChange={(e) => setFormData({...formData, notes: e.target.value})}
+        <label className="text-sm font-medium block">Company Name</label>
+        <Input 
+          placeholder="ABC Plumbing LLC" 
+          value={formData.companyName}
+          onChange={(e) => setFormData({...formData, companyName: e.target.value})}
           className="w-full"
         />
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium block">Availability Status</label>
-        <Select onValueChange={(value) => setFormData({...formData, isAvailable: value === "true"})} value={formData.isAvailable ? "true" : "false"}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select availability" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="true">Available</SelectItem>
-            <SelectItem value="false">Unavailable</SelectItem>
-          </SelectContent>
-        </Select>
+        <label className="text-sm font-medium block">Company Website</label>
+        <Input 
+          placeholder="www.example.com" 
+          value={formData.companyWebsite}
+          onChange={(e) => setFormData({...formData, companyWebsite: e.target.value})}
+          className="w-full"
+        />
       </div>
       
       <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? "Adding..." : (isEdit ? "Update Contractor" : "Add Contractor")}
+        {isLoading ? "Saving..." : (isEdit ? "Update Contractor" : "Add Contractor")}
       </Button>
     </form>
   );
@@ -149,21 +149,15 @@ export default function Contractors() {
 
   const createSubcontractorMutation = useMutation({
     mutationFn: async (subcontractorData: InsertSubcontractor) => {
-      console.log("Submitting subcontractor data:", subcontractorData);
       const res = await apiRequest("POST", "/api/subcontractors", subcontractorData);
       return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({
-        title: "Success",
-        description: "Contractor added successfully",
-      });
       setIsDialogOpen(false);
     },
     onError: (error: Error) => {
-      console.error("Subcontractor creation error:", error);
       toast({
         title: "Error",
         description: error.message,
@@ -179,10 +173,6 @@ export default function Contractors() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
-      toast({
-        title: "Success",
-        description: "Contractor updated successfully!",
-      });
       setEditingSubcontractor(null);
     },
     onError: (error: Error) => {
@@ -200,10 +190,6 @@ export default function Contractors() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/subcontractors"] });
-      toast({
-        title: "Success",
-        description: "Contractor deleted successfully!",
-      });
     },
     onError: (error: Error) => {
       toast({
@@ -286,16 +272,14 @@ export default function Contractors() {
                   <UserCheck className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                   {subcontractor.name}
                 </CardTitle>
-                <Badge variant={subcontractor.isAvailable ? 'default' : 'secondary'}>
-                  {subcontractor.isAvailable ? 'Available' : 'Busy'}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {subcontractor.skills && subcontractor.skills.length > 0 && (
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {Array.isArray(subcontractor.skills) ? subcontractor.skills.join(', ') : subcontractor.skills}
+                {subcontractor.companyName && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                    <Building2 className="h-3.5 w-3.5" />
+                    {subcontractor.companyName}
                   </p>
                 )}
+              </CardHeader>
+              <CardContent className="space-y-2">
                 {subcontractor.email && (
                   <a 
                     href={`mailto:${subcontractor.email}`}
@@ -314,11 +298,16 @@ export default function Contractors() {
                     {subcontractor.phone}
                   </a>
                 )}
-                {subcontractor.rating && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <Star className="h-4 w-4" />
-                    {subcontractor.rating}/5 rating
-                  </div>
+                {subcontractor.companyWebsite && (
+                  <a 
+                    href={subcontractor.companyWebsite}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors cursor-pointer"
+                  >
+                    <Globe className="h-4 w-4" />
+                    Website
+                  </a>
                 )}
                 
                 <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">

@@ -163,6 +163,8 @@ export const subcontractors = pgTable("subcontractors", {
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email"),
   phone: varchar("phone"),
+  companyName: varchar("company_name", { length: 255 }),
+  companyWebsite: varchar("company_website", { length: 500 }),
   skills: text("skills").array(),
   rating: decimal("rating", { precision: 3, scale: 2 }),
   isAvailable: boolean("is_available").default(true),
