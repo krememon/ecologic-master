@@ -1038,7 +1038,11 @@ export default function Jobs() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
                 {selectedJob && (
-                  selectedJob.isPaid ? (
+                  selectedJob.status === 'cancelled' ? (
+                    <Badge className="text-sm bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                      Cancelled
+                    </Badge>
+                  ) : selectedJob.isPaid ? (
                     <Badge 
                       className="text-sm bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100"
                     >
@@ -1880,8 +1884,13 @@ export default function Jobs() {
                 setLocation(`/jobs/${job.id}`);
               }}
             >
-              {/* Paid Badge - Top Right */}
-              {job.isPaid && (
+              {/* Status Badge - Top Right */}
+              {job.status === 'cancelled' ? (
+                <Badge className="absolute top-3 right-3 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
+                  <X className="h-3 w-3" />
+                  Cancelled
+                </Badge>
+              ) : job.isPaid && (
                 <Badge className="absolute top-3 right-3 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
                   <CheckCircle2 className="h-3 w-3" />
                   Paid

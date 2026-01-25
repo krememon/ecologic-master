@@ -530,8 +530,13 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </Button>
           )}
           
-          {/* Pay Button / Paid Badge */}
-          {canCreatePaymentLink && (
+          {/* Status Badge - Cancelled takes priority over Pay/Paid */}
+          {job.status === 'cancelled' ? (
+            <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium">
+              <X className="h-3.5 w-3.5" />
+              Cancelled
+            </Badge>
+          ) : canCreatePaymentLink && (
             isPaid ? (
               <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2.5 py-1 h-8 text-sm font-medium">
                 <CheckCircle2 className="h-3.5 w-3.5" />
