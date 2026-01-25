@@ -251,6 +251,33 @@ export default function Home() {
         </div>
       ) : (
         <>
+          <div className="px-4 mb-6">
+            <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+              Today
+            </h2>
+            {todayJobs.length === 0 ? (
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="py-8 text-center">
+                  <Calendar className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    No jobs scheduled today
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {todayJobs.map(job => (
+                  <JobCard
+                    key={job.id}
+                    title={job.title || `Job #${job.id}`}
+                    status={job.status}
+                    onClick={() => navigate(`/jobs/${job.id}`)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="mb-6 overflow-x-auto scrollbar-hide">
             <div className="flex gap-3 px-4 pb-1">
               {statusStripItems.map((item, index) => (
@@ -334,68 +361,35 @@ export default function Home() {
             </div>
           )}
 
-          <div className="px-4">
-            <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-              {isTechnician ? 'My Schedule' : 'Workstream'}
-            </h2>
-            
-            {todayJobs.length === 0 && upcomingJobs.length === 0 ? (
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                <CardContent className="py-8 text-center">
-                  <Calendar className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-                  <p className="text-slate-500 dark:text-slate-400 text-sm">
-                    No jobs scheduled
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {todayJobs.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 ml-1">Today</p>
-                    <div className="space-y-2">
-                      {todayJobs.map(job => (
-                        <JobCard
-                          key={job.id}
-                          title={job.title || `Job #${job.id}`}
-                          status={job.status}
-                          onClick={() => navigate(`/jobs/${job.id}`)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {upcomingJobs.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 ml-1">Upcoming</p>
-                    <div className="space-y-2">
-                      {upcomingJobs.map(job => {
-                        const jobDate = getJobDate(job);
-                        let dateLabel = '';
-                        if (jobDate) {
-                          if (isTomorrow(jobDate)) {
-                            dateLabel = 'Tomorrow';
-                          } else {
-                            dateLabel = format(jobDate, 'EEE, MMM d');
-                          }
-                        }
-                        return (
-                          <JobCard
-                            key={job.id}
-                            title={job.title || `Job #${job.id}`}
-                            subtitle={dateLabel}
-                            status={job.status}
-                            onClick={() => navigate(`/jobs/${job.id}`)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+          {upcomingJobs.length > 0 && (
+            <div className="px-4 mb-6">
+              <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+                Upcoming
+              </h2>
+              <div className="space-y-2">
+                {upcomingJobs.map(job => {
+                  const jobDate = getJobDate(job);
+                  let dateLabel = '';
+                  if (jobDate) {
+                    if (isTomorrow(jobDate)) {
+                      dateLabel = 'Tomorrow';
+                    } else {
+                      dateLabel = format(jobDate, 'EEE, MMM d');
+                    }
+                  }
+                  return (
+                    <JobCard
+                      key={job.id}
+                      title={job.title || `Job #${job.id}`}
+                      subtitle={dateLabel}
+                      status={job.status}
+                      onClick={() => navigate(`/jobs/${job.id}`)}
+                    />
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
     </div>

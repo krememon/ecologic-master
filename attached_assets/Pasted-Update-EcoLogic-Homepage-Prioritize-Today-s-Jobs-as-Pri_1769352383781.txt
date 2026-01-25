@@ -1,0 +1,114 @@
+Update EcoLogic Homepage – Prioritize Today’s Jobs as Primary Content
+
+CURRENT
+Homepage structure places business metrics before actual scheduled work.
+User wants jobs scheduled for today to be the first thing visible.
+
+GOAL
+Make “Jobs Scheduled for Today” the PRIMARY section on the homepage.
+The homepage should feel work-first, not dashboard-first.
+
+━━━━━━━━━━━━━━━━━━
+UPDATED PAGE ORDER (FINAL)
+━━━━━━━━━━━━━━━━━━
+
+1) CONTEXT HEADER
+- Small muted date (e.g. "Sunday · Jan 25")
+- Large greeting: "Good morning, {FirstName}"
+- No card container
+
+━━━━━━━━━━━━━━━━━━
+2) TODAY (PRIMARY SECTION)
+━━━━━━━━━━━━━━━━━━
+This is the first and most important section.
+
+CONTENT
+- List of jobs scheduled for today
+- Use existing Job card components
+- Sorted by scheduled time
+- Fully tappable → job details page
+
+EMPTY STATE
+- Show a clean card with:
+  Icon (calendar)
+  Text: "No jobs scheduled today"
+
+RULES
+- Visible to all roles
+- Technician: assigned jobs only
+- Dispatcher/Supervisor: scheduled jobs
+- Owner/Admin: all jobs scheduled today
+- No calendar grid
+- No map
+
+━━━━━━━━━━━━━━━━━━
+3) STATUS STRIP (SECONDARY)
+━━━━━━━━━━━━━━━━━━
+Horizontal scrollable mini-cards.
+
+METRICS (role-aware):
+- Jobs Today
+- Open Jobs
+- Leads In Flow
+- Draft Estimates
+
+RULES
+- Icon + number + label
+- Tappable
+- Hide unauthorized metrics
+- Zero values render cleanly
+
+━━━━━━━━━━━━━━━━━━
+4) BUSINESS SNAPSHOT
+━━━━━━━━━━━━━━━━━━
+Neutral business state cards.
+
+CONTENT (role-aware):
+- Open Jobs
+- Open Estimates
+- Outstanding Invoices (Owner/Admin only)
+
+RULES
+- No alert language
+- No warning colors
+- Tappable cards
+- Hide unauthorized items
+
+━━━━━━━━━━━━━━━━━━
+5) THIS WEEK PULSE (Owner/Admin only)
+━━━━━━━━━━━━━━━━━━
+Premium analytics card.
+
+METRICS
+- Revenue Collected (7 days) if available
+- Invoices Paid (7 days)
+- Win Rate (7 days)
+
+RULES
+- No charts
+- Large values, muted labels
+- Show “—” if data unavailable
+- Hidden for non-owner roles
+
+━━━━━━━━━━━━━━━━━━
+6) UPCOMING (OPTIONAL)
+━━━━━━━━━━━━━━━━━━
+- Jobs scheduled tomorrow / later this week
+- Render only if data exists
+- Same card style as Today section
+
+━━━━━━━━━━━━━━━━━━
+TECH RULES
+━━━━━━━━━━━━━━━━━━
+- Use existing APIs only
+- Each section loads independently
+- Loading, empty, and error states required
+- Never show blank white screen
+- No console errors
+- Hidden, not disabled (strict RBAC)
+
+SUCCESS
+- User immediately sees their real work
+- Homepage feels modern, calm, and intentional
+- No dashboard fatigue
+- Looks unmistakably like EcoLogic
