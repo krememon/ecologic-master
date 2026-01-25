@@ -60,30 +60,28 @@ function ContractorForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-none">
-      <div className="space-y-2">
+    <form onSubmit={handleSubmit} className="space-y-3 w-full">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium block">Name <span className="text-red-500">*</span></label>
         <Input 
           placeholder="John Smith" 
           value={formData.name}
           onChange={(e) => setFormData({...formData, name: e.target.value})}
           required
-          className="w-full"
         />
       </div>
       
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium block">Email</label>
         <Input 
           type="email" 
           placeholder="john@contractor.com" 
           value={formData.email}
           onChange={(e) => setFormData({...formData, email: e.target.value})}
-          className="w-full"
         />
       </div>
       
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium block">Phone</label>
         <Input 
           placeholder="555-123-4567" 
@@ -91,31 +89,28 @@ function ContractorForm({
           onChange={(e) => setFormData({...formData, phone: formatPhoneInput(e.target.value)})}
           inputMode="numeric"
           autoComplete="tel"
-          className="w-full"
         />
       </div>
       
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium block">Company Name</label>
         <Input 
           placeholder="ABC Plumbing LLC" 
           value={formData.companyName}
           onChange={(e) => setFormData({...formData, companyName: e.target.value})}
-          className="w-full"
         />
       </div>
       
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <label className="text-sm font-medium block">Company Website</label>
         <Input 
           placeholder="www.example.com" 
           value={formData.companyWebsite}
           onChange={(e) => setFormData({...formData, companyWebsite: e.target.value})}
-          className="w-full"
         />
       </div>
       
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="w-full mt-4" disabled={isLoading}>
         {isLoading ? "Saving..." : (isEdit ? "Update Contractor" : "Add Contractor")}
       </Button>
     </form>
@@ -216,8 +211,8 @@ export default function Contractors() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-[400px] max-h-[90vh] rounded-2xl overflow-y-auto transform-none fixed inset-4 mx-auto my-auto">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-[400px] max-h-[85vh] rounded-2xl overflow-y-auto p-5 pt-4 gap-3">
+          <DialogHeader className="pb-1">
             <DialogTitle>Add New Contractor</DialogTitle>
           </DialogHeader>
           <ContractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
@@ -226,8 +221,8 @@ export default function Contractors() {
 
       {/* Edit Contractor Dialog */}
       <Dialog open={!!editingSubcontractor} onOpenChange={(open) => !open && setEditingSubcontractor(null)}>
-        <DialogContent className="w-[95vw] max-w-[400px] max-h-[90vh] rounded-2xl overflow-y-auto transform-none fixed inset-4 mx-auto my-auto">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-[400px] max-h-[85vh] rounded-2xl overflow-y-auto p-5 pt-4 gap-3">
+          <DialogHeader className="pb-1">
             <DialogTitle>Edit Contractor</DialogTitle>
           </DialogHeader>
           <ContractorForm 
