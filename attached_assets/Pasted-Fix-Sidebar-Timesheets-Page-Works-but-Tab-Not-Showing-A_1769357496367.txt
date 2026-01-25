@@ -1,0 +1,73 @@
+Fix Sidebar: Timesheets Page Works but Tab Not Showing (Add Nav Item + Role-Aware Rendering)
+
+CURRENT
+- /timesheets page loads and works (GET /api/time/entries returns 200)
+- Sidebar/hamburger menu does NOT show a “Timesheets” tab
+- Console shows intermittent auth issues (GET /api/auth/user 401) which may cause role-based nav to render incorrectly
+
+GOAL
+Ensure the sidebar always shows the Timesheets tab for allowed roles and routes correctly.
+
+ROOT CAUSES TO CHECK
+1) Timesheets item not added to the sidebar nav config/list
+2) Item exists but is hidden due to role/permission mismatch
+3) Sidebar renders before auth user/role is loaded and never re-renders
+4) Role is derived differently in sidebar vs timesheets page (must unify)
+5) Auth endpoint sometimes 401 → sidebar treats user as logged out → hides items
+
+REQUIREMENTS
+
+A) ADD NAV ITEM
+- Add a sidebar item:
+  label: "Timesheets" (manager roles) OR "My Timesheet" (technician)
+  route: "/timesheets"
+  icon: clock/time icon consistent with others
+  placement: directly under "Schedule"
+
+B) ROLE VISIBILITY (HIDDEN NOT DISABLED)
+Show Timesheets for:
+- Owner/Admin/Manager/Supervisor (whatever your app calls it: e.g. "manager")
+- Technician (label it "My Timesheet")
+Hide Timesheets for:
+- Estimator
+- Dispatcher (per spec)
+NOTE: In your API response /api/time/entries shows role:"manager" — treat that as allowed.
+
+C) UNIFY ROLE SOURCE
+- Sidebar must use the SAME role source as the rest of the app:
+  - Prefer the auth user endpoint /api/auth/user (or existing user context)
+  - Do NOT invent a separate role check for nav
+- If the app uses "role" from /api/time/entries, do NOT use that for sidebar. Sidebar should rely on auth/company membership role (single source of truth).
+
+D) LOADING + RE-RENDER FIX (IMPORTANT)
+- Sidebar must not permanently hide role-based items while auth is loading.
+Implement one of these:
+1) Block sidebar nav rendering until auth user is loaded (show skeleton list)
+OR
+2) Render base items, then re-render when auth user resolves
+
+Do NOT compute nav items once at module load time. It must be reactive to auth state.
+
+E) FIX INTERMITTENT /api/auth/user 401 (MINIMAL)
+- Investigate why auth sometimes fails after succeeding.
+- Ensure frontend includes credentials/cookies on auth calls if required.
+- Ensure backend session check is consistent.
+- Add a retry: if /api/auth/user 401 once after previously being authed, refetch once after a short delay.
+- Do not spam requests.
+
+F) ROUTE PROTECTION
+- If user manually goes to /timesheets without permission:
+  - redirect to /home or show Not Authorized page
+- But DO NOT hide the tab for valid roles.
+
+DELIVERABLES
+- Timesheets tab appears in sidebar for allowed roles
+- Tab routes to /timesheets and closes drawer like other items
+- Technicians see label “My Timesheet”
+- Estimators and Dispatchers do not see the tab
+- No console errors
+
+SUCCESS CRITERIA
+- You can navigate to Timesheets from the sidebar reliably every time
+- Sidebar items update correctly after auth loads
+- Role gating matches timesheets API behavior (manager role sees it)

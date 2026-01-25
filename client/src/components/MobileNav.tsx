@@ -17,7 +17,8 @@ import {
   Brain,
   UsersIcon,
   Wrench,
-  Target
+  Target,
+  Clock
 } from "lucide-react";
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
@@ -26,9 +27,10 @@ import { GlobalCreateMenu } from "./GlobalCreateMenu";
 import type { Permission } from "@shared/permissions";
 
 // Navigation items with permission requirements - must match Sidebar.tsx
-const getNavigation = (t: any) => [
+const getNavigation = (t: any, role: string | undefined) => [
   { href: "/", icon: LayoutDashboard, label: t('navigation.home'), permission: null },
   { href: "/schedule", icon: Brain, label: t('navigation.schedule'), permission: "schedule.view" as Permission },
+  { href: "/timesheets", icon: Clock, label: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
   { href: "/jobs", icon: Building2, label: t('navigation.jobs'), permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
   { href: "/leads", icon: Target, label: "Leads", permission: "leads.view" as Permission },
   { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors'), permission: "clients.manage" as Permission },
@@ -52,17 +54,24 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const { t } = useTranslation();
   const { can, canAny, role } = useCan();
 
+  // Use role from hook or user prop as fallback
+  const effectiveRole = role || user?.role;
+
   // Filter navigation items based on current user's permissions
   // This recalculates when role changes (e.g., after login/logout)
   const navigationItems = useMemo(() => {
-    const navigation = getNavigation(t);
+    const navigation = getNavigation(t, effectiveRole);
     
-    // If no role, show no navigation items (safety check)
-    if (!role) {
-      return [];
+    // If no role yet, show base items without permissions or excludeRoles
+    if (!effectiveRole) {
+      return navigation.filter(item => !item.permission && !(item as any).excludeRoles);
     }
     
     return navigation.filter(item => {
+      // If item has excludeRoles and current role is excluded, hide the item
+      if ((item as any).excludeRoles && (item as any).excludeRoles.includes(effectiveRole)) {
+        return false;
+      }
       // If item has permissionAny, check if user has any of those permissions
       if ((item as any).permissionAny) {
         return canAny((item as any).permissionAny);
@@ -70,7 +79,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       // Otherwise, check the single permission (or allow if no permission required)
       return !item.permission || can(item.permission);
     });
-  }, [t, role, can, canAny]);
+  }, [t, effectiveRole, can, canAny]);
 
   const handleToggle = () => {
     console.log('Mobile nav toggle clicked, current state:', isOpen);

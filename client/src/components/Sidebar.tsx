@@ -38,14 +38,19 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
   // Use role from user prop as fallback (user prop comes from Layout which has auth data)
   const role = hookRole || user?.role;
 
+  // Debug: log role sources
+  useEffect(() => {
+    console.log('[Sidebar] Role debug - hookRole:', hookRole, 'user?.role:', user?.role, 'final role:', role);
+  }, [hookRole, user?.role, role]);
+
   // Filter navigation items based on current user's permissions
   // useMemo ensures this recalculates when role changes (e.g., after login/logout)
   const filteredNavigation = useMemo(() => {
     const navigation = getNavigation(t, role);
     
-    // If no role, show no navigation items (safety check)
+    // If no role yet (auth loading), show base navigation items that don't require permissions
     if (!role) {
-      return [];
+      return navigation.filter(item => !item.permission && !(item as any).excludeRoles);
     }
     
     return navigation.filter(item => {
@@ -64,8 +69,8 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
 
   // Debug logging
   useEffect(() => {
-    console.log('Sidebar received isOpen state:', isOpen);
-  }, [isOpen]);
+    console.log('[Sidebar] isOpen:', isOpen, 'filteredNav count:', filteredNavigation.length);
+  }, [isOpen, filteredNavigation.length]);
 
   // Close sidebar on route change (mobile only, not on initial mount)
   const [hasMounted, setHasMounted] = useState(false);
