@@ -2872,6 +2872,12 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
+  async deleteAllNotifications(userId: string): Promise<void> {
+    await db
+      .delete(notifications)
+      .where(eq(notifications.recipientUserId, userId));
+  }
+
   async findRecentDuplicateNotification(
     recipientUserId: string,
     type: NotificationType,

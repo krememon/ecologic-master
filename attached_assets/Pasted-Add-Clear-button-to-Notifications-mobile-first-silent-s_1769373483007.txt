@@ -1,0 +1,69 @@
+Add “Clear” button to Notifications (mobile-first, silent success, no RBAC changes)
+
+CURRENT
+- Notifications inbox can get crowded
+- There is no way to clear old notifications
+- Users will eventually have a long list that feels cluttered
+
+GOAL
+Add a “Clear” action in the Notifications sheet that allows the user to clear notifications safely:
+- Mobile-first UI
+- Silent success (no success popup / no global toast)
+- No console errors
+- RBAC unchanged (user can only clear their own notifications)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESIGN / UI REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Add a small “Clear” button in the Notifications header (top right area near the X)
+- Only show “Clear” if there is at least 1 notification
+- If there are 0 notifications, keep existing empty state (“No notifications yet”)
+- Button should look subtle + professional (not destructive red unless your design already uses it)
+- Keep spacing and safe areas intact on iPhone
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEHAVIOR (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Clear should:
+- Remove notifications from the inbox list for the current user
+- Also clear unread badge count immediately
+- No manual refresh required
+
+Implementation choice (pick one and do it cleanly):
+OPTION A (Recommended): “Clear All” = delete all notifications for the current user
+OPTION B: “Clear All” = archive by setting a clearedAt timestamp (requires new column)
+
+Use OPTION A unless there is an existing “soft delete” pattern in this codebase.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add endpoint:
+DELETE /api/notifications
+- Deletes ALL notifications for the current user
+- Returns { ok: true }
+
+RBAC:
+- Must only delete where recipientUserId = currentUser.id
+- Must never allow deleting other users’ notifications
+
+Also ensure:
+- GET /api/notifications/unread-count returns 0 immediately after clear
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Wire “Clear” button to call DELETE /api/notifications
+- Update local notifications state to empty immediately on success
+- Update unread count state to 0 immediately on success
+- Do NOT show success toast
+- If request fails unexpectedly, show a small inline error message in the sheet (NOT a global toast)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- “Clear” button appears only when notifications exist
+- Tapping “Clear” empties the list + removes unread badge instantly
+- No console errors
+- No changes to roles/permissions
+- Mobile UI remains clean and aligned

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell, Check } from "lucide-react";
+import { Menu, Bell, Check, Trash2 } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 import LanguageSelector from "./LanguageSelector";
@@ -65,6 +65,21 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
+    },
+  });
+
+  const [clearError, setClearError] = useState<string | null>(null);
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', '/api/notifications');
+    },
+    onSuccess: () => {
+      setClearError(null);
+      queryClient.setQueryData(['/api/notifications'], []);
+      queryClient.setQueryData(['/api/notifications/unread-count'], { unreadCount: 0 });
+    },
+    onError: () => {
+      setClearError('Failed to clear notifications');
     },
   });
 
@@ -143,19 +158,39 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
         <SheetContent side="right" className="w-full sm:max-w-md">
           <SheetHeader className="flex flex-row items-center justify-between pb-4 border-b">
             <SheetTitle>Notifications</SheetTitle>
-            {unreadCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => markAllReadMutation.mutate()}
-                disabled={markAllReadMutation.isPending}
-                className="text-xs"
-              >
-                <Check className="h-3 w-3 mr-1" />
-                Mark all read
-              </Button>
-            )}
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => markAllReadMutation.mutate()}
+                  disabled={markAllReadMutation.isPending}
+                  className="text-xs"
+                >
+                  <Check className="h-3 w-3 mr-1" />
+                  Mark all read
+                </Button>
+              )}
+              {notifications.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => clearAllMutation.mutate()}
+                  disabled={clearAllMutation.isPending}
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
           </SheetHeader>
+          
+          {clearError && (
+            <div className="mt-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded">
+              {clearError}
+            </div>
+          )}
           
           <div className="mt-4 -mx-6 px-6 overflow-y-auto max-h-[calc(100vh-8rem)]">
             {isLoading ? (

@@ -9630,6 +9630,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/notifications - Clear all notifications for current user
+  app.delete('/api/notifications', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      await storage.deleteAllNotifications(userId);
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error('Error clearing notifications:', error);
+      res.status(500).json({ message: 'Failed to clear notifications' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
