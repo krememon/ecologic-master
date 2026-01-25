@@ -52,6 +52,8 @@ EcoLogic is a multi-tenant web application built with React 18 (TypeScript, Vite
 
 - **Timesheet Editing (Manager-Only)**: Managers (Owner, Supervisor) can edit time entries to correct mistakes like forgotten clock-outs or late clock-ins. The Timesheets page shows a ⋯ action menu on each entry row for managers only. Editing requires a reason and uses the same iOS-style wheel picker for start/end times. Validation: start must be before end, max 16 hours duration. Audit trail: stores editedAt, editedByUserId, editReason, and preserves originalClockInAt/originalClockOutAt on first edit. Edited entries display a blue "Edited" tag. Technicians can only view their own entries (no edit controls visible). API endpoint: PATCH `/api/time/entries/:id` with RBAC enforcement.
 
+- **Notifications System**: In-app notification system with 10 notification types (job_assigned, job_updated, addwork_approved, payment_collected, addwork_submitted, job_completed, invoice_paid, missed_clockout, job_rescheduled, job_cancelled). Features a bell icon in the header with unread badge, slide-over notification inbox, mark-as-read (individual or all), and click-to-navigate. Notifications are role-targeted (crew, managers, office staff) with 60-second deduplication to prevent spam. Key triggers: job_assigned (crew assignment), job_rescheduled (schedule changes), payment_collected (manual payments), invoice_paid (Stripe payments). API endpoints: GET `/api/notifications`, GET `/api/notifications/unread-count`, POST `/api/notifications/:id/read`, POST `/api/notifications/read-all`. Stored in `notifications` table with company-scoped isolation.
+
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)
 - **ORM**: Drizzle ORM
