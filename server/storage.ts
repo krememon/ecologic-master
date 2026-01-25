@@ -27,6 +27,7 @@ import {
   companyTaxes,
   leads,
   timeLogs,
+  notifications,
   type User,
   type UpsertUser,
   type Company,
@@ -70,6 +71,9 @@ import {
   type Lead,
   type InsertLead,
   type TimeLog,
+  type Notification,
+  type InsertNotification,
+  type NotificationType,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -2794,6 +2798,90 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return updated || null;
+  }
+
+  // ============ NOTIFICATIONS ============
+
+  async createNotification(data: InsertNotification): Promise<Notification> {
+    const [notification] = await db
+      .insert(notifications)
+      .values(data)
+      .returning();
+    return notification;
+  }
+
+  async createNotifications(data: InsertNotification[]): Promise<Notification[]> {
+    if (data.length === 0) return [];
+    const result = await db
+      .insert(notifications)
+      .values(data)
+      .returning();
+    return result;
+  }
+
+  async getNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
+    return db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.recipientUserId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(
+        eq(notifications.recipientUserId, userId),
+        sql`${notifications.readAt} IS NULL`
+      ));
+    return result[0]?.count || 0;
+  }
+
+  async markNotificationRead(id: number, userId: string): Promise<Notification | null> {
+    const [updated] = await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(
+        eq(notifications.id, id),
+        eq(notifications.recipientUserId, userId)
+      ))
+      .returning();
+    return updated || null;
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(
+        eq(notifications.recipientUserId, userId),
+        sql`${notifications.readAt} IS NULL`
+      ));
+  }
+
+  async findRecentDuplicateNotification(
+    recipientUserId: string,
+    type: NotificationType,
+    entityId: number | null,
+    withinSeconds: number = 60
+  ): Promise<Notification | null> {
+    const cutoff = new Date(Date.now() - withinSeconds * 1000);
+    const conditions = [
+      eq(notifications.recipientUserId, recipientUserId),
+      eq(notifications.type, type),
+      gte(notifications.createdAt, cutoff)
+    ];
+    if (entityId !== null) {
+      conditions.push(eq(notifications.entityId, entityId));
+    }
+    const [existing] = await db
+      .select()
+      .from(notifications)
+      .where(and(...conditions))
+      .limit(1);
+    return existing || null;
   }
 }
 
