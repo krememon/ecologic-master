@@ -71,6 +71,17 @@ if (stripe) {
 
 const scryptAsync = promisify(scrypt);
 
+// Format 24-hour time (HH:mm) to 12-hour format (h:mm AM/PM)
+function formatTime12Hour(time24: string | null): string {
+  if (!time24) return '9:00 AM';
+  const [hoursStr, minsStr] = time24.split(':');
+  let hours = parseInt(hoursStr, 10);
+  const mins = minsStr || '00';
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${hours}:${mins} ${ampm}`;
+}
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -2677,7 +2688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const scheduleChanged = oldDateStr !== newDateStr || oldTime !== newTime || oldEndTime !== newEndTime;
         if (scheduleChanged && newDateStr) {
           const dateFormatted = new Date(newDateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          const timeFormatted = newTime || '9:00 AM';
+          const timeFormatted = formatTime12Hour(newTime);
           await notifyJobCrewAndOffice(jobId, company.id, {
             type: 'job_rescheduled',
             title: 'Job Rescheduled',
@@ -3213,7 +3224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scheduleChanged = oldDateStr !== newDateStr || oldTime !== newTime || oldEndTime !== newEndTime;
       if (scheduleChanged && newDateStr) {
         const dateFormatted = new Date(newDateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const timeFormatted = newTime || '9:00 AM';
+        const timeFormatted = formatTime12Hour(newTime);
         await notifyJobCrewAndOffice(jobId, company.id, {
           type: 'job_rescheduled',
           title: 'Job Rescheduled',
