@@ -1,12 +1,19 @@
 import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Calendar, User } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Calendar, User, MoreHorizontal, Pencil } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, parseISO } from "date-fns";
 import { useCan } from "@/hooks/useCan";
+import { TimeWheelPicker } from "@/components/TimeWheelPicker";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface TimeEntry {
   id: number;
@@ -18,6 +25,9 @@ interface TimeEntry {
   date: string;
   autoClosed?: boolean | null;
   autoClosedReason?: string | null;
+  editedAt?: string | null;
+  editedByUserId?: string | null;
+  editReason?: string | null;
   job?: { id: number; title: string | null } | null;
   user?: { id: string; firstName: string | null; lastName: string | null };
 }
@@ -67,6 +77,20 @@ function getWeekDates(date: Date): { startDate: string; endDate: string; label: 
   };
 }
 
+function dateToTimeString(dateStr: string): string {
+  const date = parseISO(dateStr);
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+}
+
+function combineDateTime(dateStr: string, timeStr: string): string {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  const date = parseISO(dateStr);
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
 interface DateGroup {
   date: string;
   dateLabel: string;
@@ -108,11 +132,223 @@ function groupEntriesByDate(entries: TimeEntry[]): DateGroup[] {
     });
 }
 
+function EntryTags({ entry }: { entry: TimeEntry }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {entry.editedAt && (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+          Edited
+        </span>
+      )}
+      {entry.autoClosed && (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          Auto-closed
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface EditEntryModalProps {
+  entry: TimeEntry | null;
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  employeeName?: string;
+}
+
+function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEntryModalProps) {
+  const { toast } = useToast();
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (entry && open) {
+      setStartTime(dateToTimeString(entry.clockInAt));
+      setEndTime(dateToTimeString(entry.clockOutAt));
+      setReason("");
+      setError("");
+    }
+  }, [entry, open]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { clockInAt: string; clockOutAt: string; editReason: string }) => {
+      return apiRequest("PATCH", `/api/time/entries/${entry?.id}`, data);
+    },
+    onSuccess: () => {
+      onSaved();
+      onClose();
+    },
+    onError: (err: any) => {
+      const message = err?.message || "Failed to save changes";
+      setError(message);
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSave = () => {
+    if (!entry) return;
+    setError("");
+
+    if (!reason.trim()) {
+      setError("A reason is required for editing time entries");
+      return;
+    }
+
+    const clockInAt = combineDateTime(entry.date, startTime);
+    const clockOutAt = combineDateTime(entry.date, endTime);
+
+    const startDate = new Date(clockInAt);
+    const endDate = new Date(clockOutAt);
+
+    if (startDate >= endDate) {
+      setError("Start time must be before end time");
+      return;
+    }
+
+    const durationHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+    if (durationHours > 16) {
+      setError("Duration cannot exceed 16 hours");
+      return;
+    }
+
+    updateMutation.mutate({ clockInAt, clockOutAt, editReason: reason.trim() });
+  };
+
+  if (!entry) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Time Entry</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              {employeeName || "Employee"}
+            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {getJobOrCategory(entry)} • {formatDate(entry.date)}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Start Time</Label>
+              <TimeWheelPicker
+                value={startTime}
+                onChange={setStartTime}
+                label="Select Start Time"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>End Time</Label>
+              <TimeWheelPicker
+                value={endTime}
+                onChange={setEndTime}
+                label="Select End Time"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>
+              Reason for Edit <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Forgot to clock out…"
+              rows={3}
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onClose} disabled={updateMutation.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save Changes"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface EntryRowProps {
+  entry: TimeEntry;
+  isManager: boolean;
+  onEdit: (entry: TimeEntry, employeeName?: string) => void;
+  employeeName?: string;
+  compact?: boolean;
+}
+
+function EntryRow({ entry, isManager, onEdit, employeeName, compact = false }: EntryRowProps) {
+  return (
+    <div className={`px-4 ${compact ? "py-2.5" : "py-3"} flex items-center justify-between gap-2`}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className={`font-medium text-slate-900 dark:text-slate-100 truncate ${compact ? "text-sm" : ""}`}>
+            {getJobOrCategory(entry)}
+          </p>
+          <EntryTags entry={entry} />
+        </div>
+        <p className={`text-slate-500 dark:text-slate-400 ${compact ? "text-xs" : "text-sm"}`}>
+          {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`font-medium text-slate-900 dark:text-slate-100 ${compact ? "text-sm" : ""}`}>
+          {formatDuration(calculateMinutes(entry.clockInAt, entry.clockOutAt))}
+        </span>
+        {isManager && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(entry, employeeName)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit entry
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Timesheets() {
   const { role } = useCan();
   const [, navigate] = useLocation();
   const [weekOffset, setWeekOffset] = useState(0);
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
+  const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
+  const [editEmployeeName, setEditEmployeeName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (role === "ESTIMATOR" || role === "DISPATCHER") {
@@ -143,6 +379,7 @@ export default function Timesheets() {
   });
 
   const isTechnician = data?.role === "technician";
+  const isManager = data?.role === "manager";
   const pageTitle = isTechnician ? "My Timesheet" : "Timesheets";
 
   const employees = useMemo(() => {
@@ -209,6 +446,15 @@ export default function Timesheets() {
     const emp = employees.find(([id]) => id === employeeFilter);
     return emp ? emp[1] : null;
   }, [employeeFilter, employees]);
+
+  const handleEditEntry = (entry: TimeEntry, employeeName?: string) => {
+    setEditEntry(entry);
+    setEditEmployeeName(employeeName);
+  };
+
+  const handleEditSaved = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/time/entries", startDate, endDate] });
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -341,29 +587,12 @@ export default function Timesheets() {
                     <CardContent className="p-0">
                       <div className="divide-y divide-slate-200 dark:divide-slate-700">
                         {dateGroup.entries.map((entry) => (
-                          <div
+                          <EntryRow
                             key={entry.id}
-                            className="px-4 py-3 flex items-center justify-between gap-2"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                                  {getJobOrCategory(entry)}
-                                </p>
-                                {entry.autoClosed && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                    Auto-closed
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm text-slate-500 dark:text-slate-400">
-                                {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
-                              </p>
-                            </div>
-                            <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                              {formatDuration(calculateMinutes(entry.clockInAt, entry.clockOutAt))}
-                            </span>
-                          </div>
+                            entry={entry}
+                            isManager={false}
+                            onEdit={handleEditEntry}
+                          />
                         ))}
                       </div>
                     </CardContent>
@@ -401,29 +630,14 @@ export default function Timesheets() {
                           <CardContent className="p-0">
                             <div className="divide-y divide-slate-200 dark:divide-slate-700">
                               {dateGroup.entries.map((entry) => (
-                                <div
+                                <EntryRow
                                   key={entry.id}
-                                  className="px-4 py-2.5 flex items-center justify-between gap-2"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                                        {getJobOrCategory(entry)}
-                                      </p>
-                                      {entry.autoClosed && (
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                          Auto-closed
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                      {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
-                                    </p>
-                                  </div>
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                    {formatDuration(calculateMinutes(entry.clockInAt, entry.clockOutAt))}
-                                  </span>
-                                </div>
+                                  entry={entry}
+                                  isManager={isManager}
+                                  onEdit={handleEditEntry}
+                                  employeeName={empGroup.name}
+                                  compact
+                                />
                               ))}
                             </div>
                           </CardContent>
@@ -437,6 +651,14 @@ export default function Timesheets() {
           </>
         )}
       </div>
+
+      <EditEntryModal
+        entry={editEntry}
+        open={!!editEntry}
+        onClose={() => setEditEntry(null)}
+        onSaved={handleEditSaved}
+        employeeName={editEmployeeName}
+      />
     </div>
   );
 }
