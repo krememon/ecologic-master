@@ -1,0 +1,109 @@
+Add “Time Today” + Clock In / Clock Out to EcoLogic Homepage
+
+CURRENT
+EcoLogic homepage does not show time or labor awareness.
+User wants to add Hours Logged and a Clock In / Clock Out feature
+that feels modern, simple, and role-aware.
+
+GOAL
+Add a “Time Today” section to the homepage that:
+- Allows technicians to clock in and out
+- Shows hours logged today
+- Gives owners and supervisors high-level labor visibility
+- Does NOT introduce payroll complexity
+
+━━━━━━━━━━━━━━━━━━
+RBAC (STRICT)
+━━━━━━━━━━━━━━━━━━
+- Technician:
+  - Can clock in / clock out
+  - Sees ONLY their own hours
+- Dispatcher / Supervisor:
+  - Sees total hours logged today
+  - Sees number of active techs
+  - NO clock in/out controls
+- Owner/Admin:
+  - Same as Dispatcher/Supervisor
+  - No pay rates or payroll data
+
+━━━━━━━━━━━━━━━━━━
+HOMEPAGE PLACEMENT
+━━━━━━━━━━━━━━━━━━
+- Place “Time Today” section near the top of the homepage
+- After Status Tabs
+- Before Business Snapshot
+
+━━━━━━━━━━━━━━━━━━
+TECHNICIAN VIEW
+━━━━━━━━━━━━━━━━━━
+CARD CONTENT
+- Title: “Time Today”
+- Display:
+  - Total hours logged today (auto-calculated)
+- Primary Action Button:
+  - If NOT clocked in → show “Clock In”
+  - If clocked in → show “Clock Out”
+- Button should be prominent and tappable
+- Show subtle active indicator when clocked in
+
+━━━━━━━━━━━━━━━━━━
+OWNER / SUPERVISOR VIEW
+━━━━━━━━━━━━━━━━━━
+CARD CONTENT
+- Title: “Labor Today”
+- Display:
+  - Total hours logged today (all techs)
+  - Number of techs currently clocked in
+- No action buttons
+
+━━━━━━━━━━━━━━━━━━
+DATA MODEL (MINIMAL v1)
+━━━━━━━━━━━━━━━━━━
+Create a simple time log structure:
+- userId
+- clockInAt (timestamp)
+- clockOutAt (timestamp | null)
+- date (derived from clockInAt)
+
+RULES
+- A user can only have ONE active clock-in at a time
+- Clock out closes the active session
+- Hours logged = sum of completed sessions + active session duration
+
+━━━━━━━━━━━━━━━━━━
+API REQUIREMENTS
+━━━━━━━━━━━━━━━━━━
+Add minimal endpoints if they do not already exist:
+- POST /api/time/clock-in
+- POST /api/time/clock-out
+- GET /api/time/today (role-aware response)
+
+Ensure:
+- Server enforces RBAC
+- Technicians can only access their own data
+- Owners/Supervisors get aggregate data only
+
+━━━━━━━━━━━━━━━━━━
+UI / UX RULES
+━━━━━━━━━━━━━━━━━━
+- Use existing card styles
+- Mobile-first
+- No modals required
+- Button state updates immediately on success
+- Friendly error handling (e.g. “Unable to clock in”)
+
+━━━━━━━━━━━━━━━━━━
+FAILURE HANDLING
+━━━━━━━━━━━━━━━━━━
+- Loading: skeleton card
+- Error: inline message inside card
+- Homepage must never white-screen
+- No console errors
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+- Technicians actually use it daily
+- Clock in/out is fast and reliable
+- Owners gain labor visibility without payroll complexity
+- Feature feels native to EcoLogic, not bolted on

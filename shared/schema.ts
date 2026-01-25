@@ -1352,3 +1352,26 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 
 export type Lead = typeof leads.$inferSelect;
 export type InsertLead = z.infer<typeof insertLeadSchema>;
+
+// Time tracking table for clock in/out
+export const timeLogs = pgTable("time_logs", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  clockInAt: timestamp("clock_in_at").notNull(),
+  clockOutAt: timestamp("clock_out_at"),
+  date: date("date").notNull(), // Date portion for easy querying
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("time_logs_company_id_idx").on(table.companyId),
+  index("time_logs_user_id_idx").on(table.userId),
+  index("time_logs_date_idx").on(table.date),
+]);
+
+export const insertTimeLogSchema = createInsertSchema(timeLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TimeLog = typeof timeLogs.$inferSelect;
+export type InsertTimeLog = z.infer<typeof insertTimeLogSchema>;
