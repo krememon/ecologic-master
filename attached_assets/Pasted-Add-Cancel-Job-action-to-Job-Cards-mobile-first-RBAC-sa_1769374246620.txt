@@ -1,0 +1,91 @@
+Add “Cancel Job” action to Job Cards (mobile-first, RBAC-safe, silent)
+
+CURRENT
+- There is NO way to cancel a job
+- Job cards do not have a Cancel action
+- Notifications for “Job Cancelled” cannot exist until this action exists
+
+GOAL
+Allow authorized users to cancel a job safely:
+- Add a “Cancel Job” action to Job cards
+- Change job status to "cancelled"
+- Trigger Job Cancelled notification (Tech only)
+- Silent success (no success popup)
+- No RBAC leaks
+- Mobile-first UI
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Allowed to cancel:
+- Owner
+- Admin
+- Supervisor
+- Dispatcher
+
+NOT allowed:
+- Technician
+- Estimator
+
+Technicians must NEVER see the Cancel option.
+
+Hidden, not disabled.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Job Card / Job Detail screen:
+- Add “Cancel Job” option in the action menu (⋯) or bottom action area
+- Style:
+  - Subtle destructive (not bright red)
+  - Consistent with app design
+- Show confirmation modal:
+  - Title: “Cancel job?”
+  - Body: “This will cancel the job for all assigned technicians.”
+  - Buttons:
+    - Cancel (dismiss)
+    - Confirm Cancel (destructive)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND LOGIC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+On confirm:
+- Update job.status = "cancelled"
+- Preserve:
+  - Time logs (do NOT delete)
+  - Invoices (do NOT delete)
+- Job should:
+  - Disappear from active jobs lists
+  - Remain visible in history where applicable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOTIFICATION (TYPE #10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Trigger:
+- job.status changes to "cancelled"
+
+Recipients:
+- Assigned technician(s) ONLY
+
+Notification payload:
+- type: "job_cancelled"
+- title: "Job cancelled"
+- body: “Job for {CustomerName} has been cancelled”
+- entityType: "job"
+- entityId: jobId
+- linkUrl: "/jobs/:jobId"
+
+ANTI-SPAM:
+- Do NOT notify if job was already cancelled
+- One notification per tech per job
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Authorized user can cancel a job
+- Job status updates correctly
+- Assigned tech receives notification immediately
+- Tech cannot cancel jobs
+- No console errors
+- No success popups
+- Mobile UI unchanged

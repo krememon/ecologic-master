@@ -2884,6 +2884,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Cancel job (Owner/Supervisor/Dispatcher only)
+  app.patch('/api/jobs/:id/cancel', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      // RBAC: Only Owner, Supervisor, Dispatcher can cancel jobs
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const allowedRoles = ['OWNER', 'SUPERVISOR', 'DISPATCHER'];
+      if (!allowedRoles.includes(member.role.toUpperCase())) {
+        return res.status(403).json({ message: "You don't have permission to cancel jobs" });
+      }
+      
+      const jobId = parseInt(req.params.id);
+      const job = await storage.getJob(jobId);
+      
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      if (job.companyId !== company.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      // Don't notify if already cancelled
+      const wasAlreadyCancelled = job.status === 'cancelled';
+      
+      // Update status to cancelled
+      const cancelledJob = await storage.updateJob(jobId, { status: 'cancelled' } as any);
+      
+      // Notify assigned technicians (only if status actually changed)
+      if (!wasAlreadyCancelled) {
+        const customerName = job.clientName || 'a customer';
+        await notifyTechniciansOnly(
+          (await storage.getJobCrewAssignments(jobId)).map(c => c.userId),
+          company.id,
+          {
+            type: 'job_cancelled',
+            title: 'Job Cancelled',
+            body: `Job for ${customerName} has been cancelled`,
+            entityType: 'job',
+            entityId: jobId,
+            linkUrl: `/jobs/${jobId}`,
+          }
+        );
+      }
+      
+      res.json(cancelledJob);
+    } catch (error) {
+      console.error("Error cancelling job:", error);
+      res.status(500).json({ message: "Failed to cancel job" });
+    }
+  });
+
   // Assign technician to job (Admin-only: Owner/Supervisor)
   app.patch('/api/jobs/:id/assign', isAuthenticated, async (req: any, res) => {
     try {
