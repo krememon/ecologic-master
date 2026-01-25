@@ -2515,6 +2515,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return createdJob;
       });
       
+      // Send notifications to newly assigned crew (outside transaction)
+      if (assignedEmployeeIds && Array.isArray(assignedEmployeeIds) && assignedEmployeeIds.length > 0) {
+        const assigner = await storage.getUser(userId);
+        const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
+        const jobTitle = job.title || `Job #${job.id}`;
+        await notifyUsers(assignedEmployeeIds, {
+          companyId: company.id,
+          type: 'job_assigned',
+          title: 'New Job Assignment',
+          body: `${assignerName} assigned you to job: ${jobTitle}`,
+          entityType: 'job',
+          entityId: job.id,
+          linkUrl: `/jobs/${job.id}`,
+        });
+      }
+      
       res.status(201).json(job);
     } catch (error) {
       console.error("Error creating job:", error);
@@ -2747,11 +2763,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Notify crew of new assignments via PATCH
-      if (assignedEmployeeIds !== undefined) {
-        const newlyAdded = assignedEmployeeIds.filter((id: string) => {
-          const existingCrew = (existingJob as any).assignedEmployeeIds || [];
-          return !existingCrew.includes(id);
-        });
+      if (assignedEmployeeIds !== undefined && Array.isArray(assignedEmployeeIds)) {
+        // Fetch actual existing crew from database
+        const existingCrewAssignments = await storage.getJobCrewAssignments(jobId);
+        const existingCrewIds = existingCrewAssignments.map((c: any) => c.userId);
+        const newlyAdded = assignedEmployeeIds.filter((id: string) => !existingCrewIds.includes(id));
         if (newlyAdded.length > 0) {
           const assigner = await storage.getUser(userId);
           const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';

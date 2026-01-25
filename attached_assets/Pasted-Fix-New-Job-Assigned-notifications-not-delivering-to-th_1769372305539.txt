@@ -1,0 +1,120 @@
+Fix “New Job Assigned” notifications not delivering to the TECH (only test notifications work)
+
+CURRENT
+- Notifications UI works and shows “Test Notification” on Owner account
+- Unread count works
+- When re-assigning a crew member to a job, the technician account does NOT receive any notification
+- This means the job-assignment trigger is not creating recipient-specific notification rows (or is creating them for the wrong user)
+
+GOAL
+When a technician is newly added to a job’s crew:
+- Create a notification row for that technician’s userId (NOT the owner)
+- Technician sees it immediately in Notifications inbox
+- Unread dot/count updates on tech account
+- No refresh required
+- No success toasts/popups
+- No console errors
+- RBAC is enforced (tech only sees their own notifications + assigned-job entities)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULES / NON-NEGOTIABLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- DO NOT refactor unrelated code
+- DO NOT change role permissions
+- DO NOT add fake notifications
+- DO NOT add global success toasts
+- Keep mobile UI unchanged
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — FIND THE REAL CREW ASSIGNMENT WRITE PATH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Locate the backend route/service that actually updates crew assignment.
+Examples could be:
+- POST /api/jobs/:id/crew
+- PUT /api/jobs/:id
+- PATCH /api/jobs/:id
+- POST /api/jobs/:id/assign
+or any service used by the crew assignment modal.
+
+Identify:
+- Where the “assigned technician(s)” are stored (job_assignments table OR jobs.assignedCrew array OR similar)
+- The exact userId(s) being added
+
+DO NOT guess. Use the actual code path.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — ADD NOTIFICATION CREATION EXACTLY AT THE MOMENT OF ASSIGNMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Implement notification creation inside the crew assignment update logic:
+
+Trigger:
+- Only when a technician is NEWLY added (diff oldCrew vs newCrew)
+Recipients:
+- Newly added technicians ONLY
+- One row per recipient user
+
+Notification payload:
+- type: "job_assigned"
+- title: "New job assigned"
+- body: include customer name or address (safe one-liner)
+- entityType: "job"
+- entityId: jobId
+- linkUrl: "/jobs/:jobId"
+- recipientUserId: newlyAddedTechUserId
+- companyId: job.companyId (or user companyId, whichever the app uses)
+
+IMPORTANT:
+- If the assigned user is not role=Technician, do NOT notify (avoid office spam)
+- Do NOT notify existing crew already on the job
+- Do NOT create duplicates
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — IDENTITY + RBAC VALIDATION (MOST LIKELY BUG)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This failure strongly suggests one of these issues. Fix whichever is true:
+
+A) Wrong recipientUserId is being saved
+- Verify the inserted notification row uses the TECH’s userId, not the current userId (owner)
+
+B) Crew assignment stores employeeId vs userId mismatch
+- If crew uses “employee.id” but notifications require “users.id”, map correctly
+- Ensure recipientUserId always matches the authenticated user’s id field used in /api/notifications queries
+
+C) Notification GET route filters by companyId incorrectly
+- Ensure tech account’s /api/notifications returns rows where recipientUserId = currentUser.id
+- companyId filter must match the tech’s companyId as stored
+- Do NOT accidentally require owner role for notifications
+
+D) Assignment route never calls the notification helper
+- Ensure the route that actually writes crew changes is where notifications are created (not a UI-only handler)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — ADD MINIMAL, TEMPORARY SERVER LOGGING (REMOVE AFTER)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add logs ONLY around this flow (then remove):
+- Before update: jobId, oldCrew ids
+- After update: newCrew ids
+- newlyAddedTechUserIds array
+- For each created notification: recipientUserId + inserted notification id
+
+Do NOT spam logs elsewhere.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5 — VERIFY WITH A REAL TEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Test procedure:
+1) Log in as Owner, assign Tech A to Job X
+2) Confirm DB has a notification row where recipientUserId = Tech A’s userId
+3) Log in as Tech A, open Notifications
+4) See “New job assigned” item, unread dot visible
+5) Tap it -> navigates to /jobs/:jobId and marks read
+6) Unread badge updates correctly
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Tech receives job_assigned notification reliably on assignment
+- Owner does NOT receive the tech notification
+- No duplicate notifications when saving without changes
+- No console errors, no success toasts
+- Mobile UI unchanged
