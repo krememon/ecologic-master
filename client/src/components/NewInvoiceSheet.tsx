@@ -8,10 +8,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   User, Calendar, ChevronRight, 
-  Plus, Search, X, Tag, List, Trash2, DollarSign, Percent, Loader2, Check
+  Plus, Search, X, Tag, List, Percent, Loader2, Check
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { TimeWheelPicker } from "./TimeWheelPicker";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
@@ -21,6 +19,7 @@ import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 interface LineItem {
   name: string;
   description: string;
+  taskCode: string;
   quantity: string;
   unitPriceCents: number;
   priceDisplay: string;
@@ -29,6 +28,8 @@ interface LineItem {
   taxId: number | null;
   taxRatePercentSnapshot: string | null;
   taxNameSnapshot: string | null;
+  saveToPriceBook: boolean;
+  priceBookItemId?: number | null;
 }
 
 interface CompanyTax {
@@ -95,14 +96,11 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [scheduledAt, setScheduledAt] = useState<{ date: string; time: string }>({ date: "", time: "" });
   const [tags, setTags] = useState<string[]>([]);
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    { name: "", description: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null }
-  ]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
 
   // Modal states
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
-  const [lineItemsModalOpen, setLineItemsModalOpen] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
   const [priceBookPickerOpen, setPriceBookPickerOpen] = useState(false);
@@ -274,9 +272,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
     setSelectedCustomer(null);
     setScheduledAt({ date: "", time: "" });
     setTags([]);
-    setLineItems([
-      { name: "", description: "", quantity: "1", unitPriceCents: 0, priceDisplay: "", unit: "each", taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null }
-    ]);
+    setLineItems([]);
     setCustomerSearch("");
     setTagInput("");
     setTaxPickerShowCreate(false);
@@ -333,40 +329,16 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
     }
   };
 
-  const addLineItem = () => {
-    setLineItems([...lineItems, { 
-      name: "", 
-      description: "", 
-      quantity: "1", 
-      unitPriceCents: 0, 
-      priceDisplay: "", 
-      unit: "each", 
-      taxable: false, 
-      taxId: null, 
-      taxRatePercentSnapshot: null, 
-      taxNameSnapshot: null 
-    }]);
+  const addLineItemFromPriceBook = (item: LineItem) => {
+    setLineItems(prev => [...prev, item]);
   };
 
-  const removeLineItem = (index: number) => {
-    if (lineItems.length > 1) {
-      setLineItems(lineItems.filter((_, i) => i !== index));
-    }
+  const removeLineItemByPriceBookId = (priceBookItemId: number) => {
+    setLineItems(prev => prev.filter(item => item.priceBookItemId !== priceBookItemId));
   };
 
   const updateLineItem = (index: number, updates: Partial<LineItem>) => {
     setLineItems(lineItems.map((item, i) => i === index ? { ...item, ...updates } : item));
-  };
-
-  const handlePriceChange = (index: number, value: string) => {
-    const numericValue = value.replace(/[^\d.]/g, '');
-    const parts = numericValue.split('.');
-    let formatted = parts[0];
-    if (parts.length > 1) {
-      formatted += '.' + parts[1].slice(0, 2);
-    }
-    const cents = Math.round((parseFloat(formatted) || 0) * 100);
-    updateLineItem(index, { priceDisplay: formatted, unitPriceCents: cents });
   };
 
   const setLineItemTax = (index: number, tax: CompanyTax | null) => {
@@ -444,7 +416,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 icon={List}
                 label="Add line items"
                 value={hasValidLineItems ? `${validLineItems.length} item${validLineItems.length !== 1 ? 's' : ''} • ${formatCurrency(subtotalCents)}` : undefined}
-                onClick={() => setLineItemsModalOpen(true)}
+                onClick={() => setPriceBookPickerOpen(true)}
                 required
               />
 
@@ -650,171 +622,6 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
               className="w-full"
             >
               {createCustomerMutation.isPending ? 'Creating...' : 'Add Customer'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Line Items Modal */}
-      <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
-        <DialogContent hideCloseButton className="max-w-md max-h-[85vh] p-0 flex flex-col rounded-2xl overflow-hidden">
-          <DialogHeader className="px-4 py-2 border-b border-slate-200 dark:border-slate-700 shrink-0">
-            <DialogTitle className="text-base">Line Items</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="flex-1 min-h-0 px-3 py-2">
-            <div className="space-y-3">
-              {lineItems.map((item, index) => (
-                <div key={index} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">Item {index + 1}</span>
-                    {lineItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeLineItem(index)}
-                        className="text-red-500 hover:text-red-600 p-0.5"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  
-                  <Input
-                    placeholder="Item name *"
-                    value={item.name}
-                    onChange={(e) => updateLineItem(index, { name: e.target.value })}
-                    className="h-9"
-                  />
-                  
-                  <Input
-                    placeholder="Description (optional)"
-                    value={item.description}
-                    onChange={(e) => updateLineItem(index, { description: e.target.value })}
-                    className="h-9 text-sm"
-                  />
-                  
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase tracking-wide">Qty</label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateLineItem(index, { quantity: e.target.value })}
-                        className="h-9"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase tracking-wide">Unit</label>
-                      <Select value={item.unit} onValueChange={(v) => updateLineItem(index, { unit: v })}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="each">Each</SelectItem>
-                          <SelectItem value="hour">Hour</SelectItem>
-                          <SelectItem value="ft">Ft</SelectItem>
-                          <SelectItem value="sq_ft">Sq Ft</SelectItem>
-                          <SelectItem value="job">Job</SelectItem>
-                          <SelectItem value="day">Day</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 uppercase tracking-wide">Price</label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                        <Input
-                          placeholder="0.00"
-                          value={item.priceDisplay}
-                          onChange={(e) => handlePriceChange(index, e.target.value)}
-                          className="pl-6 h-9"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between py-1 px-1">
-                    <span className="text-sm text-slate-600 dark:text-slate-400">Taxable</span>
-                    <Switch
-                      checked={item.taxable}
-                      onCheckedChange={(checked) => {
-                        updateLineItem(index, { 
-                          taxable: checked,
-                          ...(checked ? {} : { taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null })
-                        });
-                      }}
-                    />
-                  </div>
-
-                  {item.taxable && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTaxPickerLineItemIndex(index);
-                        setTaxPickerOpen(true);
-                      }}
-                      className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-md text-sm"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Percent className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="text-slate-600 dark:text-slate-400 text-xs">
-                          {item.taxNameSnapshot ? `${item.taxNameSnapshot} (${item.taxRatePercentSnapshot}%)` : 'Select tax rate'}
-                        </span>
-                      </span>
-                      <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-                    </button>
-                  )}
-
-                  <div className="text-right text-xs font-medium text-slate-700 dark:text-slate-300 pt-1">
-                    Line Total: {formatCurrency(item.unitPriceCents * (parseFloat(item.quantity) || 1))}
-                  </div>
-                </div>
-              ))}
-
-              <div className="flex gap-2 pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addLineItem}
-                  className="flex-1 h-9"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Add Item
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPriceBookPickerOpen(true)}
-                  className="flex-1 h-9"
-                >
-                  <List className="h-3.5 w-3.5 mr-1.5" />
-                  Price Book
-                </Button>
-              </div>
-            </div>
-          </ScrollArea>
-          <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
-            <div className="flex justify-between text-xs">
-              <span className="text-slate-500">Subtotal</span>
-              <span className="font-medium">{formatCurrency(subtotalCents)}</span>
-            </div>
-            {taxCents > 0 && (
-              <div className="flex justify-between text-xs mt-0.5">
-                <span className="text-slate-500">Tax</span>
-                <span className="font-medium">{formatCurrency(taxCents)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm font-semibold mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800">
-              <span>Total</span>
-              <span>{formatCurrency(totalCents)}</span>
-            </div>
-            <Button
-              onClick={() => setLineItemsModalOpen(false)}
-              className="w-full mt-2 h-9"
-            >
-              Done
             </Button>
           </div>
         </DialogContent>
@@ -1048,33 +855,9 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       <PriceBookPickerModal
         open={priceBookPickerOpen}
         onOpenChange={setPriceBookPickerOpen}
-        existingItems={lineItems.map(li => ({
-          ...li,
-          taskCode: "",
-          saveToPriceBook: false,
-          priceBookItemId: null,
-        }))}
-        onAddItem={(item) => {
-          const newItem: LineItem = {
-            name: item.name,
-            description: item.description || "",
-            quantity: "1",
-            unitPriceCents: item.unitPriceCents || 0,
-            priceDisplay: ((item.unitPriceCents || 0) / 100).toFixed(2),
-            unit: item.unit || "each",
-            taxable: false,
-            taxId: null,
-            taxRatePercentSnapshot: null,
-            taxNameSnapshot: null,
-          };
-          
-          const existingNonEmpty = lineItems.filter(li => li.name.trim());
-          if (existingNonEmpty.length === 0) {
-            setLineItems([newItem]);
-          } else {
-            setLineItems([...existingNonEmpty, newItem]);
-          }
-        }}
+        existingItems={lineItems}
+        onAddItem={addLineItemFromPriceBook}
+        onRemoveItemByPriceBookId={removeLineItemByPriceBookId}
       />
     </>
   );

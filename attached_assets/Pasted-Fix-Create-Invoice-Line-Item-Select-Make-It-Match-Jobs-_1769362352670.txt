@@ -1,0 +1,79 @@
+Fix Create Invoice Line Item Select: Make It Match Jobs/Estimates (Same UI + Same Flow)
+
+CURRENT
+In Create Invoice, the “Add line items” experience does NOT match Jobs/Estimates.
+Jobs/Estimates have a clean “Add Line Items” sheet:
+- Search price book
+- Tap items to add
+- “Create new line item”
+- Big Done button
+Create Invoice currently uses a different UI/flow.
+
+GOAL
+Make Create Invoice line item selection look and work EXACTLY like Jobs/Estimates:
+- Reuse the SAME line item selection component/sheet
+- Same search + list UI
+- Same selection behavior
+- Same Done/Cancel behavior
+- Same “Create new line item” entry
+Result: invoices feel consistent across EcoLogic.
+
+NON-NEGOTIABLES
+- Do NOT redesign the Jobs/Estimates selector
+- Reuse existing components (do not fork a second version)
+- No console errors
+- Mobile-first
+- Hidden-not-disabled rules remain intact
+
+REQUIRED BEHAVIOR (MATCH JOBS/ESTIMATES)
+1) When user taps “Add line items” in Create Invoice:
+- Open the SAME “Add Line Items” bottom sheet/modal used by Jobs/Estimates
+
+2) Inside the sheet:
+- Search input: “Search price book…”
+- Scroll list of price book items
+- Each item shows:
+  - Item name
+  - Price
+  - Unit (per each / per job)
+- Tap item selects it (and adds to selection)
+- Bottom action:
+  - “+ Create new line item”
+- Primary button: “Done”
+
+3) Selection logic:
+- Allow selecting multiple items before tapping Done
+- On Done:
+  - Selected items are added to the invoice draft
+  - The invoice totals update correctly
+- On Cancel/Close:
+  - Do not apply changes
+
+4) Data consistency:
+- Use the same price book source endpoint as Jobs/Estimates
+- Do not create a new price book system for invoices
+- Reuse existing item model fields (name, description, unit, price, taxable)
+
+IMPLEMENTATION NOTES (IMPORTANT)
+- Find the existing component used by Jobs/Estimates for line item selection
+  (the “Add Line Items” sheet in your screenshot)
+- Refactor if needed so it can be shared:
+  - Pass in “onConfirm(selectedItems)” callback
+  - Pass in “initialSelectedItems” if needed
+  - Keep component styling identical
+- Update Invoice create flow to call this same component
+- Ensure invoice draft state updates without page refresh
+
+EDGE CASES
+- If price book is empty:
+  - Show friendly empty state + still allow “Create new line item”
+- If user selects items then removes them later:
+  - Totals recalc correctly
+- Taxable toggle should behave the same as Jobs/Estimates
+
+SUCCESS CRITERIA
+- Invoice line item selector is visually identical to Jobs/Estimates
+- User experience is identical (search, select, done)
+- No duplicate modal designs
+- Invoice totals and line items save correctly
+- No console errors
