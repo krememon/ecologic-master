@@ -909,7 +909,19 @@ export class DatabaseStorage implements IStorage {
       .from(jobs)
       .leftJoin(clients, eq(jobs.clientId, clients.id))
       .where(eq(jobs.id, id));
-    return job;
+    
+    if (!job) return undefined;
+    
+    // Check if job has time logs (can't be deleted)
+    const [timeLogCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(timeLogs)
+      .where(eq(timeLogs.jobId, id));
+    
+    return {
+      ...job,
+      canDelete: (timeLogCount?.count || 0) === 0,
+    };
   }
 
   async createJob(jobData: InsertJob): Promise<Job> {
