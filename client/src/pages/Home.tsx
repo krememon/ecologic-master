@@ -372,7 +372,7 @@ export default function Home() {
 
   const statusStripItems: Array<{ icon: React.ElementType; value: number; label: string; route: string }> = [];
   
-  if (!isEstimator) {
+  if (!isEstimator && !isTechnician) {
     statusStripItems.push({ icon: Calendar, value: jobsToday.length, label: 'Jobs Today', route: '/jobs' });
     statusStripItems.push({ icon: Briefcase, value: openJobs.length, label: 'Open Jobs', route: '/jobs' });
   }
@@ -605,35 +605,37 @@ export default function Home() {
             )}
           </div>
 
-          <div className="px-4 mb-6">
-            <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-              Business Snapshot
-            </h2>
-            <div className="space-y-2">
-              <SnapshotRow
-                icon={Briefcase}
-                label="Open Jobs"
-                value={openJobs.length}
-                onClick={() => navigate('/jobs')}
-              />
-              {canSeeEstimates && (
+          {!isTechnician && (
+            <div className="px-4 mb-6">
+              <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+                Business Snapshot
+              </h2>
+              <div className="space-y-2">
                 <SnapshotRow
-                  icon={FileText}
-                  label="Open Estimates"
-                  value={openEstimates.length}
-                  onClick={() => navigate('/jobs?tab=estimates')}
+                  icon={Briefcase}
+                  label="Open Jobs"
+                  value={openJobs.length}
+                  onClick={() => navigate('/jobs')}
                 />
-              )}
-              {isAdmin && (
-                <SnapshotRow
-                  icon={DollarSign}
-                  label="Outstanding Invoices"
-                  value={outstandingInvoices.length}
-                  onClick={() => navigate('/invoicing')}
-                />
-              )}
+                {canSeeEstimates && (
+                  <SnapshotRow
+                    icon={FileText}
+                    label="Open Estimates"
+                    value={openEstimates.length}
+                    onClick={() => navigate('/jobs?tab=estimates')}
+                  />
+                )}
+                {isAdmin && (
+                  <SnapshotRow
+                    icon={DollarSign}
+                    label="Outstanding Invoices"
+                    value={outstandingInvoices.length}
+                    onClick={() => navigate('/invoicing')}
+                  />
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {isOwner && (
             <div className="px-4 mb-4">
