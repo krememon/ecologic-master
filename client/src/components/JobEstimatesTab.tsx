@@ -26,6 +26,7 @@ import { TimeWheelPicker } from "./TimeWheelPicker";
 import type { Customer, Estimate } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import { formatEstimateRequestedSchedule } from "@/utils/scheduleDate";
+import { formatScheduleDisplay } from "@/utils/formatScheduleTimeRange";
 
 interface LineItem {
   name: string;
@@ -800,7 +801,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             <InfoRow
               icon={Calendar}
               label="Add schedule"
-              value={schedule.date ? `${schedule.date}${schedule.time ? ` at ${schedule.time}` : ''}` : undefined}
+              value={schedule.date ? formatScheduleDisplay(schedule.date, schedule.time) : undefined}
               onClick={() => setScheduleModalOpen(true)}
               testId="row-add-schedule"
             />

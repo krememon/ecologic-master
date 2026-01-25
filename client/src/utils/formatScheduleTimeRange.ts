@@ -31,6 +31,26 @@ export function formatScheduleTimeRange(
   return '';
 }
 
+export function formatScheduleDisplay(
+  date: string | null | undefined,
+  startTime: string | null | undefined,
+  endTime?: string | null | undefined
+): string {
+  if (!date) return '';
+  
+  const formattedStart = formatTimeToDisplay(startTime);
+  const formattedEnd = formatTimeToDisplay(endTime);
+  
+  let result = date;
+  if (formattedStart) {
+    result += ` at ${formattedStart}`;
+    if (formattedEnd) {
+      result += ` – ${formattedEnd}`;
+    }
+  }
+  return result;
+}
+
 export function formatScheduleDateForDisplay(rawDate: string | Date | null | undefined): string {
   if (!rawDate) return '';
   

@@ -20,6 +20,7 @@ import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import { TimeWheelPicker } from "./TimeWheelPicker";
 import type { Customer } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
+import { formatScheduleDisplay } from "@/utils/formatScheduleTimeRange";
 
 interface Employee {
   id: string;
@@ -732,7 +733,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
             <InfoRow
               icon={Calendar}
               label="Add schedule"
-              value={schedule.date ? `${schedule.date}${schedule.startTime ? ` at ${schedule.startTime}` : ''}${schedule.endTime ? ` - ${schedule.endTime}` : ''}` : undefined}
+              value={schedule.date ? formatScheduleDisplay(schedule.date, schedule.startTime, schedule.endTime) : undefined}
               onClick={() => setScheduleModalOpen(true)}
               testId="row-add-schedule"
             />
