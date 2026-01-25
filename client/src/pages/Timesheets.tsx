@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Clock, ChevronLeft, ChevronRight, Loader2, AlertCircle, Calendar, User } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, parseISO } from "date-fns";
 import { useCan } from "@/hooks/useCan";
 
 interface TimeEntry {
@@ -63,8 +64,15 @@ function getWeekDates(date: Date): { startDate: string; endDate: string; label: 
 
 export default function Timesheets() {
   const { role } = useCan();
+  const [, navigate] = useLocation();
   const [weekOffset, setWeekOffset] = useState(0);
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
+
+  useEffect(() => {
+    if (role === "ESTIMATOR" || role === "DISPATCHER") {
+      navigate("/");
+    }
+  }, [role, navigate]);
 
   const currentDate = useMemo(() => {
     const now = new Date();

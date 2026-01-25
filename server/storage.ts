@@ -84,7 +84,7 @@ import {
   type InsertSignatureRequest,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, gte, lte, isNotNull } from "drizzle-orm";
 import crypto from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations

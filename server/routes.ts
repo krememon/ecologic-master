@@ -1189,8 +1189,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const role = member.role as UserRole;
 
-      // Estimators cannot access timesheets
-      if (role === 'ESTIMATOR') {
+      // Estimators and Dispatchers cannot access timesheets
+      if (role === 'ESTIMATOR' || role === 'DISPATCHER') {
         return res.status(403).json({ error: 'Access denied' });
       }
 
