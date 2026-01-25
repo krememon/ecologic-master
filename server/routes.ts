@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly } from "./notificationService";
+import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice } from "./notificationService";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
@@ -2662,6 +2662,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Remove schedule if date cleared
           await storage.deleteScheduleItem(existingScheduleItems[0].id);
         }
+        
+        // Check if schedule actually changed and send notification
+        const normalizedTime = normalizeTimeTo15Min(scheduleStartTime || '09:00');
+        const normalizedEndTime = scheduleEndTime ? normalizeTimeTo15Min(scheduleEndTime) : null;
+        // Normalize old date to YYYY-MM-DD string for comparison
+        const oldDateStr = existingJob.startDate ? (typeof existingJob.startDate === 'string' ? existingJob.startDate.split('T')[0] : existingJob.startDate.toISOString().split('T')[0]) : null;
+        const oldTime = existingJob.scheduledTime || null;
+        const oldEndTime = existingJob.scheduledEndTime || null;
+        const newDateStr = scheduleDate || null;
+        const newTime = scheduleDate ? normalizedTime : null;
+        const newEndTime = normalizedEndTime;
+        
+        const scheduleChanged = oldDateStr !== newDateStr || oldTime !== newTime || oldEndTime !== newEndTime;
+        if (scheduleChanged && newDateStr) {
+          const dateFormatted = new Date(newDateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const timeFormatted = newTime || '9:00 AM';
+          await notifyJobCrewAndOffice(jobId, company.id, {
+            type: 'job_rescheduled',
+            title: 'Job Rescheduled',
+            body: `${existingJob.title || `Job #${jobId}`} rescheduled to ${dateFormatted} at ${timeFormatted}`,
+            entityType: 'job',
+            entityId: jobId,
+            linkUrl: `/jobs/${jobId}`,
+          });
+        }
       }
       
       // Update crew assignments if provided
@@ -3175,6 +3200,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`[ScheduleSave]`, { jobId, scheduledDate, scheduledTime: timeStr, scheduledEndTime: endTimeStr, timezone });
+      
+      // Check if schedule actually changed and send notification
+      // Normalize old date to YYYY-MM-DD string for comparison
+      const oldDateStr = job.startDate ? (typeof job.startDate === 'string' ? job.startDate.split('T')[0] : job.startDate.toISOString().split('T')[0]) : null;
+      const oldTime = job.scheduledTime || null;
+      const oldEndTime = job.scheduledEndTime || null;
+      const newDateStr = scheduledDate || null;
+      const newTime = scheduledDate ? timeStr : null;
+      const newEndTime = endTimeStr;
+      
+      const scheduleChanged = oldDateStr !== newDateStr || oldTime !== newTime || oldEndTime !== newEndTime;
+      if (scheduleChanged && newDateStr) {
+        const dateFormatted = new Date(newDateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const timeFormatted = newTime || '9:00 AM';
+        await notifyJobCrewAndOffice(jobId, company.id, {
+          type: 'job_rescheduled',
+          title: 'Job Rescheduled',
+          body: `${job.title || `Job #${jobId}`} rescheduled to ${dateFormatted} at ${timeFormatted}`,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs/${jobId}`,
+        });
+      }
+      
       res.json(updated);
     } catch (error) {
       console.error("Error scheduling job:", error);
