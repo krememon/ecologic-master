@@ -595,6 +595,7 @@ export default function Home() {
                     key={job.id}
                     title={job.title || `Job #${job.id}`}
                     status={job.status}
+                    isPaid={(job as any).isPaid || job.paymentStatus === 'paid'}
                     onClick={() => navigate(`/jobs/${job.id}`)}
                   />
                 ))}
@@ -742,6 +743,7 @@ export default function Home() {
                       title={job.title || `Job #${job.id}`}
                       subtitle={dateLabel}
                       status={job.status}
+                      isPaid={(job as any).isPaid || job.paymentStatus === 'paid'}
                       onClick={() => navigate(`/jobs/${job.id}`)}
                     />
                   );
@@ -1005,14 +1007,17 @@ function JobCard({
   title, 
   subtitle,
   status,
+  isPaid,
   onClick 
 }: { 
   title: string; 
   subtitle?: string;
   status: string;
+  isPaid?: boolean;
   onClick: () => void;
 }) {
   const statusStyles: Record<string, { bg: string; text: string }> = {
+    paid: { bg: 'bg-green-100 dark:bg-green-900/50', text: 'text-green-700 dark:text-green-300' },
     new: { bg: 'bg-blue-100 dark:bg-blue-900/50', text: 'text-blue-700 dark:text-blue-300' },
     scheduled: { bg: 'bg-indigo-100 dark:bg-indigo-900/50', text: 'text-indigo-700 dark:text-indigo-300' },
     in_progress: { bg: 'bg-amber-100 dark:bg-amber-900/50', text: 'text-amber-700 dark:text-amber-300' },
@@ -1020,8 +1025,9 @@ function JobCard({
     active: { bg: 'bg-emerald-100 dark:bg-emerald-900/50', text: 'text-emerald-700 dark:text-emerald-300' },
   };
 
-  const style = statusStyles[status] || statusStyles.pending;
-  const displayStatus = status.replace(/_/g, ' ');
+  const effectiveStatus = isPaid ? 'paid' : status;
+  const style = statusStyles[effectiveStatus] || statusStyles.pending;
+  const displayStatus = effectiveStatus.replace(/_/g, ' ');
 
   return (
     <Card 

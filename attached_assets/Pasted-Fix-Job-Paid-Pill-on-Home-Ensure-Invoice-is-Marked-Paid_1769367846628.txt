@@ -1,0 +1,68 @@
+Fix Job Paid Pill on Home: Ensure Invoice is Marked Paid + Jobs API Returns isPaid/paymentStatus
+
+CURRENT
+After cash/check payment, Home still shows job pill “Pending”.
+Also “Outstanding Invoices” still shows 1, which suggests paid state is not reflected in API data.
+
+GOAL
+When an invoice is paid (cash/check):
+1) Invoice must persist as PAID in DB
+2) Jobs API must return a reliable paid indicator (isPaid or paymentStatus)
+3) Home “Today” list must render Paid green pill from that indicator
+4) KPIs must update: Outstanding invoices decreases, Open jobs decreases
+
+STEP 1 — Verify payment persistence (backend)
+In the cash/check payment handler:
+- Confirm it updates the invoice row in the DB:
+  - invoice.status = 'paid' OR invoice.paymentStatus = 'paid'
+  - invoice.paidAt = now (if supported)
+- Return the updated invoice from the endpoint
+- Ensure GET /api/invoices shows it as paid afterward
+
+STEP 2 — Make Jobs API include paid state (single source of truth)
+Update GET /api/jobs response to include:
+- job.isPaid (boolean)
+AND/OR
+- job.paymentStatus ('paid' | 'unpaid')
+
+Compute server-side (preferred):
+- job.isPaid = TRUE if there exists a paid invoice linked to that jobId
+OR if job.paymentStatus is stored as paid
+
+DO NOT rely on frontend guessing.
+
+STEP 3 — Update Home “Today” pill rendering
+Home Today list currently shows “Pending”.
+Change it so:
+- If job.isPaid === true OR job.paymentStatus === 'paid':
+  - show green pill “Paid”
+- Else:
+  - show “Pending” or whatever current workflow pill is
+
+IMPORTANT: Home should use payment state, not workflow status.
+
+STEP 4 — Fix KPI queries to match the same paid logic
+- Outstanding Invoices KPI must exclude invoices with status/paymentStatus = 'paid'
+- Open Jobs KPI must exclude jobs that are paid (per earlier requirement)
+
+STEP 5 — Force refresh after payment success
+After payment endpoint returns success:
+- Invalidate/refetch:
+  - invoices query
+  - jobs query
+  - homepage stats query
+So UI updates immediately without manual refresh
+
+DEBUGGING (TEMPORARY BUT REQUIRED)
+Add targeted logs for one test payment:
+- On payment success: log invoiceId, jobId, updated invoice status
+- On GET /api/jobs: log isPaid/paymentStatus for that jobId
+Remove logs after confirmed.
+
+SUCCESS CRITERIA
+- After cash/check payment:
+  - Job pill flips to green “Paid” on Home Today list
+  - Outstanding invoices count drops
+  - Open jobs count drops
+- No manual refresh required
+- No console errors
