@@ -93,10 +93,6 @@ function LeadDetailsContent({ leadId }: LeadDetailsProps) {
     );
   }
 
-  console.log("[LeadDetails] lead:", lead);
-  console.log("[LeadDetails] error:", error);
-  console.log("[LeadDetails] customer:", lead?.customer);
-
   if (error || !lead) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
