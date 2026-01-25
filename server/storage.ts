@@ -26,6 +26,7 @@ import {
   serviceCatalogItems,
   companyTaxes,
   leads,
+  timeLogs,
   type User,
   type UpsertUser,
   type Company,
@@ -68,6 +69,7 @@ import {
   type InsertCompanyTax,
   type Lead,
   type InsertLead,
+  type TimeLog,
   approvalWorkflows,
   approvalSignatures,
   approvalHistory,
@@ -290,6 +292,13 @@ export interface IStorage {
   createLead(companyId: number, lead: InsertLead): Promise<Lead>;
   updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
   deleteLead(id: number): Promise<void>;
+  
+  // Time log operations
+  getActiveTimeLog(userId: string, companyId: number): Promise<TimeLog | undefined>;
+  getUserTimeLogsToday(userId: string, companyId: number, date: string): Promise<TimeLog[]>;
+  getCompanyTimeLogsToday(companyId: number, date: string): Promise<TimeLog[]>;
+  clockIn(userId: string, companyId: number): Promise<TimeLog>;
+  clockOut(userId: string, companyId: number): Promise<TimeLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2382,6 +2391,78 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLead(id: number): Promise<void> {
     await db.delete(leads).where(eq(leads.id, id));
+  }
+  
+  // Time log operations
+  async getActiveTimeLog(userId: string, companyId: number): Promise<TimeLog | undefined> {
+    const [log] = await db
+      .select()
+      .from(timeLogs)
+      .where(
+        and(
+          eq(timeLogs.userId, userId),
+          eq(timeLogs.companyId, companyId),
+          sql`${timeLogs.clockOutAt} IS NULL`
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt))
+      .limit(1);
+    return log;
+  }
+  
+  async getUserTimeLogsToday(userId: string, companyId: number, date: string): Promise<TimeLog[]> {
+    return await db
+      .select()
+      .from(timeLogs)
+      .where(
+        and(
+          eq(timeLogs.userId, userId),
+          eq(timeLogs.companyId, companyId),
+          eq(timeLogs.date, date)
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt));
+  }
+  
+  async getCompanyTimeLogsToday(companyId: number, date: string): Promise<TimeLog[]> {
+    return await db
+      .select()
+      .from(timeLogs)
+      .where(
+        and(
+          eq(timeLogs.companyId, companyId),
+          eq(timeLogs.date, date)
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt));
+  }
+  
+  async clockIn(userId: string, companyId: number): Promise<TimeLog> {
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    
+    const [log] = await db
+      .insert(timeLogs)
+      .values({
+        userId,
+        companyId,
+        clockInAt: now,
+        date: dateStr,
+      })
+      .returning();
+    return log;
+  }
+  
+  async clockOut(userId: string, companyId: number): Promise<TimeLog | undefined> {
+    const activeLog = await this.getActiveTimeLog(userId, companyId);
+    if (!activeLog) return undefined;
+    
+    const [log] = await db
+      .update(timeLogs)
+      .set({ clockOutAt: new Date() })
+      .where(eq(timeLogs.id, activeLog.id))
+      .returning();
+    return log;
   }
 }
 

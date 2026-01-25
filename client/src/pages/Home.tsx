@@ -1,10 +1,12 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useCan } from "@/hooks/useCan";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Briefcase, 
   FileText, 
@@ -14,7 +16,10 @@ import {
   Loader2,
   Calendar,
   Users,
-  ClipboardList
+  ClipboardList,
+  Clock,
+  Play,
+  Square
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
@@ -31,6 +36,21 @@ interface LeadWithCustomer extends Lead {
 interface InvoiceWithDetails extends Invoice {
   customer?: Customer | null;
 }
+
+interface TechnicianTimeData {
+  role: 'technician';
+  isClockedIn: boolean;
+  clockedInAt: string | null;
+  hoursToday: number;
+}
+
+interface ManagerTimeData {
+  role: 'manager';
+  totalHoursToday: number;
+  activeTechCount: number;
+}
+
+type TimeData = TechnicianTimeData | ManagerTimeData;
 
 export default function Home() {
   const { toast } = useToast();
@@ -70,6 +90,42 @@ export default function Home() {
   const { data: invoices = [], isLoading: invoicesLoading, isError: invoicesError } = useQuery<InvoiceWithDetails[]>({
     queryKey: ["/api/invoices"],
     enabled: isAuthenticated && (role === 'OWNER' || role === 'SUPERVISOR'),
+  });
+
+  const queryClient = useQueryClient();
+  
+  const { data: timeData, isLoading: timeLoading, isError: timeError } = useQuery<TimeData>({
+    queryKey: ["/api/time/today"],
+    enabled: isAuthenticated,
+    refetchInterval: 60000,
+  });
+
+  const clockInMutation = useMutation({
+    mutationFn: () => apiRequest('POST', '/api/time/clock-in'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+    },
+    onError: () => {
+      toast({
+        title: "Unable to clock in",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const clockOutMutation = useMutation({
+    mutationFn: () => apiRequest('POST', '/api/time/clock-out'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+    },
+    onError: () => {
+      toast({
+        title: "Unable to clock out",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    },
   });
 
   const hasDataError = jobsError || (role !== 'TECHNICIAN' && leadsError) || (role !== 'TECHNICIAN' && estimatesError) || ((role === 'OWNER' || role === 'SUPERVISOR') && invoicesError);
@@ -285,6 +341,115 @@ export default function Home() {
                 />
               ))}
             </div>
+          </div>
+
+          <div className="px-4 mb-6">
+            {timeLoading ? (
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4 flex items-center justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                </CardContent>
+              </Card>
+            ) : timeError ? (
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                  Unable to load time data
+                </CardContent>
+              </Card>
+            ) : timeData?.role === 'technician' ? (
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${timeData.isClockedIn ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        <Clock className={`h-5 w-5 ${timeData.isClockedIn ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-slate-900 dark:text-white">Time Today</h3>
+                        <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                          {timeData.hoursToday.toFixed(1)} hrs
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {timeData.isClockedIn && (
+                        <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
+                          Active
+                        </span>
+                      )}
+                      {timeData.isClockedIn ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => clockOutMutation.mutate()}
+                          disabled={clockOutMutation.isPending}
+                          className="border-slate-300 dark:border-slate-700"
+                        >
+                          {clockOutMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Square className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                              Clock Out
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => clockInMutation.mutate()}
+                          disabled={clockInMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          {clockInMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                              Clock In
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : timeData?.role === 'manager' ? (
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                      <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-slate-900 dark:text-white">Labor Today</h3>
+                      <div className="flex items-center gap-4 mt-1">
+                        <div>
+                          <span className="text-lg font-semibold text-slate-900 dark:text-white">
+                            {timeData.totalHoursToday.toFixed(1)}
+                          </span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">hrs logged</span>
+                        </div>
+                        <div className="text-slate-300 dark:text-slate-700">|</div>
+                        <div>
+                          <span className="text-lg font-semibold text-slate-900 dark:text-white">
+                            {timeData.activeTechCount}
+                          </span>
+                          <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">
+                            {timeData.activeTechCount === 1 ? 'tech' : 'techs'} active
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
 
           <div className="px-4 mb-6">

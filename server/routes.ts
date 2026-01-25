@@ -936,6 +936,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // =====================
+  // Time tracking endpoints
+  // =====================
+  
+  // Get time data for today (role-aware response)
+  app.get('/api/time/today', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const role = member.role as UserRole;
+      const now = Date.now();
+      
+      // Technicians only see their own data
+      if (role === 'TECHNICIAN') {
+        const logs = await storage.getUserTimeLogsToday(userId, member.companyId, today);
+        const activeLog = logs.find(log => !log.clockOutAt);
+        
+        // Calculate total hours
+        let totalMinutes = 0;
+        for (const log of logs) {
+          const start = new Date(log.clockInAt).getTime();
+          const end = log.clockOutAt ? new Date(log.clockOutAt).getTime() : now;
+          totalMinutes += (end - start) / 60000;
+        }
+        
+        return res.json({
+          role: 'technician',
+          isClockedIn: !!activeLog,
+          clockedInAt: activeLog?.clockInAt || null,
+          hoursToday: Math.round(totalMinutes / 60 * 100) / 100,
+        });
+      }
+      
+      // Owner, Supervisor, Dispatcher see aggregate data
+      const allLogs = await storage.getCompanyTimeLogsToday(member.companyId, today);
+      
+      // Get unique users currently clocked in
+      const clockedInUsers = new Set<string>();
+      let totalMinutes = 0;
+      
+      for (const log of allLogs) {
+        const start = new Date(log.clockInAt).getTime();
+        const end = log.clockOutAt ? new Date(log.clockOutAt).getTime() : now;
+        totalMinutes += (end - start) / 60000;
+        
+        if (!log.clockOutAt) {
+          clockedInUsers.add(log.userId);
+        }
+      }
+      
+      return res.json({
+        role: 'manager',
+        totalHoursToday: Math.round(totalMinutes / 60 * 100) / 100,
+        activeTechCount: clockedInUsers.size,
+      });
+    } catch (error: any) {
+      console.error('Error getting time data:', error);
+      res.status(500).json({ error: 'Failed to get time data' });
+    }
+  });
+  
+  // Clock in (Technicians only)
+  app.post('/api/time/clock-in', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      // Only technicians can clock in
+      if (member.role !== 'TECHNICIAN') {
+        return res.status(403).json({ error: 'Only technicians can clock in' });
+      }
+      
+      // Check if already clocked in
+      const activeLog = await storage.getActiveTimeLog(userId, member.companyId);
+      if (activeLog) {
+        return res.status(400).json({ error: 'Already clocked in' });
+      }
+      
+      const log = await storage.clockIn(userId, member.companyId);
+      console.log('[Time] clocked in', { userId, logId: log.id });
+      res.json({ success: true, clockedInAt: log.clockInAt });
+    } catch (error: any) {
+      console.error('Error clocking in:', error);
+      res.status(500).json({ error: 'Unable to clock in' });
+    }
+  });
+  
+  // Clock out (Technicians only)
+  app.post('/api/time/clock-out', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      // Only technicians can clock out
+      if (member.role !== 'TECHNICIAN') {
+        return res.status(403).json({ error: 'Only technicians can clock out' });
+      }
+      
+      const log = await storage.clockOut(userId, member.companyId);
+      if (!log) {
+        return res.status(400).json({ error: 'Not currently clocked in' });
+      }
+      
+      console.log('[Time] clocked out', { userId, logId: log.id });
+      res.json({ success: true, clockedOutAt: log.clockOutAt });
+    } catch (error: any) {
+      console.error('Error clocking out:', error);
+      res.status(500).json({ error: 'Unable to clock out' });
+    }
+  });
+
   // Set company industry and seed price book presets (Owner only - onboarding)
   app.patch('/api/company/industry', isAuthenticated, async (req: any, res) => {
     try {
