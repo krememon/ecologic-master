@@ -161,13 +161,15 @@ export default function Home() {
         return isAfter(createdDate, sevenDaysAgo);
       });
 
-      const leadsWon7d = leadsCreated7d.filter(lead => lead.status === 'won').length;
-      const totalLeads7d = leadsCreated7d.length;
-      const winRate7d = totalLeads7d > 0 ? Math.round((leadsWon7d / totalLeads7d) * 100) : null;
+      const leadsWon7dCount = leadsCreated7d.filter(lead => lead.status === 'won').length;
+      const leadsCreated7dCount = leadsCreated7d.length;
+      const winRate7d = leadsCreated7dCount > 0 ? Math.round((leadsWon7dCount / leadsCreated7dCount) * 100) : null;
 
       return {
         revenue7d,
         invoicesPaid7d,
+        leadsCreated7d: leadsCreated7dCount,
+        leadsWon7d: leadsWon7dCount,
         winRate7d,
         hasData: true,
       };
@@ -324,36 +326,41 @@ export default function Home() {
 
           {isOwner && (
             <div className="px-4 mb-6">
-              <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-                This Week
-              </h2>
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 overflow-hidden">
-                <CardContent className="p-0">
+              <Card 
+                className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate('/leads')}
+              >
+                <CardContent className="p-5">
                   {pulseLoading ? (
-                    <div className="flex justify-center py-6">
+                    <div className="flex justify-center py-4">
                       <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
                     </div>
                   ) : pulseError ? (
-                    <div className="flex items-center justify-center gap-2 py-5 text-slate-400">
+                    <div className="flex items-center justify-center py-4 text-slate-400">
                       <span className="text-sm">Data unavailable</span>
                     </div>
                   ) : pulseMetrics ? (
-                    <div className="grid grid-cols-3 divide-x divide-slate-100 dark:divide-slate-800">
-                      <PulseCell
-                        label="Revenue"
-                        value={pulseMetrics.revenue7d > 0 ? `$${(pulseMetrics.revenue7d / 100).toLocaleString()}` : '$0'}
-                        onClick={() => navigate('/invoicing')}
-                      />
-                      <PulseCell
-                        label="Paid"
-                        value={pulseMetrics.invoicesPaid7d.toString()}
-                        onClick={() => navigate('/invoicing')}
-                      />
-                      <PulseCell
-                        label="Win Rate"
-                        value={pulseMetrics.winRate7d !== null ? `${pulseMetrics.winRate7d}%` : '—'}
-                        onClick={() => navigate('/leads')}
-                      />
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">
+                          Leads · This Week
+                        </p>
+                        <div className="flex gap-8">
+                          <div>
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                              {pulseMetrics.leadsCreated7d}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Created</p>
+                          </div>
+                          <div>
+                            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                              {pulseMetrics.leadsWon7d}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Won</p>
+                          </div>
+                        </div>
+                      </div>
+                      <WinRateRing percentage={pulseMetrics.winRate7d} />
                     </div>
                   ) : null}
                 </CardContent>
@@ -456,27 +463,51 @@ function SnapshotRow({
   );
 }
 
-function PulseCell({ 
-  label, 
-  value, 
-  onClick 
-}: { 
-  label: string; 
-  value: string; 
-  onClick: () => void;
-}) {
+function WinRateRing({ percentage }: { percentage: number | null }) {
+  if (percentage === null) {
+    return (
+      <div className="w-16 h-16 flex items-center justify-center">
+        <span className="text-sm text-slate-400">—</span>
+      </div>
+    );
+  }
+
+  const radius = 28;
+  const strokeWidth = 4;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
   return (
-    <button
-      onClick={onClick}
-      className="py-5 px-3 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-    >
-      <p className="text-xl font-semibold text-slate-900 dark:text-white">
-        {value}
-      </p>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-        {label}
-      </p>
-    </button>
+    <div className="relative w-16 h-16">
+      <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-slate-100 dark:text-slate-800"
+        />
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          className="text-emerald-500 dark:text-emerald-400"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {percentage}%
+        </span>
+      </div>
+    </div>
   );
 }
 

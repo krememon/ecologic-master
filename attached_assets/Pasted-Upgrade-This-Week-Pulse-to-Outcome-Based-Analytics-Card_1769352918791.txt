@@ -1,0 +1,98 @@
+Upgrade “This Week Pulse” to Outcome-Based Analytics Card (EcoLogic Style)
+
+CURRENT
+EcoLogic uses a simple “This Week Pulse” KPI card.
+User wants a more premium, outcome-based layout inspired by Housecall Pro,
+but without copying their dashboard or heavy chart style.
+
+GOAL
+Replace the existing “This Week Pulse” with a modern,
+outcome-focused analytics card that feels:
+- Clean
+- Tech-forward
+- Executive
+- Not like a dashboard
+
+This card must feel native to EcoLogic.
+
+━━━━━━━━━━━━━━━━━━
+RBAC (STRICT)
+━━━━━━━━━━━━━━━━━━
+- ONLY Owner/Admin can see this card
+- All other roles must not see it at all
+- Especially: Technicians must never see leads, estimates, or analytics
+
+━━━━━━━━━━━━━━━━━━
+CARD PLACEMENT
+━━━━━━━━━━━━━━━━━━
+- Lives where “This Week Pulse” currently is on the homepage
+- Below Business Snapshot
+- Above Upcoming (if present)
+
+━━━━━━━━━━━━━━━━━━
+CARD STRUCTURE
+━━━━━━━━━━━━━━━━━━
+
+CARD TITLE
+- “Leads · This Week” OR “Estimates · This Week”
+(Choose the one that best matches existing data availability)
+
+LEFT SIDE (PRIMARY)
+- Large numeric values:
+  - Created (count or $ value if available)
+  - Won (count or $ value)
+- Small muted labels
+- Optional:
+  - Win Rate percentage displayed as text
+
+RIGHT SIDE (SECONDARY – OPTIONAL)
+- Thin circular progress ring representing win rate
+- Subtle color
+- No labels inside ring except percentage
+- If ring cannot be rendered cleanly, OMIT it entirely
+
+━━━━━━━━━━━━━━━━━━
+DATA RULES
+━━━━━━━━━━━━━━━━━━
+- Use existing APIs only
+- Time range: last 7 days
+- Win Rate = Won / Created
+- If any metric is unavailable:
+  - Show “—”
+  - Do not break layout
+  - Do not hide entire card unless all data fails
+
+━━━━━━━━━━━━━━━━━━
+DESIGN RULES
+━━━━━━━━━━━━━━━━━━
+- No heavy charts
+- No legends
+- No axis
+- No animations
+- Soft card surface
+- Large numbers
+- Minimal copy
+- Calm SaaS feel
+
+━━━━━━━━━━━━━━━━━━
+INTERACTION
+━━━━━━━━━━━━━━━━━━
+- Card is tappable
+- Routes to Leads or Estimates page
+- No popups
+- No hover effects
+
+━━━━━━━━━━━━━━━━━━
+FAILURE HANDLING
+━━━━━━━━━━━━━━━━━━
+- Loading state: skeleton card
+- Error state: friendly inline message
+- Home page must never crash
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+- Card feels premium and modern
+- Does not feel like a dashboard
+- Clearly communicates performance at a glance
+- Looks unmistakably like EcoLogic, not Housecall
