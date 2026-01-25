@@ -4085,10 +4085,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Job Invoice Routes
   // ===================
 
-  // Helper to check if user can create invoices
-  const canCreateInvoices = (role: string): boolean => {
+  // Helper to check if user can create invoices (without assignment check)
+  const canCreateInvoicesBase = (role: string): boolean => {
     const upperRole = role.toUpperCase();
     return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+  };
+  
+  // Helper to check if user can create invoices (includes TECHNICIAN with assignment check done separately)
+  const canCreateInvoices = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR', 'TECHNICIAN'].includes(upperRole);
   };
 
   // GET /api/jobs/:jobId/invoice - Get invoice for a job
@@ -4133,6 +4139,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const jobId = parseInt(req.params.jobId);
+      
+      // For technicians, verify they are assigned to this job
+      if (userRole === 'TECHNICIAN') {
+        const crewAssignments = await storage.getJobCrewAssignments(jobId);
+        const isAssigned = crewAssignments.some(c => c.userId === userId);
+        if (!isAssigned) {
+          return res.status(403).json({ message: "You can only create invoices for jobs you are assigned to" });
+        }
+      }
       
       // Check if invoice already exists for this job
       const existingInvoice = await storage.getInvoiceByJobId(jobId, company.id);
@@ -4199,6 +4214,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         issueDate: today.toISOString().split('T')[0],
         dueDate: dueDate.toISOString().split('T')[0],
         notes: `Invoice for job: ${job.title || job.clientName || 'Job #' + jobId}`,
+        // Audit fields
+        createdByUserId: userId,
+        createdByRole: userRole,
       });
 
       res.status(201).json({ invoice });

@@ -1,0 +1,133 @@
+Allow Technicians to create invoices for ASSIGNED jobs with free pricing (audit-safe) + ensure invoice saves into Invoices module
+
+CURRENT
+- Technicians cannot create invoices (403 permission error)
+- Techs need to bill customers on-site
+- We want techs to have free will on pricing (not forced to price book)
+- After invoice is generated, it must be saved and show up in the main Invoices area
+
+GOAL
+Technicians can create invoices ONLY for jobs they are assigned to:
+- Tech can add/edit line items with free pricing (custom description + unit price + qty)
+- Invoice is created successfully and saved in the database
+- Invoice immediately appears in Invoices module/list (same as Owner invoices)
+- Tech can then collect payment (Pay)
+- When paid, job paymentStatus flips Pending → Paid everywhere immediately (no refresh)
+- Silent success (no global success toasts)
+- Payroll/audit-grade tracking of who created/edited the invoice
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician can:
+- Create invoices ONLY for jobs they are assigned to
+- Add custom line items:
+  - description (string)
+  - qty (number)
+  - unitPrice (number)
+- Edit invoice line items BEFORE payment
+- Collect payment for their assigned job invoice (cash/check/stripe as supported)
+
+Technician cannot:
+- Create invoices for unassigned jobs
+- Delete invoices (especially after payment)
+- Modify paid invoices (must be locked after payment)
+- See invoices for jobs they are not assigned to
+
+Owner/Admin/Supervisor/Dispatcher:
+- Keep existing invoice permissions unchanged
+
+Hidden-not-disabled:
+- If tech is NOT assigned to job, do not show Invoice/Pay buttons and block server-side too
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND CHANGES (MUST DO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Invoice creation permission
+- Update invoice create endpoint so:
+  - Owner/Admin/Supervisor/Dispatcher: unchanged
+  - Technician: allowed ONLY if assigned to jobId
+  - Otherwise return 403
+
+2) Assignment check must be real + secure
+- Use the true assignment source of truth (job_assignments table OR jobs.assignedCrew)
+- Ensure you are comparing the correct ids (userId vs employeeId)
+- This check must be server-side (not just UI)
+
+3) Free-pricing line items allowed for tech
+- For role=Technician:
+  - Allow custom line items with unitPrice set by tech
+  - Validate inputs:
+    - qty > 0
+    - unitPrice >= 0
+    - description required
+  - Store amounts as cents/integers if your system does (do not introduce floating bugs)
+
+4) Audit trail fields (payroll-grade)
+Add/ensure fields on invoices (or invoice_events table) so we can audit:
+- invoice.createdByUserId
+- invoice.createdByRole
+- invoice.createdAt (already)
+- invoice.lastEditedByUserId
+- invoice.lastEditedAt
+- OPTIONAL but preferred: invoice_audit table capturing changes (who/when/what)
+
+Minimum requirement:
+- Store createdByUserId + createdByRole on invoice
+- Store lastEditedByUserId + lastEditedAt on invoice whenever edited
+
+5) Lock invoice after payment
+- Once invoice is marked Paid:
+  - Reject edits from ALL roles except Owner/Admin (if your business rules allow) OR lock for everyone
+  - Tech must never be able to edit a paid invoice
+  - Return a quiet error (no toast), but prevent the edit UI as well
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND CHANGES (TECH JOB DETAIL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Show Invoice + Pay buttons for Tech ONLY when assigned to job
+- Hidden-not-disabled (do not show if not assigned)
+
+2) Invoice creation UI for tech
+- Use the existing invoice creation UI if possible, but allow free pricing:
+  - Add line item:
+    - description input
+    - qty stepper/input
+    - unit price input
+  - Total updates live
+- Ensure “Generate/Save Invoice” actually calls the real create invoice endpoint
+
+3) After tech creates invoice:
+- Invoice must appear in:
+  - Invoice view for that job
+  - Main Invoices list/module (same data source as office)
+- Update local state immediately so no manual refresh is needed
+
+4) Remove red error toast for expected permission cases
+- Tech should not see 403 errors in normal flow
+- Prevent by hiding actions + correct permissions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAYMENT STATUS REQUIREMENTS (DO NOT BREAK)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When invoice is paid (cash/check/stripe):
+- Job.paymentStatus flips Pending → Paid immediately
+- Paid pill updates everywhere:
+  - Jobs list (office)
+  - Home Today list
+  - Job detail header
+  - Open Jobs counter
+- No manual refresh required
+- Silent success
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Assigned technician can create an invoice with custom pricing
+- Invoice saves to DB and appears in Invoices module/list
+- Tech cannot create invoice for unassigned job (server enforces)
+- Tech cannot edit invoice after payment
+- Pay flow works and job flips to Paid everywhere instantly
+- No console errors
+- No global success popups/toasts
+- Office roles unchanged

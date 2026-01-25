@@ -285,6 +285,11 @@ export const invoices = pgTable("invoices", {
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id"),
   paidAt: timestamp("paid_at"),
+  // Audit fields for payroll-grade tracking
+  createdByUserId: varchar("created_by_user_id"),
+  createdByRole: varchar("created_by_role"),
+  lastEditedByUserId: varchar("last_edited_by_user_id"),
+  lastEditedAt: timestamp("last_edited_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
