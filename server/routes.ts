@@ -956,7 +956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Technicians only see their own data
       if (role === 'TECHNICIAN') {
         const logs = await storage.getUserTimeLogsToday(userId, member.companyId, today);
-        const activeLog = logs.find(log => !log.clockOutAt);
+        const activeLogWithJob = await storage.getActiveTimeLogWithJob(userId, member.companyId);
         
         // Calculate total hours
         let totalMinutes = 0;
@@ -968,9 +968,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         return res.json({
           role: 'technician',
-          isClockedIn: !!activeLog,
-          clockedInAt: activeLog?.clockInAt || null,
+          isClockedIn: !!activeLogWithJob,
+          clockedInAt: activeLogWithJob?.clockInAt || null,
           hoursToday: Math.round(totalMinutes / 60 * 100) / 100,
+          currentJobId: activeLogWithJob?.jobId || null,
+          currentJobTitle: activeLogWithJob?.job?.title || null,
+          currentCategory: activeLogWithJob?.category || null,
         });
       }
       
@@ -1022,12 +1025,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Already clocked in' });
       }
       
-      const log = await storage.clockIn(userId, member.companyId);
-      console.log('[Time] clocked in', { userId, logId: log.id });
-      res.json({ success: true, clockedInAt: log.clockInAt });
+      const { jobId, category } = req.body;
+      
+      // Validate jobId if provided - tech must be assigned to the job
+      if (jobId) {
+        const assignments = await storage.getUserJobAssignments(userId);
+        const isAssigned = assignments.some(a => a.jobId === jobId);
+        if (!isAssigned) {
+          return res.status(403).json({ error: 'Not assigned to this job' });
+        }
+      }
+      
+      // Validate category if provided
+      const validCategories = ['job', 'shop', 'drive', 'admin', 'break'];
+      if (category && !validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
+      }
+      
+      const log = await storage.clockIn(userId, member.companyId, jobId, category);
+      console.log('[Time] clocked in', { userId, logId: log.id, jobId, category });
+      res.json({ success: true, clockedInAt: log.clockInAt, jobId: log.jobId, category: log.category });
     } catch (error: any) {
       console.error('Error clocking in:', error);
       res.status(500).json({ error: 'Unable to clock in' });
+    }
+  });
+  
+  // Switch job/category (Technicians only)
+  app.post('/api/time/switch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      // Only technicians can switch jobs
+      if (member.role !== 'TECHNICIAN') {
+        return res.status(403).json({ error: 'Only technicians can switch jobs' });
+      }
+      
+      const { jobId, category } = req.body;
+      
+      // Validate jobId if provided - tech must be assigned to the job
+      if (jobId) {
+        const assignments = await storage.getUserJobAssignments(userId);
+        const isAssigned = assignments.some(a => a.jobId === jobId);
+        if (!isAssigned) {
+          return res.status(403).json({ error: 'Not assigned to this job' });
+        }
+      }
+      
+      // Validate category if provided
+      const validCategories = ['job', 'shop', 'drive', 'admin', 'break'];
+      if (category && !validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
+      }
+      
+      const result = await storage.switchJob(userId, member.companyId, jobId, category);
+      console.log('[Time] switched job', { userId, endedId: result.ended.id, startedId: result.started.id, jobId, category });
+      res.json({ 
+        success: true, 
+        ended: { id: result.ended.id, clockOutAt: result.ended.clockOutAt },
+        started: { id: result.started.id, clockInAt: result.started.clockInAt, jobId: result.started.jobId, category: result.started.category },
+      });
+    } catch (error: any) {
+      console.error('Error switching job:', error);
+      if (error.message === 'No active time entry to switch from') {
+        return res.status(400).json({ error: 'Not currently clocked in' });
+      }
+      res.status(500).json({ error: 'Unable to switch job' });
     }
   });
   

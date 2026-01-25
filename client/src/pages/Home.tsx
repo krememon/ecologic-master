@@ -5,6 +5,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useCan } from "@/hooks/useCan";
 import { apiRequest } from "@/lib/queryClient";
 import { 
@@ -19,7 +21,12 @@ import {
   ClipboardList,
   Clock,
   Play,
-  Square
+  Square,
+  Search,
+  Car,
+  Wrench,
+  Coffee,
+  Building
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
@@ -42,6 +49,9 @@ interface TechnicianTimeData {
   isClockedIn: boolean;
   clockedInAt: string | null;
   hoursToday: number;
+  currentJobId: number | null;
+  currentJobTitle: string | null;
+  currentCategory: string | null;
 }
 
 interface ManagerTimeData {
@@ -51,6 +61,16 @@ interface ManagerTimeData {
 }
 
 type TimeData = TechnicianTimeData | ManagerTimeData;
+
+type TimeCategory = 'job' | 'shop' | 'drive' | 'admin' | 'break';
+
+const CATEGORY_LABELS: Record<TimeCategory, string> = {
+  job: 'Job',
+  shop: 'Shop',
+  drive: 'Drive',
+  admin: 'Admin',
+  break: 'Break',
+};
 
 export default function Home() {
   const { toast } = useToast();
@@ -100,14 +120,38 @@ export default function Home() {
     refetchInterval: 60000,
   });
 
+  const [showJobPicker, setShowJobPicker] = useState(false);
+  const [jobPickerMode, setJobPickerMode] = useState<'clockIn' | 'switch'>('clockIn');
+  const [jobSearchQuery, setJobSearchQuery] = useState('');
+
   const clockInMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/time/clock-in'),
+    mutationFn: (data: { jobId?: number; category?: string }) => 
+      apiRequest('POST', '/api/time/clock-in', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+      setShowJobPicker(false);
+      setJobSearchQuery('');
     },
     onError: () => {
       toast({
         title: "Unable to clock in",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const switchJobMutation = useMutation({
+    mutationFn: (data: { jobId?: number; category?: string }) => 
+      apiRequest('POST', '/api/time/switch', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+      setShowJobPicker(false);
+      setJobSearchQuery('');
+    },
+    onError: () => {
+      toast({
+        title: "Unable to switch",
         description: "Please try again",
         variant: "destructive",
       });
@@ -127,6 +171,32 @@ export default function Home() {
       });
     },
   });
+
+  const handleClockInClick = () => {
+    setJobPickerMode('clockIn');
+    setShowJobPicker(true);
+  };
+
+  const handleSwitchClick = () => {
+    setJobPickerMode('switch');
+    setShowJobPicker(true);
+  };
+
+  const handleJobSelect = (jobId: number) => {
+    if (jobPickerMode === 'clockIn') {
+      clockInMutation.mutate({ jobId, category: 'job' });
+    } else {
+      switchJobMutation.mutate({ jobId, category: 'job' });
+    }
+  };
+
+  const handleCategorySelect = (category: TimeCategory) => {
+    if (jobPickerMode === 'clockIn') {
+      clockInMutation.mutate({ category });
+    } else {
+      switchJobMutation.mutate({ category });
+    }
+  };
 
   const hasDataError = jobsError || (role !== 'TECHNICIAN' && leadsError) || (role !== 'TECHNICIAN' && estimatesError) || ((role === 'OWNER' || role === 'SUPERVISOR') && invoicesError);
 
@@ -369,9 +439,18 @@ export default function Home() {
                         <p className="text-lg font-semibold text-slate-900 dark:text-white">
                           {timeData.hoursToday.toFixed(1)} hrs
                         </p>
+                        {timeData.isClockedIn && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            {timeData.currentJobTitle 
+                              ? `Working on: ${timeData.currentJobTitle}` 
+                              : timeData.currentCategory && timeData.currentCategory !== 'job'
+                                ? `Activity: ${CATEGORY_LABELS[timeData.currentCategory as TimeCategory] || timeData.currentCategory}`
+                                : 'Working'}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-end gap-2">
                       {timeData.isClockedIn && (
                         <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
                           <span className="relative flex h-2 w-2">
@@ -381,40 +460,53 @@ export default function Home() {
                           Active
                         </span>
                       )}
-                      {timeData.isClockedIn ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => clockOutMutation.mutate()}
-                          disabled={clockOutMutation.isPending}
-                          className="border-slate-300 dark:border-slate-700"
-                        >
-                          {clockOutMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Square className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                              Clock Out
-                            </>
-                          )}
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => clockInMutation.mutate()}
-                          disabled={clockInMutation.isPending}
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                        >
-                          {clockInMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <>
-                              <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                              Clock In
-                            </>
-                          )}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {timeData.isClockedIn ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={handleSwitchClick}
+                              disabled={switchJobMutation.isPending}
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2"
+                            >
+                              Switch
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => clockOutMutation.mutate()}
+                              disabled={clockOutMutation.isPending}
+                              className="border-slate-300 dark:border-slate-700"
+                            >
+                              {clockOutMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Square className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                                  Clock Out
+                                </>
+                              )}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={handleClockInClick}
+                            disabled={clockInMutation.isPending}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            {clockInMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                                Clock In
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -628,6 +720,112 @@ export default function Home() {
           )}
         </>
       )}
+
+      <Sheet open={showJobPicker} onOpenChange={setShowJobPicker}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="text-center">
+              {jobPickerMode === 'clockIn' ? 'Clock In To' : 'Switch To'}
+            </SheetTitle>
+          </SheetHeader>
+          
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search jobs..."
+                value={jobSearchQuery}
+                onChange={(e) => setJobSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                Your Jobs
+              </p>
+              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                {jobs
+                  .filter(job => 
+                    job.status !== 'completed' && 
+                    job.status !== 'cancelled' &&
+                    (jobSearchQuery === '' || 
+                      (job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())))
+                  )
+                  .slice(0, 10)
+                  .map(job => (
+                    <button
+                      key={job.id}
+                      onClick={() => handleJobSelect(job.id)}
+                      disabled={clockInMutation.isPending || switchJobMutation.isPending}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
+                    >
+                      <Briefcase className="h-5 w-5 text-slate-400" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                          {job.title || `Job #${job.id}`}
+                        </p>
+                      </div>
+                      {(clockInMutation.isPending || switchJobMutation.isPending) && (
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                      )}
+                    </button>
+                  ))}
+                {jobs.filter(job => 
+                  job.status !== 'completed' && 
+                  job.status !== 'cancelled' &&
+                  (jobSearchQuery === '' || 
+                    (job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())))
+                ).length === 0 && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+                    No jobs available
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                Other Activities
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleCategorySelect('shop')}
+                  disabled={clockInMutation.isPending || switchJobMutation.isPending}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Wrench className="h-5 w-5 text-slate-500" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Shop</span>
+                </button>
+                <button
+                  onClick={() => handleCategorySelect('drive')}
+                  disabled={clockInMutation.isPending || switchJobMutation.isPending}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Car className="h-5 w-5 text-slate-500" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Drive</span>
+                </button>
+                <button
+                  onClick={() => handleCategorySelect('admin')}
+                  disabled={clockInMutation.isPending || switchJobMutation.isPending}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Building className="h-5 w-5 text-slate-500" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Admin</span>
+                </button>
+                <button
+                  onClick={() => handleCategorySelect('break')}
+                  disabled={clockInMutation.isPending || switchJobMutation.isPending}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Coffee className="h-5 w-5 text-slate-500" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Break</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
