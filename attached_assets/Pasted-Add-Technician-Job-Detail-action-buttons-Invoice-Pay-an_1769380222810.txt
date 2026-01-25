@@ -1,0 +1,100 @@
+Add Technician Job Detail action buttons: Invoice, Pay, and ⋯ (match Owner job detail behavior, RBAC-safe)
+
+CURRENT
+- Technicians can open assigned Job Detail from Schedule/Home
+- Technician Job Detail screen is missing the top action buttons:
+  - Invoice
+  - Pay
+  - ⋯ (more actions)
+- On Owner/office accounts, these buttons exist and work
+
+GOAL
+On Technician accounts, show the same top action button row on Job Detail:
+- Invoice button
+- Pay button
+- ⋯ menu button
+They must behave EXACTLY like they do on the Owner job detail screen, but still respect RBAC.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC / VISIBILITY RULES (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician can:
+- View invoice for their assigned job
+- Collect payment ONLY for their assigned job (allowed)
+- Use ⋯ menu options that are safe for tech role
+
+Technician cannot:
+- Delete jobs
+- Cancel jobs
+- Edit prices / line items directly
+- See office-only internal docs / company stats
+- Access unassigned jobs
+
+Hidden, not disabled:
+- Do NOT show locked actions in ⋯ menu
+- Only show actions they are allowed to perform
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Add the same action button row UI at the top of Job Detail for technicians
+- Match styling from Owner job detail:
+  - “Invoice” button (left)
+  - “Pay” primary button (middle, green)
+  - “⋯” button (right)
+- Mobile-first spacing must remain clean (iPhone view priority)
+- No extra popups/toasts
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FUNCTIONAL REQUIREMENTS (MATCH OWNER BEHAVIOR)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Invoice button:
+- Opens the same invoice view/modal/screen used on Owner job detail
+- Must load real invoice data for that job
+- If no invoice exists yet:
+  - Follow the exact same behavior as Owner view (do NOT invent new behavior)
+
+Pay button:
+- Opens the same payment collection flow used on Owner job detail
+- Must work for:
+  - Cash
+  - Check
+  - Stripe (if that’s how Pay works now)
+- After payment is successful:
+  - Job.paymentStatus must flip Pending → Paid immediately
+  - Green “Paid” pill updates everywhere (jobs list, home today list, job header, counters)
+  - No manual refresh required
+  - No success popup
+
+⋯ menu button:
+- Use the same menu component as Owner job detail
+- BUT filter menu items by Technician permissions (hide not disable)
+- Keep “safe” actions (examples):
+  - Add notes / photos (if exists)
+  - Request additional work (when implemented)
+  - View documents allowed by visibility rules
+- Remove any destructive/office-only items from tech view:
+  - Delete job
+  - Cancel job
+  - Edit schedule
+  - Edit line items/pricing
+  - Office-only settings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPLEMENTATION NOTES (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Do NOT duplicate logic in a new tech-only component if the owner view already exists
+- Prefer reusing the existing Job Detail action bar component
+- Add role checks to the existing component to conditionally render actions
+- Ensure job access check is enforced:
+  - Technician can only access actions for assigned jobs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician sees Invoice, Pay, ⋯ buttons on assigned Job Detail
+- Invoice opens and works the same as Owner behavior
+- Pay flow works and updates job payment status everywhere immediately
+- ⋯ menu only shows tech-allowed actions (hidden not disabled)
+- No console errors
+- Mobile UI unchanged
