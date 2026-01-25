@@ -1,0 +1,79 @@
+Fix Auto Clock-Out DB Error: Add companies.auto_clock_out_time + Safe Fallback (No Auth Crashes)
+
+CURRENT
+App is crashing on /api/auth/user with:
+error: column companies.auto_clock_out_time does not exist
+
+This causes login/profile fetch failures (500), breaking the app.
+
+GOAL
+1) Add the missing DB column:
+   companies.auto_clock_out_time
+2) Ensure the server NEVER crashes if the value is missing:
+   - default to "18:00" (6:00 PM)
+3) Restore /api/auth/user to always return 200 for valid sessions
+
+ROOT CAUSE
+Backend code (storage.getUserCompany / auth user endpoint) is selecting a column that doesn’t exist in the companies table.
+
+REQUIRED FIXES
+
+A) DATABASE MIGRATION (REQUIRED)
+Add the column to the companies table:
+
+- Column name: auto_clock_out_time
+- Type: TEXT (or TIME if you already use TIME types)
+- Default: '18:00'
+- Not null preferred (safe)
+
+Also ensure existing rows get the default.
+
+Example SQL (choose one approach based on your DB tooling):
+1) If TIME type supported and desired:
+   ALTER TABLE companies
+   ADD COLUMN IF NOT EXISTS auto_clock_out_time TIME NOT NULL DEFAULT '18:00';
+
+2) If using TEXT:
+   ALTER TABLE companies
+   ADD COLUMN IF NOT EXISTS auto_clock_out_time TEXT NOT NULL DEFAULT '18:00';
+
+B) STORAGE / QUERY SAFETY (CRITICAL)
+Even after migration, we must NOT crash auth if something goes wrong.
+
+Update DatabaseStorage.getUserCompany (or wherever the company row is queried) so that:
+- If the column is missing OR query fails:
+  - Return company object but set autoClockOutTime = "18:00"
+- Do NOT throw a 500 that breaks /api/auth/user
+
+Implementation ideas:
+- Prefer selecting only known columns OR use a safe try/catch
+- If the query error code indicates missing column (42703), fallback gracefully
+
+C) API RESPONSE SHAPE
+Ensure company endpoint and auth user endpoint return auto clock-out time consistently:
+- company.autoClockOutTime (camelCase in API)
+- Default "18:00" if null
+
+D) CUSTOMIZE PAGE (SETTING)
+If the Customize page reads this value:
+- It must handle missing/null by showing default 6:00 PM
+- Saving should write back to companies.auto_clock_out_time
+
+E) VERIFICATION STEPS
+After fix:
+- Restart server
+- Log in successfully
+- Confirm:
+  GET /api/auth/user returns 200
+  GET /api/company returns 200 and includes autoClockOutTime
+- Confirm no console/server errors about missing columns
+
+WHAT NOT TO DO
+- Do not leave /api/auth/user in a state where one missing column breaks the whole app
+- Do not hard crash on company settings reads
+
+SUCCESS CRITERIA
+- DB has companies.auto_clock_out_time with default 18:00
+- Auth/user fetch works reliably (no 500s)
+- Auto clock-out feature can safely read the setting
+- App loads normally and user stays logged in
