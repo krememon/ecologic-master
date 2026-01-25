@@ -1,0 +1,83 @@
+Remove Jobs page access for Technicians (hidden-not-disabled, no nav entry, no route access)
+
+CURRENT
+- Technicians can currently see the “Jobs” tab in the left nav and open the Jobs page
+- This violates our intended permissions / UX (tech should work from Home + Schedule + assigned job details only)
+
+GOAL
+Technicians must NOT have access to the Jobs page at all:
+- “Jobs” nav item is hidden for Technician role
+- Direct URL access to /jobs is blocked for Technician role
+- No “No access” page shown (hidden-not-disabled) — redirect silently
+- Mobile UI unchanged
+- No console errors
+- No changes to non-tech roles
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician:
+- Cannot access Jobs page/list view
+- Can still access their assigned job details via:
+  - Home “Today” list
+  - Schedule
+  - Notifications deep links
+- Must NOT see company-wide jobs list or job creation entry points
+
+Owner/Admin/Supervisor/Dispatcher/Estimator:
+- Keep existing Jobs page behavior unchanged
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND CHANGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Hide nav item
+- In the left nav / sidebar component:
+  - If user.role === "Technician":
+    - Do not render the “Jobs” nav item at all
+
+2) Protect route
+- In routing for /jobs (and any nested jobs list routes):
+  - If user.role === "Technician":
+    - Redirect silently to Home (/) or Schedule (/schedule) (whichever is your default)
+    - No toast, no popups
+
+3) Hide “Create New Job”
+- Ensure technicians never see:
+  - “Create New Job” button
+  - Any job creation UI entry points
+
+IMPORTANT:
+- Do NOT show a disabled Jobs button
+- Do NOT show an “Access denied” screen for techs (hidden-not-disabled)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND SAFETY (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Even if UI hides it, protect API:
+- If there is an endpoint that returns the full jobs list (ex: GET /api/jobs):
+  - Ensure Technician role cannot call it to fetch all jobs
+  - Either return 403 OR return only assigned jobs (prefer 403 since page is removed)
+  - Do not change behavior for office roles
+
+This prevents future leaks.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEEP LINK SAFETY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technicians still need to open assigned job details from:
+- Home Today list
+- Schedule cards
+- Notifications linkUrl
+
+So:
+- Do NOT block /jobs/:jobId detail if it’s used for assigned jobs
+- Only block the Jobs LIST page (/jobs) and job creation routes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician does not see “Jobs” in nav
+- Visiting /jobs as technician redirects silently to Home (or Schedule)
+- Tech can still open assigned job detail pages from Home/Schedule/Notifications
+- Owner/office roles unchanged
+- No console errors

@@ -50,7 +50,7 @@ const getNavigation = (t: any, role: string | undefined) => [
   { href: "/", icon: LayoutDashboard, label: t('navigation.home'), permission: null },
   { href: "/schedule", icon: Brain, label: t('navigation.schedule'), permission: "schedule.view" as Permission },
   { href: "/timesheets", icon: Clock, label: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
-  { href: "/jobs", icon: Building2, label: t('navigation.jobs'), permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
+  { href: "/jobs", icon: Building2, label: t('navigation.jobs'), permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
   { href: "/leads", icon: Target, label: "Leads", permission: "leads.view" as Permission },
   { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors'), permission: "clients.manage" as Permission },
   { href: "/clients", icon: Users, label: t('navigation.clients'), permission: "clients.manage" as Permission },

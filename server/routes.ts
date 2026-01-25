@@ -2007,19 +2007,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let jobs = await storage.getJobs(company.id);
       
-      // For technicians, only return jobs they are assigned to
+      // Technicians cannot access the jobs list - they use Home/Schedule instead
       if (userRole === 'TECHNICIAN') {
-        const assignedJobIds = new Set<number>();
-        
-        // Get all crew assignments for this user
-        for (const job of jobs) {
-          const crewAssignments = await storage.getJobCrewAssignments(job.id);
-          if (crewAssignments.some(c => c.userId === userId)) {
-            assignedJobIds.add(job.id);
-          }
-        }
-        
-        jobs = jobs.filter(job => assignedJobIds.has(job.id));
+        return res.status(403).json({ message: "Access denied" });
       }
       
       // Include crew assignment info for frontend filtering

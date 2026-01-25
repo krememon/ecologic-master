@@ -62,6 +62,13 @@ export default function Jobs() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   
+  // Redirect technicians away from Jobs page - they use Home/Schedule instead
+  useEffect(() => {
+    if (role === 'TECHNICIAN') {
+      setLocation('/');
+    }
+  }, [role, setLocation]);
+  
   // Parse URL search params to get initial tab
   const getInitialTab = (): 'jobs' | 'estimates' => {
     const params = new URLSearchParams(searchString);
