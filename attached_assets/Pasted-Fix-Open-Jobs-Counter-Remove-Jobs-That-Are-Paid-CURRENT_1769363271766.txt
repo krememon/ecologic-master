@@ -1,0 +1,62 @@
+Fix “Open Jobs” Counter: Remove Jobs That Are Paid
+
+CURRENT
+The Home status pill “Open Jobs” is counting jobs that have already been paid.
+When a job is paid, it should not remain in the “Open Jobs” count.
+
+GOAL
+Update the Open Jobs KPI logic so that:
+- Paid jobs are NOT counted as open
+- The count matches real-world meaning of “open” (still active / not closed out)
+
+DEFINITION (NEW RULE)
+A job should be excluded from “Open Jobs” if it is fully paid.
+
+Implementation must use real existing data:
+- job status fields (if any)
+- invoice/payment status linkage (if jobs don’t have a paid flag)
+
+IMPORTANT
+- Do NOT break RBAC
+- Do NOT use fake data
+- Do NOT hardcode job IDs
+- Ensure count updates immediately after payment
+
+IMPLEMENTATION APPROACH (PREFERRED)
+1) Determine how EcoLogic marks a job as paid:
+- If job has a field like: job.isPaid / job.paidAt / job.paymentStatus:
+  - Use that directly
+- Otherwise, infer from invoices/payments:
+  - A job is “paid” if it has at least one invoice linked to it and that invoice is marked paid (or payment received)
+  - If partial payments exist, only exclude when fully paid
+
+2) Update backend logic for “open jobs” count:
+- Wherever the Home KPI is computed (or jobs list query used to compute it),
+  filter out jobs that are paid.
+
+Example logic:
+Open Jobs = jobs where:
+- status NOT in (Completed, Canceled)  (if status exists)
+AND
+- paid = false (or no fully-paid invoice)
+
+3) Frontend should remain unchanged:
+- KPI pulls from existing API
+- Just receives a corrected count
+
+EDGE CASES
+- Jobs with no invoice yet should still be “open”
+- Jobs with unpaid invoices are “open”
+- Jobs with paid invoice should be removed from “open” count
+- If there are multiple invoices, treat job as paid only if all required invoices are paid (or job has paid flag)
+
+TESTING / VERIFICATION
+- Create a job + invoice (unpaid) → Open Jobs increases
+- Mark invoice paid → Open Jobs decreases by 1
+- Refresh Home → count stays correct
+
+SUCCESS CRITERIA
+- Paying an invoice removes that job from “Open Jobs”
+- KPI stays accurate and consistent with business meaning
+- No console errors
+- RBAC preserved

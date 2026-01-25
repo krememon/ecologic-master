@@ -248,9 +248,17 @@ export default function Home() {
     return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
   });
 
-  const openJobs = myJobs.filter(job => 
-    job.status !== 'completed' && job.status !== 'cancelled'
-  );
+  const openJobs = myJobs.filter(job => {
+    // Exclude completed/cancelled jobs
+    if (job.status === 'completed' || job.status === 'cancelled') {
+      return false;
+    }
+    // Exclude fully paid jobs
+    if (job.paymentStatus === 'paid') {
+      return false;
+    }
+    return true;
+  });
 
   const leadsInFlow = leads.filter(lead => 
     lead.status !== 'won' && lead.status !== 'lost'
