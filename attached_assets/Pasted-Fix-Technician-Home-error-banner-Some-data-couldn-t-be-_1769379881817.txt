@@ -1,0 +1,77 @@
+Fix Technician Home error banner “Some data couldn’t be loaded” after removing Jobs tab (no console errors)
+
+CURRENT
+- We successfully removed the Jobs tab/page for Technicians
+- But Technician Home now shows an orange banner:
+  “Some data couldn’t be loaded”
+- This violates “silent success” and indicates the Home page is still calling an endpoint the Tech can’t access anymore (likely jobs list)
+
+GOAL
+Technician Home must load with NO error banner and NO console errors:
+- Tech Home should only request data they are allowed to access
+- If an endpoint is blocked for techs (ex: GET /api/jobs full list), Home must not call it
+- Tech still needs:
+  - Time Today / clock in
+  - Today’s assigned jobs (if any) OR “No jobs scheduled today”
+- Mobile-first UI unchanged
+- No fake data
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — IDENTIFY THE FAILING REQUEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+In the browser Network tab (or server logs), find the exact failing API call when Tech opens Home.
+Record:
+- endpoint path (ex: /api/jobs, /api/dashboard, /api/home, etc.)
+- status code (403/500/etc.)
+
+Do NOT guess. Fix the real failing call.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — FIX HOME DATA LOADING FOR TECH ROLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Update Home page data fetching logic to be role-aware:
+
+If user.role === "Technician":
+- DO NOT call any “company-wide jobs list” endpoint
+- Only fetch:
+  A) Today’s assigned jobs (tech only)
+  B) Time Today / active time entry
+  C) Any other tech-safe widgets already approved
+
+Implementation options (choose the simplest that matches current codebase):
+OPTION A (Preferred):
+- Add a dedicated endpoint:
+  GET /api/home/tech
+  - returns { todayJobsAssignedToMe, timeToday, openJobsCountForMe(optional) }
+- Home uses this endpoint only for technicians
+
+OPTION B:
+- If Home currently calls GET /api/jobs for “today jobs”
+  - Change backend to support a safe param:
+    GET /api/jobs?scope=today
+    - For Technician: return only assigned jobs for today
+    - For Office: return existing today jobs behavior
+  - Home calls the same endpoint but results are role-filtered
+
+IMPORTANT:
+- Do NOT return empty + throw errors; the endpoint must respond successfully for Tech
+- Avoid showing banners for expected RBAC behavior
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — REMOVE OR NARROW THE HOME ERROR BANNER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The banner should ONLY appear for true unexpected errors.
+If the error was caused by intentional RBAC restriction, fix the call so it succeeds instead.
+
+After fix:
+- Tech Home should load normally with no banner
+- If tech has 0 jobs today, show “No jobs scheduled today” (existing empty state)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician Home shows NO “Some data couldn’t be loaded” banner
+- No console errors
+- Tech Home still shows correct assigned jobs for today (or empty state)
+- Office roles unchanged
+- No fake data
