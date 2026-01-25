@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers } from "./notificationService";
+import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly } from "./notificationService";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
@@ -2520,8 +2520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const assigner = await storage.getUser(userId);
         const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
         const jobTitle = job.title || `Job #${job.id}`;
-        await notifyUsers(assignedEmployeeIds, {
-          companyId: company.id,
+        await notifyTechniciansOnly(assignedEmployeeIds, company.id, {
           type: 'job_assigned',
           title: 'New Job Assignment',
           body: `${assignerName} assigned you to job: ${jobTitle}`,
@@ -2771,8 +2770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (newlyAdded.length > 0) {
           const assigner = await storage.getUser(userId);
           const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
-          await notifyUsers(newlyAdded, {
-            companyId: company.id,
+          await notifyTechniciansOnly(newlyAdded, company.id, {
             type: 'job_assigned',
             title: 'New Job Assignment',
             body: `${assignerName} assigned you to job: ${jobTitle}`,
@@ -2985,8 +2983,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (toAdd.length > 0) {
         const assigner = await storage.getUser(userId);
         const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
-        await notifyUsers(toAdd, {
-          companyId: company.id,
+        await notifyTechniciansOnly(toAdd, company.id, {
           type: 'job_assigned',
           title: 'New Job Assignment',
           body: `${assignerName} assigned you to job: ${job.title || job.jobNumber || `Job #${jobId}`}`,

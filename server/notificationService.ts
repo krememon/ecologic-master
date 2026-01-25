@@ -14,6 +14,20 @@ type NotificationParams = {
 
 const MANAGER_ROLES = ["OWNER", "SUPERVISOR"];
 const OFFICE_ROLES = ["OWNER", "SUPERVISOR", "DISPATCHER"];
+const TECHNICIAN_ROLE = "TECHNICIAN";
+
+// Filter user IDs to only include technicians
+async function filterTechnicians(userIds: string[], companyId: number): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const techIds: string[] = [];
+  for (const userId of userIds) {
+    const member = await storage.getCompanyMember(companyId, userId);
+    if (member && member.role.toUpperCase() === TECHNICIAN_ROLE) {
+      techIds.push(userId);
+    }
+  }
+  return techIds;
+}
 
 export async function notifyUsers(
   recipientUserIds: string[],
@@ -133,4 +147,16 @@ export async function notifySpecificUser(
   params: Omit<NotificationParams, "companyId">
 ): Promise<void> {
   await notifyUsers([userId], { ...params, companyId });
+}
+
+// Notify only technicians (filters out managers/office staff)
+export async function notifyTechniciansOnly(
+  userIds: string[],
+  companyId: number,
+  params: Omit<NotificationParams, "companyId">
+): Promise<void> {
+  const techIds = await filterTechnicians(userIds, companyId);
+  if (techIds.length > 0) {
+    await notifyUsers(techIds, { ...params, companyId });
+  }
 }
