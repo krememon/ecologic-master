@@ -527,15 +527,17 @@ export default function Jobs() {
   const deleteJobMutation = useMutation({
     mutationFn: async (jobId: number) => {
       console.debug('Deleting job', jobId);
-      const res = await apiRequest("DELETE", `/api/jobs/${jobId}`);
-      // Handle both 200 and 204 responses
-      if (res.status === 204) {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.status === 204 || res.status === 200) {
         return { success: true };
-      } else if (res.status === 200) {
-        return await res.json();
       } else if (res.status === 409) {
         const data = await res.json();
         throw new Error(data.code === 'JOB_HAS_REFERENCES' ? 'HAS_REFERENCES' : data.message);
+      } else if (res.status === 401) {
+        throw new Error('Unauthorized');
       }
       throw new Error('Failed to delete job');
     },
@@ -551,7 +553,7 @@ export default function Jobs() {
       toast({ title: "Job deleted successfully" });
     },
     onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
+      if (error.message === 'Unauthorized') {
         toast({
           title: "Unauthorized",
           description: "You are logged out. Logging in again...",

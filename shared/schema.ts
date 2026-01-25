@@ -1032,7 +1032,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
   locationLat: z.union([z.number(), z.string().transform(val => val ? parseFloat(val) : null)]).nullable().optional(),
   locationLng: z.union([z.number(), z.string().transform(val => val ? parseFloat(val) : null)]).nullable().optional(),
   locationPlaceId: z.string().optional().transform(val => val || ""),
-  status: z.enum(["pending", "active", "completed", "cancelled"]).default("pending"),
+  status: z.enum(["pending", "active", "completed", "cancelled", "archived"]).default("pending"),
   paymentStatus: z.enum(["unpaid", "partial", "paid"]).default("unpaid"),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
 });
