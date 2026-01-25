@@ -3,44 +3,23 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, Clock, Loader2, Check } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { TimeWheelPicker } from "@/components/TimeWheelPicker";
+import { useToast } from "@/hooks/use-toast";
 
 interface TimeSettings {
   autoClockOutTime: string;
 }
 
-const TIME_OPTIONS = [
-  { value: "12:00", label: "12:00 PM" },
-  { value: "12:30", label: "12:30 PM" },
-  { value: "13:00", label: "1:00 PM" },
-  { value: "13:30", label: "1:30 PM" },
-  { value: "14:00", label: "2:00 PM" },
-  { value: "14:30", label: "2:30 PM" },
-  { value: "15:00", label: "3:00 PM" },
-  { value: "15:30", label: "3:30 PM" },
-  { value: "16:00", label: "4:00 PM" },
-  { value: "16:30", label: "4:30 PM" },
-  { value: "17:00", label: "5:00 PM" },
-  { value: "17:30", label: "5:30 PM" },
-  { value: "18:00", label: "6:00 PM" },
-  { value: "18:30", label: "6:30 PM" },
-  { value: "19:00", label: "7:00 PM" },
-  { value: "19:30", label: "7:30 PM" },
-  { value: "20:00", label: "8:00 PM" },
-  { value: "20:30", label: "8:30 PM" },
-  { value: "21:00", label: "9:00 PM" },
-  { value: "21:30", label: "9:30 PM" },
-  { value: "22:00", label: "10:00 PM" },
-];
-
 export default function TimeTrackingSettings() {
   const [, navigate] = useLocation();
   const { can } = useCan();
+  const { toast } = useToast();
   const [selectedTime, setSelectedTime] = useState<string>("18:00");
   const [saved, setSaved] = useState(false);
+  const [previousTime, setPreviousTime] = useState<string>("18:00");
 
   const { data, isLoading } = useQuery<TimeSettings>({
     queryKey: ["/api/company/time-settings"],
@@ -49,6 +28,7 @@ export default function TimeTrackingSettings() {
   useEffect(() => {
     if (data?.autoClockOutTime) {
       setSelectedTime(data.autoClockOutTime);
+      setPreviousTime(data.autoClockOutTime);
     }
   }, [data]);
 
@@ -58,8 +38,17 @@ export default function TimeTrackingSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/company/time-settings"] });
+      setPreviousTime(selectedTime);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    },
+    onError: () => {
+      setSelectedTime(previousTime);
+      toast({
+        title: "Error",
+        description: "Failed to save time setting. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -79,11 +68,6 @@ export default function TimeTrackingSettings() {
   const handleTimeChange = (value: string) => {
     setSelectedTime(value);
     updateMutation.mutate(value);
-  };
-
-  const getTimeLabel = (value: string) => {
-    const option = TIME_OPTIONS.find((o) => o.value === value);
-    return option?.label || value;
   };
 
   return (
@@ -125,18 +109,13 @@ export default function TimeTrackingSettings() {
                   End shifts at
                 </span>
                 <div className="flex items-center gap-2">
-                  <Select value={selectedTime} onValueChange={handleTimeChange}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue>{getTimeLabel(selectedTime)}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIME_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="w-32">
+                    <TimeWheelPicker
+                      value={selectedTime}
+                      onChange={handleTimeChange}
+                      label="Auto Clock-Out Time"
+                    />
+                  </div>
                   {saved && (
                     <div className="flex items-center gap-1 text-teal-600">
                       <Check className="h-4 w-4" />

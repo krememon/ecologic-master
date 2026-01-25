@@ -1,0 +1,63 @@
+Make Time Tracking “Auto Clock-Out Time” Use the SAME Time Picker as Jobs/Estimates
+
+CURRENT
+- Jobs/Estimates time selection uses an iOS-style wheel picker modal (“Start Time” picker)
+- Time Tracking (Customize → Auto Clock-Out Time) currently uses a basic dropdown/select list
+- This creates inconsistent UX across EcoLogic
+
+GOAL
+Update Time Tracking “Auto Clock-Out Time” so it uses the SAME time picker component/flow as Jobs/Estimates:
+- Tap field → opens the wheel picker modal
+- Pick time → press Done → field updates
+- Save persists to company.auto_clock_out_time
+This must feel identical to the Jobs/Estimates time selection UX.
+
+NON-NEGOTIABLES
+- Reuse existing time picker component (do not build a new one)
+- No redesign, only unify the picker behavior
+- Mobile-first, iPhone-style
+- No console errors
+
+IMPLEMENTATION REQUIREMENTS
+
+1) Reuse the Existing Time Picker
+- Find the exact component used in Jobs/Estimates for selecting time
+  (the wheel picker modal with Done/Cancel)
+- Use it in Customize → Time Tracking settings for “Auto Clock-Out Time”
+
+2) Field Behavior
+Replace dropdown with a tappable field that shows:
+- Label: “End shifts at”
+- Value: formatted time (e.g., “6:00 PM”)
+On tap:
+- Open the time picker modal (same as Jobs/Estimates)
+On Done:
+- Update local state + UI
+On Cancel:
+- Do nothing
+
+3) Value Rules (Match Jobs/Estimates)
+- Use the same time format + parsing logic as Jobs/Estimates
+- Use the same minute increment behavior (whatever Jobs/Estimates uses — 15 min increments preferred)
+- Store the final value in DB as "HH:MM" 24-hour format if that’s what backend expects
+  (and format to AM/PM in the UI)
+
+4) Save Behavior
+- Keep current Save persistence logic
+- Ensure the company setting updates immediately in UI after save
+- No page refresh required
+
+5) RBAC
+- Owner/Admin can edit this setting
+- Other roles can view only (if already implemented), but cannot change it
+- Hidden not disabled (if role shouldn’t see Time Tracking settings)
+
+6) Error Handling
+- If save fails, show inline error message and revert UI to previous value
+- Never white-screen
+
+SUCCESS CRITERIA
+- Time Tracking time selection opens the SAME wheel picker modal as Jobs/Estimates
+- UX is identical (Done/Cancel, same style)
+- Value saves correctly to company.auto_clock_out_time
+- No console errors
