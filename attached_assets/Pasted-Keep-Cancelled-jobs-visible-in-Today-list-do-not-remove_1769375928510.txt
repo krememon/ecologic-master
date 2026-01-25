@@ -1,0 +1,56 @@
+Keep Cancelled jobs visible in “Today” list (do not remove), show Cancelled pill
+
+CURRENT
+- When a job is cancelled, it disappears from the Home “Today” jobs list
+- This is confusing because the job WAS scheduled for today and should remain visible for awareness/audit
+- We already have Cancel Job + Cancelled status
+
+GOAL
+Cancelled jobs should still appear in the Home “Today” list IF they are scheduled for today:
+- Show a “Cancelled” pill on the card
+- Do NOT hide/remove from Today list
+- Do NOT allow technicians to cancel jobs (RBAC unchanged)
+- Silent success, no popups
+- Mobile-first UI
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LOGIC RULES (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Today list inclusion rule
+- Today list should include jobs where scheduledDate is today
+- Even if job.status === "cancelled", KEEP it visible in Today list
+
+2) Status display
+- If job.status === "cancelled":
+  - Show “Cancelled” pill (must be visible at a glance)
+  - Do NOT show it as “Pending” status (cancelled is cancelled)
+
+3) Counts / metrics (to avoid confusion)
+- Cancelled jobs should NOT count toward:
+  - Open Jobs counter
+  - Active work counters
+- Today list can still display them, but counters must reflect active jobs only
+
+4) Payment status
+- Do NOT auto-change paymentStatus when cancelling
+- If paymentStatus was Pending, it remains Pending (fine), but the visible job status must still show “Cancelled”
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCOPE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Update logic in:
+- Home “Today” list query/filter
+- Any shared selector/function that fetches “today’s jobs”
+- Ensure this change does NOT affect:
+  - Jobs main list behavior (unless it also filters cancelled incorrectly)
+  - Time logs
+  - Invoices
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Cancel a job scheduled for today → it still appears in Today list
+- Card clearly shows “Cancelled” pill
+- Open Jobs counter does NOT include cancelled jobs
+- No console errors
+- No UI spacing regressions on mobile

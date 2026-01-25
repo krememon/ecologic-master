@@ -245,7 +245,8 @@ export default function Home() {
 
   const jobsToday = myJobs.filter(job => {
     const date = getJobDate(job);
-    return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
+    // Keep cancelled jobs visible in Today list for awareness, but exclude completed/archived
+    return date && isToday(date) && job.status !== 'completed' && job.status !== 'archived';
   });
 
   const openJobs = myJobs.filter(job => {
@@ -343,7 +344,8 @@ export default function Home() {
   const todayJobs = myJobs
     .filter(job => {
       const date = getJobDate(job);
-      return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
+      // Keep cancelled jobs visible in Today list for awareness, but exclude completed/archived
+      return date && isToday(date) && job.status !== 'completed' && job.status !== 'archived';
     })
     .sort((a, b) => {
       const dateA = getJobDate(a);
