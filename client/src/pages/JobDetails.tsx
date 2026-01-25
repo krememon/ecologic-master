@@ -195,6 +195,20 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     enabled: !!jobId && isAuthenticated,
   });
 
+  interface LaborData {
+    totalMinutes: number;
+    laborByUser: { userId: string; minutes: number }[];
+  }
+  const { data: laborData, isError: laborError } = useQuery<LaborData>({
+    queryKey: ['/api/jobs', jobId, 'labor'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/labor`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch labor');
+      return res.json();
+    },
+    enabled: !!jobId && isAuthenticated,
+  });
+
   const invoice = invoiceData?.invoice;
   const invoiceId = invoice?.id;
   const invoiceStatus = invoice?.status;
@@ -705,6 +719,31 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 </div>
               ) : (
                 <p className="text-muted-foreground">Not scheduled</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Labor Time Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Labor Time
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {laborError ? (
+                <p className="text-sm text-muted-foreground">Labor time unavailable</p>
+              ) : laborData ? (
+                <p className="text-lg font-semibold">
+                  {laborData.totalMinutes > 0 
+                    ? `${Math.floor(laborData.totalMinutes / 60)}h ${laborData.totalMinutes % 60}m`
+                    : '—'}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Loading...</p>
               )}
             </CardContent>
           </Card>

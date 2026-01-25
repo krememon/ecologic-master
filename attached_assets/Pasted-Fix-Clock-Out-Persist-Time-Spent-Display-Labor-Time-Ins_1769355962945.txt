@@ -1,0 +1,133 @@
+Fix Clock Out: Persist Time Spent + Display Labor Time Inside Job Cards
+
+CURRENT
+Clock In / Switch Job / Clock Out flow is working, but Clock Out must reliably:
+- close the active time entry (endAt)
+- compute duration (minutes/hours)
+- persist it to DB
+Additionally, EcoLogic must display recorded time inside Job cards (job details view).
+
+GOAL
+When a user clocks out (or switches jobs), the system must:
+1) record exact time spent on the job (or category)
+2) show job time totals inside Job cards (Job details / Job page)
+
+NON-NEGOTIABLES
+- Hidden, not disabled
+- Strict RBAC
+- No white screens
+- No console errors
+- No fake data
+
+━━━━━━━━━━━━━━━━━━
+DATA MODEL (REQUIRED)
+━━━━━━━━━━━━━━━━━━
+Use time_entries table/collection with:
+- id
+- userId
+- jobId (nullable)
+- category (nullable: shop/drive/admin/break)
+- startAt (timestamp)
+- endAt (timestamp | null)
+
+RULES
+- Only one active entry per user: endAt IS NULL
+- Duration is derived from (endAt - startAt)
+- Never store negative or zero durations (guard for edge cases)
+
+━━━━━━━━━━━━━━━━━━
+BACKEND: CLOCK OUT MUST CLOSE ENTRY
+━━━━━━━━━━━━━━━━━━
+Update POST /api/time/clock-out to:
+
+1) Find the user’s active entry (endAt is null)
+2) Set endAt = now
+3) Return:
+- closedEntry (including startAt/endAt/jobId/category)
+- todayTotalMinutes (optional)
+- jobTotalMinutes (optional if jobId present)
+
+EDGE CASES
+- If no active entry exists:
+  - Return 400 with clear message: “No active session to clock out”
+  - Frontend shows friendly inline error (no crash)
+
+TIME CALCULATION
+- Compute durationMinutes = round((endAt - startAt) / 60000)
+- Enforce minimum duration of 1 minute if needed (optional)
+- Ensure server timezone consistency (store timestamps in UTC)
+
+━━━━━━━━━━━━━━━━━━
+BACKEND: JOB TOTALS ENDPOINT
+━━━━━━━━━━━━━━━━━━
+We need a reliable way to show labor time in Job cards.
+
+Implement ONE of these (prefer A if possible):
+
+A) If you already have a job details endpoint:
+- Extend GET /api/jobs/:id to include:
+  - laborTotalMinutes (sum of all time_entries where jobId = this jobId)
+  - laborByUser (optional: [{ userId, minutes }])
+
+B) Or add a dedicated endpoint:
+- GET /api/jobs/:id/labor
+  returns:
+  - laborTotalMinutes
+  - laborByUser (optional)
+
+RBAC
+- Technician: can only see labor time for jobs they are assigned to
+- Dispatcher/Supervisor/Owner/Admin: can see labor totals for jobs they can access
+- Estimator: only if they can access that job (otherwise hide)
+
+━━━━━━━━━━━━━━━━━━
+FRONTEND: DISPLAY INSIDE JOB CARDS
+━━━━━━━━━━━━━━━━━━
+Add a “Labor / Time” section inside Job cards (Job details page/modal).
+
+REQUIREMENTS
+- Show a compact row:
+  “Labor time: 2h 15m”
+- If there’s no time yet:
+  “Labor time: —”
+- Do not show for users who cannot access that job (RBAC)
+- Must use existing card styling and typography
+
+REAL-TIME UX (IMPORTANT)
+When a user clocks out or switches jobs:
+- Home “Time Today” updates immediately
+- If the user is currently viewing that Job details page:
+  - refresh labor time (refetch endpoint or update local state)
+- Do NOT require page refresh
+
+FORMATTING
+- Convert minutes to “Xh Ym” format
+- Keep it clean (no decimals)
+
+━━━━━━━━━━━━━━━━━━
+SWITCH JOB ALSO COUNTS
+━━━━━━━━━━━━━━━━━━
+When switching jobs:
+- the previous entry gets endAt set
+- its duration is counted toward the previous job’s labor total
+- the new entry begins immediately with the new jobId/category
+
+━━━━━━━━━━━━━━━━━━
+ERROR HANDLING
+━━━━━━━━━━━━━━━━━━
+- If job labor endpoint fails:
+  - show “Labor time unavailable” inline (do not crash job page)
+- If clock-out fails:
+  - show inline toast/message but keep UI consistent
+
+DELIVERABLES
+- Clock out closes active time entry and persists duration reliably
+- Job labor totals can be fetched from backend
+- Job details card displays “Labor time”
+- Switching jobs properly splits time and updates totals
+- No console errors
+
+SUCCESS CRITERIA
+- Clocking out always records accurate time spent
+- Job details shows accumulated labor time for that job
+- Techs see time only on assigned jobs, owners see everything they’re allowed to

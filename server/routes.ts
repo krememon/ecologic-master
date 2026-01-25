@@ -1156,14 +1156,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const log = await storage.clockOut(userId, member.companyId);
       if (!log) {
-        return res.status(400).json({ error: 'Not currently clocked in' });
+        return res.status(400).json({ error: 'No active session to clock out' });
       }
       
-      console.log('[Time] clocked out', { userId, logId: log.id });
-      res.json({ success: true, clockedOutAt: log.clockOutAt });
+      // Calculate duration
+      const startTime = new Date(log.clockInAt).getTime();
+      const endTime = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
+      const durationMinutes = Math.max(1, Math.round((endTime - startTime) / 60000));
+      
+      console.log('[Time] clocked out', { userId, logId: log.id, durationMinutes });
+      res.json({ 
+        success: true, 
+        clockedOutAt: log.clockOutAt,
+        durationMinutes,
+        jobId: log.jobId,
+        category: log.category,
+      });
     } catch (error: any) {
       console.error('Error clocking out:', error);
       res.status(500).json({ error: 'Unable to clock out' });
+    }
+  });
+  
+  // Get labor totals for a job
+  app.get('/api/jobs/:jobId/labor', isAuthenticated, async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      
+      // RBAC: Technicians can only see labor for jobs they're assigned to
+      if (member.role === 'TECHNICIAN') {
+        const assignments = await storage.getUserJobAssignments(userId);
+        const isCrewAssigned = assignments.some(a => a.jobId === jobId);
+        const isDirectlyAssigned = job.assignedTo === userId;
+        
+        if (!isCrewAssigned && !isDirectlyAssigned) {
+          return res.status(403).json({ error: 'Not authorized to view this job labor' });
+        }
+      }
+      
+      const laborData = await storage.getJobLaborTotals(jobId);
+      res.json(laborData);
+    } catch (error: any) {
+      console.error('Error fetching job labor:', error);
+      res.status(500).json({ error: 'Unable to fetch labor data' });
     }
   });
 

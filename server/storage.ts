@@ -301,6 +301,7 @@ export interface IStorage {
   clockIn(userId: string, companyId: number, jobId?: number, category?: string): Promise<TimeLog>;
   clockOut(userId: string, companyId: number): Promise<TimeLog | undefined>;
   switchJob(userId: string, companyId: number, jobId?: number, category?: string): Promise<{ ended: TimeLog; started: TimeLog }>;
+  getJobLaborTotals(jobId: number): Promise<{ totalMinutes: number; laborByUser: { userId: string; minutes: number }[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2525,6 +2526,30 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return { ended, started };
+  }
+  
+  async getJobLaborTotals(jobId: number): Promise<{ totalMinutes: number; laborByUser: { userId: string; minutes: number }[] }> {
+    const logs = await db
+      .select()
+      .from(timeLogs)
+      .where(eq(timeLogs.jobId, jobId));
+    
+    const userMinutes: Record<string, number> = {};
+    let totalMinutes = 0;
+    
+    for (const log of logs) {
+      if (!log.clockInAt) continue;
+      const start = new Date(log.clockInAt).getTime();
+      const end = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
+      const minutes = Math.max(0, Math.round((end - start) / 60000));
+      
+      totalMinutes += minutes;
+      userMinutes[log.userId] = (userMinutes[log.userId] || 0) + minutes;
+    }
+    
+    const laborByUser = Object.entries(userMinutes).map(([userId, minutes]) => ({ userId, minutes }));
+    
+    return { totalMinutes, laborByUser };
   }
 }
 
