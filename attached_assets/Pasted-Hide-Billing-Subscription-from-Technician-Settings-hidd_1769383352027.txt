@@ -1,0 +1,61 @@
+Hide “Billing & Subscription” from Technician Settings (hidden-not-disabled, no empty state)
+
+CURRENT
+- Technician Settings screen shows “Billing & Subscription”
+- It displays “No Company Found” and a “Choose Plan” button
+- Technicians should never manage billing or subscription
+
+GOAL
+Remove Billing & Subscription section from Technician role entirely:
+- Tech should not see this card at all
+- No “No Company Found” empty state on tech settings
+- Billing & Subscription remains available only to Owner/Admin (or whoever manages subscription)
+- Mobile-first UI stays clean
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC RULES (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician:
+- Must NOT see Billing/Subscription
+- Must NOT see Choose Plan
+- Must NOT be able to access billing routes via direct URL
+
+Allowed roles (choose the safest default):
+- Owner (required)
+- Admin (optional if you use it)
+Disallowed:
+- Supervisor / Dispatcher / Estimator / Technician (unless you explicitly want them later)
+
+Hidden-not-disabled:
+- Do NOT show disabled cards
+- Do NOT show “No Company Found” for techs
+- Remove the section completely
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND CHANGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) In Settings page component:
+- Wrap Billing & Subscription card/section in role check:
+  - Render only if role is Owner (and Admin if applicable)
+  - If role is Technician: do not render it at all
+
+2) Ensure spacing looks normal after removal
+- No blank gap where the card used to be
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ROUTE PROTECTION (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If Billing has its own page/route (ex: /settings/billing):
+- If user.role is not allowed:
+  - Redirect silently back to /settings
+  - No “Access denied” page
+  - No toast
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician Settings screen does not show Billing & Subscription
+- Technician never sees “No Company Found” card
+- Owner/Admin still see Billing & Subscription normally
+- Direct URL to billing route redirects silently for tech
+- No console errors

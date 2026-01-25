@@ -611,10 +611,12 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Billing & Subscription */}
-        <div className="md:col-span-3">
-          <BillingSection />
-        </div>
+        {/* Billing & Subscription - Owner Only */}
+        {user?.role === 'OWNER' && (
+          <div className="md:col-span-3">
+            <BillingSection />
+          </div>
+        )}
 
         {/* Security Settings */}
         <Card className="md:col-span-2">
