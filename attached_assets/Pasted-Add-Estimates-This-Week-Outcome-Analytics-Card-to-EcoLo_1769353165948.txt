@@ -1,0 +1,113 @@
+Add “Estimates · This Week” Outcome Analytics Card to EcoLogic Homepage
+
+CURRENT
+EcoLogic homepage already includes:
+- Status tabs
+- Today’s jobs
+- Business Snapshot
+- This Week Pulse / analytics area
+
+User wants to add a clean, outcome-based “Estimates” analytics card
+inspired by Housecall Pro, but modernized and EcoLogic-native.
+
+GOAL
+Add a single “Estimates · This Week” card that shows:
+- Created (total $ or count, depending on available data)
+- Won (total $ or count)
+- Win Rate (%)
+
+This card should feel premium and informational,
+NOT like a dashboard chart.
+
+━━━━━━━━━━━━━━━━━━
+RBAC (STRICT)
+━━━━━━━━━━━━━━━━━━
+- ONLY Owner/Admin can see this card
+- Estimator, Dispatcher, Supervisor, Technician must NOT see it
+- Hidden, not disabled
+
+━━━━━━━━━━━━━━━━━━
+PLACEMENT
+━━━━━━━━━━━━━━━━━━
+- Place this card in the homepage analytics area
+- Below Business Snapshot
+- Near / alongside existing “This Week” analytics
+- Do NOT disrupt the primary “Today” work section
+
+━━━━━━━━━━━━━━━━━━
+CARD TITLE
+━━━━━━━━━━━━━━━━━━
+- Title: “Estimates · This Week”
+- Include a small clipboard/estimate icon
+- Use existing heading and icon styles
+
+━━━━━━━━━━━━━━━━━━
+CARD LAYOUT (MATCH REFERENCE IMAGE)
+━━━━━━━━━━━━━━━━━━
+
+LEFT SIDE
+- Label: “Created”
+- Value: total estimates created in last 7 days
+  - Prefer $ total if available
+  - Otherwise show count
+- Label: “Won”
+- Value: total estimates won in last 7 days
+  - Prefer $ total if available
+  - Otherwise show count
+
+RIGHT SIDE
+- Large percentage value:
+  - Win Rate = (Won / Created) * 100
+- Label below: “Won”
+- No chart required
+- No donut required
+- Text-only percentage is acceptable and preferred for v1
+
+━━━━━━━━━━━━━━━━━━
+DATA RULES
+━━━━━━━━━━━━━━━━━━
+- Time range: last 7 days
+- Use existing Estimates APIs only
+- Status for “Won” must match existing estimate status logic
+- If Created = 0:
+  - Show $0 / 0
+  - Show Win Rate as 0%
+- If any value cannot be computed:
+  - Show “—”
+  - Do NOT crash
+  - Do NOT hide the entire card
+
+━━━━━━━━━━━━━━━━━━
+INTERACTION
+━━━━━━━━━━━━━━━━━━
+- Entire card is tappable
+- Routes to Estimates page
+- No popups
+- No hover effects
+
+━━━━━━━━━━━━━━━━━━
+DESIGN RULES
+━━━━━━━━━━━━━━━━━━
+- Soft card surface
+- Large values, muted labels
+- Plenty of whitespace
+- No charts
+- No legends
+- No animations
+- Must visually match existing EcoLogic cards
+
+━━━━━━━━━━━━━━━━━━
+ERROR & LOADING STATES
+━━━━━━━━━━━━━━━━━━
+- Loading: skeleton version of the card
+- Error: friendly inline message (“Unable to load estimate stats”)
+- Homepage must continue rendering even if this fails
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+- Card looks nearly identical in structure to the reference image
+- Feels modern and clean
+- Adds insight without clutter
+- Owner/Admin instantly understands estimate performance
+- No console errors

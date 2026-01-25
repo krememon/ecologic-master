@@ -134,8 +134,8 @@ export default function Home() {
     invoice.status !== 'paid' && invoice.status !== 'cancelled'
   );
 
-  const pulseLoading = isOwner && (invoicesLoading || leadsLoading);
-  const pulseError = isOwner && (invoicesError || leadsError);
+  const pulseLoading = isOwner && (invoicesLoading || leadsLoading || estimatesLoading);
+  const pulseError = isOwner && (invoicesError || leadsError || estimatesError);
 
   const pulseMetrics = (() => {
     if (!isOwner) return null;
@@ -163,14 +163,34 @@ export default function Home() {
 
       const leadsWon7dCount = leadsCreated7d.filter(lead => lead.status === 'won').length;
       const leadsCreated7dCount = leadsCreated7d.length;
-      const winRate7d = leadsCreated7dCount > 0 ? Math.round((leadsWon7dCount / leadsCreated7dCount) * 100) : null;
+      const leadsWinRate7d = leadsCreated7dCount > 0 ? Math.round((leadsWon7dCount / leadsCreated7dCount) * 100) : null;
+
+      const estimatesCreated7d = estimates.filter(est => {
+        if (!est.createdAt) return false;
+        const createdDate = parseISO(est.createdAt as unknown as string);
+        return isAfter(createdDate, sevenDaysAgo);
+      });
+
+      const estimatesWon7d = estimatesCreated7d.filter(est => est.status === 'approved');
+      const estimatesCreated7dCount = estimatesCreated7d.length;
+      const estimatesWon7dCount = estimatesWon7d.length;
+      
+      const estimatesCreated7dTotal = estimatesCreated7d.reduce((sum, est) => sum + (est.totalCents || 0), 0);
+      const estimatesWon7dTotal = estimatesWon7d.reduce((sum, est) => sum + (est.totalCents || 0), 0);
+      
+      const estimatesWinRate7d = estimatesCreated7dCount > 0 ? Math.round((estimatesWon7dCount / estimatesCreated7dCount) * 100) : 0;
 
       return {
         revenue7d,
         invoicesPaid7d,
         leadsCreated7d: leadsCreated7dCount,
         leadsWon7d: leadsWon7dCount,
-        winRate7d,
+        leadsWinRate7d,
+        estimatesCreated7d: estimatesCreated7dCount,
+        estimatesWon7d: estimatesWon7dCount,
+        estimatesCreated7dTotal,
+        estimatesWon7dTotal,
+        estimatesWinRate7d,
         hasData: true,
       };
     } catch {
@@ -325,7 +345,7 @@ export default function Home() {
           </div>
 
           {isOwner && (
-            <div className="px-4 mb-6">
+            <div className="px-4 mb-4">
               <Card 
                 className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 cursor-pointer hover:shadow-md transition-shadow"
                 onClick={() => navigate('/leads')}
@@ -360,7 +380,59 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
-                      <WinRateRing percentage={pulseMetrics.winRate7d} />
+                      <WinRateRing percentage={pulseMetrics.leadsWinRate7d} />
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {isOwner && (
+            <div className="px-4 mb-6">
+              <Card 
+                className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => navigate('/jobs?tab=estimates')}
+              >
+                <CardContent className="p-5">
+                  {pulseLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                    </div>
+                  ) : pulseError ? (
+                    <div className="flex items-center justify-center py-4 text-slate-400">
+                      <span className="text-sm">Unable to load estimate stats</span>
+                    </div>
+                  ) : pulseMetrics ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-4">
+                          <ClipboardList className="h-4 w-4 text-slate-400" />
+                          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                            Estimates · This Week
+                          </p>
+                        </div>
+                        <div className="flex gap-8">
+                          <div>
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                              ${(pulseMetrics.estimatesCreated7dTotal / 100).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Created</p>
+                          </div>
+                          <div>
+                            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                              ${(pulseMetrics.estimatesWon7dTotal / 100).toLocaleString()}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Won</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                          {pulseMetrics.estimatesWinRate7d}%
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Won</p>
+                      </div>
                     </div>
                   ) : null}
                 </CardContent>
