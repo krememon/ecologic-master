@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target } from "lucide-react";
+import { Building2, LayoutDashboard, Users, UserCheck, FileText, DollarSign, FolderOpen, MessageSquare, Brain, PenTool, Settings, LogOut, X, UsersIcon, Wrench, Target, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
 import type { Permission } from "@shared/permissions";
 
-const getNavigation = (t: any) => [
+const getNavigation = (t: any, role: string | null) => [
   { name: t('navigation.home'), href: "/", icon: LayoutDashboard, permission: null },
   { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
   { name: t('navigation.jobs'), href: "/jobs", icon: Building2, permission: "jobs.view.all" as Permission, permissionAny: ["jobs.view.all", "jobs.view.assigned"] as Permission[] },
@@ -20,6 +20,7 @@ const getNavigation = (t: any) => [
   { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "documents.view" as Permission },
   { name: t('navigation.messages'), href: "/messages", icon: MessageSquare, permission: null },
   { name: "Employees", href: "/employees", icon: UsersIcon, permission: "users.view" as Permission },
+  { name: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", href: "/timesheets", icon: Clock, permission: null, excludeRoles: ["ESTIMATOR"] as string[] },
 ];
 
 interface SidebarProps {
@@ -37,7 +38,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
   // Filter navigation items based on current user's permissions
   // useMemo ensures this recalculates when role changes (e.g., after login/logout)
   const filteredNavigation = useMemo(() => {
-    const navigation = getNavigation(t);
+    const navigation = getNavigation(t, role);
     
     // If no role, show no navigation items (safety check)
     if (!role) {
@@ -45,6 +46,10 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
     }
     
     return navigation.filter(item => {
+      // If item has excludeRoles and current role is excluded, hide the item
+      if ((item as any).excludeRoles && (item as any).excludeRoles.includes(role)) {
+        return false;
+      }
       // If item has permissionAny, check if user has any of those permissions
       if ((item as any).permissionAny) {
         return canAny((item as any).permissionAny);

@@ -46,6 +46,7 @@ import PaymentReview from "@/pages/PaymentReview";
 import PublicInvoicePay from "@/pages/PublicInvoicePay";
 import Leads from "@/pages/Leads";
 import LeadDetails from "@/pages/LeadDetails";
+import Timesheets from "@/pages/Timesheets";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -159,6 +160,7 @@ function Router() {
         <Route path="/ai-scheduling">{() => <Redirect to="/schedule" />}</Route>
         <Route path="/approvals" component={Approvals} />
         <Route path="/employees" component={Employees} />
+        <Route path="/timesheets" component={Timesheets} />
         <Route path="/settings" component={Settings} />
         <Route path="/customize" component={Customize} />
         <Route path="/customize/company-profile" component={CompanyProfile} />

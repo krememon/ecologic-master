@@ -302,6 +302,8 @@ export interface IStorage {
   clockOut(userId: string, companyId: number): Promise<TimeLog | undefined>;
   switchJob(userId: string, companyId: number, jobId?: number, category?: string): Promise<{ ended: TimeLog; started: TimeLog }>;
   getJobLaborTotals(jobId: number): Promise<{ totalMinutes: number; laborByUser: { userId: string; minutes: number }[] }>;
+  getTimeEntriesForUser(userId: string, companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null })[]>;
+  getTimeEntriesForCompany(companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null; user?: { id: string; firstName: string | null; lastName: string | null } })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2550,6 +2552,85 @@ export class DatabaseStorage implements IStorage {
     const laborByUser = Object.entries(userMinutes).map(([userId, minutes]) => ({ userId, minutes }));
     
     return { totalMinutes, laborByUser };
+  }
+
+  async getTimeEntriesForUser(userId: string, companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null })[]> {
+    const logs = await db
+      .select({
+        id: timeLogs.id,
+        companyId: timeLogs.companyId,
+        userId: timeLogs.userId,
+        jobId: timeLogs.jobId,
+        category: timeLogs.category,
+        clockInAt: timeLogs.clockInAt,
+        clockOutAt: timeLogs.clockOutAt,
+        date: timeLogs.date,
+        notes: timeLogs.notes,
+        createdAt: timeLogs.createdAt,
+        job: {
+          id: jobs.id,
+          title: jobs.title,
+        },
+      })
+      .from(timeLogs)
+      .leftJoin(jobs, eq(timeLogs.jobId, jobs.id))
+      .where(
+        and(
+          eq(timeLogs.userId, userId),
+          eq(timeLogs.companyId, companyId),
+          gte(timeLogs.date, startDate),
+          lte(timeLogs.date, endDate),
+          isNotNull(timeLogs.clockOutAt)
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt));
+
+    return logs.map(log => ({
+      ...log,
+      job: log.job?.id ? log.job : null,
+    }));
+  }
+
+  async getTimeEntriesForCompany(companyId: number, startDate: string, endDate: string): Promise<(TimeLog & { job?: { id: number; title: string | null } | null; user?: { id: string; firstName: string | null; lastName: string | null } })[]> {
+    const logs = await db
+      .select({
+        id: timeLogs.id,
+        companyId: timeLogs.companyId,
+        userId: timeLogs.userId,
+        jobId: timeLogs.jobId,
+        category: timeLogs.category,
+        clockInAt: timeLogs.clockInAt,
+        clockOutAt: timeLogs.clockOutAt,
+        date: timeLogs.date,
+        notes: timeLogs.notes,
+        createdAt: timeLogs.createdAt,
+        job: {
+          id: jobs.id,
+          title: jobs.title,
+        },
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(timeLogs)
+      .leftJoin(jobs, eq(timeLogs.jobId, jobs.id))
+      .innerJoin(users, eq(timeLogs.userId, users.id))
+      .where(
+        and(
+          eq(timeLogs.companyId, companyId),
+          gte(timeLogs.date, startDate),
+          lte(timeLogs.date, endDate),
+          isNotNull(timeLogs.clockOutAt)
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt));
+
+    return logs.map(log => ({
+      ...log,
+      job: log.job?.id ? log.job : null,
+    }));
   }
 }
 

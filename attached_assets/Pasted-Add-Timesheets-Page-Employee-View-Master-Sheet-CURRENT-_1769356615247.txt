@@ -1,0 +1,132 @@
+Add Timesheets Page (Employee View + Master Sheet)
+
+CURRENT
+EcoLogic has working clock in/out with job-linked time entries.
+Time is stored correctly but there is no dedicated Timesheets page.
+
+GOAL
+Add a Timesheets page that mirrors real-world paper timesheets:
+- Employees see only their own time
+- Owner/Admin/Supervisor see a master sheet of everyone’s time
+- Read-only v1 (no editing or payroll)
+
+━━━━━━━━━━━━━━━━━━
+RBAC (STRICT)
+━━━━━━━━━━━━━━━━━━
+- Technician:
+  - Can access “My Timesheet”
+  - Can only see their own time entries
+- Owner/Admin:
+  - Can access full Timesheets (all employees)
+- Supervisor:
+  - Same as Owner/Admin
+- Dispatcher:
+  - Optional access (view-only) if already allowed
+- Estimator:
+  - No access
+
+Hidden, not disabled.
+
+━━━━━━━━━━━━━━━━━━
+NAVIGATION
+━━━━━━━━━━━━━━━━━━
+- Add “Timesheets” to main navigation for Owner/Admin/Supervisor
+- Add “My Timesheet” for Technicians
+- Route can be shared, but content must be role-aware
+
+━━━━━━━━━━━━━━━━━━
+DATA SOURCE
+━━━━━━━━━━━━━━━━━━
+Use existing time_entries data:
+- userId
+- jobId (nullable)
+- startAt
+- endAt
+
+Derive:
+- Date (from startAt)
+- Start Time
+- End Time
+- Hours Worked = (endAt - startAt)
+
+Ignore entries where endAt is null (active sessions).
+
+━━━━━━━━━━━━━━━━━━
+EMPLOYEE VIEW (TECHNICIAN)
+━━━━━━━━━━━━━━━━━━
+PAGE TITLE
+- “My Timesheet”
+
+DEFAULT VIEW
+- This Week (Mon–Sun)
+- Optional toggle: Last Week
+
+TABLE COLUMNS
+- Date
+- Start
+- End
+- Hours
+- Job (job name or category)
+
+RULES
+- Read-only
+- No editing
+- No delete
+- No approvals (v1)
+
+━━━━━━━━━━━━━━━━━━
+MASTER VIEW (OWNER / SUPERVISOR)
+━━━━━━━━━━━━━━━━━━
+PAGE TITLE
+- “Timesheets”
+
+DEFAULT VIEW
+- This Week
+
+TABLE COLUMNS
+- Employee Name
+- Date
+- Start
+- End
+- Hours
+- Job
+
+FEATURES (v1)
+- Filter by employee (dropdown/search)
+- Filter by date range (week selector)
+- Group rows by employee (optional but recommended)
+
+━━━━━━━━━━━━━━━━━━
+API REQUIREMENTS
+━━━━━━━━━━━━━━━━━━
+Add or extend endpoint:
+- GET /api/time/entries
+
+Behavior:
+- Technician → returns only their entries
+- Owner/Admin/Supervisor → returns all entries
+- Enforce RBAC server-side
+
+━━━━━━━━━━━━━━━━━━
+UI / UX RULES
+━━━━━━━━━━━━━━━━━━
+- Table-first layout (like real timesheets)
+- Clean, minimal styling
+- Mobile-friendly (stacked rows if needed)
+- Reuse existing table components
+- Handle empty states (“No time entries this week”)
+
+━━━━━━━━━━━━━━━━━━
+ERROR HANDLING
+━━━━━━━━━━━━━━━━━━
+- Loading state
+- Friendly error state
+- Never white-screen
+
+━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━
+- Tech can see their weekly hours clearly
+- Owner can review everyone’s time in one place
+- Data matches clock in/out records exactly
+- No console errors

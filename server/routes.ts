@@ -1177,6 +1177,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Unable to clock out' });
     }
   });
+
+  // Get time entries for Timesheets page (role-aware)
+  app.get('/api/time/entries', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+
+      const role = member.role as UserRole;
+
+      // Estimators cannot access timesheets
+      if (role === 'ESTIMATOR') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // Get date range from query params
+      const startDate = req.query.startDate as string;
+      const endDate = req.query.endDate as string;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'startDate and endDate are required' });
+      }
+
+      // Technicians can only see their own entries
+      if (role === 'TECHNICIAN') {
+        const entries = await storage.getTimeEntriesForUser(userId, member.companyId, startDate, endDate);
+        return res.json({ role: 'technician', entries });
+      }
+
+      // Owner, Supervisor, Dispatcher see all entries
+      const entries = await storage.getTimeEntriesForCompany(member.companyId, startDate, endDate);
+      return res.json({ role: 'manager', entries });
+    } catch (error: any) {
+      console.error('Error getting time entries:', error);
+      res.status(500).json({ error: 'Failed to get time entries' });
+    }
+  });
   
   // Get labor totals for a job
   app.get('/api/jobs/:jobId/labor', isAuthenticated, async (req: any, res) => {
