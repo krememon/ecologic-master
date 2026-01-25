@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
 import type { Permission } from "@shared/permissions";
 
-const getNavigation = (t: any, role: string | null) => [
+const getNavigation = (t: any, role: string | undefined) => [
   { name: t('navigation.home'), href: "/", icon: LayoutDashboard, permission: null },
   { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
   { name: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", href: "/timesheets", icon: Clock, permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
@@ -33,7 +33,10 @@ interface SidebarProps {
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const { t } = useTranslation();
-  const { can, canAny, role } = useCan();
+  const { can, canAny, role: hookRole } = useCan();
+  
+  // Use role from user prop as fallback (user prop comes from Layout which has auth data)
+  const role = hookRole || user?.role;
 
   // Filter navigation items based on current user's permissions
   // useMemo ensures this recalculates when role changes (e.g., after login/logout)
