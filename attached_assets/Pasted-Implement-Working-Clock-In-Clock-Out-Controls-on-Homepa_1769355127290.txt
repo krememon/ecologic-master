@@ -1,0 +1,121 @@
+Implement Working Clock In / Clock Out Controls on Homepage (Time Today Card)
+
+CURRENT
+Homepage has a “Time Today” section concept, but there is no reliable,
+interactive control that actually clocks a user in/out and persists to DB.
+
+GOAL
+Add a real Clock In / Clock Out button (and job/category picker) that:
+- Creates time entries in the database
+- Updates UI immediately (no refresh required)
+- Respects RBAC and “hidden not disabled”
+- Never white-screens on error
+
+RBAC (STRICT)
+- Technician:
+  - Can clock in/out
+  - Can only select jobs they are assigned to
+  - Can only view/modify their own active entry
+- Dispatcher/Supervisor/Owner/Admin:
+  - Do NOT see clock in/out buttons (v1)
+  - Can optionally see aggregate “hours today” stats later
+- Hidden, not disabled
+
+HOMEPAGE UI (TECHNICIAN VIEW ONLY)
+Add a “Time Today” card with:
+
+A) Header row
+- Title: “Time Today”
+- Status chip:
+  - If clocked out: “Not clocked in”
+  - If clocked in: “Clocked in” (subtle indicator)
+
+B) Body
+- If clocked in:
+  - “Working on: {JobName or Category}”
+  - “Elapsed: 2h 14m” (live updating every minute is OK; every 30s optional)
+- If clocked out:
+  - Show a short helper line: “Clock in to start tracking time.”
+
+C) Actions
+- If clocked out:
+  - Primary button: “Clock In”
+- If clocked in:
+  - Secondary button: “Switch Job”
+  - Primary button: “Clock Out”
+
+No popups for success.
+Use inline state changes and existing UI patterns.
+
+CLOCK IN FLOW
+When user taps “Clock In”:
+1) Open existing modal/sheet pattern used elsewhere (searchable picker)
+2) Picker options (two sections):
+   - Assigned Jobs (searchable)
+   - Non-job categories: Shop, Drive, Admin, Break
+3) On selection:
+   - Call POST /api/time/clock-in with { jobId } OR { category }
+4) On success:
+   - Close modal
+   - Update card state to “Clocked in”
+   - Show working-on + elapsed
+   - Show Switch Job + Clock Out buttons
+
+SWITCH JOB FLOW (only while clocked in)
+- Tapping Switch Job opens the same picker
+- On selection call POST /api/time/switch with { jobId } or { category }
+- Backend must close current active entry and open new one
+- UI updates “Working on:” immediately
+
+CLOCK OUT FLOW
+- Tapping Clock Out calls POST /api/time/clock-out
+- On success:
+  - Update UI to “Not clocked in”
+  - Remove “Working on”
+  - Button returns to “Clock In”
+- If no active entry exists:
+  - Show friendly inline error and recover gracefully
+
+BACKEND REQUIREMENTS (IF NOT ALREADY PRESENT)
+Create minimal endpoints with server-side RBAC enforcement:
+- GET  /api/time/today
+  - Technician: returns their active entry + today totals
+- POST /api/time/clock-in
+  - Creates active time entry
+  - Enforce only one active entry per user
+  - Validate jobId is allowed for that user
+- POST /api/time/switch
+  - Ends active entry, starts new entry
+  - Validate new jobId is allowed
+- POST /api/time/clock-out
+  - Ends active entry
+
+DATA MODEL
+Use time_entries:
+- id, userId, jobId(nullable), category(nullable), startAt, endAt(nullable)
+
+CONSTRAINTS
+- Only one active entry per user (endAt is null)
+- Switching splits entries correctly
+- Created = startAt now; clockOut sets endAt now
+
+ERROR HANDLING (CRITICAL)
+- Each API call must be try/catch
+- If a call fails:
+  - Show inline error text inside the Time Today card
+  - Do not crash page
+  - Keep button states consistent (no stuck loading)
+- Add minimal logs (only around time endpoints) but do not spam console
+
+DELIVERABLES
+- Working Clock In / Out on homepage for technicians
+- Job/category picker modal reused from existing patterns
+- API endpoints implemented (if missing)
+- Time entries saved and split correctly
+- No console errors, no white screens
+
+SUCCESS CRITERIA
+- Technician can clock in with 2 taps
+- Can switch jobs mid-day
+- Can clock out instantly
+- Home updates immediately and reliably

@@ -429,37 +429,52 @@ export default function Home() {
             ) : timeData?.role === 'technician' ? (
               <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-white">Time Today</h3>
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+                      timeData.isClockedIn 
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    }`}>
+                      {timeData.isClockedIn && (
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                        </span>
+                      )}
+                      {timeData.isClockedIn ? 'Clocked in' : 'Not clocked in'}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-full ${timeData.isClockedIn ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
                         <Clock className={`h-5 w-5 ${timeData.isClockedIn ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`} />
                       </div>
                       <div>
-                        <h3 className="text-sm font-medium text-slate-900 dark:text-white">Time Today</h3>
                         <p className="text-lg font-semibold text-slate-900 dark:text-white">
                           {timeData.hoursToday.toFixed(1)} hrs
                         </p>
-                        {timeData.isClockedIn && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            {timeData.currentJobTitle 
-                              ? `Working on: ${timeData.currentJobTitle}` 
-                              : timeData.currentCategory && timeData.currentCategory !== 'job'
-                                ? `Activity: ${CATEGORY_LABELS[timeData.currentCategory as TimeCategory] || timeData.currentCategory}`
-                                : 'Working'}
+                        {timeData.isClockedIn ? (
+                          <div className="space-y-0.5">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {timeData.currentJobTitle 
+                                ? `Working on: ${timeData.currentJobTitle}` 
+                                : timeData.currentCategory && timeData.currentCategory !== 'job'
+                                  ? `Activity: ${CATEGORY_LABELS[timeData.currentCategory as TimeCategory] || timeData.currentCategory}`
+                                  : 'Working'}
+                            </p>
+                            {timeData.clockedInAt && (
+                              <ElapsedTime startTime={timeData.clockedInAt} />
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Clock in to start tracking time
                           </p>
                         )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {timeData.isClockedIn && (
-                        <span className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                          </span>
-                          Active
-                        </span>
-                      )}
                       <div className="flex items-center gap-2">
                         {timeData.isClockedIn ? (
                           <>
@@ -835,6 +850,38 @@ function getGreeting(): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
+}
+
+function ElapsedTime({ startTime }: { startTime: string }) {
+  const [elapsed, setElapsed] = useState('');
+  
+  useEffect(() => {
+    const calculateElapsed = () => {
+      const start = new Date(startTime).getTime();
+      const now = Date.now();
+      const diff = now - start;
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      
+      if (hours > 0) {
+        setElapsed(`Elapsed: ${hours}h ${minutes}m`);
+      } else {
+        setElapsed(`Elapsed: ${minutes}m`);
+      }
+    };
+    
+    calculateElapsed();
+    const interval = setInterval(calculateElapsed, 60000);
+    
+    return () => clearInterval(interval);
+  }, [startTime]);
+  
+  return (
+    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+      {elapsed}
+    </p>
+  );
 }
 
 function StatusPill({ 
