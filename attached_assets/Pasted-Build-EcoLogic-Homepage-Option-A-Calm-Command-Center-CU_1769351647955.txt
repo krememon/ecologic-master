@@ -1,0 +1,104 @@
+Build EcoLogic Homepage – Option A (Calm Command Center)
+
+CURRENT
+Homepage has “Here’s what’s happening today” and “Needs Attention” sections
+that feel repetitive and overly task-driven.
+
+GOAL
+Replace those sections with a calmer, more premium structure:
+- Awareness first
+- Insight second
+- Action later
+
+This homepage should feel like professional SaaS software,
+not a task nagger.
+
+DO NOT add charts.
+DO NOT redesign existing components.
+
+━━━━━━━━━━━━━━━━━━
+PAGE STRUCTURE
+━━━━━━━━━━━━━━━━━━
+
+1) HEADER
+- Title: Home
+- Existing hamburger menu
+- Global floating “+” button unchanged
+
+━━━━━━━━━━━━━━━━━━
+2) TODAY AT A GLANCE
+━━━━━━━━━━━━━━━━━━
+Single summary card that provides awareness, not urgency.
+
+CONTENT (role-aware):
+- Jobs scheduled today
+- Leads created today
+- Estimates sent today
+
+RULES
+- Render only metrics allowed by role
+- Technician: jobs only
+- Estimator: leads + estimates
+- Owner/Admin: all permitted metrics
+- No per-line arrows
+- Optional “View details →” at bottom of card
+- Pull data from existing APIs only
+- If a metric is unavailable, omit it (do not error)
+
+━━━━━━━━━━━━━━━━━━
+3) BUSINESS SNAPSHOT
+━━━━━━━━━━━━━━━━━━
+High-level business state card(s).
+
+CONTENT (role-aware):
+- Open jobs
+- Open estimates
+- Outstanding invoices (Owner/Admin only)
+
+RULES
+- Neutral wording only
+- No “needs attention” or alert language
+- Cards are tappable and route to existing pages
+- Hide cards entirely if role does not allow
+- Handle zero counts gracefully
+
+━━━━━━━━━━━━━━━━━━
+4) THIS WEEK PULSE (Owner/Admin only)
+━━━━━━━━━━━━━━━━━━
+Keep existing implementation:
+- Revenue Collected (7d) if available
+- Invoices Paid (7d)
+- Win Rate (7d)
+
+RULES
+- Hidden for non-owner roles
+- No charts
+- Use existing card styles
+- Handle unavailable metrics gracefully
+
+━━━━━━━━━━━━━━━━━━
+5) TODAY & UPCOMING
+━━━━━━━━━━━━━━━━━━
+- Card list only
+- No calendar UI
+- Role-aware:
+  - Technician: assigned jobs
+  - Dispatcher/Supervisor: scheduled jobs
+  - Estimator: relevant leads/estimates if supported
+  - Owner/Admin: jobs today + upcoming
+
+━━━━━━━━━━━━━━━━━━
+TECHNICAL RULES
+━━━━━━━━━━━━━━━━━━
+- Use existing APIs only
+- Each section fetches independently
+- Loading, empty, and error states required
+- Never show a blank white screen
+- No console errors
+- Hidden, not disabled (strict RBAC)
+
+SUCCESS CRITERIA
+- Homepage feels calm and premium
+- User immediately understands business state
+- No nagging or alert-driven UX
+- Looks and feels native to EcoLogic

@@ -7,15 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useCan } from "@/hooks/useCan";
 import { 
   Briefcase, 
-  Users, 
   FileText, 
   DollarSign, 
   AlertCircle,
-  CheckCircle2,
   Clock,
   ChevronRight,
-  Loader2,
-  Circle
+  Loader2
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
@@ -88,9 +85,11 @@ export default function Home() {
   const canSeeLeads = role !== 'TECHNICIAN';
   const canSeeEstimates = role !== 'TECHNICIAN';
   const isTechnician = role === 'TECHNICIAN';
+  const isEstimator = role === 'ESTIMATOR';
   const userId = user?.id;
 
   const today = startOfDay(new Date());
+  const sevenDaysAgo = subDays(today, 7);
   
   const getJobDate = (job: JobWithClient): Date | null => {
     if (job.startDate) {
@@ -108,28 +107,35 @@ export default function Home() {
     ? jobs.filter(job => isAssignedToMe(job))
     : jobs;
 
-  const jobsToday = myJobs.filter(job => {
+  const jobsScheduledToday = myJobs.filter(job => {
     const date = getJobDate(job);
     return date && isToday(date) && job.status !== 'completed' && job.status !== 'cancelled';
   });
 
-  const newLeads = leads.filter(lead => lead.status === 'new');
-  
-  const unsentEstimates = estimates.filter(estimate => 
-    estimate.status === 'draft'
-  );
-
-  const unpaidInvoices = invoices.filter(invoice => 
-    invoice.status !== 'paid' && invoice.status !== 'cancelled'
-  );
-
-  const overdueInvoices = unpaidInvoices.filter(inv => {
-    if (!inv.dueDate) return false;
-    const dueDate = parseISO(inv.dueDate as unknown as string);
-    return dueDate < today;
+  const leadsCreatedToday = leads.filter(lead => {
+    if (!lead.createdAt) return false;
+    const createdDate = parseISO(lead.createdAt as unknown as string);
+    return isToday(createdDate);
   });
 
-  const sevenDaysAgo = subDays(today, 7);
+  const estimatesSentToday = estimates.filter(estimate => {
+    if (estimate.status !== 'sent' && estimate.status !== 'approved') return false;
+    if (!estimate.createdAt) return false;
+    const createdDate = parseISO(estimate.createdAt as unknown as string);
+    return isToday(createdDate);
+  });
+
+  const openJobs = myJobs.filter(job => 
+    job.status !== 'completed' && job.status !== 'cancelled'
+  );
+
+  const openEstimates = estimates.filter(estimate => 
+    estimate.status === 'draft' || estimate.status === 'sent'
+  );
+
+  const outstandingInvoices = invoices.filter(invoice => 
+    invoice.status !== 'paid' && invoice.status !== 'cancelled'
+  );
 
   const pulseLoading = isOwner && (invoicesLoading || leadsLoading);
   const pulseError = isOwner && (invoicesError || leadsError);
@@ -173,57 +179,6 @@ export default function Home() {
     }
   })();
 
-  const needsAttentionItems: Array<{
-    id: string;
-    type: 'lead' | 'estimate' | 'job' | 'invoice';
-    title: string;
-    subtitle: string;
-    urgency: 'high' | 'medium' | 'low';
-    route: string;
-  }> = [];
-
-  if (canSeeLeads) {
-    newLeads.slice(0, 3).forEach(lead => {
-      const customerName = lead.customer 
-        ? `${lead.customer.firstName || ''} ${lead.customer.lastName || ''}`.trim() 
-        : 'New Lead';
-      needsAttentionItems.push({
-        id: `lead-${lead.id}`,
-        type: 'lead',
-        title: customerName || 'New Lead',
-        subtitle: 'Not contacted yet',
-        urgency: 'high',
-        route: `/leads/${lead.id}`,
-      });
-    });
-  }
-
-  if (canSeeEstimates) {
-    unsentEstimates.slice(0, 3).forEach(estimate => {
-      needsAttentionItems.push({
-        id: `estimate-${estimate.id}`,
-        type: 'estimate',
-        title: estimate.estimateNumber || `Estimate #${estimate.id}`,
-        subtitle: 'Not sent to customer',
-        urgency: 'medium',
-        route: `/estimates/${estimate.id}`,
-      });
-    });
-  }
-
-  if (isAdmin) {
-    overdueInvoices.slice(0, 3).forEach(invoice => {
-      needsAttentionItems.push({
-        id: `invoice-${invoice.id}`,
-        type: 'invoice',
-        title: invoice.invoiceNumber || `Invoice #${invoice.id}`,
-        subtitle: 'Overdue',
-        urgency: 'high',
-        route: `/invoicing/${invoice.id}`,
-      });
-    });
-  }
-
   const upcomingJobs = myJobs
     .filter(job => {
       const date = getJobDate(job);
@@ -240,38 +195,18 @@ export default function Home() {
 
   const dataLoading = jobsLoading || (canSeeLeads && leadsLoading) || (canSeeEstimates && estimatesLoading) || (isAdmin && invoicesLoading);
 
-  const briefItems: Array<{ text: string; count: number; route: string }> = [];
+  const todayGlanceItems: Array<{ label: string; value: number }> = [];
   
-  if (jobsToday.length > 0) {
-    briefItems.push({
-      text: jobsToday.length === 1 ? '1 job scheduled today' : `${jobsToday.length} jobs scheduled today`,
-      count: jobsToday.length,
-      route: '/jobs',
-    });
+  if (!isEstimator) {
+    todayGlanceItems.push({ label: 'Jobs scheduled', value: jobsScheduledToday.length });
   }
-
-  if (canSeeLeads && newLeads.length > 0) {
-    briefItems.push({
-      text: newLeads.length === 1 ? '1 new lead awaiting contact' : `${newLeads.length} new leads awaiting contact`,
-      count: newLeads.length,
-      route: '/leads',
-    });
+  
+  if (canSeeLeads) {
+    todayGlanceItems.push({ label: 'Leads created', value: leadsCreatedToday.length });
   }
-
-  if (canSeeEstimates && unsentEstimates.length > 0) {
-    briefItems.push({
-      text: unsentEstimates.length === 1 ? '1 estimate ready to send' : `${unsentEstimates.length} estimates ready to send`,
-      count: unsentEstimates.length,
-      route: '/jobs?tab=estimates',
-    });
-  }
-
-  if (isAdmin && unpaidInvoices.length > 0) {
-    briefItems.push({
-      text: unpaidInvoices.length === 1 ? '1 unpaid invoice' : `${unpaidInvoices.length} unpaid invoices`,
-      count: unpaidInvoices.length,
-      route: '/invoicing',
-    });
+  
+  if (canSeeEstimates) {
+    todayGlanceItems.push({ label: 'Estimates sent', value: estimatesSentToday.length });
   }
 
   const greeting = getGreeting();
@@ -279,8 +214,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
-      <div className="px-4 pt-6 pb-2">
+      <div className="px-4 pt-6 pb-4">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Home</h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+          {greeting}, {firstName}
+        </p>
       </div>
 
       {hasDataError && (
@@ -303,60 +241,67 @@ export default function Home() {
       ) : (
         <>
           <div className="px-4 mb-6">
+            <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+              Today at a Glance
+            </h2>
             <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-              <CardContent className="p-5">
-                <p className="text-lg text-slate-700 dark:text-slate-300 mb-1">
-                  {greeting}, {firstName}
-                </p>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
-                  Here's what's happening today
-                </p>
-                
-                {briefItems.length === 0 ? (
-                  <div className="flex items-center gap-3 py-2">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                    <span className="text-slate-600 dark:text-slate-400 text-sm">
-                      Your day looks clear. Enjoy!
-                    </span>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {briefItems.map((item, index) => (
-                      <BriefItem 
-                        key={index}
-                        text={item.text}
-                        onClick={() => navigate(item.route)}
-                      />
-                    ))}
-                  </div>
-                )}
+              <CardContent className="p-4">
+                <div className="flex justify-around">
+                  {todayGlanceItems.map((item, index) => (
+                    <div key={index} className="text-center">
+                      <p className="text-2xl font-semibold text-slate-900 dark:text-white">
+                        {item.value}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {item.label}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => navigate(isEstimator ? '/leads' : '/jobs')}
+                  className="w-full mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1"
+                >
+                  View details
+                  <ChevronRight className="h-4 w-4" />
+                </button>
               </CardContent>
             </Card>
           </div>
 
-          {needsAttentionItems.length > 0 && (
-            <div className="px-4 mb-6">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
-                Needs Attention
-              </h2>
-              <div className="space-y-2">
-                {needsAttentionItems.map(item => (
-                  <AttentionCard
-                    key={item.id}
-                    type={item.type}
-                    title={item.title}
-                    subtitle={item.subtitle}
-                    urgency={item.urgency}
-                    onClick={() => navigate(item.route)}
-                  />
-                ))}
-              </div>
+          <div className="px-4 mb-6">
+            <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+              Business Snapshot
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
+              <SnapshotCard
+                icon={Briefcase}
+                label="Open Jobs"
+                value={openJobs.length}
+                onClick={() => navigate('/jobs')}
+              />
+              {canSeeEstimates && (
+                <SnapshotCard
+                  icon={FileText}
+                  label="Open Estimates"
+                  value={openEstimates.length}
+                  onClick={() => navigate('/jobs?tab=estimates')}
+                />
+              )}
+              {isAdmin && (
+                <SnapshotCard
+                  icon={DollarSign}
+                  label="Outstanding Invoices"
+                  value={outstandingInvoices.length}
+                  onClick={() => navigate('/invoicing')}
+                />
+              )}
             </div>
-          )}
+          </div>
 
           {isOwner && (
             <div className="px-4 mb-6">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
+              <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
                 This Week Pulse
               </h2>
               <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
@@ -395,12 +340,12 @@ export default function Home() {
           )}
 
           <div className="px-4">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-3">
+            <h2 className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
               {isTechnician ? 'My Schedule' : 'Today & Upcoming'}
             </h2>
             
             {upcomingJobs.length === 0 ? (
-              <Card className="bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardContent className="p-4 flex items-center gap-3">
                   <Clock className="h-5 w-5 text-slate-400" />
                   <span className="text-slate-500 dark:text-slate-400 text-sm">
@@ -448,18 +393,36 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-function BriefItem({ text, onClick }: { text: string; onClick: () => void }) {
+function SnapshotCard({ 
+  icon: Icon, 
+  label, 
+  value, 
+  onClick,
+  className = ""
+}: { 
+  icon: React.ElementType; 
+  label: string; 
+  value: number; 
+  onClick: () => void;
+  className?: string;
+}) {
   return (
-    <button
+    <Card 
+      className={`cursor-pointer hover:shadow-md transition-shadow bg-white dark:bg-slate-900 ${className}`}
       onClick={onClick}
-      className="w-full flex items-center gap-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors -mx-2 px-2"
     >
-      <Circle className="h-2 w-2 text-blue-500 fill-blue-500 flex-shrink-0" />
-      <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">
-        {text}
-      </span>
-      <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
-    </button>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
+            <Icon className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+          </div>
+          <div>
+            <p className="text-xl font-semibold text-slate-900 dark:text-white">{value}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -477,63 +440,13 @@ function PulseMetric({
       onClick={onClick}
       className="text-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
     >
-      <p className="text-xl font-bold text-slate-900 dark:text-white">
+      <p className="text-xl font-semibold text-slate-900 dark:text-white">
         {value}
       </p>
       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
         {label}
       </p>
     </button>
-  );
-}
-
-function AttentionCard({ 
-  type, 
-  title, 
-  subtitle, 
-  urgency, 
-  onClick 
-}: { 
-  type: 'lead' | 'estimate' | 'job' | 'invoice';
-  title: string; 
-  subtitle: string; 
-  urgency: 'high' | 'medium' | 'low';
-  onClick: () => void;
-}) {
-  const iconMap = {
-    lead: Users,
-    estimate: FileText,
-    job: Briefcase,
-    invoice: DollarSign,
-  };
-  const Icon = iconMap[type];
-  
-  const urgencyColors = {
-    high: 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400',
-    medium: 'bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400',
-    low: 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400',
-  };
-
-  return (
-    <Card 
-      className="cursor-pointer hover:shadow-md transition-shadow bg-white dark:bg-slate-900"
-      onClick={onClick}
-    >
-      <CardContent className="p-3 flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${urgencyColors[urgency]}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-            {title}
-          </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-            {subtitle}
-          </p>
-        </div>
-        <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />
-      </CardContent>
-    </Card>
   );
 }
 
