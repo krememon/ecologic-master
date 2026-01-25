@@ -1,0 +1,82 @@
+Organize Timesheets Page: Employee Filter + Grouping + Weekly Totals (RBAC-Aware)
+
+CURRENT
+Timesheets page loads and displays time entries correctly, but needs better organization and usability:
+- Entries are shown as a flat list
+- No clear grouping by employee or date
+- No clear weekly totals per employee
+- Manager view and employee view need clearer separation
+- UI needs light polish and better empty states
+
+GOAL
+Improve the Timesheets page organization and usability by adding:
+- Employee filtering (for managers)
+- Clear grouping of entries
+- Weekly totals
+- Role-aware visibility (hidden, not disabled)
+- Clean, modern EcoLogic UI polish
+
+RBAC (STRICT / HIDDEN NOT DISABLED)
+- Owner/Admin/Supervisor:
+  - Can view all employees’ time entries
+  - Can filter by employee (dropdown)
+  - See weekly totals per employee and overall totals
+- Technician:
+  - Can ONLY see their own time entries
+  - Employee filter is hidden
+  - Sees only their own weekly totals
+- Dispatcher / Estimator:
+  - Do NOT see Timesheets unless explicitly permitted
+  - If routed directly without permission, redirect to Home
+
+PAGE ORGANIZATION (REQUIRED)
+1) Top Controls
+- Date range selector (existing)
+- Employee filter dropdown (ONLY for Owner/Admin/Supervisor)
+  - Default: “All Employees”
+  - Options: active employees only
+
+2) Grouping Logic
+- Group entries by Employee
+- Within each employee group:
+  - Group entries by Day (Sun, Mon, Tue…)
+  - Show job name under each entry (if job-linked)
+  - Show start time → end time and duration
+
+3) Totals
+- Per-day total (optional, subtle)
+- Per-employee weekly total (REQUIRED)
+- Overall weekly total (Owner/Admin/Supervisor only)
+
+4) Empty States
+- No entries this week:
+  - Friendly message
+  - Simple icon
+  - No broken layouts
+- Technician with no time logged:
+  - “No time logged yet this week”
+
+UI / UX POLISH
+- Use existing EcoLogic card components
+- Clear section dividers between employees
+- Totals visually emphasized but not loud
+- Maintain mobile-friendly layout
+- No tables unless already used elsewhere (prefer stacked cards)
+
+TECHNICAL NOTES
+- Reuse existing time entry data and API
+- Do NOT change clock-in/clock-out logic
+- Do NOT introduce new routes
+- All logic handled within /timesheets
+
+ERROR HANDLING
+- Unauthorized access redirects safely
+- Page must not crash
+- No console errors
+
+SUCCESS CRITERIA
+- Managers can easily review everyone’s time
+- Employees clearly see their own hours
+- Weekly totals are obvious at a glance
+- Page feels clean, modern, and professional
+- Matches EcoLogic design language
