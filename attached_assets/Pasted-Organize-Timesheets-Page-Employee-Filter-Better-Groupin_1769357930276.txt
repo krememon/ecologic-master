@@ -1,0 +1,154 @@
+Organize Timesheets Page: Employee Filter + Better Grouping + Totals (RBAC Safe)
+
+CURRENT
+Timesheets page loads and shows time entries, but needs organization:
+- Filtering by employee (for managers)
+- Cleaner grouping and weekly totals
+- Better empty states and UX polish
+
+GOAL
+Make Timesheets feel like a real master timesheet system:
+- Managers (Owner/Admin/Supervisor/Manager role) can filter by employee + week
+- Technicians see only their timesheet (no employee filter)
+- Page is clean, organized, and mobile-friendly
+
+NON-NEGOTIABLES
+- Hidden, not disabled
+- Strict RBAC
+- No white screens
+- No console errors
+- No redesign of global app styling (use existing components)
+
+━━━━━━━━━━━━━━━━━━
+RBAC RULES
+━━━━━━━━━━━━━━━━━━
+- Technician:
+  - Sees ONLY their entries
+  - Sees NO employee selector
+- Owner/Admin/Supervisor/Manager:
+  - Sees ALL employees (master sheet)
+  - Can filter by employee
+- Dispatcher/Estimator:
+  - No access (unless previously allowed)
+
+━━━━━━━━━━━━━━━━━━
+UI LAYOUT (FINAL)
+━━━━━━━━━━━━━━━━━━
+Top Controls Card:
+1) Week Picker (existing)
+- Keep the current week range control
+- Add Prev/Next week buttons if not already present
+
+2) Employee Filter (MANAGERS ONLY)
+- Dropdown: “All Employees”
+- Options: employee names
+- Searchable dropdown if list is >10
+- Persist selection in URL query string:
+  /timesheets?week=YYYY-MM-DD&employeeId=123 (optional but recommended)
+
+Summary Row (always visible)
+- “Total Hours” for current filter + week
+- Format: 0h 7m / 12h 30m etc.
+
+Entries List (organized)
+MANAGERS:
+- Group entries by Employee
+- Within each employee group:
+  - Group by Date
+  - Show rows for each time entry segment
+
+TECHNICIANS:
+- Group by Date only
+- Show their entries
+
+Each entry row shows:
+- Job name (or category like Shop/Drive/Admin/Break)
+- Start time – End time
+- Duration (e.g., 7m, 1h 20m)
+- Optional: small subtext for job address if already available (optional)
+
+━━━━━━━━━━━━━━━━━━
+FILTERING BEHAVIOR
+━━━━━━━━━━━━━━━━━━
+Employee filter affects:
+- Total Hours calculation
+- Entries list
+
+If “All Employees”:
+- Total Hours = sum across everyone for selected week
+- Grouped list shows all employees
+
+If specific employee selected:
+- Total Hours = only that employee
+- List shows only that employee group
+
+TECHNICIAN:
+- Filter is locked to current user (no dropdown)
+
+━━━━━━━━━━━━━━━━━━
+DATA REQUIREMENTS
+━━━━━━━━━━━━━━━━━━
+Backend should provide enough data to populate filters cleanly.
+
+Preferred:
+- GET /api/time/entries?weekStart=...&weekEnd=...&employeeId=...
+  returns:
+  - entries
+  - employees list (managers only) OR provide separate endpoint
+
+If employees list is not available:
+- Add GET /api/employees (already likely exists)
+- Use that for dropdown options (managers only)
+
+RBAC enforcement server-side:
+- Technician requests must always be scoped to their userId regardless of query params
+- Manager can request all or a specific employee
+
+━━━━━━━━━━━━━━━━━━
+TOTALS CALCULATION
+━━━━━━━━━━━━━━━━━━
+- Total hours must be derived from entry durations
+- Ignore active entries (endAt null) or show “In progress” separately (optional)
+- Display formatting:
+  minutes < 60 => “47m”
+  >= 60 => “2h 15m”
+
+Optional but recommended:
+- Show per-employee weekly total inside each employee group header (managers only)
+  Example: “Code Test — 6h 20m”
+
+━━━━━━━━━━━━━━━━━━
+EMPTY / ERROR STATES
+━━━━━━━━━━━━━━━━━━
+Empty week:
+- Show clean empty card:
+  “No time entries for this week”
+
+Empty employee filter:
+- “No entries for {Employee} this week”
+
+Error:
+- Inline friendly error card
+- Do not crash the page
+
+━━━━━━━━━━━━━━━━━━
+POLISH REQUIREMENTS
+━━━━━━━━━━━━━━━━━━
+- Keep spacing consistent (same as Jobs/Docs pages)
+- Ensure list is scannable (headers + groups)
+- Make the employee dropdown and week selector align nicely
+- No clutter, no charts
+
+DELIVERABLES
+- Employee filter dropdown (managers only)
+- Grouped entries view (employee + date)
+- Weekly total hours (for filter)
+- Optional per-employee totals
+- URL state persistence (optional but preferred)
+- No console errors
+
+SUCCESS CRITERIA
+- Owner can quickly answer: “How many hours did everyone work this week?”
+- Owner can filter to one employee in 1 tap
+- Tech can view their weekly hours clearly
+- Page feels organized and professional

@@ -33,15 +33,18 @@ function formatDate(dateStr: string): string {
   return format(parseISO(dateStr), "EEE, MMM d");
 }
 
-function calculateHours(start: string, end: string): string {
-  const startTime = new Date(start).getTime();
-  const endTime = new Date(end).getTime();
-  const minutes = Math.round((endTime - startTime) / 60000);
+function formatDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   if (hours === 0) return `${mins}m`;
   if (mins === 0) return `${hours}h`;
   return `${hours}h ${mins}m`;
+}
+
+function calculateMinutes(start: string, end: string): number {
+  const startTime = new Date(start).getTime();
+  const endTime = new Date(end).getTime();
+  return Math.round((endTime - startTime) / 60000);
 }
 
 function getJobOrCategory(entry: TimeEntry): string {
@@ -60,6 +63,47 @@ function getWeekDates(date: Date): { startDate: string; endDate: string; label: 
     endDate: format(end, "yyyy-MM-dd"),
     label: `${format(start, "MMM d")} - ${format(end, "MMM d, yyyy")}`,
   };
+}
+
+interface DateGroup {
+  date: string;
+  dateLabel: string;
+  entries: TimeEntry[];
+  totalMinutes: number;
+}
+
+interface EmployeeGroup {
+  userId: string;
+  name: string;
+  dateGroups: DateGroup[];
+  totalMinutes: number;
+}
+
+function groupEntriesByDate(entries: TimeEntry[]): DateGroup[] {
+  const dateMap = new Map<string, TimeEntry[]>();
+  
+  for (const entry of entries) {
+    const existing = dateMap.get(entry.date) || [];
+    existing.push(entry);
+    dateMap.set(entry.date, existing);
+  }
+  
+  return Array.from(dateMap.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, dayEntries]) => {
+      const totalMinutes = dayEntries.reduce(
+        (sum, e) => sum + calculateMinutes(e.clockInAt, e.clockOutAt),
+        0
+      );
+      return {
+        date,
+        dateLabel: formatDate(date),
+        entries: dayEntries.sort((a, b) => 
+          new Date(b.clockInAt).getTime() - new Date(a.clockInAt).getTime()
+        ),
+        totalMinutes,
+      };
+    });
 }
 
 export default function Timesheets() {
@@ -117,33 +161,52 @@ export default function Timesheets() {
     return data.entries.filter((e) => e.userId === employeeFilter);
   }, [data?.entries, employeeFilter, isTechnician]);
 
-  const totalHours = useMemo(() => {
-    let minutes = 0;
-    for (const entry of filteredEntries) {
-      const start = new Date(entry.clockInAt).getTime();
-      const end = new Date(entry.clockOutAt).getTime();
-      minutes += Math.round((end - start) / 60000);
-    }
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+  const totalMinutes = useMemo(() => {
+    return filteredEntries.reduce(
+      (sum, entry) => sum + calculateMinutes(entry.clockInAt, entry.clockOutAt),
+      0
+    );
   }, [filteredEntries]);
 
-  const groupedByEmployee = useMemo(() => {
-    if (isTechnician) return null;
-    const groups: Record<string, { name: string; entries: TimeEntry[] }> = {};
-    for (const entry of filteredEntries) {
-      const key = entry.userId;
-      if (!groups[key]) {
-        const name = entry.user
-          ? `${entry.user.firstName || ""} ${entry.user.lastName || ""}`.trim() || key
-          : key;
-        groups[key] = { name, entries: [] };
-      }
-      groups[key].entries.push(entry);
-    }
-    return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
+  const technicianDateGroups = useMemo(() => {
+    if (!isTechnician) return null;
+    return groupEntriesByDate(filteredEntries);
   }, [filteredEntries, isTechnician]);
+
+  const employeeGroups = useMemo((): EmployeeGroup[] | null => {
+    if (isTechnician) return null;
+    
+    const groupMap = new Map<string, { name: string; entries: TimeEntry[] }>();
+    
+    for (const entry of filteredEntries) {
+      const existing = groupMap.get(entry.userId);
+      if (existing) {
+        existing.entries.push(entry);
+      } else {
+        const name = entry.user
+          ? `${entry.user.firstName || ""} ${entry.user.lastName || ""}`.trim() || entry.userId
+          : entry.userId;
+        groupMap.set(entry.userId, { name, entries: [entry] });
+      }
+    }
+    
+    return Array.from(groupMap.entries())
+      .map(([userId, { name, entries }]) => {
+        const dateGroups = groupEntriesByDate(entries);
+        const totalMinutes = entries.reduce(
+          (sum, e) => sum + calculateMinutes(e.clockInAt, e.clockOutAt),
+          0
+        );
+        return { userId, name, dateGroups, totalMinutes };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredEntries, isTechnician]);
+
+  const selectedEmployeeName = useMemo(() => {
+    if (employeeFilter === "all") return null;
+    const emp = employees.find(([id]) => id === employeeFilter);
+    return emp ? emp[1] : null;
+  }, [employeeFilter, employees]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -231,9 +294,13 @@ export default function Timesheets() {
           <Card>
             <CardContent className="py-12 text-center">
               <Clock className="h-12 w-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-500 dark:text-slate-400 text-lg">No time entries this week</p>
+              <p className="text-slate-500 dark:text-slate-400 text-lg">
+                {selectedEmployeeName 
+                  ? `No entries for ${selectedEmployeeName} this week`
+                  : "No time entries this week"}
+              </p>
               <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">
-                Time entries will appear here when you clock in and out
+                Time entries will appear here when clocked in and out
               </p>
             </CardContent>
           </Card>
@@ -245,81 +312,48 @@ export default function Timesheets() {
               <CardContent className="py-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-600 dark:text-slate-400">
-                    Total Hours
+                    Total Hours {selectedEmployeeName ? `(${selectedEmployeeName})` : ""}
                   </span>
                   <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                    {totalHours}
+                    {formatDuration(totalMinutes)}
                   </span>
                 </div>
               </CardContent>
             </Card>
 
-            {isTechnician ? (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Time Entries</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                    {filteredEntries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-900 dark:text-slate-100">
-                            {formatDate(entry.date)}
-                          </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">
-                            {getJobOrCategory(entry)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-slate-600 dark:text-slate-400">
-                            {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
-                          </span>
-                          <span className="font-medium text-slate-900 dark:text-slate-100 min-w-[60px] text-right">
-                            {calculateHours(entry.clockInAt, entry.clockOutAt)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
+            {isTechnician && technicianDateGroups ? (
               <div className="space-y-4">
-                {groupedByEmployee?.map((group) => (
-                  <Card key={group.name}>
+                {technicianDateGroups.map((dateGroup) => (
+                  <Card key={dateGroup.date}>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        {group.name}
+                      <CardTitle className="text-base flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          {dateGroup.dateLabel}
+                        </span>
+                        <span className="text-sm font-medium text-slate-500">
+                          {formatDuration(dateGroup.totalMinutes)}
+                        </span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
                       <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                        {group.entries.map((entry) => (
+                        {dateGroup.entries.map((entry) => (
                           <div
                             key={entry.id}
-                            className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2"
+                            className="px-4 py-3 flex items-center justify-between gap-2"
                           >
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-slate-900 dark:text-slate-100">
-                                {formatDate(entry.date)}
-                              </p>
-                              <p className="text-sm text-slate-500 dark:text-slate-400">
+                              <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
                                 {getJobOrCategory(entry)}
                               </p>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm">
-                              <span className="text-slate-600 dark:text-slate-400">
+                              <p className="text-sm text-slate-500 dark:text-slate-400">
                                 {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
-                              </span>
-                              <span className="font-medium text-slate-900 dark:text-slate-100 min-w-[60px] text-right">
-                                {calculateHours(entry.clockInAt, entry.clockOutAt)}
-                              </span>
+                              </p>
                             </div>
+                            <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                              {formatDuration(calculateMinutes(entry.clockInAt, entry.clockOutAt))}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -327,7 +361,63 @@ export default function Timesheets() {
                   </Card>
                 ))}
               </div>
-            )}
+            ) : employeeGroups ? (
+              <div className="space-y-6">
+                {employeeGroups.map((empGroup) => (
+                  <div key={empGroup.userId}>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <div className="flex items-center gap-2">
+                        <User className="h-5 w-5 text-slate-500" />
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {empGroup.name}
+                        </span>
+                      </div>
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                        {formatDuration(empGroup.totalMinutes)}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {empGroup.dateGroups.map((dateGroup) => (
+                        <Card key={dateGroup.date}>
+                          <CardHeader className="py-2 px-4">
+                            <CardTitle className="text-sm flex items-center justify-between font-medium">
+                              <span className="text-slate-600 dark:text-slate-400">
+                                {dateGroup.dateLabel}
+                              </span>
+                              <span className="text-slate-500">
+                                {formatDuration(dateGroup.totalMinutes)}
+                              </span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-0">
+                            <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                              {dateGroup.entries.map((entry) => (
+                                <div
+                                  key={entry.id}
+                                  className="px-4 py-2.5 flex items-center justify-between gap-2"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                                      {getJobOrCategory(entry)}
+                                    </p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                      {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}
+                                    </p>
+                                  </div>
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    {formatDuration(calculateMinutes(entry.clockInAt, entry.clockOutAt))}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </>
         )}
       </div>
