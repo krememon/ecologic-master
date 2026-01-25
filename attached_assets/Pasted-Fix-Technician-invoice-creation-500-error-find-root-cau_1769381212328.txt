@@ -1,0 +1,96 @@
+Fix Technician invoice creation 500 error (find root cause in logs) + remove red toast for expected flows
+
+CURRENT
+- Technician can now access the Invoice button
+- Invoice create attempt fails with:
+  Error 500: {"message":"Failed to create invoice"}
+- A red error toast appears in UI
+- We need tech invoice creation to work and save into Invoices list
+
+GOAL
+- Fix the backend 500 so technicians can successfully create invoices for assigned jobs
+- Ensure invoice is saved in DB and appears in Invoices module
+- Keep RBAC strict (assigned jobs only)
+- Silent success UX (no big red toast for normal use)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — GET THE REAL SERVER ERROR (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Do NOT guess.
+Find the exact failing backend route and log the real error:
+- Locate the invoice creation route handler (ex: POST /api/invoices or POST /api/jobs/:jobId/invoice)
+- Add TEMP logging around the failing call:
+  - userId, role
+  - jobId
+  - request body payload keys (not sensitive values)
+  - the caught error stack + database error message
+- Reproduce once as technician
+- Capture the exact error (DB constraint / missing column / null value / foreign key / invalid type)
+
+After we fix it, REMOVE the temporary logs.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — FIX THE ROOT CAUSE (MOST LIKELY ISSUES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Based on typical EcoLogic invoice logic, check and fix whichever is true:
+
+A) Missing required fields in payload
+- The create-invoice endpoint may require:
+  - companyId
+  - customerId
+  - jobId
+  - createdByUserId
+  - status / paymentStatus
+  - invoiceNumber
+  - totals fields
+If tech flow isn’t sending some required fields, the server must fill them from job/company context.
+
+B) invoiceNumber generation fails or is null
+- If invoiceNumber is required:
+  - Generate it server-side for every invoice (do not rely on client)
+  - Ensure uniqueness + correct format
+
+C) Line items schema mismatch
+- Tech flow may be sending line items differently than backend expects
+- Align payload shape to match existing owner invoice creation payload exactly
+- If backend expects cents integers, convert properly (avoid floats)
+
+D) Foreign key constraint fails
+- Example: customerId not found, jobId invalid, companyId mismatch
+- Ensure create-invoice pulls customerId from the job if not provided
+
+E) Tech is allowed now but backend still blocks certain fields
+- Confirm the permission gate is not throwing internally after partial changes
+
+IMPORTANT:
+- Do not change the database schema unless the error proves it is required
+- Prefer matching the existing owner invoice creation code path so tech uses the same backend logic
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — SAVE + VISIBILITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Once invoice is successfully created:
+- It must be persisted in DB
+- It must appear in:
+  - Job detail invoice view
+  - Main Invoices list/module (same query source)
+- UI should update immediately without manual refresh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — FIX UI ERROR HANDLING (SILENT SUCCESS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Remove the big red global toast for normal flows
+- For unexpected failures like a real 500:
+  - Show a small inline message inside the invoice modal/sheet
+  - Keep it subtle (no loud red full-width toast)
+- But once backend is fixed, invoice creation should not trigger errors anyway
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician can create invoice successfully for an assigned job
+- Invoice saves to DB and appears in Invoices module
+- No 500 errors
+- No global red error toast for normal actions
+- RBAC enforced: tech cannot create invoice for unassigned job
+- No console errors
