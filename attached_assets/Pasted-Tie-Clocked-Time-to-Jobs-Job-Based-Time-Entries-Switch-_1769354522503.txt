@@ -1,0 +1,78 @@
+Tie Clocked Time to Jobs (Job-Based Time Entries + Switch Job)
+
+CURRENT
+We are adding Clock In / Clock Out and “Time Today” on the homepage.
+Time entries are not yet linked to jobs.
+
+GOAL
+Make time tracking job-aware:
+- A time entry can be linked to a Job (jobId)
+- Tech can clock in and choose a job (or non-job category)
+- Tech can switch jobs while clocked in (auto-split time)
+- Owners can later see job labor totals
+
+RBAC (STRICT)
+- Technician:
+  - Can only choose from jobs they are assigned to (or permitted jobs by role rules)
+  - Can only view/edit their own time entries
+- Dispatcher/Supervisor/Owner:
+  - Can see aggregate totals (no pay rates)
+  - Owner/Admin can access all job labor summaries later
+- Hidden, not disabled
+
+DATA MODEL
+Create/extend time entries table:
+- id
+- userId
+- jobId (nullable)
+- category (nullable or enum: job/shop/drive/admin/break)
+- startAt (timestamp)
+- endAt (timestamp | null)
+- notes (optional)
+
+RULES
+- Only one active time entry per user at a time (endAt = null)
+- Clock In:
+  - Creates an active entry with selected jobId or category
+- Switch Job:
+  - Ends the current active entry (set endAt = now)
+  - Creates a new active entry with the new jobId/category
+- Clock Out:
+  - Ends the active entry (set endAt = now)
+
+API
+Add endpoints (or extend existing):
+- POST /api/time/clock-in  { jobId? , category? }
+- POST /api/time/switch    { jobId? , category? }
+- POST /api/time/clock-out {}
+- GET  /api/time/today     (role-aware: personal for tech, aggregate for owner)
+
+Ensure server-side RBAC enforcement:
+- Tech can only select allowed jobs
+- Tech can only affect their own active entry
+
+FRONTEND (HOMEPAGE “Time Today” CARD)
+TECH VIEW
+- If not clocked in:
+  - “Clock In” button
+  - On press: modal/sheet to select:
+    - Assigned Jobs (searchable)
+    - Non-job options: Shop / Drive / Admin / Break
+- If clocked in:
+  - Show “Working on: {JobName or Category}”
+  - Show elapsed time
+  - Buttons:
+    - “Switch Job” (opens same picker)
+    - “Clock Out”
+
+UX RULES
+- Fast, minimal taps
+- Reuse existing modal / searchable picker components
+- No white screens
+- Friendly errors
+- No console errors
+
+SUCCESS
+- Tech can clock in to a job
+- Tech can switch jobs and time splits correctly
+- Data is stored cleanly for future job labor reporting

@@ -295,10 +295,12 @@ export interface IStorage {
   
   // Time log operations
   getActiveTimeLog(userId: string, companyId: number): Promise<TimeLog | undefined>;
+  getActiveTimeLogWithJob(userId: string, companyId: number): Promise<(TimeLog & { job?: { id: number; title: string | null } }) | undefined>;
   getUserTimeLogsToday(userId: string, companyId: number, date: string): Promise<TimeLog[]>;
   getCompanyTimeLogsToday(companyId: number, date: string): Promise<TimeLog[]>;
-  clockIn(userId: string, companyId: number): Promise<TimeLog>;
+  clockIn(userId: string, companyId: number, jobId?: number, category?: string): Promise<TimeLog>;
   clockOut(userId: string, companyId: number): Promise<TimeLog | undefined>;
+  switchJob(userId: string, companyId: number, jobId?: number, category?: string): Promise<{ ended: TimeLog; started: TimeLog }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2410,6 +2412,34 @@ export class DatabaseStorage implements IStorage {
     return log;
   }
   
+  async getActiveTimeLogWithJob(userId: string, companyId: number): Promise<(TimeLog & { job?: { id: number; title: string | null } }) | undefined> {
+    const results = await db
+      .select({
+        timeLog: timeLogs,
+        job: {
+          id: jobs.id,
+          title: jobs.title,
+        },
+      })
+      .from(timeLogs)
+      .leftJoin(jobs, eq(timeLogs.jobId, jobs.id))
+      .where(
+        and(
+          eq(timeLogs.userId, userId),
+          eq(timeLogs.companyId, companyId),
+          sql`${timeLogs.clockOutAt} IS NULL`
+        )
+      )
+      .orderBy(desc(timeLogs.clockInAt))
+      .limit(1);
+    
+    if (!results[0]) return undefined;
+    return {
+      ...results[0].timeLog,
+      job: results[0].job?.id ? results[0].job : undefined,
+    };
+  }
+  
   async getUserTimeLogsToday(userId: string, companyId: number, date: string): Promise<TimeLog[]> {
     return await db
       .select()
@@ -2437,7 +2467,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(timeLogs.clockInAt));
   }
   
-  async clockIn(userId: string, companyId: number): Promise<TimeLog> {
+  async clockIn(userId: string, companyId: number, jobId?: number, category?: string): Promise<TimeLog> {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     
@@ -2446,6 +2476,8 @@ export class DatabaseStorage implements IStorage {
       .values({
         userId,
         companyId,
+        jobId: jobId || null,
+        category: (category as any) || (jobId ? 'job' : null),
         clockInAt: now,
         date: dateStr,
       })
@@ -2463,6 +2495,36 @@ export class DatabaseStorage implements IStorage {
       .where(eq(timeLogs.id, activeLog.id))
       .returning();
     return log;
+  }
+  
+  async switchJob(userId: string, companyId: number, jobId?: number, category?: string): Promise<{ ended: TimeLog; started: TimeLog }> {
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    
+    const activeLog = await this.getActiveTimeLog(userId, companyId);
+    if (!activeLog) {
+      throw new Error('No active time entry to switch from');
+    }
+    
+    const [ended] = await db
+      .update(timeLogs)
+      .set({ clockOutAt: now })
+      .where(eq(timeLogs.id, activeLog.id))
+      .returning();
+    
+    const [started] = await db
+      .insert(timeLogs)
+      .values({
+        userId,
+        companyId,
+        jobId: jobId || null,
+        category: (category as any) || (jobId ? 'job' : null),
+        clockInAt: now,
+        date: dateStr,
+      })
+      .returning();
+    
+    return { ended, started };
   }
 }
 
