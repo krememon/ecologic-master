@@ -212,23 +212,6 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     );
   }
 
-  if (invoice.status?.toLowerCase() === 'paid') {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
-        <div className="text-center space-y-4">
-          <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Already Paid</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            This invoice has already been paid.
-          </p>
-          <Button onClick={() => navigate('/jobs', { replace: true })}>
-            Back to Jobs
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   if (viewState === 'processing') {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
@@ -254,13 +237,30 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
             <CheckCircle2 className="h-12 w-12 text-green-500" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payment success</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payment Successful</h1>
             <p className="text-lg text-gray-600 dark:text-gray-400">
-              Payment of {formatCurrency(paidDollars)} was successful.
+              This invoice has been marked as paid.
             </p>
           </div>
           <Button onClick={handleDone} className="px-8">
             Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (invoice.status?.toLowerCase() === 'paid') {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Already Paid</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            This invoice has already been paid.
+          </p>
+          <Button onClick={() => navigate('/jobs', { replace: true })}>
+            Back to Jobs
           </Button>
         </div>
       </div>
