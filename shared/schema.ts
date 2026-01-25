@@ -1391,3 +1391,57 @@ export const insertTimeLogSchema = createInsertSchema(timeLogs).omit({
 export type TimeLog = typeof timeLogs.$inferSelect;
 export type InsertTimeLog = z.infer<typeof insertTimeLogSchema>;
 export type TimeEntryCategory = "job" | "shop" | "drive" | "admin" | "break";
+
+// Notification type enum
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "job_assigned",
+  "job_updated",
+  "addwork_approved",
+  "payment_collected",
+  "addwork_submitted",
+  "job_completed",
+  "invoice_paid",
+  "missed_clockout",
+  "job_rescheduled",
+  "job_cancelled"
+]);
+
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  recipientUserId: varchar("recipient_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: notificationTypeEnum("type").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  body: text("body").notNull(),
+  entityType: varchar("entity_type", { length: 50 }),
+  entityId: integer("entity_id"),
+  linkUrl: varchar("link_url", { length: 500 }),
+  readAt: timestamp("read_at"),
+  meta: jsonb("meta"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("notifications_recipient_idx").on(table.recipientUserId),
+  index("notifications_company_idx").on(table.companyId),
+  index("notifications_created_at_idx").on(table.createdAt),
+  index("notifications_read_at_idx").on(table.readAt),
+]);
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type NotificationType = 
+  | "job_assigned"
+  | "job_updated"
+  | "addwork_approved"
+  | "payment_collected"
+  | "addwork_submitted"
+  | "job_completed"
+  | "invoice_paid"
+  | "missed_clockout"
+  | "job_rescheduled"
+  | "job_cancelled";

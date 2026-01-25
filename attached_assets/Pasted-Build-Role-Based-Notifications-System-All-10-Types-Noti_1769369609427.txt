@@ -1,0 +1,185 @@
+Build Role-Based Notifications System (All 10 Types) + Notifications Inbox
+
+CURRENT
+We added a notifications bell + Notifications inbox UI with an empty state.
+There is no real notifications data, no unread count, and no role-based delivery.
+
+GOAL
+Implement a real, role-based notifications system that supports these 10 notification types:
+1) New Job Assigned (Tech)
+2) Job Updated While On Site (Tech)
+3) Add-Work Approved (Tech)
+4) Payment Collected Confirmation (Tech + Manager)
+5) Add-Work Request Submitted (Manager/Dispatcher)
+6) Job Marked Complete (Office/Manager)
+7) Invoice Paid (Office/Manager)
+8) Missed Clock-Out Auto-Closed (Manager)
+9) Job Rescheduled (Tech + Office)
+10) Job Cancelled (Tech)
+
+Notifications must:
+- Be role-specific (RBAC, hidden not disabled)
+- Be in-app only (no push for v1)
+- Deep-link to the relevant page (job, invoice, timesheet, approval)
+- Support read/unread and unread badge dot/count
+
+NON-NEGOTIABLES
+- No fake data
+- No success popups
+- No console errors
+- Do not notify for tiny/noise events
+- Respect job/document visibility rules
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATA MODEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create DB table: notifications
+
+Fields:
+- id (pk)
+- companyId
+- recipientUserId (nullable if targeting role group, but prefer per-user rows)
+- recipientRole (optional, if you want role-based fanout)
+- type (enum string)
+- title (string)
+- body (string)
+- entityType (job|invoice|timesheet|addwork|schedule)
+- entityId (string/int)
+- linkUrl (string)  // route to open in app
+- createdAt (timestamp)
+- readAt (timestamp nullable)
+- meta (json nullable) // optional extra info
+
+RECOMMENDED DELIVERY METHOD (V1)
+Create one row per recipient user (fan-out at creation time)
+so reads/unreads are per-user and simple.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add endpoints:
+- GET /api/notifications
+  - returns current user’s notifications (most recent first)
+  - supports pagination later (limit 50)
+- POST /api/notifications/:id/read
+  - sets readAt
+- POST /api/notifications/read-all
+  - sets readAt for all
+- GET /api/notifications/unread-count
+  - returns unreadCount integer
+
+RBAC:
+- User can only read/update their own notifications.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI (Inbox)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Notifications sheet/modal should show:
+- Title: Notifications
+- List rows:
+  - Title
+  - Body (one line)
+  - Timestamp (relative)
+  - Unread indicator (dot)
+- Tap row -> navigate to linkUrl and mark as read
+- Empty state: “No notifications yet”
+
+Badge:
+- Bell shows dot if unreadCount > 0
+- Optional: show number badge if <= 9 (later)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ROLE TARGETING RULES (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tech notifications only go to technicians assigned to the job.
+Manager/Office notifications go to roles:
+- Owner/Admin/Supervisor/Manager (your app’s manager role)
+- Dispatcher where specified
+Estimator should only receive notifications if they can access that entity (default none).
+
+Technician must never receive financial/office-only notifications except:
+- Payment confirmation for their job (allowed)
+- Add-work approval (allowed)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EVENT TRIGGERS (ALL 10 TYPES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Implement notifications in the relevant backend routes/services:
+
+1) New Job Assigned (Tech)
+Trigger: when job crew assignment changes to include a tech
+Recipients: newly added tech(s)
+Link: /jobs/:id
+
+2) Job Updated While On Site (Tech)
+Trigger: job updated (notes/status/schedule/address) AND job is assigned to tech
+Recipients: assigned tech(s)
+Link: /jobs/:id
+IMPORTANT: avoid spam — only notify on key fields:
+- scheduledDate/time change
+- address change
+- notes change (optional)
+- status change (optional)
+
+3) Add-Work Approved (Tech)
+Trigger: add-work request approved
+Recipients: requesting tech
+Link: /jobs/:id (or /jobs/:id/addwork)
+
+4) Payment Collected Confirmation (Tech + Manager)
+Trigger: invoice marked paid (cash/check/card)
+Recipients:
+- assigned tech(s) on that job (if any)
+- managers (Owner/Admin/Supervisor)
+Link: /invoices/:id OR /jobs/:id
+
+5) Add-Work Request Submitted (Manager/Dispatcher)
+Trigger: tech submits add-work request
+Recipients:
+- managers (Owner/Admin/Supervisor)
+- dispatcher (if role exists and permitted)
+Link: approval screen route (or job details)
+
+6) Job Marked Complete (Office/Manager)
+Trigger: tech marks job completed / status = completed
+Recipients: managers + dispatcher
+Link: /jobs/:id
+
+7) Invoice Paid (Office/Manager)
+Trigger: invoice paid
+Recipients: managers
+Link: /invoices/:id
+
+8) Missed Clock-Out Auto-Closed (Manager)
+Trigger: auto clock-out closes an active entry
+Recipients: managers
+Link: /timesheets?week=...&employeeId=...
+
+9) Job Rescheduled (Tech + Office)
+Trigger: scheduled date/time changed
+Recipients:
+- assigned tech(s)
+- managers + dispatcher
+Link: /jobs/:id or /schedule
+
+10) Job Cancelled (Tech)
+Trigger: job status changed to cancelled
+Recipients: assigned tech(s)
+Link: /jobs/:id
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEDUP / SPAM PROTECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add simple safeguards:
+- Do not create multiple notifications for the same event within 60 seconds
+  (same type + same entityId + same recipient)
+- Only notify on meaningful changes (see #2 and #9)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUCCESS CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- All 10 notification types are created by real events
+- Notifications only go to correct roles/users (RBAC safe)
+- Inbox shows them, unread state works, badge updates
+- Tapping navigates correctly and marks read
+- No console errors
