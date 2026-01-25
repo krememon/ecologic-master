@@ -934,7 +934,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteJob(id: number): Promise<void> {
-    await db.delete(jobs).where(eq(jobs.id, id));
+    // Use a transaction to safely unlink related records before deleting the job
+    await db.transaction(async (tx) => {
+      // 1. Set job_id to NULL on time_logs (preserves payroll data)
+      await tx.update(timeLogs)
+        .set({ jobId: null })
+        .where(eq(timeLogs.jobId, id));
+      
+      // 2. Set job_id to NULL on leads (converted_to_job_id)
+      await tx.update(leads)
+        .set({ convertedToJobId: null })
+        .where(eq(leads.convertedToJobId, id));
+      
+      // 3. Now delete the job - CASCADE will handle other related records
+      // (schedule_items, job_photos, job_line_items, documents, invoices, estimates, etc.)
+      await tx.delete(jobs).where(eq(jobs.id, id));
+    });
   }
 
   async getInvoices(companyId: number): Promise<any[]> {
