@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers } from "./notificationService";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
@@ -2726,6 +2727,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Send notifications for job updates
+      const jobTitle = updatedJob?.title || existingJob.title || existingJob.jobNumber || `Job #${jobId}`;
+      
+      // Check if schedule changed (job_rescheduled)
+      const oldScheduleDate = existingJob.startDate;
+      const newScheduleDate = scheduleDate;
+      if (scheduleDate !== undefined && scheduleDate !== oldScheduleDate) {
+        await notifyJobCrew(jobId, company.id, {
+          type: 'job_rescheduled',
+          title: 'Job Rescheduled',
+          body: newScheduleDate 
+            ? `${jobTitle} has been rescheduled to ${new Date(newScheduleDate).toLocaleDateString()}`
+            : `${jobTitle} schedule has been cleared`,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs/${jobId}`,
+        });
+      }
+
+      // Notify crew of new assignments via PATCH
+      if (assignedEmployeeIds !== undefined) {
+        const newlyAdded = assignedEmployeeIds.filter((id: string) => {
+          const existingCrew = (existingJob as any).assignedEmployeeIds || [];
+          return !existingCrew.includes(id);
+        });
+        if (newlyAdded.length > 0) {
+          const assigner = await storage.getUser(userId);
+          const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
+          await notifyUsers(newlyAdded, {
+            companyId: company.id,
+            type: 'job_assigned',
+            title: 'New Job Assignment',
+            body: `${assignerName} assigned you to job: ${jobTitle}`,
+            entityType: 'job',
+            entityId: jobId,
+            linkUrl: `/jobs/${jobId}`,
+          });
+        }
+      }
+
       res.json(updatedJob);
     } catch (error) {
       console.error("Error updating job:", error);
@@ -2924,6 +2965,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         added = result.added;
       }
       
+      // Send notifications to newly assigned crew members
+      if (toAdd.length > 0) {
+        const assigner = await storage.getUser(userId);
+        const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
+        await notifyUsers(toAdd, {
+          companyId: company.id,
+          type: 'job_assigned',
+          title: 'New Job Assignment',
+          body: `${assignerName} assigned you to job: ${job.title || job.jobNumber || `Job #${jobId}`}`,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs/${jobId}`,
+        });
+      }
+
       res.json({ ok: true, added, removed: toRemove.length });
     } catch (error) {
       console.error("Error assigning crew:", error);
@@ -9255,6 +9311,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Payment] Manual ${method} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
 
+      // Send payment_collected notification to managers
+      const payer = await storage.getUser(userId);
+      const payerName = payer ? `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || 'Someone' : 'Someone';
+      await notifyManagers(company.id, {
+        type: 'payment_collected',
+        title: 'Payment Collected',
+        body: `${payerName} collected a $${amountDollars} ${method.toLowerCase()} payment`,
+        entityType: 'invoice',
+        entityId: invoiceId,
+        linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
+      });
+
       res.json({
         success: true,
         amountCents,
@@ -9404,6 +9472,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
             console.log(`[Stripe] Job ${invoice.jobId} paymentStatus updated to 'paid'`);
           }
+
+          // Send invoice_paid notification to managers
+          const amountDollars = invoice.totalCents > 0 
+            ? (invoice.totalCents / 100).toFixed(2) 
+            : parseFloat(invoice.amount).toFixed(2);
+          await notifyManagers(invoice.companyId, {
+            type: 'invoice_paid',
+            title: 'Invoice Paid',
+            body: `A $${amountDollars} card payment was received`,
+            entityType: 'invoice',
+            entityId: invoiceId,
+            linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
+          });
         }
       }
 
