@@ -1,0 +1,98 @@
+Allow Technicians to collect payment (create payment links) ONLY for invoices on jobs they are assigned to + remove loud 403 UI
+
+CURRENT
+- Technician can reach the Checkout/Pay screen
+- Checkout shows error:
+  403: "You do not have permission to create payment links"
+- Tech must be able to take payment on-site for assigned jobs
+- Current UI shows a loud error banner (not silent success)
+
+GOAL
+Technicians can collect payment ONLY for invoices tied to jobs they are assigned to:
+- Cash / Check works
+- Card works (Stripe payment link / checkout creation)
+- After successful payment, job.paymentStatus flips Pending → Paid immediately everywhere (no refresh)
+- RBAC is enforced server-side (assigned jobs only)
+- No loud red error banners for expected behavior (hidden-not-disabled + silent)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RBAC (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Technician:
+- Allowed to create payment links ONLY when:
+  - Invoice belongs to a job the tech is assigned to
+  - Invoice is unpaid
+- NOT allowed to create payment links for unassigned jobs or other techs’ jobs
+- NOT allowed to change company Stripe settings
+
+Owner/Admin/Supervisor/Dispatcher:
+- Keep existing payment behavior unchanged
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND CHANGES (MUST DO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Locate the endpoint that creates Stripe payment links / checkout sessions
+   Example:
+   - POST /api/payments/create-link
+   - POST /api/stripe/payment-link
+   - POST /api/invoices/:id/pay
+   (Use the real route in codebase)
+
+2) Update permission logic:
+- If role is Owner/Admin/Supervisor/Dispatcher: unchanged
+- If role is Technician:
+  - Load invoice by invoiceId
+  - Load linked jobId from invoice
+  - Verify technician is assigned to that job (server-side)
+  - Verify invoice is unpaid
+  - If all true -> allow creating payment link
+  - Else -> return 403
+
+3) Audit fields (minimum)
+- Log who initiated payment collection:
+  - payment.createdByUserId
+  - payment.createdByRole = "Technician"
+  - timestamp
+
+4) Ensure idempotency
+- If payment link already exists for that invoice and is still valid:
+  - Reuse it (do not spam Stripe with duplicates)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND CHANGES (SILENT SUCCESS + HIDDEN-NOT-DISABLED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Do not show the red 403 banner for expected RBAC restrictions
+- If tech is not allowed, they should never be able to open Card payment
+- Hide/disable “Card” option for tech ONLY if they fail the eligibility checks
+
+2) Eligibility behavior:
+- When Checkout opens:
+  - If backend says technician is allowed -> show Cash/Check/Card normally
+  - If not allowed -> hide Card option (and do not show loud banner)
+
+3) If an unexpected error occurs (real outage):
+- Show a small inline message under payment options (subtle)
+- No big red full-width error block
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAYMENT STATUS REQUIREMENTS (DO NOT BREAK)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When payment is completed (cash/check/card):
+- Invoice marked paid
+- Job flips Pending → Paid immediately
+- Paid pill updates:
+  - Jobs list
+  - Home Today list
+  - Job header
+  - Open Jobs counter
+- No manual refresh required
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Technician can create Stripe payment link for an invoice on an assigned job
+- Technician cannot do it for unassigned jobs
+- Checkout shows no loud 403 error banner in normal use
+- Card payments work end-to-end
+- Job flips to Paid everywhere immediately after payment
+- No console errors

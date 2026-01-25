@@ -9533,8 +9533,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Owner, Supervisor, Dispatcher, Estimator can create payment links
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+      // RBAC: Owner, Supervisor, Dispatcher, Estimator, Technician can create payment links
+      // Technician requires assignment check done after loading invoice
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR', 'TECHNICIAN'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to create payment links" });
       }
 
@@ -9549,6 +9550,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!invoice || invoice.companyId !== company.id) {
         return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      // For technicians, verify they are assigned to the job linked to this invoice
+      if (userRole === 'TECHNICIAN' && invoice.jobId) {
+        const crewAssignments = await storage.getJobCrewAssignments(invoice.jobId);
+        const isAssigned = crewAssignments.some(c => c.userId === userId);
+        if (!isAssigned) {
+          return res.status(403).json({ message: "You can only collect payments for jobs you are assigned to" });
+        }
       }
 
       // Check if invoice is already paid
