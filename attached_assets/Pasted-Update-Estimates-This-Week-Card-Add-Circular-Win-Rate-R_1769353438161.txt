@@ -1,0 +1,59 @@
+Update “Estimates · This Week” Card — Add Circular Win Rate Ring Like Leads
+
+CURRENT
+Homepage analytics includes:
+- “Leads · This Week” card with a circular win-rate ring on the right (e.g., 100% inside a green ring)
+- “Estimates · This Week” card currently shows “0% Won” as plain text without the ring
+
+GOAL
+Make “Estimates · This Week” visually consistent with “Leads · This Week”:
+- The right-side win rate must be displayed inside the same circular ring component
+- Even when win rate is 0%, still show the ring (with minimal progress)
+
+DO NOT redesign the whole homepage.
+Only update the Estimates card to match the Leads card pattern.
+
+RBAC (STRICT)
+- Owner/Admin only can see these analytics cards
+- Hidden, not disabled for all other roles
+
+VISUAL REQUIREMENTS
+Estimates card must match Leads card layout:
+- Title: “ESTIMATES · THIS WEEK”
+- Left metric: Created (prefer $ total if available; otherwise count)
+- Middle metric: Won (prefer $ total if available; otherwise count)
+- Right: Win Rate ring with percentage text inside (e.g., “0%”)
+
+WIN RATE RING BEHAVIOR
+- Use the same ring component / styling used by the Leads card (reuse component if it exists)
+- Render a circular progress ring around the percentage text
+- For 0%:
+  - Still show the ring outline
+  - Progress should be minimal/empty but visible (no broken/blank circle)
+- For 100%:
+  - Full ring
+- Keep styling subtle and modern (no heavy chart look)
+
+DATA RULES
+- Compute winRate = (won / created) * 100
+- If created = 0:
+  - winRate should be 0%
+  - created display should be $0 or 0
+  - won display should be $0 or 0
+- Never crash if values are missing; show “—” and ring outline with 0%
+
+IMPLEMENTATION NOTES
+- Prefer reusing the exact Leads ring component (copy/paste minimal logic ONLY if necessary)
+- Ensure consistent sizing, padding, alignment, font weights, and colors between the two cards
+- Keep card tappable → route to Estimates page
+
+LOADING / ERROR
+- Loading: show skeleton state
+- Error: friendly inline message inside the card
+- Homepage must not white-screen or throw console errors
+
+SUCCESS CRITERIA
+- Leads and Estimates cards look like a matching pair
+- Estimates win-rate shows inside a circular ring at all times (including 0%)
+- No console errors
+- RBAC preserved

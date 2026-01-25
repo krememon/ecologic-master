@@ -406,12 +406,9 @@ export default function Home() {
                   ) : pulseMetrics ? (
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-4">
-                          <ClipboardList className="h-4 w-4 text-slate-400" />
-                          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                            Estimates · This Week
-                          </p>
-                        </div>
+                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">
+                          Estimates · This Week
+                        </p>
                         <div className="flex gap-8">
                           <div>
                             <p className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -427,12 +424,7 @@ export default function Home() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                          {pulseMetrics.estimatesWinRate7d}%
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Won</p>
-                      </div>
+                      <WinRateRing percentage={pulseMetrics.estimatesWinRate7d} />
                     </div>
                   ) : null}
                 </CardContent>
