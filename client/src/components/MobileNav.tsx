@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Bell } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { 
@@ -24,6 +24,12 @@ import EcoLogicLogo from "./EcoLogicLogo";
 import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
 import { GlobalCreateMenu } from "./GlobalCreateMenu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import type { Permission } from "@shared/permissions";
 
 // Navigation items with permission requirements - must match Sidebar.tsx
@@ -50,9 +56,12 @@ interface MobileNavProps {
 
 export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [location] = useLocation();
   const { t } = useTranslation();
   const { can, canAny, role } = useCan();
+  
+  const unreadCount = 0;
 
   // Use role from hook or user prop as fallback
   const effectiveRole = role || user?.role;
@@ -112,7 +121,17 @@ export default function MobileNav({ user, company }: MobileNavProps) {
           
           <EcoLogicLogo size={32} showText={false} />
           
-          <div className="w-10 flex items-center justify-end">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setNotificationsOpen(true)}
+              className="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              )}
+            </button>
             <GlobalCreateMenu />
           </div>
         </div>
@@ -211,6 +230,22 @@ export default function MobileNav({ user, company }: MobileNavProps) {
             </nav>
         </div>
       </div>
+
+      <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Notifications</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+              <Bell className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+            </div>
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
+              No notifications yet
+            </p>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
