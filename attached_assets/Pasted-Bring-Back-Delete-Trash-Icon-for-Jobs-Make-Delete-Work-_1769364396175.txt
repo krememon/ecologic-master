@@ -1,0 +1,58 @@
+Bring Back Delete (Trash Icon) for Jobs + Make Delete Work Again (Remove Archive UI)
+
+CURRENT
+Delete job is blocked due to foreign key constraint from time_logs → jobs.
+Agent changed the UI to Archive, but user wants the old garbage delete behavior back.
+
+GOAL
+Restore the trash/delete icon on job cards and allow jobs to be deleted successfully,
+while preventing database FK errors.
+
+IMPORTANT
+We must make DELETE /api/jobs/:id succeed even when time logs exist.
+
+CHOSEN DELETE BEHAVIOR (SAFE)
+When a job is deleted:
+- The job record is deleted
+- Related time_logs are NOT deleted
+- Instead, time_logs.jobId is set to NULL (or reassigned) so payroll/history remains
+- Timesheet rows with jobId NULL should display a fallback label:
+  “Deleted job” or “Unassigned”
+
+UI REQUIREMENTS
+- Restore the red trash icon on job cards (same as before)
+- Remove/undo the Archive button/icon change
+- Delete flow should behave like it used to:
+  - Tap trash → confirm → job disappears from list and KPIs update
+- If delete succeeds, show normal success feedback (no scary toast)
+- If delete fails, show actual reason
+
+BACKEND REQUIREMENTS
+1) Fix the foreign key constraint so deletion is possible:
+Option A (preferred):
+- Update FK time_logs_job_id_fkey to ON DELETE SET NULL
+  so when jobs are deleted, time_logs.jobId becomes NULL automatically
+
+OR Option B:
+- In DELETE /api/jobs/:id handler:
+  - First run: UPDATE time_logs SET job_id = NULL WHERE job_id = :id
+  - Then delete the job
+
+2) Also handle other related tables that might block delete:
+- documents.jobId (set to NULL or delete docs, choose safest)
+- invoices.jobId (set to NULL or delete invoices, choose safest)
+- estimates.convertedJobId references (set to NULL) if needed
+Implement the minimum required to prevent FK violations.
+
+TIMESHEETS / UI FALLBACK
+Anywhere time logs are displayed:
+- If jobId is null, show:
+  Title: “Unassigned”
+  Subtitle: “Deleted job”
+Do not crash.
+
+SUCCESS CRITERIA
+- Trash icon is back on Job cards
+- Jobs can be deleted even if they have time logs
+- No FK constraint errors
+- Timesheets still retain accurate hours, with “Deleted job” label where needed

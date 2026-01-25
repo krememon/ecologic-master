@@ -850,26 +850,13 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Check which jobs have time logs (can't be deleted)
-    const jobsWithTimeLogs = await db
-      .select({ 
-        jobId: timeLogs.jobId,
-        count: sql<number>`count(*)::int`
-      })
-      .from(timeLogs)
-      .where(inArray(timeLogs.jobId, jobIds))
-      .groupBy(timeLogs.jobId);
-    
-    const jobsWithTimeLogsSet = new Set(jobsWithTimeLogs.map(t => t.jobId));
-    
-    // Merge primary line item, isPaid, crew assignments, customer, and canDelete into jobs
+    // Merge primary line item, isPaid, crew assignments, and customer into jobs
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
       isPaid: paidStatusByJob[job.id] || false,
       crewAssignments: crewByJob[job.id] || [],
       customer: job.customerId ? customerMap[job.customerId] || null : null,
-      canDelete: !jobsWithTimeLogsSet.has(job.id),
     }));
   }
 
@@ -909,19 +896,7 @@ export class DatabaseStorage implements IStorage {
       .from(jobs)
       .leftJoin(clients, eq(jobs.clientId, clients.id))
       .where(eq(jobs.id, id));
-    
-    if (!job) return undefined;
-    
-    // Check if job has time logs (can't be deleted)
-    const [timeLogCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(timeLogs)
-      .where(eq(timeLogs.jobId, id));
-    
-    return {
-      ...job,
-      canDelete: (timeLogCount?.count || 0) === 0,
-    };
+    return job;
   }
 
   async createJob(jobData: InsertJob): Promise<Job> {

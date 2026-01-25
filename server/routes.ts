@@ -2756,16 +2756,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Check if job has references that prevent deletion
-      const hasReferences = await storage.jobHasReferences(jobId);
-      if (hasReferences) {
-        return res.status(409).json({ 
-          message: "This job has time logs or related records and cannot be deleted. Archive it instead.",
-          code: "JOB_HAS_REFERENCES" 
-        });
-      }
-      
-      // Delete job (CASCADE will remove related schedule items, photos, etc.)
+      // Delete job - related time_logs and leads will have jobId set to NULL
+      // Other related records (schedule items, photos, etc.) will CASCADE delete
       await storage.deleteJob(jobId);
       
       res.status(204).send(); // No content response

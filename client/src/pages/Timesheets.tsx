@@ -59,12 +59,16 @@ function calculateMinutes(start: string, end: string): number {
   return Math.round((endTime - startTime) / 60000);
 }
 
-function getJobOrCategory(entry: TimeEntry): string {
-  if (entry.job?.title) return entry.job.title;
+function getJobOrCategory(entry: TimeEntry): { title: string; subtitle?: string } {
+  if (entry.job?.title) return { title: entry.job.title };
   if (entry.category && entry.category !== "job") {
-    return entry.category.charAt(0).toUpperCase() + entry.category.slice(1);
+    return { title: entry.category.charAt(0).toUpperCase() + entry.category.slice(1) };
   }
-  return "—";
+  // Job was deleted - jobId is null but category was "job"
+  if (entry.category === "job" && !entry.job) {
+    return { title: "Unassigned", subtitle: "Deleted job" };
+  }
+  return { title: "—" };
 }
 
 function getWeekDates(date: Date): { startDate: string; endDate: string; label: string } {
@@ -236,7 +240,7 @@ function EditEntryModal({ entry, open, onClose, onSaved, employeeName }: EditEnt
               {employeeName || "Employee"}
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {getJobOrCategory(entry)} • {formatDate(entry.date)}
+              {getJobOrCategory(entry).title} • {formatDate(entry.date)}
             </p>
           </div>
 
@@ -308,11 +312,18 @@ function EntryRow({ entry, isManager, onEdit, employeeName, compact = false }: E
   return (
     <div className={`px-4 ${compact ? "py-2.5" : "py-3"} flex items-center justify-between gap-2`}>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className={`font-medium text-slate-900 dark:text-slate-100 truncate ${compact ? "text-sm" : ""}`}>
-            {getJobOrCategory(entry)}
-          </p>
-          <EntryTags entry={entry} />
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <p className={`font-medium text-slate-900 dark:text-slate-100 truncate ${compact ? "text-sm" : ""}`}>
+              {getJobOrCategory(entry).title}
+            </p>
+            <EntryTags entry={entry} />
+          </div>
+          {getJobOrCategory(entry).subtitle && (
+            <p className={`text-slate-400 dark:text-slate-500 ${compact ? "text-xs" : "text-xs"}`}>
+              {getJobOrCategory(entry).subtitle}
+            </p>
+          )}
         </div>
         <p className={`text-slate-500 dark:text-slate-400 ${compact ? "text-xs" : "text-sm"}`}>
           {formatTime(entry.clockInAt)} - {formatTime(entry.clockOutAt)}

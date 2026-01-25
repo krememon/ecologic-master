@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2, Archive } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
@@ -36,7 +36,6 @@ interface JobWithClient extends Job {
   } | null;
   primaryLineItem?: string | null;
   isPaid?: boolean;
-  canDelete?: boolean;
 }
 
 interface JobPhoto {
@@ -1026,36 +1025,19 @@ export default function Jobs() {
                   <Edit className="h-4 w-4 mr-1.5" />
                   Edit
                 </Button>
-                {selectedJob?.canDelete !== false ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (selectedJob) {
-                        setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
-                        setSelectedJob(null);
-                      }
-                    }}
-                    data-testid="button-delete-job"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (selectedJob) {
-                        setJobToArchive({ id: selectedJob.id, title: selectedJob.title });
-                        setSelectedJob(null);
-                      }
-                    }}
-                    data-testid="button-archive-job"
-                    className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                  >
-                    <Archive className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedJob) {
+                      setJobToDelete({ id: selectedJob.id, title: selectedJob.title });
+                      setSelectedJob(null);
+                    }
+                  }}
+                  data-testid="button-delete-job"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
                 {selectedJob && (
                   <Badge 
                     variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
@@ -1982,33 +1964,18 @@ export default function Jobs() {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    {job.canDelete !== false ? (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setJobToDelete({ id: job.id, title: job.title });
-                        }}
-                        data-testid={`button-delete-job-${job.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setJobToArchive({ id: job.id, title: job.title });
-                        }}
-                        data-testid={`button-archive-job-${job.id}`}
-                      >
-                        <Archive className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setJobToDelete({ id: job.id, title: job.title });
+                      }}
+                      data-testid={`button-delete-job-${job.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>
