@@ -55,12 +55,20 @@ interface NewInvoiceSheetProps {
   onInvoiceCreated?: (invoice: any) => void;
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionLabel({ title }: { title: string }) {
   return (
-    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+    <div className="px-4 pt-4 pb-1.5">
+      <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
         {title}
       </span>
+    </div>
+  );
+}
+
+function CardGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900">
+      {children}
     </div>
   );
 }
@@ -71,25 +79,29 @@ function InfoRow({
   value, 
   onClick,
   required = false,
+  isLast = false,
 }: { 
   icon: React.ElementType; 
   label: string; 
   value?: string; 
   onClick?: () => void;
   required?: boolean;
+  isLast?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left"
+      className={`w-full flex items-center gap-3 px-4 h-[48px] bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left ${!isLast ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}
     >
-      <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
-      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+      <div className="w-5 flex items-center justify-center flex-shrink-0">
+        <Icon className="h-[18px] w-[18px] text-slate-400" />
+      </div>
+      <span className={`flex-1 text-[15px] ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
-        {required && !value && <span className="text-red-400 text-xs ml-1">*</span>}
+        {required && !value && <span className="text-red-400 text-[10px] ml-0.5">*</span>}
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-500" />
     </button>
   );
 }
@@ -408,45 +420,51 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <div className="flex items-center justify-center h-12 border-b border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 relative flex-shrink-0">
             <button 
               type="button"
               onClick={() => handleClose(false)}
-              className="absolute right-4 top-1/2 -translate-y-1/2"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
-              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              <X className="h-4 w-4 text-slate-400 dark:text-slate-500" />
             </button>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Invoice</h2>
+            <h2 className="text-[15px] font-semibold text-slate-900 dark:text-slate-100">New Invoice</h2>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-20">
-              <SectionHeader title="Customer" />
-              <InfoRow
-                icon={User}
-                label="Add customer"
-                value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
-                onClick={() => setCustomerModalOpen(true)}
-                required
-              />
+              <SectionLabel title="Customer" />
+              <CardGroup>
+                <InfoRow
+                  icon={User}
+                  label="Add customer"
+                  value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
+                  onClick={() => setCustomerModalOpen(true)}
+                  required
+                  isLast
+                />
+              </CardGroup>
 
-              <SectionHeader title="Line Items" />
-              <InfoRow
-                icon={List}
-                label="Add line items"
-                value={hasValidLineItems ? `${validLineItems.length} item${validLineItems.length !== 1 ? 's' : ''} • ${formatCurrency(subtotalCents)}` : undefined}
-                onClick={() => setPriceBookPickerOpen(true)}
-                required
-              />
+              <SectionLabel title="Line Items" />
+              <CardGroup>
+                <InfoRow
+                  icon={List}
+                  label="Add line items"
+                  value={hasValidLineItems ? `${validLineItems.length} item${validLineItems.length !== 1 ? 's' : ''} • ${formatCurrency(subtotalCents)}` : undefined}
+                  onClick={() => setPriceBookPickerOpen(true)}
+                  required
+                  isLast={validLineItems.length === 0}
+                />
 
               {/* Inline Line Items Editor */}
               {validLineItems.length > 0 && (
-                <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                <>
                   {lineItems.map((item, index) => {
                     if (!item.name.trim() && item.unitPriceCents === 0) return null;
+                    const isLastItem = index === lineItems.filter(i => i.name.trim() || i.unitPriceCents > 0).length - 1;
                     return (
-                      <div key={index} className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
-                        <div className="flex items-start justify-between gap-2 mb-2">
+                      <div key={index} className={`px-4 py-2.5 ${!isLastItem ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}>
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
                             {item.description && (
@@ -458,25 +476,25 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                             onClick={() => removeLineItem(index)}
                             className="text-red-500 hover:text-red-600 p-1 -mr-1"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                         
-                        <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div className="grid grid-cols-3 gap-2 mb-1.5">
                           <div>
-                            <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">Qty</label>
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-0.5">Qty</label>
                             <Input
                               type="number"
                               min="1"
                               value={item.quantity}
                               onChange={(e) => updateLineItem(index, { quantity: e.target.value })}
-                              className="h-8 text-sm"
+                              className="h-7 text-sm"
                             />
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">Unit</label>
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-0.5">Unit</label>
                             <Select value={item.unit} onValueChange={(v) => updateLineItem(index, { unit: v })}>
-                              <SelectTrigger className="h-8 text-sm">
+                              <SelectTrigger className="h-7 text-sm">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -490,20 +508,20 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                             </Select>
                           </div>
                           <div>
-                            <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-1">Price</label>
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wide block mb-0.5">Price</label>
                             <div className="relative">
-                              <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                              <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                               <Input
                                 placeholder="0.00"
                                 value={item.priceDisplay}
                                 onChange={(e) => handlePriceChange(index, e.target.value)}
-                                className="pl-6 h-8 text-sm"
+                                className="pl-5 h-7 text-sm"
                               />
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center justify-between py-0.5">
                           <span className="text-xs text-slate-600 dark:text-slate-400">Taxable</span>
                           <Switch
                             checked={item.taxable}
@@ -523,68 +541,77 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                               setTaxPickerLineItemIndex(index);
                               setTaxPickerOpen(true);
                             }}
-                            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-md text-sm mt-1"
+                            className="w-full flex items-center justify-between px-2 py-1 bg-slate-50 dark:bg-slate-800 rounded text-sm mt-0.5"
                           >
-                            <span className="flex items-center gap-1.5">
-                              <Percent className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="flex items-center gap-1">
+                              <Percent className="h-3 w-3 text-slate-400" />
                               <span className="text-slate-600 dark:text-slate-400 text-xs">
                                 {item.taxNameSnapshot ? `${item.taxNameSnapshot} (${item.taxRatePercentSnapshot}%)` : 'Select tax rate'}
                               </span>
                             </span>
-                            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                            <ChevronRight className="h-3 w-3 text-slate-400" />
                           </button>
                         )}
 
-                        <div className="text-right text-xs font-medium text-slate-700 dark:text-slate-300 mt-2">
+                        <div className="text-right text-[11px] font-medium text-slate-600 dark:text-slate-400 mt-1">
                           Line Total: {formatCurrency(item.unitPriceCents * (parseFloat(item.quantity) || 1))}
                         </div>
                       </div>
                     );
                   })}
-                </div>
+                </>
               )}
+              </CardGroup>
 
-              <SectionHeader title="Schedule" />
-              <InfoRow
-                icon={Calendar}
-                label="Add schedule"
-                value={scheduleDisplay || undefined}
-                onClick={() => setScheduleModalOpen(true)}
-              />
+              <SectionLabel title="Schedule" />
+              <CardGroup>
+                <InfoRow
+                  icon={Calendar}
+                  label="Add schedule"
+                  value={scheduleDisplay || undefined}
+                  onClick={() => setScheduleModalOpen(true)}
+                  isLast
+                />
+              </CardGroup>
 
-              <SectionHeader title="Tags" />
-              <InfoRow
-                icon={Tag}
-                label="Add job tags"
-                value={tags.length > 0 ? tags.join(', ') : undefined}
-                onClick={() => setTagsModalOpen(true)}
-              />
+              <SectionLabel title="Tags" />
+              <CardGroup>
+                <InfoRow
+                  icon={Tag}
+                  label="Add job tags"
+                  value={tags.length > 0 ? tags.join(', ') : undefined}
+                  onClick={() => setTagsModalOpen(true)}
+                  isLast
+                />
+              </CardGroup>
 
               {totalCents > 0 && (
                 <>
-                  <SectionHeader title="Summary" />
-                  <div className="bg-white dark:bg-slate-900 px-4 py-3 space-y-2 border-b border-slate-200 dark:border-slate-700">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Subtotal</span>
-                      <span className="text-slate-900 dark:text-slate-100">{formatCurrency(subtotalCents)}</span>
-                    </div>
-                    {taxCents > 0 && (
+                  <SectionLabel title="Summary" />
+                  <CardGroup>
+                    <div className="px-4 py-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">Tax</span>
-                        <span className="text-slate-900 dark:text-slate-100">{formatCurrency(taxCents)}</span>
+                        <span className="text-slate-500">Subtotal</span>
+                        <span className="text-slate-900 dark:text-slate-100">{formatCurrency(subtotalCents)}</span>
                       </div>
-                    )}
-                    <div className="flex justify-between text-sm font-semibold pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <span className="text-slate-900 dark:text-slate-100">Total</span>
-                      <span className="text-slate-900 dark:text-slate-100">{formatCurrency(totalCents)}</span>
+                      {taxCents > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Tax</span>
+                          <span className="text-slate-900 dark:text-slate-100">{formatCurrency(taxCents)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-semibold pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                        <span className="text-slate-900 dark:text-slate-100">Total</span>
+                        <span className="text-slate-900 dark:text-slate-100">{formatCurrency(totalCents)}</span>
+                      </div>
                     </div>
-                  </div>
+                  </CardGroup>
                 </>
               )}
           </div>
 
           {/* Sticky Bottom Done Button */}
-          <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+          <div className="absolute bottom-0 left-0 right-0 px-4 py-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-t border-slate-200/80 dark:border-slate-700 safe-area-bottom">
             <Button
               type="button"
               onClick={() => {
@@ -599,7 +626,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 handleSubmit();
               }}
               disabled={createInvoiceMutation.isPending}
-              className="w-full h-11"
+              className="w-full h-11 rounded-xl"
             >
               {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
             </Button>

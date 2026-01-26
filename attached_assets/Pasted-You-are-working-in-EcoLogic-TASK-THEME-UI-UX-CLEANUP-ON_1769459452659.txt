@@ -1,0 +1,113 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Layout, spacing, typography, colors, borders only
+
+TARGET: New Invoice sheet (header + section headers + rows + bottom button)
+USER FEEDBACK: “Clean it up more — don’t like how it came out”
+So we need a more premium, tighter, Apple/Housecall-style result.
+
+NON-NEGOTIABLES
+- Do NOT touch handlers/state/API/validation
+- Do NOT refactor shared modal infrastructure
+- Only modify classNames / layout wrappers / spacing / typography / borders
+
+WHAT’S WRONG (VISUALLY) RIGHT NOW
+1) Section headers (CUSTOMER / LINE ITEMS / etc.) are too tall and feel “heavy”
+2) Rows feel too spaced out and “flat”
+3) Overall looks like big grey blocks instead of a modern grouped-list card style
+4) Header area feels too tall and not premium
+5) Button area feels detached / floating with too much empty space
+
+NEW VISUAL DIRECTION (DO THIS)
+Make it look like a modern iOS “grouped settings” list:
+- White sheet background
+- Each section becomes a rounded “card” group with subtle border
+- Section label becomes a small caption ABOVE the card (not a big grey bar)
+- Rows inside each card are compact with thin dividers
+- Icons smaller + aligned
+- Right chevron subtle
+- Reduce total vertical whitespace drastically
+
+IMPLEMENTATION PLAN (PRESENTATION ONLY)
+
+A) Header (premium)
+- Keep: title “New Invoice”, single X close
+- Reduce header height/padding (tight)
+- Add subtle bottom divider (hairline)
+- Title: slightly smaller, semi-bold, centered
+- X: smaller, aligned vertically center, with a subtle hover/tap style (if exists)
+
+B) Replace “grey bar section headers” with “caption + card”
+For each section:
+- Remove the large grey header background bar entirely OR visually neutralize it (bg transparent)
+- Add a small caption label above the group:
+  - text: CUSTOMER / LINE ITEMS / SCHEDULE / TAGS
+  - style: uppercase, tracking, muted, small (like 12px)
+  - minimal top/bottom spacing (tight)
+- Wrap the row(s) in a rounded container:
+  - bg-white
+  - border: subtle light grey
+  - radius: 14–16px
+  - overflow-hidden so dividers are clean
+
+C) Compact rows (“shorter rows”)
+For each row inside a card:
+- Height target: ~48–52px (not 64+)
+- Left padding: consistent (16px-ish)
+- Icon:
+  - size smaller (18–20px)
+  - muted color
+  - fixed width column so text lines up across rows
+- Text:
+  - “Add customer”, “Add line items”, etc. should be slightly smaller and medium weight
+  - Keep the red asterisk but make it tighter and aligned baseline
+- Chevron:
+  - smaller, muted
+- Dividers:
+  - Use thin border between rows (if multiple rows per card)
+  - Dividers should not run under the icon gutter if possible (indent divider starting after icon)
+
+D) Overall spacing
+- Reduce spacing between sections (caption + card)
+- Remove the huge blank feeling between the list and the button by:
+  - letting content naturally end
+  - keeping bottom padding minimal but safe
+
+E) Bottom Save button area (integrated)
+- Keep functionality identical
+- Make it feel integrated like a sticky footer:
+  - subtle top divider above footer
+  - footer padding: 16px
+  - button full width inside footer with consistent radius
+  - reduce extra empty space below the button (but keep safe-area)
+- If the button is already sticky, just restyle container padding and divider.
+
+F) Optional tiny copy change (VISUAL ONLY)
+- If current labels are Title Case (“Customer”) elsewhere, follow the app standard.
+- But do NOT change meaning or required flags.
+
+DO NOT
+- Change the order of sections
+- Change tap targets behavior
+- Change required validation
+- Change any text values stored/sent to backend
+
+DELIVERABLES
+1) New Invoice sheet now uses grouped-card sections + caption labels (no heavy grey bars)
+2) Rows are compact and aligned (icons/text/asterisk/chevrons)
+3) Header is tighter and premium
+4) Footer button area feels intentional, not floating
+5) No functional changes
+
+QA CHECKLIST
+- Clicking rows still opens the same flows
+- Required asterisks still show only where required
+- Save Invoice works
+- Close works
+- No console errors / no layout overflow at iPhone width
+
+NOTE TO YOU (AGENT)
+If the current component uses a shared <SectionHeader /> that forces grey bars, DO NOT refactor it globally.
+Instead, override styles locally in the New Invoice component OR create a local wrapper that visually converts it into the caption+card style without touching other screens.
