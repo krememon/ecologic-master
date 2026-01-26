@@ -1,0 +1,105 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Spacing, typography, layout, visual consistency only
+
+TARGET: New Invoice sheet layout/spacing
+REFERENCE: New Job fill-out spacing (first screenshot) is the GOLD STANDARD.
+Invoice sheet (second screenshot) currently has way too much vertical whitespace between everything.
+
+GOAL
+Make New Invoice spacing match New Job fill-out:
+- tighter section spacing
+- tighter row spacing
+- remove unnecessary top/bottom padding
+- keep it clean + modern
+- keep the “card row” style if you want, BUT spacing must match Jobs (no big gaps)
+
+STRICT RULES
+- Do NOT touch onClick/onSubmit/onChange/state/API/validation
+- Do NOT change what fields show
+- Only update classNames/layout wrappers/padding/margins
+
+WHAT TO FIX (SPECIFIC)
+1) Too much space between:
+   - header divider and first section label
+   - section label and its row card
+   - each section group and the next section label
+2) Row cards are too tall
+3) Icons/text/chevron row padding is too large
+4) Bottom button has too much “air” above it
+5) Overall sheet content looks “stretched” vertically
+
+IMPLEMENTATION STEPS
+
+A) Use the New Job fill-out measurements as reference
+- Find New Job component and note spacing values:
+  - spacing between section headers
+  - row height/padding
+  - divider usage
+- Copy those spacing tokens (padding/margin classes) into New Invoice (presentation only).
+- We are NOT copying logic—only the layout spacing system.
+
+B) Tighten the Invoice header + top padding
+- Reduce top padding inside sheet content container (the area below the header)
+- Reduce margin-top before first section label (“CUSTOMER”)
+- Keep header and X as-is (already good)
+
+C) Tighten section spacing (biggest win)
+For each section block (CUSTOMER, LINE ITEMS, SCHEDULE, TAGS):
+- Make section label have small top margin (like Jobs)
+- Make label-to-row gap small (like Jobs)
+- Remove any large padding wrappers around each section
+- If sections are wrapped in a container adding padding/margin, reduce it
+
+Target spacing:
+- Label top margin: small
+- Label bottom margin: very small
+- Between cards: small and consistent
+
+D) Tighten the row card styling
+- Reduce card vertical padding (py)
+- Reduce card min-height if it’s set too large
+- Reduce icon gutter width slightly
+- Keep consistent left/right padding with Jobs rows
+- Chevron should be vertically centered with the text
+
+Row target:
+- Similar height to Jobs rows (no tall pills)
+
+E) Reduce overall content padding
+- Invoice sheet currently has large left/right padding + large vertical padding.
+- Keep horizontal padding comfortable, but reduce vertical padding everywhere.
+- Remove any “gap-y-6 / space-y-6” style values and replace with Jobs-like values (“space-y-3/4” vibe).
+
+F) Button/footer spacing
+- Keep Save Invoice button behavior identical
+- Reduce the dead space between the last section and the button
+- Ensure footer has proper safe-area padding but not excessive
+- Button can stay large, but the container above it shouldn’t push it too far down
+
+IMPORTANT: KEEP VISUAL CONSISTENCY WITH JOBS
+- If Jobs uses flat rows with separators, you can keep invoice as rounded cards,
+  BUT spacing must match Jobs (tight + consistent).
+- If keeping rounded cards causes extra whitespace, shrink their padding and the gaps between them.
+
+DELIVERABLES
+1) New Invoice sheet spacing matches New Job fill-out:
+   - minimal gaps
+   - compact rows
+   - sections stacked cleanly
+2) No functional changes
+3) Quick before/after note listing which padding/margin/space-y values were changed
+
+QA CHECKLIST
+- Click each row still opens the same picker/modal
+- Required asterisk still shows
+- Save Invoice still works
+- No console errors / no white screen
+- Looks correct on iPhone width
+
+AGENT NOTE (HOW TO EXECUTE FAST)
+- Search in New Invoice component for: "space-y-", "gap-y-", "py-", "mt-", "mb-", "pt-", "pb-"
+- Most of the bad spacing is usually from one or two wrappers using large `space-y-*` or big `py-*`.
+- Replace those with the same values used in New Job fill-out wrappers.

@@ -55,20 +55,12 @@ interface NewInvoiceSheetProps {
   onInvoiceCreated?: (invoice: any) => void;
 }
 
-function SectionLabel({ title }: { title: string }) {
+function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 pt-4 pb-1.5">
-      <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
         {title}
       </span>
-    </div>
-  );
-}
-
-function CardGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mx-4 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900">
-      {children}
     </div>
   );
 }
@@ -79,29 +71,25 @@ function InfoRow({
   value, 
   onClick,
   required = false,
-  isLast = false,
 }: { 
   icon: React.ElementType; 
   label: string; 
   value?: string; 
   onClick?: () => void;
   required?: boolean;
-  isLast?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 h-[48px] bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left ${!isLast ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}
+      className="w-full flex items-center gap-3 px-4 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left"
     >
-      <div className="w-5 flex items-center justify-center flex-shrink-0">
-        <Icon className="h-[18px] w-[18px] text-slate-400" />
-      </div>
-      <span className={`flex-1 text-[15px] ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+      <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
+      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
-        {required && !value && <span className="text-red-400 text-[10px] ml-0.5">*</span>}
+        {required && !value && <span className="text-red-500 ml-1">*</span>}
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-500" />
+      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
     </button>
   );
 }
@@ -420,50 +408,44 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-950">
-          <div className="flex items-center justify-center h-12 border-b border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 relative flex-shrink-0">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
             <button 
               type="button"
               onClick={() => handleClose(false)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2"
             >
-              <X className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
             </button>
-            <h2 className="text-[15px] font-semibold text-slate-900 dark:text-slate-100">New Invoice</h2>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Invoice</h2>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-20">
-              <SectionLabel title="Customer" />
-              <CardGroup>
-                <InfoRow
-                  icon={User}
-                  label="Add customer"
-                  value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
-                  onClick={() => setCustomerModalOpen(true)}
-                  required
-                  isLast
-                />
-              </CardGroup>
+              <SectionHeader title="Customer" />
+              <InfoRow
+                icon={User}
+                label="Add customer"
+                value={selectedCustomer ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` : undefined}
+                onClick={() => setCustomerModalOpen(true)}
+                required
+              />
 
-              <SectionLabel title="Line Items" />
-              <CardGroup>
-                <InfoRow
-                  icon={List}
-                  label="Add line items"
-                  value={hasValidLineItems ? `${validLineItems.length} item${validLineItems.length !== 1 ? 's' : ''} • ${formatCurrency(subtotalCents)}` : undefined}
-                  onClick={() => setPriceBookPickerOpen(true)}
-                  required
-                  isLast={validLineItems.length === 0}
-                />
+              <SectionHeader title="Line Items" />
+              <InfoRow
+                icon={List}
+                label="Add line items"
+                value={hasValidLineItems ? `${validLineItems.length} item${validLineItems.length !== 1 ? 's' : ''} • ${formatCurrency(subtotalCents)}` : undefined}
+                onClick={() => setPriceBookPickerOpen(true)}
+                required
+              />
 
               {/* Inline Line Items Editor */}
               {validLineItems.length > 0 && (
-                <>
+                <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                   {lineItems.map((item, index) => {
                     if (!item.name.trim() && item.unitPriceCents === 0) return null;
-                    const isLastItem = index === lineItems.filter(i => i.name.trim() || i.unitPriceCents > 0).length - 1;
                     return (
-                      <div key={index} className={`px-4 py-2.5 ${!isLastItem ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}>
+                      <div key={index} className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
@@ -559,59 +541,50 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                       </div>
                     );
                   })}
-                </>
+                </div>
               )}
-              </CardGroup>
 
-              <SectionLabel title="Schedule" />
-              <CardGroup>
-                <InfoRow
-                  icon={Calendar}
-                  label="Add schedule"
-                  value={scheduleDisplay || undefined}
-                  onClick={() => setScheduleModalOpen(true)}
-                  isLast
-                />
-              </CardGroup>
+              <SectionHeader title="Schedule" />
+              <InfoRow
+                icon={Calendar}
+                label="Add schedule"
+                value={scheduleDisplay || undefined}
+                onClick={() => setScheduleModalOpen(true)}
+              />
 
-              <SectionLabel title="Tags" />
-              <CardGroup>
-                <InfoRow
-                  icon={Tag}
-                  label="Add job tags"
-                  value={tags.length > 0 ? tags.join(', ') : undefined}
-                  onClick={() => setTagsModalOpen(true)}
-                  isLast
-                />
-              </CardGroup>
+              <SectionHeader title="Tags" />
+              <InfoRow
+                icon={Tag}
+                label="Add job tags"
+                value={tags.length > 0 ? tags.join(', ') : undefined}
+                onClick={() => setTagsModalOpen(true)}
+              />
 
               {totalCents > 0 && (
                 <>
-                  <SectionLabel title="Summary" />
-                  <CardGroup>
-                    <div className="px-4 py-3 space-y-1.5">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">Subtotal</span>
-                        <span className="text-slate-900 dark:text-slate-100">{formatCurrency(subtotalCents)}</span>
-                      </div>
-                      {taxCents > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-500">Tax</span>
-                          <span className="text-slate-900 dark:text-slate-100">{formatCurrency(taxCents)}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm font-semibold pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-slate-900 dark:text-slate-100">Total</span>
-                        <span className="text-slate-900 dark:text-slate-100">{formatCurrency(totalCents)}</span>
-                      </div>
+                  <SectionHeader title="Summary" />
+                  <div className="bg-white dark:bg-slate-900 px-4 py-3 space-y-2 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Subtotal</span>
+                      <span className="text-slate-900 dark:text-slate-100">{formatCurrency(subtotalCents)}</span>
                     </div>
-                  </CardGroup>
+                    {taxCents > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Tax</span>
+                        <span className="text-slate-900 dark:text-slate-100">{formatCurrency(taxCents)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-semibold pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <span className="text-slate-900 dark:text-slate-100">Total</span>
+                      <span className="text-slate-900 dark:text-slate-100">{formatCurrency(totalCents)}</span>
+                    </div>
+                  </div>
                 </>
               )}
           </div>
 
           {/* Sticky Bottom Done Button */}
-          <div className="absolute bottom-0 left-0 right-0 px-4 py-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-t border-slate-200/80 dark:border-slate-700 safe-area-bottom">
+          <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
             <Button
               type="button"
               onClick={() => {
@@ -626,7 +599,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 handleSubmit();
               }}
               disabled={createInvoiceMutation.isPending}
-              className="w-full h-11 rounded-xl"
+              className="w-full h-11"
             >
               {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
             </Button>
