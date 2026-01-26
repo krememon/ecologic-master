@@ -94,8 +94,10 @@ const JOB_TYPES = [
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-      {title}
+    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+        {title}
+      </span>
     </div>
   );
 }
@@ -119,15 +121,15 @@ function InfoRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
+      className="w-full flex items-center gap-3 px-4 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left"
       data-testid={testId}
     >
       <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
-      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
         {required && !value && <span className="text-red-500 ml-1">*</span>}
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-400" />
+      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
     </button>
   );
 }
@@ -837,10 +839,10 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
     <>
       <Dialog open={open} onOpenChange={(o) => { if (!o) { resetForm(); } onOpenChange(o); }}>
         <DialogContent className="w-full max-w-lg h-[90vh] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden" hideCloseButton>
-          <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex-shrink-0 flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <button 
               onClick={() => { resetForm(); onOpenChange(false); }}
-              className="text-sm text-blue-500 font-medium"
+              className="text-sm text-blue-500 font-medium min-w-[60px] text-left"
               data-testid="button-cancel-job"
             >
               Cancel
@@ -852,6 +854,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
               size="sm"
               onClick={handleSave}
               disabled={!canSave || createJobMutation.isPending || updateJobMutation.isPending}
+              className="min-w-[60px] h-8 rounded-lg"
               data-testid="button-save-job"
             >
               {(createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
@@ -888,7 +891,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
             <SectionHeader title="Location" />
             <InfoRow
               icon={MapPin}
-              label="Add job location"
+              label="Add location"
               value={location || undefined}
               onClick={() => setLocationModalOpen(true)}
               testId="row-add-location"
@@ -915,7 +918,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
             <SectionHeader title="Assigned To" />
             <InfoRow
               icon={Users}
-              label="Assign technicians"
+              label="Assign employees"
               value={getEmployeesDisplayText()}
               onClick={() => setEmployeesModalOpen(true)}
               testId="row-assign-technicians"

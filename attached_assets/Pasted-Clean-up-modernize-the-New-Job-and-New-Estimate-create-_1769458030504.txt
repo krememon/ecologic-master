@@ -1,0 +1,69 @@
+Clean up / modernize the "New Job" and "New Estimate" create forms (the main fill-out pages) with ZERO functional changes.
+
+Goal:
+Make the New Job and New Estimate fill-out pages look cleaner, more modern, and consistent with EcoLogic’s updated modal style, while keeping every existing interaction and behavior exactly the same.
+
+Rules:
+- Do NOT change any functionality:
+  - which fields exist
+  - what is required (e.g., customer required)
+  - navigation into the picker modals (Select Customer, Add Line Items, Location, Schedule, Assign Employees, Job Type, Notes)
+  - Save/Cancel behavior
+  - API calls, payloads, or data shape
+- Do NOT change RBAC rules.
+- This is UI/visual polish only.
+
+What to improve (visual only):
+
+1) Header polish
+- Keep "Cancel" on the left and "Save" on the right.
+- Make header spacing cleaner and consistent:
+  - tighter vertical padding
+  - consistent title typography ("New Job" / "New Estimate")
+- Make the Save button look consistent between both screens (same size, radius, padding, color).
+- Ensure header divider is subtle and consistent.
+
+2) Section headers + rows
+- Keep the current section grouping (Customer, Line Items, Location, Job Type, Schedule, Assigned To/Dispatch To, Notes).
+- Make section headers cleaner:
+  - consistent casing (either Title Case or small caps, pick one and apply everywhere)
+  - lighter background or subtle divider style consistent across both pages
+- Make row styling consistent:
+  - consistent icon size and alignment
+  - consistent row height
+  - consistent chevron alignment on right
+  - subtle pressed state on tap
+  - reduce visual clutter (less heavy lines)
+
+3) Spacing + rhythm
+- Reduce excessive vertical whitespace between sections.
+- Increase “scanability”:
+  - clear separation between sections
+  - consistent padding left/right
+  - keep everything aligned
+
+4) Copy consistency (visual only)
+- Make placeholder/action text consistent between Job and Estimate:
+  Examples (do NOT change meaning/function):
+  - "Select customer" vs "Add customer" → make these consistent if they do the same thing
+  - "Add job location" vs "Add address" → make these consistent if they do the same thing
+  - "Assign technicians" vs "My employees" → make these consistent if they do the same thing
+(If any label differences are meaningful, keep them—only normalize when they represent the same action.)
+
+5) Use updated modals styling language
+- Ensure the look matches the modern modals we’ve cleaned:
+  - soft grey section backgrounds
+  - clean dividers
+  - modern typography
+  - consistent corner radius where used
+
+Scope:
+- Update ONLY the New Job page component and New Estimate page component (and their shared UI components if they already exist).
+- Prefer extracting shared styles/components so both pages stay identical in design.
+
+Acceptance Criteria:
+- New Job and New Estimate pages look noticeably cleaner and more modern.
+- Both pages look consistent with each other (same visual system).
+- Every row still opens the same modal and saves the same values.
+- Save/Cancel behavior unchanged.
+- No console errors or regressions.
