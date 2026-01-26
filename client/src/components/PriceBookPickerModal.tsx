@@ -324,14 +324,6 @@ export function PriceBookPickerModal({
               </div>
             </div>
 
-            <div className="flex items-center justify-between py-2">
-              <Label htmlFor="item-taxable" className="font-normal">Taxable</Label>
-              <Switch
-                id="item-taxable"
-                checked={newItem.taxable}
-                onCheckedChange={(checked) => setNewItem({ ...newItem, taxable: checked })}
-              />
-            </div>
           </div>
 
           <DialogFooter className="flex-row gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
