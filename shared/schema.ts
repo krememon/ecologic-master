@@ -299,6 +299,11 @@ export const invoices = pgTable("invoices", {
   createdByRole: varchar("created_by_role"),
   lastEditedByUserId: varchar("last_edited_by_user_id"),
   lastEditedAt: timestamp("last_edited_at"),
+  // QuickBooks sync fields
+  qboInvoiceId: varchar("qbo_invoice_id", { length: 100 }),
+  qboSyncStatus: varchar("qbo_sync_status", { length: 20 }), // pending, synced, failed
+  qboLastSyncError: text("qbo_last_sync_error"),
+  qboLastSyncedAt: timestamp("qbo_last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

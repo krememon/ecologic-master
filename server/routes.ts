@@ -1300,6 +1300,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/integrations/quickbooks/sync-invoice/:id - Sync invoice to QuickBooks
+  app.post('/api/integrations/quickbooks/sync-invoice/:id', isAuthenticated, async (req: any, res) => {
+    const invoiceId = parseInt(req.params.id);
+    
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      if (!company?.qboRealmId) {
+        return res.status(400).json({ error: 'QuickBooks not connected' });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice || invoice.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+      
+      // Idempotent: if already synced, return existing ID
+      if (invoice.qboInvoiceId) {
+        console.log('[QB] Invoice already synced:', invoice.qboInvoiceId);
+        return res.json({ 
+          success: true, 
+          qboInvoiceId: invoice.qboInvoiceId,
+          alreadySynced: true
+        });
+      }
+      
+      // Ensure customer exists in QBO
+      if (!invoice.customerId) {
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: 'Invoice has no customer',
+          qboLastSyncedAt: new Date(),
+        });
+        return res.status(400).json({ error: 'Invoice has no customer' });
+      }
+      
+      const qboCustomerId = await ensureQboCustomer(member.companyId, invoice.customerId);
+      if (!qboCustomerId) {
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: 'Failed to create/find QBO customer',
+          qboLastSyncedAt: new Date(),
+        });
+        return res.status(400).json({ error: 'Failed to create QBO customer' });
+      }
+      
+      const accessToken = await getQboAccessToken(member.companyId);
+      if (!accessToken) {
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: 'Failed to get access token',
+          qboLastSyncedAt: new Date(),
+        });
+        return res.status(400).json({ error: 'Unable to get access token' });
+      }
+      
+      // Build QBO invoice line items
+      const lineItems = (invoice.lineItems || []).map((item: any, idx: number) => ({
+        LineNum: idx + 1,
+        Amount: (item.quantity * item.unitPrice).toFixed(2),
+        DetailType: 'SalesItemLineDetail',
+        Description: item.description || item.name,
+        SalesItemLineDetail: {
+          Qty: item.quantity,
+          UnitPrice: item.unitPrice,
+        },
+      }));
+      
+      // Create QBO invoice
+      console.log('[QB] Creating invoice for customer:', qboCustomerId);
+      const createResponse = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/invoice`,
+        {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            CustomerRef: { value: qboCustomerId },
+            DocNumber: invoice.invoiceNumber,
+            TxnDate: invoice.issueDate,
+            DueDate: invoice.dueDate,
+            Line: lineItems,
+            PrivateNote: invoice.notes || undefined,
+          }),
+        }
+      );
+      
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error('[QB] Failed to create invoice:', errorText);
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: errorText.substring(0, 500),
+          qboLastSyncedAt: new Date(),
+        });
+        return res.status(400).json({ error: 'Failed to create QBO invoice' });
+      }
+      
+      const createData = await createResponse.json();
+      const qboInvoiceId = createData.Invoice?.Id;
+      
+      if (qboInvoiceId) {
+        console.log('[QB] Created invoice:', qboInvoiceId);
+        await storage.updateInvoice(invoiceId, {
+          qboInvoiceId,
+          qboSyncStatus: 'synced',
+          qboLastSyncError: null,
+          qboLastSyncedAt: new Date(),
+        });
+        return res.json({ success: true, qboInvoiceId });
+      }
+      
+      await storage.updateInvoice(invoiceId, {
+        qboSyncStatus: 'failed',
+        qboLastSyncError: 'No invoice ID returned',
+        qboLastSyncedAt: new Date(),
+      });
+      return res.status(400).json({ error: 'No invoice ID returned from QBO' });
+    } catch (error: any) {
+      console.error('[QB] Error syncing invoice:', error);
+      await storage.updateInvoice(invoiceId, {
+        qboSyncStatus: 'failed',
+        qboLastSyncError: error.message?.substring(0, 500) || 'Unknown error',
+        qboLastSyncedAt: new Date(),
+      });
+      res.status(500).json({ error: 'Failed to sync invoice' });
+    }
+  });
+
   // =====================
   // LEADS ROUTES
   // =====================

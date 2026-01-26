@@ -12,8 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2 } from "lucide-react";
+import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useCan } from "@/hooks/useCan";
 
 interface Invoice {
   id: number;
@@ -25,6 +26,10 @@ interface Invoice {
   totalCents: number;
   status: string;
   createdAt: string;
+  qboInvoiceId?: string | null;
+  qboSyncStatus?: string | null;
+  qboLastSyncError?: string | null;
+  qboLastSyncedAt?: string | null;
 }
 
 interface LineItem {
@@ -53,6 +58,7 @@ type ViewState = 'review' | 'processing' | 'success';
 export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { can } = useCan();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNote, setShowNote] = useState(false);
@@ -64,9 +70,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [viewState, setViewState] = useState<ViewState>('review');
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isSyncingQbo, setIsSyncingQbo] = useState(false);
+  const [qboSyncResult, setQboSyncResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
+  const canSyncQbo = can('customize.manage');
 
   const { data: invoiceData, isLoading: invoiceLoading, error: invoiceError } = useQuery<{ invoice: Invoice | null }>({
     queryKey: ['/api/jobs', numericJobId, 'invoice'],
@@ -189,6 +198,35 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     navigate('/jobs', { replace: true });
   };
 
+  const handleQboSync = async () => {
+    if (isSyncingQbo || !invoice) return;
+    
+    setIsSyncingQbo(true);
+    setQboSyncResult(null);
+    
+    try {
+      const response = await apiRequest('POST', `/api/integrations/quickbooks/sync-invoice/${invoice.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setQboSyncResult({ 
+          success: true, 
+          message: data.alreadySynced ? 'Already synced' : 'Synced successfully'
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
+      } else {
+        throw new Error(data.error || 'Sync failed');
+      }
+    } catch (err: any) {
+      setQboSyncResult({ 
+        success: false, 
+        message: err.message || 'Sync failed'
+      });
+    } finally {
+      setIsSyncingQbo(false);
+    }
+  };
+
   const formatCurrency = (dollars: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -300,7 +338,40 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Checkout</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Checkout</h1>
+          
+          {canSyncQbo && (
+            <div className="flex items-center gap-2">
+              {invoice.qboInvoiceId ? (
+                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <Cloud className="h-3 w-3" />
+                  Synced
+                </span>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleQboSync}
+                  disabled={isSyncingQbo}
+                  className="text-xs h-7"
+                >
+                  {isSyncingQbo ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : (
+                    <Cloud className="h-3 w-3 mr-1" />
+                  )}
+                  Sync to QB
+                </Button>
+              )}
+              {qboSyncResult && (
+                <span className={`text-xs ${qboSyncResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                  {qboSyncResult.message}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
