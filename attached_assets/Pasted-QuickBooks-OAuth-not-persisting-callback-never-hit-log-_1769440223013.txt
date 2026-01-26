@@ -1,0 +1,51 @@
+QuickBooks OAuth not persisting: callback never hit — log redirect_uri + handle Intuit error params
+
+CURRENT
+- /api/integrations/quickbooks/connect is called and returns 302
+- /api/integrations/quickbooks/status stays {connected:false}
+- Server logs show NO requests to /api/integrations/quickbooks/callback
+- That means Intuit is not calling our callback, so tokens are never stored
+
+GOAL
+1) Confirm the exact redirect_uri being sent to Intuit
+2) Confirm whether Intuit is returning an error (user denied, redirect mismatch, etc.)
+3) Make callback endpoint logging undeniable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — LOG THE EXACT OAUTH URL (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+In GET /api/integrations/quickbooks/connect:
+- Log the FULL Intuit authorize URL we redirect to (including query string)
+- Specifically log the value of redirect_uri and state
+
+Example log:
+[QB] OAuth URL: https://appcenter.intuit.com/connect/oauth2?...&redirect_uri=...&state=...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — LOG CALLBACK HITS (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+In GET /api/integrations/quickbooks/callback:
+- Add logs at the very top:
+  [QB] CALLBACK HIT
+  query keys: code? realmId? state? error? error_description?
+- If error exists (like user_denied), log it and redirect back to UI with:
+  /customize/quickbooks?error=...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — VERIFY ROUTE EXISTS + MATCHES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Ensure the backend route path is EXACTLY:
+  GET /api/integrations/quickbooks/callback
+- Ensure the connect route uses QB_REDIRECT_URI exactly (no hardcoded different path)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — AFTER FIX, REMOVE TEMP LOGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Once callback is confirmed working and tokens save, remove the noisy logs.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Clicking Connect logs the exact redirect_uri being sent to Intuit
+- After Intuit approval, server logs show “CALLBACK HIT”
+- /api/integrations/quickbooks/status returns connected:true

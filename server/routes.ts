@@ -1004,6 +1004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate secure state token with embedded companyId
       const state = createQboState(member.companyId);
       console.log('[QB] Initiating OAuth for companyId:', member.companyId);
+      console.log('[QB] QB_REDIRECT_URI:', QB_REDIRECT_URI);
       
       const authUrl = new URL(QB_AUTH_BASE);
       authUrl.searchParams.set('client_id', QB_CLIENT_ID);
@@ -1012,6 +1013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       authUrl.searchParams.set('redirect_uri', QB_REDIRECT_URI);
       authUrl.searchParams.set('state', state);
       
+      console.log('[QB] Full OAuth URL:', authUrl.toString());
       res.redirect(authUrl.toString());
     } catch (error: any) {
       console.error('Error initiating QuickBooks OAuth:', error);
@@ -1021,9 +1023,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/integrations/quickbooks/callback - OAuth callback
   app.get('/api/integrations/quickbooks/callback', async (req: any, res) => {
-    console.log('[QB] Callback received with query:', Object.keys(req.query));
+    console.log('[QB] CALLBACK HIT');
+    console.log('[QB] Query params:', JSON.stringify(req.query));
+    console.log('[QB] Full URL:', req.originalUrl);
     try {
-      const { code, realmId, state, error: oauthError } = req.query;
+      const { code, realmId, state, error: oauthError, error_description } = req.query;
+      
+      if (error_description) {
+        console.error('[QB] Error description:', error_description);
+      }
       
       if (oauthError) {
         console.error('[QB] OAuth error from Intuit:', oauthError);
