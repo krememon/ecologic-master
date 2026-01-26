@@ -1,0 +1,91 @@
+Fix QuickBooks OAuth connection not persisting (still shows “Connect QuickBooks” after redirect)
+
+CURRENT
+- Clicking “Connect QuickBooks” redirects to Intuit and then back to EcoLogic
+- After returning, Settings still shows “Connect QuickBooks” (not connected)
+- Clicking again repeats the redirect loop
+- This means tokens/realmId are not being saved OR UI is not reading saved state
+
+GOAL
+After a successful Intuit OAuth connection:
+- EcoLogic must store realmId + tokens to the correct company in DB
+- Settings must immediately show “Connected to QuickBooks”
+- No manual refresh required
+- No redirect loop
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — VERIFY CALLBACK IS HIT (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add TEMP server logging ONLY in the callback route:
+- Log when /api/integrations/quickbooks/callback is hit
+- Log received query params keys: code present? realmId present? state present?
+- Log which companyId/userId it is attempting to save to
+
+If callback is NOT hit:
+- Redirect URI in Intuit does not match QB_REDIRECT_URI exactly
+- Fix by matching character-for-character
+
+Remove temp logs after fix.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — FIX COMPANY BINDING (MOST LIKELY ROOT CAUSE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The callback must know which EcoLogic company to save into.
+If callback currently relies on session cookie, it may be missing during the redirect.
+
+Implement a reliable “state” strategy:
+
+On /connect:
+- Generate a state value that encodes companyId + userId securely
+  Option A (preferred): store state -> {companyId,userId} in DB table (qbo_oauth_states) with expiry (10 min)
+  Option B: signed token (HMAC) that includes companyId/userId and expires quickly
+
+On /callback:
+- Validate state
+- Resolve companyId/userId from state
+- Save tokens/realmId into that company record
+- Do NOT depend on browser session being present
+
+RBAC:
+- Only Owner/Admin can initiate connect
+- Callback should still store to the company resolved from state
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — ADD STATUS ENDPOINT (REQUIRED FOR UI)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add:
+GET /api/integrations/quickbooks/status
+- Returns { connected: boolean, realmId?: string, connectedAt?: timestamp }
+- Derive connected = (company.qboRealmId exists AND refreshToken exists)
+
+This is what the Settings UI should use to display Connected/Disconnected.
+Do NOT expose tokens in this endpoint.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — UPDATE SETTINGS UI TO REFLECT REAL STATUS (NO REFRESH)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- On Settings → QuickBooks section:
+  - Fetch /status on load
+  - If connected: show “Connected to QuickBooks” + Disconnect button
+  - If not: show Connect button
+- After returning from callback redirect:
+  - Auto-refetch /status (or read query param like ?quickbooks=connected then refetch)
+
+No popups/toasts.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5 — SUCCESS REDIRECT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After successful callback storage:
+- Redirect user to: /settings?quickbooks=connected
+(or wherever QuickBooks section lives)
+Then Settings should show connected state immediately.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Connect QuickBooks once → returns to EcoLogic and shows “Connected”
+- Clicking Connect again does NOT start OAuth (because already connected)
+- Disconnect clears connection and UI updates immediately
+- No tokens exposed to frontend
+- No console errors

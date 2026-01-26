@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, ArrowLeft, Link2, CheckCircle2, XCircle } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,6 +20,7 @@ export default function QuickBooksSettings() {
   const { can } = useCan();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   
   const hasPermission = can('customize.manage');
@@ -30,6 +31,30 @@ export default function QuickBooksSettings() {
       navigate('/');
     }
   }, [authLoading, hasPermission, navigate]);
+
+  // Handle OAuth callback query params
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const connected = params.get('connected');
+    const error = params.get('error');
+    
+    if (connected === 'true' || error) {
+      // Refetch status after OAuth callback
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/quickbooks/status'] });
+      
+      // Show error toast only for errors
+      if (error) {
+        toast({
+          title: "Connection Failed",
+          description: "Could not connect to QuickBooks. Please try again.",
+          variant: "destructive",
+        });
+      }
+      
+      // Clear URL params
+      window.history.replaceState({}, '', '/customize/quickbooks');
+    }
+  }, [search, toast]);
 
   const { data: status, isLoading: statusLoading } = useQuery<QBStatus>({
     queryKey: ['/api/integrations/quickbooks/status'],

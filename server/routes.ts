@@ -7,7 +7,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice } from "./notificationService";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
-import { scrypt, randomBytes, timingSafeEqual, createHash } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
 function generatePairKey(companyId: number, userId1: string, userId2: string): string {
@@ -874,6 +874,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ? 'https://quickbooks.api.intuit.com' 
     : 'https://sandbox-quickbooks.api.intuit.com';
 
+  function createQboState(companyId: number): string {
+    const payload = { c: companyId, t: Date.now() };
+    const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const secret = process.env.SESSION_SECRET || 'qbo-state-secret';
+    const signature = createHmac('sha256', secret).update(data).digest('base64url');
+    return `${data}.${signature}`;
+  }
+
+  function verifyQboState(state: string): { companyId: number } | null {
+    try {
+      const [data, signature] = state.split('.');
+      if (!data || !signature) return null;
+      
+      const secret = process.env.SESSION_SECRET || 'qbo-state-secret';
+      const expectedSig = createHmac('sha256', secret).update(data).digest('base64url');
+      if (signature !== expectedSig) return null;
+      
+      const payload = JSON.parse(Buffer.from(data, 'base64url').toString());
+      if (Date.now() - payload.t > 10 * 60 * 1000) return null;
+      
+      return { companyId: payload.c };
+    } catch {
+      return null;
+    }
+  }
+
   // Helper: Get valid QBO access token (refreshes if expired)
   async function getQboAccessToken(companyId: number): Promise<string | null> {
     const company = await storage.getCompany(companyId);
@@ -975,10 +1001,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'QuickBooks integration not configured' });
       }
       
-      // Generate CSRF state and store in session
-      const state = randomBytes(32).toString('hex');
-      req.session.qboOAuthState = state;
-      req.session.qboCompanyId = member.companyId;
+      // Generate secure state token with embedded companyId
+      const state = createQboState(member.companyId);
+      console.log('[QB] Initiating OAuth for companyId:', member.companyId);
       
       const authUrl = new URL(QB_AUTH_BASE);
       authUrl.searchParams.set('client_id', QB_CLIENT_ID);
@@ -996,41 +1021,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /api/integrations/quickbooks/callback - OAuth callback
   app.get('/api/integrations/quickbooks/callback', async (req: any, res) => {
+    console.log('[QB] Callback received with query:', Object.keys(req.query));
     try {
       const { code, realmId, state, error: oauthError } = req.query;
       
       if (oauthError) {
-        console.error('QuickBooks OAuth error:', oauthError);
-        return res.redirect('/customize?quickbooks=error');
+        console.error('[QB] OAuth error from Intuit:', oauthError);
+        return res.redirect('/customize/quickbooks?error=oauth');
       }
       
-      // Validate CSRF state
-      if (!state || state !== req.session?.qboOAuthState) {
-        console.error('QuickBooks OAuth state mismatch');
-        return res.redirect('/customize?quickbooks=error');
+      // Verify signed state token and extract companyId
+      if (!state) {
+        console.error('[QB] No state parameter');
+        return res.redirect('/customize/quickbooks?error=state');
       }
       
-      const companyId = req.session?.qboCompanyId;
-      if (!companyId) {
-        console.error('No company ID in session');
-        return res.redirect('/customize?quickbooks=error');
+      const stateData = verifyQboState(state as string);
+      if (!stateData) {
+        console.error('[QB] Invalid or expired state token');
+        return res.redirect('/customize/quickbooks?error=state');
       }
       
-      // Clear session state
-      delete req.session.qboOAuthState;
-      delete req.session.qboCompanyId;
+      const { companyId } = stateData;
+      console.log('[QB] Valid state for companyId:', companyId);
       
       if (!code || !realmId) {
-        console.error('Missing code or realmId');
-        return res.redirect('/customize?quickbooks=error');
+        console.error('[QB] Missing code or realmId');
+        return res.redirect('/customize/quickbooks?error=missing');
       }
       
       if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
-        console.error('QuickBooks credentials not configured');
-        return res.redirect('/customize?quickbooks=error');
+        console.error('[QB] QuickBooks credentials not configured');
+        return res.redirect('/customize/quickbooks?error=config');
       }
       
       // Exchange code for tokens
+      console.log('[QB] Exchanging code for tokens...');
       const basicAuth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString('base64');
       const tokenResponse = await fetch(QB_TOKEN_URL, {
         method: 'POST',
@@ -1048,12 +1074,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
-        console.error('Token exchange failed:', errorText);
-        return res.redirect('/customize?quickbooks=error');
+        console.error('[QB] Token exchange failed:', errorText);
+        return res.redirect('/customize/quickbooks?error=token');
       }
       
       const tokens = await tokenResponse.json();
       const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+      console.log('[QB] Token exchange successful, saving to company:', companyId);
       
       // Store tokens in database
       await storage.updateCompany(companyId, {
@@ -1064,10 +1091,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qboConnectedAt: new Date(),
       });
       
-      res.redirect('/customize?quickbooks=connected');
+      console.log('[QB] Connection saved successfully');
+      res.redirect('/customize/quickbooks?connected=true');
     } catch (error: any) {
-      console.error('Error in QuickBooks callback:', error);
-      res.redirect('/customize?quickbooks=error');
+      console.error('[QB] Error in callback:', error);
+      res.redirect('/customize/quickbooks?error=unknown');
     }
   });
 
