@@ -1111,6 +1111,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/integrations/quickbooks/test - Test QuickBooks connection
+  app.post('/api/integrations/quickbooks/test', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      if (!company?.qboRealmId) {
+        return res.status(400).json({ error: 'QuickBooks not connected' });
+      }
+      
+      const accessToken = await getQboAccessToken(member.companyId);
+      if (!accessToken) {
+        return res.status(400).json({ error: 'Unable to get access token' });
+      }
+      
+      // Call QBO CompanyInfo endpoint to test connection
+      const response = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/companyinfo/${company.qboRealmId}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[QB] Test connection failed:', errorText);
+        return res.status(400).json({ error: 'Connection test failed' });
+      }
+      
+      const data = await response.json();
+      const companyName = data.CompanyInfo?.CompanyName || 'Unknown';
+      
+      res.json({ 
+        success: true, 
+        companyName,
+        testedAt: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('Error testing QuickBooks connection:', error);
+      res.status(500).json({ error: 'Connection test failed' });
+    }
+  });
+
   // POST /api/integrations/quickbooks/disconnect - Disconnect QuickBooks
   app.post('/api/integrations/quickbooks/disconnect', isAuthenticated, async (req: any, res) => {
     try {

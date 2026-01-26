@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ArrowLeft, Link2, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Link2, CheckCircle2, XCircle, Zap } from "lucide-react";
 import { Link, useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,13 @@ interface QBStatus {
   realmId: string | null;
 }
 
+interface TestResult {
+  success: boolean;
+  companyName?: string;
+  testedAt: string;
+  error?: string;
+}
+
 export default function QuickBooksSettings() {
   const { isLoading: authLoading } = useAuth();
   const { can } = useCan();
@@ -22,6 +29,8 @@ export default function QuickBooksSettings() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
   
   const hasPermission = can('customize.manage');
 
@@ -89,6 +98,35 @@ export default function QuickBooksSettings() {
     } finally {
       setIsDisconnecting(false);
     }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const response = await apiRequest('POST', '/api/integrations/quickbooks/test');
+      const data = await response.json();
+      setTestResult({
+        success: true,
+        companyName: data.companyName,
+        testedAt: data.testedAt,
+      });
+    } catch (error: any) {
+      setTestResult({
+        success: false,
+        testedAt: new Date().toISOString(),
+        error: error.message || 'Connection test failed',
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const formatTestTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   };
 
   // Show loading while checking auth or redirecting non-owners
@@ -166,6 +204,36 @@ export default function QuickBooksSettings() {
                   Connected on {formatDate(status.connectedAt)}
                 </p>
               )}
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleTestConnection}
+                  disabled={isTesting}
+                  size="sm"
+                >
+                  {isTesting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Test Connection
+                    </>
+                  )}
+                </Button>
+                
+                {testResult && (
+                  <span className={`text-sm ${testResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {testResult.success 
+                      ? `Success: ${testResult.companyName} (${formatTestTime(testResult.testedAt)})`
+                      : `Failed (${formatTestTime(testResult.testedAt)})`
+                    }
+                  </span>
+                )}
+              </div>
               
               <Button
                 variant="outline"
