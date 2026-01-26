@@ -1,0 +1,65 @@
+Implement automatic QuickBooks invoice sync (no manual button required).
+
+Context:
+- QuickBooks OAuth connection works
+- Manual sync endpoint works:
+  POST /api/integrations/quickbooks/sync-invoice/:invoiceId
+- Invoices now successfully create in QBO with proper Line[]
+- qboInvoiceId is saved and UI shows "Synced to QuickBooks"
+
+Goal:
+Whenever an invoice is created (and optionally when it becomes Paid), it should automatically sync to QuickBooks without the user opening the invoice and pressing a button.
+
+Requirements:
+
+1) Auto-sync trigger on invoice creation (PRIMARY)
+- After an invoice is successfully created in EcoLogic (the same backend route that creates the invoice):
+  - Trigger QuickBooks sync automatically by calling the same internal logic used by the manual sync endpoint
+  - Do NOT require any frontend action
+  - This must run server-side
+
+2) Must be non-blocking (DO NOT slow or break invoice creation)
+- Invoice creation must return success even if QuickBooks is down
+- Auto-sync should run in the background:
+  - fire-and-forget (no waiting in the request)
+  - log errors but do not throw them back to the client
+- If auto-sync fails, invoice remains created normally and can still be manually synced later
+
+3) Idempotent
+- If invoice.qboInvoiceId already exists, skip creating a new QBO invoice
+- Never create duplicates
+
+4) Only sync when QuickBooks is connected
+- Check integration connection/tokens/realmId exist for the company/user
+- If not connected, skip silently (no error shown to user)
+
+5) Data requirements (same as manual sync)
+- Resolve customer automatically (no manual customer sync)
+- Prefer company name for QBO customer display name
+- Map line items to QBO Line[] (using job_line_items fallback if needed)
+- Create/reuse default "EcoLogic Service" item if needed
+- Save qboInvoiceId on invoice after success
+
+6) UI behavior
+- Do NOT redesign UI
+- Keep the "Sync to QuickBooks" area for fallback/manual retry, but:
+  - If invoice.qboInvoiceId exists, show "Synced ✓"
+  - If not synced yet, show "Not synced" (existing behavior is fine)
+
+Implementation notes:
+- Extract the core sync logic into a shared function (e.g. syncInvoiceToQuickBooks(invoiceId, userId))
+  - Manual endpoint calls this function
+  - Auto-sync calls this function
+- In the invoice create route, after DB insert succeeds:
+  - call the shared function in a background promise (do not await)
+  - add logs:
+    [QB] Auto-sync scheduled for invoiceId: X
+    [QB] Auto-sync success invoiceId: X qboInvoiceId: Y
+    [QB] Auto-sync failed invoiceId: X error: ...
+
+Deliverables:
+- Creating a new invoice automatically triggers QuickBooks sync
+- Invoice appears in QuickBooks Sandbox without user clicking anything
+- EcoLogic invoice stores qboInvoiceId after successful auto-sync
+- No impact to Stripe or payments
+- No duplicate QBO invoices

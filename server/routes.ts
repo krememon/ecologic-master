@@ -1559,52 +1559,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/integrations/quickbooks/sync-invoice/:id - Sync invoice to QuickBooks
-  app.post('/api/integrations/quickbooks/sync-invoice/:id', isAuthenticated, async (req: any, res) => {
-    const invoiceId = parseInt(req.params.id);
-    console.log('[QB] Sync endpoint hit for invoiceId:', invoiceId);
-    
+  // Shared function to sync invoice to QuickBooks (used by manual endpoint and auto-sync)
+  async function syncInvoiceToQuickBooks(invoiceId: number, companyId: number): Promise<{ success: boolean; qboInvoiceId?: string; alreadySynced?: boolean; error?: string }> {
     try {
-      const userId = getUserId(req.user);
-      const member = await storage.getCompanyMemberByUserId(userId);
-      if (!member) {
-        return res.status(403).json({ error: 'Not a company member' });
-      }
-      
-      if (!can(member.role as UserRole, 'customize.manage')) {
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-      
-      const company = await storage.getCompany(member.companyId);
+      const company = await storage.getCompany(companyId);
       if (!company?.qboRealmId) {
-        return res.status(400).json({ error: 'QuickBooks not connected' });
+        return { success: false, error: 'QuickBooks not connected' };
       }
       
-      // Fresh fetch to ensure we have latest qboInvoiceId
       const invoice = await storage.getInvoice(invoiceId);
-      if (!invoice || invoice.companyId !== member.companyId) {
-        return res.status(404).json({ error: 'Invoice not found' });
+      if (!invoice || invoice.companyId !== companyId) {
+        return { success: false, error: 'Invoice not found' };
       }
       
-      // Debug logging
       console.log('[QB] Loaded invoice qboInvoiceId:', invoice.qboInvoiceId);
-      console.log('[QB] Line items count:', (invoice.lineItems || []).length);
       
       // Idempotent: if already synced, return existing ID
       if (invoice.qboInvoiceId) {
         console.log('[QB] Already synced, skipping create. qboInvoiceId:', invoice.qboInvoiceId);
-        return res.json({ 
-          success: true, 
-          qboInvoiceId: invoice.qboInvoiceId,
-          alreadySynced: true
-        });
+        return { success: true, qboInvoiceId: invoice.qboInvoiceId, alreadySynced: true };
       }
       
       console.log('[QB] Creating QBO invoice now...');
       
       // Resolve customer: invoice.customerId → job.customerId → fail
       let resolvedCustomerId = invoice.customerId;
-      
       if (!resolvedCustomerId && invoice.jobId) {
         const job = await storage.getJob(invoice.jobId);
         if (job?.customerId) {
@@ -1616,37 +1595,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!resolvedCustomerId) {
         await storage.updateInvoice(invoiceId, {
           qboSyncStatus: 'failed',
-          qboLastSyncError: 'Invoice has no customer (checked invoice and job)',
+          qboLastSyncError: 'Invoice has no customer',
           qboLastSyncedAt: new Date(),
         });
-        return res.status(400).json({ error: 'Invoice has no customer. Please assign a customer to the job or invoice first.' });
+        return { success: false, error: 'Invoice has no customer' };
       }
       
-      const qboCustomerId = await ensureQboCustomer(member.companyId, resolvedCustomerId);
+      const qboCustomerId = await ensureQboCustomer(companyId, resolvedCustomerId);
       if (!qboCustomerId) {
         await storage.updateInvoice(invoiceId, {
           qboSyncStatus: 'failed',
           qboLastSyncError: 'Failed to create/find QBO customer',
           qboLastSyncedAt: new Date(),
         });
-        return res.status(400).json({ error: 'Failed to create QBO customer' });
+        return { success: false, error: 'Failed to create QBO customer' };
       }
       
-      const accessToken = await getQboAccessToken(member.companyId);
+      const accessToken = await getQboAccessToken(companyId);
       if (!accessToken) {
         await storage.updateInvoice(invoiceId, {
           qboSyncStatus: 'failed',
           qboLastSyncError: 'Failed to get access token',
           qboLastSyncedAt: new Date(),
         });
-        return res.status(400).json({ error: 'Unable to get access token' });
+        return { success: false, error: 'Unable to get access token' };
       }
       
-      // Fetch line items - prefer invoice.lineItems, fallback to job_line_items if invoice has a jobId
+      // Fetch line items
       let actualLineItems = invoice.lineItems || [];
-      
       if (actualLineItems.length === 0 && invoice.jobId) {
-        // Fetch from job_line_items table
         const jobLineItemsResult = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, invoice.jobId));
         actualLineItems = jobLineItemsResult.map(item => ({
           name: item.name,
@@ -1654,30 +1631,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: parseFloat(item.quantity) || 1,
           unitPriceCents: item.unitPriceCents || 0,
           unit: item.unit,
-          taxable: item.taxable,
-          taxId: item.taxId,
-          taxRatePercentSnapshot: item.taxRatePercentSnapshot,
-          taxNameSnapshot: item.taxNameSnapshot,
         }));
-        console.log('[QB] Fetched line items from job_line_items table');
+        console.log('[QB] Fetched', actualLineItems.length, 'line items from job_line_items');
       }
       
-      // Debug: log invoice line items
-      console.log('[QB] Line items count:', actualLineItems.length, 'sample:', actualLineItems[0]);
-      
-      // Get or create default QuickBooks service item
-      const serviceItem = await ensureQboServiceItem(member.companyId);
+      const serviceItem = await ensureQboServiceItem(companyId);
       if (!serviceItem) {
         await storage.updateInvoice(invoiceId, {
           qboSyncStatus: 'failed',
           qboLastSyncError: 'Failed to create QuickBooks service item',
           qboLastSyncedAt: new Date(),
         });
-        return res.status(400).json({ error: 'Failed to create QuickBooks service item' });
+        return { success: false, error: 'Failed to create QuickBooks service item' };
       }
       
-      // Build QBO invoice line items with ItemRef
-      const qboLines = actualLineItems
+      // Build QBO line items
+      const qboLines: any[] = actualLineItems
         .filter((item: any) => {
           const qty = parseFloat(item.quantity) || 1;
           const unitPrice = item.unitPriceCents ? item.unitPriceCents / 100 : (parseFloat(item.unitPrice) || 0);
@@ -1686,24 +1655,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .map((item: any, idx: number) => {
           const qty = parseFloat(item.quantity) || 1;
           const unitPrice = item.unitPriceCents ? item.unitPriceCents / 100 : (parseFloat(item.unitPrice) || 0);
-          const amount = qty * unitPrice;
-          
           return {
             LineNum: idx + 1,
-            Amount: amount,
+            Amount: qty * unitPrice,
             DetailType: 'SalesItemLineDetail',
             Description: item.description || item.name || 'Service',
-            SalesItemLineDetail: {
-              ItemRef: serviceItem,
-              Qty: qty,
-              UnitPrice: unitPrice,
-            },
+            SalesItemLineDetail: { ItemRef: serviceItem, Qty: qty, UnitPrice: unitPrice },
           };
         });
       
-      // Ensure we have at least one line item
+      // Fallback to total if no line items
       if (qboLines.length === 0) {
-        // Create a single line item from invoice total
         const totalAmount = invoice.totalCents ? invoice.totalCents / 100 : parseFloat(invoice.amount) || 0;
         if (totalAmount > 0) {
           qboLines.push({
@@ -1711,11 +1673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             Amount: totalAmount,
             DetailType: 'SalesItemLineDetail',
             Description: `Invoice ${invoice.invoiceNumber}`,
-            SalesItemLineDetail: {
-              ItemRef: serviceItem,
-              Qty: 1,
-              UnitPrice: totalAmount,
-            },
+            SalesItemLineDetail: { ItemRef: serviceItem, Qty: 1, UnitPrice: totalAmount },
           });
         } else {
           await storage.updateInvoice(invoiceId, {
@@ -1723,14 +1681,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             qboLastSyncError: 'Invoice has no line items or amount',
             qboLastSyncedAt: new Date(),
           });
-          return res.status(400).json({ error: 'Invoice has no line items or amount' });
+          return { success: false, error: 'Invoice has no line items or amount' };
         }
       }
       
-      console.log('[QB] QBO Line items:', JSON.stringify(qboLines));
-      
-      // Create QBO invoice
-      console.log('[QB] Creating invoice for customer:', qboCustomerId);
+      console.log('[QB] Creating invoice for customer:', qboCustomerId, 'lines:', qboLines.length);
       const createResponse = await fetch(
         `${QB_API_BASE}/v3/company/${company.qboRealmId}/invoice`,
         {
@@ -1759,7 +1714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           qboLastSyncError: errorText.substring(0, 500),
           qboLastSyncedAt: new Date(),
         });
-        return res.status(400).json({ error: 'Failed to create QBO invoice' });
+        return { success: false, error: 'Failed to create QBO invoice' };
       }
       
       const createData = await createResponse.json();
@@ -1774,25 +1729,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           qboLastSyncedAt: new Date(),
         });
         
-        // Verify the save worked
-        const savedInvoice = await storage.getInvoice(invoiceId);
-        console.log('[QB] Saved qboInvoiceId:', savedInvoice?.qboInvoiceId);
-
-        // After invoice sync, sync any waiting payments (non-blocking)
+        // Sync waiting payments (non-blocking)
         db.select().from(payments)
-          .where(and(
-            eq(payments.invoiceId, invoiceId),
-            eq(payments.qboPaymentSyncStatus, 'waiting')
-          ))
+          .where(and(eq(payments.invoiceId, invoiceId), eq(payments.qboPaymentSyncStatus, 'waiting')))
           .then(waitingPayments => {
             waitingPayments.forEach(p => {
-              syncPaymentToQbo(p.id, member.companyId).then(result => {
-                console.log(`[QB] Waiting payment ${p.id} sync: ${result.success ? result.qboPaymentId : result.error}`);
-              }).catch(err => console.error('[QB] Waiting payment sync error:', err));
+              syncPaymentToQbo(p.id, companyId).catch(err => console.error('[QB] Payment sync error:', err));
             });
-          }).catch(err => console.error('[QB] Error finding waiting payments:', err));
-
-        return res.json({ success: true, qboInvoiceId });
+          }).catch(() => {});
+        
+        return { success: true, qboInvoiceId };
       }
       
       await storage.updateInvoice(invoiceId, {
@@ -1800,14 +1746,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qboLastSyncError: 'No invoice ID returned',
         qboLastSyncedAt: new Date(),
       });
-      return res.status(400).json({ error: 'No invoice ID returned from QBO' });
+      return { success: false, error: 'No invoice ID returned from QBO' };
     } catch (error: any) {
       console.error('[QB] Error syncing invoice:', error);
-      await storage.updateInvoice(invoiceId, {
-        qboSyncStatus: 'failed',
-        qboLastSyncError: error.message?.substring(0, 500) || 'Unknown error',
-        qboLastSyncedAt: new Date(),
-      });
+      try {
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: error.message?.substring(0, 500) || 'Unknown error',
+          qboLastSyncedAt: new Date(),
+        });
+      } catch {}
+      return { success: false, error: error.message || 'Unknown error' };
+    }
+  }
+
+  // POST /api/integrations/quickbooks/sync-invoice/:id - Sync invoice to QuickBooks
+  app.post('/api/integrations/quickbooks/sync-invoice/:id', isAuthenticated, async (req: any, res) => {
+    const invoiceId = parseInt(req.params.id);
+    console.log('[QB] Sync endpoint hit for invoiceId:', invoiceId);
+    
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const result = await syncInvoiceToQuickBooks(invoiceId, member.companyId);
+      
+      if (result.success) {
+        return res.json(result);
+      } else {
+        return res.status(400).json({ error: result.error });
+      }
+    } catch (error: any) {
+      console.error('[QB] Error in sync endpoint:', error);
       res.status(500).json({ error: 'Failed to sync invoice' });
     }
   });
@@ -3555,7 +3532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const roleResult = await storage.getUserRole(userId, company.id);
               const userRole = roleResult?.role || 'OWNER';
               
-              await storage.createInvoice({
+              const createdInvoice = await storage.createInvoice({
                 companyId: company.id,
                 jobId: job.id,
                 clientId: customerId || null,
@@ -3571,6 +3548,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 createdByUserId: userId,
                 createdByRole: userRole,
               });
+              
+              // Auto-sync to QuickBooks (fire-and-forget)
+              console.log('[QB] Auto-sync scheduled for invoiceId:', createdInvoice.id);
+              syncInvoiceToQuickBooks(createdInvoice.id, company.id)
+                .then(result => {
+                  if (result.success) {
+                    console.log('[QB] Auto-sync success invoiceId:', createdInvoice.id, 'qboInvoiceId:', result.qboInvoiceId);
+                  } else {
+                    console.log('[QB] Auto-sync failed invoiceId:', createdInvoice.id, 'error:', result.error);
+                  }
+                })
+                .catch(err => console.error('[QB] Auto-sync error invoiceId:', createdInvoice.id, err.message));
             }
           } catch (invoiceError) {
             // Log but don't fail the job creation
@@ -3840,7 +3829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const roleResult = await storage.getUserRole(userId, company.id);
               const userRole = roleResult?.role || 'OWNER';
               
-              await storage.createInvoice({
+              const createdInvoice = await storage.createInvoice({
                 companyId: company.id,
                 jobId: jobId,
                 clientId: existingJob.customerId || null,
@@ -3856,6 +3845,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 createdByUserId: userId,
                 createdByRole: userRole,
               });
+              
+              // Auto-sync to QuickBooks (fire-and-forget)
+              console.log('[QB] Auto-sync scheduled for invoiceId:', createdInvoice.id);
+              syncInvoiceToQuickBooks(createdInvoice.id, company.id)
+                .then(result => {
+                  if (result.success) {
+                    console.log('[QB] Auto-sync success invoiceId:', createdInvoice.id, 'qboInvoiceId:', result.qboInvoiceId);
+                  } else {
+                    console.log('[QB] Auto-sync failed invoiceId:', createdInvoice.id, 'error:', result.error);
+                  }
+                })
+                .catch(err => console.error('[QB] Auto-sync error invoiceId:', createdInvoice.id, err.message));
             }
           } catch (invoiceError) {
             console.error('[AutoInvoice] Failed to auto-create invoice on update:', invoiceError);
@@ -5276,6 +5277,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdByRole: userRole,
       });
 
+      // Auto-sync to QuickBooks (fire-and-forget, non-blocking)
+      console.log('[QB] Auto-sync scheduled for invoiceId:', invoice.id);
+      syncInvoiceToQuickBooks(invoice.id, company.id)
+        .then(result => {
+          if (result.success) {
+            console.log('[QB] Auto-sync success invoiceId:', invoice.id, 'qboInvoiceId:', result.qboInvoiceId);
+          } else {
+            console.log('[QB] Auto-sync failed invoiceId:', invoice.id, 'error:', result.error);
+          }
+        })
+        .catch(err => console.error('[QB] Auto-sync error invoiceId:', invoice.id, err.message));
+
       res.status(201).json({ invoice });
     } catch (error) {
       console.error("Error creating invoice:", error);
@@ -5667,6 +5680,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: `Generated from job: ${job.title}`,
         });
         console.log(`[InvoiceGenerate] saved invoice`, { invoiceId: invoice.id, jobId });
+        
+        // Auto-sync to QuickBooks (fire-and-forget)
+        console.log('[QB] Auto-sync scheduled for invoiceId:', invoice.id);
+        syncInvoiceToQuickBooks(invoice.id, company.id)
+          .then(result => {
+            if (result.success) {
+              console.log('[QB] Auto-sync success invoiceId:', invoice.id, 'qboInvoiceId:', result.qboInvoiceId);
+            } else {
+              console.log('[QB] Auto-sync failed invoiceId:', invoice.id, 'error:', result.error);
+            }
+          })
+          .catch(err => console.error('[QB] Auto-sync error invoiceId:', invoice.id, err.message));
       }
 
       console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${fileName} docId=${document.id} invoiceId=${invoice.id}`);
@@ -9285,6 +9310,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`[Invoice] Created standalone invoice`, { invoiceId: invoice.id, customerId, companyId: company.id });
+
+      // Auto-sync to QuickBooks (fire-and-forget, non-blocking)
+      console.log('[QB] Auto-sync scheduled for invoiceId:', invoice.id);
+      syncInvoiceToQuickBooks(invoice.id, company.id)
+        .then(result => {
+          if (result.success) {
+            console.log('[QB] Auto-sync success invoiceId:', invoice.id, 'qboInvoiceId:', result.qboInvoiceId);
+          } else {
+            console.log('[QB] Auto-sync failed invoiceId:', invoice.id, 'error:', result.error);
+          }
+        })
+        .catch(err => console.error('[QB] Auto-sync error invoiceId:', invoice.id, err.message));
+
       res.status(201).json(invoice);
     } catch (error) {
       console.error("Error creating invoice:", error);
