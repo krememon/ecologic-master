@@ -1,0 +1,100 @@
+Integrate QuickBooks Online PAYMENTS (QBO Payment entity) so invoices get marked Paid in QuickBooks when Stripe payment succeeds.
+
+Context:
+- EcoLogic invoices already auto-sync to QuickBooks and save invoice.qboInvoiceId
+- Stripe is the payment processor (DO NOT change Stripe)
+- Goal is to create a QBO Payment and apply it to the correct QBO Invoice
+- This is NOT “QuickBooks Payments” (merchant service). This is the QuickBooks Online Accounting API “Payment” object.
+
+Goal:
+When a customer pays an EcoLogic invoice via Stripe, EcoLogic should automatically:
+1) Create a QuickBooks Payment
+2) Apply it to the synced QuickBooks Invoice
+3) Result: QuickBooks invoice becomes PAID
+
+Requirements (must-haves):
+
+1) Trigger payment sync ONLY after Stripe confirms payment
+- Hook into the existing Stripe webhook flow that marks an invoice paid
+  (ex: payment_intent.succeeded, invoice.payment_succeeded, checkout.session.completed — whichever you already use)
+- Do NOT sync payment on invoice creation
+- Do NOT block or delay the webhook response (non-blocking)
+
+2) Idempotency / no duplicates (CRITICAL)
+- Add a persistent field to store QBO payment id:
+  - Preferred: invoice.qboPaymentId
+  - Or: payments table column qboPaymentId (linked to invoiceId)
+- Before creating a QBO Payment:
+  - If qboPaymentId exists -> skip and return success
+- Also store Stripe payment identifier on the record (paymentIntentId / chargeId)
+  and ensure one Stripe payment maps to one QBO payment
+
+3) Ensure the invoice exists in QBO before creating payment
+- If invoice.qboInvoiceId is missing:
+  - Attempt to sync the invoice first (call the shared syncInvoiceToQuickBooks logic)
+  - If invoice sync fails, log and exit (do not fail Stripe webhook)
+
+4) Create the QBO Payment and APPLY it to the invoice
+- Use QBO Payment create endpoint:
+  POST /v3/company/:realmId/payment
+- Payment payload MUST include:
+  - CustomerRef: { value: qboCustomerId }
+  - TotalAmt: invoice.total (in dollars, 2 decimals)
+  - TxnDate: ISO date (use today or EcoLogic paidAt date)
+  - Line: [{
+      Amount: invoice.total,
+      LinkedTxn: [{
+        TxnId: invoice.qboInvoiceId,
+        TxnType: "Invoice"
+      }]
+    }]
+
+5) Deposit account (where the money goes)
+- Payments require a DepositToAccountRef or an AR/AP flow depending on settings.
+- Implement “getOrCreateDepositAccountRef”:
+  - Prefer finding an existing account named "Undeposited Funds" or any Bank account
+  - Use that account’s Id for DepositToAccountRef
+- Add to payment payload:
+  DepositToAccountRef: { value: accountId }
+
+6) Payment method (optional but nice)
+- Set PaymentMethodRef to something like "Credit Card" if available
+- If not found, omit PaymentMethodRef (do not fail)
+
+7) Non-blocking + safe
+- QBO payment sync must never break Stripe webhook processing
+- Use fire-and-forget pattern:
+  - webhook handler responds 200 immediately
+  - then async call to sync QBO payment
+- Log errors but do not throw errors that impact payments
+
+8) Logging (required for debugging)
+Add logs:
+- [QB-PAY] Payment sync triggered invoiceId=...
+- [QB-PAY] invoice.qboInvoiceId=... qboPaymentId=...
+- [QB-PAY] Creating QBO payment payload: ... (safe/redact tokens)
+- [QB-PAY] Created QBO payment: <id>
+- [QB-PAY] Saved qboPaymentId: <id>
+- [QB-PAY] Skipping, already synced qboPaymentId: <id>
+
+Implementation notes (structure):
+- Extract shared function:
+  syncInvoicePaymentToQuickBooks(invoiceId, userId, stripePaymentId)
+- This function:
+  1) loads invoice + customer mapping
+  2) ensures qboInvoiceId exists (sync invoice if needed)
+  3) creates QBO payment (idempotent)
+  4) saves qboPaymentId back to DB
+
+Rules:
+- Do NOT redesign UI
+- Do NOT break Stripe
+- Must be mobile-safe
+- Must work in Sandbox
+- Must not require manual customer sync
+
+Acceptance Criteria:
+- Create a new EcoLogic invoice (it syncs to QBO as Unpaid)
+- Pay it via Stripe in EcoLogic
+- Within a short time, QuickBooks invoice changes from “Due in 30 days” to “Paid”
+- No duplicate QBO payments if webhook fires twice / button clicked twice
