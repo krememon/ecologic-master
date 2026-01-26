@@ -1,0 +1,79 @@
+Fix “Login successful but unable to load your profile” error (auth/profile fetch failing after login)
+
+CURRENT
+- After signing in, UI shows:
+  “Login successful but unable to load your profile. Please try refreshing the page.”
+- This blocks access to the app and QuickBooks settings
+- This appears immediately after login (session/profile fetch failure)
+
+GOAL
+Make login reliable:
+- After successful login, the app MUST load the user profile every time
+- No red error box for normal login
+- No manual refresh required
+- Fix the real failing request (401/403/500) and the root cause
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — IDENTIFY THE FAILING REQUEST (MANDATORY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Using browser Network tab and server logs, find the exact request that fails right after login.
+Common endpoints:
+- GET /api/me
+- GET /api/auth/me
+- GET /api/user
+- GET /api/profile
+- GET /api/session
+
+Record:
+- endpoint
+- status code
+- response body
+- server stack trace (if 500)
+
+Do NOT guess.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — FIX ROOT CAUSE (MOST LIKELY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Fix whichever is true:
+
+A) Cookie/session not being sent
+- Ensure login response sets cookie correctly
+- Ensure cookie options are correct for replit.dev domain:
+  - SameSite and Secure settings must allow cookie on HTTPS
+- Ensure frontend fetch includes credentials:
+  - fetch(..., { credentials: "include" })
+  - or axios with withCredentials=true
+- Ensure CORS allows credentials if applicable
+
+B) Auth middleware mismatch
+- Login sets one auth mechanism, profile endpoint expects another
+- Make them consistent
+
+C) Profile endpoint error due to missing company/user join
+- If profile endpoint expects companyId and it’s null for this user, it may crash
+- Handle “no company yet” gracefully and still return user profile
+
+D) Redirect timing race
+- App redirects before cookie/session is persisted
+- Add a short, silent retry for profile fetch (max 2 retries) before showing any error
+
+IMPORTANT:
+- Do not show a loud red error for expected states
+- If truly unauthenticated, redirect back to login silently
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — IMPROVE UX (SILENT SUCCESS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Replace the current red error box behavior:
+- If profile fetch fails once, retry automatically
+- Only show a small inline message if repeated failures happen
+- Prefer redirect to login if session invalid
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Sign in works and loads profile immediately (no manual refresh)
+- No “unable to load your profile” red box on normal login
+- No console errors
+- Works on replit.dev domain
