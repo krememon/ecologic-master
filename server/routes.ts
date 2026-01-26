@@ -1562,6 +1562,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/integrations/quickbooks/sync-invoice/:id - Sync invoice to QuickBooks
   app.post('/api/integrations/quickbooks/sync-invoice/:id', isAuthenticated, async (req: any, res) => {
     const invoiceId = parseInt(req.params.id);
+    console.log('[QB] Sync endpoint hit for invoiceId:', invoiceId);
     
     try {
       const userId = getUserId(req.user);
@@ -1586,18 +1587,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Debug logging
-      console.log('[QB] Idempotency check qboInvoiceId:', invoice.qboInvoiceId);
+      console.log('[QB] Loaded invoice qboInvoiceId:', invoice.qboInvoiceId);
       console.log('[QB] Line items count:', (invoice.lineItems || []).length);
       
       // Idempotent: if already synced, return existing ID
       if (invoice.qboInvoiceId) {
-        console.log('[QB] Invoice already synced:', invoice.qboInvoiceId);
+        console.log('[QB] Already synced, skipping create. qboInvoiceId:', invoice.qboInvoiceId);
         return res.json({ 
           success: true, 
           qboInvoiceId: invoice.qboInvoiceId,
           alreadySynced: true
         });
       }
+      
+      console.log('[QB] Creating QBO invoice now...');
       
       // Resolve customer: invoice.customerId → job.customerId → fail
       let resolvedCustomerId = invoice.customerId;

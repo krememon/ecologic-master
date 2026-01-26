@@ -235,23 +235,31 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const handleQboSync = async () => {
     if (isSyncingQbo || !invoice) return;
     
+    console.log("[QB UI] Sync clicked for invoice", invoice.id);
+    console.log("[QB UI] Current qboInvoiceId:", invoice.qboInvoiceId);
+    
     setIsSyncingQbo(true);
     setQboSyncResult(null);
     
     try {
+      console.log("[QB UI] Calling POST /api/integrations/quickbooks/sync-invoice/" + invoice.id);
       const response = await apiRequest('POST', `/api/integrations/quickbooks/sync-invoice/${invoice.id}`);
       const data = await response.json();
+      console.log("[QB UI] Sync response", response.status, data);
       
       if (data.success) {
         setQboSyncResult({ 
           success: true, 
           message: data.alreadySynced ? 'Already synced' : 'Synced successfully'
         });
+        // Refetch invoice to get updated qboInvoiceId
+        console.log("[QB UI] Refetching invoice to update UI");
         queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
       } else {
         throw new Error(data.error || 'Sync failed');
       }
     } catch (err: any) {
+      console.log("[QB UI] Sync error:", err.message);
       setQboSyncResult({ 
         success: false, 
         message: err.message || 'Sync failed'
