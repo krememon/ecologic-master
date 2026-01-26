@@ -1,0 +1,64 @@
+Add search bar to Subcontractors (Contractors) page to look up contractors (mobile-first, no fake data)
+
+CURRENT
+- Contractors/Subcontractors page shows list (or empty state)
+- There is no way to search/filter contractors
+- As the list grows, it will be hard to find someone quickly
+
+GOAL
+Add a search bar that lets users quickly look up contractors by:
+- Name
+- Company Name
+- Email
+- Phone
+Search should feel instant and clean on mobile.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Add a search input near the top of the Contractors page (above the list)
+- Use same styling as other EcoLogic search inputs (rounded, icon on left)
+- Placeholder: “Search contractors”
+- Show the clear (×) icon when text exists
+- No extra popups/toasts
+
+Empty states:
+- If there are no contractors at all: keep “No contractors yet”
+- If search yields 0 results: show “No contractors found” (subtext: “Try a different search”)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEARCH BEHAVIOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Case-insensitive search
+- Trim whitespace
+- Matches partial strings (ex: “abc” matches “ABC Plumbing LLC”)
+- Must search across:
+  - name
+  - companyName
+  - email
+  - phone
+
+Performance:
+- If list is small, filter client-side instantly
+- If list can be large later, support server-side query param without changing UI behavior
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API (IF NEEDED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If contractors are fetched from backend:
+- Update GET /api/contractors to accept:
+  - ?q=searchTerm
+- Backend performs case-insensitive search across the fields above
+- Return only matching rows
+
+Do NOT break existing fetch behavior when q is not provided.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Search bar appears and looks native to EcoLogic
+- Typing filters contractors correctly (name/company/email/phone)
+- Clear button resets list instantly
+- No fake data
+- No console errors
+- Mobile spacing remains clean

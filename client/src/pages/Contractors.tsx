@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2 } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, Edit, Trash2, Globe, Building2, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertSubcontractorSchema, type InsertSubcontractor, type Subcontractor } from "@shared/schema";
 import { formatPhoneInput } from "@shared/phoneUtils";
@@ -122,6 +122,7 @@ export default function Contractors() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSubcontractor, setEditingSubcontractor] = useState<Subcontractor | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -140,6 +141,17 @@ export default function Contractors() {
   const { data: subcontractors = [], isLoading: subcontractorsLoading } = useQuery<Subcontractor[]>({
     queryKey: ["/api/subcontractors"],
     enabled: isAuthenticated,
+  });
+
+  const filteredSubcontractors = subcontractors.filter((sub) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    return (
+      sub.name?.toLowerCase().includes(query) ||
+      sub.companyName?.toLowerCase().includes(query) ||
+      sub.email?.toLowerCase().includes(query) ||
+      sub.phone?.toLowerCase().includes(query)
+    );
   });
 
   const createSubcontractorMutation = useMutation({
@@ -244,6 +256,27 @@ export default function Contractors() {
         </Button>
       </div>
 
+      {subcontractors.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search contractors"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
       {subcontractors.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -258,9 +291,19 @@ export default function Contractors() {
             </Button>
           </CardContent>
         </Card>
+      ) : filteredSubcontractors.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="h-12 w-12 text-slate-400 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No contractors found</h3>
+            <p className="text-slate-600 dark:text-slate-400 text-center">
+              Try a different search
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {subcontractors.map((subcontractor: any) => (
+          {filteredSubcontractors.map((subcontractor: any) => (
             <Card key={subcontractor.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">
