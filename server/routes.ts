@@ -3535,7 +3535,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const createdInvoice = await storage.createInvoice({
                 companyId: company.id,
                 jobId: job.id,
-                clientId: customerId || null,
+                clientId: null,
+                customerId: customerId || null,
                 invoiceNumber,
                 amount: (totalCents / 100).toFixed(2),
                 subtotalCents,
@@ -3832,7 +3833,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const createdInvoice = await storage.createInvoice({
                 companyId: company.id,
                 jobId: jobId,
-                clientId: existingJob.customerId || null,
+                clientId: null,
+                customerId: existingJob.customerId || null,
                 invoiceNumber,
                 amount: (totalCents / 100).toFixed(2),
                 subtotalCents,
@@ -5263,6 +5265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId: company.id,
         jobId: jobId,
         clientId: job.clientId || null,
+        customerId: job.customerId || null,
         invoiceNumber,
         amount: totalAmount,
         subtotalCents,
@@ -5667,7 +5670,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoice = await storage.createInvoice({
           companyId: company.id,
           jobId: jobId,
-          clientId: customer?.id || null,
+          clientId: null,
+          customerId: customer?.id || job.customerId || null,
           invoiceNumber: invoiceNumber,
           amount: total.toFixed(2),
           subtotalCents,
@@ -8884,6 +8888,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice || invoice.companyId !== company.id) {
         return res.status(404).json({ message: "Invoice not found" });
       }
+      
+      console.log("[Invoice API] invoiceId:", invoiceId, "invoice.customerId:", invoice.customerId, "job.customerId:", (invoice.job as any)?.customerId);
+      console.log("[Invoice API] customer:", invoice.customer ? `${invoice.customer.firstName} ${invoice.customer.lastName} / ${invoice.customer.companyName}` : 'null');
       
       res.json(invoice);
     } catch (error) {

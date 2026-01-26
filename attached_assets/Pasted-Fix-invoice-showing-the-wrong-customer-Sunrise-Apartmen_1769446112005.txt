@@ -1,0 +1,62 @@
+Fix invoice showing the wrong customer ("Sunrise Apartments") everywhere.
+It should show the actual selected customer for the invoice (ex: Jennifer Pellegrino).
+
+Problem:
+- Invoice list card shows "Sunrise Apartments"
+- Invoice details "Customer" card shows "Sunrise Apartments" + manager@sunriseapts.com
+- But this invoice should be tied to customer: Jennifer Pellegrino
+
+Goal:
+Always display the real invoice customer (prefer companyName, else first+last).
+Never show placeholder/demo customer data unless it is the actual linked customer record.
+
+Root Cause Likely:
+The invoice fetch endpoint (GET /api/invoices and/or GET /api/invoices/:id) is returning a hardcoded demo customer object or using the wrong join (pulling a default "Sunrise Apartments" customer instead of invoice.customerId/job.customerId).
+
+Requirements:
+
+1) Backend: Fix invoice -> customer relationship used in API responses
+- In GET /api/invoices and GET /api/invoices/:id:
+  - Ensure invoice.customerId is used to join the customers table when present
+  - If invoice.customerId is null, fall back to invoice.job.customerId
+  - Do NOT use any "defaultCustomer" or seeded/demo customer values
+  - Return the real customer object in the response:
+    {
+      customer: { id, firstName, lastName, companyName, email, phone, ... }
+    }
+
+- Add logs in GET /api/invoices/:id to confirm:
+  console.log("[Invoice API] invoiceId:", id, "invoice.customerId:", invoice.customerId, "job.customerId:", invoice.job?.customerId)
+  console.log("[Invoice API] resolvedCustomerId:", resolvedCustomerId)
+
+2) Database integrity check (fix the data if it’s wrong)
+- When an invoice is created:
+  - Ensure invoice.customerId is set to the selected customer
+  - If invoice is created from a job, ensure invoice.customerId is copied from job.customerId
+- Add a one-time migration/fix for existing invoices:
+  - For any invoice with customerId null but job.customerId not null:
+    - set invoice.customerId = job.customerId
+
+3) Frontend: Use the customer object from the API (no placeholders)
+- On invoice list cards and invoice detail customer section:
+  - Use invoice.customer.companyName if present
+  - Else use invoice.customer.firstName + invoice.customer.lastName
+  - If invoice.customer missing, show "Unknown Customer"
+- Remove any fallback like:
+  "Sunrise Apartments" or manager@sunriseapts.com
+
+4) Verification steps
+- Load invoice 64 and 65 and confirm they show the correct customer name:
+  - Jennifer Pellegrino should display for the invoice tied to her
+- Confirm customer email shown matches the real customer record
+
+Rules:
+- Do NOT redesign UI
+- Do NOT break Stripe
+- Do NOT touch QuickBooks syncing logic except for reading correct customer data
+- Mobile-safe
+
+Acceptance Criteria:
+- Invoice list shows Jennifer Pellegrino (not Sunrise Apartments)
+- Invoice details customer card shows Jennifer Pellegrino + her email (not manager@sunriseapts.com)
+- No invoice shows seeded/demo customer unless it is truly that customer
