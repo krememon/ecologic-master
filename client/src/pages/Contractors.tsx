@@ -61,56 +61,61 @@ function ContractorForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 w-full">
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium block">Name <span className="text-red-500">*</span></label>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Name <span className="text-red-400 text-xs">*</span></label>
         <Input 
-          placeholder="John Smith" 
+          placeholder="Name" 
           value={formData.name}
           onChange={(e) => setFormData({...formData, name: e.target.value})}
           required
+          className="h-10"
         />
       </div>
       
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium block">Email</label>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Email</label>
         <Input 
           type="email" 
-          placeholder="john@contractor.com" 
+          placeholder="Email" 
           value={formData.email}
           onChange={(e) => setFormData({...formData, email: e.target.value})}
+          className="h-10"
         />
       </div>
       
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium block">Phone</label>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Phone</label>
         <Input 
-          placeholder="555-123-4567" 
+          placeholder="Phone" 
           value={formData.phone}
           onChange={(e) => setFormData({...formData, phone: formatPhoneInput(e.target.value)})}
           inputMode="numeric"
           autoComplete="tel"
+          className="h-10"
         />
       </div>
       
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium block">Company Name</label>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Company Name</label>
         <Input 
-          placeholder="ABC Plumbing LLC" 
+          placeholder="Company Name" 
           value={formData.companyName}
           onChange={(e) => setFormData({...formData, companyName: e.target.value})}
+          className="h-10"
         />
       </div>
       
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium block">Company Website</label>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block">Company Website</label>
         <Input 
-          placeholder="www.example.com" 
+          placeholder="Company Website" 
           value={formData.companyWebsite}
           onChange={(e) => setFormData({...formData, companyWebsite: e.target.value})}
+          className="h-10"
         />
       </div>
       
-      <Button type="submit" className="w-full mt-4" disabled={isLoading}>
+      <Button type="submit" className="w-full h-11 mt-2" disabled={isLoading}>
         {isLoading ? "Saving..." : (isEdit ? "Update Contractor" : "Add Contractor")}
       </Button>
     </form>
@@ -223,26 +228,42 @@ export default function Contractors() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-[400px] max-h-[85vh] rounded-2xl overflow-y-auto p-5 pt-4 gap-3">
-          <DialogHeader className="pb-1">
-            <DialogTitle>Add New Contractor</DialogTitle>
-          </DialogHeader>
-          <ContractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
+            <button 
+              onClick={() => setIsDialogOpen(false)} 
+              className="absolute right-4 top-1/2 -translate-y-1/2"
+            >
+              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+            </button>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add New Contractor</h3>
+          </div>
+          <div className="p-4">
+            <ContractorForm onSubmit={createSubcontractorMutation.mutate} isLoading={createSubcontractorMutation.isPending} />
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit Contractor Dialog */}
       <Dialog open={!!editingSubcontractor} onOpenChange={(open) => !open && setEditingSubcontractor(null)}>
-        <DialogContent className="w-[95vw] max-w-[400px] max-h-[85vh] rounded-2xl overflow-y-auto p-5 pt-4 gap-3">
-          <DialogHeader className="pb-1">
-            <DialogTitle>Edit Contractor</DialogTitle>
-          </DialogHeader>
-          <ContractorForm 
-            onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor!.id, subcontractorData: data })} 
-            isLoading={updateSubcontractorMutation.isPending}
-            initialData={editingSubcontractor}
-            isEdit={true}
-          />
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
+            <button 
+              onClick={() => setEditingSubcontractor(null)} 
+              className="absolute right-4 top-1/2 -translate-y-1/2"
+            >
+              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+            </button>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Edit Contractor</h3>
+          </div>
+          <div className="p-4">
+            <ContractorForm 
+              onSubmit={(data) => updateSubcontractorMutation.mutate({ subcontractorId: editingSubcontractor!.id, subcontractorData: data })} 
+              isLoading={updateSubcontractorMutation.isPending}
+              initialData={editingSubcontractor}
+              isEdit={true}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

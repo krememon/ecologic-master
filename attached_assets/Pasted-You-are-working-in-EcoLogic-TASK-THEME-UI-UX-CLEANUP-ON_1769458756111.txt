@@ -1,0 +1,77 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY (presentation + placeholder text only)
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual consistency, spacing, headers, typography, layout only
+✅ Updating placeholder STRINGS is allowed (no behavior change)
+
+TARGET: “Add New Contractor” modal (the form in the screenshot)
+
+WHAT I WANT
+1) Clean up the modal to match our modern EcoLogic modal style:
+   - Centered title
+   - Single X close (top-right)
+   - Tighter spacing (shorter rows / less padding)
+   - Consistent input styling
+2) Replace ALL example placeholders with field-name placeholders:
+   - Name placeholder becomes “Name” (greyed out)
+   - Email placeholder becomes “Email”
+   - Phone placeholder becomes “Phone”
+   - Company Name placeholder becomes “Company Name”
+   - Company Website placeholder becomes “Company Website”
+   - No “John Smith”, “john@…”, “555…”, “ABC Plumbing…”, “www.example.com”
+   - Keep required asterisk rules exactly as-is (do NOT change validation)
+
+STRICT RULES
+- Do NOT modify handlers, onChange, onSubmit, validation, state shape, or API calls.
+- Do NOT rename fields/keys that the backend expects.
+- Only change: className/styles/layout wrappers + placeholder string values.
+
+IMPLEMENTATION STEPS
+A) Find the component
+- Search for: "Add New Contractor", "Add Contractor", "ContractorModal", "contractor", "company website"
+- Confirm this is the modal used from the Contractors section.
+
+B) Modal header cleanup (presentation only)
+- Ensure header matches our standard:
+  - Title centered: “Add New Contractor”
+  - Single X close icon/button on the right
+  - Remove/avoid any extra close controls if present
+- Reduce header padding to match other cleaned modals.
+
+C) Form spacing + shorter rows
+- Reduce vertical gaps between:
+  - label and input
+  - each field block
+- Make inputs consistent height and border radius with our other modals (Jobs/Estimates reference)
+- Keep the same field order and required indicators.
+
+D) Placeholder replacements (string-only)
+Set placeholders exactly to these values:
+- Name input: placeholder="Name"
+- Email input: placeholder="Email"
+- Phone input: placeholder="Phone"
+- Company Name input: placeholder="Company Name"
+- Company Website input: placeholder="Company Website"
+
+IMPORTANT
+- Do not change labels (“Name”, “Email”, etc.) unless it’s purely spacing/typography.
+- Placeholders should be the SAME WORDING as the label (as requested).
+- Keep placeholder styling subtle/greyed out (use existing input placeholder styles; only adjust if needed for consistency).
+
+E) Button styling (presentation only)
+- Keep the same button text and click behavior (Add Contractor)
+- Make spacing under button consistent (less dead space)
+- Ensure button width + radius match current EcoLogic primary button style.
+
+DELIVERABLES
+1) Updated Add New Contractor modal UI with tighter spacing + consistent header.
+2) All placeholders updated from examples → field-name placeholders (exact strings above).
+3) Confirm no functional changes: submit still works, validation still works, no console errors.
+
+QA CHECKLIST
+- Typing in each field still updates the same state
+- Required fields still required
+- Submit still calls the same function/API
+- No layout overflow on mobile width
+- No white screen / runtime errors
