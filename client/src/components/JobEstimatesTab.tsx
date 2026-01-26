@@ -1061,38 +1061,54 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
       {/* EMPLOYEES Modal */}
       <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Select Employees</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden max-h-[80vh] flex flex-col" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Assign Employees</DialogTitle>
+            <button
+              onClick={() => setEmployeesModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-          <ScrollArea className="flex-1 min-h-0 max-h-[50vh]">
+          <ScrollArea className="flex-1 min-h-0 max-h-[50vh] bg-white dark:bg-slate-900">
             {companyEmployees.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
                 No employees found
               </div>
             ) : (
-              <div className="py-2">
-                {companyEmployees.map((employee) => {
+              <div className="py-1">
+                {companyEmployees.map((employee, index) => {
                   const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed';
+                  const isSelected = assignedEmployees.includes(employee.id);
                   return (
-                    <div
-                      key={employee.id}
-                      className="flex items-center gap-3 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0"
-                    >
-                      <Checkbox
-                        id={`employee-${employee.id}`}
-                        checked={assignedEmployees.includes(employee.id)}
-                        onCheckedChange={() => toggleEmployee(employee.id)}
+                    <div key={employee.id}>
+                      <button
+                        onClick={() => toggleEmployee(employee.id)}
+                        className={`w-full flex items-center gap-3 px-4 min-h-[56px] text-left transition-colors ${
+                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                        }`}
                         data-testid={`checkbox-employee-${employee.id}`}
-                      />
-                      <Label
-                        htmlFor={`employee-${employee.id}`}
-                        className="text-sm font-normal cursor-pointer flex-1"
                       >
-                        <span className="block">{employeeName}</span>
-                        <span className="text-xs text-slate-500">{employee.role}</span>
-                      </Label>
+                        <Checkbox
+                          id={`employee-${employee.id}`}
+                          checked={isSelected}
+                          onCheckedChange={() => {}}
+                          className="pointer-events-none"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{employeeName}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{employee.email || ''}</p>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          {employee.role}
+                        </span>
+                      </button>
+                      {index < companyEmployees.length - 1 && (
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+                      )}
                     </div>
                   );
                 })}
@@ -1100,11 +1116,12 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             )}
           </ScrollArea>
 
-          <DialogFooter>
-            <Button onClick={() => setEmployeesModalOpen(false)} data-testid="button-done-employees">
-              Done ({assignedEmployees.length} selected)
+          <div className="flex justify-between items-center px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <span className="text-sm text-slate-500">{assignedEmployees.length} selected</span>
+            <Button onClick={() => setEmployeesModalOpen(false)} data-testid="button-done-employees" className="h-10 rounded-xl">
+              Save
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

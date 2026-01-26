@@ -1,0 +1,72 @@
+Clean up / modernize the "Assign Employees" modal for both Jobs and Estimates with ZERO functional changes.
+
+Goal:
+Make the Assign Employees/Assign Technicians modal look cleaner and consistent with the updated EcoLogic modal style (grey header, single X close, modern list rows), while keeping the exact same assignment behavior.
+
+Rules:
+- Do NOT change any functionality:
+  - who can be assigned
+  - multi-select behavior
+  - search behavior
+  - selected count behavior
+  - Save/Done behavior
+  - API calls, payloads, or data shape
+- Do NOT change RBAC rules (hidden-not-disabled stays intact).
+- UI polish only.
+
+Current Issues / Inconsistency:
+- Jobs and Estimates use different-looking assignment modals:
+  - One is "ASSIGN TECHNICIANS" with Cancel + Done in header
+  - One is "Assign Employees" with X close and Save button at bottom
+  - Row styling differs (avatars vs pills vs selection indicators)
+We need ONE consistent modern modal used everywhere.
+
+UI Updates Required (visual only):
+1) Universal modal header
+- Add subtle grey header background section behind the title.
+- Title should be Title Case: "Assign Employees" (or "Assign Technicians" if that is the canonical wording — pick ONE and use everywhere).
+- Use a SINGLE close control only:
+  - one X icon top-right
+  - remove "Cancel" and "Done" text links from the header (replace with bottom Save action only, if already present).
+- Add subtle divider under the header.
+
+2) Search bar polish
+- Use modern search input styling consistent with other modals:
+  - soft background
+  - rounded corners
+  - placeholder like "Search employees..."
+- Keep search behavior identical.
+
+3) List row styling consistency
+- Keep the same selection behavior (tap toggles selection).
+- Use clean, modern list rows:
+  - Employee name (primary)
+  - Secondary line (email OR role subtitle, whichever already exists)
+  - Role badge/pill on the right (TECHNICIAN / ESTIMATOR / DISPATCHER / SUPERVISOR) as currently shown in the newer version.
+  - Subtle separators or light card backgrounds (like current newer version).
+- Keep the selection indicator style the same functionally:
+  - If it currently uses checkbox/left indicator, keep that behavior, just polish visuals.
+  - Add subtle pressed state for tap feedback.
+
+4) Footer / action area consistency
+- Keep the selected count ("X selected") exactly as-is.
+- Keep a single primary action button at the bottom:
+  - Label should be "Save" (preferred) or "Done" (choose ONE and use everywhere).
+  - Full-width is okay, or right-aligned like current newer version — pick one and use everywhere.
+- No behavior changes when saving.
+
+Scope:
+- Apply this new unified design to BOTH:
+  - Jobs assignment modal
+  - Estimates assignment modal
+- Prefer extracting a shared component (e.g. <AssignEmployeesModal />) used by both, to prevent divergence.
+- No backend changes.
+
+Acceptance Criteria:
+- Jobs and Estimates assignment modals look identical.
+- Grey header + divider present.
+- Single X close icon (no Cancel text link).
+- Search input matches other updated modals.
+- Employee rows look modern and consistent with role badges.
+- Selection + Save behavior works exactly the same as before.
+- No console errors or regressions.

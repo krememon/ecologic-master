@@ -1040,22 +1040,33 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
         setEmployeesModalOpen(open);
         if (!open) setEmployeeSearch("");
       }}>
-        <DialogContent className="w-[95vw] max-w-md max-h-[80vh] overflow-hidden flex flex-col" preventAutoFocus>
-          <DialogHeader>
-            <DialogTitle>Assign Employees</DialogTitle>
-          </DialogHeader>
-
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search employees..."
-              value={employeeSearch}
-              onChange={(e) => setEmployeeSearch(e.target.value)}
-              className="pl-10"
-            />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden max-h-[80vh] flex flex-col" preventAutoFocus hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Assign Employees</DialogTitle>
+            <button
+              onClick={() => { setEmployeesModalOpen(false); setEmployeeSearch(""); }}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          <ScrollArea className="flex-1 min-h-0 max-h-[50vh]">
+          <div className="px-4 py-3 bg-white dark:bg-slate-900">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search employees..."
+                value={employeeSearch}
+                onChange={(e) => setEmployeeSearch(e.target.value)}
+                className="pl-10 h-9 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-slate-800" />
+
+          <ScrollArea className="flex-1 min-h-0 max-h-[50vh] bg-white dark:bg-slate-900">
             {employeesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -1065,58 +1076,62 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
                 {employeeSearch ? 'No employees match your search' : 'No employees found'}
               </div>
             ) : (
-              <div className="space-y-1">
-                {filteredEmployees.map((employee) => {
+              <div className="py-1">
+                {filteredEmployees.map((employee, index) => {
                   const isSelected = assignedEmployees.includes(employee.id);
                   return (
-                    <button
-                      key={employee.id}
-                      type="button"
-                      onClick={() => {
-                        if (isSelected) {
-                          setAssignedEmployees(assignedEmployees.filter(id => id !== employee.id));
-                        } else {
-                          setAssignedEmployees([...assignedEmployees, employee.id]);
-                        }
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left"
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => {}}
-                        className="pointer-events-none"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                          {formatEmployeeName(employee)}
+                    <div key={employee.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setAssignedEmployees(assignedEmployees.filter(id => id !== employee.id));
+                          } else {
+                            setAssignedEmployees([...assignedEmployees, employee.id]);
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 min-h-[56px] text-left transition-colors ${
+                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                        }`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => {}}
+                          className="pointer-events-none"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                            {formatEmployeeName(employee)}
+                          </div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {employee.email || ''}
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                          {employee.email || employee.role}
-                        </div>
-                      </div>
-                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                        {employee.role}
-                      </span>
-                    </button>
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          {employee.role}
+                        </span>
+                      </button>
+                      {index < filteredEmployees.length - 1 && (
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+                      )}
+                    </div>
                   );
                 })}
               </div>
             )}
           </ScrollArea>
 
-          <DialogFooter className="pt-2 border-t">
-            <div className="flex justify-between items-center w-full">
-              <span className="text-sm text-slate-500">
-                {assignedEmployees.length} selected
-              </span>
-              <Button onClick={() => {
-                setEmployeesModalOpen(false);
-                setEmployeeSearch("");
-              }}>
-                Save
-              </Button>
-            </div>
-          </DialogFooter>
+          <div className="flex justify-between items-center px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <span className="text-sm text-slate-500">
+              {assignedEmployees.length} selected
+            </span>
+            <Button onClick={() => {
+              setEmployeesModalOpen(false);
+              setEmployeeSearch("");
+            }} className="h-10 rounded-xl">
+              Save
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

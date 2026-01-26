@@ -1042,34 +1042,37 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       {/* EMPLOYEES Modal */}
       <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
         <DialogContent 
-          className="w-[95vw] max-w-md p-0 gap-0" 
+          className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" 
           hideCloseButton
           onInteractOutside={(e) => e.preventDefault()}
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <button onClick={() => setEmployeesModalOpen(false)} className="text-sm text-blue-500 font-medium">
-              Cancel
-            </button>
-            <DialogTitle className="text-base font-semibold">ASSIGN TECHNICIANS</DialogTitle>
-            <button onClick={() => setEmployeesModalOpen(false)} className="text-sm text-blue-500 font-medium">
-              Done
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Assign Employees</DialogTitle>
+            <button
+              onClick={() => setEmployeesModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="p-4 border-b">
+          <div className="px-4 py-3 bg-white dark:bg-slate-900">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search by name"
+                placeholder="Search employees..."
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-9 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl"
               />
             </div>
           </div>
 
-          <ScrollArea className="max-h-64">
-            <div className="py-2">
+          <div className="border-t border-slate-100 dark:border-slate-800" />
+
+          <ScrollArea className="max-h-64 bg-white dark:bg-slate-900">
+            <div className="py-1">
               {employeesLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
@@ -1080,33 +1083,45 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                   <p className="font-medium">No team members found</p>
                 </div>
               ) : (
-                filteredEmployees.map((employee) => (
-                  <button
-                    key={employee.id}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
-                      assignedEmployees.includes(employee.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                    }`}
-                    onClick={() => toggleEmployee(employee.id)}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                      <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                filteredEmployees.map((employee, index) => {
+                  const isSelected = assignedEmployees.includes(employee.id);
+                  return (
+                    <div key={employee.id}>
+                      <button
+                        className={`w-full flex items-center gap-3 px-4 min-h-[56px] text-left transition-colors ${
+                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                        }`}
+                        onClick={() => toggleEmployee(employee.id)}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => {}}
+                          className="pointer-events-none"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                            {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{employee.email || ''}</p>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                          {employee.role}
+                        </span>
+                      </button>
+                      {index < filteredEmployees.length - 1 && (
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">
-                        {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}
-                      </p>
-                      <p className="text-xs text-slate-500 capitalize">{employee.role?.toLowerCase()}</p>
-                    </div>
-                    {assignedEmployees.includes(employee.id) && (
-                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                        <span className="text-white text-xs">✓</span>
-                      </div>
-                    )}
-                  </button>
-                ))
+                  );
+                })
               )}
             </div>
           </ScrollArea>
+
+          <div className="flex justify-between items-center px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <span className="text-sm text-slate-500">{assignedEmployees.length} selected</span>
+            <Button onClick={() => setEmployeesModalOpen(false)} className="h-10 rounded-xl">Save</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
