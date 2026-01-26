@@ -1,0 +1,56 @@
+Fix invoice customer display name showing placeholder ("Sunrise Apartments") instead of real customer name.
+
+Problem:
+On invoice cards and invoice details pages, the customer name is displaying as "Sunrise Apartments", which is a placeholder or fallback value.
+Invoices should always display the actual linked customer’s name.
+
+Goal:
+Invoices must display the real customer name (or company name) associated with the invoice, never a hardcoded or placeholder value.
+
+Requirements:
+
+1) Determine correct customer display name source
+When rendering an invoice, resolve the display name in this priority order:
+- invoice.customer.companyName (if exists and non-empty)
+- invoice.customer.firstName + invoice.customer.lastName
+- else invoice.job.customer.companyName
+- else invoice.job.customer.firstName + invoice.job.customer.lastName
+- else show "Unknown Customer"
+
+DO NOT use any hardcoded placeholder strings like:
+- "Sunrise Apartments"
+- "Default Customer"
+- "Test Customer"
+
+2) Fix invoice list cards
+- Update the invoice card component to use the resolved customer display name
+- Ensure this applies to:
+  - Invoice list page
+  - Any invoice preview cards
+  - Mobile layout
+
+3) Fix invoice details page header
+- The invoice details page title/subtitle should show the same resolved customer display name
+- Ensure consistency between list view and detail view
+
+4) Backend safety (if applicable)
+- If the invoice API response currently injects a placeholder name:
+  - Remove it
+  - Return the actual related customer data instead
+- Ensure GET /api/invoices and GET /api/invoices/:id return proper customer info
+
+5) Logging (temporary, for verification)
+Add a console log when rendering invoice name:
+console.log("[Invoice UI] Display name resolved as:", displayName)
+
+Rules:
+- Do NOT change QuickBooks logic
+- Do NOT change Stripe logic
+- Do NOT redesign UI
+- Mobile-safe only
+- No breaking changes to existing invoices
+
+Acceptance Criteria:
+- Invoice cards show the real customer name (e.g. "Linda Graziano", "Jennifer Pellegrino")
+- No invoice anywhere displays "Sunrise Apartments" unless it is an actual customer record
+- Newly created and existing invoices both display correctly

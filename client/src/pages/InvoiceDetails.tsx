@@ -299,9 +299,39 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     );
   }
 
-  const customerName = invoice.customer 
-    ? `${invoice.customer.firstName} ${invoice.customer.lastName}`.trim()
-    : invoice.client?.name || 'No customer';
+  // Resolve customer display name with priority order
+  const resolveCustomerDisplayName = () => {
+    const customer = invoice.customer as any;
+    const job = invoice.job as any;
+    // Priority 1: invoice.customer.companyName
+    if (customer?.companyName) {
+      return customer.companyName;
+    }
+    // Priority 2: invoice.customer firstName + lastName
+    if (customer) {
+      const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+      if (fullName) return fullName;
+    }
+    // Priority 3: invoice.job.customer (if job has customer data)
+    if (job?.customer?.companyName) {
+      return job.customer.companyName;
+    }
+    if (job?.customer) {
+      const jobCustomerName = `${job.customer.firstName || ''} ${job.customer.lastName || ''}`.trim();
+      if (jobCustomerName) return jobCustomerName;
+    }
+    // Priority 4: invoice.client (legacy)
+    if (invoice.client?.name) {
+      return invoice.client.name;
+    }
+    // Priority 5: job.clientName (legacy)
+    if (job?.clientName) {
+      return job.clientName;
+    }
+    return 'Unknown Customer';
+  };
+  const customerName = resolveCustomerDisplayName();
+  console.log("[Invoice UI] Display name resolved as:", customerName);
 
   const lineItems = invoice.lineItems || [];
   const canPay = invoice.status !== 'paid' && invoice.status !== 'void' && invoice.status !== 'cancelled';

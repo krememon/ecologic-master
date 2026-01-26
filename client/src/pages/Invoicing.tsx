@@ -381,16 +381,32 @@ export default function Invoicing() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {invoice.customer && (
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {invoice.customer.firstName} {invoice.customer.lastName}
-                  </p>
-                )}
-                {invoice.client && !invoice.customer && (
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {invoice.client.name}
-                  </p>
-                )}
+                {(() => {
+                  // Resolve customer display name with priority order
+                  let displayName = 'Unknown Customer';
+                  if (invoice.customer?.companyName) {
+                    displayName = invoice.customer.companyName;
+                  } else if (invoice.customer) {
+                    const fullName = `${invoice.customer.firstName || ''} ${invoice.customer.lastName || ''}`.trim();
+                    if (fullName) displayName = fullName;
+                  } else if ((invoice as any).job?.customer?.companyName) {
+                    displayName = (invoice as any).job.customer.companyName;
+                  } else if ((invoice as any).job?.customer) {
+                    const jobCust = (invoice as any).job.customer;
+                    const fullName = `${jobCust.firstName || ''} ${jobCust.lastName || ''}`.trim();
+                    if (fullName) displayName = fullName;
+                  } else if (invoice.client?.name) {
+                    displayName = invoice.client.name;
+                  } else if ((invoice as any).job?.clientName) {
+                    displayName = (invoice as any).job.clientName;
+                  }
+                  console.log("[Invoice UI] Display name resolved as:", displayName);
+                  return (
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {displayName}
+                    </p>
+                  );
+                })()}
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                   <DollarSign className="h-4 w-4" />
                   {formatAmount(invoice)}

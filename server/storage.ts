@@ -1100,12 +1100,16 @@ export class DatabaseStorage implements IStorage {
         job: {
           id: jobs.id,
           title: jobs.title,
+          clientName: jobs.clientName,
+          customerId: jobs.customerId,
         },
         customer: {
           id: customers.id,
           firstName: customers.firstName,
           lastName: customers.lastName,
           email: customers.email,
+          phone: customers.phone,
+          companyName: customers.companyName,
         },
       })
       .from(invoices)
@@ -1156,12 +1160,16 @@ export class DatabaseStorage implements IStorage {
         job: {
           id: jobs.id,
           title: jobs.title,
+          clientName: jobs.clientName,
+          customerId: jobs.customerId,
         },
         customer: {
           id: customers.id,
           firstName: customers.firstName,
           lastName: customers.lastName,
           email: customers.email,
+          phone: customers.phone,
+          companyName: customers.companyName,
         },
       })
       .from(invoices)
