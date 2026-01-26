@@ -1,0 +1,58 @@
+Clean up the "Job Location" modal UI and add the subtle grey header section (match the newer EcoLogic modal style). No functional changes.
+
+Goal:
+Make the Job Location modal look cleaner and more modern, consistent with the updated Select Customer + Add Line Items modals, including:
+- A subtle grey header background behind the title
+- Cleaner spacing/padding
+- Consistent input styling
+- Mobile-safe layout
+
+Rules:
+- Do NOT change any functionality or data behavior.
+- Do NOT change Google Places / address autocomplete behavior.
+- Do NOT change what fields exist or how they save:
+  - Address (autocomplete)
+  - City
+  - ZIP/Postal Code
+  - Done button behavior
+- Only visual/UI polish.
+
+UI Changes Required:
+1) Add grey header section
+- Wrap the header/title area ("Job Location") in a dedicated header container.
+- Apply a visible light-grey background (same tone used in other modals, reuse existing token if available).
+- Add a subtle bottom divider (border) separating header from the form content.
+- Keep title centered and same font weight/size as other modal headers.
+
+2) Modal layout + spacing cleanup
+- Reduce excess empty white space throughout the modal.
+- Tighten vertical spacing between:
+  - Header and first field
+  - Address and City/ZIP row
+  - City/ZIP row and Done button
+- Keep it clean, not cramped.
+
+3) Input styling consistency
+- Ensure all inputs match modern EcoLogic style:
+  - Rounded corners
+  - Soft background / border style consistent with other modals
+  - Consistent padding and font size
+- Ensure City and ZIP inputs are perfectly aligned and equal height/width.
+- Keep Address input height aligned with others.
+
+4) Done button placement
+- Keep the Done button behavior identical.
+- Visually align it better (consistent bottom spacing).
+- Prefer centered or right-aligned (whichever matches existing design), but do not redesign the button.
+
+Scope:
+- Update only the JobLocation modal/component (or equivalent file).
+- Reuse existing modal header styles/classes if available (do not duplicate styling logic if a shared header exists).
+
+Acceptance Criteria:
+- Job Location modal has a clearly visible grey header section behind the title.
+- Modal looks cleaner with improved spacing and consistent input styling.
+- Address autocomplete still works exactly the same.
+- City/ZIP fields still save exactly the same.
+- Done button still saves and closes exactly the same.
+- No console errors or functional regressions.

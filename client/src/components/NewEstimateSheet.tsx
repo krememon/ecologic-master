@@ -1150,61 +1150,67 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
 
       {/* JOB LOCATION Modal */}
       <Dialog open={jobLocationModalOpen} onOpenChange={setJobLocationModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Job Location</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <DialogHeader className="p-0">
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Job Location</DialogTitle>
+            </DialogHeader>
+          </div>
 
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
+          <div className="space-y-3 px-4 py-3">
+            <div className="space-y-1">
               <Label htmlFor="addressLine1">Street Address</Label>
               <Input
                 id="addressLine1"
                 value={jobLocation.addressLine1}
                 onChange={(e) => setJobLocation({ ...jobLocation, addressLine1: e.target.value })}
-                placeholder="123 Main St"
+                placeholder="Street Address"
                 data-testid="input-job-address-line1"
+                className="h-9"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="city">City</Label>
               <Input
                 id="city"
                 value={jobLocation.city}
                 onChange={(e) => setJobLocation({ ...jobLocation, city: e.target.value })}
-                placeholder="Anytown"
+                placeholder="City"
                 data-testid="input-job-city"
+                className="h-9"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
                 <Label htmlFor="state">State</Label>
                 <Input
                   id="state"
                   value={jobLocation.state}
                   onChange={(e) => setJobLocation({ ...jobLocation, state: e.target.value })}
-                  placeholder="CA"
+                  placeholder="State"
                   data-testid="input-job-state"
+                  className="h-9"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="zip">ZIP Code</Label>
                 <Input
                   id="zip"
                   value={jobLocation.zip}
                   onChange={(e) => setJobLocation({ ...jobLocation, zip: e.target.value })}
-                  placeholder="12345"
+                  placeholder="ZIP"
                   data-testid="input-job-zip"
+                  className="h-9"
                 />
               </div>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button onClick={() => setJobLocationModalOpen(false)}>
+          <div className="flex justify-end px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+            <Button onClick={() => setJobLocationModalOpen(false)} className="h-10 rounded-xl">
               Done
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

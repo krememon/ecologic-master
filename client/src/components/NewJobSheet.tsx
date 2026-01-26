@@ -943,12 +943,14 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
       {/* LOCATION Modal */}
       <Dialog open={locationModalOpen} onOpenChange={setLocationModalOpen}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Job Location</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <DialogHeader className="p-0">
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Job Location</DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="space-y-3 px-4 py-3">
+            <div className="space-y-1">
               <Label>Address</Label>
               <LocationInput
                 value={location}
@@ -966,19 +968,19 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                 placeholder="Start typing an address..."
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
                 <Label>City</Label>
-                <Input value={city} onChange={(e) => { setCity(e.target.value); setLocationIsManualOverride(true); }} placeholder="City" />
+                <Input value={city} onChange={(e) => { setCity(e.target.value); setLocationIsManualOverride(true); }} placeholder="City" className="h-9" />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label>ZIP/Postal Code</Label>
-                <Input value={postalCode} onChange={(e) => { setPostalCode(e.target.value); setLocationIsManualOverride(true); }} placeholder="ZIP" />
+                <Input value={postalCode} onChange={(e) => { setPostalCode(e.target.value); setLocationIsManualOverride(true); }} placeholder="ZIP" className="h-9" />
               </div>
             </div>
           </div>
-          <div className="flex justify-end pt-4">
-            <Button onClick={() => setLocationModalOpen(false)}>Done</Button>
+          <div className="flex justify-end px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+            <Button onClick={() => setLocationModalOpen(false)} className="h-10 rounded-xl">Done</Button>
           </div>
         </DialogContent>
       </Dialog>
