@@ -1241,21 +1241,29 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
 
       {/* NOTES Modal */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Estimate Notes</DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Estimate Notes</DialogTitle>
+            <button
+              onClick={() => setNotesModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="px-4 py-3">
             <Textarea
               placeholder="Add notes about this estimate..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
               data-testid="textarea-notes"
+              className="resize-none"
             />
           </div>
-          <div className="flex justify-end pt-4">
-            <Button onClick={() => setNotesModalOpen(false)}>Done</Button>
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+            <Button onClick={() => setNotesModalOpen(false)} className="w-full h-10 rounded-xl">Done</Button>
           </div>
         </DialogContent>
       </Dialog>
