@@ -1,0 +1,102 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual consistency, spacing, headers, typography, layout only
+
+TARGET: “Add New Invoice / New Invoice” screen (shown in screenshot)
+NOTE: This is the invoice creation sheet/page with sections: Customer, Line Items, Schedule, Tags + “Save Invoice” button.
+
+GOAL
+Make this screen match our updated EcoLogic style:
+- Cleaner iOS/Apple-like header (centered title, single X close)
+- Grey section headers (soft light grey background) consistent with other modals/sheets
+- “Shorter” list rows (tighter padding)
+- Consistent icon + chevron alignment
+- Reduce dead whitespace and make layout feel polished
+- Keep “Save Invoice” button consistent and well-spaced
+
+STRICT RULES
+1) Do NOT change any functions/handlers/state/validation/data flow.
+   - Don’t touch onClick logic for opening pickers/modals
+   - Don’t change required rules (*)
+   - Don’t change what fields show
+2) Styling/layout only:
+   - className changes, spacing, typography, container structure (safe)
+   - NO new state, NO new components that affect behavior
+
+ISSUES TO FIX (from screenshot)
+- Header uses “Cancel” text on left; we want consistent modal header pattern (center title + single X close)
+- Section headers look a bit tall/heavy; make them softer + tighter
+- Row padding is too tall (“shorter rows” needed)
+- Required asterisk spacing inconsistent
+- Too much unused whitespace between sections and below content
+- Save button area needs consistent padding and safe-area spacing
+
+IMPLEMENTATION STEPS
+
+A) Locate the Invoice create component
+- Search: "NEW INVOICE", "Save Invoice", "Add customer", "Add line items", "Add schedule", "Add job tags"
+- Identify the component that renders this screen/sheet.
+
+B) Header cleanup (presentation only)
+- Replace the current header layout with our standard:
+  - Centered title: “New Invoice” (Title Case preferred over ALL CAPS, but only if it’s just text rendering)
+  - Single X close button on the top-right
+  - Remove/hide the left “Cancel” label visually (DO NOT change the close/cancel handler—reuse the same handler tied to cancel/close)
+  - Keep the same onClose behavior
+- Match typography used in other cleaned sheets:
+  - title weight/size consistent
+  - subtle bottom divider
+
+C) Section headers (grey bars)
+- Ensure each section header (“CUSTOMER”, “LINE ITEMS”, “SCHEDULE”, “TAGS”) matches our pattern:
+  - soft light grey background
+  - small uppercase label, slightly tracked
+  - reduced height/padding (tighter)
+  - subtle border top/bottom if consistent elsewhere
+- Keep the same section titles (no logic change).
+
+D) Make rows “shorter” + consistent
+For each row (Add customer / Add line items / Add schedule / Add job tags):
+- Reduce vertical padding to tighten height
+- Align icon, label text, required asterisk, and chevron perfectly on one baseline
+- Keep chevron size consistent
+- Keep left padding consistent across rows
+- Keep row separators subtle and consistent
+
+Row text rules (presentation only):
+- Primary text: “Add customer”, “Add line items”, “Add schedule”, “Add job tags”
+- Keep the red asterisk exactly where it is logically required, but tighten spacing:
+  - visually: small gap, aligned to text baseline
+
+E) Content spacing + background
+- Reduce extra whitespace between sections
+- Ensure the background behind sections is consistent with our other fill-out pages
+- Keep the scroll behavior identical
+
+F) Save button area cleanup (presentation only)
+- Keep “Save Invoice” functionality identical
+- Visually:
+  - consistent button height/radius with EcoLogic primary buttons
+  - proper horizontal padding
+  - safe-area bottom padding so it doesn’t feel floating
+  - reduce excessive empty space above/below button, but keep breathing room
+
+SAFETY / NON-NEGOTIABLE
+- Do NOT touch any shared modal infrastructure used by Jobs/Estimates.
+- Keep changes localized to the invoice create screen component + its local styles.
+- If you must reuse an existing “ModalHeader” style component already used elsewhere, only swap it in if it’s purely presentational and doesn’t change behavior.
+
+DELIVERABLES
+1) Updated New Invoice screen matching EcoLogic’s cleaned modal/sheet style.
+2) Shorter list rows, cleaner section headers, consistent header with single X close.
+3) No functional changes; all taps still open the same flows.
+
+QA CHECKLIST
+- Tapping each row still opens the same picker/modal
+- Required fields still required
+- Save Invoice still works
+- Close/X still closes exactly like Cancel did
+- No console errors / no white screen
+- Looks clean at iPhone width

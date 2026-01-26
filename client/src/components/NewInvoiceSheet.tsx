@@ -57,8 +57,10 @@ interface NewInvoiceSheetProps {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-      {title}
+    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+        {title}
+      </span>
     </div>
   );
 }
@@ -80,14 +82,14 @@ function InfoRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
+      className="w-full flex items-center gap-3 px-4 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left"
     >
       <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
-      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
-        {required && !value && <span className="text-red-500 ml-1">*</span>}
+        {required && !value && <span className="text-red-400 text-xs ml-1">*</span>}
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-400" />
+      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
     </button>
   );
 }
@@ -406,17 +408,16 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
             <button 
               type="button"
               onClick={() => handleClose(false)}
-              className="text-blue-600 text-sm font-medium"
+              className="absolute right-4 top-1/2 -translate-y-1/2"
             >
-              Cancel
+              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
             </button>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">NEW INVOICE</h2>
-            <div className="w-12"></div>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Invoice</h2>
           </div>
 
           <div className="flex-1 overflow-y-auto pb-20">
@@ -583,7 +584,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
           </div>
 
           {/* Sticky Bottom Done Button */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+          <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
             <Button
               type="button"
               onClick={() => {
@@ -598,7 +599,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 handleSubmit();
               }}
               disabled={createInvoiceMutation.isPending}
-              className="w-full h-12 text-base font-semibold"
+              className="w-full h-11"
             >
               {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
             </Button>
