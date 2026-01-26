@@ -860,6 +860,246 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =====================
+  // QUICKBOOKS INTEGRATION ROUTES
+  // =====================
+
+  const QB_CLIENT_ID = process.env.QB_CLIENT_ID;
+  const QB_CLIENT_SECRET = process.env.QB_CLIENT_SECRET;
+  const QB_REDIRECT_URI = process.env.QB_REDIRECT_URI;
+  const QB_ENV = process.env.QB_ENV || 'sandbox';
+  
+  const QB_AUTH_BASE = 'https://appcenter.intuit.com/connect/oauth2';
+  const QB_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+  const QB_API_BASE = QB_ENV === 'production' 
+    ? 'https://quickbooks.api.intuit.com' 
+    : 'https://sandbox-quickbooks.api.intuit.com';
+
+  // Helper: Get valid QBO access token (refreshes if expired)
+  async function getQboAccessToken(companyId: number): Promise<string | null> {
+    const company = await storage.getCompany(companyId);
+    if (!company?.qboRefreshToken) return null;
+    
+    const now = new Date();
+    const expiresAt = company.qboTokenExpiresAt ? new Date(company.qboTokenExpiresAt) : null;
+    
+    // If token is still valid (with 5 min buffer), return it
+    if (expiresAt && expiresAt.getTime() - 5 * 60 * 1000 > now.getTime() && company.qboAccessToken) {
+      return company.qboAccessToken;
+    }
+    
+    // Token expired, refresh it
+    if (!QB_CLIENT_ID || !QB_CLIENT_SECRET) {
+      console.error('QuickBooks credentials not configured');
+      return null;
+    }
+    
+    try {
+      const basicAuth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString('base64');
+      const response = await fetch(QB_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`,
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: company.qboRefreshToken,
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to refresh QBO token:', await response.text());
+        return null;
+      }
+      
+      const tokens = await response.json();
+      const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+      
+      await storage.updateCompany(companyId, {
+        qboAccessToken: tokens.access_token,
+        qboRefreshToken: tokens.refresh_token,
+        qboTokenExpiresAt: newExpiresAt,
+      });
+      
+      return tokens.access_token;
+    } catch (error) {
+      console.error('Error refreshing QBO token:', error);
+      return null;
+    }
+  }
+
+  // GET /api/integrations/quickbooks/status - Check connection status
+  app.get('/api/integrations/quickbooks/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+      
+      res.json({
+        connected: !!company.qboRealmId && !!company.qboRefreshToken,
+        connectedAt: company.qboConnectedAt,
+        realmId: company.qboRealmId,
+      });
+    } catch (error: any) {
+      console.error('Error checking QuickBooks status:', error);
+      res.status(500).json({ error: 'Failed to check QuickBooks status' });
+    }
+  });
+
+  // GET /api/integrations/quickbooks/connect - Initiate OAuth flow
+  app.get('/api/integrations/quickbooks/connect', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      if (!QB_CLIENT_ID || !QB_REDIRECT_URI) {
+        return res.status(500).json({ error: 'QuickBooks integration not configured' });
+      }
+      
+      // Generate CSRF state and store in session
+      const state = randomBytes(32).toString('hex');
+      req.session.qboOAuthState = state;
+      req.session.qboCompanyId = member.companyId;
+      
+      const authUrl = new URL(QB_AUTH_BASE);
+      authUrl.searchParams.set('client_id', QB_CLIENT_ID);
+      authUrl.searchParams.set('response_type', 'code');
+      authUrl.searchParams.set('scope', 'com.intuit.quickbooks.accounting');
+      authUrl.searchParams.set('redirect_uri', QB_REDIRECT_URI);
+      authUrl.searchParams.set('state', state);
+      
+      res.redirect(authUrl.toString());
+    } catch (error: any) {
+      console.error('Error initiating QuickBooks OAuth:', error);
+      res.status(500).json({ error: 'Failed to initiate QuickBooks connection' });
+    }
+  });
+
+  // GET /api/integrations/quickbooks/callback - OAuth callback
+  app.get('/api/integrations/quickbooks/callback', async (req: any, res) => {
+    try {
+      const { code, realmId, state, error: oauthError } = req.query;
+      
+      if (oauthError) {
+        console.error('QuickBooks OAuth error:', oauthError);
+        return res.redirect('/customize?quickbooks=error');
+      }
+      
+      // Validate CSRF state
+      if (!state || state !== req.session?.qboOAuthState) {
+        console.error('QuickBooks OAuth state mismatch');
+        return res.redirect('/customize?quickbooks=error');
+      }
+      
+      const companyId = req.session?.qboCompanyId;
+      if (!companyId) {
+        console.error('No company ID in session');
+        return res.redirect('/customize?quickbooks=error');
+      }
+      
+      // Clear session state
+      delete req.session.qboOAuthState;
+      delete req.session.qboCompanyId;
+      
+      if (!code || !realmId) {
+        console.error('Missing code or realmId');
+        return res.redirect('/customize?quickbooks=error');
+      }
+      
+      if (!QB_CLIENT_ID || !QB_CLIENT_SECRET || !QB_REDIRECT_URI) {
+        console.error('QuickBooks credentials not configured');
+        return res.redirect('/customize?quickbooks=error');
+      }
+      
+      // Exchange code for tokens
+      const basicAuth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString('base64');
+      const tokenResponse = await fetch(QB_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${basicAuth}`,
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code as string,
+          redirect_uri: QB_REDIRECT_URI,
+        }),
+      });
+      
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        console.error('Token exchange failed:', errorText);
+        return res.redirect('/customize?quickbooks=error');
+      }
+      
+      const tokens = await tokenResponse.json();
+      const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+      
+      // Store tokens in database
+      await storage.updateCompany(companyId, {
+        qboRealmId: realmId as string,
+        qboAccessToken: tokens.access_token,
+        qboRefreshToken: tokens.refresh_token,
+        qboTokenExpiresAt: expiresAt,
+        qboConnectedAt: new Date(),
+      });
+      
+      res.redirect('/customize?quickbooks=connected');
+    } catch (error: any) {
+      console.error('Error in QuickBooks callback:', error);
+      res.redirect('/customize?quickbooks=error');
+    }
+  });
+
+  // POST /api/integrations/quickbooks/disconnect - Disconnect QuickBooks
+  app.post('/api/integrations/quickbooks/disconnect', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      await storage.updateCompany(member.companyId, {
+        qboRealmId: null,
+        qboAccessToken: null,
+        qboRefreshToken: null,
+        qboTokenExpiresAt: null,
+        qboConnectedAt: null,
+      });
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error disconnecting QuickBooks:', error);
+      res.status(500).json({ error: 'Failed to disconnect QuickBooks' });
+    }
+  });
+
+  // =====================
   // LEADS ROUTES
   // =====================
 
