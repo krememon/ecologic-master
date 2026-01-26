@@ -1,0 +1,62 @@
+Fix stale state bug in "Generate Invoice PDF" modal:
+"Pay Invoice" button shows on first open right after payment, but disappears after closing and reopening.
+
+Evidence (screenshots):
+- First open of Generate Invoice PDF modal shows buttons: Cancel + Pay Invoice + Next (incorrect because invoice is already paid)
+- If user closes the modal and opens it again, Pay Invoice is gone and a green "Paid" pill appears (correct)
+
+Goal:
+On the FIRST open (immediately after Stripe payment success), the modal must already know the invoice is paid and must NOT show "Pay Invoice".
+
+Root Cause:
+The modal is rendering using stale invoice/job state from before the Stripe webhook update.
+After closing/reopening, the screen refetches and state becomes correct.
+
+Requirements:
+
+1) Modal must fetch fresh invoice state on open
+- When opening the Generate Invoice PDF modal:
+  - Always refetch the latest invoice for the job BEFORE deciding whether to show Pay Invoice
+  - Use the existing endpoint (whichever you have):
+    - GET /api/jobs/:jobId/invoice
+    OR
+    - GET /api/invoices/:invoiceId
+  - Replace any cached invoice object used for the button logic with the freshly fetched response
+  - While loading, do not render Pay Invoice (default to hidden until confirmed unpaid)
+
+2) Use a single "isPaid" helper everywhere (avoid mismatched logic)
+Compute isPaid as TRUE if any of:
+- invoice.paidAt exists
+- invoice.status === "paid"
+- invoice.balanceDueCents === 0
+- invoice.amountPaidCents >= invoice.totalCents
+
+If isPaid is true:
+- Do NOT render "Pay Invoice"
+- Render the "Paid" pill (as shown in the second screenshot)
+
+3) Ensure state updates immediately after Stripe return
+- After /stripe/return redirect, force a refresh of job + invoice data so UI doesn’t carry stale state:
+  - refetch the current job
+  - refetch the invoice for that job
+- Make sure the Generate Invoice modal reads from this refreshed state when opened.
+
+4) Add temporary logs to verify
+When modal opens, log:
+console.log("[Invoice PDF Modal] opened", { invoiceId, jobId, paidAt: invoice?.paidAt, status: invoice?.status, balanceDueCents: invoice?.balanceDueCents });
+
+Also log after refetch:
+console.log("[Invoice PDF Modal] refreshed invoice", refreshedInvoice);
+
+Rules:
+- Do NOT redesign UI
+- Do NOT change Stripe logic
+- Do NOT change QuickBooks logic
+- Mobile-safe
+- Keep existing modal layout and buttons (just fix visibility/state)
+
+Acceptance Criteria:
+- Immediately after paying via Stripe, opening Generate Invoice PDF modal shows:
+  - Green "Paid" pill
+  - NO "Pay Invoice" button
+- Closing and reopening does not change behavior (it is correct both times)

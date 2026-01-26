@@ -37,6 +37,7 @@ export function JobInvoiceModal({
   const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const [invoiceAmount, setInvoiceAmount] = useState<string | null>(null);
   const [invoiceStatus, setInvoiceStatus] = useState<string | null>(null);
+  const [invoiceStatusLoaded, setInvoiceStatusLoaded] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(false);
@@ -60,21 +61,28 @@ export function JobInvoiceModal({
   // Fetch existing PDF and fresh invoice status when modal opens
   useEffect(() => {
     if (open) {
+      // Reset status loaded flag to prevent stale state from showing Pay Invoice
+      setInvoiceStatusLoaded(false);
+      
       // Always fetch fresh invoice status when modal opens
       fetch(`/api/jobs/${jobId}/invoice`, { credentials: 'include' })
         .then(async (res) => {
           if (res.ok) {
             const data = await res.json();
             if (data.invoice) {
-              console.log("[Invoice UI] generate screen opened, invoice paidAt:", data.invoice.paidAt, "status:", data.invoice.status, "balanceDue:", data.invoice.balanceDueCents);
+              console.log("[Invoice PDF Modal] opened", { invoiceId: data.invoice.id, jobId, paidAt: data.invoice.paidAt, status: data.invoice.status, balanceDueCents: data.invoice.balanceDueCents });
               setInvoiceId(data.invoice.id);
               setInvoiceStatus(data.invoice.status);
               setInvoiceAmount(data.invoice.total || data.invoice.amount);
+              console.log("[Invoice PDF Modal] refreshed invoice", data.invoice);
             }
           }
         })
         .catch((err) => {
           console.log("[Invoice UI] Could not fetch invoice status:", err);
+        })
+        .finally(() => {
+          setInvoiceStatusLoaded(true);
         });
 
       // Only fetch PDF if not already loaded
@@ -199,6 +207,7 @@ export function JobInvoiceModal({
     setInvoiceId(null);
     setInvoiceAmount(null);
     setInvoiceStatus(null);
+    setInvoiceStatusLoaded(false);
     setPreviewImageUrl(null);
     setPreviewLoading(false);
     setPreviewError(false);
@@ -274,7 +283,10 @@ export function JobInvoiceModal({
   };
 
   const isEmailValid = toEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail);
+  // Only show "Pay Invoice" when we've confirmed the invoice is NOT paid
+  // Hide the button while loading to prevent flash of stale state
   const isPaid = invoiceStatus?.toLowerCase() === 'paid';
+  const canShowPayButton = invoiceStatusLoaded && !isPaid;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -505,7 +517,7 @@ export function JobInvoiceModal({
               <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              {pdfUrl && invoiceId && !isPaid && (
+              {pdfUrl && invoiceId && canShowPayButton && (
                 <Button
                   variant="outline"
                   onClick={handleGetPaymentLink}
@@ -539,7 +551,7 @@ export function JobInvoiceModal({
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              {invoiceId && !isPaid && (
+              {invoiceId && canShowPayButton && (
                 <Button
                   variant="outline"
                   onClick={handleGetPaymentLink}
