@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, Check, Loader2, Package } from "lucide-react";
+import { Search, Plus, Check, Loader2, Package, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ServiceCatalogItem } from "@shared/schema";
@@ -74,12 +74,10 @@ export function PriceBookPickerModal({
     enabled: open,
   });
 
-  // When modal opens, initialize selected items from existing line items by priceBookItemId
   useEffect(() => {
     if (open && catalogItems.length > 0) {
       const matchingIds = new Set<number>();
       for (const existingItem of existingItems) {
-        // Use priceBookItemId if available (reliable), otherwise skip
         if (existingItem.priceBookItemId) {
           matchingIds.add(existingItem.priceBookItemId);
         }
@@ -97,7 +95,6 @@ export function PriceBookPickerModal({
     onSuccess: (createdItem: ServiceCatalogItem) => {
       queryClient.invalidateQueries({ queryKey: ['/api/service-catalog'] });
       
-      // Immediately add the newly created item (not toggle-based)
       const lineItem: LineItem = {
         name: createdItem.name,
         description: createdItem.description || "",
@@ -148,7 +145,6 @@ export function PriceBookPickerModal({
     }
   }, [open]);
 
-  // Toggle selection of a catalog item
   const handleToggleSelection = (item: ServiceCatalogItem) => {
     setSelectedItemIds(prev => {
       const newSet = new Set(prev);
@@ -161,9 +157,7 @@ export function PriceBookPickerModal({
     });
   };
 
-  // Apply selections on Done
   const handleDone = () => {
-    // Find newly selected items (not in initial set)
     for (const itemId of selectedItemIds) {
       if (!initialSelectedIds.has(itemId)) {
         const catalogItem = catalogItems.find(c => c.id === itemId);
@@ -188,7 +182,6 @@ export function PriceBookPickerModal({
       }
     }
     
-    // Find deselected items (were in initial set but no longer selected)
     if (onRemoveItemByPriceBookId) {
       for (const itemId of initialSelectedIds) {
         if (!selectedItemIds.has(itemId)) {
@@ -243,12 +236,12 @@ export function PriceBookPickerModal({
   if (showCreateForm) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New Line Item</DialogTitle>
+        <DialogContent className="w-[95vw] max-w-md rounded-2xl" hideCloseButton>
+          <DialogHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+            <DialogTitle className="text-base font-semibold text-center">Create New Line Item</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-3">
             <div className="space-y-2">
               <Label htmlFor="item-name">Name *</Label>
               <Input
@@ -256,6 +249,7 @@ export function PriceBookPickerModal({
                 value={newItem.name}
                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
                 placeholder="e.g., Standard Inspection"
+                className="h-10"
               />
             </div>
 
@@ -278,7 +272,7 @@ export function PriceBookPickerModal({
                   <Input
                     id="item-price"
                     type="text"
-                    className="pl-7"
+                    className="pl-7 h-10"
                     value={priceDisplay}
                     onChange={(e) => handlePriceChange(e.target.value)}
                     onBlur={handlePriceBlur}
@@ -293,7 +287,7 @@ export function PriceBookPickerModal({
                   value={newItem.unit}
                   onValueChange={(value) => setNewItem({ ...newItem, unit: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -315,6 +309,7 @@ export function PriceBookPickerModal({
                   value={newItem.taskCode}
                   onChange={(e) => setNewItem({ ...newItem, taskCode: e.target.value })}
                   placeholder="e.g., INSP-001"
+                  className="h-10"
                 />
               </div>
               <div className="space-y-2">
@@ -324,6 +319,7 @@ export function PriceBookPickerModal({
                   value={newItem.category}
                   onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
                   placeholder="e.g., Inspections"
+                  className="h-10"
                 />
               </div>
             </div>
@@ -338,21 +334,21 @@ export function PriceBookPickerModal({
             </div>
           </div>
 
-          <DialogFooter className="flex-row gap-2">
+          <DialogFooter className="flex-row gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <Button 
               variant="outline" 
               onClick={() => {
                 resetCreateForm();
                 setShowCreateForm(false);
               }}
-              className="flex-1"
+              className="flex-1 h-11 rounded-xl"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleCreateItem}
               disabled={createMutation.isPending}
-              className="flex-1"
+              className="flex-1 h-11 rounded-xl"
             >
               {createMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -367,95 +363,131 @@ export function PriceBookPickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton className="w-[95vw] max-w-md max-h-[85vh] flex flex-col" preventAutoFocus>
-        <DialogHeader>
-          <DialogTitle>Add Line Items</DialogTitle>
-        </DialogHeader>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Search price book..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      <DialogContent className="w-[95vw] max-w-md p-0 gap-0 max-h-[85vh] flex flex-col rounded-2xl overflow-hidden" hideCloseButton preventAutoFocus>
+        <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+          <div className="min-w-[44px]" />
+          <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Add Line Items
+          </DialogTitle>
+          <button 
+            onClick={() => onOpenChange(false)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <ScrollArea className="flex-1 -mx-6 px-6 min-h-0" style={{ maxHeight: 'calc(85vh - 220px)' }}>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-            </div>
-          ) : filteredItems.length === 0 && catalogItems.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="mx-auto h-12 w-12 text-slate-300 mb-4" />
-              <p className="text-slate-500 mb-4">No items in your price book yet</p>
-              <Button onClick={() => setShowCreateForm(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create your first item
-              </Button>
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-slate-500">No items match "{searchQuery}"</p>
-            </div>
-          ) : (
-            <div className="space-y-1 py-2">
-              {filteredItems.map((item) => {
-                const isSelected = selectedItemIds.has(item.id);
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleToggleSelection(item)}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                      isSelected 
-                        ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800' 
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate">
-                          {item.name}
-                        </div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
-                          <span>{formatCurrency(item.defaultPriceCents)}</span>
-                          <span className="text-slate-300 dark:text-slate-600">•</span>
-                          <span>per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}</span>
-                          {item.category && (
-                            <>
-                              <span className="text-slate-300 dark:text-slate-600">•</span>
-                              <span className="truncate">{item.category}</span>
-                            </>
+        <div className="px-4 py-3 bg-white dark:bg-slate-900">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search price book..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 dark:border-slate-800" />
+
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="bg-white dark:bg-slate-900">
+            <button
+              className="w-full flex items-center gap-3 px-4 min-h-[56px] text-left hover:bg-blue-50 dark:hover:bg-blue-950/30 active:bg-blue-100 dark:active:bg-blue-950/50 transition-colors"
+              onClick={() => setShowCreateForm(true)}
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <Plus className="h-5 w-5 text-white" />
+              </div>
+              <span className="font-semibold text-blue-600 dark:text-blue-400">Create New Line Item</span>
+            </button>
+
+            {(filteredItems.length > 0 || isLoading) && (
+              <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+            )}
+
+            {isLoading ? (
+              <div className="py-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                      <div className="h-3 w-24 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredItems.length === 0 && catalogItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                  <Package className="h-7 w-7 text-slate-400" />
+                </div>
+                <p className="font-medium text-slate-600 dark:text-slate-400 text-center">
+                  No items in your price book yet
+                </p>
+                <p className="text-sm text-slate-400 mt-1">Create your first item above</p>
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                  <Search className="h-7 w-7 text-slate-400" />
+                </div>
+                <p className="font-medium text-slate-600 dark:text-slate-400 text-center">
+                  No items match "{searchQuery}"
+                </p>
+                <p className="text-sm text-slate-400 mt-1">Try a different search term</p>
+              </div>
+            ) : (
+              <div className="py-1">
+                {filteredItems.map((item, index) => {
+                  const isSelected = selectedItemIds.has(item.id);
+                  return (
+                    <div key={item.id}>
+                      <button
+                        onClick={() => handleToggleSelection(item)}
+                        className={`w-full flex items-center gap-3 px-4 min-h-[64px] text-left transition-colors ${
+                          isSelected 
+                            ? 'bg-teal-50 dark:bg-teal-900/20' 
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${
+                          isSelected
+                            ? 'bg-teal-500 text-white'
+                            : 'bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {isSelected ? (
+                            <Check className="h-5 w-5" />
+                          ) : (
+                            item.name.charAt(0).toUpperCase()
                           )}
                         </div>
-                      </div>
-                      {isSelected && (
-                        <div className="flex-shrink-0 mt-1">
-                          <Check className="h-5 w-5 text-teal-600" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                            {formatCurrency(item.defaultPriceCents)} per {UNIT_OPTIONS.find(u => u.value === item.unit)?.label.toLowerCase() || item.unit}
+                            {item.category && ` · ${item.category}`}
+                          </p>
                         </div>
+                      </button>
+                      {index < filteredItems.length - 1 && (
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
                       )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </ScrollArea>
 
-        <div className="pt-2 border-t space-y-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowCreateForm(true)}
-            className="w-full"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create new line item
-          </Button>
-          
-          <Button onClick={handleDone} className="w-full">
-            Done
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <Button onClick={handleDone} className="w-full h-12 rounded-xl font-semibold">
+            Done {selectedItemIds.size > 0 && `(${selectedItemIds.size})`}
           </Button>
         </div>
       </DialogContent>

@@ -1,0 +1,70 @@
+Revamp the "Add Line Items" modal UI to look cleaner and more modern, with ZERO functional changes.
+
+Context:
+This is the modal used to add line items from the price book/service catalog.
+Current layout:
+- Title: "Add Line Items"
+- Search input ("Search price book...")
+- List of line item cards (name, price, unit)
+- "Create new line item" row/button
+- "Done" primary button
+Everything works correctly. Do not change behavior.
+
+Goal:
+Keep the exact same functionality and flows, but make the UI feel cleaner/premium and consistent with EcoLogic.
+
+Do NOT change:
+- Search/filter behavior
+- Selecting line items (tap behavior)
+- Quantity logic (if exists)
+- How selected items are stored/saved
+- Create new line item flow
+- Done button behavior
+- Any API calls/data shape
+
+UI improvements (design-only):
+1) Header polish
+- Keep "Add Line Items" title centered
+- Add a single X close in the top-right (ONLY if it already exists; do not add new controls if not needed)
+- Add subtle divider under header
+- Better spacing/padding
+
+2) Search input polish
+- Softer background, consistent rounded corners
+- Clean icon alignment, smaller height if needed
+- Placeholder text stays similar ("Search price book..." is fine)
+
+3) List row design
+- Convert each line item from a big rounded card into a cleaner, tighter list row:
+  - Name (bold)
+  - Price + unit (subtext)
+  - Optional subtle chevron or plus indicator ONLY if it already exists functionally
+- Add subtle separators between rows
+- Add a pressed state (tap feedback)
+- Keep scrolling smooth and mobile-friendly
+
+4) Create new line item action
+- Keep "+ Create new line item" exactly as-is functionally
+- Make it visually consistent with the list rows (same padding, divider)
+- Keep it pinned near bottom if it currently is; do not change behavior
+
+5) Done button
+- Keep the same button and action
+- Ensure spacing from bottom is consistent and looks clean
+- No layout shift when keyboard opens
+
+6) Empty + loading states (if applicable)
+- If search returns nothing: show a clean "No results" message
+- If loading: show skeleton rows or subtle loader (no redesign)
+
+Rules:
+- No backend changes
+- No functional changes
+- No new flows
+- Mobile-safe (iPhone width)
+- Keep EcoLogic styling consistent (rounded corners, soft shadows, clean dividers)
+
+Acceptance Criteria:
+- Modal looks noticeably cleaner and more modern
+- Search, selection, create new line item, and Done all work EXACTLY the same
+- No console errors and no regressions
