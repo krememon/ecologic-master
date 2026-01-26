@@ -1061,7 +1061,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
       {/* EMPLOYEES Modal */}
       <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden max-h-[80vh] flex flex-col" hideCloseButton>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
           <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
             <div className="min-w-[44px]" />
             <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Assign Employees</DialogTitle>
@@ -1073,7 +1073,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
             </button>
           </div>
 
-          <ScrollArea className="flex-1 min-h-0 max-h-[50vh] bg-white dark:bg-slate-900">
+          <ScrollArea className="max-h-64 bg-white dark:bg-slate-900">
             {companyEmployees.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
                 No employees found
