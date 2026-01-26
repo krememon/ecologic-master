@@ -156,6 +156,7 @@ export const customers = pgTable("customers", {
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
   geocodePrecision: varchar("geocode_precision", { length: 20 }), // 'exact' or 'approximate'
+  qboCustomerId: varchar("qbo_customer_id", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

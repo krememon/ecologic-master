@@ -959,6 +959,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // Helper: Ensure EcoLogic customer is mapped to a QBO customer (idempotent)
+  async function ensureQboCustomer(companyId: number, customerId: number): Promise<string | null> {
+    const company = await storage.getCompany(companyId);
+    if (!company?.qboRealmId) {
+      console.error('[QB] ensureQboCustomer: Company not connected to QBO');
+      return null;
+    }
+
+    const customer = await storage.getCustomer(customerId);
+    if (!customer) {
+      console.error('[QB] ensureQboCustomer: Customer not found');
+      return null;
+    }
+
+    // If already mapped, return existing ID
+    if (customer.qboCustomerId) {
+      console.log('[QB] Customer already mapped to QBO:', customer.qboCustomerId);
+      return customer.qboCustomerId;
+    }
+
+    const accessToken = await getQboAccessToken(companyId);
+    if (!accessToken) {
+      console.error('[QB] ensureQboCustomer: Could not get access token');
+      return null;
+    }
+
+    const displayName = `${customer.firstName} ${customer.lastName}`.trim();
+    
+    try {
+      // Search for existing QBO customer by DisplayName
+      const searchQuery = encodeURIComponent(`DisplayName = '${displayName.replace(/'/g, "\\'")}'`);
+      const searchResponse = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/query?query=select * from Customer where ${searchQuery}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const existingCustomers = searchData.QueryResponse?.Customer || [];
+        
+        // Check for match by email if multiple results
+        let matchedCustomer = existingCustomers.find((c: any) => 
+          c.PrimaryEmailAddr?.Address?.toLowerCase() === customer.email?.toLowerCase()
+        ) || existingCustomers[0];
+        
+        if (matchedCustomer) {
+          console.log('[QB] Found existing QBO customer:', matchedCustomer.Id);
+          await storage.updateCustomer(customerId, { qboCustomerId: matchedCustomer.Id });
+          return matchedCustomer.Id;
+        }
+      }
+
+      // Create new QBO customer
+      console.log('[QB] Creating new QBO customer for:', displayName);
+      const createResponse = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/customer`,
+        {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            DisplayName: displayName,
+            GivenName: customer.firstName,
+            FamilyName: customer.lastName,
+            PrimaryEmailAddr: customer.email ? { Address: customer.email } : undefined,
+            PrimaryPhone: customer.phone ? { FreeFormNumber: customer.phone } : undefined,
+            BillAddr: customer.address ? {
+              Line1: customer.address,
+              City: customer.city || undefined,
+              CountrySubDivisionCode: customer.state || undefined,
+              PostalCode: customer.zip || undefined,
+            } : undefined,
+            CompanyName: customer.companyName || undefined,
+          }),
+        }
+      );
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error('[QB] Failed to create QBO customer:', errorText);
+        return null;
+      }
+
+      const createData = await createResponse.json();
+      const qboCustomerId = createData.Customer?.Id;
+      
+      if (qboCustomerId) {
+        console.log('[QB] Created QBO customer:', qboCustomerId);
+        await storage.updateCustomer(customerId, { qboCustomerId });
+        return qboCustomerId;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[QB] Error in ensureQboCustomer:', error);
+      return null;
+    }
+  }
+
   // GET /api/integrations/quickbooks/status - Check connection status
   app.get('/api/integrations/quickbooks/status', isAuthenticated, async (req: any, res) => {
     try {
