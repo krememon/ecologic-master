@@ -1,5 +1,5 @@
-import { useState, Component, ErrorInfo, ReactNode } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect, useRef, Component, ErrorInfo, ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Loader2, FileCheck, Ale
 import { format } from "date-fns";
 import { NewEstimateSheet } from "@/components/NewEstimateSheet";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
 import type { Customer } from "@shared/schema";
 
 interface ErrorBoundaryProps {
@@ -29,7 +30,7 @@ class LeadDetailsErrorBoundary extends Component<ErrorBoundaryProps, ErrorBounda
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('LeadDetails error:', error, errorInfo);
+    console.error('[LeadDetails] Error boundary caught:', error, errorInfo);
   }
 
   render() {
@@ -79,36 +80,52 @@ function safeFormatDate(dateStr: string | null | undefined): string | null {
 function LeadDetailsContent({ leadId }: LeadDetailsProps) {
   const [, navigate] = useLocation();
   const [estimateSheetOpen, setEstimateSheetOpen] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: lead, isLoading, error } = useQuery<Lead>({
+  const numericLeadId = parseInt(leadId, 10);
+  const isValidId = !isNaN(numericLeadId) && numericLeadId > 0;
+
+  console.log("[LeadDetails] leadId:", leadId, "numericId:", numericLeadId, "isValid:", isValidId);
+
+  const { data: lead, isLoading, error, refetch, isFetching } = useQuery<Lead>({
     queryKey: [`/api/leads/${leadId}`],
-    enabled: !!leadId,
+    enabled: isValidId,
+    retry: false,
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
 
-  if (error || !lead) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
-        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-        <p className="text-slate-700 dark:text-slate-300 mb-4">Lead not found</p>
-        <Button variant="outline" onClick={() => navigate("/leads")}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Leads
-        </Button>
-      </div>
-    );
-  }
-
-  const customerName = lead.customer
-    ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim() || "Customer"
-    : "Lead";
+  useEffect(() => {
+    if (error && isValidId && retryCount < 3) {
+      const errorMessage = (error as any)?.message || '';
+      const isNotFound = errorMessage.includes('404') || errorMessage.includes('not found') || errorMessage.toLowerCase().includes('not found');
+      
+      console.log("[LeadDetails] fetch error:", errorMessage, "retryCount:", retryCount, "isNotFound:", isNotFound);
+      
+      if (isNotFound) {
+        const delays = [250, 500, 1000];
+        const delay = delays[retryCount] || 1000;
+        
+        console.log("[LeadDetails] scheduling retry", retryCount + 1, "in", delay, "ms");
+        setIsRetrying(true);
+        
+        retryTimeoutRef.current = setTimeout(() => {
+          setRetryCount(prev => prev + 1);
+          refetch();
+        }, delay);
+      }
+    } else if (lead) {
+      setIsRetrying(false);
+    }
+  }, [error, isValidId, retryCount, refetch, lead]);
 
   const updateLeadStatusMutation = useMutation({
     mutationFn: async () => {
@@ -130,6 +147,59 @@ function LeadDetailsContent({ leadId }: LeadDetailsProps) {
     updateLeadStatusMutation.mutate();
     navigate("/leads");
   };
+
+  if (!isValidId) {
+    console.log("[LeadDetails] invalid leadId, showing loading");
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (isLoading || isFetching || isRetrying) {
+    console.log("[LeadDetails] loading state - isLoading:", isLoading, "isFetching:", isFetching, "isRetrying:", isRetrying);
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (error && retryCount >= 3) {
+    const errorMessage = (error as any)?.message || '';
+    const isPermissionError = errorMessage.includes('401') || errorMessage.includes('403');
+    
+    console.log("[LeadDetails] error after retries exhausted:", errorMessage, "isPermissionError:", isPermissionError);
+    
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <p className="text-slate-700 dark:text-slate-300 mb-4">
+          {isPermissionError ? "You don't have permission to view this lead" : "Lead not found"}
+        </p>
+        <Button variant="outline" onClick={() => navigate("/leads")}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Leads
+        </Button>
+      </div>
+    );
+  }
+
+  if (error || !lead) {
+    console.log("[LeadDetails] error or no lead, retrying...", "error:", error, "lead:", lead);
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  console.log("[LeadDetails] successfully loaded lead:", lead.id);
+
+  const customerName = lead.customer
+    ? `${lead.customer.firstName || ""} ${lead.customer.lastName || ""}`.trim() || "Customer"
+    : "Lead";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">

@@ -1,0 +1,54 @@
+Fix Lead Details screen showing an error on first open after creating a lead.
+
+Problem:
+- After creating a new lead, if I immediately click the lead to open it, I get an error screen:
+  "Something went wrong loading this lead."
+- If I go back to Leads and then click the lead again, it opens fine.
+This is a stale state / race condition bug.
+
+Goal:
+Immediately after creating a lead, tapping it should open the Lead Details screen successfully with no error.
+
+Likely Root Cause:
+- The Lead Details page is fetching before the lead is committed/available, or it is using a stale/undefined leadId,
+  or navigation happens before the create response + list refresh completes.
+- The details fetch may be firing with an invalid id (undefined / NaN) or before the backend returns the new lead.
+
+Requirements:
+
+1) Ensure navigation uses the real created lead id
+- In the create lead flow:
+  - Use the lead ID returned from the POST /api/leads/create (or equivalent)
+  - Navigate to /leads/:id ONLY after the create request succeeds and returns the id
+  - Do NOT rely on the leads list refresh to find the new lead id
+
+2) Fix Lead Details fetch timing
+- On Lead Details page:
+  - Guard against invalid IDs:
+    - if leadId is missing/undefined/NaN, do not fetch; show loading instead
+  - When leadId becomes valid, fetch lead details:
+    - GET /api/leads/:id
+  - If the first fetch returns 404 because of timing, implement a short retry:
+    - retry 2-3 times with small delay (e.g. 250ms, 500ms, 1000ms)
+    - only for 404/not-found right after creation, not for real permission errors
+
+3) Loading vs Error behavior (important)
+- While loading/retrying, show the normal loading state (spinner/skeleton)
+- Only show the error screen if:
+  - leadId is valid AND
+  - retries exhausted OR a non-retryable error occurs (401/403/500)
+
+4) Keep RBAC + "hidden not disabled"
+- Do not expose any lead data user isn’t allowed to see
+- If user truly lacks access (403), show the existing error message
+
+5) Logging (temporary, for verification)
+Add logs:
+- console.log("[LeadDetails] leadId:", leadId)
+- console.log("[LeadDetails] fetch attempt:", attempt, "status:", status)
+
+Acceptance Criteria:
+- Create a lead → immediately tap it → Lead Details opens successfully (no error)
+- No “Something went wrong loading this lead” flash
+- Going back and reopening still works
+- No changes to UI design
