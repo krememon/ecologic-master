@@ -1,0 +1,97 @@
+Fix Price Book multi-select bug: allow adding MULTIPLE line items (all prices + totals must reflect every selected item)
+
+CURRENT
+- When creating a Job and adding line items from the Price Book:
+  - I can click/select multiple items
+  - BUT only ONE item’s price/amount actually shows up in the job/invoice totals
+- This breaks billing accuracy and is a blocker for real use
+
+GOAL
+Price Book line item picker must support true multi-select:
+- If user selects 2+ items, ALL selected items are added as separate line items
+- Each line item includes correct:
+  - description/name
+  - qty (default 1)
+  - unit price
+  - line total
+- Overall totals must equal the sum of ALL selected items
+- Works the same everywhere we use the Price Book picker:
+  - Job creation
+  - Estimate creation
+  - Invoice creation (including tech invoice flow)
+No fake data. No UI redesign.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MOST LIKELY ROOT CAUSES (FIND & FIX)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Selected items state is being overwritten instead of appended
+- Example: setSelected(item) vs setSelected([...prev, item])
+
+2) On “Add/Confirm”, code only maps the first selected item
+- Example: selectedItems[0] used instead of iterating selectedItems
+
+3) Totals calculation is using a single line item instead of summing all
+- Example: subtotal = selectedItem.price vs reduce over all line items
+
+4) Backend payload only accepts one item
+- Example: API expects `lineItem` not `lineItems[]`
+- Ensure backend supports array and saves all line items
+
+Do NOT guess—trace from UI selection → payload → DB save → returned data.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REQUIRED BEHAVIOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Multi-select:
+  - Selecting multiple items should add multiple rows
+- Deduping rule:
+  - If the same Price Book item is selected twice, either:
+    A) increase qty
+    OR
+    B) allow duplicates as separate rows
+  Use the same behavior that Estimates/Invoices already use (match existing system)
+
+- Default qty:
+  - 1 for each new line item
+
+- Totals:
+  - subtotal = sum(qty * unitPrice) across ALL items
+  - taxes/fees behavior unchanged (if exists)
+  - total updates immediately, no refresh
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCOPE (IMPORTANT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Fix must apply to every place the Price Book picker is used:
+- Jobs
+- Estimates
+- Invoices
+
+If there are multiple picker implementations, unify them or fix the shared component only.
+Do NOT refactor unrelated code.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST CASES (MUST PASS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Select 3 different items:
+   - All 3 appear as separate line items
+   - Total = sum of all 3 prices
+
+2) Select 2 items, then remove 1:
+   - Total updates correctly
+
+3) Save job/invoice:
+   - Re-open it
+   - All line items persist and display correctly
+
+4) Tech invoice flow:
+   - Multi-select also works there
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Multi-select adds multiple items correctly
+- Prices and totals reflect ALL items selected
+- Data persists after save/reload
+- No console errors
+- No UI regressions

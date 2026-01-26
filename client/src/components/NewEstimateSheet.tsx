@@ -550,9 +550,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
   };
 
   const addLineItemFromPriceBook = (item: LineItem) => {
-    // Filter out empty placeholder items and add the new item
-    const existingItems = lineItems.filter(i => i.name.trim());
-    setLineItems([...existingItems, item]);
+    setLineItems(prev => [...prev.filter(i => i.name.trim()), item]);
   };
 
   const removeLineItem = (index: number) => {

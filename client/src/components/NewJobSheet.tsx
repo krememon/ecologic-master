@@ -715,8 +715,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   };
 
   const addLineItemFromPriceBook = (item: LineItem) => {
-    const existingItems = lineItems.filter(i => i.name.trim());
-    setLineItems([...existingItems, item]);
+    setLineItems(prev => [...prev.filter(i => i.name.trim()), item]);
   };
 
   const removeLineItem = (index: number) => {
