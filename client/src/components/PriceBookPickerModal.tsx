@@ -248,7 +248,7 @@ export function PriceBookPickerModal({
                 id="item-name"
                 value={newItem.name}
                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                placeholder="e.g., Standard Inspection"
+                placeholder="Name"
                 className="h-10"
               />
             </div>
@@ -259,7 +259,7 @@ export function PriceBookPickerModal({
                 id="item-description"
                 value={newItem.description}
                 onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                placeholder="Describe this item..."
+                placeholder="Description"
                 rows={2}
               />
             </div>
@@ -277,7 +277,7 @@ export function PriceBookPickerModal({
                     onChange={(e) => handlePriceChange(e.target.value)}
                     onBlur={handlePriceBlur}
                     onFocus={handlePriceFocus}
-                    placeholder="0.00"
+                    placeholder="Price"
                   />
                 </div>
               </div>
@@ -308,7 +308,7 @@ export function PriceBookPickerModal({
                   id="item-taskcode"
                   value={newItem.taskCode}
                   onChange={(e) => setNewItem({ ...newItem, taskCode: e.target.value })}
-                  placeholder="e.g., INSP-001"
+                  placeholder="Task Code"
                   className="h-10"
                 />
               </div>
@@ -318,7 +318,7 @@ export function PriceBookPickerModal({
                   id="item-category"
                   value={newItem.category}
                   onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-                  placeholder="e.g., Inspections"
+                  placeholder="Category"
                   className="h-10"
                 />
               </div>
