@@ -81,6 +81,7 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       setIsAddDialogOpen(false);
       form.reset();
@@ -105,6 +106,7 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Success",

@@ -461,6 +461,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      // Invalidate payments queries (auto-invoice creates invoice when job has line items)
+      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
       // Invalidate the customer's jobs list so it appears immediately on their detail page
       if (newJob.customerId) {
         queryClient.invalidateQueries({ queryKey: [`/api/customers/${newJob.customerId}/jobs`] });
@@ -521,6 +524,9 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', initialJob?.id, 'crew'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      // Invalidate payments queries (invoice may be created/updated when job has line items)
+      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
       // Invalidate customer jobs for both old and new customer if changed
       if (updatedJob.customerId) {
         queryClient.invalidateQueries({ queryKey: [`/api/customers/${updatedJob.customerId}/jobs`] });
