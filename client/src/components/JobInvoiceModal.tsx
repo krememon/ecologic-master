@@ -6,8 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard, CheckCircle2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface JobInvoiceModalProps {
@@ -546,12 +545,6 @@ export function JobInvoiceModal({
         )}
 
         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
-          {isPaid && (
-            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 mr-auto">
-              <CheckCircle2 className="h-3 w-3" />
-              Paid
-            </Badge>
-          )}
           {step === 1 ? (
             <>
               <Button variant="outline" onClick={handleClose}>
