@@ -1,0 +1,56 @@
+Fix stale state bug: "Pay Invoice" button appears on the initial Generate Invoice screen right after payment, but disappears after closing and reopening.
+
+Current behavior:
+- After a successful Stripe payment, if the user immediately opens the initial Generate Invoice screen,
+  it still shows the "Pay Invoice" button (incorrect).
+- If the user closes (X) and reopens the screen, the "Pay Invoice" button is gone (correct).
+
+Root cause:
+The initial Generate Invoice screen is using stale invoice/job state (invoice still looks unpaid)
+because the UI does not refetch or update state immediately after Stripe webhook marks invoice paid.
+
+Goal:
+After a successful payment, the Generate Invoice screen must instantly reflect the paid state and NEVER show "Pay Invoice" if already paid.
+
+Requirements:
+
+1) Source of truth
+- The visibility of "Pay Invoice" must be based on invoice status fields returned from the backend:
+  - invoice.paidAt exists OR invoice.status === "paid" OR invoice.balanceDueCents === 0 OR invoice.amountPaidCents >= invoice.totalCents
+- Use "hidden not disabled": if paid, do not render the button at all.
+
+2) Fix the stale state on first open
+Implement one (or both) of these safe approaches:
+
+A) Refetch on open (recommended)
+- When the Generate Invoice modal/screen opens:
+  - always refetch the latest invoice data for that job:
+    GET /api/jobs/:jobId/invoice (or GET /api/invoices/:invoiceId)
+  - update local state with the response before rendering action buttons
+
+B) Refresh after Stripe return (also good)
+- After /stripe/return redirects back into the app:
+  - trigger a refetch of:
+    - the job (GET /api/jobs/:jobId)
+    - and the invoice (GET /api/jobs/:jobId/invoice)
+  - ensure state updates before user can open the Generate Invoice screen
+
+3) Ensure the Generate Invoice screen uses the refreshed state
+- Replace any use of cached job/invoice data with the freshly fetched invoice state
+- Make sure the component re-renders when invoice becomes paid
+
+4) Logging (temporary)
+Add logs to confirm which state is being used:
+console.log("[Invoice UI] generate screen opened, invoice paidAt:", invoice?.paidAt, "status:", invoice?.status, "balanceDue:", invoice?.balanceDueCents)
+
+Rules:
+- Do NOT redesign UI
+- Do NOT change Stripe logic
+- Do NOT change QuickBooks logic
+- Mobile-safe
+- Keep RBAC behavior unchanged
+
+Acceptance Criteria:
+- Immediately after paying an invoice, opening Generate Invoice screen does NOT show "Pay Invoice"
+- No need to close/reopen to see correct state
+- Pay button only appears when invoice is truly unpaid

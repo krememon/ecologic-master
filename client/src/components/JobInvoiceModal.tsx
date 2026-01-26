@@ -57,41 +57,61 @@ export function JobInvoiceModal({
     );
   }, [invoiceNumber, companyName, customerFirstName]);
 
-  // Fetch existing PDF when modal opens
+  // Fetch existing PDF and fresh invoice status when modal opens
   useEffect(() => {
-    if (open && !pdfUrl) {
-      setLoadingExisting(true);
-      setErrorMessage(null);
-      fetch(`/api/jobs/${jobId}/invoice/pdf/latest`, { credentials: 'include' })
+    if (open) {
+      // Always fetch fresh invoice status when modal opens
+      fetch(`/api/jobs/${jobId}/invoice`, { credentials: 'include' })
         .then(async (res) => {
           if (res.ok) {
             const data = await res.json();
-            if (data.pdfUrl) {
-              setPdfUrl(data.pdfUrl);
-              setPdfFileName(data.fileName);
-              setPreviewImageUrl(data.previewImageUrl || null);
-              setPreviewLoading(true);
-              setPreviewError(false);
-              // Set invoice data for payment link
-              if (data.invoiceId) {
-                setInvoiceId(data.invoiceId);
-                setInvoiceAmount(data.invoiceAmount);
-                setInvoiceStatus(data.invoiceStatus);
-              }
-              // Extract invoice number from filename
-              const match = data.fileName?.match(/Invoice_(INV_\d+)/);
-              if (match) {
-                setInvoiceNumber(match[1].replace(/_/g, '-'));
-              }
+            if (data.invoice) {
+              console.log("[Invoice UI] generate screen opened, invoice paidAt:", data.invoice.paidAt, "status:", data.invoice.status, "balanceDue:", data.invoice.balanceDueCents);
+              setInvoiceId(data.invoice.id);
+              setInvoiceStatus(data.invoice.status);
+              setInvoiceAmount(data.invoice.total || data.invoice.amount);
             }
           }
         })
         .catch((err) => {
-          console.log("[InvoicePDF] No existing PDF found:", err);
-        })
-        .finally(() => {
-          setLoadingExisting(false);
+          console.log("[Invoice UI] Could not fetch invoice status:", err);
         });
+
+      // Only fetch PDF if not already loaded
+      if (!pdfUrl) {
+        setLoadingExisting(true);
+        setErrorMessage(null);
+        fetch(`/api/jobs/${jobId}/invoice/pdf/latest`, { credentials: 'include' })
+          .then(async (res) => {
+            if (res.ok) {
+              const data = await res.json();
+              if (data.pdfUrl) {
+                setPdfUrl(data.pdfUrl);
+                setPdfFileName(data.fileName);
+                setPreviewImageUrl(data.previewImageUrl || null);
+                setPreviewLoading(true);
+                setPreviewError(false);
+                // Set invoice data for payment link (backup if not set above)
+                if (data.invoiceId && !invoiceId) {
+                  setInvoiceId(data.invoiceId);
+                  setInvoiceAmount(data.invoiceAmount);
+                  setInvoiceStatus(data.invoiceStatus);
+                }
+                // Extract invoice number from filename
+                const match = data.fileName?.match(/Invoice_(INV_\d+)/);
+                if (match) {
+                  setInvoiceNumber(match[1].replace(/_/g, '-'));
+                }
+              }
+            }
+          })
+          .catch((err) => {
+            console.log("[InvoicePDF] No existing PDF found:", err);
+          })
+          .finally(() => {
+            setLoadingExisting(false);
+          });
+      }
     }
   }, [open, jobId]);
 
