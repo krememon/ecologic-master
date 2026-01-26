@@ -1,0 +1,76 @@
+Fix: Stripe payment succeeds but NO QuickBooks Payment is created (no $350 payment appears in QBO).
+
+Evidence:
+- In QuickBooks → Payments list, there is NO payment for $350.
+- QuickBooks invoice remains "Due in 30 days".
+- Stripe webhook logs show invoice is marked paid in EcoLogic.
+
+Goal:
+When Stripe webhook confirms payment for an invoice, create a QBO Payment and apply it to the synced QBO invoice.
+
+Requirements:
+
+1) Add explicit QBO payment sync call inside Stripe webhook
+- In the Stripe webhook handler where we process "checkout.session.completed":
+  - After:
+    - Payment record created
+    - Invoice marked as paid
+  - Immediately trigger:
+    triggerQuickBooksPaymentSync(invoiceId, stripeSessionId, paymentIntentId)
+  - This MUST run even with no logged-in user (webhooks have no req.user)
+
+2) Payment sync must resolve QuickBooks connection by companyId (NOT req.user)
+- Load invoice by invoiceId
+- Get companyId from invoice.companyId
+- Load the stored QuickBooks tokens/realmId connection record by companyId
+- If no connection exists, log:
+  [QB-PAY] Skipping: no QBO connection for companyId=...
+
+3) Ensure qboInvoiceId exists before creating payment
+- If invoice.qboInvoiceId is missing:
+  - call the existing shared invoice sync function first
+  - re-fetch invoice to get qboInvoiceId
+  - if still missing, log and exit
+
+4) Create the QBO Payment (Accounting API) and apply to invoice
+- POST /v3/company/:realmId/payment
+- Payload:
+  - CustomerRef: { value: qboCustomerId }
+  - TotalAmt: invoice.total dollars
+  - TxnDate: invoice.paidAt (or today)
+  - DepositToAccountRef: { value: <depositAccountId> }
+  - PaymentRefNum: include Stripe session or payment intent id
+  - Line: [{
+      Amount: invoice.total,
+      LinkedTxn: [{ TxnId: invoice.qboInvoiceId, TxnType: "Invoice" }]
+    }]
+
+5) Deposit account resolution (required)
+- Implement getDepositAccountId():
+  - Prefer account named "Undeposited Funds"
+  - Else any Bank account
+  - If none found, log error and exit (do not throw)
+
+6) Idempotency
+- Add invoice.qboPaymentId field (or payment table qboPaymentId)
+- Before creating payment:
+  - if qboPaymentId exists -> skip
+- Also prevent duplicate Stripe webhook deliveries:
+  - Store stripeSessionId/paymentIntentId in DB and skip if already processed
+
+7) Logging (REQUIRED — we need to see it in console)
+Add logs:
+- [QB-PAY] Triggered invoiceId=... stripeSessionId=... paymentIntentId=...
+- [QB-PAY] invoice.qboInvoiceId=... invoice.qboPaymentId=...
+- [QB-PAY] Creating QBO payment TotalAmt=... CustomerRef=... DepositToAccountRef=...
+- [QB-PAY] Created QBO payment id=...
+- [QB-PAY] Saved qboPaymentId=...
+
+8) Do NOT block Stripe webhook
+- The webhook must return 200 quickly
+- Payment sync runs fire-and-forget with try/catch and logs errors
+
+Acceptance Criteria:
+- Create invoice -> QBO invoice is Open
+- Pay via Stripe -> QBO Payment appears for $350 in Payments list
+- Invoice balance becomes $0 and shows Paid in QuickBooks

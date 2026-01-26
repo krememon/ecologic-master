@@ -196,7 +196,7 @@ async function syncPaymentToQboFromWebhook(
       TotalAmt: amountDollars,
       TxnDate: new Date().toISOString().split('T')[0],
       PaymentMethodRef: { value: '3', name: 'Credit Card' },
-      PaymentRefNum: stripePaymentIntentId,
+      PaymentRefNum: stripePaymentIntentId ? stripePaymentIntentId.slice(-21) : undefined,
       PrivateNote: `EcoLogic Payment ID: ${paymentId} | Stripe: ${stripePaymentIntentId}`,
       Line: [{
         Amount: amountDollars,
@@ -228,7 +228,8 @@ async function syncPaymentToQboFromWebhook(
     // Check for existing QBO payment with same PaymentRefNum (de-duplication)
     if (stripePaymentIntentId) {
       try {
-        const dedupeQuery = encodeURIComponent(`SELECT * FROM Payment WHERE PaymentRefNum = '${stripePaymentIntentId}'`);
+        const truncatedRef = stripePaymentIntentId.slice(-21);
+        const dedupeQuery = encodeURIComponent(`SELECT * FROM Payment WHERE PaymentRefNum = '${truncatedRef}'`);
         const dedupeResponse = await fetch(`${baseUrl}/v3/company/${company.qboRealmId}/query?query=${dedupeQuery}`, {
           method: 'GET',
           headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
