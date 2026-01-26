@@ -1,0 +1,70 @@
+Make the new "Select Customer" modal UI universal across the app (reuse the same component everywhere).
+
+Context:
+We now have a polished Select Customer modal design:
+- Title: "Select Customer" centered
+- Single X close top-right
+- Search field with clean styling
+- "Add Customer" action row with big + circle
+- Customer rows with initials avatar, name, email, dividers
+This modal looks perfect and functions correctly.
+
+Goal:
+Use this exact same modal (same UI + behavior) anywhere the app needs to "Select Customer".
+
+Requirements:
+
+1) Identify ALL places that use a customer picker
+Replace any older customer selection UI with this new universal modal component.
+Common places include (but not limited to):
+- Create Job flow
+- Create Estimate flow
+- Create Invoice flow
+- Create Lead flow
+- Any "Change customer" / "Select customer" in edit forms
+- Any other modal/screen that prompts for customer selection
+
+2) Do NOT change behavior
+- Search behavior must remain the same
+- Selecting a customer must return the selected customerId exactly as before
+- Add Customer flow must remain identical (same fields, same route)
+- Cancel/close behavior same as before
+- RBAC/visibility rules unchanged
+
+3) Build as a reusable component
+- Create/standardize a single reusable component, e.g.:
+  <SelectCustomerModal
+    open
+    onClose
+    onSelectCustomer(customer)
+    onAddCustomer
+    initialQuery?
+    selectedCustomerId?
+  />
+- Ensure it is easy to plug into any screen without duplication
+
+4) Ensure consistent styling everywhere
+- No variations per screen
+- Same spacing, colors, typography, dividers
+- Single X close only (no duplicates)
+- Mobile-safe always
+
+5) Data loading
+- Component should handle:
+  - loading customers list
+  - filtering/searching by name/email
+  - empty state
+  - loading state
+- Avoid refetch loops; cache customers if already loaded globally (optional)
+
+6) Acceptance Criteria
+- Every customer selection experience in the app uses the same modal UI
+- No legacy/old customer picker UI remains
+- No regressions: all create flows still work
+- No duplicated X icons anywhere
+- Works perfectly on iPhone width
+
+Rules:
+- Do NOT redesign other pages
+- Keep "hidden not disabled" philosophy
+- Do not break Stripe, QuickBooks, or any existing flows

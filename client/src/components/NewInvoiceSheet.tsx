@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { TimeWheelPicker } from "./TimeWheelPicker";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
+import { SelectCustomerModal } from "./CustomerModals";
 import type { Customer } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 
@@ -606,148 +607,15 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
       </Dialog>
 
       {/* Customer Picker Modal */}
-      <Dialog open={customerModalOpen} onOpenChange={setCustomerModalOpen}>
-        <DialogContent className="max-w-md h-[80vh] p-0 flex flex-col rounded-2xl overflow-hidden">
-          <DialogHeader className="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-            <DialogTitle>Select Customer</DialogTitle>
-          </DialogHeader>
-          <div className="px-4 py-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search customers..."
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="divide-y divide-slate-200 dark:divide-slate-700">
-              <button
-                type="button"
-                onClick={() => setAddCustomerModalOpen(true)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left"
-              >
-                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                  <Plus className="h-5 w-5 text-blue-600" />
-                </div>
-                <span className="text-sm font-medium text-blue-600">Add New Customer</span>
-              </button>
-              {customersLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                </div>
-              ) : filteredCustomers.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-slate-500">
-                  No customers found
-                </div>
-              ) : (
-                filteredCustomers.map((customer) => (
-                  <button
-                    key={customer.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedCustomer(customer);
-                      setCustomerModalOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                      <User className="h-5 w-5 text-slate-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {customer.firstName} {customer.lastName}
-                      </p>
-                      {customer.email && (
-                        <p className="text-xs text-slate-500 truncate">{customer.email}</p>
-                      )}
-                    </div>
-                    {selectedCustomer?.id === customer.id && (
-                      <Check className="h-5 w-5 text-blue-600" />
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Customer Modal */}
-      <Dialog open={addCustomerModalOpen} onOpenChange={setAddCustomerModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Add New Customer</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">First Name *</label>
-                <Input
-                  value={newCustomer.firstName}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, firstName: e.target.value })}
-                  placeholder="John"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Last Name *</label>
-                <Input
-                  value={newCustomer.lastName}
-                  onChange={(e) => setNewCustomer({ ...newCustomer, lastName: e.target.value })}
-                  placeholder="Doe"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
-              <Input
-                type="email"
-                value={newCustomer.email}
-                onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                placeholder="john@example.com"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone</label>
-              <Input
-                type="tel"
-                value={newCustomer.phone}
-                onChange={(e) => setNewCustomer({ ...newCustomer, phone: formatPhoneInput(e.target.value) })}
-                placeholder="(555) 123-4567"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Address</label>
-              <Input
-                value={newCustomer.address}
-                onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                placeholder="123 Main St"
-              />
-            </div>
-            <Button
-              onClick={() => {
-                if (!newCustomer.firstName || !newCustomer.lastName) {
-                  toast({ title: "Error", description: "First and last name are required", variant: "destructive" });
-                  return;
-                }
-                createCustomerMutation.mutate({
-                  firstName: newCustomer.firstName,
-                  lastName: newCustomer.lastName,
-                  email: newCustomer.email || null,
-                  phone: newCustomer.phone ? getRawPhoneValue(newCustomer.phone) : null,
-                  address: newCustomer.address || null,
-                });
-              }}
-              disabled={createCustomerMutation.isPending}
-              className="w-full"
-            >
-              {createCustomerMutation.isPending ? 'Creating...' : 'Add Customer'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SelectCustomerModal
+        open={customerModalOpen}
+        onOpenChange={setCustomerModalOpen}
+        onSelectCustomer={(customer) => {
+          setSelectedCustomer(customer);
+          setCustomerModalOpen(false);
+        }}
+        canCreateCustomer={true}
+      />
 
       {/* Schedule Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
