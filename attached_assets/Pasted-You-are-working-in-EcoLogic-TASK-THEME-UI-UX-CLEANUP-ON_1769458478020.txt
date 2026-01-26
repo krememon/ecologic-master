@@ -1,0 +1,82 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual consistency, spacing, headers, typography, layout only
+
+TARGET: Leads → Fill-out page → “Description” field/section (NOT the modal)
+REFERENCE STYLE: The recent cleaned modals/sheets (grey section headers, tighter spacing, modern Apple/Housecall look)
+
+WHAT I WANT
+Clean up the Description section on the Leads fill-out so it looks modern, tighter, and consistent with the rest of EcoLogic.
+
+STRICT RULES
+1) Do not change any functions/handlers/props/state
+   - Do not rename variables
+   - Do not alter onChange/onBlur/onSubmit
+   - Do not change validation or required logic
+   - Do not change API calls
+2) Only edit presentation: classNames, spacing, layout wrappers, typography, borders, header styling.
+3) If anything is shared with Jobs/Estimates, be extra careful (avoid refactors that risk a white-screen). Keep changes localized.
+
+CURRENT ISSUE (from screenshot vibe)
+- Header looks generic (“Cancel / Description / Done” style)
+- Too much whitespace
+- Textarea looks a bit “default” and tall
+- Needs tighter padding + consistent EcoLogic section header styling
+
+IMPLEMENTATION STEPS
+A) Find the Leads fill-out component
+- Search for: "Leads", "LeadForm", "CreateLead", "NewLead", "lead description", "What service is the lead interested in?"
+- Identify the Description field block (label + textarea + helper/errors if any)
+
+B) Rebuild the Description section layout (presentation-only)
+1) Add a grey section header bar above the field (same pattern as our cleaned modals):
+   - soft light grey background
+   - subtle border
+   - section title: “Description”
+   - if the required asterisk exists, keep it (do NOT change validation), just style it cleaner (smaller, muted red)
+2) Tighten spacing:
+   - Reduce top padding above section
+   - Reduce gap between label and textarea
+   - Reduce overall vertical whitespace in this section to match our “shorter rows” standard
+3) Typography:
+   - Label: same font size/weight used in Jobs/Estimates fill-out labels
+   - Placeholder: slightly muted, consistent with app
+4) Textarea styling (DO NOT change behavior)
+   - Keep same value + onChange + name/id
+   - Visually:
+     - consistent border radius with EcoLogic inputs
+     - consistent border color + focus ring
+     - reduce internal padding slightly
+     - set a cleaner default height (not huge), but still comfortable (e.g. ~110–140px) — ONLY CSS/cls
+     - disable resize handle visually if we’ve been doing that elsewhere (CSS only), but do not change functionality if it breaks UX (use best judgment)
+
+C) If there is a top header on the fill-out page
+- Do NOT change navigation logic
+- Only adjust spacing/typography so the page header matches the cleaner style we’ve been using (centered title look, minimal controls)
+- If there are “Cancel/Done” buttons, do not change their click behavior; only restyle (size, spacing, alignment)
+
+FILES / COMPONENTS
+- Make changes only in the Leads fill-out component and any local CSS/module/tailwind classes it uses.
+- Avoid touching shared modal components or shared form primitives unless it’s purely className and clearly safe.
+
+DELIVERABLES
+1) Updated Leads fill-out Description section with:
+   - grey section header
+   - tighter spacing
+   - consistent label + required indicator styling
+   - modern textarea styling aligned with EcoLogic
+2) Before/After notes: list exactly which classNames/layout wrappers were changed.
+3) Quick QA checklist (must pass):
+   - Typing in Description still updates exactly the same
+   - Required/validation (if any) behaves identically
+   - Submit/create lead still works
+   - No console errors, no white screen
+   - Looks good on mobile width (iPhone size)
+
+DO NOT
+- change any text content besides purely visual casing/spacing if absolutely needed
+- change placeholder copy
+- change any conditional rendering
+- introduce new state or new components unless it’s purely presentational and local

@@ -8,7 +8,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, StickyNote } from "lucide-react";
+import { Plus, Search, User, Phone, Mail, Calendar, Loader2, MoreVertical, Trash2, Pencil, ChevronRight, StickyNote, X } from "lucide-react";
 import { format } from "date-fns";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SelectCustomerModal } from "@/components/CustomerModals";
@@ -40,8 +40,10 @@ const formatPhoneNumber = (value: string): string => {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-      {title}
+    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+      <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+        {title}
+      </span>
     </div>
   );
 }
@@ -63,14 +65,14 @@ function InfoRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
+      className="w-full flex items-center gap-3 px-4 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left"
     >
       <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
-      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+      <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
         {value || label}
         {required && !value && <span className="text-red-500 ml-1">*</span>}
       </span>
-      <ChevronRight className="h-4 w-4 text-slate-400" />
+      <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
     </button>
   );
 }
@@ -426,27 +428,34 @@ export default function Leads() {
 
       {/* Description Edit Modal */}
       <Dialog open={descriptionModalOpen} onOpenChange={setDescriptionModalOpen}>
-        <DialogContent hideCloseButton className="max-w-sm">
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setDescriptionModalOpen(false)} className="text-blue-600 text-sm font-medium">
-              Cancel
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
+            <button 
+              onClick={() => setDescriptionModalOpen(false)} 
+              className="absolute left-4 top-1/2 -translate-y-1/2"
+            >
+              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
             </button>
-            <h3 className="text-base font-semibold">Description</h3>
-            <button onClick={saveDescriptionModal} className="text-blue-600 text-sm font-medium">
-              Done
-            </button>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Description</h3>
           </div>
-          <div>
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Description <span className="text-red-500">*</span>
-            </label>
-            <Textarea
-              value={tempDescription}
-              onChange={(e) => setTempDescription(e.target.value)}
-              placeholder="What service is the lead interested in?"
-              className="mt-1"
-              rows={4}
-            />
+          <div className="p-4 space-y-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Description <span className="text-red-400 text-xs">*</span>
+              </label>
+              <Textarea
+                value={tempDescription}
+                onChange={(e) => setTempDescription(e.target.value)}
+                placeholder="What service is the lead interested in?"
+                className="min-h-[120px] resize-none text-sm"
+              />
+            </div>
+            <Button 
+              onClick={saveDescriptionModal} 
+              className="w-full h-11"
+            >
+              Done
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
