@@ -985,7 +985,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return null;
     }
 
-    const displayName = `${customer.firstName} ${customer.lastName}`.trim();
+    // DisplayName: prefer Company Name, otherwise First + Last
+    const displayName = customer.companyName?.trim() || `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown Customer';
     
     try {
       // Search for existing QBO customer by DisplayName
@@ -1499,17 +1500,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Ensure customer exists in QBO
-      if (!invoice.customerId) {
-        await storage.updateInvoice(invoiceId, {
-          qboSyncStatus: 'failed',
-          qboLastSyncError: 'Invoice has no customer',
-          qboLastSyncedAt: new Date(),
-        });
-        return res.status(400).json({ error: 'Invoice has no customer' });
+      // Resolve customer: invoice.customerId → job.customerId → fail
+      let resolvedCustomerId = invoice.customerId;
+      
+      if (!resolvedCustomerId && invoice.jobId) {
+        const job = await storage.getJob(invoice.jobId);
+        if (job?.customerId) {
+          resolvedCustomerId = job.customerId;
+          console.log('[QB] Using customer from job:', resolvedCustomerId);
+        }
       }
       
-      const qboCustomerId = await ensureQboCustomer(member.companyId, invoice.customerId);
+      if (!resolvedCustomerId) {
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: 'Invoice has no customer (checked invoice and job)',
+          qboLastSyncedAt: new Date(),
+        });
+        return res.status(400).json({ error: 'Invoice has no customer. Please assign a customer to the job or invoice first.' });
+      }
+      
+      const qboCustomerId = await ensureQboCustomer(member.companyId, resolvedCustomerId);
       if (!qboCustomerId) {
         await storage.updateInvoice(invoiceId, {
           qboSyncStatus: 'failed',
