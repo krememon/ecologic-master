@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +24,11 @@ import {
   Search,
   AlertCircle,
   Banknote,
-  X
+  X,
+  ChevronDown,
+  Receipt
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, isWithinInterval } from "date-fns";
 
 const paymentSchema = z.object({
   jobId: z.string().min(1, "Job is required"),
@@ -43,6 +45,7 @@ export default function PaymentsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [monthFilter, setMonthFilter] = useState<string>("this");
   const { toast } = useToast();
 
   const { data: payments = [], isLoading: paymentsLoading } = useQuery<any[]>({
@@ -51,10 +54,6 @@ export default function PaymentsPage() {
 
   const { data: jobs = [] } = useQuery<any[]>({
     queryKey: ["/api/jobs"],
-  });
-
-  const { data: stats } = useQuery<any>({
-    queryKey: ["/api/dashboard/stats"],
   });
 
   const form = useForm<PaymentFormData>({
@@ -80,7 +79,6 @@ export default function PaymentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       setIsAddDialogOpen(false);
       form.reset();
     },
@@ -100,7 +98,6 @@ export default function PaymentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
     },
     onError: (error: Error) => {
       toast({
@@ -119,42 +116,45 @@ export default function PaymentsPage() {
     updatePaymentStatusMutation.mutate({ id: paymentId, status: newStatus });
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400", icon: Clock },
-      completed: { color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400", icon: CheckCircle },
-      paid: { color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400", icon: CheckCircle },
-      failed: { color: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400", icon: XCircle },
-      refunded: { color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400", icon: AlertCircle },
-    };
+  const now = new Date();
+  const thisMonthStart = startOfMonth(now);
+  const thisMonthEnd = endOfMonth(now);
+  const lastMonthStart = startOfMonth(subMonths(now, 1));
+  const lastMonthEnd = endOfMonth(subMonths(now, 1));
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
-    const Icon = config.icon;
+  const monthlyPayments = useMemo(() => {
+    const start = monthFilter === "this" ? thisMonthStart : lastMonthStart;
+    const end = monthFilter === "this" ? thisMonthEnd : lastMonthEnd;
+    
+    return payments.filter(p => {
+      const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
+      if (!paidDate) return false;
+      return isWithinInterval(paidDate, { start, end });
+    });
+  }, [payments, monthFilter, thisMonthStart, thisMonthEnd, lastMonthStart, lastMonthEnd]);
 
-    return (
-      <Badge className={`${config.color} flex items-center gap-1 font-medium`}>
-        <Icon className="w-3 h-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
+  const breakdown = useMemo(() => {
+    let cash = 0, check = 0, card = 0, pending = 0;
+    
+    monthlyPayments.forEach(p => {
+      const amt = parseFloat(p.amount) || 0;
+      const method = (p.paymentMethod || '').toLowerCase();
+      const status = (p.status || '').toLowerCase();
+      
+      if (status === 'pending') {
+        pending += amt;
+      } else if (status === 'completed' || status === 'paid') {
+        if (method === 'cash') cash += amt;
+        else if (method === 'check') check += amt;
+        else if (method === 'credit_card' || method === 'card' || method === 'stripe') card += amt;
+        else cash += amt;
+      }
+    });
+    
+    return { cash, check, card, pending, total: cash + check + card };
+  }, [monthlyPayments]);
 
-  const getPaymentMethodIcon = (method: string) => {
-    switch (method?.toLowerCase()) {
-      case "credit_card":
-      case "card":
-      case "stripe":
-        return <CreditCard className="w-4 h-4" />;
-      case "cash":
-        return <Banknote className="w-4 h-4" />;
-      case "check":
-        return <DollarSign className="w-4 h-4" />;
-      default:
-        return <DollarSign className="w-4 h-4" />;
-    }
-  };
-
-  const filteredPayments = payments.filter(payment => {
+  const filteredPayments = monthlyPayments.filter(payment => {
     const matchesStatus = filterStatus === "all" || payment.status === filterStatus;
     const matchesSearch = payment.jobTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          payment.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -162,20 +162,50 @@ export default function PaymentsPage() {
     return matchesStatus && (searchTerm === "" || matchesSearch);
   });
 
-  const totalPaymentsValue = stats?.totalRevenue || 0;
-  const completedPaymentsValue = stats?.paidInvoices || 0;
-  const pendingPaymentsValue = stats?.outstandingInvoices || 0;
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending: { color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", icon: Clock },
+      completed: { color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: CheckCircle },
+      paid: { color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: CheckCircle },
+      failed: { color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: XCircle },
+      refunded: { color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400", icon: AlertCircle },
+    };
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    const Icon = config.icon;
+    return (
+      <Badge className={`${config.color} flex items-center gap-1 text-xs font-medium border-0`}>
+        <Icon className="w-3 h-3" />
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </Badge>
+    );
+  };
+
+  const getPaymentMethodLabel = (method: string) => {
+    switch (method?.toLowerCase()) {
+      case "credit_card":
+      case "card":
+      case "stripe":
+        return "Card";
+      case "cash":
+        return "Cash";
+      case "check":
+        return "Check";
+      case "bank_transfer":
+        return "Transfer";
+      default:
+        return "Other";
+    }
+  };
 
   if (paymentsLoading) {
     return (
       <div className="p-4 sm:p-6 space-y-6">
         <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
-            ))}
+          <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/4"></div>
+          <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 h-64 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+            <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
           </div>
         </div>
       </div>
@@ -184,329 +214,369 @@ export default function PaymentsPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">Payments</h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-1">
-          Track and manage all payments received from your jobs
-        </p>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="shadow-sm border-0 bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-slate-900">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Payments</p>
-                <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                  ${totalPaymentsValue.toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm border-0 bg-gradient-to-br from-green-50 to-white dark:from-green-950/30 dark:to-slate-900">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Completed</p>
-                <p className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400 mt-1">
-                  ${completedPaymentsValue.toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm border-0 bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/30 dark:to-slate-900">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Pending</p>
-                <p className="text-2xl sm:text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-                  ${pendingPaymentsValue.toLocaleString()}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/50 rounded-full flex items-center justify-center">
-                <Clock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <Input
-              placeholder="Search payments..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-9"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue placeholder="Filter by status" />
+      {/* Header with Month Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-slate-100">Payments</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Financial overview</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={monthFilter} onValueChange={setMonthFilter}>
+            <SelectTrigger className="w-40 bg-white dark:bg-slate-800">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
+              <SelectItem value="this">This Month</SelectItem>
+              <SelectItem value="last">Last Month</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" size="default" className="flex-1 sm:flex-none">
-            <Download className="w-4 h-4 mr-2" />
+          <Button variant="outline" className="gap-2">
+            <Download className="w-4 h-4" />
             Export
           </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Record Payment
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-[400px] max-h-[85vh] rounded-2xl overflow-y-auto p-5 pt-4 gap-3">
-              <DialogHeader className="pb-1">
-                <DialogTitle>Record New Payment</DialogTitle>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleCreatePayment)} className="space-y-3">
-                  <FormField
-                    control={form.control}
-                    name="jobId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Job</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a job" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {jobs.map((job) => (
-                              <SelectItem key={job.id} value={job.id.toString()}>
-                                {job.title} - {job.clientName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Amount</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="paymentMethod"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Method</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="cash">Cash</SelectItem>
-                            <SelectItem value="check">Check</SelectItem>
-                            <SelectItem value="credit_card">Credit Card</SelectItem>
-                            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="failed">Failed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="paidDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Date (Optional)</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Notes (Optional)</FormLabel>
-                        <FormControl>
-                          <Textarea placeholder="Additional notes..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={createPaymentMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
-                      {createPaymentMutation.isPending ? "Recording..." : "Record Payment"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
-      {/* Payment History */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold">Payment History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredPayments.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <DollarSign className="w-8 h-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                {searchTerm || filterStatus !== "all" ? "No payments found" : "No payments yet"}
-              </h3>
-              <p className="text-slate-500 dark:text-slate-400 mb-4">
-                {searchTerm || filterStatus !== "all" 
-                  ? "Try a different search or filter" 
-                  : "Start by recording your first payment"}
-              </p>
-              {(!searchTerm && filterStatus === "all") && (
-                <Button onClick={() => setIsAddDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Record First Payment
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredPayments.map((payment) => (
-                <div
-                  key={payment.id}
-                  className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center shrink-0">
-                      {getPaymentMethodIcon(payment.paymentMethod)}
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {payment.jobTitle || 'Payment'}
-                      </h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 truncate">
-                        {payment.clientName || 'Unknown'} • {(payment.paymentMethod || 'cash').replace('_', ' ')}
-                      </p>
-                      {payment.paidDate && (
-                        <p className="text-xs text-slate-400 dark:text-slate-500">
-                          {format(new Date(payment.paidDate), 'MMM d, yyyy')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <p className="font-semibold text-slate-900 dark:text-slate-100">
-                        ${parseFloat(payment.amount || 0).toLocaleString()}
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {getStatusBadge(payment.status)}
-                      {payment.status === "pending" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleStatusUpdate(payment.id, "completed")}
-                          disabled={updatePaymentStatusMutation.isPending}
-                          className="text-xs"
-                        >
-                          Mark Paid
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Total Revenue Card */}
+      <Card className="bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-700 border-0 text-white">
+        <CardContent className="py-6 px-6">
+          <p className="text-slate-300 text-sm font-medium mb-1">
+            {monthFilter === "this" ? "This Month" : "Last Month"}'s Revenue
+          </p>
+          <p className="text-4xl sm:text-5xl font-bold tracking-tight">
+            ${breakdown.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="text-slate-400 text-sm mt-2">
+            {monthlyPayments.length} payment{monthlyPayments.length !== 1 ? 's' : ''} received
+          </p>
         </CardContent>
       </Card>
+
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Payments List */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Controls */}
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <Input
+                placeholder="Search payments..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-9 bg-white dark:bg-slate-800"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full sm:w-36 bg-white dark:bg-slate-800">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700 shrink-0">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Record
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[95vw] max-w-[400px] max-h-[85vh] rounded-2xl overflow-y-auto p-5 pt-4 gap-3">
+                <DialogHeader className="pb-1">
+                  <DialogTitle>Record Payment</DialogTitle>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(handleCreatePayment)} className="space-y-3">
+                    <FormField
+                      control={form.control}
+                      name="jobId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Job</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a job" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {jobs.map((job) => (
+                                <SelectItem key={job.id} value={job.id.toString()}>
+                                  {job.title} - {job.clientName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Amount</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="paymentMethod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Method</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="cash">Cash</SelectItem>
+                              <SelectItem value="check">Check</SelectItem>
+                              <SelectItem value="credit_card">Card</SelectItem>
+                              <SelectItem value="bank_transfer">Transfer</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="paidDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date (Optional)</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Notes (Optional)</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder="Notes..." rows={2} {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={createPaymentMutation.isPending} className="bg-blue-600 hover:bg-blue-700">
+                        {createPaymentMutation.isPending ? "Saving..." : "Save"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Payments Table / Cards */}
+          <Card className="shadow-sm">
+            <CardContent className="p-0">
+              {filteredPayments.length === 0 ? (
+                <div className="text-center py-16 px-4">
+                  <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Receipt className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <h3 className="text-base font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {searchTerm || filterStatus !== "all" ? "No matching payments" : "No payments yet"}
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {searchTerm || filterStatus !== "all" 
+                      ? "Try adjusting your filters" 
+                      : "Payments will appear here once recorded"}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200 dark:border-slate-700">
+                          <th className="text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider py-3 px-4">Job</th>
+                          <th className="text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider py-3 px-4">Method</th>
+                          <th className="text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider py-3 px-4">Date</th>
+                          <th className="text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider py-3 px-4">Status</th>
+                          <th className="text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider py-3 px-4">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredPayments.map((payment) => (
+                          <tr key={payment.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                                {payment.jobTitle || 'Payment'}
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                {payment.clientName || '—'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">
+                              {getPaymentMethodLabel(payment.paymentMethod)}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-slate-600 dark:text-slate-300">
+                              {payment.paidDate ? format(new Date(payment.paidDate), 'MMM d, yyyy') : '—'}
+                            </td>
+                            <td className="py-3 px-4">
+                              {getStatusBadge(payment.status)}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                                ${parseFloat(payment.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards */}
+                  <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredPayments.map((payment) => (
+                      <div key={payment.id} className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                              {payment.jobTitle || 'Payment'}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {payment.clientName || '—'}
+                            </p>
+                          </div>
+                          <span className="font-semibold text-slate-900 dark:text-slate-100 ml-3">
+                            ${parseFloat(payment.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <span>{getPaymentMethodLabel(payment.paymentMethod)}</span>
+                            <span>•</span>
+                            <span>{payment.paidDate ? format(new Date(payment.paidDate), 'MMM d') : '—'}</span>
+                          </div>
+                          {getStatusBadge(payment.status)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right: Breakdown Card */}
+        <div className="space-y-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <Banknote className="w-4 h-4 text-green-600 dark:text-green-400" />
+                  </div>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Cash</span>
+                </div>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  ${breakdown.cash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Check</span>
+                </div>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  ${breakdown.check.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Card</span>
+                </div>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  ${breakdown.card.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+                    <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Pending</span>
+                </div>
+                <span className="font-semibold text-amber-600 dark:text-amber-400">
+                  ${breakdown.pending.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
