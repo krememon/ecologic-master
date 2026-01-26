@@ -5,8 +5,8 @@ import { initializeDatabase } from "./db-init";
 import path from "path";
 import Stripe from "stripe";
 import { db } from "./db";
-import { invoices, payments } from "../shared/schema";
-import { eq } from "drizzle-orm";
+import { invoices, payments, customers, companies } from "../shared/schema";
+import { eq, and, sql } from "drizzle-orm";
 
 const app = express();
 
@@ -17,6 +17,273 @@ app.set("etag", false);
 const stripe = process.env.STRIPE_SECRET_KEY 
   ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-04-30.basil" as any })
   : null;
+
+// QuickBooks access token helper for webhook context
+async function getQboAccessTokenForWebhook(companyId: number): Promise<string | null> {
+  try {
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+    if (!company?.qboAccessToken || !company?.qboRefreshToken || !company?.qboRealmId) {
+      return null;
+    }
+
+    // Check if token is expired (with 5-minute buffer)
+    const expiresAt = company.qboTokenExpiresAt;
+    const now = new Date();
+    const bufferMs = 5 * 60 * 1000;
+
+    if (expiresAt && new Date(expiresAt).getTime() - bufferMs < now.getTime()) {
+      // Token is expired or about to expire, refresh it
+      const clientId = process.env.QB_CLIENT_ID;
+      const clientSecret = process.env.QB_CLIENT_SECRET;
+      if (!clientId || !clientSecret) {
+        console.log('[QB-PAY] Missing QB client credentials for refresh');
+        return null;
+      }
+
+      const refreshResponse = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: company.qboRefreshToken,
+        }).toString(),
+      });
+
+      if (!refreshResponse.ok) {
+        console.error('[QB-PAY] Token refresh failed:', await refreshResponse.text());
+        return null;
+      }
+
+      const tokens = await refreshResponse.json();
+      const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+
+      await db.update(companies).set({
+        qboAccessToken: tokens.access_token,
+        qboRefreshToken: tokens.refresh_token,
+        qboTokenExpiresAt: newExpiresAt,
+        updatedAt: new Date(),
+      }).where(eq(companies.id, companyId));
+
+      return tokens.access_token;
+    }
+
+    return company.qboAccessToken;
+  } catch (error) {
+    console.error('[QB-PAY] Error getting access token:', error);
+    return null;
+  }
+}
+
+// Sync payment to QuickBooks from webhook context (no req.user)
+async function syncPaymentToQboFromWebhook(
+  paymentId: number, 
+  companyId: number,
+  stripePaymentIntentId: string
+): Promise<{ success: boolean; qboPaymentId?: string; error?: string }> {
+  console.log('[QB-PAY] Payment sync triggered paymentId=' + paymentId);
+  
+  try {
+    // Get payment record
+    const [paymentRecord] = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
+    if (!paymentRecord) {
+      console.log('[QB-PAY] Payment not found paymentId=' + paymentId);
+      return { success: false, error: 'Payment not found' };
+    }
+
+    // Check if already synced (idempotent)
+    if (paymentRecord.qboPaymentId) {
+      console.log('[QB-PAY] Skipping, already synced qboPaymentId=' + paymentRecord.qboPaymentId);
+      return { success: true, qboPaymentId: paymentRecord.qboPaymentId };
+    }
+
+    // Check if another process is syncing
+    if (paymentRecord.qboPaymentSyncStatus === 'syncing') {
+      console.log('[QB-PAY] Skipping, another process is syncing paymentId=' + paymentId);
+      return { success: false, error: 'Already syncing' };
+    }
+
+    // Atomic compare-and-set: acquire lock
+    const updateResult = await db.update(payments)
+      .set({
+        qboPaymentSyncStatus: 'syncing',
+        updatedAt: new Date()
+      })
+      .where(
+        and(
+          eq(payments.id, paymentId),
+          sql`(${payments.qboPaymentId} IS NULL)`,
+          sql`(${payments.qboPaymentSyncStatus} IS NULL OR ${payments.qboPaymentSyncStatus} NOT IN ('syncing', 'synced'))`
+        )
+      )
+      .returning({ id: payments.id });
+    
+    if (updateResult.length === 0) {
+      console.log('[QB-PAY] Failed to acquire sync lock paymentId=' + paymentId);
+      const [checkRecord] = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
+      if (checkRecord?.qboPaymentId) {
+        return { success: true, qboPaymentId: checkRecord.qboPaymentId };
+      }
+      return { success: false, error: 'Could not acquire sync lock' };
+    }
+    console.log('[QB-PAY] Acquired sync lock paymentId=' + paymentId);
+
+    // Get company QB settings
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
+    if (!company?.qboRealmId) {
+      console.log('[QB-PAY] QuickBooks not connected for companyId=' + companyId);
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: 'QuickBooks not connected', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: 'QuickBooks not connected' };
+    }
+
+    // Get invoice
+    if (!paymentRecord.invoiceId) {
+      console.log('[QB-PAY] Payment has no invoice paymentId=' + paymentId);
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: 'Payment has no invoice', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: 'Payment has no invoice' };
+    }
+
+    const [invoiceRecord] = await db.select().from(invoices).where(eq(invoices.id, paymentRecord.invoiceId)).limit(1);
+    if (!invoiceRecord) {
+      console.log('[QB-PAY] Invoice not found invoiceId=' + paymentRecord.invoiceId);
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: 'Invoice not found', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: 'Invoice not found' };
+    }
+
+    console.log('[QB-PAY] Loaded invoice qboInvoiceId=' + (invoiceRecord.qboInvoiceId || 'null') + ' qboPaymentId=' + (paymentRecord.qboPaymentId || 'null'));
+
+    // If invoice not yet synced to QBO, mark payment as waiting
+    if (!invoiceRecord.qboInvoiceId) {
+      console.log('[QB-PAY] Invoice not synced to QBO, marking payment as waiting invoiceId=' + paymentRecord.invoiceId);
+      await db.update(payments).set({ qboPaymentSyncStatus: 'waiting', qboPaymentLastSyncError: 'Invoice not yet synced to QuickBooks', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: 'Invoice not synced - payment marked waiting' };
+    }
+
+    // Get customer QBO ID
+    let qboCustomerId: string | null = null;
+    if (invoiceRecord.customerId) {
+      const [customer] = await db.select().from(customers).where(eq(customers.id, invoiceRecord.customerId)).limit(1);
+      if (customer?.qboCustomerId) {
+        qboCustomerId = customer.qboCustomerId;
+      }
+    }
+
+    if (!qboCustomerId) {
+      console.log('[QB-PAY] Customer not synced to QuickBooks customerId=' + invoiceRecord.customerId);
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: 'Customer not synced to QuickBooks', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: 'Customer not synced to QuickBooks' };
+    }
+
+    // Get access token
+    const accessToken = await getQboAccessTokenForWebhook(companyId);
+    if (!accessToken) {
+      console.log('[QB-PAY] Could not get QuickBooks access token');
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: 'Could not get QuickBooks access token', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: 'Could not get QuickBooks access token' };
+    }
+
+    const qboEnv = process.env.QB_ENV || 'sandbox';
+    const baseUrl = qboEnv === 'production' ? 'https://quickbooks.api.intuit.com' : 'https://sandbox-quickbooks.api.intuit.com';
+
+    // Calculate amount
+    const amountDollars = paymentRecord.amountCents ? Number((paymentRecord.amountCents / 100).toFixed(2)) : Number(parseFloat(paymentRecord.amount).toFixed(2));
+
+    // Build payment payload
+    const qboPaymentData: any = {
+      CustomerRef: { value: qboCustomerId },
+      TotalAmt: amountDollars,
+      TxnDate: new Date().toISOString().split('T')[0],
+      PaymentMethodRef: { value: '3', name: 'Credit Card' },
+      PaymentRefNum: stripePaymentIntentId,
+      PrivateNote: `EcoLogic Payment ID: ${paymentId} | Stripe: ${stripePaymentIntentId}`,
+      Line: [{
+        Amount: amountDollars,
+        LinkedTxn: [{
+          TxnId: invoiceRecord.qboInvoiceId,
+          TxnType: 'Invoice'
+        }]
+      }]
+    };
+
+    // Try to get deposit account
+    try {
+      const accountQuery = encodeURIComponent("SELECT * FROM Account WHERE Name = 'Undeposited Funds' AND AccountType = 'Other Current Asset'");
+      const accountResponse = await fetch(`${baseUrl}/v3/company/${company.qboRealmId}/query?query=${accountQuery}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
+      });
+      if (accountResponse.ok) {
+        const accountData = await accountResponse.json();
+        if (accountData.QueryResponse?.Account?.length > 0) {
+          qboPaymentData.DepositToAccountRef = { value: accountData.QueryResponse.Account[0].Id, name: accountData.QueryResponse.Account[0].Name };
+          console.log('[QB-PAY] Using deposit account:', accountData.QueryResponse.Account[0].Id);
+        }
+      }
+    } catch (e) {
+      console.log('[QB-PAY] Could not find deposit account, proceeding without');
+    }
+
+    // Check for existing QBO payment with same PaymentRefNum (de-duplication)
+    if (stripePaymentIntentId) {
+      try {
+        const dedupeQuery = encodeURIComponent(`SELECT * FROM Payment WHERE PaymentRefNum = '${stripePaymentIntentId}'`);
+        const dedupeResponse = await fetch(`${baseUrl}/v3/company/${company.qboRealmId}/query?query=${dedupeQuery}`, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
+        });
+        if (dedupeResponse.ok) {
+          const dedupeData = await dedupeResponse.json();
+          if (dedupeData.QueryResponse?.Payment?.length > 0) {
+            const existingPayment = dedupeData.QueryResponse.Payment[0];
+            console.log('[QB-PAY] Found existing QBO payment with PaymentRefNum: ' + existingPayment.Id);
+            await db.update(payments).set({ qboPaymentId: existingPayment.Id, qboPaymentSyncStatus: 'synced', qboPaymentLastSyncError: null, qboPaymentLastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(payments.id, paymentId));
+            return { success: true, qboPaymentId: existingPayment.Id };
+          }
+        }
+      } catch (e) {
+        console.log('[QB-PAY] De-duplication check failed, proceeding with create');
+      }
+    }
+
+    console.log('[QB-PAY] Creating QBO payment for invoice qboInvoiceId=' + invoiceRecord.qboInvoiceId);
+
+    // Create QBO Payment
+    const createResponse = await fetch(`${baseUrl}/v3/company/${company.qboRealmId}/payment`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(qboPaymentData)
+    });
+
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error('[QB-PAY] Payment creation failed status=' + createResponse.status + ':', errorText);
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: `QBO API error: ${createResponse.status}`, updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      return { success: false, error: `QBO API error: ${createResponse.status}` };
+    }
+
+    const createData = await createResponse.json();
+    const newQboPaymentId = createData.Payment?.Id;
+
+    if (newQboPaymentId) {
+      await db.update(payments).set({ qboPaymentId: newQboPaymentId, qboPaymentSyncStatus: 'synced', qboPaymentLastSyncError: null, qboPaymentLastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(payments.id, paymentId));
+      console.log('[QB-PAY] Created QBO payment: ' + newQboPaymentId);
+      console.log('[QB-PAY] Saved qboPaymentId: ' + newQboPaymentId);
+      return { success: true, qboPaymentId: newQboPaymentId };
+    }
+
+    console.log('[QB-PAY] No payment ID returned from QBO');
+    await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: 'No payment ID returned from QBO', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+    return { success: false, error: 'No payment ID returned from QBO' };
+  } catch (error: any) {
+    console.error('[QB-PAY] Error syncing payment:', error);
+    try {
+      await db.update(payments).set({ qboPaymentSyncStatus: 'failed', qboPaymentLastSyncError: error.message || 'Unknown error', updatedAt: new Date() }).where(eq(payments.id, paymentId));
+    } catch {}
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
 
 // Stripe webhook endpoint - MUST use raw body for signature verification
 // This MUST be before express.json() middleware
@@ -68,7 +335,27 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       }
 
       if (existingInvoice.status?.toLowerCase() === 'paid') {
-        console.log(`[Stripe Webhook] Invoice ${invoiceId} already paid, skipping`);
+        console.log(`[Stripe Webhook] Invoice ${invoiceId} already paid, checking for QBO sync`);
+        
+        // Even if invoice is already paid, check if QBO payment sync was missed
+        const [existingPayment] = await db
+          .select()
+          .from(payments)
+          .where(eq(payments.stripePaymentIntentId, session.payment_intent as string));
+        
+        if (existingPayment && !existingPayment.qboPaymentId && existingPayment.qboPaymentSyncStatus !== 'synced') {
+          console.log(`[QB-PAY] Retrying QBO sync for missed payment paymentId=${existingPayment.id}`);
+          syncPaymentToQboFromWebhook(existingPayment.id, existingInvoice.companyId, session.payment_intent as string)
+            .then(result => {
+              if (result.success) {
+                console.log(`[QB-PAY] Retry sync success: ${result.qboPaymentId}`);
+              } else {
+                console.log(`[QB-PAY] Retry sync: ${result.error}`);
+              }
+            })
+            .catch(err => console.error('[QB-PAY] Retry sync error:', err));
+        }
+        
         return res.json({ received: true, message: 'Already processed' });
       }
 
@@ -93,8 +380,9 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         .from(payments)
         .where(eq(payments.stripePaymentIntentId, session.payment_intent as string));
       
+      let paymentId: number | null = null;
       if (!existingPayment) {
-        await db.insert(payments).values({
+        const [newPayment] = await db.insert(payments).values({
           companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
           invoiceId: parseInt(invoiceId),
           jobId: jobId ? parseInt(jobId) : existingInvoice.jobId,
@@ -106,13 +394,31 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           stripePaymentIntentId: session.payment_intent as string,
           stripeCheckoutSessionId: session.id,
           paidDate: now,
-        });
-        console.log(`[Stripe Webhook] Payment record created for invoice ${invoiceId}`);
+        }).returning({ id: payments.id });
+        paymentId = newPayment.id;
+        console.log(`[Stripe Webhook] Payment record created for invoice ${invoiceId} paymentId=${paymentId}`);
       } else {
+        paymentId = existingPayment.id;
         console.log(`[Stripe Webhook] Payment already exists for payment intent ${session.payment_intent}`);
       }
 
       console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid`);
+
+      // Fire-and-forget: Sync payment to QuickBooks
+      if (paymentId) {
+        const targetCompanyId = companyId ? parseInt(companyId) : existingInvoice.companyId;
+        console.log(`[QB-PAY] Triggered from Stripe webhook invoiceId=${invoiceId} stripeId=${session.payment_intent}`);
+        
+        syncPaymentToQboFromWebhook(paymentId, targetCompanyId, session.payment_intent as string)
+          .then(result => {
+            if (result.success) {
+              console.log(`[QB-PAY] Stripe webhook payment synced: ${result.qboPaymentId}`);
+            } else {
+              console.log(`[QB-PAY] Stripe webhook payment sync: ${result.error}`);
+            }
+          })
+          .catch(err => console.error('[QB-PAY] Stripe webhook sync error:', err));
+      }
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment:', error);
       return res.status(500).send('Error processing payment');
