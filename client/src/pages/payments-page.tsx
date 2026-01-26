@@ -52,6 +52,22 @@ export default function PaymentsPage() {
     queryKey: ["/api/payments"],
   });
 
+  const { data: breakdownData, isLoading: breakdownLoading } = useQuery<{
+    cashTotalCents: number;
+    checkTotalCents: number;
+    cardTotalCents: number;
+    pendingTotalCents: number;
+    completedTotalCents: number;
+  }>({
+    queryKey: ["/api/payments/breakdown", monthFilter === "this" ? "this_month" : "last_month"],
+    queryFn: async () => {
+      const range = monthFilter === "this" ? "this_month" : "last_month";
+      const res = await fetch(`/api/payments/breakdown?range=${range}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch breakdown");
+      return res.json();
+    },
+  });
+
   const { data: jobs = [] } = useQuery<any[]>({
     queryKey: ["/api/jobs"],
   });
@@ -79,6 +95,7 @@ export default function PaymentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
       setIsAddDialogOpen(false);
       form.reset();
     },
@@ -98,6 +115,7 @@ export default function PaymentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
     },
     onError: (error: Error) => {
       toast({
@@ -134,25 +152,17 @@ export default function PaymentsPage() {
   }, [payments, monthFilter, thisMonthStart, thisMonthEnd, lastMonthStart, lastMonthEnd]);
 
   const breakdown = useMemo(() => {
-    let cash = 0, check = 0, card = 0, pending = 0;
-    
-    monthlyPayments.forEach(p => {
-      const amt = parseFloat(p.amount) || 0;
-      const method = (p.paymentMethod || '').toLowerCase();
-      const status = (p.status || '').toLowerCase();
-      
-      if (status === 'pending') {
-        pending += amt;
-      } else if (status === 'completed' || status === 'paid') {
-        if (method === 'cash') cash += amt;
-        else if (method === 'check') check += amt;
-        else if (method === 'credit_card' || method === 'card' || method === 'stripe') card += amt;
-        else cash += amt;
-      }
-    });
-    
-    return { cash, check, card, pending, total: cash + check + card };
-  }, [monthlyPayments]);
+    if (breakdownData) {
+      return {
+        cash: breakdownData.cashTotalCents / 100,
+        check: breakdownData.checkTotalCents / 100,
+        card: breakdownData.cardTotalCents / 100,
+        pending: breakdownData.pendingTotalCents / 100,
+        total: breakdownData.completedTotalCents / 100,
+      };
+    }
+    return { cash: 0, check: 0, card: 0, pending: 0, total: 0 };
+  }, [breakdownData]);
 
   const filteredPayments = monthlyPayments.filter(payment => {
     const matchesStatus = filterStatus === "all" || payment.status === filterStatus;

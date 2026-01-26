@@ -1,0 +1,107 @@
+Fix Payments “Pending” amount to show unpaid money (Accounts Receivable), not $0.00
+
+CURRENT
+- Payments page Breakdown shows:
+  Cash / Check / Card / Pending
+- Cash/Check/Card represent paid money
+- Pending currently shows $0.00 and is not tied to what customers still owe
+
+GOAL
+“Pending” must represent the total amount of money owed but NOT yet paid:
+- Pending = total unpaid invoice balances
+- Updates instantly when payments are recorded (cash/check/card/stripe)
+- Must be accurate and auditable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEFINITIONS (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Paid totals:
+- Cash/Check/Card totals = sum of completed payments by method
+
+Pending total:
+- Pending = SUM( invoice_total_cents - amount_paid_cents ) for invoices where balance > 0
+- This includes:
+  - Unpaid invoices
+  - Partially paid invoices (if supported)
+- Excludes:
+  - Paid invoices (balance = 0)
+  - Cancelled/void invoices (if supported)
+
+If you do not currently store amount_paid_cents:
+- Compute it from payments table:
+  amount_paid_cents = SUM(payments.amountCents) for that invoice where status = "paid"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATA SOURCES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use real data only:
+- invoices table (invoice totals + status + jobId/companyId)
+- payments table (records created automatically from job/invoice payments)
+
+Do NOT create any fake rows.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPLEMENTATION REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Add a backend endpoint for breakdown totals:
+GET /api/payments/breakdown?range=this_month|last_month|custom&start=&end=
+Returns:
+- cashTotalCents
+- checkTotalCents
+- cardTotalCents
+- pendingTotalCents
+- completedTotalCents (optional)
+- countCompleted (optional)
+
+2) Calculation rules:
+- cash/check/card totals:
+  SUM(payments.amountCents) where method matches and status="paid" within date range
+- pending total:
+  For invoices in the selected range (same range):
+    invoiceBalanceCents = invoiceTotalCents - SUM(paid payments for that invoice)
+  pendingTotalCents = SUM(max(invoiceBalanceCents, 0)) across invoices where balance > 0
+
+3) Range consistency:
+- If range is “This Month”, both:
+  - Completed payments total
+  - Pending invoice balances
+  must reflect invoices/payments in that same range definition
+
+4) Update UI to use cents formatting:
+- Convert cents → dollars
+- Keep existing breakdown UI
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+UI REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- “Pending” row shows the correct pendingTotal value (not $0)
+- Updates immediately after:
+  - recording a cash/check payment
+  - successful card payment
+- No 24-hour time formats introduced
+- No loud error banners
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEST CASES (MUST PASS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) Create an invoice for $350 (unpaid)
+- Pending shows $350
+
+2) Record a $100 payment against that invoice
+- Cash/Check/Card increases by $100 (depending on method)
+- Pending drops to $250
+
+3) Record final $250 payment
+- Pending becomes $0
+- Completed totals reflect full $350
+
+4) Multiple invoices unpaid
+- Pending equals sum of all unpaid balances
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Pending shows unpaid money owed (accurate)
+- Paid method totals are still correct
+- Updates without manual refresh
+- No console errors

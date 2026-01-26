@@ -7703,6 +7703,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/payments/breakdown', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const range = (req.query.range as string) || 'this_month';
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (range === 'last_month') {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        startDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
+        endDate = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+      } else {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      }
+      
+      const breakdown = await storage.getPaymentsBreakdown(company.id, startDate, endDate);
+      res.json(breakdown);
+    } catch (error) {
+      console.error("Error fetching payments breakdown:", error);
+      res.status(500).json({ message: "Failed to fetch payments breakdown" });
+    }
+  });
+
   app.post('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

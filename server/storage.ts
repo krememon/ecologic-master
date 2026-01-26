@@ -122,6 +122,13 @@ export interface IStorage {
   // Payment operations
   getPayments(companyId: number): Promise<any[]>;
   getPaymentByInvoiceId(invoiceId: number): Promise<any | null>;
+  getPaymentsBreakdown(companyId: number, startDate: Date, endDate: Date): Promise<{
+    cashTotalCents: number;
+    checkTotalCents: number;
+    cardTotalCents: number;
+    pendingTotalCents: number;
+    completedTotalCents: number;
+  }>;
   createPayment(payment: any): Promise<any>;
   updatePayment(id: number, payment: any): Promise<any>;
   
@@ -527,6 +534,71 @@ export class DatabaseStorage implements IStorage {
       .where(eq(payments.id, id))
       .returning();
     return updated;
+  }
+
+  async getPaymentsBreakdown(companyId: number, startDate: Date, endDate: Date): Promise<{
+    cashTotalCents: number;
+    checkTotalCents: number;
+    cardTotalCents: number;
+    pendingTotalCents: number;
+    completedTotalCents: number;
+  }> {
+    const allPayments = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.companyId, companyId));
+    
+    let cashTotalCents = 0;
+    let checkTotalCents = 0;
+    let cardTotalCents = 0;
+    
+    for (const p of allPayments) {
+      const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
+      if (!paidDate || paidDate < startDate || paidDate > endDate) continue;
+      
+      const status = (p.status || '').toLowerCase();
+      if (status !== 'paid' && status !== 'completed') continue;
+      
+      const amountCents = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+      const method = (p.paymentMethod || '').toLowerCase();
+      
+      if (method === 'cash') cashTotalCents += amountCents;
+      else if (method === 'check') checkTotalCents += amountCents;
+      else if (method === 'credit_card' || method === 'card' || method === 'stripe') cardTotalCents += amountCents;
+      else cashTotalCents += amountCents;
+    }
+    
+    const allInvoices = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.companyId, companyId));
+    
+    let pendingTotalCents = 0;
+    for (const inv of allInvoices) {
+      const invStatus = (inv.status || '').toLowerCase();
+      if (invStatus === 'cancelled' || invStatus === 'void' || invStatus === 'paid') continue;
+      
+      const invoiceTotalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
+      
+      const invoicePayments = allPayments.filter(p => 
+        p.invoiceId === inv.id && 
+        ((p.status || '').toLowerCase() === 'paid' || (p.status || '').toLowerCase() === 'completed')
+      );
+      const paidCents = invoicePayments.reduce((sum, p) => 
+        sum + (p.amountCents || Math.round(parseFloat(p.amount || '0') * 100)), 0
+      );
+      
+      const balance = Math.max(invoiceTotalCents - paidCents, 0);
+      pendingTotalCents += balance;
+    }
+    
+    return {
+      cashTotalCents,
+      checkTotalCents,
+      cardTotalCents,
+      pendingTotalCents,
+      completedTotalCents: cashTotalCents + checkTotalCents + cardTotalCents,
+    };
   }
 
   async createCompany(companyData: InsertCompany): Promise<Company> {
