@@ -9430,7 +9430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to record payments" });
       }
 
-      const { invoiceId, method } = req.body;
+      const { invoiceId, method, checkNumber } = req.body;
       
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
@@ -9469,9 +9469,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId: company.id,
         jobId: invoice.jobId || null,
         invoiceId: invoice.id,
+        customerId: invoice.customerId || null,
         amount: amountDollars,
+        amountCents: amountCents,
         paymentMethod: method.toLowerCase(),
-        status: 'completed',
+        status: 'paid',
+        collectedByUserId: userId,
+        collectedByRole: userRole,
+        checkNumber: method.toLowerCase() === 'check' ? (checkNumber || null) : null,
         paidDate: new Date(),
         notes: `Manual ${method.toLowerCase()} payment recorded`,
       });

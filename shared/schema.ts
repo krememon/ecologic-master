@@ -388,13 +388,19 @@ export const payments = pgTable("payments", {
   companyId: integer("company_id").references(() => companies.id).notNull(),
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
   invoiceId: integer("invoice_id").references(() => invoices.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").references(() => customers.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  amountCents: integer("amount_cents"), // stored as integer cents for accuracy
   paymentMethod: varchar("payment_method"), // cash, check, credit_card, bank_transfer, stripe, other
-  status: varchar("status").notNull().default("pending"), // pending, completed, failed, refunded
+  status: varchar("status").notNull().default("paid"), // paid, failed, refunded
+  collectedByUserId: varchar("collected_by_user_id").references(() => users.id),
+  collectedByRole: varchar("collected_by_role"),
   stripePaymentIntentId: varchar("stripe_payment_intent_id"),
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id"),
+  checkNumber: varchar("check_number"),
   paidDate: timestamp("paid_date"),
   notes: text("notes"),
+  meta: jsonb("meta"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,0 +1,69 @@
+PAYMENTS PAGE — Prompt 1 of 5: Create/Confirm Payments “Source of Truth” (DB + write-path)
+
+CURRENT
+- Invoices exist and can be marked paid (cash/check/Stripe)
+- Techs can collect payments on assigned jobs
+- There is not yet a dedicated Payments page that is audit-grade
+
+GOAL
+Create a real “payments” source of truth so every payment is recorded reliably and can be listed on a Payments page:
+- Each payment must link to a real invoice + job
+- Must record method (cash/check/card), amount, status, who collected it, and timestamps
+- No fake data
+- Payroll/audit-grade accuracy
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATA MODEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create DB table: payments (if it doesn’t already exist)
+
+Fields:
+- id (uuid pk)
+- companyId (uuid)
+- invoiceId (uuid, required)
+- jobId (uuid, required)
+- customerId (uuid, nullable if not available)
+- amountCents (int, required)  // store as integer cents
+- method ("cash" | "check" | "card", required)
+- status ("paid" | "failed" | "refunded", default "paid")
+- collectedByUserId (uuid, required)
+- collectedByRole (string, required)
+- paidAt (timestamp, default now)
+- createdAt (timestamp, default now)
+- stripePaymentIntentId (string nullable)
+- stripeCheckoutSessionId (string nullable)
+- checkNumber (string nullable)
+- note (text nullable)
+- meta (jsonb nullable)
+
+Indexes:
+- payments(companyId, paidAt desc)
+- payments(invoiceId)
+- payments(jobId)
+- payments(collectedByUserId, paidAt desc)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WRITE PATH REQUIREMENTS (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ensure ALL payment flows create a payments row:
+A) Cash payment
+B) Check payment
+C) Card payment (Stripe)
+
+When invoice is marked paid by any method:
+- Create one payments row
+- Then invoice.paymentStatus → Paid
+- Then job.paymentStatus flips Pending → Paid immediately everywhere (existing requirement)
+
+Idempotency:
+- Prevent duplicate payment rows for same invoice payment event
+- If Stripe retries webhooks, do not create duplicates (use stripeEventId or paymentIntentId)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Paying an invoice creates a payments row every time
+- No duplicates on retries
+- Amount stored as cents (no float bugs)
+- Does not break existing invoice/job paid update behavior
+- No console errors
