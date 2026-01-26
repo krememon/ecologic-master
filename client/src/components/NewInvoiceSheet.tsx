@@ -408,7 +408,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md max-h-[90vh] p-0 flex flex-col rounded-2xl overflow-hidden">
           <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
             <button 
               type="button"
@@ -420,7 +420,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Invoice</h2>
           </div>
 
-          <div className="flex-1 overflow-y-auto pb-20">
+          <div className="flex-1 overflow-y-auto">
               <SectionHeader title="Customer" />
               <InfoRow
                 icon={User}
@@ -583,8 +583,8 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
               )}
           </div>
 
-          {/* Sticky Bottom Done Button */}
-          <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+          {/* Footer Button */}
+          <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
             <Button
               type="button"
               onClick={() => {

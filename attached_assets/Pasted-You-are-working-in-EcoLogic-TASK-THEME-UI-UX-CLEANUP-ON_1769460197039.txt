@@ -1,0 +1,68 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Layout/spacing/visuals only
+
+TARGET: New Invoice sheet — the huge blank white area above the “Save Invoice” button (see screenshot)
+PROBLEM: There’s a giant empty white block because the footer/button is pinned to the bottom while content is short.
+
+GOAL
+Make the screen feel intentional and tight like Jobs fill-out:
+- Remove the “giant empty white space” feeling
+- Keep the Save Invoice button accessible and consistent
+- No functional changes
+
+STRICT RULES
+- Do NOT change any handlers or how Save works
+- Do NOT change scrolling logic/behavior
+- Only adjust layout CSS / wrappers / spacing
+
+WHAT TO DO (PRESENTATION ONLY)
+
+Option A (Preferred): Make the footer NOT force a huge empty content area
+1) Find the layout wrapper that does something like:
+   - height: 100%
+   - min-height: 100vh
+   - flex: 1
+   - justify-between
+   - or “content container flex-grow” + “footer pinned”
+2) Change the layout so the footer sits directly after content when content is short:
+   - Remove `justify-between` on the main column
+   - Avoid forcing the content area to `flex: 1` if that creates a giant blank region
+   - Keep a normal flow layout: content → footer
+3) Keep the footer “sticky” only if it’s already working well elsewhere, but don’t let it create a big empty middle.
+
+Option B (If footer must stay sticky): Add a subtle background treatment so it doesn’t look like an empty mistake
+- Add a light grey page background behind the content area (very subtle) so the “empty” area reads as app background, not a giant blank panel
+- Or add a very subtle gradient/fade above the footer
+⚠️ This is purely cosmetic; do NOT add new components or logic.
+
+Option C (Matches Jobs): Use Jobs fill-out structure exactly
+- Inspect New Job fill-out layout wrappers:
+  - how it handles footer actions (Save pill) without giant white void
+- Copy the same wrapper structure and spacing into New Invoice (presentation only).
+
+SPECIFIC UI TARGETS
+- The gap between the last section and the Save button should be modest (like Jobs), not half the screen.
+- Footer should have:
+  - consistent horizontal padding
+  - safe-area padding
+  - subtle top divider
+- The main sheet background should match the rest of EcoLogic (if Jobs uses a light grey app background, use that here too).
+
+DELIVERABLES
+1) New Invoice no longer has the massive blank white area above the Save button.
+2) Layout feels like New Job (tight and intentional).
+3) No functional changes.
+
+QA CHECKLIST
+- Save button still works
+- Close button still works
+- Scroll still works if content grows (e.g., once customer/line items are selected)
+- No console errors / no white screen
+
+AGENT QUICK HINT (where to look)
+Search in the New Invoice component for:
+- `h-full`, `min-h-screen`, `min-h-[...]`, `flex-1`, `grow`, `justify-between`, `sticky`, `fixed`, `absolute`, `inset-0`, `bottom-0`
+One of those is creating the giant empty area. Fix it with layout-only changes as described.
