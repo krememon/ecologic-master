@@ -1,0 +1,49 @@
+Update the "Select Customer" modal used in Jobs and Estimates to use the new universal polished Select Customer modal.
+
+Current state:
+- We have a new polished Select Customer modal (rounded, centered title "Select Customer", single X top-right, modern search, big + Add Customer row, initials avatars, clean dividers).
+- Jobs and Estimates still use the old customer picker modal (all caps "SELECT CUSTOMER", Cancel left, old styling).
+
+Goal:
+Jobs and Estimates must use the SAME new polished Select Customer modal UI + component, with the SAME behavior.
+
+Requirements:
+
+1) Replace ONLY the customer picker UI in these flows:
+- Create Job: when selecting a customer
+- Create Estimate: when selecting a customer
+- Any "change customer" action inside Job/Estimate flows if it exists
+
+2) Keep functionality identical
+- Selecting a customer still sets the correct customerId in the form
+- Search works the same (or better) and filters customers correctly
+- Add Customer flow remains identical and still returns to the picker with the new customer available
+- Cancel/close behavior unchanged
+- No backend/API changes
+
+3) Implementation approach
+- Reuse the existing new component (the polished modal) rather than duplicating code.
+- Update Jobs and Estimates to call the same modal component and pass:
+  - open / onClose
+  - onSelectCustomer(customerId or customer object)
+  - onAddCustomer
+  - selectedCustomerId (optional)
+- Remove/disable the old customer picker component from Jobs/Estimates (do not leave dead UI behind).
+
+4) Visual consistency
+- Jobs + Estimates must match the new modal exactly:
+  - Title case "Select Customer" (not all caps)
+  - Single X top-right (no Cancel button on left for these)
+  - Search placeholder: "Search by name or email..."
+  - Modern list row styles with initials avatar
+  - Big circular + for Add Customer row
+  - Same spacing/dividers
+- No duplicate X icons
+
+5) Acceptance Criteria
+- Creating a Job -> Select Customer opens the new modal
+- Creating an Estimate -> Select Customer opens the new modal
+- Selecting customer works and continues flow normally
+- Add Customer works and returns to the same new modal
+- No old modal appears anywhere in Jobs or Estimates
+- Mobile-safe (iPhone width), no layout glitches
