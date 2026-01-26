@@ -1067,6 +1067,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // Helper function to get or create a default QuickBooks service item
+  async function ensureQboServiceItem(companyId: number): Promise<{ value: string; name: string } | null> {
+    const company = await storage.getCompany(companyId);
+    if (!company?.qboRealmId) return null;
+
+    const accessToken = await getQboAccessToken(companyId);
+    if (!accessToken) return null;
+
+    const itemName = 'EcoLogic Service';
+    
+    try {
+      // Search for existing item
+      const searchQuery = encodeURIComponent(`Name = '${itemName}'`);
+      const searchResponse = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/query?query=select * from Item where ${searchQuery}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const existingItem = searchData.QueryResponse?.Item?.[0];
+        if (existingItem) {
+          console.log('[QB] Found existing service item:', existingItem.Id);
+          return { value: existingItem.Id, name: existingItem.Name };
+        }
+      }
+
+      // Get an income account to use
+      const accountQuery = encodeURIComponent("AccountType = 'Income'");
+      const accountResponse = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/query?query=select * from Account where ${accountQuery} MAXRESULTS 1`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      let incomeAccountId: string | null = null;
+      if (accountResponse.ok) {
+        const accountData = await accountResponse.json();
+        incomeAccountId = accountData.QueryResponse?.Account?.[0]?.Id;
+      }
+
+      if (!incomeAccountId) {
+        console.error('[QB] No income account found');
+        return null;
+      }
+
+      // Create new service item
+      console.log('[QB] Creating new service item:', itemName);
+      const createResponse = await fetch(
+        `${QB_API_BASE}/v3/company/${company.qboRealmId}/item`,
+        {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            Name: itemName,
+            Type: 'Service',
+            IncomeAccountRef: { value: incomeAccountId },
+          }),
+        }
+      );
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error('[QB] Failed to create service item:', errorText);
+        return null;
+      }
+
+      const createData = await createResponse.json();
+      const newItem = createData.Item;
+      if (newItem) {
+        console.log('[QB] Created service item:', newItem.Id);
+        return { value: newItem.Id, name: newItem.Name };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('[QB] Error in ensureQboServiceItem:', error);
+      return null;
+    }
+  }
+
   // Helper function to sync payment to QuickBooks
   async function syncPaymentToQbo(paymentId: number, companyId: number): Promise<{ success: boolean; qboPaymentId?: string; error?: string }> {
     try {
@@ -1540,17 +1634,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Unable to get access token' });
       }
       
-      // Build QBO invoice line items
-      const lineItems = (invoice.lineItems || []).map((item: any, idx: number) => ({
-        LineNum: idx + 1,
-        Amount: (item.quantity * item.unitPrice).toFixed(2),
-        DetailType: 'SalesItemLineDetail',
-        Description: item.description || item.name,
-        SalesItemLineDetail: {
-          Qty: item.quantity,
-          UnitPrice: item.unitPrice,
-        },
-      }));
+      // Debug: log invoice line items
+      console.log('[QB] Invoice line items:', JSON.stringify(invoice.lineItems));
+      
+      // Get or create default QuickBooks service item
+      const serviceItem = await ensureQboServiceItem(member.companyId);
+      if (!serviceItem) {
+        await storage.updateInvoice(invoiceId, {
+          qboSyncStatus: 'failed',
+          qboLastSyncError: 'Failed to create QuickBooks service item',
+          qboLastSyncedAt: new Date(),
+        });
+        return res.status(400).json({ error: 'Failed to create QuickBooks service item' });
+      }
+      
+      // Build QBO invoice line items with ItemRef
+      const rawLineItems = invoice.lineItems || [];
+      const qboLines = rawLineItems
+        .filter((item: any) => {
+          const qty = parseFloat(item.quantity) || 1;
+          const unitPrice = item.unitPriceCents ? item.unitPriceCents / 100 : (parseFloat(item.unitPrice) || 0);
+          return qty * unitPrice > 0;
+        })
+        .map((item: any, idx: number) => {
+          const qty = parseFloat(item.quantity) || 1;
+          const unitPrice = item.unitPriceCents ? item.unitPriceCents / 100 : (parseFloat(item.unitPrice) || 0);
+          const amount = qty * unitPrice;
+          
+          return {
+            LineNum: idx + 1,
+            Amount: amount,
+            DetailType: 'SalesItemLineDetail',
+            Description: item.description || item.name || 'Service',
+            SalesItemLineDetail: {
+              ItemRef: serviceItem,
+              Qty: qty,
+              UnitPrice: unitPrice,
+            },
+          };
+        });
+      
+      // Ensure we have at least one line item
+      if (qboLines.length === 0) {
+        // Create a single line item from invoice total
+        const totalAmount = invoice.totalCents ? invoice.totalCents / 100 : parseFloat(invoice.amount) || 0;
+        if (totalAmount > 0) {
+          qboLines.push({
+            LineNum: 1,
+            Amount: totalAmount,
+            DetailType: 'SalesItemLineDetail',
+            Description: `Invoice ${invoice.invoiceNumber}`,
+            SalesItemLineDetail: {
+              ItemRef: serviceItem,
+              Qty: 1,
+              UnitPrice: totalAmount,
+            },
+          });
+        } else {
+          await storage.updateInvoice(invoiceId, {
+            qboSyncStatus: 'failed',
+            qboLastSyncError: 'Invoice has no line items or amount',
+            qboLastSyncedAt: new Date(),
+          });
+          return res.status(400).json({ error: 'Invoice has no line items or amount' });
+        }
+      }
+      
+      console.log('[QB] QBO Line items:', JSON.stringify(qboLines));
       
       // Create QBO invoice
       console.log('[QB] Creating invoice for customer:', qboCustomerId);
@@ -1568,8 +1718,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             DocNumber: invoice.invoiceNumber,
             TxnDate: invoice.issueDate,
             DueDate: invoice.dueDate,
-            Line: lineItems,
-            PrivateNote: invoice.notes || undefined,
+            Line: qboLines,
+            PrivateNote: `EcoLogic Invoice ${invoice.invoiceNumber}`,
           }),
         }
       );

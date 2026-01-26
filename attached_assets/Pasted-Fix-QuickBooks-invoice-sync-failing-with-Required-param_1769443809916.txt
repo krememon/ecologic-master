@@ -1,0 +1,66 @@
+Fix QuickBooks invoice sync failing with:
+"Required parameter Line is missing in the request"
+
+Context:
+EcoLogic is a contractor management SaaS.
+QuickBooks Online OAuth is already connected and working.
+Customer creation in QuickBooks already works.
+Invoice creation fails because the payload sent to QuickBooks does not include a properly formatted Line[] array.
+
+Requirements:
+
+When syncing an invoice to QuickBooks:
+
+1. Ensure the EcoLogic invoice is fetched WITH its line items
+   - invoice.lineItems must exist and not be empty
+   - If line items are missing, fix the DB query
+   - Add a debug log:
+     console.log("[QB] Invoice line items:", invoice.lineItems)
+
+2. Create or reuse a default QuickBooks Service Item
+   - Item Name: "EcoLogic Service"
+   - Type: Service
+   - If the item already exists, reuse it
+   - If not, create it using any existing Income account
+   - Return the ItemRef { value, name }
+
+3. Map EcoLogic invoice line items → QuickBooks Line[]
+   For each EcoLogic line item:
+   - Amount = qty * unitPrice
+   - DetailType = "SalesItemLineDetail"
+   - SalesItemLineDetail must include:
+     - ItemRef (default service item)
+     - Qty
+     - UnitPrice
+   - Include Description if available
+   - Skip lines where amount ≤ 0
+
+4. Include Line[] in the QuickBooks invoice payload
+   - The invoice create request MUST include:
+     {
+       CustomerRef: { value: qboCustomerId },
+       Line: qboLines,
+       PrivateNote: `EcoLogic Invoice ${invoice.invoiceNumber}`
+     }
+
+5. Idempotency
+   - If invoice.qboInvoiceId already exists:
+     - Do NOT create a new QuickBooks invoice
+     - Return success immediately
+   - After successful creation:
+     - Save qboInvoiceId on the EcoLogic invoice record
+
+6. UI behavior
+   - Do NOT redesign UI
+   - Replace "Sync to QuickBooks" with "Synced ✓" after success
+   - UI should update immediately
+
+Rules:
+- Do NOT break Stripe payments
+- Do NOT require manual customer sync
+- Prefer company name for QuickBooks customer display name
+- Must work on mobile
+- No duplicate QuickBooks invoices
+
+Goal:
+Clicking "Sync to QuickBooks" successfully creates the invoice in QuickBooks Sandbox with valid line items and updates EcoLogic instantly.
