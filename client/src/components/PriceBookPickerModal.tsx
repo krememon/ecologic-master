@@ -237,23 +237,23 @@ export function PriceBookPickerModal({
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="w-[95vw] max-w-md rounded-2xl" hideCloseButton>
-          <DialogHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+          <DialogHeader className="pb-2 border-b border-slate-100 dark:border-slate-800">
             <DialogTitle className="text-base font-semibold text-center">Create New Line Item</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-3">
-            <div className="space-y-2">
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
               <Label htmlFor="item-name">Name *</Label>
               <Input
                 id="item-name"
                 value={newItem.name}
                 onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
                 placeholder="Name"
-                className="h-10"
+                className="h-9"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="item-description">Description</Label>
               <Textarea
                 id="item-description"
@@ -265,14 +265,14 @@ export function PriceBookPickerModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="item-price">Price *</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">$</span>
                   <Input
                     id="item-price"
                     type="text"
-                    className="pl-7 h-10"
+                    className="pl-7 h-9"
                     value={priceDisplay}
                     onChange={(e) => handlePriceChange(e.target.value)}
                     onBlur={handlePriceBlur}
@@ -281,13 +281,13 @@ export function PriceBookPickerModal({
                   />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="item-unit">Unit</Label>
                 <Select
                   value={newItem.unit}
                   onValueChange={(value) => setNewItem({ ...newItem, unit: value })}
                 >
-                  <SelectTrigger className="h-10">
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -302,45 +302,44 @@ export function PriceBookPickerModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="item-taskcode">Task Code</Label>
                 <Input
                   id="item-taskcode"
                   value={newItem.taskCode}
                   onChange={(e) => setNewItem({ ...newItem, taskCode: e.target.value })}
                   placeholder="Task Code"
-                  className="h-10"
+                  className="h-9"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <Label htmlFor="item-category">Category</Label>
                 <Input
                   id="item-category"
                   value={newItem.category}
                   onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
                   placeholder="Category"
-                  className="h-10"
+                  className="h-9"
                 />
               </div>
             </div>
-
           </div>
 
-          <DialogFooter className="flex-row gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <DialogFooter className="flex-row gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <Button 
               variant="outline" 
               onClick={() => {
                 resetCreateForm();
                 setShowCreateForm(false);
               }}
-              className="flex-1 h-11 rounded-xl"
+              className="flex-1 h-10 rounded-xl"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleCreateItem}
               disabled={createMutation.isPending}
-              className="flex-1 h-11 rounded-xl"
+              className="flex-1 h-10 rounded-xl"
             >
               {createMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
