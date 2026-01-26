@@ -1,0 +1,85 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY (presentation + placeholder text)
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual consistency, spacing, headers, typography, layout only
+✅ Updating placeholder STRINGS is allowed
+
+TARGET: “Add New Client” modal (shown in screenshot)
+
+GOAL
+Clean up the Add New Client modal so it matches EcoLogic’s modern modal style and fix the Phone Number placeholder to be consistent.
+
+STRICT RULES
+1) Do NOT modify:
+   - onChange / onSubmit handlers
+   - state shape or variable names
+   - validation or required logic
+   - API calls
+2) Only change:
+   - classNames / spacing / layout wrappers
+   - typography
+   - placeholder string values
+3) Keep behavior 100% identical.
+
+CHANGES TO MAKE
+
+A) Modal header cleanup (presentation only)
+- Keep title: “Add New Client”
+- Keep subtitle text, but tighten spacing between title + subtitle
+- Single X close icon top-right
+- Reduce header padding to match other cleaned modals
+
+B) Form spacing + layout
+- Reduce vertical spacing between fields
+- Reduce gap between label and input
+- Use “shorter row” style consistent with:
+  - Add New Contractor
+  - Select Customer modal
+- Ensure all inputs have consistent height, border radius, and focus ring
+
+C) Placeholder cleanup (IMPORTANT)
+Replace placeholders so they match the label text exactly.
+❌ No example values (no 555-123-4567 style placeholders)
+
+Set placeholders EXACTLY as:
+- Company Name → placeholder="Company Name"
+- Email Address → placeholder="Email Address"
+- Phone Number → placeholder="Phone Number"
+- Address → placeholder="Address"
+- Notes textarea → placeholder="Notes"
+
+⚠️ Specifically fix:
+- Phone Number currently shows an example number
+- Replace it with the text “Phone Number” (greyed out)
+
+D) Notes textarea styling (presentation only)
+- Reduce default height slightly (CSS only)
+- Tighter internal padding
+- Match border radius + style of other textareas in EcoLogic
+- Keep resize behavior unchanged unless already disabled elsewhere
+
+E) Footer buttons
+- Keep button text and click behavior exactly the same:
+  - Cancel
+  - Add New Client
+- Reduce dead space above footer
+- Align buttons consistently with other cleaned modals
+
+FILES
+- Only update the Add New Client modal component and any local styles it uses
+- Do NOT refactor shared modal logic
+
+DELIVERABLES
+1) Cleaned Add New Client modal with tighter spacing and modern styling
+2) Phone Number placeholder fixed to “Phone Number”
+3) All placeholders match their label text
+4) Zero functional changes
+
+QA CHECKLIST
+- Typing works in all fields
+- Phone formatting/validation (if any) still works
+- Submit still creates client
+- Cancel still closes modal
+- No console errors / no white screen
+- Looks clean on mobile width

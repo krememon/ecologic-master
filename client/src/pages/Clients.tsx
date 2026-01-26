@@ -426,14 +426,21 @@ export default function Clients() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[min(92vw,900px)] h-[min(92vh,680px)] p-0 rounded-2xl overflow-hidden shadow-xl">
-          <div className="flex flex-col h-full">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex flex-col h-full max-h-[85vh]">
             {/* Fixed Header */}
-            <div className="px-5 md:px-6 pt-4 pb-2 border-b bg-background">
-              <h1 className="text-center text-xl md:text-2xl font-semibold leading-tight">{t('clients.addClient')}</h1>
-              <p className="text-center text-xs md:text-sm text-muted-foreground mt-1">
-                Add a new client to your system
-              </p>
+            <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
+              <button 
+                type="button"
+                onClick={() => setIsDialogOpen(false)} 
+                className="absolute right-4 top-1/2 -translate-y-1/2"
+              >
+                <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              </button>
+              <div className="text-center">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('clients.addClient')}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Add a new client to your system</p>
+              </div>
             </div>
 
             {/* Body and Footer combined in form */}
@@ -483,7 +490,7 @@ export default function Clients() {
                             <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.phone')}</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="555-123-4567" 
+                                placeholder={t('clients.fields.phone')} 
                                 {...field} 
                                 value={field.value || ""} 
                                 onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
@@ -529,7 +536,7 @@ export default function Clients() {
                         <FormItem>
                           <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.notes')}</FormLabel>
                           <FormControl>
-                            <Textarea placeholder={t('clients.fields.notes')} {...field} value={field.value || ""} className="text-sm" data-testid="input-client-notes" />
+                            <Textarea placeholder={t('clients.fields.notes')} {...field} value={field.value || ""} className="text-sm min-h-[100px] resize-none" data-testid="input-client-notes" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -539,15 +546,16 @@ export default function Clients() {
                 </div>
 
                 {/* Fixed Footer */}
-                <div className="px-5 md:px-6 py-3 border-t bg-background">
-                  <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel-client">
+                <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1 h-11" data-testid="button-cancel-client">
                       {t('common.cancel')}
                     </Button>
                     <Button 
                       type="submit" 
                       form="client-create-form"
                       disabled={isSubmitting}
+                      className="flex-1 h-11"
                       data-testid="button-submit-client"
                     >
                       {isSubmitting ? "Adding..." : t('clients.addClient')}
@@ -562,14 +570,21 @@ export default function Clients() {
 
       {/* Edit Client Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="w-[min(92vw,900px)] h-[min(92vh,680px)] p-0 rounded-2xl overflow-hidden shadow-xl">
-          <div className="flex flex-col h-full">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex flex-col h-full max-h-[85vh]">
             {/* Fixed Header */}
-            <div className="px-5 md:px-6 pt-4 pb-2 border-b bg-background">
-              <h1 className="text-center text-xl md:text-2xl font-semibold leading-tight">Edit Client</h1>
-              <p className="text-center text-xs md:text-sm text-muted-foreground mt-1">
-                Update client information
-              </p>
+            <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
+              <button 
+                type="button"
+                onClick={() => setIsEditDialogOpen(false)} 
+                className="absolute right-4 top-1/2 -translate-y-1/2"
+              >
+                <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              </button>
+              <div className="text-center">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Edit Client</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Update client information</p>
+              </div>
             </div>
 
             {/* Body and Footer combined in form */}
@@ -587,7 +602,7 @@ export default function Clients() {
                         <FormItem>
                           <FormLabel className="text-xs font-medium mb-1">Client Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter client name or company" {...field} className="h-9 text-sm" data-testid="input-edit-client-name" />
+                            <Input placeholder="Name" {...field} className="h-9 text-sm" data-testid="input-edit-client-name" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -602,7 +617,7 @@ export default function Clients() {
                           <FormItem className="min-w-0">
                             <FormLabel className="text-xs font-medium mb-1">Email</FormLabel>
                             <FormControl>
-                              <Input type="email" placeholder="client@example.com" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-email" />
+                              <Input type="email" placeholder="Email" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-edit-client-email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -617,7 +632,7 @@ export default function Clients() {
                             <FormLabel className="text-xs font-medium mb-1">Phone</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="555-123-4567" 
+                                placeholder="Phone" 
                                 {...field} 
                                 value={field.value || ""} 
                                 onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
@@ -648,7 +663,7 @@ export default function Clients() {
                               onAddressSelected={(addr) => {
                                 editForm.setValue("address", addr.formatted_address || addr.street);
                               }}
-                              placeholder="Enter client address"
+                              placeholder="Address"
                             />
                           </FormControl>
                           <FormMessage />
@@ -663,7 +678,7 @@ export default function Clients() {
                         <FormItem>
                           <FormLabel className="text-xs font-medium mb-1">Notes</FormLabel>
                           <FormControl>
-                            <Textarea placeholder="Any additional notes about this client" {...field} value={field.value || ""} className="text-sm" data-testid="input-edit-client-notes" />
+                            <Textarea placeholder="Notes" {...field} value={field.value || ""} className="text-sm min-h-[100px] resize-none" data-testid="input-edit-client-notes" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -673,12 +688,12 @@ export default function Clients() {
                 </div>
 
                 {/* Fixed Footer */}
-                <div className="px-5 md:px-6 py-3 border-t bg-background">
-                  <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit-client">
+                <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} className="flex-1 h-11" data-testid="button-cancel-edit-client">
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={updateClientMutation.isPending} data-testid="button-submit-edit-client">
+                    <Button type="submit" disabled={updateClientMutation.isPending} className="flex-1 h-11" data-testid="button-submit-edit-client">
                       {updateClientMutation.isPending ? "Updating..." : "Update Client"}
                     </Button>
                   </div>
