@@ -1,0 +1,71 @@
+You are working in EcoLogic.
+
+TASK THEME: UI / UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual styling only (header background, spacing, typography)
+
+TARGET: “Record Payment” modal
+REFERENCE: “Add New Contractor” modal header (greyed-out header strip)
+
+GOAL
+Make the Record Payment modal header visually match the Add New Contractor header:
+- Soft grey background header bar
+- Centered title
+- Single X close button
+- Subtle bottom divider
+- No functional changes
+
+STRICT RULES
+- Do NOT touch onClose logic, submit logic, or modal behavior
+- Do NOT refactor shared modal logic globally
+- Only adjust styling/layout in the Record Payment modal
+
+WHAT TO CHANGE (SPECIFIC)
+
+A) Header background + structure
+- Add the same light grey header background used in Add New Contractor
+- Header should visually appear as a separate section from the form body
+- Use identical background color, padding, and height as the Add New Contractor header
+
+B) Title styling
+- Keep text exactly: “Record Payment”
+- Center the title horizontally
+- Match font size + weight used in Add New Contractor header
+- No all-caps, no oversized text
+
+C) Close (X) button
+- Keep a single X in the top-right
+- Match size, color, and alignment of the Add New Contractor close button
+- Do NOT add Cancel text
+
+D) Divider
+- Add a subtle bottom border/divider separating header from form content
+- Same divider style as Add New Contractor
+
+E) Spacing below header
+- Reduce top padding of the form so it sits closer to the header (like Add New Contractor)
+- Remove any excessive margin-top added by the form container
+
+DO NOT
+- Change any form fields
+- Change placeholders
+- Change footer buttons
+- Change spacing between inputs (only header-related spacing)
+
+IMPLEMENTATION HINT
+- Locate the header wrapper in Add New Contractor (likely a reusable modal header pattern)
+- Either:
+  1) Reuse that same header component in Record Payment, OR
+  2) Copy its classNames/styles directly into Record Payment’s header wrapper
+- If the header component is shared, ensure changes are scoped so only Record Payment is updated.
+
+DELIVERABLES
+1) Record Payment modal now has the same greyed-out header strip as Add New Contractor
+2) Header height, padding, background, and divider visually match
+3) No functional changes
+
+QA CHECK
+- Close (X) still closes modal
+- Record Payment form still works
+- No console errors
+- Header visually matches Add New Contractor exactly

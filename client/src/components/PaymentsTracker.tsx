@@ -275,16 +275,15 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                 Record Payment
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+            <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
               <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
                 <button 
-                  type="button"
                   onClick={() => setIsAddDialogOpen(false)}
                   className="absolute right-4 top-1/2 -translate-y-1/2"
                 >
                   <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                 </button>
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Record Payment</h2>
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Record Payment</h3>
               </div>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleCreatePayment)} className="p-4 space-y-3">
