@@ -613,46 +613,55 @@ export default function Documents() {
                   )}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{userIsAdmin ? 'Upload Document' : 'Upload Photo'}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="file">File</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        ref={fileInputRef}
-                        id="file"
-                        type="file"
-                        accept={userIsAdmin ? undefined : "image/*"}
-                        onChange={handleFileSelect}
-                        className="flex-1"
-                        data-testid="input-file"
-                      />
-                    </div>
+              <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
+                  <button 
+                    onClick={() => setUploadOpen(false)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2"
+                  >
+                    <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                  </button>
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {userIsAdmin ? 'Upload Document' : 'Upload Photo'}
+                  </h3>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="file" className="text-sm font-medium text-slate-700 dark:text-slate-300">File</Label>
+                    <Input
+                      ref={fileInputRef}
+                      id="file"
+                      type="file"
+                      accept={userIsAdmin ? undefined : "image/*"}
+                      onChange={handleFileSelect}
+                      className="h-10"
+                      data-testid="input-file"
+                    />
                     {selectedFile && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs text-slate-500">
                         Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
                       </p>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">{userIsAdmin ? 'Document Name' : 'Photo Name'}</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {userIsAdmin ? 'Document Name' : 'Photo Name'}
+                    </Label>
                     <Input
                       id="name"
                       value={uploadName}
                       onChange={(e) => setUploadName(e.target.value)}
-                      placeholder={userIsAdmin ? "Enter document name" : "Enter photo name"}
+                      placeholder="Name"
+                      className="h-10"
                       data-testid="input-document-name"
                     />
                   </div>
                   {userIsAdmin ? (
                     <>
-                      <div className="space-y-2">
-                        <Label htmlFor="category">Category</Label>
+                      <div className="space-y-1">
+                        <Label htmlFor="category" className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</Label>
                         <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v as DocumentCategory)}>
-                          <SelectTrigger data-testid="select-category">
+                          <SelectTrigger className="h-10" data-testid="select-category">
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
@@ -664,10 +673,10 @@ export default function Documents() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="visibility">Who can see this?</Label>
+                      <div className="space-y-1">
+                        <Label htmlFor="visibility" className="text-sm font-medium text-slate-700 dark:text-slate-300">Who can see this?</Label>
                         <Select value={uploadVisibility} onValueChange={(v) => setUploadVisibility(v as DocumentVisibility)}>
-                          <SelectTrigger data-testid="select-visibility">
+                          <SelectTrigger className="h-10" data-testid="select-visibility">
                             <SelectValue placeholder="Select visibility" />
                           </SelectTrigger>
                           <SelectContent>
@@ -688,29 +697,29 @@ export default function Documents() {
                             </SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
                           Controls which team members can view this document
                         </p>
                       </div>
                     </>
                   ) : (
-                    <div className="space-y-2">
-                      <Label>Category</Label>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-md text-sm">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Category</Label>
+                      <div className="flex items-center gap-2 px-3 h-10 bg-slate-100 dark:bg-slate-800 rounded-md text-sm">
                         <Camera className="h-4 w-4" />
                         <span>Photos</span>
                       </div>
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <Label htmlFor="job">
+                  <div className="space-y-1">
+                    <Label htmlFor="job" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                       Attach to Job
                       {!userIsAdmin && <span className="text-red-500 ml-1">*</span>}
                     </Label>
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full justify-between"
+                      className="w-full h-10 justify-between"
                       onClick={() => setUploadJobPickerOpen(true)}
                       data-testid="button-select-job"
                     >
@@ -725,11 +734,12 @@ export default function Documents() {
                       <p className="text-xs text-red-500">Photos must be attached to a job</p>
                     )}
                   </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="outline" onClick={() => setUploadOpen(false)} data-testid="button-cancel">
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700 mt-4">
+                    <Button variant="outline" className="h-10" onClick={() => setUploadOpen(false)} data-testid="button-cancel">
                       Cancel
                     </Button>
                     <Button 
+                      className="h-10"
                       onClick={handleUpload} 
                       disabled={!selectedFile || uploadMutation.isPending || (!userIsAdmin && uploadJobId === 'company-wide')}
                       data-testid="button-submit-upload"

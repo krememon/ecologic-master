@@ -1,0 +1,120 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual consistency, spacing, headers, typography, layout only
+✅ Placeholder text tweaks are allowed (strings only)
+
+TARGET: “Upload Document” modal (Documents & Approvals)
+
+GOAL
+Modernize and clean up this modal to match EcoLogic’s latest modal styling:
+- Greyed-out header strip (like Add New Contractor)
+- Centered title + single X close
+- Tighter spacing (“shorter” rows)
+- Consistent input/select styling + chevrons aligned
+- Cleaner helper text styling
+- Footer buttons aligned and modern
+- Keep ALL functionality exactly the same
+
+STRICT RULES
+1) DO NOT change:
+   - upload logic (file selection, form submit, storage upload)
+   - API calls
+   - state shape/keys
+   - validation / required behavior
+   - default values (Category, Visibility, Attach to Job)
+   - how “Choose File” works
+2) Only change:
+   - classNames/styles/layout wrappers
+   - typography
+   - spacing
+   - placeholder strings (optional, but do NOT change meaning)
+
+WHAT TO FIX (from screenshot)
+- Header is plain white; needs grey header strip
+- File input row looks default (“Choose File / No file chosen”) and not consistent with app
+- Too much vertical whitespace between fields
+- Helper text (“Controls which team members…”) is visually loud and too separated
+- Footer buttons not aligned to current EcoLogic style (Cancel + Upload)
+
+IMPLEMENTATION STEPS
+
+A) Header (match Add New Contractor)
+- Apply grey header background strip (same bg color, padding, height)
+- Title centered: “Upload Document”
+- Single X close top-right
+- Subtle bottom divider under header
+
+B) Overall modal padding + spacing
+- Reduce vertical spacing between form groups
+- Tighten label-to-input gap
+- Use consistent “shorter” field blocks (same as Add New Client/Contractor)
+
+C) Field styling consistency
+For all inputs/selects:
+- Match border radius, height, and focus ring used elsewhere
+- Ensure dropdown chevrons are aligned consistently on the right
+- Keep left padding consistent across fields
+
+D) File input row modernization (UI only — NO functional changes)
+- Keep the native file input behavior exactly the same.
+- Visually present it like EcoLogic:
+  Option 1 (preferred, safe):
+  - Wrap the native <input type="file"> in a styled container
+  - Style the input to take full width, consistent border + radius
+  - Ensure the “Choose File / No file chosen” text doesn’t look cramped:
+    - add consistent padding
+    - align baseline with other fields
+  Option 2 (only if already used elsewhere in app):
+  - Use a hidden file input + a styled button/row that triggers click
+  - ONLY do this if it already exists as a pattern in EcoLogic and does NOT change logic (same handler)
+  - If any risk of breaking upload flow, do Option 1.
+
+E) Document Name input
+- Keep label: “Document Name”
+- Placeholder can be cleaned to match your new placeholder style:
+  - change from “Enter document name” → “Document Name” (greyed) IF you want consistency with the other modals
+  - Otherwise keep it, but ensure placeholder styling matches EcoLogic
+
+F) Helper text (“Controls which team members…”)
+- Reduce visual weight:
+  - smaller font
+  - muted color
+  - tighter spacing (closer to the visibility select)
+- Keep the text content the same (unless you want it to match sentence case—visual only)
+
+G) Attach to Job select
+- Keep the current default and behavior (“Company-wide (No job)”)
+- Style like other selects
+
+H) Footer buttons
+- Keep Cancel and Upload behaviors identical
+- Make buttons consistent:
+  - same height
+  - radius matches app
+  - aligned baseline
+  - reduce extra footer padding/empty space
+- Upload button:
+  - keep icon if it’s already there
+  - ensure icon + text are vertically centered
+  - fix any misalignment between Cancel and Upload
+
+FILES
+- Only change the Upload Document modal component and any local CSS it uses.
+- Do NOT refactor shared modal logic globally.
+
+DELIVERABLES
+1) Upload Document modal now matches EcoLogic’s modern style (grey header strip + tight spacing).
+2) File input row looks clean and consistent, with no behavior changes.
+3) Footer buttons look aligned and professional.
+4) No functional changes and no console errors.
+
+QA CHECKLIST (MUST PASS)
+- Selecting a file still works
+- Upload still uploads successfully
+- Validation still behaves the same
+- Category/Visibility/Attach-to-Job selections still work
+- Cancel and X close still work
+- No runtime errors / no white screens
+- Looks good at iPhone width
