@@ -162,11 +162,6 @@ export function JobInvoiceModal({
       
       // Invalidate invoices cache so it appears in Invoices tab immediately
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      
-      toast({
-        title: "Invoice Generated",
-        description: `${data.fileName} is ready to send.`,
-      });
     },
     onError: (error: any) => {
       const errMsg = error.message || "Failed to generate invoice";
