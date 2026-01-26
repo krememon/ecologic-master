@@ -1639,8 +1639,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Unable to get access token' });
       }
       
+      // Fetch line items - prefer invoice.lineItems, fallback to job_line_items if invoice has a jobId
+      let actualLineItems = invoice.lineItems || [];
+      
+      if (actualLineItems.length === 0 && invoice.jobId) {
+        // Fetch from job_line_items table
+        const jobLineItemsResult = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, invoice.jobId));
+        actualLineItems = jobLineItemsResult.map(item => ({
+          name: item.name,
+          description: item.description,
+          quantity: parseFloat(item.quantity) || 1,
+          unitPriceCents: item.unitPriceCents || 0,
+          unit: item.unit,
+          taxable: item.taxable,
+          taxId: item.taxId,
+          taxRatePercentSnapshot: item.taxRatePercentSnapshot,
+          taxNameSnapshot: item.taxNameSnapshot,
+        }));
+        console.log('[QB] Fetched line items from job_line_items table');
+      }
+      
       // Debug: log invoice line items
-      console.log('[QB] Invoice line items:', JSON.stringify(invoice.lineItems));
+      console.log('[QB] Line items count:', actualLineItems.length, 'sample:', actualLineItems[0]);
       
       // Get or create default QuickBooks service item
       const serviceItem = await ensureQboServiceItem(member.companyId);
@@ -1654,8 +1674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Build QBO invoice line items with ItemRef
-      const rawLineItems = invoice.lineItems || [];
-      const qboLines = rawLineItems
+      const qboLines = actualLineItems
         .filter((item: any) => {
           const qty = parseFloat(item.quantity) || 1;
           const unitPrice = item.unitPriceCents ? item.unitPriceCents / 100 : (parseFloat(item.unitPrice) || 0);

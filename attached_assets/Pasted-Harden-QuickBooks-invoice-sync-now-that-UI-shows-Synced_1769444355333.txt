@@ -1,0 +1,51 @@
+Harden QuickBooks invoice sync now that UI shows "Synced to QuickBooks".
+
+Current status:
+- UI now shows "Synced to QuickBooks" ✅
+- QBO invoices were previously duplicating when sync clicked multiple times (Created invoice 145, then 146) ❌
+- Sync endpoint logs show invoice line items are still empty: [QB] Invoice line items: [] ❌
+- It is currently creating a single fallback line for the total instead of real line items.
+
+Requirements:
+
+1) Enforce strict idempotency (NO duplicates ever)
+- In POST /api/integrations/quickbooks/sync-invoice/:invoiceId
+- Before creating a QBO invoice:
+  - Reload the invoice from DB
+  - If invoice.qboInvoiceId exists:
+    - Return success immediately and DO NOT call QBO create invoice
+    - Response should include qboInvoiceId and a flag like alreadySynced=true
+- After successful QBO create:
+  - Save qboInvoiceId to the invoice record in DB
+  - Return it in the response
+- Add logs:
+  console.log("[QB] Idempotency check qboInvoiceId:", invoice.qboInvoiceId)
+  console.log("[QB] Returning already synced:", invoice.qboInvoiceId)
+
+2) Fix line item fetching so QBO receives real Line[] (not fallback total)
+- Update the invoice DB query used by the sync endpoint to include invoice line items
+- Confirm which table/field stores invoice items (invoiceLineItems / invoiceItems / line_items)
+- Ensure invoice.lineItems is populated for invoice 64 and future invoices
+- Add debug log:
+  console.log("[QB] Line items count:", lineItems.length, "sample:", lineItems[0])
+
+3) Map each EcoLogic line item → QBO Line[]
+- For each line item:
+  - Qty (default 1)
+  - UnitPrice
+  - Amount = Qty * UnitPrice
+  - DetailType = "SalesItemLineDetail"
+  - SalesItemLineDetail must include ItemRef, Qty, UnitPrice
+- Use the existing default QBO service item "EcoLogic Service" as ItemRef
+- Only fall back to a single total line IF lineItems truly do not exist
+
+Rules:
+- Do NOT redesign UI
+- Do NOT break Stripe
+- Do NOT block payments
+- Must remain mobile-safe
+
+Goal:
+- Clicking sync once creates exactly ONE QBO invoice and saves qboInvoiceId
+- Clicking again never creates a duplicate and returns alreadySynced=true
+- QBO invoice shows the real EcoLogic line items (not a single total line)
