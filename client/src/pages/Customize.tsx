@@ -1,11 +1,34 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
-import { Link } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock } from "lucide-react";
+import { Link, useSearch } from "wouter";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2 } from "lucide-react";
+import { useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Customize() {
   const { isLoading: authLoading } = useAuth();
   const { can } = useCan();
+  const { toast } = useToast();
+  const searchString = useSearch();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const qbStatus = params.get('quickbooks');
+    if (qbStatus === 'connected') {
+      toast({
+        title: "QuickBooks Connected",
+        description: "Your QuickBooks account has been successfully connected.",
+      });
+      window.history.replaceState({}, '', '/customize');
+    } else if (qbStatus === 'error') {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to QuickBooks. Please try again.",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, '', '/customize');
+    }
+  }, [searchString, toast]);
 
   if (authLoading) {
     return (
@@ -53,6 +76,12 @@ export default function Customize() {
       title: "Time Tracking",
       description: "Configure auto clock-out and time settings",
       href: "/customize/time-tracking",
+    },
+    {
+      icon: Link2,
+      title: "QuickBooks",
+      description: "Connect to QuickBooks Online for accounting",
+      href: "/customize/quickbooks",
     },
   ];
 
