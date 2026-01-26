@@ -87,19 +87,14 @@ export function SelectCustomerModal({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" preventAutoFocus>
         <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-          <button 
-            onClick={handleClose} 
-            className="text-sm text-blue-600 dark:text-blue-400 font-medium hover:text-blue-700 dark:hover:text-blue-300 transition-colors min-w-[60px] min-h-[44px] flex items-center justify-start"
-            data-testid="button-cancel-select-customer"
-          >
-            Cancel
-          </button>
+          <div className="min-w-[44px]" />
           <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
             Select Customer
           </DialogTitle>
           <button 
             onClick={handleClose} 
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            data-testid="button-cancel-select-customer"
           >
             <X className="h-5 w-5" />
           </button>
