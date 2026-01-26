@@ -1,0 +1,69 @@
+Revamp the "Select Customer" screen UI to look cleaner and more modern, without changing functionality.
+
+Context:
+This is the modal/screen used to select a customer (seen when creating a Job/Estimate/Invoice/Lead, etc.).
+Current screen has:
+- Header: "SELECT CUSTOMER" with Cancel on left and X on right
+- Search input ("Search by name")
+- "+ Add Customer" row
+- List of customers (name + email)
+Functionality currently works correctly — do not change behavior.
+
+Goal:
+Keep the exact same functionality and flows, but visually clean it up to feel modern/premium and consistent with EcoLogic styling.
+
+Do NOT change:
+- Search behavior
+- Add Customer flow
+- Selecting a customer
+- Any API calls or data shape
+- Navigation logic
+
+UI/UX improvements to implement:
+1) Header polish
+- Keep "Select Customer" title (case can be Title Case instead of all caps if it matches EcoLogic)
+- Use a consistent top bar style with proper spacing and alignment
+- Keep Cancel + X but make them visually consistent (same size, same hit target)
+- Add subtle divider under header
+
+2) Search input polish
+- Make search field slightly shorter height with better padding
+- Add soft background and rounded corners consistent with app
+- Confirm the placeholder and icon alignment look clean
+- Keep same functionality
+
+3) "+ Add Customer" row polish
+- Make it look like a primary action row:
+  - icon in a small circle
+  - label text aligned with customer rows
+  - subtle hover/press state
+- Keep it pinned above the customer list like it is now
+
+4) Customer list polish
+- Each customer should be a clean list row:
+  - left avatar circle (initials or generic icon is fine)
+  - name (bold)
+  - email (subtext)
+- Add consistent spacing between rows
+- Add subtle separators or dividers note: keep light and modern
+- Add a pressed state so it feels tappable
+
+5) Empty state + loading state (if not already)
+- If no customers match search, show a simple empty state message
+- If loading, show skeleton rows or a subtle loader (no redesign)
+
+6) Mobile-safe
+- Must look perfect in iPhone width
+- No horizontal scrolling
+- Tap targets at least 44px tall
+
+Rules:
+- No backend changes
+- No functionality changes
+- No new buttons beyond what exists now
+- Keep “hidden not disabled” philosophy
+
+Acceptance Criteria:
+- Screen looks noticeably cleaner and more modern
+- Search, add customer, and selecting customers work exactly the same
+- Layout is consistent with EcoLogic design system and mobile UI

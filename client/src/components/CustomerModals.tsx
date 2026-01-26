@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Search, Plus, X, ChevronLeft, User } from "lucide-react";
+import { Loader2, Search, Plus, X, ChevronLeft, User, Users } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Customer } from "@shared/schema";
@@ -18,6 +18,12 @@ interface SelectCustomerModalProps {
   onOpenChange: (open: boolean) => void;
   onSelectCustomer: (customer: Customer) => void;
   canCreateCustomer: boolean;
+}
+
+function getInitials(firstName?: string | null, lastName?: string | null): string {
+  const first = firstName?.charAt(0)?.toUpperCase() || '';
+  const last = lastName?.charAt(0)?.toUpperCase() || '';
+  return first + last || '?';
 }
 
 export function SelectCustomerModal({
@@ -79,82 +85,111 @@ export function SelectCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden" preventAutoFocus>
-        <div className="flex items-center justify-between px-4 py-3 border-b">
+      <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" preventAutoFocus>
+        <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
           <button 
             onClick={handleClose} 
-            className="text-sm text-blue-500 font-medium"
+            className="text-sm text-blue-600 dark:text-blue-400 font-medium hover:text-blue-700 dark:hover:text-blue-300 transition-colors min-w-[60px] min-h-[44px] flex items-center justify-start"
             data-testid="button-cancel-select-customer"
           >
             Cancel
           </button>
-          <DialogTitle className="text-base font-semibold">SELECT CUSTOMER</DialogTitle>
+          <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            Select Customer
+          </DialogTitle>
           <button 
             onClick={handleClose} 
-            className="text-slate-400 hover:text-slate-600"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-4 border-b">
+        <div className="px-4 py-3 bg-white dark:bg-slate-900">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
-              placeholder="Search by name"
+              placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
               data-testid="input-search-customer"
             />
           </div>
         </div>
 
-        <ScrollArea className="max-h-64">
-          <div className="py-2">
+        <div className="border-t border-slate-100 dark:border-slate-800" />
+
+        <ScrollArea className="max-h-80">
+          <div className="bg-white dark:bg-slate-900">
             {canCreateCustomer && (
               <button
-                className="w-full flex items-center gap-3 px-4 py-3 text-left border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                className="w-full flex items-center gap-3 px-4 min-h-[56px] text-left hover:bg-blue-50 dark:hover:bg-blue-950/30 active:bg-blue-100 dark:active:bg-blue-950/50 transition-colors"
                 onClick={() => setShowAddCustomer(true)}
                 data-testid="button-add-customer"
               >
-                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                  <Plus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                  <Plus className="h-5 w-5 text-white" />
                 </div>
-                <span className="font-medium text-blue-600 dark:text-blue-400">+ Add Customer</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">Add Customer</span>
               </button>
             )}
 
+            {canCreateCustomer && (filteredCustomers.length > 0 || isLoading) && (
+              <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+            )}
+
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div className="py-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3">
+                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-28 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                      <div className="h-3 w-40 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filteredCustomers.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <User className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                <p className="font-medium">No customers found</p>
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                  <Users className="h-7 w-7 text-slate-400" />
+                </div>
+                <p className="font-medium text-slate-600 dark:text-slate-400 text-center">
+                  {searchQuery ? "No customers match your search" : "No customers yet"}
+                </p>
+                {searchQuery && (
+                  <p className="text-sm text-slate-400 mt-1">Try a different search term</p>
+                )}
               </div>
             ) : (
-              filteredCustomers.map((customer) => (
-                <button
-                  key={customer.id}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                  onClick={() => handleSelectCustomer(customer)}
-                  data-testid={`customer-row-${customer.id}`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                    <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">
-                      {`${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed'}
-                    </p>
-                    {customer.email && (
-                      <p className="text-sm text-slate-500 truncate">{customer.email}</p>
+              <div className="py-1">
+                {filteredCustomers.map((customer, index) => (
+                  <div key={customer.id}>
+                    <button
+                      className="w-full flex items-center gap-3 px-4 min-h-[60px] text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors"
+                      onClick={() => handleSelectCustomer(customer)}
+                      data-testid={`customer-row-${customer.id}`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center text-sm font-semibold text-slate-600 dark:text-slate-300">
+                        {getInitials(customer.firstName, customer.lastName)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {`${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unnamed'}
+                        </p>
+                        {customer.email && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{customer.email}</p>
+                        )}
+                      </div>
+                    </button>
+                    {index < filteredCustomers.length - 1 && (
+                      <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
                     )}
                   </div>
-                </button>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </ScrollArea>
@@ -255,19 +290,19 @@ function AddCustomerModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden rounded-2xl">
+        <DialogHeader className="px-4 h-14 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
           <Button
             variant="ghost"
             size="sm"
-            className="text-primary font-normal p-0 h-auto gap-1"
+            className="text-blue-600 dark:text-blue-400 font-medium p-0 h-auto gap-1 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-transparent min-h-[44px]"
             onClick={onBack}
             data-testid="button-back-add-customer"
           >
             <ChevronLeft className="h-4 w-4" />
             Back
           </Button>
-          <DialogTitle className="text-sm font-semibold tracking-wide uppercase">
+          <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
             Add Customer
           </DialogTitle>
           <div className="w-12" />
@@ -384,9 +419,9 @@ function AddCustomerModal({
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800">
           <Button
-            className="w-full"
+            className="w-full h-12 rounded-xl font-semibold"
             onClick={handleSubmit}
             disabled={createCustomerMutation.isPending}
             data-testid="button-save-customer"
