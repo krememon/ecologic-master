@@ -1066,6 +1066,170 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // Helper function to sync payment to QuickBooks
+  async function syncPaymentToQbo(paymentId: number, companyId: number): Promise<{ success: boolean; qboPaymentId?: string; error?: string }> {
+    try {
+      // Get payment with invoice
+      const payment = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
+      if (!payment.length) {
+        return { success: false, error: 'Payment not found' };
+      }
+      const paymentRecord = payment[0];
+
+      // Check if already synced (idempotent)
+      if (paymentRecord.qboPaymentId) {
+        return { success: true, qboPaymentId: paymentRecord.qboPaymentId };
+      }
+
+      // Get company QB settings
+      const company = await storage.getCompany(companyId);
+      if (!company?.qboRealmId) {
+        return { success: false, error: 'QuickBooks not connected' };
+      }
+
+      // Get invoice to check if it's synced
+      if (!paymentRecord.invoiceId) {
+        return { success: false, error: 'Payment has no invoice' };
+      }
+
+      const invoice = await db.select().from(invoices).where(eq(invoices.id, paymentRecord.invoiceId)).limit(1);
+      if (!invoice.length) {
+        return { success: false, error: 'Invoice not found' };
+      }
+      const invoiceRecord = invoice[0];
+
+      // If invoice not yet synced to QBO, mark payment as waiting
+      if (!invoiceRecord.qboInvoiceId) {
+        await db.update(payments).set({
+          qboPaymentSyncStatus: 'waiting',
+          qboPaymentLastSyncError: 'Invoice not yet synced to QuickBooks',
+          updatedAt: new Date()
+        }).where(eq(payments.id, paymentId));
+        return { success: false, error: 'Invoice not yet synced - payment marked waiting' };
+      }
+
+      // Get customer for QBO customer ID
+      let qboCustomerId: string | null = null;
+      if (invoiceRecord.customerId) {
+        const customer = await db.select().from(customers).where(eq(customers.id, invoiceRecord.customerId)).limit(1);
+        if (customer.length && customer[0].qboCustomerId) {
+          qboCustomerId = customer[0].qboCustomerId;
+        }
+      }
+
+      if (!qboCustomerId) {
+        await db.update(payments).set({
+          qboPaymentSyncStatus: 'failed',
+          qboPaymentLastSyncError: 'Customer not synced to QuickBooks',
+          updatedAt: new Date()
+        }).where(eq(payments.id, paymentId));
+        return { success: false, error: 'Customer not synced to QuickBooks' };
+      }
+
+      // Get access token
+      const accessToken = await getQboAccessToken(companyId);
+      if (!accessToken) {
+        await db.update(payments).set({
+          qboPaymentSyncStatus: 'failed',
+          qboPaymentLastSyncError: 'Could not get QuickBooks access token',
+          updatedAt: new Date()
+        }).where(eq(payments.id, paymentId));
+        return { success: false, error: 'Could not get QuickBooks access token' };
+      }
+
+      const qboEnv = process.env.QB_ENV || 'sandbox';
+      const baseUrl = qboEnv === 'production' 
+        ? 'https://quickbooks.api.intuit.com' 
+        : 'https://sandbox-quickbooks.api.intuit.com';
+
+      // Calculate amount in dollars
+      const amountDollars = paymentRecord.amountCents 
+        ? paymentRecord.amountCents / 100 
+        : parseFloat(paymentRecord.amount);
+
+      // Map EcoLogic payment method to QBO payment type
+      let qboPaymentMethodRef: { value: string; name: string } | undefined;
+      const method = paymentRecord.paymentMethod?.toLowerCase();
+      if (method === 'cash') {
+        qboPaymentMethodRef = { value: '1', name: 'Cash' };
+      } else if (method === 'check') {
+        qboPaymentMethodRef = { value: '2', name: 'Check' };
+      } else if (method === 'credit_card' || method === 'stripe' || method === 'card') {
+        qboPaymentMethodRef = { value: '3', name: 'Credit Card' };
+      }
+
+      // Create QBO Payment
+      const qboPaymentData: any = {
+        CustomerRef: { value: qboCustomerId },
+        TotalAmt: amountDollars,
+        Line: [{
+          Amount: amountDollars,
+          LinkedTxn: [{
+            TxnId: invoiceRecord.qboInvoiceId,
+            TxnType: 'Invoice'
+          }]
+        }]
+      };
+
+      if (qboPaymentMethodRef) {
+        qboPaymentData.PaymentMethodRef = qboPaymentMethodRef;
+      }
+
+      if (paymentRecord.checkNumber) {
+        qboPaymentData.PaymentRefNum = paymentRecord.checkNumber;
+      }
+
+      const createResponse = await fetch(
+        `${baseUrl}/v3/company/${company.qboRealmId}/payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(qboPaymentData)
+        }
+      );
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error('[QB] Payment creation failed:', errorText);
+        await db.update(payments).set({
+          qboPaymentSyncStatus: 'failed',
+          qboPaymentLastSyncError: `QBO API error: ${createResponse.status}`,
+          updatedAt: new Date()
+        }).where(eq(payments.id, paymentId));
+        return { success: false, error: `QBO API error: ${createResponse.status}` };
+      }
+
+      const createData = await createResponse.json();
+      const newQboPaymentId = createData.Payment?.Id;
+
+      if (newQboPaymentId) {
+        await db.update(payments).set({
+          qboPaymentId: newQboPaymentId,
+          qboPaymentSyncStatus: 'synced',
+          qboPaymentLastSyncError: null,
+          qboPaymentLastSyncedAt: new Date(),
+          updatedAt: new Date()
+        }).where(eq(payments.id, paymentId));
+        console.log('[QB] Payment synced:', newQboPaymentId);
+        return { success: true, qboPaymentId: newQboPaymentId };
+      }
+
+      return { success: false, error: 'No payment ID returned from QBO' };
+    } catch (error: any) {
+      console.error('[QB] Error syncing payment:', error);
+      await db.update(payments).set({
+        qboPaymentSyncStatus: 'failed',
+        qboPaymentLastSyncError: error.message || 'Unknown error',
+        updatedAt: new Date()
+      }).where(eq(payments.id, paymentId));
+      return { success: false, error: error.message || 'Unknown error' };
+    }
+  }
+
   // GET /api/integrations/quickbooks/status - Check connection status
   app.get('/api/integrations/quickbooks/status', isAuthenticated, async (req: any, res) => {
     try {
@@ -1421,6 +1585,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           qboLastSyncError: null,
           qboLastSyncedAt: new Date(),
         });
+
+        // After invoice sync, sync any waiting payments (non-blocking)
+        db.select().from(payments)
+          .where(and(
+            eq(payments.invoiceId, invoiceId),
+            eq(payments.qboPaymentSyncStatus, 'waiting')
+          ))
+          .then(waitingPayments => {
+            waitingPayments.forEach(p => {
+              syncPaymentToQbo(p.id, member.companyId).then(result => {
+                console.log(`[QB] Waiting payment ${p.id} sync: ${result.success ? result.qboPaymentId : result.error}`);
+              }).catch(err => console.error('[QB] Waiting payment sync error:', err));
+            });
+          }).catch(err => console.error('[QB] Error finding waiting payments:', err));
+
         return res.json({ success: true, qboInvoiceId });
       }
       
@@ -10213,6 +10392,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Payment] Manual ${method} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
 
+      // Sync payment to QuickBooks (non-blocking)
+      syncPaymentToQbo(payment.id, company.id).then(result => {
+        if (result.success) {
+          console.log(`[QB] Payment ${payment.id} synced to QuickBooks: ${result.qboPaymentId}`);
+        } else {
+          console.log(`[QB] Payment ${payment.id} sync: ${result.error}`);
+        }
+      }).catch(err => console.error('[QB] Payment sync error:', err));
+
       // Send payment_collected notification to managers
       const payer = await storage.getUser(userId);
       const payerName = payer ? `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || 'Someone' : 'Someone';
@@ -10385,7 +10573,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
           if (!existingPayment) {
             const amountCents = session.amount_total || (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100));
-            await storage.createPayment({
+            const stripePayment = await storage.createPayment({
               companyId: invoice.companyId,
               invoiceId: invoiceId,
               jobId: invoice.jobId || null,
@@ -10399,6 +10587,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
               paidDate: new Date(),
             });
             console.log(`[Stripe] Payment record created for invoice ${invoiceId}`);
+
+            // Sync payment to QuickBooks (non-blocking)
+            syncPaymentToQbo(stripePayment.id, invoice.companyId).then(result => {
+              if (result.success) {
+                console.log(`[QB] Stripe payment ${stripePayment.id} synced: ${result.qboPaymentId}`);
+              } else {
+                console.log(`[QB] Stripe payment ${stripePayment.id} sync: ${result.error}`);
+              }
+            }).catch(err => console.error('[QB] Stripe payment sync error:', err));
           }
 
           // Update job paymentStatus to 'paid' if invoice is associated with a job

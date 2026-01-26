@@ -413,6 +413,11 @@ export const payments = pgTable("payments", {
   paidDate: timestamp("paid_date"),
   notes: text("notes"),
   meta: jsonb("meta"),
+  // QuickBooks sync fields
+  qboPaymentId: varchar("qbo_payment_id", { length: 100 }),
+  qboPaymentSyncStatus: varchar("qbo_payment_sync_status", { length: 20 }), // pending, synced, failed, waiting
+  qboPaymentLastSyncError: text("qbo_payment_last_sync_error"),
+  qboPaymentLastSyncedAt: timestamp("qbo_payment_last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
