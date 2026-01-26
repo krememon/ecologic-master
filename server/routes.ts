@@ -1579,10 +1579,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'QuickBooks not connected' });
       }
       
+      // Fresh fetch to ensure we have latest qboInvoiceId
       const invoice = await storage.getInvoice(invoiceId);
       if (!invoice || invoice.companyId !== member.companyId) {
         return res.status(404).json({ error: 'Invoice not found' });
       }
+      
+      // Debug logging
+      console.log('[QB] Idempotency check qboInvoiceId:', invoice.qboInvoiceId);
+      console.log('[QB] Line items count:', (invoice.lineItems || []).length);
       
       // Idempotent: if already synced, return existing ID
       if (invoice.qboInvoiceId) {
@@ -1746,6 +1751,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           qboLastSyncError: null,
           qboLastSyncedAt: new Date(),
         });
+        
+        // Verify the save worked
+        const savedInvoice = await storage.getInvoice(invoiceId);
+        console.log('[QB] Saved qboInvoiceId:', savedInvoice?.qboInvoiceId);
 
         // After invoice sync, sync any waiting payments (non-blocking)
         db.select().from(payments)

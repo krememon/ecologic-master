@@ -1142,6 +1142,10 @@ export class DatabaseStorage implements IStorage {
         stripeCheckoutSessionId: invoices.stripeCheckoutSessionId,
         stripePaymentIntentId: invoices.stripePaymentIntentId,
         paidAt: invoices.paidAt,
+        qboInvoiceId: invoices.qboInvoiceId,
+        qboSyncStatus: invoices.qboSyncStatus,
+        qboLastSyncError: invoices.qboLastSyncError,
+        qboLastSyncedAt: invoices.qboLastSyncedAt,
         createdAt: invoices.createdAt,
         updatedAt: invoices.updatedAt,
         client: {

@@ -1,0 +1,53 @@
+Fix QuickBooks invoice sync creating duplicate invoices and not updating UI.
+
+Current behavior:
+- Clicking "Sync to QuickBooks" successfully creates a QBO invoice (Created invoice: 145)
+- Clicking again creates another QBO invoice (Created invoice: 146)
+- UI does not switch to "Synced ✓" even after success
+- Invoice fetch logs show: [QB] Invoice line items: [] (not pulling real line items)
+
+Requirements:
+
+1) Idempotency (NO duplicate QBO invoices)
+- In POST /api/integrations/quickbooks/sync-invoice/:invoiceId
+- Before creating a QBO invoice:
+  - Re-fetch the invoice fresh from DB
+  - If invoice.qboInvoiceId exists, return success immediately:
+    { success: true, alreadySynced: true, qboInvoiceId: invoice.qboInvoiceId }
+  - Do NOT create another QBO invoice
+
+- After successfully creating a QBO invoice:
+  - Persist qboInvoiceId to the EcoLogic invoice record in DB immediately
+  - Then return the qboInvoiceId in the API response
+
+- Add logs:
+  console.log("[QB] Idempotency check qboInvoiceId:", invoice.qboInvoiceId)
+  console.log("[QB] Saved qboInvoiceId:", savedInvoice.qboInvoiceId)
+
+2) UI update instantly ("Synced ✓")
+- On the Invoice Details page:
+  - After clicking "Sync to QuickBooks" and receiving success:
+    - Update local invoice state with returned qboInvoiceId
+    - OR refetch GET /api/invoices/:id
+  - Replace button with non-clickable status text: "Synced ✓"
+  - Do not redesign UI; keep it mobile-safe
+
+3) Fix invoice line items fetching (so QBO gets real lines)
+- Ensure invoice query used by sync endpoint includes line items relation/table
+- invoice.lineItems should not be []
+- If line items are stored under a different field name (items, invoiceItems, line_items), normalize it
+- Add debug log showing counts:
+  console.log("[QB] Line items count:", (invoice.lineItems || invoice.items || []).length)
+
+4) Do NOT block Stripe / payments
+- The log "[QB] Waiting payment ... Customer not synced" must NOT fail invoice sync
+- Ensure QuickBooks payment sync (if triggered) is:
+  - non-blocking
+  - does not throw errors that break invoice sync
+
+Deliverables:
+- First sync creates ONE QBO invoice and saves qboInvoiceId to EcoLogic invoice
+- Second sync returns already_synced and does NOT create another QBO invoice
+- UI shows "Synced ✓" immediately after success
+- Invoice line items are correctly pulled (not empty) and used when available
+- Stripe remains unaffected
