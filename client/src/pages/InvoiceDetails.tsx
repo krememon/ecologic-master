@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
 import { format } from "date-fns";
 
 interface InvoiceDetailsProps {
@@ -54,6 +54,8 @@ interface InvoiceData {
   stripeCheckoutSessionId?: string | null;
   stripePaymentIntentId?: string | null;
   paidAt?: string | null;
+  qboInvoiceId?: string | null;
+  qboSyncStatus?: string | null;
   createdAt: string;
   updatedAt?: string | null;
   client?: {
@@ -107,8 +109,11 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const [emailValue, setEmailValue] = useState('');
   const [phoneValue, setPhoneValue] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isSyncingQbo, setIsSyncingQbo] = useState(false);
+  const [qboSyncResult, setQboSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   
   const canVoidInvoice = role === 'OWNER' || role === 'SUPERVISOR';
+  const canSyncQbo = role === 'OWNER' || role === 'SUPERVISOR';
 
   const { data: invoice, isLoading, error } = useQuery<InvoiceData>({
     queryKey: [`/api/invoices/${invoiceId}`],
@@ -224,6 +229,36 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
       toast({ title: error.message || "Failed to send invoice", variant: "destructive" });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleQboSync = async () => {
+    if (isSyncingQbo || !invoice) return;
+    
+    setIsSyncingQbo(true);
+    setQboSyncResult(null);
+    
+    try {
+      const response = await apiRequest('POST', `/api/integrations/quickbooks/sync-invoice/${invoice.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setQboSyncResult({ 
+          success: true, 
+          message: data.alreadySynced ? 'Already synced' : 'Synced successfully'
+        });
+        queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
+      } else {
+        throw new Error(data.error || 'Sync failed');
+      }
+    } catch (err: any) {
+      setQboSyncResult({ 
+        success: false, 
+        message: err.message || 'Sync failed'
+      });
+      toast({ title: err.message || "Failed to sync to QuickBooks", variant: "destructive" });
+    } finally {
+      setIsSyncingQbo(false);
     }
   };
 
@@ -528,6 +563,52 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
                   </span>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* QuickBooks Sync Card */}
+        {canSyncQbo && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <Cloud className="h-5 w-5" />
+                QuickBooks
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {invoice.qboInvoiceId ? (
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <Check className="h-4 w-4" />
+                  <span className="text-sm font-medium">Synced to QuickBooks</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Not synced</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQboSync}
+                    disabled={isSyncingQbo}
+                    className="w-full"
+                  >
+                    {isSyncingQbo ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="h-4 w-4 mr-2" />
+                        Sync to QuickBooks
+                      </>
+                    )}
+                  </Button>
+                  {qboSyncResult && !qboSyncResult.success && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{qboSyncResult.message}</p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
