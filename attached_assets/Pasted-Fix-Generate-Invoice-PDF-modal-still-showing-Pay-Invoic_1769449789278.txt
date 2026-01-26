@@ -1,0 +1,73 @@
+Fix Generate Invoice PDF modal still showing "Pay Invoice" even when invoice is already paid.
+
+Evidence:
+- Backend is definitely marking invoice paid and syncing QB payment:
+  [Stripe Webhook] Invoice 73 marked as paid
+  [QB-PAY] Created QBO payment: 158
+  [QB-PAY] Saved qboPaymentId: 158
+- UI refetches invoice:
+  GET /api/jobs/474/invoice 200
+- Yet the Generate Invoice PDF modal still renders "Pay Invoice" (incorrect)
+
+Root cause:
+The modal is not using the freshly fetched invoice object to compute paid state.
+It is likely:
+- using stale job state instead of invoice state, OR
+- checking the wrong fields (e.g. only paidAt, but API uses balanceDue/amountPaid/status), OR
+- rendering Pay button before invoice fetch completes.
+
+Goal:
+"Pay Invoice" must NEVER appear if the invoice is already paid, even on first open.
+
+Requirements:
+
+1) In the Generate Invoice PDF modal, compute paid state ONLY from the invoice returned by:
+   GET /api/jobs/:jobId/invoice
+   Do NOT rely on job fields or cached invoice props.
+
+2) Implement a strict gating flag:
+- const [invoiceStatusLoading, setInvoiceStatusLoading] = useState(true)
+- On modal open:
+  - setInvoiceStatusLoading(true)
+  - fetch latest invoice
+  - setInvoice(refreshedInvoice)
+  - setInvoiceStatusLoading(false)
+
+3) While invoiceStatusLoading === true:
+- Do NOT render the Pay Invoice button at all (default hidden)
+- Only render Pay Invoice after load AND only if invoice is confirmed unpaid.
+
+4) Use a robust isPaid() helper that matches backend fields (covers all possibilities):
+isPaid = (
+  invoice?.status === "paid" ||
+  !!invoice?.paidAt ||
+  (typeof invoice?.balanceDueCents === "number" && invoice.balanceDueCents <= 0) ||
+  (typeof invoice?.amountPaidCents === "number" && typeof invoice?.totalCents === "number" && invoice.amountPaidCents >= invoice.totalCents)
+)
+
+Also handle alternate field names if used:
+- balanceDue (dollars) / amountPaid (dollars) / total (dollars)
+
+5) Add a debug log INSIDE the modal render right before buttons:
+console.log("[Invoice PDF Modal] render flags", {
+  invoiceStatusLoading,
+  status: invoice?.status,
+  paidAt: invoice?.paidAt,
+  balanceDueCents: invoice?.balanceDueCents,
+  amountPaidCents: invoice?.amountPaidCents,
+  totalCents: invoice?.totalCents,
+  isPaid
+})
+
+6) Acceptance Criteria (must pass):
+- Pay via Stripe
+- Immediately open Generate Invoice PDF modal:
+  - Pay Invoice button is NOT shown
+  - "Paid" pill shows
+- Closing + reopening does not change anything (still correct)
+
+Rules:
+- Do NOT redesign UI
+- Do NOT change Stripe logic
+- Do NOT change QuickBooks logic
+- Mobile-safe
