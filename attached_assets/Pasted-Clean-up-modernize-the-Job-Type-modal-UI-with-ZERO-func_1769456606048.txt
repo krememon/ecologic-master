@@ -1,0 +1,52 @@
+Clean up / modernize the "Job Type" modal UI with ZERO functional changes.
+
+Goal:
+Make the Job Type selection modal look cleaner and consistent with our updated EcoLogic modal style (Select Customer, Add Line Items, Job Location), while keeping the exact same behavior.
+
+Rules:
+- Do NOT change functionality.
+- Do NOT change the list of job types or their values.
+- Do NOT change how selection works or what gets saved.
+- Do NOT change any API calls, state shape, or routing.
+- This is UI polish only.
+
+Current UI issues:
+- Header uses all caps "JOB TYPE"
+- Shows both "Cancel" and an "X" (redundant)
+- Feels like legacy styling compared to our new modals
+
+UI Updates Required:
+1) Header modernization
+- Add the subtle grey header background section behind the title (match other updated modals).
+- Title should be Title Case: "Job Type" (not all caps).
+- Use ONE close control only:
+  - Keep a single X icon top-right
+  - Remove "Cancel" text link (or hide it) so header matches our modern modals.
+
+2) List row polish (no behavior change)
+- Keep the same list items and tap-to-select behavior.
+- Convert rows to the cleaner list style used in other modals:
+  - consistent padding
+  - subtle dividers between rows
+  - better vertical spacing (slightly tighter)
+  - add a subtle pressed state (tap feedback)
+- Optional (only if selection already exists): show a checkmark on the selected item.
+  - If selection highlighting does NOT already exist, do not add new behavior.
+
+3) Modal styling consistency
+- Rounded corners and spacing consistent with other modals.
+- Ensure mobile-safe layout (iPhone width).
+- No duplicate close icons.
+
+Scope:
+- Update only the JobType modal/component (or equivalent file).
+- Reuse shared modal header styles/classes if available.
+
+Acceptance Criteria:
+- Job Type modal matches the modern EcoLogic modal look:
+  - grey header
+  - Title Case "Job Type"
+  - single X close top-right
+  - clean list rows with dividers
+- Selecting a job type works exactly as before (no regressions).
+- No console errors.
