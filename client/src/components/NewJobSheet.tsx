@@ -141,6 +141,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
+  const [locationState, setLocationState] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [locationLat, setLocationLat] = useState<number | undefined>();
   const [locationLng, setLocationLng] = useState<number | undefined>();
@@ -951,7 +952,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
           </div>
           <div className="space-y-3 px-4 py-3">
             <div className="space-y-1">
-              <Label>Address</Label>
+              <Label>Street Address</Label>
               <LocationInput
                 value={location}
                 onChange={(val) => {
@@ -960,22 +961,27 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                 }}
                 onAddressSelected={(addr) => {
                   setCity(addr.city);
+                  setLocationState(addr.state);
                   setPostalCode(addr.postalCode);
                   setLocationPlaceId(addr.place_id);
                   setLocation(addr.formatted_address || addr.street);
                   setLocationIsManualOverride(true);
                 }}
-                placeholder="Start typing an address..."
+                placeholder="Street Address"
               />
+            </div>
+            <div className="space-y-1">
+              <Label>City</Label>
+              <Input value={city} onChange={(e) => { setCity(e.target.value); setLocationIsManualOverride(true); }} placeholder="City" className="h-9" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>City</Label>
-                <Input value={city} onChange={(e) => { setCity(e.target.value); setLocationIsManualOverride(true); }} placeholder="City" className="h-9" />
+                <Label>State</Label>
+                <Input value={locationState} onChange={(e) => { setLocationState(e.target.value); setLocationIsManualOverride(true); }} placeholder="State" className="h-9" />
               </div>
               <div className="space-y-1">
-                <Label>ZIP/Postal Code</Label>
-                <Input value={postalCode} onChange={(e) => { setPostalCode(e.target.value); setLocationIsManualOverride(true); }} placeholder="ZIP" className="h-9" />
+                <Label>ZIP Code</Label>
+                <Input value={postalCode} onChange={(e) => { setPostalCode(e.target.value); setLocationIsManualOverride(true); }} placeholder="ZIP Code" className="h-9" />
               </div>
             </div>
           </div>

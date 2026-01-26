@@ -1,0 +1,54 @@
+Match the Job Location modal UI between Jobs and Estimates (make them identical).
+
+Goal:
+The Job Location modal used in Jobs and the Job Location modal used in Estimates should look and behave the same.
+Right now they differ:
+- One shows Address + City + ZIP/Postal Code
+- The other shows Street Address + City + State + ZIP Code
+They also have slightly different spacing/copy.
+
+Rules:
+- Do NOT break address autocomplete (if used).
+- Do NOT change saving behavior (the stored address should still be correct).
+- Prefer the MORE COMPLETE version (Street Address + City + State + ZIP) so both are consistent.
+- This is primarily a UI consistency task. If fields already exist in the data model, use them.
+- If the underlying model only stores a single address string, keep that behavior and only update the UI to match.
+
+What to change:
+1) Use the same fields, labels, and layout in BOTH places:
+- Street Address (single full-width input; still supports autocomplete if available)
+- City (full-width input)
+- State + ZIP Code (two half-width inputs on the same row)
+
+2) Copy/text consistency:
+- Use the same label casing and wording in both modals:
+  - "Street Address"
+  - "City"
+  - "State"
+  - "ZIP Code"
+- Placeholder text should match the label text (greyed out).
+
+3) Styling consistency:
+- Keep the same grey header section and divider.
+- Same padding, spacing, corner radius, input height, and font sizes.
+- Same Done button style and placement (bottom-right).
+- Same modal width/height behavior on mobile.
+
+4) Data mapping (important)
+- Ensure the values entered map correctly to whatever the backend expects for jobs and estimates.
+- If estimates currently only store (address, city, zip) but not state:
+  - Add state to the estimate location payload ONLY if the DB/model already supports it.
+  - If the DB does NOT support state, still match the UI but ensure state is either:
+    - stored in the combined address field, OR
+    - safely ignored without breaking anything.
+- Do not introduce breaking schema changes unless state already exists.
+
+Scope:
+- Update both the Jobs JobLocation modal component and the Estimates JobLocation modal component to use the same shared layout/component (preferred).
+- Avoid duplicating code: extract a shared <JobLocationModal /> if possible.
+
+Acceptance Criteria:
+- Jobs and Estimates Job Location modals look identical.
+- Same fields, same labels, same placeholders, same spacing.
+- Done button works in both and saves correctly.
+- No console errors and no regressions.

@@ -1198,7 +1198,7 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
                   id="zip"
                   value={jobLocation.zip}
                   onChange={(e) => setJobLocation({ ...jobLocation, zip: e.target.value })}
-                  placeholder="ZIP"
+                  placeholder="ZIP Code"
                   data-testid="input-job-zip"
                   className="h-9"
                 />
