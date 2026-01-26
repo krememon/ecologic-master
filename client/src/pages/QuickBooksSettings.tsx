@@ -1,11 +1,11 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ArrowLeft, Link2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { Link } from "wouter";
+import { Loader2, ArrowLeft, Link2, CheckCircle2, XCircle } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,11 +19,21 @@ export default function QuickBooksSettings() {
   const { isLoading: authLoading } = useAuth();
   const { can } = useCan();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  
+  const hasPermission = can('customize.manage');
+
+  // Hidden-not-disabled: redirect non-owners to home
+  useEffect(() => {
+    if (!authLoading && !hasPermission) {
+      navigate('/');
+    }
+  }, [authLoading, hasPermission, navigate]);
 
   const { data: status, isLoading: statusLoading } = useQuery<QBStatus>({
     queryKey: ['/api/integrations/quickbooks/status'],
-    enabled: can('customize.manage'),
+    enabled: hasPermission,
   });
 
   const disconnectMutation = useMutation({
@@ -56,24 +66,11 @@ export default function QuickBooksSettings() {
     }
   };
 
-  if (authLoading || statusLoading) {
+  // Show loading while checking auth or redirecting non-owners
+  if (authLoading || statusLoading || !hasPermission) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-      </div>
-    );
-  }
-
-  if (!can('customize.manage')) {
-    return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-8 text-center shadow-sm border border-slate-200 dark:border-slate-700">
-          <AlertCircle className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-          <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Not Authorized</h2>
-          <p className="text-slate-600 dark:text-slate-400">
-            Only Owners can access QuickBooks settings.
-          </p>
-        </div>
       </div>
     );
   }
