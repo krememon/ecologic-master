@@ -9659,8 +9659,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: 'paid',
             paidDate: new Date().toISOString().split('T')[0],
             paidAt: new Date(),
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: session.payment_intent as string,
           } as any);
           console.log(`[Stripe] Invoice ${invoiceId} marked as paid from session check`);
+
+          // Create payment record (idempotency: check if already exists)
+          const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
+          if (!existingPayment) {
+            const amountCents = session.amount_total || (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100));
+            await storage.createPayment({
+              companyId: invoice.companyId,
+              invoiceId: invoiceId,
+              jobId: invoice.jobId || null,
+              customerId: invoice.customerId || null,
+              amount: (amountCents / 100).toFixed(2),
+              amountCents: amountCents,
+              paymentMethod: 'stripe',
+              status: 'paid',
+              stripePaymentIntentId: session.payment_intent as string,
+              stripeCheckoutSessionId: session.id,
+              paidDate: new Date(),
+            });
+            console.log(`[Stripe] Payment record created for invoice ${invoiceId}`);
+          }
 
           // Update job paymentStatus to 'paid' if invoice is associated with a job
           if (invoice.jobId) {

@@ -86,23 +86,33 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         })
         .where(eq(invoices.id, parseInt(invoiceId)));
 
-      // Create payment record
+      // Create payment record (idempotency: check for existing payment by paymentIntentId)
       const amountCents = session.amount_total || 0;
-      await db.insert(payments).values({
-        companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
-        invoiceId: parseInt(invoiceId),
-        jobId: jobId ? parseInt(jobId) : existingInvoice.jobId,
-        customerId: existingInvoice.customerId || null,
-        amount: (amountCents / 100).toFixed(2),
-        amountCents: amountCents,
-        paymentMethod: 'stripe',
-        status: 'paid',
-        stripePaymentIntentId: session.payment_intent as string,
-        stripeCheckoutSessionId: session.id,
-        paidDate: now,
-      });
+      const [existingPayment] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.stripePaymentIntentId, session.payment_intent as string));
+      
+      if (!existingPayment) {
+        await db.insert(payments).values({
+          companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
+          invoiceId: parseInt(invoiceId),
+          jobId: jobId ? parseInt(jobId) : existingInvoice.jobId,
+          customerId: existingInvoice.customerId || null,
+          amount: (amountCents / 100).toFixed(2),
+          amountCents: amountCents,
+          paymentMethod: 'stripe',
+          status: 'paid',
+          stripePaymentIntentId: session.payment_intent as string,
+          stripeCheckoutSessionId: session.id,
+          paidDate: now,
+        });
+        console.log(`[Stripe Webhook] Payment record created for invoice ${invoiceId}`);
+      } else {
+        console.log(`[Stripe Webhook] Payment already exists for payment intent ${session.payment_intent}`);
+      }
 
-      console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid, payment recorded`);
+      console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid`);
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment:', error);
       return res.status(500).send('Error processing payment');

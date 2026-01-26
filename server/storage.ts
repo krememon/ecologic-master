@@ -469,11 +469,42 @@ export class DatabaseStorage implements IStorage {
   
   async getPayments(companyId: number): Promise<any[]> {
     const result = await db
-      .select()
+      .select({
+        id: payments.id,
+        companyId: payments.companyId,
+        jobId: payments.jobId,
+        invoiceId: payments.invoiceId,
+        customerId: payments.customerId,
+        amount: payments.amount,
+        amountCents: payments.amountCents,
+        paymentMethod: payments.paymentMethod,
+        status: payments.status,
+        collectedByUserId: payments.collectedByUserId,
+        collectedByRole: payments.collectedByRole,
+        stripePaymentIntentId: payments.stripePaymentIntentId,
+        stripeCheckoutSessionId: payments.stripeCheckoutSessionId,
+        checkNumber: payments.checkNumber,
+        paidDate: payments.paidDate,
+        notes: payments.notes,
+        meta: payments.meta,
+        createdAt: payments.createdAt,
+        updatedAt: payments.updatedAt,
+        jobTitle: jobs.title,
+        clientFirstName: customers.firstName,
+        clientLastName: customers.lastName,
+      })
       .from(payments)
+      .leftJoin(jobs, eq(payments.jobId, jobs.id))
+      .leftJoin(customers, eq(payments.customerId, customers.id))
       .where(eq(payments.companyId, companyId))
-      .orderBy(desc(payments.createdAt));
-    return result;
+      .orderBy(desc(payments.paidDate), desc(payments.createdAt));
+    
+    return result.map(p => ({
+      ...p,
+      clientName: p.clientFirstName && p.clientLastName 
+        ? `${p.clientFirstName} ${p.clientLastName}`.trim() 
+        : p.clientFirstName || p.clientLastName || null,
+    }));
   }
   
   async getPaymentByInvoiceId(invoiceId: number): Promise<any | null> {
