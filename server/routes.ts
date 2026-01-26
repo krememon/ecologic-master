@@ -2569,6 +2569,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // AUTO-CREATE INVOICE: Create invoice automatically if job has line items
+      if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
+        const validLineItems = lineItems.filter((item: any) => item.name && item.name.trim());
+        if (validLineItems.length > 0) {
+          try {
+            // Check if invoice already exists for this job (prevent duplicates)
+            const existingInvoice = await storage.getInvoiceByJobId(job.id, company.id);
+            if (!existingInvoice) {
+              // Calculate totals from line items
+              let subtotalCents = 0;
+              let taxCents = 0;
+              for (const item of validLineItems) {
+                const qty = parseFloat(item.quantity) || 1;
+                const unitPrice = parseInt(item.unitPriceCents) || 0;
+                const lineTotal = Math.round(qty * unitPrice);
+                subtotalCents += lineTotal;
+                if (item.taxable && item.taxRatePercentSnapshot) {
+                  const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+                  taxCents += Math.round(lineTotal * taxRate / 100);
+                }
+              }
+              const totalCents = subtotalCents + taxCents;
+              
+              // Generate invoice number
+              const invoiceNumber = `INV-${Date.now()}`;
+              const today = new Date();
+              const dueDate = new Date(today);
+              dueDate.setDate(dueDate.getDate() + 30);
+              
+              // Get user role for audit
+              const roleResult = await storage.getUserRole(userId, company.id);
+              const userRole = roleResult?.role || 'OWNER';
+              
+              await storage.createInvoice({
+                companyId: company.id,
+                jobId: job.id,
+                clientId: customerId || null,
+                invoiceNumber,
+                amount: (totalCents / 100).toFixed(2),
+                subtotalCents,
+                taxCents,
+                totalCents,
+                status: 'pending',
+                issueDate: today.toISOString().split('T')[0],
+                dueDate: dueDate.toISOString().split('T')[0],
+                notes: `Invoice for job: ${job.title || 'Job #' + job.id}`,
+                createdByUserId: userId,
+                createdByRole: userRole,
+              });
+            }
+          } catch (invoiceError) {
+            // Log but don't fail the job creation
+            console.error('[AutoInvoice] Failed to auto-create invoice:', invoiceError);
+          }
+        }
+      }
+      
       res.status(201).json(job);
     } catch (error) {
       console.error("Error creating job:", error);
@@ -2803,6 +2860,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
               updatedAt: new Date(),
             })
             .where(eq(invoices.id, existingInvoice.id));
+        } else if (lineItems && lineItems.length > 0) {
+          // AUTO-CREATE INVOICE: No invoice exists and we're adding line items
+          try {
+            const validLineItems = lineItems.filter((item: any) => item.name && item.name.trim());
+            if (validLineItems.length > 0) {
+              let subtotalCents = 0;
+              let taxCents = 0;
+              for (const item of validLineItems) {
+                const qty = parseFloat(item.quantity) || 1;
+                const unitPrice = parseInt(item.unitPriceCents) || 0;
+                const lineTotal = Math.round(qty * unitPrice);
+                subtotalCents += lineTotal;
+                if (item.taxable && item.taxRatePercentSnapshot) {
+                  const taxRate = parseFloat(item.taxRatePercentSnapshot) || 0;
+                  taxCents += Math.round(lineTotal * taxRate / 100);
+                }
+              }
+              const totalCents = subtotalCents + taxCents;
+              
+              const invoiceNumber = `INV-${Date.now()}`;
+              const today = new Date();
+              const dueDate = new Date(today);
+              dueDate.setDate(dueDate.getDate() + 30);
+              
+              const roleResult = await storage.getUserRole(userId, company.id);
+              const userRole = roleResult?.role || 'OWNER';
+              
+              await storage.createInvoice({
+                companyId: company.id,
+                jobId: jobId,
+                clientId: existingJob.customerId || null,
+                invoiceNumber,
+                amount: (totalCents / 100).toFixed(2),
+                subtotalCents,
+                taxCents,
+                totalCents,
+                status: 'pending',
+                issueDate: today.toISOString().split('T')[0],
+                dueDate: dueDate.toISOString().split('T')[0],
+                notes: `Invoice for job: ${existingJob.title || 'Job #' + jobId}`,
+                createdByUserId: userId,
+                createdByRole: userRole,
+              });
+            }
+          } catch (invoiceError) {
+            console.error('[AutoInvoice] Failed to auto-create invoice on update:', invoiceError);
+          }
         }
       }
       
