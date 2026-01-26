@@ -865,7 +865,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const QB_CLIENT_ID = process.env.QB_CLIENT_ID;
   const QB_CLIENT_SECRET = process.env.QB_CLIENT_SECRET;
-  const QB_REDIRECT_URI = process.env.QB_REDIRECT_URI;
+  // Ensure redirect URI includes the callback path
+  const QB_BASE_URL = process.env.QB_REDIRECT_URI || '';
+  const QB_REDIRECT_URI = QB_BASE_URL.includes('/api/integrations/quickbooks/callback') 
+    ? QB_BASE_URL 
+    : `${QB_BASE_URL.replace(/\/$/, '')}/api/integrations/quickbooks/callback`;
   const QB_ENV = process.env.QB_ENV || 'sandbox';
   
   const QB_AUTH_BASE = 'https://appcenter.intuit.com/connect/oauth2';

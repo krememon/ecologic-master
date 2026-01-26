@@ -1,0 +1,57 @@
+QuickBooks OAuth: ensure Intuit callback hits backend route (not frontend), and log query params
+
+CURRENT
+- /api/integrations/quickbooks/connect redirects to Intuit (302)
+- But /api/integrations/quickbooks/callback is never logged
+- Manually visiting /api/integrations/quickbooks/callback just loads the UI and status stays disconnected
+
+GOAL
+- Intuit redirect must hit the backend callback handler and save tokens
+- /status must flip to connected:true immediately after successful OAuth
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — FORCE BACKEND CALLBACK HANDLER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ensure GET /api/integrations/quickbooks/callback is registered BEFORE any frontend catch-all route.
+If there is a SPA fallback like app.get("*", serveIndex), the callback MUST be above it.
+
+On callback route, respond server-side:
+- If no code: return 400 JSON {message:"Missing code"} (do NOT render UI)
+- If code exists: exchange tokens, store, then redirect to /customize/quickbooks?connected=1
+
+This guarantees we can tell backend callback vs frontend routing.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — LOG THE EXACT OAUTH URL WE SEND TO INTUIT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+In /connect route, log:
+- full authorize URL (including redirect_uri)
+- redirect_uri value exactly
+- state token
+
+Example:
+[QB] AUTHORIZE URL: ...
+[QB] redirect_uri: ...
+[QB] state: ...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — LOG CALLBACK HIT + PARAMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+At top of callback handler, log:
+[QB] CALLBACK HIT
+- hasCode? hasRealmId? hasState?
+- if error param exists, log error + description
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — VERIFY INTUIT CONFIG MATCH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Ensure redirect_uri sent in /connect matches QB_REDIRECT_URI env EXACTLY
+- Ensure Intuit Settings Redirect URI matches EXACTLY too
+- No trailing slash differences
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Clicking Connect logs redirect_uri being sent to Intuit
+- After Intuit approval, logs show CALLBACK HIT with code + realmId
+- /api/integrations/quickbooks/status returns connected:true
