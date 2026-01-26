@@ -1017,13 +1017,20 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
 
       {/* SCHEDULE Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Schedule</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Schedule</DialogTitle>
+            <button
+              onClick={() => setScheduleModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
+          <div className="space-y-3 px-4 py-3">
+            <div className="space-y-1">
               <Label htmlFor="scheduleDate">Date</Label>
               <Input
                 id="scheduleDate"
@@ -1031,23 +1038,24 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                 value={schedule.date}
                 onChange={(e) => setSchedule({ ...schedule, date: e.target.value })}
                 data-testid="input-schedule-date"
+                className="h-9"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="scheduleTime">Time</Label>
               <TimeWheelPicker
                 value={schedule.time}
                 onChange={(time) => setSchedule({ ...schedule, time })}
-                label="Select Time"
+                label="Time"
               />
             </div>
           </div>
 
-          <DialogFooter>
-            <Button onClick={() => setScheduleModalOpen(false)} data-testid="button-done-schedule">
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+            <Button onClick={() => setScheduleModalOpen(false)} data-testid="button-done-schedule" className="w-full h-10 rounded-xl">
               Done
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

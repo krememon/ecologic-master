@@ -1,0 +1,65 @@
+Clean up / modernize the "Schedule" modal UI for both Jobs and Estimates with ZERO functional changes.
+
+Goal:
+Make the Schedule modal look cleaner and consistent with our updated EcoLogic modal style (Select Customer, Add Line Items, Job Location, Job Type), while keeping the exact same scheduling behavior.
+
+Rules:
+- Do NOT change any scheduling functionality:
+  - date selection
+  - start time selection
+  - end time selection
+  - 15-minute increments / time picker behavior (whatever is currently implemented)
+  - saved values, API calls, or data shape
+- Do NOT change validation rules or required fields.
+- UI polish only.
+
+Current issues (inconsistent between screens):
+- Jobs vs Estimates schedule modals have different layouts:
+  - One has Start/End side-by-side
+  - One has Start/End stacked
+  - Done button placement differs (bottom-right small button vs full-width)
+  - Close button differs / header style differs
+
+What to change (visual consistency only):
+1) Make Jobs + Estimates Schedule modals match each other exactly
+- Pick ONE consistent layout and apply it to both:
+  Preferred layout (matches modern modals):
+  - Grey header section behind title "Schedule"
+  - Single X close top-right
+  - Date field (full width)
+  - Start Time and End Time stacked (full width each) OR side-by-side, but choose ONE and use it everywhere
+  - Primary Done button full-width at bottom (recommended for mobile consistency)
+
+2) Add modern modal header style
+- Add subtle grey header background behind the title.
+- Add a bottom divider line under the header.
+- Title should be "Schedule" (Title Case) centered.
+
+3) Input styling + spacing polish
+- Make inputs consistent with other modals:
+  - same border radius
+  - same padding
+  - same font sizes
+  - consistent icon sizing/alignment (calendar + clock icons)
+- Reduce extra white space and align spacing between fields.
+
+4) Done button styling
+- Keep same action and behavior.
+- Make it consistent with other modals:
+  - full-width primary button
+  - consistent height and corner radius
+  - consistent bottom padding
+- No changes to what happens when Done is pressed.
+
+Scope:
+- Update the Schedule modal component(s) used by Jobs and Estimates.
+- Prefer extracting a shared <ScheduleModal /> or shared layout wrapper so both screens use the same UI.
+- Do not duplicate two separate designs.
+
+Acceptance Criteria:
+- Jobs schedule modal and Estimates schedule modal look identical.
+- Grey header section exists behind the title and matches other modals.
+- Single X close icon (no duplicates, no Cancel text).
+- Date/Start/End fields look consistent and spacing is clean.
+- Done button works exactly the same and saves the same values as before.
+- No regressions and no console errors.

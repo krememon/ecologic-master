@@ -619,41 +619,49 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
 
       {/* Schedule Modal */}
       <Dialog open={scheduleModalOpen} onOpenChange={setScheduleModalOpen}>
-        <DialogContent hideCloseButton className="max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Schedule Invoice</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Date</label>
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Schedule Invoice</DialogTitle>
+            <button
+              onClick={() => setScheduleModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="space-y-3 px-4 py-3">
+            <div className="space-y-1">
+              <Label>Date</Label>
               <Input
                 type="date"
                 value={scheduledAt.date}
                 onChange={(e) => setScheduledAt({ ...scheduledAt, date: e.target.value })}
+                className="h-9"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Time (Optional)</label>
+            <div className="space-y-1">
+              <Label>Time (Optional)</Label>
               <TimeWheelPicker
                 value={scheduledAt.time || "09:00"}
                 onChange={(time) => setScheduledAt({ ...scheduledAt, time })}
               />
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setScheduledAt({ date: "", time: "" })}
-                className="flex-1"
-              >
-                Clear
-              </Button>
-              <Button
-                onClick={() => setScheduleModalOpen(false)}
-                className="flex-1"
-              >
-                Done
-              </Button>
-            </div>
+          </div>
+          <div className="flex gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              variant="outline"
+              onClick={() => setScheduledAt({ date: "", time: "" })}
+              className="flex-1 h-10 rounded-xl"
+            >
+              Clear
+            </Button>
+            <Button
+              onClick={() => setScheduleModalOpen(false)}
+              className="flex-1 h-10 rounded-xl"
+            >
+              Done
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
