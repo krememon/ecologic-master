@@ -246,8 +246,8 @@ export default function Contractors() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
           All Contractors ({subcontractors.length})
         </h3>
         <Button onClick={() => setIsDialogOpen(true)} className="shrink-0">
