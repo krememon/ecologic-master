@@ -103,6 +103,12 @@ export const companies = pgTable("companies", {
   subscriptionPlan: varchar("subscription_plan"), // starter, professional, enterprise
   maxUsers: integer("max_users").default(1),
   trialEndsAt: timestamp("trial_ends_at"),
+  // QuickBooks Online integration
+  qboRealmId: varchar("qbo_realm_id"),
+  qboAccessToken: text("qbo_access_token"),
+  qboRefreshToken: text("qbo_refresh_token"),
+  qboTokenExpiresAt: timestamp("qbo_token_expires_at"),
+  qboConnectedAt: timestamp("qbo_connected_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,0 +1,102 @@
+QUICKBOOKS — Step 1: Implement OAuth Connect + Callback + Store Tokens (Sandbox)
+
+CURRENT
+- Intuit app created
+- Replit secrets set:
+  - QB_CLIENT_ID
+  - QB_CLIENT_SECRET
+  - QB_REDIRECT_URI
+  - QB_ENV=sandbox
+- No QuickBooks integration code exists yet in EcoLogic
+
+GOAL
+Add the minimal QuickBooks Online OAuth connection so an Owner/Admin can connect EcoLogic to QuickBooks Sandbox:
+- Owner clicks “Connect QuickBooks”
+- Redirect to Intuit consent
+- Intuit redirects back to our callback
+- Backend exchanges code for tokens
+- Store realmId + tokens + expiresAt in DB
+- Show “Connected” state in Settings
+- Silent success, no noisy popups
+- Tech role must never see this
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND ROUTES (REQUIRED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1) GET /api/integrations/quickbooks/connect
+- RBAC: Owner/Admin only
+- Creates a CSRF “state” value and stores it server-side (session or signed cookie)
+- Redirects to Intuit OAuth authorize endpoint using:
+  - client_id = QB_CLIENT_ID
+  - scope = com.intuit.quickbooks.accounting
+  - redirect_uri = QB_REDIRECT_URI
+  - response_type=code
+  - state=<csrf>
+
+2) GET /api/integrations/quickbooks/callback
+- Reads: code, realmId, state
+- Validates the CSRF state
+- Calls Intuit token endpoint to exchange code for:
+  - access_token
+  - refresh_token
+  - expires_in
+- Stores to DB (company-level integration):
+  - qboRealmId = realmId
+  - qboAccessToken
+  - qboRefreshToken
+  - qboTokenExpiresAt = now + expires_in seconds
+  - qboConnectedAt = now
+- Redirects back to app UI:
+  - /settings?quickbooks=connected (or similar)
+
+3) POST /api/integrations/quickbooks/disconnect
+- RBAC: Owner/Admin only
+- Clears realmId + tokens + timestamps in DB
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOKEN REFRESH (REQUIRED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add helper:
+- getQboAccessToken(companyId)
+  - if token expired: refresh using refresh_token
+  - update DB with new access_token + expiresAt
+  - return valid access_token
+
+Use QB_ENV to pick base URLs:
+- sandbox: https://sandbox-quickbooks.api.intuit.com
+- production: https://quickbooks.api.intuit.com
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DB STORAGE (REQUIRED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add columns (or integration table) for company:
+- qboRealmId (string)
+- qboAccessToken (string)
+- qboRefreshToken (string)
+- qboTokenExpiresAt (timestamp)
+- qboConnectedAt (timestamp)
+
+Do NOT store tokens on the user record (company-level integration).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND UI (SETTINGS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Add “QuickBooks” section in Settings for Owner/Admin only:
+- If not connected:
+  - Button: “Connect QuickBooks”
+  - Calls /api/integrations/quickbooks/connect (full page redirect)
+- If connected:
+  - Show “Connected to QuickBooks”
+  - Button: “Disconnect”
+
+Technicians must never see this section (hidden-not-disabled).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ACCEPTANCE CRITERIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Owner can click Connect and complete Intuit consent
+- Callback stores realmId + tokens in DB
+- Settings shows Connected state
+- Disconnect clears integration
+- No console errors
+- No RBAC leaks
