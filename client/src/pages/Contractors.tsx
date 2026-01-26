@@ -246,11 +246,11 @@ export default function Contractors() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           All Contractors ({subcontractors.length})
         </h3>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button onClick={() => setIsDialogOpen(true)} className="shrink-0">
           <Plus className="w-4 h-4 mr-2" />
           Add New Contractor
         </Button>
