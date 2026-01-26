@@ -1,0 +1,60 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Layout/alignment only
+
+TARGET: New Invoice → “Save Invoice” button alignment
+PROBLEM: The Save Invoice button is NOT visually centered in its container (looks shifted/off).
+
+GOAL
+Make the Save Invoice button perfectly centered horizontally and visually balanced, matching how the Jobs “Save” / primary bottom button is centered.
+
+STRICT RULES
+- Do NOT change any button handlers, disabled logic, loading logic, or props.
+- Only adjust CSS/classNames on the button and its immediate wrapper.
+
+IMPLEMENTATION STEPS
+1) Locate the Save Invoice button section
+- Search for: "Save Invoice"
+- Find the button component + its wrapper container.
+
+2) Fix container alignment (preferred)
+- Ensure the footer wrapper uses:
+  - `w-full`
+  - `flex`
+  - `justify-center`
+  - and consistent horizontal padding (same on both sides)
+- Remove any asymmetric padding/margin causing the drift (ex: `pl-*` without matching `pr-*`, or `ml-*`).
+
+Example target wrapper (TAILWIND STYLE — adapt to your codebase):
+- Wrapper: `w-full flex justify-center px-4 pb-4`
+- If there is safe-area padding: keep it, but ensure it’s symmetric.
+
+3) Fix button sizing so centering is true
+- If the button is intended to be full width within padding, use:
+  - `w-full`
+  - plus wrapper `px-*` to create the side gutters
+- If it’s intended to be a fixed max width “pill”, use:
+  - `w-full max-w-[520px]`
+  - and keep `mx-auto`
+- Add `mx-auto` to the button if needed.
+
+4) Remove positioning that can break centering
+- If the button or wrapper uses `absolute`, `left-*`, `translate-x-*`, or `inset-*`, remove/avoid those (presentation only) and center using flex + padding instead.
+
+5) Visually confirm on iPhone width
+- Button should have equal left/right gutter
+- Text “Save Invoice” should be centered (ensure button uses `text-center`)
+
+DELIVERABLE
+- Save Invoice button is perfectly centered horizontally with equal side padding/gutters.
+
+QA
+- Button still clickable
+- No layout shift issues when keyboard opens (if applicable)
+- No functional changes
+
+AGENT NOTE
+Most likely cause is mismatched padding on the footer container (e.g., `pl-6 pr-4`) or a wrapper that’s not `w-full`.
+Fix symmetry first, then apply `flex justify-center` + `mx-auto` as needed.

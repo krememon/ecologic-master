@@ -584,7 +584,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
           </div>
 
           {/* Footer Button */}
-          <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+          <div className="flex-shrink-0 w-full flex justify-center px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
             <Button
               type="button"
               onClick={() => {
@@ -599,7 +599,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 handleSubmit();
               }}
               disabled={createInvoiceMutation.isPending}
-              className="w-full h-11"
+              className="w-full h-11 text-center"
             >
               {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
             </Button>
