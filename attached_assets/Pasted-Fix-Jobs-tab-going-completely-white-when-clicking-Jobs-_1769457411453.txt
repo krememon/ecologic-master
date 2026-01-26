@@ -1,0 +1,49 @@
+Fix Jobs tab going completely white when clicking Jobs (page renders blank).
+
+Goal:
+When I click the Jobs tab, the Jobs page should render normally every time. Right now it randomly goes to a blank white screen.
+
+Context / Evidence:
+- After recent UI modal changes (Assign Employees unification), clicking Jobs sometimes results in a totally white page.
+- Server logs still show /api/jobs returning 200 with [] so backend is fine.
+- This looks like a frontend runtime error or component crash (React render error), not an API failure.
+
+Rules:
+- Do NOT change any Jobs functionality or data logic.
+- Do NOT redesign the Jobs page UI.
+- Fix the crash/blank screen only.
+- Keep RBAC rules intact.
+- Add/remove ONLY targeted logs needed to identify the crash.
+
+What to do:
+1) Identify the frontend error
+- Open browser DevTools console and capture the actual JS error stack when the Jobs tab turns white.
+- Add a temporary global error boundary (or use existing) to log render errors clearly:
+  console.error("[JobsPage Crash]", error, info);
+
+2) Common causes to check (fix whichever applies):
+- A component now imports/uses something undefined after recent refactor (AssignEmployeesModal changes).
+- Hook usage error (hooks called conditionally, missing dependency).
+- Rendering code assumes jobs array exists but gets undefined/null.
+- A modal component is mounted globally and throws when props are missing.
+- Duplicate component name/export causing wrong import in Jobs page.
+
+3) Fix the crash safely
+- Ensure Jobs page always renders even when jobs = [].
+- Add defensive guards only where needed:
+  - default empty arrays
+  - optional chaining for nested props
+  - avoid mapping over undefined
+- If the crash is caused by the Assign Employees modal unification:
+  - ensure Jobs page passes all required props to the shared AssignEmployeesModal
+  - ensure the shared modal does not run effects when closed (open=false)
+  - ensure it does not assume a job/estimate id exists unless open=true
+
+4) Remove temporary logs after confirming
+- Keep only one or two helpful logs if needed.
+
+Acceptance Criteria:
+- Clicking Jobs tab never results in a blank white screen.
+- Jobs page loads normally even with 0 jobs.
+- No console errors on navigation.
+- No regressions to Jobs or Assign Employees functionality.
