@@ -447,23 +447,12 @@ export function PriceBookPickerModal({
                     <div key={item.id}>
                       <button
                         onClick={() => handleToggleSelection(item)}
-                        className={`w-full flex items-center gap-3 px-4 min-h-[64px] text-left transition-colors ${
+                        className={`w-full flex items-center justify-between px-4 min-h-[56px] text-left transition-colors ${
                           isSelected 
                             ? 'bg-teal-50 dark:bg-teal-900/20' 
                             : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
                         }`}
                       >
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${
-                          isSelected
-                            ? 'bg-teal-500 text-white'
-                            : 'bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          {isSelected ? (
-                            <Check className="h-5 w-5" />
-                          ) : (
-                            item.name.charAt(0).toUpperCase()
-                          )}
-                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                             {item.name}
@@ -473,9 +462,12 @@ export function PriceBookPickerModal({
                             {item.category && ` · ${item.category}`}
                           </p>
                         </div>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-teal-500 flex-shrink-0 ml-3" />
+                        )}
                       </button>
                       {index < filteredItems.length - 1 && (
-                        <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
                       )}
                     </div>
                   );
