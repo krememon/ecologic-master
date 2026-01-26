@@ -25,7 +25,8 @@ import {
   Search,
   Calendar,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  X
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -274,21 +275,28 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                 Record Payment
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Record New Payment</DialogTitle>
-              </DialogHeader>
+            <DialogContent className="sm:max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+              <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
+                <button 
+                  type="button"
+                  onClick={() => setIsAddDialogOpen(false)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                >
+                  <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                </button>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Record Payment</h2>
+              </div>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleCreatePayment)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(handleCreatePayment)} className="p-4 space-y-3">
                   <FormField
                     control={form.control}
                     name="jobId"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Job</FormLabel>
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-medium text-slate-700 dark:text-slate-300">Job</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-10">
                               <SelectValue placeholder="Select a job" />
                             </SelectTrigger>
                           </FormControl>
@@ -309,10 +317,10 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                     control={form.control}
                     name="amount"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Amount</FormLabel>
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                          <Input type="number" step="0.01" placeholder="0.00" className="h-10" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -323,11 +331,11 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                     control={form.control}
                     name="paymentMethod"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Method</FormLabel>
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-medium text-slate-700 dark:text-slate-300">Payment Method</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-10">
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
@@ -348,11 +356,11 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                     control={form.control}
                     name="status"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-medium text-slate-700 dark:text-slate-300">Status</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-10">
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
@@ -371,10 +379,10 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                     control={form.control}
                     name="paidDate"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Date (Optional)</FormLabel>
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-medium text-slate-700 dark:text-slate-300">Payment Date</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" className="h-10" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -385,22 +393,22 @@ export function PaymentsTracker({ jobs }: PaymentsTrackerProps) {
                     control={form.control}
                     name="notes"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Notes (Optional)</FormLabel>
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-medium text-slate-700 dark:text-slate-300">Notes</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="Additional notes..." {...field} />
+                          <Textarea placeholder="Notes" className="min-h-[72px] resize-none" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700 mt-4">
+                    <Button type="button" variant="outline" className="h-10" onClick={() => setIsAddDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={createPaymentMutation.isPending}>
-                      {createPaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                    <Button type="submit" className="h-10" disabled={createPaymentMutation.isPending}>
+                      {createPaymentMutation.isPending ? "Recording..." : "Save"}
                     </Button>
                   </div>
                 </form>

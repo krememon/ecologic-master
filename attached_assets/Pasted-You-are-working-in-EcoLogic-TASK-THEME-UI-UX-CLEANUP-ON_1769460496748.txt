@@ -1,0 +1,97 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Visual consistency, spacing, headers, typography, layout only
+✅ Placeholder text tweaks are allowed (strings only)
+
+TARGET: “Record Payment” modal (shown in screenshot)
+
+GOAL
+Make this modal match EcoLogic’s cleaned modal style:
+- Centered title + single X close
+- Tighter spacing (“shorter” form rows)
+- Consistent input heights/borders/radius
+- Cleaner footer buttons (aligned + consistent sizing)
+- Make it feel Apple/Housecall modern and minimal
+
+STRICT RULES
+1) Do NOT change ANY:
+   - handlers (onChange/onSubmit/onClick)
+   - state shape/keys
+   - validation / required rules
+   - API calls
+   - dropdown options or date picker behavior
+2) Only change:
+   - classNames/styles
+   - layout wrappers (safe)
+   - typography
+   - placeholder strings (optional, but no behavior changes)
+
+WHAT TO CLEAN UP (SPECIFIC)
+
+A) Header
+- Keep title “Record Payment”
+- Single X close top-right (already there)
+- Tighten header padding + add subtle divider
+- Title typography matches other cleaned modals (semi-bold, not too large)
+
+B) Form spacing (biggest improvement)
+- Reduce vertical whitespace between fields:
+  - label → input gap tighter
+  - field → next field gap tighter
+- Use consistent label styling across all fields:
+  - same font size/weight as Add New Client/Contractor
+- Make all inputs/selects the same height and radius
+- Ensure dropdown chevrons align consistently (same right padding)
+
+C) Input consistency
+- Job dropdown: match our standard select style (same as other modals)
+- Amount field: same height as selects, consistent padding
+- Method/Status selects: same style as Job select
+- Date field: align calendar icon better (vertically centered, consistent right padding)
+- Notes textarea:
+  - reduce height slightly (presentation only)
+  - tighter padding
+  - match EcoLogic textarea border/radius
+  - keep resize behavior unchanged unless already disabled elsewhere
+
+D) Placeholder cleanup (strings only)
+- Notes placeholder should match our newer style:
+  - change from “Notes…” to “Notes” (greyed) OR keep “Notes” consistent with other modals
+- Date placeholder “mm/dd/yyyy” can stay, but ensure it uses the same placeholder color as other inputs
+- Amount placeholder “0.00” can remain, but ensure consistent placeholder style
+
+E) Footer buttons (clean + aligned)
+- Current footer shows Cancel + Save.
+- Make them consistent with EcoLogic:
+  - same height
+  - same radius
+  - aligned baseline
+  - reduced padding around footer so it’s not floating
+  - add subtle top divider above footer
+- Keep button order and behaviors identical.
+- Ensure Save button uses the same primary blue style as other modals.
+
+F) Modal padding + overall balance
+- Reduce internal padding slightly so it feels tighter
+- Keep comfortable left/right padding (don’t cram)
+- Avoid huge empty space at the bottom
+
+FILES
+- Only modify the Record Payment modal component and any local styles it uses.
+- Avoid touching shared modal infrastructure globally.
+
+DELIVERABLES
+1) Record Payment modal looks consistent with the rest of the cleaned EcoLogic UI.
+2) Tighter spacing, consistent inputs, cleaner footer buttons.
+3) No functional changes.
+
+QA CHECKLIST
+- Selecting Job still works the same
+- Amount input still works the same
+- Method/Status dropdown still works the same
+- Date picker still works the same
+- Save/Cancel still behave the same
+- No console errors / no white screen
+- Looks clean on iPhone width
