@@ -152,9 +152,12 @@ export interface IStorage {
   // Client operations
   getClients(companyId: number): Promise<Client[]>;
   getClient(id: number): Promise<Client | undefined>;
+  getClientSecure(id: number, companyId: number): Promise<Client | undefined>;
   createClient(client: InsertClient): Promise<Client>;
   updateClient(id: number, client: Partial<InsertClient>): Promise<Client>;
+  updateClientSecure(id: number, companyId: number, client: Partial<InsertClient>): Promise<Client | null>;
   deleteClient(id: number): Promise<void>;
+  deleteClientSecure(id: number, companyId: number): Promise<boolean>;
   
   // Subcontractor operations
   getSubcontractors(companyId: number): Promise<Subcontractor[]>;
@@ -166,26 +169,34 @@ export interface IStorage {
   // Job operations
   getJobs(companyId: number): Promise<any[]>;
   getJob(id: number): Promise<any>;
+  getJobSecure(id: number, companyId: number): Promise<any>;
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, job: Partial<InsertJob>): Promise<Job>;
+  updateJobSecure(id: number, companyId: number, job: Partial<InsertJob>): Promise<Job | null>;
   deleteJob(id: number): Promise<void>;
+  deleteJobSecure(id: number, companyId: number): Promise<boolean>;
   
   // Invoice operations
   getInvoices(companyId: number): Promise<any[]>;
   getInvoice(id: number): Promise<any>;
+  getInvoiceSecure(id: number, companyId: number): Promise<any>;
   getInvoiceByJobId(jobId: number, companyId: number): Promise<any>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice>;
+  updateInvoiceSecure(id: number, companyId: number, invoice: Partial<InsertInvoice>): Promise<Invoice | null>;
   deleteInvoice(id: number): Promise<void>;
   
   // Document operations
   getDocuments(companyId: number): Promise<any[]>;
   getDocument(id: number): Promise<Document | null>;
+  getDocumentSecure(id: number, companyId: number): Promise<Document | null>;
   getDocumentsByIds(ids: number[], companyId: number): Promise<Document[]>;
   getDocumentsByJob(jobId: number): Promise<Document[]>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocumentStatus(id: number, status: string): Promise<Document>;
+  updateDocumentSecure(id: number, companyId: number, updates: Partial<InsertDocument>): Promise<Document | null>;
   deleteDocument(id: number): Promise<void>;
+  deleteDocumentSecure(id: number, companyId: number): Promise<boolean>;
   deleteDocumentsBulk(ids: number[], companyId: number): Promise<number>;
   
   // Messaging operations
@@ -258,17 +269,23 @@ export interface IStorage {
   getEstimatesByJob(jobId: number): Promise<Estimate[]>;
   getEstimatesByCompany(companyId: number): Promise<Estimate[]>;
   getEstimate(id: number): Promise<EstimateWithItems | undefined>;
+  getEstimateSecure(id: number, companyId: number): Promise<EstimateWithItems | undefined>;
   createEstimate(payload: CreateEstimatePayload, companyId: number, userId: string): Promise<EstimateWithItems>;
   updateEstimate(id: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems>;
+  updateEstimateSecure(id: number, companyId: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems | null>;
   deleteEstimate(id: number): Promise<void>;
+  deleteEstimateSecure(id: number, companyId: number): Promise<boolean>;
   getNextEstimateNumber(companyId: number): Promise<string>;
   
   // Customer operations
   getCustomers(companyId: number): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
+  getCustomerSecure(id: number, companyId: number): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer & { companyId: number }): Promise<Customer>;
   updateCustomer(id: number, updates: Partial<InsertCustomer>): Promise<Customer>;
+  updateCustomerSecure(id: number, companyId: number, updates: Partial<InsertCustomer>): Promise<Customer | null>;
   deleteCustomer(id: number): Promise<void>;
+  deleteCustomerSecure(id: number, companyId: number): Promise<boolean>;
   deleteCustomersBulk(ids: number[]): Promise<number>;
   
   // Service catalog operations
@@ -780,6 +797,14 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
+  async getClientSecure(id: number, companyId: number): Promise<Client | undefined> {
+    const [client] = await db
+      .select()
+      .from(clients)
+      .where(and(eq(clients.id, id), eq(clients.companyId, companyId)));
+    return client;
+  }
+
   async createClient(clientData: InsertClient): Promise<Client> {
     const [client] = await db.insert(clients).values(clientData).returning();
     return client;
@@ -794,8 +819,25 @@ export class DatabaseStorage implements IStorage {
     return client;
   }
 
+  async updateClientSecure(id: number, companyId: number, clientData: Partial<InsertClient>): Promise<Client | null> {
+    const result = await db
+      .update(clients)
+      .set({ ...clientData, updatedAt: new Date() })
+      .where(and(eq(clients.id, id), eq(clients.companyId, companyId)))
+      .returning();
+    return result[0] || null;
+  }
+
   async deleteClient(id: number): Promise<void> {
     await db.delete(clients).where(eq(clients.id, id));
+  }
+
+  async deleteClientSecure(id: number, companyId: number): Promise<boolean> {
+    const result = await db
+      .delete(clients)
+      .where(and(eq(clients.id, id), eq(clients.companyId, companyId)))
+      .returning();
+    return result.length > 0;
   }
 
   async getSubcontractors(companyId: number): Promise<Subcontractor[]> {
@@ -1016,6 +1058,45 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
+  async getJobSecure(id: number, companyId: number): Promise<any> {
+    const [job] = await db
+      .select({
+        id: jobs.id,
+        title: jobs.title,
+        status: jobs.status,
+        priority: jobs.priority,
+        startDate: jobs.startDate,
+        scheduledTime: jobs.scheduledTime,
+        scheduledEndTime: jobs.scheduledEndTime,
+        endDate: jobs.endDate,
+        location: jobs.location,
+        city: jobs.city,
+        postalCode: jobs.postalCode,
+        locationLat: jobs.locationLat,
+        locationLng: jobs.locationLng,
+        locationPlaceId: jobs.locationPlaceId,
+        description: jobs.description,
+        notes: jobs.notes,
+        clientId: jobs.clientId,
+        clientName: jobs.clientName,
+        customerId: jobs.customerId,
+        jobType: jobs.jobType,
+        companyId: jobs.companyId,
+        createdAt: jobs.createdAt,
+        updatedAt: jobs.updatedAt,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          phone: clients.phone,
+        },
+      })
+      .from(jobs)
+      .leftJoin(clients, eq(jobs.clientId, clients.id))
+      .where(and(eq(jobs.id, id), eq(jobs.companyId, companyId)));
+    return job;
+  }
+
   async createJob(jobData: InsertJob): Promise<Job> {
     // Convert lat/lng to strings for database decimal fields
     const dbJobData = {
@@ -1051,6 +1132,25 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
+  async updateJobSecure(id: number, companyId: number, jobData: Partial<InsertJob>): Promise<Job | null> {
+    const dbJobData = {
+      ...jobData,
+      locationLat: jobData.locationLat !== null && jobData.locationLat !== undefined 
+        ? String(jobData.locationLat) 
+        : jobData.locationLat,
+      locationLng: jobData.locationLng !== null && jobData.locationLng !== undefined 
+        ? String(jobData.locationLng) 
+        : jobData.locationLng,
+      updatedAt: new Date()
+    };
+    const result = await db
+      .update(jobs)
+      .set(dbJobData)
+      .where(and(eq(jobs.id, id), eq(jobs.companyId, companyId)))
+      .returning();
+    return result[0] || null;
+  }
+
   async deleteJob(id: number): Promise<void> {
     // Use a transaction to safely unlink related records before deleting the job
     await db.transaction(async (tx) => {
@@ -1068,6 +1168,27 @@ export class DatabaseStorage implements IStorage {
       // (schedule_items, job_photos, job_line_items, documents, invoices, estimates, etc.)
       await tx.delete(jobs).where(eq(jobs.id, id));
     });
+  }
+
+  async deleteJobSecure(id: number, companyId: number): Promise<boolean> {
+    // First verify the job belongs to the company
+    const [job] = await db.select({ id: jobs.id }).from(jobs)
+      .where(and(eq(jobs.id, id), eq(jobs.companyId, companyId)));
+    if (!job) return false;
+    
+    // Use a transaction to safely unlink related records before deleting the job
+    await db.transaction(async (tx) => {
+      await tx.update(timeLogs)
+        .set({ jobId: null })
+        .where(eq(timeLogs.jobId, id));
+      
+      await tx.update(leads)
+        .set({ convertedToJobId: null })
+        .where(eq(leads.convertedToJobId, id));
+      
+      await tx.delete(jobs).where(eq(jobs.id, id));
+    });
+    return true;
   }
 
   async getInvoices(companyId: number): Promise<any[]> {
@@ -1180,6 +1301,66 @@ export class DatabaseStorage implements IStorage {
     return invoice;
   }
 
+  async getInvoiceSecure(id: number, companyId: number): Promise<any> {
+    const [invoice] = await db
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        amount: invoices.amount,
+        subtotalCents: invoices.subtotalCents,
+        taxCents: invoices.taxCents,
+        totalCents: invoices.totalCents,
+        status: invoices.status,
+        dueDate: invoices.dueDate,
+        issueDate: invoices.issueDate,
+        paidDate: invoices.paidDate,
+        pdfUrl: invoices.pdfUrl,
+        clientId: invoices.clientId,
+        customerId: invoices.customerId,
+        jobId: invoices.jobId,
+        estimateId: invoices.estimateId,
+        companyId: invoices.companyId,
+        scheduledAt: invoices.scheduledAt,
+        tags: invoices.tags,
+        notes: invoices.notes,
+        lineItems: invoices.lineItems,
+        stripeCheckoutSessionId: invoices.stripeCheckoutSessionId,
+        stripePaymentIntentId: invoices.stripePaymentIntentId,
+        paidAt: invoices.paidAt,
+        qboInvoiceId: invoices.qboInvoiceId,
+        qboSyncStatus: invoices.qboSyncStatus,
+        qboLastSyncError: invoices.qboLastSyncError,
+        qboLastSyncedAt: invoices.qboLastSyncedAt,
+        createdAt: invoices.createdAt,
+        updatedAt: invoices.updatedAt,
+        client: {
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+        },
+        job: {
+          id: jobs.id,
+          title: jobs.title,
+          clientName: jobs.clientName,
+          customerId: jobs.customerId,
+        },
+        customer: {
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          email: customers.email,
+          phone: customers.phone,
+          companyName: customers.companyName,
+        },
+      })
+      .from(invoices)
+      .leftJoin(clients, eq(invoices.clientId, clients.id))
+      .leftJoin(jobs, eq(invoices.jobId, jobs.id))
+      .leftJoin(customers, eq(invoices.customerId, customers.id))
+      .where(and(eq(invoices.id, id), eq(invoices.companyId, companyId)));
+    return invoice;
+  }
+
   async getInvoiceByJobId(jobId: number, companyId: number): Promise<any> {
     const [invoice] = await db
       .select({
@@ -1220,6 +1401,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invoices.id, id))
       .returning();
     return invoice;
+  }
+
+  async updateInvoiceSecure(id: number, companyId: number, invoiceData: Partial<InsertInvoice>): Promise<Invoice | null> {
+    const result = await db
+      .update(invoices)
+      .set({ ...invoiceData, updatedAt: new Date() })
+      .where(and(eq(invoices.id, id), eq(invoices.companyId, companyId)))
+      .returning();
+    return result[0] || null;
   }
 
   async deleteInvoice(id: number): Promise<void> {
@@ -1275,6 +1465,14 @@ export class DatabaseStorage implements IStorage {
     return document || null;
   }
 
+  async getDocumentSecure(id: number, companyId: number): Promise<Document | null> {
+    const [document] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), eq(documents.companyId, companyId)));
+    return document || null;
+  }
+
   async getDocumentsByIds(ids: number[], companyId: number): Promise<Document[]> {
     if (ids.length === 0) return [];
     const result = await db
@@ -1323,6 +1521,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDocument(id: number): Promise<void> {
     await db.delete(documents).where(eq(documents.id, id));
+  }
+
+  async deleteDocumentSecure(id: number, companyId: number): Promise<boolean> {
+    const result = await db
+      .delete(documents)
+      .where(and(eq(documents.id, id), eq(documents.companyId, companyId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async updateDocumentSecure(id: number, companyId: number, updates: Partial<InsertDocument>): Promise<Document | null> {
+    const result = await db
+      .update(documents)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(documents.id, id), eq(documents.companyId, companyId)))
+      .returning();
+    return result[0] || null;
   }
 
   async deleteDocumentsBulk(ids: number[], companyId: number): Promise<number> {
@@ -2092,6 +2307,39 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async getEstimateSecure(id: number, companyId: number): Promise<EstimateWithItems | undefined> {
+    const [estimate] = await db
+      .select()
+      .from(estimates)
+      .where(and(eq(estimates.id, id), eq(estimates.companyId, companyId)));
+    
+    if (!estimate) return undefined;
+
+    const items = await db
+      .select()
+      .from(estimateItems)
+      .where(eq(estimateItems.estimateId, id))
+      .orderBy(estimateItems.sortOrder);
+
+    const attachments = await db
+      .select()
+      .from(estimateAttachments)
+      .where(eq(estimateAttachments.estimateId, id))
+      .orderBy(desc(estimateAttachments.createdAt));
+
+    const [creator] = await db
+      .select({ firstName: users.firstName, lastName: users.lastName })
+      .from(users)
+      .where(eq(users.id, estimate.createdByUserId));
+
+    return {
+      ...estimate,
+      items,
+      attachments,
+      createdBy: creator || null,
+    };
+  }
+
   async getNextEstimateNumber(companyId: number): Promise<string> {
     // Use atomic increment with upsert
     const result = await db
@@ -2310,9 +2558,26 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async updateEstimateSecure(id: number, companyId: number, payload: UpdateEstimatePayload): Promise<EstimateWithItems | null> {
+    // First verify the estimate belongs to this company
+    const existing = await this.getEstimateSecure(id, companyId);
+    if (!existing) return null;
+    
+    // Use the regular update method since we've verified ownership
+    return this.updateEstimate(id, payload);
+  }
+
   async deleteEstimate(id: number): Promise<void> {
     // Items are deleted via cascade
     await db.delete(estimates).where(eq(estimates.id, id));
+  }
+
+  async deleteEstimateSecure(id: number, companyId: number): Promise<boolean> {
+    const result = await db
+      .delete(estimates)
+      .where(and(eq(estimates.id, id), eq(estimates.companyId, companyId)))
+      .returning();
+    return result.length > 0;
   }
 
   // Customer operations
@@ -2329,6 +2594,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(customers)
       .where(eq(customers.id, id));
+    return customer || undefined;
+  }
+
+  async getCustomerSecure(id: number, companyId: number): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(and(eq(customers.id, id), eq(customers.companyId, companyId)));
     return customer || undefined;
   }
 
@@ -2349,8 +2622,25 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async updateCustomerSecure(id: number, companyId: number, updates: Partial<InsertCustomer>): Promise<Customer | null> {
+    const result = await db
+      .update(customers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(customers.id, id), eq(customers.companyId, companyId)))
+      .returning();
+    return result[0] || null;
+  }
+
   async deleteCustomer(id: number): Promise<void> {
     await db.delete(customers).where(eq(customers.id, id));
+  }
+
+  async deleteCustomerSecure(id: number, companyId: number): Promise<boolean> {
+    const result = await db
+      .delete(customers)
+      .where(and(eq(customers.id, id), eq(customers.companyId, companyId)))
+      .returning();
+    return result.length > 0;
   }
 
   async deleteCustomersBulk(ids: number[]): Promise<number> {

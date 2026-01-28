@@ -1,0 +1,105 @@
+You are a senior security engineer taking over the EcoLogic backend. Your mission is to “lock down” user/company data so no user can ever access another company’s data (prevent IDOR + cross-tenant leaks), and files/documents cannot be accessed without permission.
+
+NON-NEGOTIABLE CONSTRAINTS
+- Do NOT change any UI behavior or styling.
+- Do NOT break existing features.
+- Preserve current RBAC rules (“hidden not disabled”) and any existing job-access logic.
+- No fake data. No placeholder demo users.
+- Make small, safe, incremental changes with clear logs and tests.
+
+STEP 0 — BASELINE + AUDIT
+1) Identify how auth is currently done (session/JWT/cookie), where req.user is set, and how company membership is represented.
+2) List all data models/tables that are “company-owned” (at minimum: companies, users, memberships, jobs, estimates, invoices, clients, documents, document_links/job_insights, messages/DMs, notifications, time entries, schedule items).
+3) Grep the codebase for any queries that use only `id = ?` without `company_id` / tenant scoping. These are HIGH RISK.
+
+STEP 1 — TENANT ISOLATION (CORE)
+Goal: company data isolation must be impossible to forget.
+4) Ensure every company-owned table has `company_id` (or tenant_id) NOT NULL.
+5) Add DB indexes needed for scoped queries:
+   - (company_id, id)
+   - (company_id, created_at) where relevant
+6) Add DB foreign keys where missing (e.g., jobs.company_id -> companies.id) and ensure delete/update rules are sane.
+
+STEP 2 — AUTH CONTEXT MIDDLEWARE (SINGLE SOURCE OF TRUTH)
+7) Implement/standardize one middleware (e.g., `requireAuth`) that sets:
+   - req.userId
+   - req.companyId (active company / membership)
+   - req.role
+   - req.membershipId (if you track it)
+   Reject requests if these are missing/invalid.
+8) Ensure the middleware is applied to ALL protected routes. Public routes must be explicitly listed.
+
+STEP 3 — FIX IDOR EVERYWHERE (NO MORE “GUESS THE ID”)
+Rule: any read/update/delete must be scoped by company_id and checked for permissions.
+9) For EVERY endpoint that reads a record by ID (jobs/:id, invoices/:id, documents/:id, etc):
+   - Query using: `WHERE id = $1 AND company_id = $2`
+   - If not found -> return 404 (do not leak existence)
+10) For UPDATE/DELETE:
+   - Use `... WHERE id = $1 AND company_id = $2 RETURNING *`
+   - If no rows -> 404
+11) For list endpoints:
+   - Always filter by company_id (and then additional RBAC filters)
+   - Never return records from another company.
+
+STEP 4 — CENTRALIZE RBAC + JOB ACCESS (NO SCATTERED LOGIC)
+12) Create a single permission module, e.g. `server/security/permissions.ts` that exports:
+   - canAccessJob(userContext, job)
+   - canAccessDocument(userContext, document, relatedJob?)
+   - canAccessClient(...)
+   - etc.
+13) Refactor endpoints to call these helpers instead of repeating role checks.
+14) Ensure “hidden not disabled”: if user can’t see it, backend must not return it.
+
+STEP 5 — DOCUMENT/FILE SECURITY (COMMON DATA LEAK)
+15) Confirm storage: local filesystem, S3-compatible, Cloudinary, etc.
+16) Ensure documents are NOT public by default.
+17) Access pattern must be one of:
+   A) Signed URL (short expiry like 5–10 minutes) generated only after permission check, OR
+   B) Stream file through API after permission check.
+18) Prevent direct object access: no permanent public URLs.
+19) Validate uploads server-side:
+   - enforce max size
+   - restrict mime types
+   - do not trust filename/mimetype from client
+   - store with random UUID key names
+
+STEP 6 — INPUT VALIDATION + SAFE DB PRACTICES
+20) Add request validation to all mutating routes using zod/joi:
+   - validate types, lengths, required fields
+21) Ensure all SQL is parameterized (no string concatenation).
+22) Add payload size limits and reject oversized requests.
+
+STEP 7 — RATE LIMITING + BASIC HARDENING
+23) Add rate limiting to:
+   - login/auth endpoints
+   - password reset/invite acceptance (if any)
+   - document download endpoints
+24) Add security headers (helmet) and tighten CORS to only known front-end origins.
+
+STEP 8 — LOGGING / SECRETS SAFETY
+25) Remove any logs that print:
+   - tokens
+   - cookies
+   - authorization headers
+   - secrets / env vars
+26) Mask PII in logs (email/phone) where reasonable.
+
+STEP 9 — PROOF (TESTS THAT DEMONSTRATE SECURITY)
+27) Add minimal automated tests OR a runnable script that proves isolation:
+   - Create Company A + Company B
+   - Create a job + document in A
+   - Auth as a user in B
+   - Attempt GET/PUT/DELETE on A’s resources by ID -> must be 404 (or 403 but prefer 404 to avoid leaking)
+   - Attempt sequential ID probing -> must fail
+28) Output:
+   - How to run tests
+   - Example test output
+
+DELIVERABLES (MUST PROVIDE)
+- A checklist of all routes audited + routes fixed (file path + endpoint)
+- Any DB migration SQL generated
+- The new permission module location + how endpoints use it
+- The test/script used to verify isolation and its results
+- A short “Security Notes” section describing remaining risks (if any) and next steps (optional: Postgres RLS)
+
+IMPORTANT: Make changes in small commits/steps. After each step, run the app and ensure nothing breaks.
