@@ -9,9 +9,36 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { User as SelectUser, InsertUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
+
+// SECURITY: Rate limiters for auth endpoints to prevent brute force attacks
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: { message: "Too many login attempts. Please try again after 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful logins
+});
+
+const registerRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 registration attempts per hour
+  message: { message: "Too many registration attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const passwordResetRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 password reset requests per hour
+  message: { message: "Too many password reset attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 declare global {
   namespace Express {
@@ -346,8 +373,8 @@ export function setupAuth(app: Express) {
 
   // Auth Routes
   
-  // Email/Password Registration
-  app.post("/api/register", async (req, res) => {
+  // Email/Password Registration (rate limited to prevent abuse)
+  app.post("/api/register", registerRateLimiter, async (req, res) => {
     try {
       const { email, password, firstName, lastName } = req.body;
       
@@ -390,8 +417,8 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Email/Password Login
-  app.post("/api/login", (req, res, next) => {
+  // Email/Password Login (rate limited to prevent brute force)
+  app.post("/api/login", authRateLimiter, (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) {
@@ -444,8 +471,8 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Password Reset Request
-  app.post("/api/forgot-password", async (req, res) => {
+  // Password Reset Request (rate limited to prevent abuse)
+  app.post("/api/forgot-password", passwordResetRateLimiter, async (req, res) => {
     try {
       const { email } = req.body;
       const user = await storage.getUserByEmail(email);
@@ -473,8 +500,8 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Password Reset
-  app.post("/api/reset-password", async (req, res) => {
+  // Password Reset (rate limited to prevent abuse)
+  app.post("/api/reset-password", passwordResetRateLimiter, async (req, res) => {
     try {
       const { token, password } = req.body;
       

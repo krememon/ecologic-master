@@ -2991,7 +2991,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/clients', async (req: any, res) => {
-    console.log('server:POST /api/clients:entered', req.body);
+    // SECURITY: Don't log full request body - log only non-sensitive keys
+    console.log('server:POST /api/clients:entered', { keys: Object.keys(req.body) });
     try {
       if (!req.isAuthenticated()) {
         console.log('server:POST /api/clients:unauthorized');
@@ -4890,7 +4891,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk delete documents - MUST come before :documentId route to avoid matching "bulk" as an ID
   app.delete('/api/documents/bulk', isAuthenticated, async (req: any, res) => {
     try {
-      console.log('[DELETE] Bulk delete request, body:', JSON.stringify(req.body));
+      // SECURITY: Log only document IDs, not full body
+      console.log('[DELETE] Bulk delete request, ids:', req.body?.ids?.length || 0);
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
       
