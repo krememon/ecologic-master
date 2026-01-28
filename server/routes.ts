@@ -4982,10 +4982,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid document ID" });
       }
       
-      // Try to get the document first to delete the file
+      // SECURITY: Get document with company verification to prevent cross-tenant access
+      const doc = await storage.getDocumentSecure(documentId, company.id);
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // Try to delete the file
       try {
-        const doc = await storage.getDocument(documentId);
-        if (doc && doc.fileUrl) {
+        if (doc.fileUrl) {
           const fs = await import('fs');
           const filePath = doc.fileUrl.startsWith('/') ? doc.fileUrl.slice(1) : doc.fileUrl;
           if (fs.existsSync(filePath)) {
@@ -4997,7 +5002,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('[DELETE] File deletion failed (continuing with DB delete):', fileError);
       }
       
-      await storage.deleteDocument(documentId);
+      // SECURITY: Use secure delete method with company verification
+      await storage.deleteDocumentSecure(documentId, company.id);
       console.log('[DELETE] Document deleted successfully:', documentId);
       res.json({ success: true, deletedIds: [documentId] });
     } catch (error) {
@@ -5025,8 +5031,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Status is required" });
       }
       
-      // Get the document to check its category and current status
-      const doc = await storage.getDocument(documentId);
+      // SECURITY: Get document with company verification to prevent cross-tenant access
+      const doc = await storage.getDocumentSecure(documentId, company.id);
       if (!doc) {
         return res.status(404).json({ message: "Document not found" });
       }
@@ -5041,7 +5047,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You don't have permission to make this status change" });
       }
       
-      const updatedDoc = await storage.updateDocumentStatus(documentId, status);
+      // SECURITY: Use secure update method with company verification
+      const updatedDoc = await storage.updateDocumentSecure(documentId, company.id, { status });
+      if (!updatedDoc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
       res.json(updatedDoc);
     } catch (error) {
       console.error("Error updating document:", error);
@@ -5081,17 +5091,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Supervisors cannot set Owner Only visibility" });
       }
       
-      // Get the document to verify it exists and belongs to company
-      const doc = await storage.getDocument(documentId);
-      if (!doc) {
+      // SECURITY: Use secure update method with company verification
+      const updatedDoc = await storage.updateDocumentSecure(documentId, company.id, { visibility });
+      if (!updatedDoc) {
         return res.status(404).json({ message: "Document not found" });
       }
-      
-      if (doc.companyId !== company.id) {
-        return res.status(403).json({ message: "Document not found" });
-      }
-      
-      const updatedDoc = await storage.updateDocumentVisibility(documentId, visibility);
       res.json(updatedDoc);
     } catch (error) {
       console.error("Error updating document visibility:", error);
