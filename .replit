@@ -42,3 +42,6 @@ integrations = ["javascript_websocket:1.0.0", "javascript_openai:1.0.0", "javasc
 [userenv]
 
 [userenv.shared]
+
+[userenv.development]
+BYPASS_EMAIL_CODE = "true"

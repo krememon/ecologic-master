@@ -509,21 +509,31 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "No pending signup found. Please start over." });
       }
 
-      // Check if code expired
-      if (new Date() > pendingSignup.codeExpiresAt) {
-        return res.status(400).json({ message: "Code expired. Please request a new one." });
+      // DEV BYPASS: Accept "000000" in development with BYPASS_EMAIL_CODE=true
+      const devBypassEnabled = process.env.NODE_ENV === "development" && process.env.BYPASS_EMAIL_CODE === "true";
+      const isDevBypass = devBypassEnabled && code === "000000";
+      
+      if (isDevBypass) {
+        console.log("[auth] DEV BYPASS enabled for email code verification - signup");
       }
 
-      // Check max attempts (5 attempts allowed)
-      if ((pendingSignup.codeAttempts || 0) >= 5) {
-        return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
-      }
+      if (!isDevBypass) {
+        // Check if code expired
+        if (new Date() > pendingSignup.codeExpiresAt) {
+          return res.status(400).json({ message: "Code expired. Please request a new one." });
+        }
 
-      // Verify code
-      const isValid = await comparePasswords(code, pendingSignup.verificationCodeHash);
-      if (!isValid) {
-        await storage.incrementPendingSignupAttempts(normalizedEmail);
-        return res.status(400).json({ message: "Invalid code. Please try again." });
+        // Check max attempts (5 attempts allowed)
+        if ((pendingSignup.codeAttempts || 0) >= 5) {
+          return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
+        }
+
+        // Verify code
+        const isValid = await comparePasswords(code, pendingSignup.verificationCodeHash);
+        if (!isValid) {
+          await storage.incrementPendingSignupAttempts(normalizedEmail);
+          return res.status(400).json({ message: "Invalid code. Please try again." });
+        }
       }
 
       // Mark as verified
@@ -796,7 +806,12 @@ export function setupAuth(app: Express) {
         return res.status(500).json({ message: "Email failed to send. Check server email config." });
       }
 
-      res.json(isDev ? { ok: true, devCode: code } : { ok: true });
+      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
+      res.json({ 
+        ok: true, 
+        ...(isDev && { devCode: code }),
+        ...(devBypassEnabled && { devBypass: true })
+      });
     } catch (error) {
       console.error("Login password error:", error);
       res.status(500).json({ message: "Unable to verify password. Please try again." });
@@ -823,22 +838,32 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Please verify your password first." });
       }
 
-      if (!challenge.verificationCodeHash || !challenge.codeExpiresAt) {
-        return res.status(400).json({ message: "No verification code sent. Please try again." });
+      // DEV BYPASS: Accept "000000" in development with BYPASS_EMAIL_CODE=true
+      const devBypassEnabled = process.env.NODE_ENV === "development" && process.env.BYPASS_EMAIL_CODE === "true";
+      const isDevBypass = devBypassEnabled && code === "000000";
+      
+      if (isDevBypass) {
+        console.log("[auth] DEV BYPASS enabled for email code verification - login");
       }
 
-      if (new Date() > challenge.codeExpiresAt) {
-        return res.status(400).json({ message: "Code expired. Please request a new one." });
-      }
+      if (!isDevBypass) {
+        if (!challenge.verificationCodeHash || !challenge.codeExpiresAt) {
+          return res.status(400).json({ message: "No verification code sent. Please try again." });
+        }
 
-      if ((challenge.codeAttempts || 0) >= 5) {
-        return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
-      }
+        if (new Date() > challenge.codeExpiresAt) {
+          return res.status(400).json({ message: "Code expired. Please request a new one." });
+        }
 
-      const isValid = await comparePasswords(code, challenge.verificationCodeHash);
-      if (!isValid) {
-        await storage.incrementLoginChallengeAttempts(normalizedEmail);
-        return res.status(400).json({ message: "Invalid code. Please try again." });
+        if ((challenge.codeAttempts || 0) >= 5) {
+          return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
+        }
+
+        const isValid = await comparePasswords(code, challenge.verificationCodeHash);
+        if (!isValid) {
+          await storage.incrementLoginChallengeAttempts(normalizedEmail);
+          return res.status(400).json({ message: "Invalid code. Please try again." });
+        }
       }
 
       // Code is valid - log the user in
@@ -955,7 +980,12 @@ export function setupAuth(app: Express) {
         return res.status(500).json({ message: "Email failed to send. Check server email config." });
       }
 
-      res.json(isDev ? { ok: true, devCode: code } : { ok: true });
+      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
+      res.json({ 
+        ok: true, 
+        ...(isDev && { devCode: code }),
+        ...(devBypassEnabled && { devBypass: true })
+      });
     } catch (error) {
       console.error("Resend login code error:", error);
       res.status(500).json({ message: "Unable to resend code. Please try again." });
