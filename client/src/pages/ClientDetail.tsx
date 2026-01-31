@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, FileText, Calendar, Briefcase, Edit2, StickyNote, X, Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import type { Customer, Job, Estimate } from "@shared/schema";
 
@@ -91,6 +93,20 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
     },
     onError: () => {
       toast({ title: "Failed to save notes", variant: "destructive" });
+    },
+  });
+
+  const updateOptInMutation = useMutation({
+    mutationFn: async (data: { emailOptIn?: boolean; smsOptIn?: boolean }) => {
+      const res = await apiRequest('PATCH', `/api/customers/${customerId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      toast({ title: "Preferences updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update preferences", variant: "destructive" });
     },
   });
 
@@ -208,6 +224,54 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Communication Preferences Card */}
+      {canEditCustomers && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Bell className="h-5 w-5 text-blue-600" />
+              Communication Preferences
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="emailOptIn" className="text-sm font-medium">Email Campaigns</Label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Allow sending promotional emails to this client
+                </p>
+              </div>
+              <Switch
+                id="emailOptIn"
+                checked={customer.emailOptIn ?? true}
+                onCheckedChange={(checked) => updateOptInMutation.mutate({ emailOptIn: checked })}
+                disabled={updateOptInMutation.isPending || !customer.email}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="smsOptIn" className="text-sm font-medium">Text Message Campaigns</Label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Allow sending promotional texts to this client
+                </p>
+              </div>
+              <Switch
+                id="smsOptIn"
+                checked={customer.smsOptIn ?? true}
+                onCheckedChange={(checked) => updateOptInMutation.mutate({ smsOptIn: checked })}
+                disabled={updateOptInMutation.isPending || !customer.phone}
+              />
+            </div>
+            {(customer.emailUnsubscribedAt || customer.smsUnsubscribedAt) && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 pt-2 border-t border-slate-200 dark:border-slate-700">
+                {customer.emailUnsubscribedAt && 'Email unsubscribed. '}
+                {customer.smsUnsubscribedAt && 'SMS unsubscribed via STOP keyword.'}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
