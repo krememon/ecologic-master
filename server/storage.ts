@@ -942,16 +942,13 @@ export class DatabaseStorage implements IStorage {
       const preservedCount = memberUserIds.length - orphanedUserIds.length;
       console.log(`[delete-company] ${orphanedUserIds.length} orphaned, ${preservedCount} preserved`);
       
-      // 21. Delete sessions, auth identities, and user records for orphaned users
+      // 21. Delete sessions and user records for orphaned users
       if (orphanedUserIds.length > 0) {
         console.log(`[delete-company] deleting orphan sessions for userIds:`, orphanedUserIds);
         for (const userId of orphanedUserIds) {
           // Cast TEXT to JSONB and use proper JSON operators: -> for object, ->> for text
           await tx.delete(sessions).where(sql`(sess::jsonb)->'passport'->>'user' = ${userId}`);
         }
-        
-        console.log(`[delete-company] deleting orphan auth identities for userIds:`, orphanedUserIds);
-        await tx.delete(authIdentities).where(inArray(authIdentities.userId, orphanedUserIds));
         
         console.log(`[delete-company] deleting orphan users:`, orphanedUserIds);
         await tx.delete(users).where(inArray(users.id, orphanedUserIds));
