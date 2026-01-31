@@ -387,7 +387,7 @@ export async function sendBrandedCampaignEmail({
     footerParts.push(footerText);
   }
   
-  // Build HTML with CID references for images
+  // Build HTML with CID references for images - polished unified header design
   const html = `
 <!DOCTYPE html>
 <html>
@@ -408,8 +408,22 @@ export async function sendBrandedCampaignEmail({
           </tr>
           ` : ''}
           <tr>
-            <td style="padding: 30px; background-color: ${brandColor}; text-align: center;">
-              ${hasLogo ? `<img src="cid:logo" alt="${fromName}" style="max-height: 60px; max-width: 200px;" />` : `<h1 style="margin: 0; color: white; font-size: 24px;">${fromName}</h1>`}
+            <td style="height: 90px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
+              <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                <tr>
+                  <td align="center" style="vertical-align: middle;">
+                    ${hasLogo ? `
+                    <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                      <tr>
+                        <td style="background-color: #ffffff; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                          <img src="cid:logo" alt="${fromName}" style="width: 80px; height: 80px; border-radius: 9999px; display: block; object-fit: cover;" />
+                        </td>
+                      </tr>
+                    </table>
+                    ` : `<h1 style="margin: 0; color: white; font-size: 22px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>`}
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
