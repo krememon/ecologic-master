@@ -752,6 +752,21 @@ export function setupAuth(app: Express) {
         codeAttempts: 0,
       });
 
+      // DEV FALLBACK: Log code to console in development
+      const isDev = process.env.NODE_ENV === "development";
+      if (isDev) {
+        console.log("[login-code] DEV ONLY code for", normalizedEmail, "=", code);
+      }
+
+      // Check email provider configuration
+      if (!process.env.RESEND_API_KEY) {
+        console.error("[login-code] RESEND_API_KEY not configured");
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Email provider not configured." });
+      }
+
       // Send verification code email
       try {
         const { Resend } = await import("resend");
@@ -772,11 +787,16 @@ export function setupAuth(app: Express) {
             </div>
           `,
         });
+        console.log("[login-code] initial code sent email=", normalizedEmail);
       } catch (emailError) {
-        console.error("Failed to send login code email:", emailError);
+        console.error("[login-code] email send failed:", emailError);
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Email failed to send. Check server email config." });
       }
 
-      res.json({ ok: true });
+      res.json(isDev ? { ok: true, devCode: code } : { ok: true });
     } catch (error) {
       console.error("Login password error:", error);
       res.status(500).json({ message: "Unable to verify password. Please try again." });
@@ -891,6 +911,21 @@ export function setupAuth(app: Express) {
         codeAttempts: 0,
       });
 
+      // DEV FALLBACK: Log code to console in development
+      const isDev = process.env.NODE_ENV === "development";
+      if (isDev) {
+        console.log("[login-code] DEV ONLY code for", normalizedEmail, "=", code);
+      }
+
+      // Check email provider configuration
+      if (!process.env.RESEND_API_KEY) {
+        console.error("[login-code] RESEND_API_KEY not configured");
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Email provider not configured." });
+      }
+
       // Send new code email
       try {
         const { Resend } = await import("resend");
@@ -914,9 +949,13 @@ export function setupAuth(app: Express) {
         console.log("[login-code] resend sent email=" + normalizedEmail);
       } catch (emailError) {
         console.error("[login-code] resend email failed:", emailError);
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Email failed to send. Check server email config." });
       }
 
-      res.json({ ok: true });
+      res.json(isDev ? { ok: true, devCode: code } : { ok: true });
     } catch (error) {
       console.error("Resend login code error:", error);
       res.status(500).json({ message: "Unable to resend code. Please try again." });

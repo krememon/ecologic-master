@@ -103,6 +103,7 @@ export default function SignInWizard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [devCode, setDevCode] = useState<string | null>(null);
   
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
@@ -162,7 +163,11 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/password", { email, password });
-      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      
+      if (data?.devCode) {
+        setDevCode(data.devCode);
+      }
       
       setResendCooldown(30);
       goToStep("code");
@@ -237,7 +242,11 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/resend-code", { email });
-      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
+      
+      if (data?.devCode) {
+        setDevCode(data.devCode);
+      }
       
       setResendCooldown(30);
       setVerificationCode(["", "", "", "", "", ""]);
@@ -425,6 +434,14 @@ export default function SignInWizard() {
                   </div>
                   
                   {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+                  
+                  {devCode && (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-center">
+                      <p className="text-xs text-amber-700 dark:text-amber-400 font-mono">
+                        DEV code: <span className="font-bold">{devCode}</span>
+                      </p>
+                    </div>
+                  )}
                   
                   <Button type="submit" className="w-full" disabled={isLoading || !isCodeComplete()}>
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
