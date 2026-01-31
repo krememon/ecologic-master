@@ -58,6 +58,20 @@ export const pendingSignups = pgTable("pending_signups", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Login challenges for multi-step sign-in with email MFA
+export const loginChallenges = pgTable("login_challenges", {
+  id: serial("id").primaryKey(),
+  email: varchar("email").notNull(),
+  userId: varchar("user_id").notNull(),
+  passwordVerified: boolean("password_verified").default(false),
+  verificationCodeHash: varchar("verification_code_hash"),
+  codeExpiresAt: timestamp("code_expires_at"),
+  lastCodeSentAt: timestamp("last_code_sent_at"),
+  codeAttempts: integer("code_attempts").default(0),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // User storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 // Note: Email uniqueness is enforced by case-insensitive index users_email_lower_unique

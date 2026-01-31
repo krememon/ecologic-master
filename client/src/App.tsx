@@ -53,6 +53,7 @@ import QuickBooksSettings from "@/pages/QuickBooksSettings";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
+import SignInWizard from "@/pages/SignInWizard";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -122,7 +123,7 @@ function Router() {
         <Route path="/" component={Welcome} />
         <Route path="/welcome" component={Welcome} />
         <Route path="/auth" component={AuthPage} />
-        <Route path="/login" component={Auth} />
+        <Route path="/login" component={SignInWizard} />
         <Route path="/register" component={Auth} />
         <Route path="/signup" component={SignupWizard} />
         <Route path="/forgot-password" component={ForgotPassword} />

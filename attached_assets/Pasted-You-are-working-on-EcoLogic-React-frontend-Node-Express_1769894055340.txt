@@ -1,0 +1,103 @@
+You are working on EcoLogic (React frontend + Node/Express-ish backend + DB + email).  
+
+TASK: Fix the Sign In flow. Right now clicking "Sign in" incorrectly routes to the old Create Account screen. Replace it with a real Sign In wizard: Email -> Password -> 6-digit code sent to email -> Success. Ensure smooth animations between screens.
+
+NON-NEGOTIABLE:
+- Sign in must NOT land on the create account screen.
+- Sign in flow is 3 steps:
+  1) Email
+  2) Password
+  3) Email verification code (6 digits)
+- Smooth, premium transitions between steps (same spec used for signup wizard).
+- No layout jump (stable header, consistent form container height).
+- Buttons have loading states; disable during async.
+- Never show raw API JSON errors in the UI.
+- Respect prefers-reduced-motion.
+
+========================
+FRONTEND: SIGN IN WIZARD
+========================
+
+1) ROUTING FIX
+- Ensure "Sign in" button/link routes to /login (or /signin) and NOT /signup or old create account route.
+- Ensure "Already have an account? Log in" links to /login.
+- Ensure logged-in users are redirected away from /login to the app (dashboard/jobs).
+
+2) NEW /login UI (3-step wizard)
+Create /login as a multi-step wizard with a stable header:
+- Logo + Title: "Sign in to EcoLogic"
+- Subtext: "Secure access to your company"
+- Progress indicator optional (Step 1 of 3)
+- Only the form body transitions (header stays fixed).
+
+Step A — EMAIL
+- Field: Email
+- Button: Continue
+Validation: required + email format
+On continue: call backend to check user exists and begin sign-in session (do NOT send code yet unless needed).
+Transition forward on success.
+
+Step B — PASSWORD
+- Field: Password (with show/hide)
+- Button: Continue
+On continue: call backend to validate password.
+If correct: trigger sending 6-digit email code and move to Step C.
+If incorrect: show clean inline error "Incorrect password."
+
+Step C — EMAIL CODE (Mandatory)
+Copy:
+- "We sent a 6-digit code to <email>"
+Inputs:
+- 6 digit code input with auto-advance
+- Allow paste full code into first field (auto-distribute)
+Actions:
+- Verify button
+- Resend code link with 30s cooldown timer
+On verify success:
+- finalize login session
+- redirect into app
+On failure: show clean inline error (no raw JSON).
+
+TRANSITIONS (VERY IMPORTANT)
+- Use the same reusable transition wrapper as signup wizard.
+- Animation spec:
+  - Duration: 240ms
+  - Easing: cubic-bezier(0.22, 1, 0.36, 1)
+  - Forward: opacity 0→1 + translateY(8px)→0
+  - Back: opacity 0→1 + translateY(-8px)→0 (optional)
+- Ensure exit animations play (no hard swaps).
+- Keep a consistent min-height for the form container to prevent jumping.
+- prefers-reduced-motion: reduce/disable motion.
+
+NAV LINKS ON /login
+- "Don’t have an account? Create account" -> /signup (welcome screen if you have one, otherwise signup wizard)
+- If you support Google OAuth sign-in, it can live on /login below a divider, but DO NOT confuse it with create account.
+
+========================
+BACKEND: SIGN IN ENDPOINTS
+========================
+
+Implement or adjust backend endpoints to support email+password+email-code login.
+
+Required behavior:
+- Code is mandatory for login (email MFA) after password is correct.
+- Store codes hashed, with expiry (10 minutes).
+- Add resend cooldown server-side (basic throttling).
+- Don’t allow code verification without a successful password step.
+
+Endpoints:
+
+1) POST /api/auth/login/start
+Input: { email }
+Behavior:
+- Confirm user exists
+- Create a temporary login attempt record (login_challenge) tied to email
+Return: { ok: true }
+
+2) POST /api/auth/login/password
+Input: { email, password }
+Behavior:
+- Validate password
+- If valid:
+  - Generate 6-digit code
+  - Store hashed code

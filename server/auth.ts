@@ -676,7 +676,251 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Email/Password Login (rate limited to prevent brute force)
+  // Login Step 1: Start login - check if user exists
+  app.post("/api/auth/login/start", authRateLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const user = await storage.getUserByEmail(normalizedEmail);
+      
+      if (!user) {
+        return res.status(400).json({ message: "No account found with this email." });
+      }
+
+      if (!user.password) {
+        return res.status(400).json({ message: "Please sign in with Google or your original sign-in method." });
+      }
+
+      // Create login challenge (expires in 15 minutes)
+      await storage.createLoginChallenge({
+        email: normalizedEmail,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      });
+
+      res.json({ ok: true, firstName: user.firstName });
+    } catch (error) {
+      console.error("Login start error:", error);
+      res.status(500).json({ message: "Unable to start sign in. Please try again." });
+    }
+  });
+
+  // Login Step 2: Verify password and send code
+  app.post("/api/auth/login/password", authRateLimiter, async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Check for valid login challenge
+      const challenge = await storage.getLoginChallenge(normalizedEmail);
+      if (!challenge || new Date() > challenge.expiresAt) {
+        return res.status(400).json({ message: "Session expired. Please start over." });
+      }
+
+      // Get user and verify password
+      const user = await storage.getUserByEmail(normalizedEmail);
+      if (!user || !user.password) {
+        return res.status(400).json({ message: "Invalid credentials." });
+      }
+
+      const isValid = await comparePasswords(password, user.password);
+      if (!isValid) {
+        return res.status(400).json({ message: "Incorrect password." });
+      }
+
+      // Generate 6-digit MFA code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const codeHash = await hashPassword(code);
+      const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      // Update challenge with password verified and code
+      await storage.updateLoginChallenge(normalizedEmail, {
+        passwordVerified: true,
+        verificationCodeHash: codeHash,
+        codeExpiresAt,
+        lastCodeSentAt: new Date(),
+        codeAttempts: 0,
+      });
+
+      // Send verification code email
+      try {
+        const { Resend } = await import("resend");
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          to: normalizedEmail,
+          subject: "Your EcoLogic Sign-In Code",
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">Sign-in verification</h2>
+              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Enter this code to complete your sign-in:</p>
+              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
+              </div>
+              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes. If you didn't try to sign in, please secure your account.</p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error("Failed to send login code email:", emailError);
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Login password error:", error);
+      res.status(500).json({ message: "Unable to verify password. Please try again." });
+    }
+  });
+
+  // Login Step 3: Verify code and complete login
+  app.post("/api/auth/login/verify-code", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      
+      if (!email || !code) {
+        return res.status(400).json({ message: "Email and code are required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const challenge = await storage.getLoginChallenge(normalizedEmail);
+
+      if (!challenge) {
+        return res.status(400).json({ message: "Session expired. Please start over." });
+      }
+
+      if (!challenge.passwordVerified) {
+        return res.status(400).json({ message: "Please verify your password first." });
+      }
+
+      if (!challenge.verificationCodeHash || !challenge.codeExpiresAt) {
+        return res.status(400).json({ message: "No verification code sent. Please try again." });
+      }
+
+      if (new Date() > challenge.codeExpiresAt) {
+        return res.status(400).json({ message: "Code expired. Please request a new one." });
+      }
+
+      if ((challenge.codeAttempts || 0) >= 5) {
+        return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
+      }
+
+      const isValid = await comparePasswords(code, challenge.verificationCodeHash);
+      if (!isValid) {
+        await storage.incrementLoginChallengeAttempts(normalizedEmail);
+        return res.status(400).json({ message: "Invalid code. Please try again." });
+      }
+
+      // Code is valid - log the user in
+      const user = await storage.getUserByEmail(normalizedEmail);
+      if (!user) {
+        return res.status(400).json({ message: "User not found." });
+      }
+
+      // Clean up the challenge
+      await storage.deleteLoginChallenge(normalizedEmail);
+
+      // Log in the user
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Login session error:", err);
+          return res.status(500).json({ message: "Unable to complete sign in." });
+        }
+        res.json({
+          ok: true,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          },
+        });
+      });
+    } catch (error) {
+      console.error("Login verify code error:", error);
+      res.status(500).json({ message: "Verification failed. Please try again." });
+    }
+  });
+
+  // Login: Resend code
+  app.post("/api/auth/login/resend-code", authRateLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const challenge = await storage.getLoginChallenge(normalizedEmail);
+
+      if (!challenge || !challenge.passwordVerified) {
+        return res.status(400).json({ message: "Please verify your password first." });
+      }
+
+      // Check cooldown (30 seconds)
+      if (challenge.lastCodeSentAt) {
+        const timeSinceLastCode = Date.now() - new Date(challenge.lastCodeSentAt).getTime();
+        if (timeSinceLastCode < 30000) {
+          const waitSeconds = Math.ceil((30000 - timeSinceLastCode) / 1000);
+          return res.status(400).json({ message: `Please wait ${waitSeconds} seconds.` });
+        }
+      }
+
+      // Generate new code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const codeHash = await hashPassword(code);
+      const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      await storage.updateLoginChallenge(normalizedEmail, {
+        verificationCodeHash: codeHash,
+        codeExpiresAt,
+        lastCodeSentAt: new Date(),
+        codeAttempts: 0,
+      });
+
+      // Send new code email
+      try {
+        const { Resend } = await import("resend");
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          to: normalizedEmail,
+          subject: "Your New EcoLogic Sign-In Code",
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">New sign-in code</h2>
+              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Here's your new code:</p>
+              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
+              </div>
+              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes.</p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error("Failed to resend login code:", emailError);
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Resend login code error:", error);
+      res.status(500).json({ message: "Unable to resend code. Please try again." });
+    }
+  });
+
+  // Legacy Email/Password Login (keeping for backward compatibility)
   app.post("/api/login", authRateLimiter, (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);

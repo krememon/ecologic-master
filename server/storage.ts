@@ -2,6 +2,7 @@ import {
   users,
   sessions,
   pendingSignups,
+  loginChallenges,
   companies,
   companyMembers,
   clients,
@@ -3701,6 +3702,55 @@ export class DatabaseStorage implements IStorage {
   async deletePendingSignup(email: string) {
     const normalizedEmail = email.toLowerCase().trim();
     await db.delete(pendingSignups).where(sql`LOWER(email) = ${normalizedEmail}`);
+  }
+
+  async createLoginChallenge(data: {
+    email: string;
+    userId: string;
+    expiresAt: Date;
+  }) {
+    const normalizedEmail = data.email.toLowerCase().trim();
+    await db.delete(loginChallenges).where(sql`LOWER(email) = ${normalizedEmail}`);
+    
+    const [result] = await db.insert(loginChallenges).values({
+      email: normalizedEmail,
+      userId: data.userId,
+      expiresAt: data.expiresAt,
+    }).returning();
+    return result;
+  }
+
+  async getLoginChallenge(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const [result] = await db.select().from(loginChallenges)
+      .where(sql`LOWER(email) = ${normalizedEmail}`)
+      .limit(1);
+    return result;
+  }
+
+  async updateLoginChallenge(email: string, data: {
+    passwordVerified?: boolean;
+    verificationCodeHash?: string;
+    codeExpiresAt?: Date;
+    lastCodeSentAt?: Date;
+    codeAttempts?: number;
+  }) {
+    const normalizedEmail = email.toLowerCase().trim();
+    await db.update(loginChallenges)
+      .set(data)
+      .where(sql`LOWER(email) = ${normalizedEmail}`);
+  }
+
+  async incrementLoginChallengeAttempts(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    await db.update(loginChallenges)
+      .set({ codeAttempts: sql`${loginChallenges.codeAttempts} + 1` })
+      .where(sql`LOWER(email) = ${normalizedEmail}`);
+  }
+
+  async deleteLoginChallenge(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    await db.delete(loginChallenges).where(sql`LOWER(email) = ${normalizedEmail}`);
   }
 }
 
