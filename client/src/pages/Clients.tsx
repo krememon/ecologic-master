@@ -724,58 +724,63 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* Header Section */}
+      {/* Header Toolbar */}
       <div className="space-y-4">
-        {/* Actions Row */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap min-w-fit">
+        {/* Toolbar Row */}
+        <div className="flex items-center justify-between gap-4 min-h-[44px]">
+          {/* Left: Title */}
+          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0">
             All Clients ({customers.length})
           </h3>
-          <div className="flex items-center gap-2 flex-wrap">
+          
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2">
             {isSelectMode ? (
               <Button 
                 variant="outline" 
                 size="icon"
                 onClick={exitSelectMode}
-                className="h-10 w-10 bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                className="h-9 w-9 shrink-0 border-slate-300 dark:border-slate-600 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50"
               >
-                <X className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <X className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               </Button>
             ) : (
               <>
                 {customers.length > 0 && (
                   <Button 
-                    variant="outline" 
+                    variant="ghost" 
                     size="icon"
                     onClick={() => setIsSelectMode(true)}
-                    className="h-10 w-10"
+                    className="h-9 w-9 shrink-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
-                    <CheckSquare className="h-5 w-5" />
+                    <CheckSquare className="h-4 w-4" />
                   </Button>
                 )}
                 {canSendCampaigns && (
                   <Button 
                     variant="outline" 
                     onClick={handleLaunchCampaign}
-                    className="h-10 px-4"
+                    className="h-9 px-3 text-sm font-medium border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
-                    <Send className="w-4 h-4 mr-2" />
-                    Launch Campaign
+                    <Send className="w-4 h-4 mr-1.5" />
+                    <span className="hidden sm:inline">Launch Campaign</span>
+                    <span className="sm:hidden">Campaign</span>
                   </Button>
                 )}
                 <Button 
                   onClick={() => setIsDialogOpen(true)}
-                  className="h-10 px-4"
+                  className="h-9 px-3 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add New Client
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  <span className="hidden sm:inline">Add New Client</span>
+                  <span className="sm:hidden">Add</span>
                 </Button>
               </>
             )}
           </div>
         </div>
 
-        {/* Row 2: Search Bar */}
+        {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input

@@ -1,0 +1,67 @@
+UI REDESIGN: Clean up and redesign the Clients page header controls so they look intentional, modern, and balanced. This is a layout + styling change only. Do NOT change any logic or behavior.
+
+GOAL
+Create a clean, single toolbar-style header row with:
+- Left side: “All Clients (N)” label
+- Right side: action buttons grouped and aligned
+This should match modern SaaS patterns (Stripe, Linear, Notion).
+
+STRUCTURE (REQUIRED)
+Wrap the header controls in a single container:
+
+- Parent container:
+  - display: flex
+  - align-items: center
+  - justify-content: space-between
+  - gap: consistent spacing
+  - prevent wrapping on desktop
+
+LEFT SIDE
+- “All Clients (N)”
+- Single line only (white-space: nowrap)
+- Medium font weight
+- No buttons mixed into this side
+
+RIGHT SIDE (ACTIONS GROUP)
+Group all buttons together in a flex container:
+- [ Select Mode icon button ]
+- [ Launch Campaign ]
+- [ + Add New Client ]
+
+Button hierarchy:
+- Add New Client → primary (filled blue)
+- Launch Campaign → secondary / outline style
+- Select Mode → icon-only, subtle outline or ghost button
+
+Ensure:
+- All buttons are the same height
+- Icons are vertically centered
+- Consistent border radius across buttons
+
+RESPONSIVE BEHAVIOR
+- On smaller widths:
+  - Keep “All Clients (N)” on top
+  - Action buttons move below in one or two rows
+  - Add New Client remains visually dominant
+- Do NOT allow “All Clients (N)” to wrap awkwardly
+
+SPACING
+- Add horizontal padding so the toolbar doesn’t feel cramped
+- Use consistent gaps between buttons (e.g. gap-2 or gap-3)
+- Remove unnecessary vertical stacking unless on mobile
+
+DO NOT CHANGE
+- No RBAC logic
+- No click behavior
+- No data flow
+- No existing button actions
+
+ACCEPTANCE TESTS
+- Desktop: one clean toolbar row, no wrapping, balanced spacing
+- Mobile: buttons stack cleanly, primary action stands out
+- Visual hierarchy is obvious at a glance
+- Matches EcoLogic design language used elsewhere
+
+DELIVERABLE
+- Update Clients page header JSX/CSS only
+- No new components unless absolutely necessary
