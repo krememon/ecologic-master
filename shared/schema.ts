@@ -204,6 +204,31 @@ export const campaignRecipients = pgTable("campaign_recipients", {
   customerIdx: index("campaign_recipients_customer_idx").on(table.customerId),
 }));
 
+// Company Email Branding table - for campaign email customization
+export const companyEmailBranding = pgTable("company_email_branding", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }).unique(),
+  logoUrl: varchar("logo_url", { length: 500 }),
+  headerBannerUrl: varchar("header_banner_url", { length: 500 }),
+  primaryColor: varchar("primary_color", { length: 20 }).default("#2563EB"),
+  fromName: varchar("from_name", { length: 100 }),
+  replyToEmail: varchar("reply_to_email", { length: 255 }),
+  footerText: text("footer_text"),
+  showPhone: boolean("show_phone").default(true),
+  showAddress: boolean("show_address").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCompanyEmailBrandingSchema = createInsertSchema(companyEmailBranding).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCompanyEmailBranding = z.infer<typeof insertCompanyEmailBrandingSchema>;
+export type CompanyEmailBranding = typeof companyEmailBranding.$inferSelect;
+
 // Subcontractors table
 export const subcontractors = pgTable("subcontractors", {
   id: serial("id").primaryKey(),
