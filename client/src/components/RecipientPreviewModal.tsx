@@ -8,7 +8,9 @@ type Channel = "email" | "sms" | "both";
 
 interface Recipient {
   id: number;
-  name: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
   email: string | null;
   phone: string | null;
   emailEligible: boolean;
@@ -18,14 +20,23 @@ interface Recipient {
 }
 
 function getDisplayName(r: Recipient): string {
-  if (r.name && r.name.trim()) return r.name.trim();
+  if (r.companyName && r.companyName.trim()) {
+    return r.companyName.trim();
+  }
+  const fullName = [r.firstName, r.lastName].filter(Boolean).join(" ").trim();
+  if (fullName) return fullName;
   if (r.email) return r.email;
   if (r.phone) return r.phone;
   return "Unnamed Client";
 }
 
+function hasRealName(r: Recipient): boolean {
+  if (r.companyName && r.companyName.trim()) return true;
+  const fullName = [r.firstName, r.lastName].filter(Boolean).join(" ").trim();
+  return !!fullName;
+}
+
 function getSubline(r: Recipient): string | null {
-  if (r.email && r.phone) return `${r.email} • ${r.phone}`;
   if (r.email) return r.email;
   if (r.phone) return r.phone;
   return null;
@@ -146,7 +157,7 @@ export default function RecipientPreviewModal({
                 {/* Eligible Recipients */}
                 {eligibleRecipients.map((r) => {
                   const displayName = getDisplayName(r);
-                  const subline = r.name && r.name.trim() ? getSubline(r) : null;
+                  const subline = hasRealName(r) ? getSubline(r) : null;
                   return (
                     <div
                       key={r.id}

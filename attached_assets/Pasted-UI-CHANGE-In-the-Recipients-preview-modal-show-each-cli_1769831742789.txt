@@ -1,0 +1,49 @@
+UI CHANGE: In the “Recipients” preview modal, show each client’s NAME as the primary (bold) line instead of the email address. Show email (and/or phone) as the smaller secondary line underneath. Only use email as the primary line if the client truly has no name/company name available.
+
+DO NOT CHANGE
+- No changes to sending logic, selection logic, preview counts, RBAC, or opt-in logic.
+- This is a display-only change.
+
+IMPLEMENTATION REQUIREMENTS
+
+1) Build a robust displayName helper (single source of truth)
+Create/adjust a function used by the Recipients modal:
+
+function getClientDisplayName(client) {
+  // PRIORITY ORDER:
+  // 1) companyName (if present and not empty)
+  // 2) fullName / name (if present)
+  // 3) firstName + lastName (if either present)
+  // 4) fallback: email
+  // 5) fallback: phone
+  // 6) "Unnamed Client"
+}
+
+Make sure it trims whitespace and avoids returning blank strings.
+
+2) Render two-line row layout
+In each recipient row (middle column):
+- Line 1 (primary): displayName in medium/bold text
+- Line 2 (secondary): email if exists, else phone if exists (muted small text)
+If both email + phone exist, show email first (or "email • phone" if space allows).
+
+3) Ensure the modal is actually receiving name fields
+Right now it looks like the modal has emails. Confirm the client object includes the name fields.
+If names are not being passed, update the data source so recipient rows have access to:
+- companyName OR name OR firstName/lastName
+If the Clients API currently does not return name fields, fix the API response shape (still no logic changes, just include fields already in DB).
+
+4) Visual polish
+- Keep the checkbox on the left, icons on the right.
+- Ensure text column has flex-1 and min-w-0 so truncation works.
+- Use ellipsis for long names/emails.
+
+ACCEPTANCE TESTS
+- Recipients list shows "Brennan Synch" (or company name) as the big text.
+- Email appears underneath in smaller muted text.
+- If a client has no name fields at all, email becomes the primary line as fallback.
+- No blank rows.
+
+DELIVERABLE
+- Update Recipients modal row rendering + helper function.
+- If required, update clients query/API to include name/companyName fields so the UI can display them.

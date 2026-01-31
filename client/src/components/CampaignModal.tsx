@@ -14,7 +14,9 @@ type AudienceMode = "selected" | "all";
 
 interface Recipient {
   id: number;
-  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
   email: string | null;
   phone: string | null;
   emailEligible: boolean;
