@@ -298,6 +298,7 @@ export async function sendBrandedCampaignEmail({
   companyName,
   branding,
   company,
+  unsubscribeUrl,
 }: {
   to: string;
   subject: string;
@@ -318,6 +319,7 @@ export async function sendBrandedCampaignEmail({
     state?: string | null;
     postalCode?: string | null;
   } | null;
+  unsubscribeUrl?: string;
 }): Promise<EmailResult> {
   const resendApiKey = process.env.RESEND_API_KEY;
   
@@ -405,7 +407,9 @@ export async function sendBrandedCampaignEmail({
                 ${footerParts.join('<br />')}
               </p>
               <p style="margin: 8px 0 0 0; color: #9ca3af; font-size: 11px; text-align: center;">
-                To unsubscribe, please reply to this email or contact ${companyName} directly.
+                ${unsubscribeUrl 
+                  ? `<a href="${unsubscribeUrl}" style="color: #9ca3af; text-decoration: underline;">Unsubscribe</a> from marketing emails`
+                  : `To unsubscribe, please reply to this email or contact ${companyName} directly.`}
               </p>
             </td>
           </tr>
@@ -413,7 +417,9 @@ export async function sendBrandedCampaignEmail({
           <tr>
             <td style="padding: 20px 30px; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
               <p style="margin: 0; color: #9ca3af; font-size: 11px; text-align: center;">
-                Sent by ${companyName}. To unsubscribe, please reply to this email.
+                Sent by ${companyName}. ${unsubscribeUrl 
+                  ? `<a href="${unsubscribeUrl}" style="color: #9ca3af; text-decoration: underline;">Unsubscribe</a>`
+                  : 'To unsubscribe, please reply to this email.'}
               </p>
             </td>
           </tr>
@@ -426,6 +432,13 @@ export async function sendBrandedCampaignEmail({
 </html>`;
 
   try {
+    // Build headers with List-Unsubscribe if unsubscribe URL is provided
+    const headers: Record<string, string> = {};
+    if (unsubscribeUrl) {
+      headers['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
+      headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    }
+    
     const { data, error } = await resend.emails.send({
       from: resolvedFrom,
       to: [to],
@@ -433,6 +446,7 @@ export async function sendBrandedCampaignEmail({
       html,
       replyTo: branding?.replyToEmail || undefined,
       attachments: attachments.length > 0 ? attachments : undefined,
+      headers: Object.keys(headers).length > 0 ? headers : undefined,
     });
 
     if (error) {

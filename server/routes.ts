@@ -126,6 +126,38 @@ function getUserId(user: any): string {
   return user.id || user.sub;
 }
 
+// Render simple HTML page for unsubscribe result
+function renderUnsubscribePage({ success, error, channel = 'email' }: { success: boolean; error?: string; channel?: 'email' | 'sms' }): string {
+  const channelLabel = channel === 'sms' ? 'text messages' : 'emails';
+  const title = success ? 'Unsubscribed' : 'Unsubscribe Error';
+  const message = success 
+    ? `You have been successfully unsubscribed from marketing ${channelLabel}. You will no longer receive promotional messages from this company.`
+    : (error || 'An error occurred while processing your request.');
+  
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .container { background: white; padding: 40px; border-radius: 8px; max-width: 400px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { margin: 0 0 16px; font-size: 24px; color: ${success ? '#10b981' : '#ef4444'}; }
+    p { color: #666; line-height: 1.6; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">${success ? '✓' : '⚠'}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+  </div>
+</body>
+</html>`;
+}
+
 // Track connected WebSocket clients
 const wsClients = new Map<string, Set<WebSocket>>();
 
@@ -6888,6 +6920,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: 'queued',
           });
 
+          // Generate unsubscribe URL for this recipient
+          const { generateUnsubscribeUrl } = await import('./services/unsubscribe');
+          const unsubscribeUrl = generateUnsubscribeUrl(company.id, customer.id, 'email');
+          
           const result = await sendBrandedCampaignEmail({
             to: customer.email!,
             subject: subject!,
@@ -6895,6 +6931,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             companyName: company.name,
             branding: emailBranding,
             company: company,
+            unsubscribeUrl,
           });
 
           if (result.success) {
@@ -9253,6 +9290,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error signing document:", error);
       res.status(500).json({ message: "Failed to sign document" });
+    }
+  });
+
+  // ============== PUBLIC UNSUBSCRIBE ENDPOINTS ==============
+
+  // GET /api/public/unsubscribe/email - Unsubscribe from email marketing
+  app.get('/api/public/unsubscribe/email', async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid link' }));
+      }
+      
+      const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
+      const payload = verifyUnsubscribeToken(token);
+      
+      if (!payload) {
+        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'This link is invalid or has expired' }));
+      }
+      
+      if (payload.channel !== 'email') {
+        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid unsubscribe link' }));
+      }
+      
+      // Verify customer exists and belongs to company
+      const customer = await storage.getCustomer(payload.customerId);
+      
+      if (!customer || customer.companyId !== payload.companyId) {
+        return res.status(404).send(renderUnsubscribePage({ success: false, error: 'Link not found' }));
+      }
+      
+      // Update customer preferences
+      await storage.updateCustomer(payload.customerId, {
+        emailOptIn: false,
+        emailUnsubscribedAt: new Date(),
+      });
+      
+      console.log(`[Unsub] Email unsubscribe: customerId=${payload.customerId} companyId=${payload.companyId}`);
+      
+      res.send(renderUnsubscribePage({ success: true }));
+    } catch (error) {
+      console.error('[Unsub] Error processing unsubscribe:', error);
+      res.status(500).send(renderUnsubscribePage({ success: false, error: 'Something went wrong' }));
+    }
+  });
+
+  // GET /api/public/unsubscribe/sms - Unsubscribe from SMS marketing (future-ready)
+  app.get('/api/public/unsubscribe/sms', async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid link', channel: 'sms' }));
+      }
+      
+      const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
+      const payload = verifyUnsubscribeToken(token);
+      
+      if (!payload) {
+        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'This link is invalid or has expired', channel: 'sms' }));
+      }
+      
+      if (payload.channel !== 'sms') {
+        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid unsubscribe link', channel: 'sms' }));
+      }
+      
+      const customer = await storage.getCustomer(payload.customerId);
+      
+      if (!customer || customer.companyId !== payload.companyId) {
+        return res.status(404).send(renderUnsubscribePage({ success: false, error: 'Link not found', channel: 'sms' }));
+      }
+      
+      await storage.updateCustomer(payload.customerId, {
+        smsOptIn: false,
+        smsUnsubscribedAt: new Date(),
+      });
+      
+      console.log(`[Unsub] SMS unsubscribe: customerId=${payload.customerId} companyId=${payload.companyId}`);
+      
+      res.send(renderUnsubscribePage({ success: true, channel: 'sms' }));
+    } catch (error) {
+      console.error('[Unsub] Error processing SMS unsubscribe:', error);
+      res.status(500).send(renderUnsubscribePage({ success: false, error: 'Something went wrong', channel: 'sms' }));
     }
   });
 
