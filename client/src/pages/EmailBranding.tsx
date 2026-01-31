@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Loader2, ChevronLeft, Upload, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/slider";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 
 interface EmailBranding {
   id?: number;
@@ -22,6 +26,60 @@ interface EmailBranding {
   footerText?: string | null;
   showPhone?: boolean | null;
   showAddress?: boolean | null;
+}
+
+async function getCroppedImg(
+  imageSrc: string,
+  pixelCrop: Area,
+  outputWidth: number = 1200,
+  outputHeight: number = 300
+): Promise<Blob> {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    throw new Error("Could not get canvas context");
+  }
+
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    outputWidth,
+    outputHeight
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("Canvas toBlob failed"));
+        }
+      },
+      "image/jpeg",
+      0.9
+    );
+  });
+}
+
+function createImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", (error) => reject(error));
+    image.crossOrigin = "anonymous";
+    image.src = url;
+  });
 }
 
 export default function EmailBranding() {
@@ -36,6 +94,12 @@ export default function EmailBranding() {
   const [showPhone, setShowPhone] = useState(true);
   const [showAddress, setShowAddress] = useState(true);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const { data: branding, isLoading } = useQuery<EmailBranding>({
     queryKey: ['/api/company/email-branding'],
@@ -81,32 +145,70 @@ export default function EmailBranding() {
     },
   });
 
-  const handleUploadBanner = async (file: File) => {
+  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const handleFileSelect = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageToCrop(reader.result as string);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCropModalOpen(true);
+    };
+    reader.onerror = () => {
+      toast({ title: "Error", description: "Could not read image file", variant: "destructive" });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropSave = async () => {
+    if (!imageToCrop || !croppedAreaPixels) {
+      toast({ title: "Error", description: "No crop area selected", variant: "destructive" });
+      return;
+    }
+
     setUploadingBanner(true);
-    
+    setCropModalOpen(false);
+
+    let croppedBlob: Blob;
     try {
+      croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels, 1200, 300);
+    } catch (cropError: any) {
+      console.error("Crop error:", cropError);
+      toast({ title: "Error", description: "Could not crop image", variant: "destructive" });
+      setUploadingBanner(false);
+      setImageToCrop(null);
+      return;
+    }
+
+    try {
+      const timestamp = Date.now();
+      const file = new File([croppedBlob], `header-${timestamp}.jpg`, { type: "image/jpeg" });
+
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include',
       });
-      
+
       if (!response.ok) {
         throw new Error('Upload failed');
       }
-      
+
       const data = await response.json();
       const url = data.url || data.fileUrl;
-      
+
       if (!url) {
         throw new Error('No URL returned from upload');
       }
-      
+
       setHeaderBannerUrl(url);
-      
+
       await apiRequest('PUT', '/api/company/email-branding', {
         headerBannerUrl: url,
         fromName: fromName || null,
@@ -115,14 +217,23 @@ export default function EmailBranding() {
         showPhone,
         showAddress,
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['/api/company/email-branding'] });
-      toast({ title: "Uploaded & Saved", description: "Header image uploaded and saved" });
+      toast({ title: "Saved", description: "Header image uploaded and saved" });
     } catch (error: any) {
-      toast({ title: "Upload Failed", description: error.message || "Failed to upload", variant: "destructive" });
+      console.error("Upload error:", error);
+      toast({ title: "Upload Failed", description: "Upload failed", variant: "destructive" });
     } finally {
       setUploadingBanner(false);
+      setImageToCrop(null);
+      setCroppedAreaPixels(null);
     }
+  };
+
+  const handleCropCancel = () => {
+    setCropModalOpen(false);
+    setImageToCrop(null);
+    setCroppedAreaPixels(null);
   };
 
   const handleSave = () => {
@@ -224,7 +335,7 @@ export default function EmailBranding() {
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (file) handleUploadBanner(file);
+                            if (file) handleFileSelect(file);
                             e.target.value = '';
                           }}
                         />
@@ -243,7 +354,7 @@ export default function EmailBranding() {
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) handleUploadBanner(file);
+                        if (file) handleFileSelect(file);
                         e.target.value = '';
                       }}
                     />
@@ -259,7 +370,7 @@ export default function EmailBranding() {
                     </div>
                   </label>
                 )}
-                <p className="text-xs text-slate-500 mt-2">Recommended size: 1200 x 300 pixels</p>
+                <p className="text-xs text-slate-500 mt-2">Output: 1200 x 300 pixels (4:1 aspect ratio)</p>
               </div>
             </CardContent>
           </Card>
@@ -402,6 +513,50 @@ export default function EmailBranding() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={cropModalOpen} onOpenChange={(open) => !open && handleCropCancel()}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Crop Header Image</DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full h-[300px] bg-slate-900 rounded-lg overflow-hidden">
+            {imageToCrop && (
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={4 / 1}
+                restrictPosition={true}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Zoom</Label>
+            <Slider
+              value={[zoom]}
+              min={1}
+              max={3}
+              step={0.1}
+              onValueChange={(value) => setZoom(value[0])}
+            />
+          </div>
+          <p className="text-xs text-slate-500 text-center">
+            Drag to reposition. Output will be 1200 x 300 pixels.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCropCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleCropSave} disabled={uploadingBanner}>
+              {uploadingBanner && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Save Header
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
