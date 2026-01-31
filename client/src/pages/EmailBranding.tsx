@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ImageCropModal from "@/components/ImageCropModal";
 
 interface EmailBranding {
   id?: number;
@@ -41,6 +42,9 @@ export default function EmailBranding() {
   const [showAddress, setShowAddress] = useState(true);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropMode, setCropMode] = useState<"logo" | "banner">("logo");
 
   const { data: branding, isLoading } = useQuery<EmailBranding>({
     queryKey: ['/api/company/email-branding'],
@@ -87,6 +91,16 @@ export default function EmailBranding() {
       toast({ title: "Error", description: error.message || "Failed to send test email", variant: "destructive" });
     },
   });
+
+  const openCropModal = (file: File, mode: "logo" | "banner") => {
+    setCropFile(file);
+    setCropMode(mode);
+    setCropModalOpen(true);
+  };
+
+  const handleCroppedUpload = async (croppedFile: File) => {
+    await handleUpload(croppedFile, cropMode);
+  };
 
   const handleUpload = async (file: File, type: 'logo' | 'banner') => {
     if (type === 'logo') setUploadingLogo(true);
@@ -224,7 +238,8 @@ export default function EmailBranding() {
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) handleUpload(file, 'logo');
+                        if (file) openCropModal(file, 'logo');
+                        e.target.value = '';
                       }}
                     />
                     <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm">
@@ -254,7 +269,8 @@ export default function EmailBranding() {
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) handleUpload(file, 'banner');
+                        if (file) openCropModal(file, 'banner');
+                        e.target.value = '';
                       }}
                     />
                     <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm">
@@ -435,6 +451,17 @@ export default function EmailBranding() {
           </Card>
         </div>
       </div>
+
+      <ImageCropModal
+        open={cropModalOpen}
+        onClose={() => {
+          setCropModalOpen(false);
+          setCropFile(null);
+        }}
+        file={cropFile}
+        mode={cropMode}
+        onCropped={handleCroppedUpload}
+      />
     </div>
   );
 }

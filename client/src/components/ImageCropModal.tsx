@@ -1,10 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ImageCropModalProps {
   open: boolean;
@@ -82,6 +83,7 @@ export default function ImageCropModal({
   mode,
   onCropped,
 }: ImageCropModalProps) {
+  const { toast } = useToast();
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -94,19 +96,27 @@ export default function ImageCropModal({
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
-  const handleFileChange = useCallback(() => {
-    if (file) {
+  useEffect(() => {
+    if (file && open) {
       const reader = new FileReader();
       reader.onload = () => {
         setImageSrc(reader.result as string);
       };
+      reader.onerror = () => {
+        toast({ title: "Error", description: "Could not read image file", variant: "destructive" });
+      };
       reader.readAsDataURL(file);
     }
-  }, [file]);
+  }, [file, open, toast]);
 
-  if (file && !imageSrc) {
-    handleFileChange();
-  }
+  useEffect(() => {
+    if (!open) {
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCroppedAreaPixels(null);
+      setImageSrc(null);
+    }
+  }, [open]);
 
   const handleSave = async () => {
     if (!imageSrc || !croppedAreaPixels) return;
@@ -124,24 +134,17 @@ export default function ImageCropModal({
       const croppedFile = new File([croppedBlob], fileName, { type: "image/png" });
 
       await onCropped(croppedFile);
-      handleClose();
+      onClose();
     } catch (error) {
       console.error("Crop failed:", error);
+      toast({ title: "Error", description: "Could not crop image", variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleClose = () => {
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
-    setImageSrc(null);
-    onClose();
-  };
-
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-lg max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>Edit Image</DialogTitle>
@@ -183,7 +186,7 @@ export default function ImageCropModal({
           </p>
 
           <div className="flex gap-3 justify-end">
-            <Button variant="outline" onClick={handleClose} disabled={isProcessing}>
+            <Button variant="outline" onClick={onClose} disabled={isProcessing}>
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={isProcessing || !croppedAreaPixels}>
