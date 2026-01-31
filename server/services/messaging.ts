@@ -2,6 +2,25 @@ import { Resend } from 'resend';
 
 const DEFAULT_FROM = 'onboarding@resend.dev';
 
+function toAbsoluteUrl(relativeUrl: string | null | undefined): string {
+  if (!relativeUrl) return '';
+  
+  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+    return relativeUrl;
+  }
+  
+  const baseUrl = process.env.APP_BASE_URL || '';
+  if (!baseUrl) {
+    console.warn('[Email] APP_BASE_URL not set - images may not display in emails');
+    return relativeUrl;
+  }
+  
+  const cleanBase = baseUrl.replace(/\/$/, '');
+  const cleanPath = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+  
+  return `${cleanBase}${cleanPath}`;
+}
+
 interface EmailResult {
   success: boolean;
   messageId?: string;
@@ -218,10 +237,14 @@ export async function sendBrandedCampaignEmail({
   const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
   
   const brandColor = branding?.primaryColor || '#2563EB';
-  const logoUrl = branding?.logoUrl || '';
-  const headerBannerUrl = branding?.headerBannerUrl || '';
+  const logoUrl = toAbsoluteUrl(branding?.logoUrl);
+  const headerBannerUrl = toAbsoluteUrl(branding?.headerBannerUrl);
   const footerText = branding?.footerText || '';
   const fromName = branding?.fromName || companyName;
+  
+  if (logoUrl || headerBannerUrl) {
+    console.log('[Campaign] Email image URLs:', { logoUrl, headerBannerUrl });
+  }
   const showPhone = branding?.showPhone ?? true;
   const showAddress = branding?.showAddress ?? true;
   
@@ -299,7 +322,7 @@ export async function sendBrandedCampaignEmail({
       to: [to],
       subject,
       html,
-      reply_to: branding?.replyToEmail || undefined,
+      replyTo: branding?.replyToEmail || undefined,
     });
 
     if (error) {
@@ -356,7 +379,7 @@ export const messagingService = {
         to: [to],
         subject,
         html,
-        reply_to: replyTo || undefined,
+        replyTo: replyTo || undefined,
       });
 
       if (error) {
