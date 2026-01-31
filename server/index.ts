@@ -13,20 +13,43 @@ const app = express();
 
 // PUBLIC STATIC FILES - MUST be registered FIRST before any middleware
 // This ensures uploads are accessible to email clients without auth
+// Using explicit GET handler instead of express.static to ensure it takes priority
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use("/uploads", (req, res, next) => {
+
+app.get("/uploads/:filename", (req, res) => {
+  const filename = req.params.filename;
+  // Security: prevent path traversal
+  if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    return res.status(400).send("Invalid filename");
+  }
+  
+  const filePath = path.join(uploadsDir, filename);
+  
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("File not found");
+  }
+  
+  // Determine content type
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+  };
+  const contentType = mimeTypes[ext] || "application/octet-stream";
+  
+  res.setHeader("Content-Type", contentType);
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=31536000");
-  next();
-}, express.static(uploadsDir, {
-  maxAge: "1y",
-  etag: true,
-  lastModified: true,
-  index: false,
-}));
+  res.sendFile(filePath);
+});
 console.log("[Static] Public /uploads route registered at:", uploadsDir);
 
 // Disable ETags to prevent 304 responses which break JSON parsing
