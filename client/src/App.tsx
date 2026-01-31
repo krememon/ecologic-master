@@ -74,6 +74,11 @@ function PublicInvoiceRouter() {
   );
 }
 
+// Public unsubscribe page - NO auth required
+function UnsubscribeRouter() {
+  return <PublicUnsubscribe />;
+}
+
 function Router() {
   // Check for public payment/stripe routes BEFORE any auth hooks
   const path = window.location.pathname;
@@ -84,6 +89,11 @@ function Router() {
   // Public invoice payment page - NO auth required
   if (path.match(/^\/invoice\/\d+\/pay$/)) {
     return <PublicInvoiceRouter />;
+  }
+  
+  // Public unsubscribe page - NO auth required
+  if (path.startsWith('/unsubscribe')) {
+    return <UnsubscribeRouter />;
   }
 
   const { isAuthenticated, isLoading, user } = useAuth();
