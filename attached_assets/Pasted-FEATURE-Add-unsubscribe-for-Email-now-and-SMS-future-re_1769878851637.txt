@@ -1,0 +1,55 @@
+FEATURE: Add unsubscribe for Email (now) and SMS (future-ready). Must be simple, secure, and compatible with campaign blasts.
+
+GOAL
+- Every campaign email includes an Unsubscribe link unique per recipient.
+- Clicking the link opts that recipient out for that company.
+- Campaign sending must respect opt-out (skip recipients).
+- SMS opt-out fields exist now; STOP handling can be added later.
+
+DATABASE
+1) Add fields to customers/clients table:
+- email_marketing_opt_in BOOLEAN NOT NULL DEFAULT true
+- sms_marketing_opt_in BOOLEAN NOT NULL DEFAULT true
+- marketing_unsubscribed_at TIMESTAMP NULL
+(Optional) marketing_unsubscribe_reason TEXT NULL
+
+TOKEN + SECURITY
+2) Implement signed unsubscribe token (no raw IDs in URL)
+- Create helper: createUnsubToken({companyId, customerId, channel})
+- Use HMAC signature with secret (e.g. UNSUB_TOKEN_SECRET)
+- Include issuedAt + optional expiry (e.g. 180 days)
+- Verify token server-side before applying changes
+
+API ROUTES
+3) Add public endpoints (no auth required):
+GET /api/public/unsubscribe/email?token=...
+- Verify token
+- Set email_marketing_opt_in=false, marketing_unsubscribed_at=now
+- Return a simple HTML page: “You’re unsubscribed from emails.”
+
+(Optional later) /api/public/unsubscribe/sms?token=...
+
+FRONTEND PAGES
+4) Add a simple public route/page:
+- /unsubscribe/email?token=...
+This can call the API and show success/error.
+
+CAMPAIGN SENDING
+5) Update campaign recipients selection + sending:
+- When building recipients list for email campaigns, exclude customers where email_marketing_opt_in=false or email is missing
+- Add Unsubscribe link per recipient into email footer:
+  ${PUBLIC_BASE_URL}/unsubscribe/email?token=${token}
+
+EMAIL TEMPLATE
+6) Update HTML template footer:
+- Add an Unsubscribe link that is visible and email-client-safe.
+- Also set List-Unsubscribe headers if possible:
+  - List-Unsubscribe: <mailto:...>, <https://.../unsubscribe/email?token=...>
+  - List-Unsubscribe-Post: List-Unsubscribe=One-Click (optional)
+
+TESTS
+7) Verify:
+- Send campaign email → unsubscribe link present
+- Click link → shows “unsubscribed” page
+- Re-send campaign → that recipient is skipped
+- No crashes; invalid/expired tokens show “link invalid” page
