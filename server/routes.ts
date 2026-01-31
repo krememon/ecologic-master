@@ -9442,6 +9442,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/public/email-preferences - Get current email preferences (public, no auth)
+  app.get('/api/public/email-preferences', async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ ok: false, message: 'Invalid token' });
+      }
+      
+      const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
+      const payload = verifyUnsubscribeToken(token);
+      
+      if (!payload) {
+        return res.status(400).json({ ok: false, message: 'This link is invalid or has expired' });
+      }
+      
+      const customer = await storage.getCustomer(payload.customerId);
+      
+      if (!customer || customer.companyId !== payload.companyId) {
+        return res.status(404).json({ ok: false, message: 'Link not found' });
+      }
+      
+      res.json({
+        ok: true,
+        emailOptIn: customer.emailOptIn ?? true,
+        smsOptIn: customer.smsOptIn ?? true,
+        channel: payload.channel,
+      });
+    } catch (error) {
+      console.error('[Prefs] Error getting email preferences:', error);
+      res.status(500).json({ ok: false, message: 'Something went wrong' });
+    }
+  });
+
+  // POST /api/public/email-preferences - Update email preferences (public, no auth)
+  app.post('/api/public/email-preferences', async (req, res) => {
+    try {
+      const { token, emailOptIn, smsOptIn } = req.body;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ ok: false, message: 'Invalid token' });
+      }
+      
+      const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
+      const payload = verifyUnsubscribeToken(token);
+      
+      if (!payload) {
+        return res.status(400).json({ ok: false, message: 'This link is invalid or has expired' });
+      }
+      
+      const customer = await storage.getCustomer(payload.customerId);
+      
+      if (!customer || customer.companyId !== payload.companyId) {
+        return res.status(404).json({ ok: false, message: 'Link not found' });
+      }
+      
+      const updates: Record<string, unknown> = {};
+      
+      if (typeof emailOptIn === 'boolean') {
+        updates.emailOptIn = emailOptIn;
+        if (emailOptIn) {
+          updates.emailUnsubscribedAt = null;
+        } else {
+          updates.emailUnsubscribedAt = new Date();
+        }
+      }
+      
+      if (typeof smsOptIn === 'boolean') {
+        updates.smsOptIn = smsOptIn;
+        if (smsOptIn) {
+          updates.smsUnsubscribedAt = null;
+        } else {
+          updates.smsUnsubscribedAt = new Date();
+        }
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        await storage.updateCustomer(payload.customerId, updates);
+        console.log(`[Prefs] Updated preferences: customerId=${payload.customerId} updates=${JSON.stringify(updates)}`);
+      }
+      
+      res.json({ ok: true });
+    } catch (error) {
+      console.error('[Prefs] Error updating email preferences:', error);
+      res.status(500).json({ ok: false, message: 'Something went wrong' });
+    }
+  });
+
   // ============== DEBUG ENDPOINTS (Dev Only) ==============
 
   // POST /api/debug/test-email - Test email configuration (dev only)
