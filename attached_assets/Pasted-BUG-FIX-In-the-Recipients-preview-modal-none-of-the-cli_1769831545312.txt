@@ -1,0 +1,62 @@
+BUG FIX: In the “Recipients” preview modal, none of the client names are showing. The list rows show checkmarks and the email icon, but the display text is blank. Fix this so each recipient row shows the client’s name reliably.
+
+HARD RULES
+- Do NOT change campaign logic or selection logic.
+- Fix is UI/data binding only: ensure the modal has the client display fields and renders them correctly.
+- Keep styling consistent with EcoLogic.
+
+LIKELY ROOT CAUSES (CHECK THESE)
+1) Wrong field name:
+   - client.name vs client.fullName vs client.firstName/lastName vs client.companyName
+2) Recipient modal is receiving only IDs/eligibility, not the full client objects
+3) CSS/layout bug:
+   - text container has width: 0, flex misconfigured, overflow hidden, or text color = background
+
+REQUIRED IMPLEMENTATION (DO THIS)
+A) Ensure the Recipients modal receives full client objects OR can look them up.
+Preferred approach:
+- Pass `clients` (array of client objects already loaded on Clients page) into the LaunchCampaign modal,
+- Then pass those same objects into the Recipients modal.
+- Recipient rows must render using those objects, not just IDs.
+
+If current state stores only selected IDs:
+- Build a map: `const clientById = new Map(clients.map(c => [c.id, c]))`
+- For each recipientId, resolve `client = clientById.get(id)` and render from that.
+
+B) Create a robust display name helper
+Add a function used in the Recipients row:
+
+getClientDisplayName(client):
+- If client.companyName exists and not empty -> return companyName
+- Else if client.firstName/lastName -> return `${firstName} ${lastName}` trimmed
+- Else if client.name -> return name
+- Else if client.email -> return email
+- Else if client.phone -> return formatted phone
+- Else -> return "Unnamed Client"
+
+This ensures names never render blank even if data is incomplete.
+
+C) Fix the row layout so text is visible
+Each row should be a flex row:
+[left checkbox] [name + subline] [icons]
+- Ensure the text container has:
+  - flex: 1
+  - min-width: 0 (important for flex truncation)
+  - text colors not muted to invisibility
+- Render:
+  - Primary line (bold): displayName
+  - Secondary line (muted small): email and/or phone (optional, but helpful)
+
+D) Add a dev-only debug log to confirm data shape (remove after)
+- console.log("Recipients modal sample client:", recipients[0], resolvedClient) in dev only.
+- Remove or gate behind NODE_ENV !== 'production' once fixed.
+
+ACCEPTANCE TESTS
+1) Recipients modal shows client names for all rows.
+2) If a client has no company/name fields, it shows email or phone fallback (never blank).
+3) No layout regression: checkbox left, name center, channel icons right.
+4) Works for both “All Clients” and “Selected Clients” flows.
+
+DELIVERABLE
+- Update Recipients modal component to resolve client objects correctly and render displayName + optional subline.
+- Fix flex styling so text is visible and not collapsing.

@@ -8,13 +8,27 @@ type Channel = "email" | "sms" | "both";
 
 interface Recipient {
   id: number;
-  name: string;
+  name: string | null;
   email: string | null;
   phone: string | null;
   emailEligible: boolean;
   smsEligible: boolean;
   emailDisabledReason: string | null;
   smsDisabledReason: string | null;
+}
+
+function getDisplayName(r: Recipient): string {
+  if (r.name && r.name.trim()) return r.name.trim();
+  if (r.email) return r.email;
+  if (r.phone) return r.phone;
+  return "Unnamed Client";
+}
+
+function getSubline(r: Recipient): string | null {
+  if (r.email && r.phone) return `${r.email} • ${r.phone}`;
+  if (r.email) return r.email;
+  if (r.phone) return r.phone;
+  return null;
 }
 
 interface RecipientPreviewModalProps {
@@ -130,32 +144,41 @@ export default function RecipientPreviewModal({
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {/* Eligible Recipients */}
-                {eligibleRecipients.map((r) => (
-                  <div
-                    key={r.id}
-                    onClick={() => toggleRecipient(r.id)}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={localSelectedIds.includes(r.id)}
-                      onCheckedChange={() => toggleRecipient(r.id)}
-                      className="h-5 w-5"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                        {r.name}
-                      </p>
+                {eligibleRecipients.map((r) => {
+                  const displayName = getDisplayName(r);
+                  const subline = r.name && r.name.trim() ? getSubline(r) : null;
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={() => toggleRecipient(r.id)}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={localSelectedIds.includes(r.id)}
+                        onCheckedChange={() => toggleRecipient(r.id)}
+                        className="h-5 w-5 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                          {displayName}
+                        </p>
+                        {subline && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                            {subline}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {(channel === "email" || channel === "both") && r.emailEligible && (
+                          <Mail className="h-4 w-4 text-blue-500" />
+                        )}
+                        {(channel === "sms" || channel === "both") && r.smsEligible && (
+                          <MessageSquare className="h-4 w-4 text-green-500" />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {(channel === "email" || channel === "both") && r.emailEligible && (
-                        <Mail className="h-4 w-4 text-blue-500" />
-                      )}
-                      {(channel === "sms" || channel === "both") && r.smsEligible && (
-                        <MessageSquare className="h-4 w-4 text-green-500" />
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Ineligible Recipients */}
                 {ineligibleRecipients.length > 0 && (
@@ -165,22 +188,25 @@ export default function RecipientPreviewModal({
                         Not Eligible ({ineligibleRecipients.length})
                       </p>
                     </div>
-                    {ineligibleRecipients.map((r) => (
-                      <div
-                        key={r.id}
-                        className="flex items-center gap-3 px-5 py-3 opacity-50"
-                      >
-                        <Checkbox disabled checked={false} className="h-5 w-5" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
-                            {r.name}
-                          </p>
-                          <p className="text-xs text-slate-400 dark:text-slate-500">
-                            {getDisabledReason(r)}
-                          </p>
+                    {ineligibleRecipients.map((r) => {
+                      const displayName = getDisplayName(r);
+                      return (
+                        <div
+                          key={r.id}
+                          className="flex items-center gap-3 px-5 py-3 opacity-50"
+                        >
+                          <Checkbox disabled checked={false} className="h-5 w-5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
+                              {displayName}
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                              {getDisabledReason(r)}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </>
                 )}
 
