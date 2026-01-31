@@ -440,6 +440,16 @@ export default function SignInWizard() {
                       <p className="text-xs text-amber-700 dark:text-amber-400 font-mono">
                         DEV code: <span className="font-bold">{devCode}</span>
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const digits = devCode.split("");
+                          setVerificationCode(digits);
+                        }}
+                        className="mt-2 text-xs text-amber-600 hover:underline"
+                      >
+                        Auto-fill code
+                      </button>
                     </div>
                   )}
                   
