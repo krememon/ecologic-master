@@ -1,0 +1,139 @@
+INTEGRATION TASK: Make the “Send Campaign” button actually send emails and/or SMS (or both) to the selected recipients. Currently clicking Send returns 500 "Failed to send campaign". Implement full backend integration + clean frontend error handling.
+
+HARD RULES
+- Do NOT break UI or selection logic. Keep existing modal/preview behavior.
+- Must respect RBAC ("hidden not disabled" already for UI, but backend must enforce too).
+- Must respect per-client opt-in toggles:
+  - Email Campaigns toggle => email_opt_in true
+  - Text Message Campaigns toggle => sms_opt_in true
+- Must scope recipients by company_id (no cross-tenant sending).
+- If provider keys are missing, return a clear 400/500 message like:
+  - "Email provider not configured (missing SENDGRID_API_KEY)" instead of generic fail.
+- Store per-recipient send results (sent/failed/skipped) so we can debug.
+
+FRONTEND (Send button)
+1) Identify the component handling Send Campaign.
+2) Ensure it calls a real endpoint like POST /api/campaigns/send with payload:
+{
+  channel: "email" | "sms" | "both",
+  subject?: string,
+  emailBody?: string,
+  smsBody?: string,
+  recipientClientIds: number[]   // the final confirmed list from Recipients modal
+}
+3) Disable Send button while sending and prevent double clicks.
+4) If response error:
+   - show toast with a human-readable error string
+   - log details to console in dev only
+5) On success:
+   - show subtle success toast "Campaign sent"
+   - close modal
+   - clear selection state if applicable
+
+BACKEND (Implement /api/campaigns/send)
+Create or fix POST /api/campaigns/send.
+It must:
+A) Auth + RBAC
+- Require authenticated user
+- Allow only Owner/Admin and optionally Supervisor/Dispatcher (match existing rule)
+- Reject others with 403
+
+B) Validate payload
+- channel required
+- For email/both: subject and emailBody required
+- For sms/both: smsBody required
+- recipientClientIds must be non-empty
+- Enforce max recipients (MVP 500)
+
+C) Fetch clients safely
+- Query clients WHERE id IN (recipientClientIds) AND company_id = currentUser.company_id
+- If some ids not found, ignore them and proceed (but report skipped count)
+
+D) Apply eligibility rules
+For each client:
+- Email eligible if client.email exists AND client.email_opt_in true AND email_unsubscribed_at IS NULL
+- SMS eligible if client.phone exists AND client.sms_opt_in true AND sms_unsubscribed_at IS NULL
+Create “final recipient list” per channel and SKIP the rest (track reason).
+
+E) Provider integration
+EMAIL:
+- Use SendGrid first (most common). Env vars:
+  - SENDGRID_API_KEY
+  - SENDGRID_FROM_EMAIL (fallback "no-reply@ecologicapp.com" only if you have it verified; otherwise require it)
+- Implement server/services/email.ts:
+  sendEmail({to, subject, text, html?})
+  Use plain text for MVP.
+
+SMS:
+- Use Twilio env vars:
+  - TWILIO_ACCOUNT_SID
+  - TWILIO_AUTH_TOKEN
+  - TWILIO_FROM_NUMBER
+- Implement server/services/sms.ts:
+  sendSms({to, body})
+
+If required env vars missing:
+- Return 400 with explicit message specifying which var is missing.
+- Do NOT pretend it succeeded.
+
+F) Logging (DB)
+If you already created campaigns tables, use them. If not, create minimal tables now:
+- campaigns(id, company_id, created_by_user_id, channel, subject, email_body, sms_body, created_at, sent_at)
+- campaign_recipients(id, campaign_id, client_id, channel, destination, status, provider_message_id, error_message, created_at)
+
+Flow:
+1) Create campaign row
+2) For each email recipient:
+   - create campaign_recipients row status 'queued'
+   - attempt send
+   - update status 'sent' + provider_message_id OR 'failed' + error_message
+3) Same for SMS recipients
+
+G) API response
+Return structured summary:
+{
+  campaignId,
+  summary: {
+    requested: N,
+    emailAttempted: X,
+    smsAttempted: Y,
+    sent: S,
+    failed: F,
+    skipped: K
+  },
+  errorsSample: [...] // optional small list of failed reasons (max 5)
+}
+
+Also log server-side errors with context (no secrets).
+
+WEBHOOK (Optional but recommended)
+Add /api/webhooks/twilio for STOP:
+- if inbound message body contains STOP/UNSUBSCRIBE/CANCEL
+- find client by phone + company scope if possible
+- set sms_opt_in=false, sms_unsubscribed_at=now
+
+DEBUGGING REQUIREMENTS (to fix current 500)
+- Wrap send handler in try/catch that returns:
+  res.status(500).json({ message: "Failed to send campaign", detail: err.message })
+- In development, include stack in logs but not in response.
+
+ACCEPTANCE TESTS
+1) With SENDGRID configured:
+- Send Email campaign to 1 eligible client -> email arrives, API returns sent=1
+2) With TWILIO configured:
+- Send Text campaign -> SMS sends, API returns sent=1
+3) With both configured:
+- Both sends -> both attempted and logged
+4) With missing keys:
+- API returns clear message identifying missing env var
+5) Opt-out:
+- Client email_opt_in=false => skipped for email
+- Client sms_opt_in=false => skipped for SMS
+6) Unauthorized role:
+- returns 403
+
+DELIVERABLES
+- Working POST /api/campaigns/send
+- Provider wrappers (SendGrid + Twilio)
+- Better error message plumbing so UI shows WHY it failed
+- Campaign + recipient logs persisted in DB

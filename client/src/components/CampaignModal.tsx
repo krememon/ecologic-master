@@ -119,10 +119,12 @@ export default function CampaignModal({
       resetForm();
       onSendSuccess?.();
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      const message = error?.message || "Failed to send campaign";
+      console.error("[Campaign] Send error:", error);
       toast({
         title: "Send Error",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     },

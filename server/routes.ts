@@ -6755,9 +6755,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Campaigns] send campaignId=${campaign.id} userId=${userId} companyId=${company.id} emailSent=${results.emailSent} smsSent=${results.smsSent}`);
       res.json(results);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending campaign:", error);
-      res.status(500).json({ message: "Failed to send campaign" });
+      const errorMessage = error?.message || "Failed to send campaign";
+      res.status(500).json({ 
+        message: "Failed to send campaign", 
+        detail: process.env.NODE_ENV === 'development' ? errorMessage : undefined 
+      });
     }
   });
 
