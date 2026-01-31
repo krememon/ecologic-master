@@ -6923,6 +6923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Generate unsubscribe URL for this recipient
           const { generateUnsubscribeUrl } = await import('./services/unsubscribe');
           const unsubscribeUrl = generateUnsubscribeUrl(company.id, customer.id, 'email');
+          console.log(`[Campaign] Email unsubscribe URL for customer ${customer.id}: ${unsubscribeUrl}`);
           
           const result = await sendBrandedCampaignEmail({
             to: customer.email!,

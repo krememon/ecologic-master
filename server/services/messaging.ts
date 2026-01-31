@@ -435,8 +435,11 @@ export async function sendBrandedCampaignEmail({
     // Build headers with List-Unsubscribe if unsubscribe URL is provided
     const headers: Record<string, string> = {};
     if (unsubscribeUrl) {
+      console.log(`[Campaign] Using unsubscribe URL in email: ${unsubscribeUrl}`);
       headers['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
       headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+    } else {
+      console.log('[Campaign] WARNING: No unsubscribe URL provided for campaign email');
     }
     
     const { data, error } = await resend.emails.send({
