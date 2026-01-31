@@ -1,0 +1,64 @@
+BUG: Campaign emails are sending but only show a blue header with “EcoLogic” text. The uploaded header image + logo are not appearing in the sent email. This indicates the email renderer is falling back because branding URLs are missing OR the renderer is reading the wrong fields.
+
+GOAL:
+Make the sent campaign email include:
+- Header background image (when backgroundType=image and url exists)
+- Circular logo (when logoUrl exists)
+- Otherwise fallback to brand color + brand name
+
+STEP 1 — Add debug logs (dev only)
+In POST /api/campaigns/send right before rendering the email HTML:
+console.log("[EmailBranding] loaded branding:", branding)
+Specifically log:
+- branding.backgroundType
+- branding.backgroundImageUrl (or headerBannerUrl depending on schema)
+- branding.brandColor
+- branding.logoUrl
+- branding.fromName
+
+This will confirm whether values are missing at send-time.
+
+STEP 2 — Fix the data mapping (most likely issue)
+We recently refactored to unified Email Header settings.
+Update the email renderer to use the current stored keys (whatever is persisted today).
+Examples:
+- If stored as JSON: company.email_branding.header.backgroundImageUrl, header.backgroundType, header.logoUrl, header.brandColor
+- If stored flat: logoUrl, headerBannerUrl/headerBackgroundImageUrl, brandColor, backgroundType
+
+Make sure the renderer uses the SAME keys as the Customize page saves.
+
+STEP 3 — Ensure branding is persisted correctly
+Verify PATCH /api/company/email-branding actually saves:
+- logoUrl
+- backgroundType
+- backgroundImageUrl
+- brandColor
+and GET returns them.
+If save is writing to different column names, fix it.
+
+STEP 4 — Update email HTML template
+Implement header logic:
+- If backgroundType === "image" && backgroundImageUrl:
+  render header image:
+  <img src="..." width="600" style="display:block;width:100%;height:auto;" />
+- Else:
+  render a solid-color header bar.
+
+Then render the logo:
+- If logoUrl:
+  render <img src="logoUrl" ...> inside header area (centered)
+- Else:
+  render fromName text.
+
+(Email clients can’t do true overlay reliably; for v1, center logo inside header with solid color OR place logo below header image in its own colored row. Ensure it looks good in Gmail.)
+
+STEP 5 — Retest
+- Upload logo and background image in Customize
+- Confirm GET branding returns URLs
+- Send a test campaign
+- Verify Gmail shows background image + logo (not just text fallback)
+
+ACCEPTANCE:
+- Email displays branded header using uploaded images when present.
+- If images missing, fallback shows brand color + fromName.
+- Debug logs confirm branding values loaded during send.

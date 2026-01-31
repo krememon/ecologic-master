@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const DEFAULT_FROM = 'onboarding@resend.dev';
 
@@ -26,31 +28,53 @@ function toAbsoluteUrl(relativeUrl: string | null | undefined): string {
   return `${cleanBase}${cleanPath}`;
 }
 
-async function isImagePubliclyAccessible(url: string): Promise<boolean> {
+function isImageFileValid(url: string): boolean {
   if (!url) return false;
   
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    // Extract filename from URL path
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
     
-    const response = await fetch(url, {
-      method: 'HEAD',
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeout);
-    
-    const contentType = response.headers.get('content-type') || '';
-    const isImage = contentType.startsWith('image/');
-    const isAccessible = response.ok && isImage;
-    
-    if (!isAccessible) {
-      console.warn(`[Email] Image not accessible: ${url} - status=${response.status} contentType=${contentType}`);
+    // Handle both /uploads/file.png and /public/uploads/file.png
+    let filename = '';
+    if (pathname.startsWith('/public/uploads/')) {
+      filename = pathname.replace('/public/uploads/', '');
+    } else if (pathname.startsWith('/uploads/')) {
+      filename = pathname.replace('/uploads/', '');
+    } else {
+      // Not a local upload, assume it's accessible
+      console.log(`[Email] External image URL, assuming accessible: ${url}`);
+      return true;
     }
     
-    return isAccessible;
+    // Security: prevent path traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      console.warn(`[Email] Invalid filename in URL: ${url}`);
+      return false;
+    }
+    
+    // Check if file exists locally
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const filePath = path.join(uploadsDir, filename);
+    
+    if (!fs.existsSync(filePath)) {
+      console.warn(`[Email] Image file not found: ${filePath}`);
+      return false;
+    }
+    
+    // Verify it's an image by extension
+    const ext = path.extname(filename).toLowerCase();
+    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
+    if (!imageExtensions.includes(ext)) {
+      console.warn(`[Email] Not an image file: ${filePath}`);
+      return false;
+    }
+    
+    console.log(`[Email] Image file verified: ${filePath}`);
+    return true;
   } catch (error: any) {
-    console.warn(`[Email] Image accessibility check failed: ${url} - ${error.message}`);
+    console.warn(`[Email] Image validation failed: ${url} - ${error.message}`);
     return false;
   }
 }
@@ -283,20 +307,24 @@ export async function sendBrandedCampaignEmail({
   });
   console.log('[Campaign] Absolute URLs for email:', { logoUrl, headerBannerUrl });
   
-  // Check if images are publicly accessible, skip if not
+  // Verify images exist locally before embedding in email
   if (logoUrl) {
-    const isLogoAccessible = await isImagePubliclyAccessible(logoUrl);
-    if (!isLogoAccessible) {
-      console.warn('[Campaign] Logo not publicly accessible, skipping in email:', logoUrl);
+    const isLogoValid = isImageFileValid(logoUrl);
+    if (!isLogoValid) {
+      console.warn('[Campaign] Logo file not found or invalid, skipping in email:', logoUrl);
       logoUrl = '';
+    } else {
+      console.log('[Campaign] Logo will be included in email:', logoUrl);
     }
   }
   
   if (headerBannerUrl) {
-    const isHeaderAccessible = await isImagePubliclyAccessible(headerBannerUrl);
-    if (!isHeaderAccessible) {
-      console.warn('[Campaign] Header banner not publicly accessible, skipping in email:', headerBannerUrl);
+    const isHeaderValid = isImageFileValid(headerBannerUrl);
+    if (!isHeaderValid) {
+      console.warn('[Campaign] Header banner file not found or invalid, skipping in email:', headerBannerUrl);
       headerBannerUrl = '';
+    } else {
+      console.log('[Campaign] Header banner will be included in email:', headerBannerUrl);
     }
   }
   
