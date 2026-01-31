@@ -48,6 +48,21 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
+// Log RESEND_FROM at startup
+if (process.env.RESEND_FROM) {
+  console.log("[email] Using RESEND_FROM =", process.env.RESEND_FROM);
+} else {
+  console.warn("[email] WARNING: RESEND_FROM is not set - email sending will fail");
+}
+
+function getResendFrom(): string {
+  const from = process.env.RESEND_FROM;
+  if (!from) {
+    throw new Error("RESEND_FROM environment variable is not configured");
+  }
+  return from;
+}
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -491,7 +506,7 @@ export function setupAuth(app: Express) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         
         const { error } = await resend.emails.send({
-          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          from: getResendFrom(),
           to: normalizedEmail,
           subject: "Your EcoLogic Verification Code",
           html: `
@@ -721,7 +736,7 @@ export function setupAuth(app: Express) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         
         const { error } = await resend.emails.send({
-          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          from: getResendFrom(),
           to: normalizedEmail,
           subject: "Your New EcoLogic Verification Code",
           html: `
@@ -865,7 +880,7 @@ export function setupAuth(app: Express) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         
         const { error } = await resend.emails.send({
-          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          from: getResendFrom(),
           to: normalizedEmail,
           subject: "Your EcoLogic Sign-In Code",
           html: `
@@ -1067,7 +1082,7 @@ export function setupAuth(app: Express) {
         const resend = new Resend(process.env.RESEND_API_KEY);
         
         const { error } = await resend.emails.send({
-          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          from: getResendFrom(),
           to: normalizedEmail,
           subject: "Your New EcoLogic Sign-In Code",
           html: `
