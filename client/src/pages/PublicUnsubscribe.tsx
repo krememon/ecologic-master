@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle, Mail, ArrowLeft } from "lucide-react";
@@ -7,14 +6,15 @@ import { Loader2, CheckCircle, XCircle, Mail, ArrowLeft } from "lucide-react";
 type State = "loading" | "confirm" | "success" | "cancelled" | "error";
 
 export default function PublicUnsubscribe() {
-  const [location] = useLocation();
   const [state, setState] = useState<State>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
-  const channel = location.includes("/sms") ? "sms" : "email";
+  // Support /unsubscribe, /unsubscribe/email, /unsubscribe/sms
+  const path = window.location.pathname;
+  const channel = path.includes("/sms") ? "sms" : "email";
 
   useEffect(() => {
     if (!token) {
@@ -74,8 +74,6 @@ export default function PublicUnsubscribe() {
     setState("cancelled");
   };
 
-  const channelLabel = channel === "sms" ? "text messages" : "promotional emails";
-
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -100,7 +98,7 @@ export default function PublicUnsubscribe() {
             <div className="text-center">
               <h2 className="text-xl font-semibold text-slate-800 mb-2">Unsubscribe</h2>
               <p className="text-slate-600 mb-6">
-                Are you sure you want to unsubscribe from {channelLabel}?
+                Are you sure you want to unsubscribe from EcoLogic marketing {channel === "sms" ? "text messages" : "emails"}?
               </p>
               <div className="flex flex-col gap-3">
                 <Button
@@ -114,7 +112,7 @@ export default function PublicUnsubscribe() {
                       Unsubscribing...
                     </>
                   ) : (
-                    "Yes, unsubscribe"
+                    "Yes, unsubscribe me"
                   )}
                 </Button>
                 <Button
@@ -123,7 +121,7 @@ export default function PublicUnsubscribe() {
                   disabled={isSubmitting}
                   className="w-full"
                 >
-                  Cancel
+                  No, keep me subscribed
                 </Button>
               </div>
             </div>
@@ -132,9 +130,9 @@ export default function PublicUnsubscribe() {
           {state === "success" && (
             <div className="text-center py-4">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">Successfully Unsubscribed</h2>
+              <h2 className="text-xl font-semibold text-slate-800 mb-2">Unsubscribed</h2>
               <p className="text-slate-600">
-                You will no longer receive {channelLabel} from this company.
+                You have been unsubscribed from marketing {channel === "sms" ? "text messages" : "emails"}.
               </p>
             </div>
           )}
@@ -144,7 +142,7 @@ export default function PublicUnsubscribe() {
               <ArrowLeft className="w-16 h-16 text-slate-400 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-slate-800 mb-2">You're Still Subscribed</h2>
               <p className="text-slate-600">
-                No changes were made. You'll continue receiving {channelLabel}.
+                No changes were made. You'll continue receiving marketing {channel === "sms" ? "text messages" : "emails"}.
               </p>
             </div>
           )}
