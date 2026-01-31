@@ -107,31 +107,38 @@ export default function PublicUnsubscribe() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
-        <CardContent className="pt-6 pb-6 px-5">
-          <div className="text-center mb-4">
-            <img 
-              src={ecologicDroplet} 
-              alt="EcoLogic Logo" 
-              className="h-14 sm:h-16 w-auto mx-auto mb-2"
-            />
-            <img 
-              src={ecologicWordmark} 
-              alt="EcoLogic" 
-              className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto"
-            />
-          </div>
-
+        <CardContent className="p-6 sm:p-8">
           {state === "loading" && (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-teal-600 mb-4" />
+            <div className="text-center">
+              <img 
+                src={ecologicDroplet} 
+                alt="EcoLogic Logo" 
+                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
+              />
+              <img 
+                src={ecologicWordmark} 
+                alt="EcoLogic" 
+                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-6"
+              />
+              <Loader2 className="w-8 h-8 animate-spin mx-auto text-teal-600 mb-3" />
               <p className="text-slate-600">Validating link...</p>
             </div>
           )}
 
           {state === "confirm" && (
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">Unsubscribe</h2>
-              <p className="text-slate-600 mb-6">
+              <img 
+                src={ecologicDroplet} 
+                alt="EcoLogic Logo" 
+                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
+              />
+              <img 
+                src={ecologicWordmark} 
+                alt="EcoLogic" 
+                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
+              />
+              <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Unsubscribe</h2>
+              <p className="text-slate-600 mb-4">
                 Are you sure you want to unsubscribe from EcoLogic marketing {channel === "sms" ? "text messages" : "emails"}?
               </p>
               <div className="flex flex-col gap-3">
@@ -162,9 +169,19 @@ export default function PublicUnsubscribe() {
           )}
 
           {state === "success" && (
-            <div className="text-center py-4">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">Unsubscribed</h2>
+            <div className="text-center">
+              <img 
+                src={ecologicDroplet} 
+                alt="EcoLogic Logo" 
+                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
+              />
+              <img 
+                src={ecologicWordmark} 
+                alt="EcoLogic" 
+                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
+              />
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+              <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Unsubscribed</h2>
               <p className="text-slate-600 mb-4">
                 You have been unsubscribed from marketing {channel === "sms" ? "text messages" : "emails"}.
               </p>
@@ -187,9 +204,19 @@ export default function PublicUnsubscribe() {
           )}
 
           {state === "resubscribed" && (
-            <div className="text-center py-4">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">Resubscribed</h2>
+            <div className="text-center">
+              <img 
+                src={ecologicDroplet} 
+                alt="EcoLogic Logo" 
+                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
+              />
+              <img 
+                src={ecologicWordmark} 
+                alt="EcoLogic" 
+                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
+              />
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+              <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Resubscribed</h2>
               <p className="text-slate-600">
                 You have been resubscribed to marketing {channel === "sms" ? "text messages" : "emails"}.
               </p>
@@ -197,9 +224,19 @@ export default function PublicUnsubscribe() {
           )}
 
           {state === "cancelled" && (
-            <div className="text-center py-4">
-              <ArrowLeft className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">You're Still Subscribed</h2>
+            <div className="text-center">
+              <img 
+                src={ecologicDroplet} 
+                alt="EcoLogic Logo" 
+                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
+              />
+              <img 
+                src={ecologicWordmark} 
+                alt="EcoLogic" 
+                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
+              />
+              <ArrowLeft className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+              <h2 className="text-xl font-semibold text-slate-800 mb-2.5">You're Still Subscribed</h2>
               <p className="text-slate-600">
                 No changes were made. You'll continue receiving marketing {channel === "sms" ? "text messages" : "emails"}.
               </p>
@@ -207,9 +244,19 @@ export default function PublicUnsubscribe() {
           )}
 
           {state === "error" && (
-            <div className="text-center py-4">
-              <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-800 mb-2">Error</h2>
+            <div className="text-center">
+              <img 
+                src={ecologicDroplet} 
+                alt="EcoLogic Logo" 
+                className="h-14 sm:h-16 w-auto mx-auto mb-2.5"
+              />
+              <img 
+                src={ecologicWordmark} 
+                alt="EcoLogic" 
+                className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto mb-4"
+              />
+              <XCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+              <h2 className="text-xl font-semibold text-slate-800 mb-2.5">Error</h2>
               <p className="text-slate-600">{errorMessage}</p>
             </div>
           )}
