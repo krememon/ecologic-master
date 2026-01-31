@@ -3,12 +3,31 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db-init";
 import path from "path";
+import fs from "fs";
 import Stripe from "stripe";
 import { db } from "./db";
 import { invoices, payments, customers, companies } from "../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 const app = express();
+
+// PUBLIC STATIC FILES - MUST be registered FIRST before any middleware
+// This ensures uploads are accessible to email clients without auth
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=31536000");
+  next();
+}, express.static(uploadsDir, {
+  maxAge: "1y",
+  etag: true,
+  lastModified: true,
+  index: false,
+}));
+console.log("[Static] Public /uploads route registered at:", uploadsDir);
 
 // Disable ETags to prevent 304 responses which break JSON parsing
 app.set("etag", false);

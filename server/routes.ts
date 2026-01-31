@@ -229,16 +229,7 @@ function requirePerm(permissions: Permission | Permission[]) {
 export { broadcastToCompany };
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Ensure uploads directory exists
-  if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads', { recursive: true });
-  }
-
-  // Serve uploaded files
-  app.use('/uploads', (req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    next();
-  }, express.static('uploads'));
+  // Note: uploads directory and static route handled in index.ts (before all middleware)
 
   // SERVER-SIDE STRIPE RETURN HANDLER - Bulletproof redirect to /jobs
   // This ensures Stripe always lands on Jobs even if SPA routing fails
