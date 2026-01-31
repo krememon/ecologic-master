@@ -1,0 +1,62 @@
+BUG: Auth never becomes "logged in" even after successful signup/login verification.
+Evidence:
+- POST /api/auth/login/verify-code 200 -> GET /api/auth/user 401
+- POST /api/auth/signup/set-password 200 -> POST /api/companies 401
+So sessions/cookies are not being created or not being stored/sent.
+
+GOAL:
+After successful signup/login verification, the server must create a session + set cookie so /api/auth/user returns 200.
+
+STEP 1 — Identify how /api/auth/user decides you're logged in
+1) Open the auth middleware used by /api/auth/user.
+   It likely checks for:
+   - a session cookie (e.g. "sid", "session", "auth_token")
+   - or a bearer token
+   Log what it's looking for (cookie name / header name).
+
+STEP 2 — Create a single reusable "finalizeLogin" helper
+2) Create or locate the existing helper used by any working auth path (Google OAuth maybe).
+   Make a helper like:
+   - finalizeLogin(res, userId)
+that:
+   a) creates a session record (if your system uses sessions table)
+   b) sets the correct cookie name expected by auth middleware
+   c) uses cookie options compatible with replit.dev (https):
+      - httpOnly: true
+      - secure: true
+      - sameSite: "none"
+      - path: "/"
+
+3) Add DEV debug logs inside finalizeLogin:
+   - console.log("[auth] finalizeLogin setting cookie", cookieName, "for userId", userId)
+   - Also log whether res.getHeader("Set-Cookie") is present after setting (DEV only).
+
+STEP 3 — Call finalizeLogin in BOTH flows
+4) In POST /api/auth/login/verify-code:
+   - After code is validated and you determine the userId:
+     - call finalizeLogin(res, userId)
+     - return { ok: true }
+
+5) In POST /api/auth/signup/set-password:
+   - After user is created/updated successfully:
+     - call finalizeLogin(res, userId)
+     - return { ok: true }
+
+STEP 4 — Ensure frontend sends/stores cookies
+6) Confirm your apiRequest helper uses:
+   credentials: "include"
+for /api calls. (Agent says it already does—verify anyway.)
+Also ensure you do NOT call APIs with a different origin/baseURL (must be same origin as the site).
+
+STEP 5 — Validate with hard proof (Network)
+7) In browser Network tab:
+   - verify-code response MUST include Set-Cookie header
+   - the subsequent /api/auth/user request MUST include Cookie header
+If Set-Cookie is missing -> backend did not finalizeLogin.
+If Set-Cookie exists but Cookie not sent -> cookie flags / credentials / origin mismatch.
+
+DELIVERABLES:
+- After verify-code: GET /api/auth/user returns 200
+- After signup set-password: POST /api/companies returns 200 (not 401)
+- No reroute loop back to sign in
+- User remains logged in on refresh

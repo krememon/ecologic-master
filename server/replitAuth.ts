@@ -978,6 +978,10 @@ export async function setupAuth(app: Express) {
       );
     });
   });
+  
+  // Import and setup auth.ts routes (MFA login/signup wizard endpoints)
+  const { setupAuth: setupMfaAuth } = await import("./auth");
+  setupMfaAuth(app);
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
