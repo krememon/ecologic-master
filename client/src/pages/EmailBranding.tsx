@@ -12,12 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import ImageCropModal from "@/components/ImageCropModal";
 
 interface EmailBranding {
   id?: number;
   companyId?: number;
-  logoUrl?: string | null;
   headerBannerUrl?: string | null;
   headerBackgroundType?: string | null;
   primaryColor?: string | null;
@@ -33,7 +31,6 @@ export default function EmailBranding() {
   const { can } = useCan();
   const { toast } = useToast();
   
-  const [logoUrl, setLogoUrl] = useState("");
   const [headerBannerUrl, setHeaderBannerUrl] = useState("");
   const [headerBackgroundType, setHeaderBackgroundType] = useState<"color" | "image">("color");
   const [primaryColor, setPrimaryColor] = useState("#2563EB");
@@ -42,11 +39,7 @@ export default function EmailBranding() {
   const [footerText, setFooterText] = useState("");
   const [showPhone, setShowPhone] = useState(true);
   const [showAddress, setShowAddress] = useState(true);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [cropModalOpen, setCropModalOpen] = useState(false);
-  const [cropFile, setCropFile] = useState<File | null>(null);
-  const [cropMode, setCropMode] = useState<"logo" | "banner">("logo");
 
   const { data: branding, isLoading } = useQuery<EmailBranding>({
     queryKey: ['/api/company/email-branding'],
@@ -58,7 +51,6 @@ export default function EmailBranding() {
 
   useEffect(() => {
     if (branding) {
-      setLogoUrl(branding.logoUrl || "");
       setHeaderBannerUrl(branding.headerBannerUrl || "");
       setHeaderBackgroundType((branding.headerBackgroundType as "color" | "image") || "color");
       setPrimaryColor(branding.primaryColor || "#2563EB");
@@ -95,19 +87,8 @@ export default function EmailBranding() {
     },
   });
 
-  const openCropModal = (file: File, mode: "logo" | "banner") => {
-    setCropFile(file);
-    setCropMode(mode);
-    setCropModalOpen(true);
-  };
-
-  const handleCroppedUpload = async (croppedFile: File) => {
-    await handleUpload(croppedFile, cropMode);
-  };
-
-  const handleUpload = async (file: File, type: 'logo' | 'banner') => {
-    if (type === 'logo') setUploadingLogo(true);
-    else setUploadingBanner(true);
+  const handleUploadBanner = async (file: File) => {
+    setUploadingBanner(true);
     
     try {
       const formData = new FormData();
@@ -130,17 +111,12 @@ export default function EmailBranding() {
         throw new Error('No URL returned from upload');
       }
       
-      if (type === 'logo') {
-        setLogoUrl(url);
-      } else {
-        setHeaderBannerUrl(url);
-        setHeaderBackgroundType("image");
-      }
+      setHeaderBannerUrl(url);
+      setHeaderBackgroundType("image");
       
       await apiRequest('PUT', '/api/company/email-branding', {
-        logoUrl: type === 'logo' ? url : (logoUrl || null),
-        headerBannerUrl: type === 'banner' ? url : (headerBannerUrl || null),
-        headerBackgroundType: type === 'banner' ? 'image' : headerBackgroundType,
+        headerBannerUrl: url,
+        headerBackgroundType: 'image',
         primaryColor: primaryColor || '#2563EB',
         fromName: fromName || null,
         replyToEmail: replyToEmail || null,
@@ -150,18 +126,16 @@ export default function EmailBranding() {
       });
       
       queryClient.invalidateQueries({ queryKey: ['/api/company/email-branding'] });
-      toast({ title: "Uploaded & Saved", description: `${type === 'logo' ? 'Logo' : 'Background'} uploaded and saved` });
+      toast({ title: "Uploaded & Saved", description: "Background image uploaded and saved" });
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message || "Failed to upload", variant: "destructive" });
     } finally {
-      if (type === 'logo') setUploadingLogo(false);
-      else setUploadingBanner(false);
+      setUploadingBanner(false);
     }
   };
 
   const handleSave = () => {
     saveMutation.mutate({
-      logoUrl: logoUrl || null,
       headerBannerUrl: headerBannerUrl || null,
       headerBackgroundType,
       primaryColor: primaryColor || '#2563EB',
@@ -210,10 +184,6 @@ export default function EmailBranding() {
     footerParts.push(footerText);
   }
 
-  const headerBackground = headerBackgroundType === "image" && headerBannerUrl
-    ? `url(${headerBannerUrl})`
-    : primaryColor;
-
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="mb-6">
@@ -239,51 +209,6 @@ export default function EmailBranding() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label className="text-base font-medium">Logo</Label>
-                <p className="text-xs text-slate-500 mb-3">Your logo will be centered in the header with a circular mask</p>
-                <div className="flex items-center gap-4">
-                  {logoUrl ? (
-                    <div className="relative">
-                      <div 
-                        className="w-20 h-20 rounded-full border-2 border-slate-200 dark:border-slate-600 overflow-hidden bg-slate-100 dark:bg-slate-700"
-                        style={{
-                          backgroundImage: `url(${logoUrl})`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                      />
-                      <button
-                        onClick={() => setLogoUrl("")}
-                        className="absolute -top-1 -right-1 w-7 h-7 min-w-0 p-0 bg-red-500 text-white rounded-full grid place-items-center leading-none hover:bg-red-600 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center bg-slate-50 dark:bg-slate-800">
-                      <Upload className="w-6 h-6 text-slate-400" />
-                    </div>
-                  )}
-                  <label className="cursor-pointer">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) openCropModal(file, 'logo');
-                        e.target.value = '';
-                      }}
-                    />
-                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium">
-                      {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      {logoUrl ? 'Change Logo' : 'Upload Logo'}
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <div className="border-t pt-6">
                 <Label className="text-base font-medium">Background Type</Label>
                 <p className="text-xs text-slate-500 mb-3">Choose between a solid color or custom image</p>
                 <div className="flex gap-2">
@@ -359,7 +284,7 @@ export default function EmailBranding() {
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) openCropModal(file, 'banner');
+                          if (file) handleUploadBanner(file);
                           e.target.value = '';
                         }}
                       />
@@ -399,10 +324,10 @@ export default function EmailBranding() {
                   type="email"
                   value={replyToEmail}
                   onChange={(e) => setReplyToEmail(e.target.value)}
-                  placeholder="hello@yourcompany.com"
+                  placeholder="support@yourcompany.com"
                   className="mt-1"
                 />
-                <p className="text-xs text-slate-500 mt-1">Where replies will be sent</p>
+                <p className="text-xs text-slate-500 mt-1">Where customer replies will go</p>
               </div>
             </CardContent>
           </Card>
@@ -412,18 +337,6 @@ export default function EmailBranding() {
               <CardTitle className="text-lg">Footer</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="footerText">Footer Text</Label>
-                <Textarea
-                  id="footerText"
-                  value={footerText}
-                  onChange={(e) => setFooterText(e.target.value)}
-                  placeholder="Additional information to show in the footer..."
-                  className="mt-1"
-                  rows={2}
-                />
-              </div>
-              
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="showPhone">Show Phone Number</Label>
@@ -445,6 +358,18 @@ export default function EmailBranding() {
                   id="showAddress"
                   checked={showAddress}
                   onCheckedChange={setShowAddress}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="footerText">Custom Footer Text</Label>
+                <Textarea
+                  id="footerText"
+                  value={footerText}
+                  onChange={(e) => setFooterText(e.target.value)}
+                  placeholder="Thank you for choosing us!"
+                  className="mt-1"
+                  rows={2}
                 />
               </div>
             </CardContent>
@@ -475,7 +400,7 @@ export default function EmailBranding() {
               <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-b-lg">
                 <div className="bg-white rounded-lg overflow-hidden shadow-sm max-w-[400px] mx-auto">
                   <div 
-                    className="relative h-32 flex items-center justify-center"
+                    className="h-24 flex items-center justify-center"
                     style={{ 
                       backgroundColor: headerBackgroundType === "image" && headerBannerUrl ? undefined : primaryColor,
                       backgroundImage: headerBackgroundType === "image" && headerBannerUrl ? `url(${headerBannerUrl})` : undefined,
@@ -483,18 +408,7 @@ export default function EmailBranding() {
                       backgroundPosition: 'center',
                     }}
                   >
-                    {logoUrl ? (
-                      <div 
-                        className="w-20 h-20 rounded-full border-4 border-white shadow-lg"
-                        style={{
-                          backgroundImage: `url(${logoUrl})`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                      />
-                    ) : (
-                      <h1 className="text-xl font-bold text-white drop-shadow-lg">{displayFromName}</h1>
-                    )}
+                    <h1 className="text-xl font-bold text-white drop-shadow-lg">{displayFromName}</h1>
                   </div>
                   <div className="p-6">
                     <h2 className="text-lg font-semibold text-slate-800 mb-3">Sample Email Subject</h2>
@@ -527,17 +441,6 @@ export default function EmailBranding() {
           </Card>
         </div>
       </div>
-
-      <ImageCropModal
-        open={cropModalOpen}
-        onClose={() => {
-          setCropModalOpen(false);
-          setCropFile(null);
-        }}
-        file={cropFile}
-        mode={cropMode}
-        onCropped={handleCroppedUpload}
-      />
     </div>
   );
 }

@@ -304,9 +304,8 @@ export async function sendBrandedCampaignEmail({
   body: string;
   companyName: string;
   branding?: {
-    logoUrl?: string | null;
     headerBannerUrl?: string | null;
-    combinedHeaderUrl?: string | null;
+    headerBackgroundType?: string | null;
     primaryColor?: string | null;
     fromName?: string | null;
     replyToEmail?: string | null;
@@ -339,54 +338,28 @@ export async function sendBrandedCampaignEmail({
   const footerText = branding?.footerText || '';
   const fromName = branding?.fromName || companyName;
   
-  // Load images as CID inline attachments for reliable Gmail display
-  // Resend format: content as base64 string, contentId for CID reference (camelCase)
+  // Load header image as CID inline attachment for reliable Gmail display
   const attachments: Array<{
     filename: string;
     content: string;
     contentId: string;
   }> = [];
   
-  // Try combined header first (single unified image)
-  const combinedHeaderAttachment = loadImageAsAttachment(branding?.combinedHeaderUrl, 'combinedheader');
-  
-  // Fallback to separate logo/header
-  const logoAttachment = !combinedHeaderAttachment ? loadImageAsAttachment(branding?.logoUrl, 'logo') : null;
-  const headerAttachment = !combinedHeaderAttachment ? loadImageAsAttachment(branding?.headerBannerUrl, 'header') : null;
-  
-  const hasCombinedHeader = !!combinedHeaderAttachment;
-  const hasLogo = !!logoAttachment;
+  // Only load header image if background type is image
+  const useImageHeader = branding?.headerBackgroundType === 'image' && branding?.headerBannerUrl;
+  const headerAttachment = useImageHeader ? loadImageAsAttachment(branding?.headerBannerUrl, 'header') : null;
   const hasHeader = !!headerAttachment;
   
-  // Add combined header or fallback to separate images
-  if (combinedHeaderAttachment) {
+  if (headerAttachment) {
     attachments.push({
-      filename: combinedHeaderAttachment.filename,
-      content: combinedHeaderAttachment.content.toString('base64'),
-      contentId: 'combinedheader',
+      filename: headerAttachment.filename,
+      content: headerAttachment.content.toString('base64'),
+      contentId: 'header',
     });
-    console.log('[Campaign] Combined header attached with contentId: combinedheader');
-  } else {
-    if (logoAttachment) {
-      attachments.push({
-        filename: logoAttachment.filename,
-        content: logoAttachment.content.toString('base64'),
-        contentId: 'logo',
-      });
-      console.log('[Campaign] Logo attached with contentId: logo');
-    }
-    
-    if (headerAttachment) {
-      attachments.push({
-        filename: headerAttachment.filename,
-        content: headerAttachment.content.toString('base64'),
-        contentId: 'header',
-      });
-      console.log('[Campaign] Header attached with contentId: header');
-    }
+    console.log('[Campaign] Header image attached with contentId: header');
   }
   
-  console.log('[Campaign] Sending email with', attachments.length, 'inline attachments, combinedHeader:', hasCombinedHeader);
+  console.log('[Campaign] Sending email with', attachments.length, 'inline attachments, hasHeader:', hasHeader);
   
   const showPhone = branding?.showPhone ?? true;
   const showAddress = branding?.showAddress ?? true;
@@ -403,51 +376,23 @@ export async function sendBrandedCampaignEmail({
     footerParts.push(footerText);
   }
   
-  // Build HTML - use combined header if available, otherwise fallback layout
+  // Build HTML - header image or solid color bar
   let headerHtml = '';
   
-  if (hasCombinedHeader) {
-    // Single unified header image
+  if (hasHeader) {
+    // Header image
     headerHtml = `
           <tr>
             <td style="padding: 0; line-height: 0;">
-              <img src="cid:combinedheader" alt="${fromName}" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
-            </td>
-          </tr>`;
-  } else if (hasHeader || hasLogo) {
-    // Fallback: 2-row layout with negative margin overlap (Gmail-safe)
-    headerHtml = `
-          ${hasHeader ? `
-          <tr>
-            <td style="padding: 0; line-height: 0;">
-              <img src="cid:header" alt="Header" style="width: 100%; max-width: 600px; height: auto; display: block;" />
-            </td>
-          </tr>` : ''}
-          <tr>
-            <td style="height: 90px; background-color: ${brandColor}; text-align: center; vertical-align: top;">
-              <table cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto; margin-top: -56px;">
-                <tr>
-                  <td align="center" valign="middle">
-                    ${hasLogo ? `
-                    <table cellpadding="0" cellspacing="0" align="center">
-                      <tr>
-                        <td style="background-color: #ffffff; border-radius: 9999px; padding: 12px;">
-                          <img src="cid:logo" alt="${fromName}" width="88" height="88" style="width: 88px; height: 88px; border-radius: 9999px; display: block;" />
-                        </td>
-                      </tr>
-                    </table>
-                    ` : `<h1 style="margin: 0; padding-top: 56px; color: white; font-size: 22px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>`}
-                  </td>
-                </tr>
-              </table>
+              <img src="cid:header" alt="${fromName}" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
             </td>
           </tr>`;
   } else {
-    // No images - just brand strip with text
+    // Solid color header bar with company name
     headerHtml = `
           <tr>
-            <td style="height: 80px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
-              <h1 style="margin: 0; color: white; font-size: 22px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>
+            <td style="height: 120px; background-color: ${brandColor}; text-align: center; vertical-align: middle; border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: white; font-size: 24px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>
             </td>
           </tr>`;
   }

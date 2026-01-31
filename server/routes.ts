@@ -872,8 +872,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Always return complete object with defaults
       res.json({
-        logoUrl: branding?.logoUrl || null,
         headerBannerUrl: branding?.headerBannerUrl || null,
+        headerBackgroundType: branding?.headerBackgroundType || 'color',
         primaryColor: branding?.primaryColor || '#2563EB',
         fromName: branding?.fromName || company?.name || 'EcoLogic',
         replyToEmail: branding?.replyToEmail || company?.email || null,
@@ -901,7 +901,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const {
-        logoUrl,
         headerBannerUrl,
         headerBackgroundType,
         primaryColor,
@@ -928,24 +927,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Generate combined header image (hash-based caching handles reuse)
-      const { generateCombinedHeader } = await import('./services/headerGenerator');
-      
-      // Generate combined header - will reuse cached version if inputs unchanged
-      const combinedHeaderUrl = await generateCombinedHeader({
-        companyId: member.companyId,
-        bannerPath: headerBannerUrl,
-        logoPath: logoUrl,
-        brandColor: primaryColor || '#2563EB',
-        backgroundType: headerBackgroundType === 'image' ? 'image' : 'color',
-      });
-      
       const branding = await storage.upsertEmailBranding(member.companyId, {
-        logoUrl: logoUrl || null,
         headerBannerUrl: headerBannerUrl || null,
         headerBackgroundType: headerBackgroundType || 'color',
         primaryColor: primaryColor || '#2563EB',
-        combinedHeaderUrl: combinedHeaderUrl || null,
         fromName: fromName || null,
         replyToEmail: replyToEmail || null,
         footerText: footerText || null,
@@ -986,7 +971,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Build branded HTML
       const brandColor = branding?.primaryColor || '#2563EB';
-      const logoUrl = branding?.logoUrl || '';
+      const headerBackgroundType = branding?.headerBackgroundType || 'color';
       const headerBannerUrl = branding?.headerBannerUrl || '';
       const footerText = branding?.footerText || '';
       const fromName = branding?.fromName || company?.name || 'EcoLogic';
@@ -1005,6 +990,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         footerParts.push(footerText);
       }
       
+      // Determine header HTML based on background type
+      const useImageHeader = headerBackgroundType === 'image' && headerBannerUrl;
+      const headerHtml = useImageHeader 
+        ? `<tr><td style="padding: 0; line-height: 0;"><img src="${headerBannerUrl}" alt="${fromName}" style="width: 100%; height: auto; display: block; border-radius: 8px 8px 0 0;" /></td></tr>`
+        : `<tr><td style="height: 120px; background-color: ${brandColor}; text-align: center; vertical-align: middle; border-radius: 8px 8px 0 0;"><h1 style="margin: 0; color: white; font-size: 24px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1></td></tr>`;
+      
       const html = `
 <!DOCTYPE html>
 <html>
@@ -1017,18 +1008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
-          ${headerBannerUrl ? `
-          <tr>
-            <td style="padding: 0;">
-              <img src="${headerBannerUrl}" alt="Header" style="width: 100%; height: auto; display: block;" />
-            </td>
-          </tr>
-          ` : ''}
-          <tr>
-            <td style="padding: 30px; background-color: ${brandColor}; text-align: center;">
-              ${logoUrl ? `<img src="${logoUrl}" alt="${fromName}" style="max-height: 60px; max-width: 200px;" />` : `<h1 style="margin: 0; color: white; font-size: 24px;">${fromName}</h1>`}
-            </td>
-          </tr>
+          ${headerHtml}
           <tr>
             <td style="padding: 30px;">
               <h2 style="margin: 0 0 20px 0; color: #333333;">Test Email</h2>
