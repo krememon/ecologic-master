@@ -339,10 +339,11 @@ export async function sendBrandedCampaignEmail({
   const fromName = branding?.fromName || companyName;
   
   // Load images as CID inline attachments for reliable Gmail display
+  // Resend format: content as base64 string, contentId for CID reference (camelCase)
   const attachments: Array<{
     filename: string;
-    content: Buffer;
-    headers: { 'Content-ID': string };
+    content: string;
+    contentId: string;
   }> = [];
   
   const logoAttachment = loadImageAsAttachment(branding?.logoUrl, 'logo');
@@ -354,19 +355,19 @@ export async function sendBrandedCampaignEmail({
   if (logoAttachment) {
     attachments.push({
       filename: logoAttachment.filename,
-      content: logoAttachment.content,
-      headers: { 'Content-ID': '<logo>' },
+      content: logoAttachment.content.toString('base64'),
+      contentId: 'logo',
     });
-    console.log('[Campaign] Logo attached with CID: logo');
+    console.log('[Campaign] Logo attached with contentId: logo');
   }
   
   if (headerAttachment) {
     attachments.push({
       filename: headerAttachment.filename,
-      content: headerAttachment.content,
-      headers: { 'Content-ID': '<header>' },
+      content: headerAttachment.content.toString('base64'),
+      contentId: 'header',
     });
-    console.log('[Campaign] Header attached with CID: header');
+    console.log('[Campaign] Header attached with contentId: header');
   }
   
   console.log('[Campaign] Sending email with', attachments.length, 'inline attachments');

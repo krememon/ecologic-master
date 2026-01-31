@@ -1,0 +1,67 @@
+FIX: Images are showing as attachments at the bottom of Gmail, not rendering in the email header.
+
+Goal: Send logo/header as INLINE images (CID) and reference them from HTML so they render in-place.
+
+CURRENT BEHAVIOR
+- Images are attached but not displayed inline.
+- Header shows broken image icons/alt text.
+
+REQUIRED CHANGES
+
+1) Update email sending code (Resend)
+When sending with Resend, use inline attachments (contentId) and reference them via cid in HTML.
+
+Resend supports:
+attachments: [
+  {
+    filename: "header.png",
+    content: <base64 string>,
+    contentType: "image/png",
+    contentId: "header"
+  },
+  {
+    filename: "logo.png",
+    content: <base64 string>,
+    contentType: "image/png",
+    contentId: "logo"
+  }
+]
+
+NOTE: Ensure you are using the correct property name for Resend ("contentId" not "cid") based on current codebase. If Resend requires "content_id" or "cid", use the exact supported field.
+
+2) Update the HTML template
+Replace external URLs with CID references:
+- Header image:
+  <img src="cid:header" ...>
+- Logo:
+  <img src="cid:logo" ...>
+
+Do NOT include both CID and external URL for the same image.
+
+3) Ensure the attachment is actually inline
+If Resend supports setting disposition, set:
+- disposition: "inline"
+If it does not, contentId should still render inline when referenced by cid.
+
+4) Make sure you fetch image bytes correctly
+- Download the logo/header image bytes on the server (from stored URL) before sending
+- Convert to base64
+- Set correct contentType (image/png or image/jpeg)
+- If fetch fails, skip inline image and fallback to color header + text (no broken icons)
+
+5) Prevent Gmail “attachments only” behavior
+This happens if CID is missing or HTML doesn’t reference cid correctly.
+Verify:
+- contentId matches exactly what HTML uses after "cid:"
+- ex: contentId:"logo" => src="cid:logo"
+
+ACCEPTANCE TEST
+- Send email to Gmail.
+- Header banner appears in the email body.
+- Logo appears in header body.
+- Images do NOT show only as attachments at the bottom.
+
+Deliverable:
+- CID inline attachments working with Resend
+- Email HTML updated to use cid references
+- Fallback behavior if image fetch fails
