@@ -43,6 +43,21 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// Pending signups for multi-step registration with email verification
+export const pendingSignups = pgTable("pending_signups", {
+  id: serial("id").primaryKey(),
+  email: varchar("email").notNull(),
+  firstName: varchar("first_name").notNull(),
+  lastName: varchar("last_name").notNull(),
+  verificationCodeHash: varchar("verification_code_hash").notNull(),
+  codeExpiresAt: timestamp("code_expires_at").notNull(),
+  emailVerified: boolean("email_verified").default(false),
+  lastCodeSentAt: timestamp("last_code_sent_at"),
+  codeAttempts: integer("code_attempts").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // User storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 // Note: Email uniqueness is enforced by case-insensitive index users_email_lower_unique

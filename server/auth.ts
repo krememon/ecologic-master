@@ -417,6 +417,265 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // ============================================
+  // NEW MULTI-STEP SIGNUP FLOW
+  // ============================================
+
+  // Rate limiter for signup code requests
+  const signupCodeRateLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 3, // 3 code requests per minute per IP
+    message: { message: "Too many code requests. Please wait a moment." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Step 1: Start signup - send verification code
+  app.post("/api/auth/signup/start", signupCodeRateLimiter, async (req, res) => {
+    try {
+      const { firstName, lastName, email } = req.body;
+      
+      if (!firstName || !lastName || !email) {
+        return res.status(400).json({ message: "First name, last name, and email are required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
+      if (existingUser) {
+        return res.status(400).json({ message: "An account with this email already exists. Please log in instead." });
+      }
+
+      // Generate 6-digit code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const codeHash = await hashPassword(code);
+      const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Create or update pending signup
+      await storage.createOrUpdatePendingSignup({
+        email: normalizedEmail,
+        firstName,
+        lastName,
+        verificationCodeHash: codeHash,
+        codeExpiresAt,
+      });
+
+      // Send verification code email via Resend
+      try {
+        const { Resend } = await import("resend");
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          to: normalizedEmail,
+          subject: "Your EcoLogic Verification Code",
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">Verify your email</h2>
+              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Hi ${firstName}, use this code to verify your email address:</p>
+              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
+              </div>
+              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error("Failed to send verification code email:", emailError);
+        // Still return success - user can request resend
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Signup start error:", error);
+      res.status(500).json({ message: "Failed to start signup. Please try again." });
+    }
+  });
+
+  // Step 2: Verify email code
+  app.post("/api/auth/signup/verify-email", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      
+      if (!email || !code) {
+        return res.status(400).json({ message: "Email and code are required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const pendingSignup = await storage.getPendingSignupByEmail(normalizedEmail);
+
+      if (!pendingSignup) {
+        return res.status(400).json({ message: "No pending signup found. Please start over." });
+      }
+
+      // Check if code expired
+      if (new Date() > pendingSignup.codeExpiresAt) {
+        return res.status(400).json({ message: "Code expired. Please request a new one." });
+      }
+
+      // Check max attempts (5 attempts allowed)
+      if ((pendingSignup.codeAttempts || 0) >= 5) {
+        return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
+      }
+
+      // Verify code
+      const isValid = await comparePasswords(code, pendingSignup.verificationCodeHash);
+      if (!isValid) {
+        await storage.incrementPendingSignupAttempts(normalizedEmail);
+        return res.status(400).json({ message: "Invalid code. Please try again." });
+      }
+
+      // Mark as verified
+      await storage.markPendingSignupVerified(normalizedEmail);
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Verify email error:", error);
+      res.status(500).json({ message: "Verification failed. Please try again." });
+    }
+  });
+
+  // Step 3: Set password and create account
+  app.post("/api/auth/signup/set-password", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const pendingSignup = await storage.getPendingSignupByEmail(normalizedEmail);
+
+      if (!pendingSignup) {
+        return res.status(400).json({ message: "No pending signup found. Please start over." });
+      }
+
+      if (!pendingSignup.emailVerified) {
+        return res.status(400).json({ message: "Email not verified. Please verify your email first." });
+      }
+
+      // Check if user already exists (race condition protection)
+      const existingUser = await storage.getUserByEmail(normalizedEmail);
+      if (existingUser) {
+        await storage.deletePendingSignup(normalizedEmail);
+        return res.status(400).json({ message: "Account already exists. Please log in." });
+      }
+
+      // Create user account
+      const hashedPassword = await hashPassword(password);
+      const userId = `email_${Date.now()}_${randomBytes(4).toString("hex")}`;
+
+      const user = await storage.createUser({
+        id: userId,
+        email: normalizedEmail,
+        password: hashedPassword,
+        firstName: pendingSignup.firstName,
+        lastName: pendingSignup.lastName,
+        emailVerified: true,
+        provider: "email",
+      });
+
+      // Clean up pending signup
+      await storage.deletePendingSignup(normalizedEmail);
+
+      // Log the user in
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Login after signup error:", err);
+          return res.status(500).json({ message: "Account created but login failed. Please log in manually." });
+        }
+        
+        res.json({ 
+          ok: true, 
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          }
+        });
+      });
+    } catch (error) {
+      console.error("Set password error:", error);
+      res.status(500).json({ message: "Failed to create account. Please try again." });
+    }
+  });
+
+  // Resend verification code
+  app.post("/api/auth/signup/resend-code", signupCodeRateLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const pendingSignup = await storage.getPendingSignupByEmail(normalizedEmail);
+
+      if (!pendingSignup) {
+        return res.status(400).json({ message: "No pending signup found. Please start over." });
+      }
+
+      // Check cooldown (30 seconds)
+      if (pendingSignup.lastCodeSentAt) {
+        const timeSinceLastCode = Date.now() - new Date(pendingSignup.lastCodeSentAt).getTime();
+        if (timeSinceLastCode < 30000) {
+          const waitSeconds = Math.ceil((30000 - timeSinceLastCode) / 1000);
+          return res.status(400).json({ message: `Please wait ${waitSeconds} seconds before requesting a new code.` });
+        }
+      }
+
+      // Generate new code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const codeHash = await hashPassword(code);
+      const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      await storage.createOrUpdatePendingSignup({
+        email: normalizedEmail,
+        firstName: pendingSignup.firstName,
+        lastName: pendingSignup.lastName,
+        verificationCodeHash: codeHash,
+        codeExpiresAt,
+      });
+
+      // Send email
+      try {
+        const { Resend } = await import("resend");
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
+          to: normalizedEmail,
+          subject: "Your New EcoLogic Verification Code",
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+              <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600;">New verification code</h2>
+              <p style="margin: 0 0 24px; color: #666; font-size: 16px;">Here's your new code:</p>
+              <div style="background: #f5f5f5; border-radius: 8px; padding: 24px; text-align: center; margin: 0 0 24px;">
+                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: monospace;">${code}</span>
+              </div>
+              <p style="margin: 0; color: #999; font-size: 14px;">This code expires in 10 minutes.</p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error("Failed to resend verification code:", emailError);
+      }
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Resend code error:", error);
+      res.status(500).json({ message: "Failed to resend code. Please try again." });
+    }
+  });
+
   // Email/Password Login (rate limited to prevent brute force)
   app.post("/api/login", authRateLimiter, (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {

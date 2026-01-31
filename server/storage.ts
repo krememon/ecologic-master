@@ -1,6 +1,7 @@
 import {
   users,
   sessions,
+  pendingSignups,
   companies,
   companyMembers,
   clients,
@@ -3634,6 +3635,72 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .limit(1);
     return existing || null;
+  }
+
+  // Pending Signup Methods
+  async createOrUpdatePendingSignup(data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    verificationCodeHash: string;
+    codeExpiresAt: Date;
+  }) {
+    const normalizedEmail = data.email.toLowerCase().trim();
+    const existing = await db.select().from(pendingSignups).where(sql`LOWER(email) = ${normalizedEmail}`).limit(1);
+    
+    if (existing.length > 0) {
+      const [updated] = await db.update(pendingSignups)
+        .set({
+          firstName: data.firstName,
+          lastName: data.lastName,
+          verificationCodeHash: data.verificationCodeHash,
+          codeExpiresAt: data.codeExpiresAt,
+          emailVerified: false,
+          codeAttempts: 0,
+          lastCodeSentAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(pendingSignups.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(pendingSignups).values({
+      email: normalizedEmail,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      verificationCodeHash: data.verificationCodeHash,
+      codeExpiresAt: data.codeExpiresAt,
+      lastCodeSentAt: new Date(),
+    }).returning();
+    return created;
+  }
+
+  async getPendingSignupByEmail(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const [signup] = await db.select().from(pendingSignups).where(sql`LOWER(email) = ${normalizedEmail}`).limit(1);
+    return signup || null;
+  }
+
+  async markPendingSignupVerified(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const [updated] = await db.update(pendingSignups)
+      .set({ emailVerified: true, updatedAt: new Date() })
+      .where(sql`LOWER(email) = ${normalizedEmail}`)
+      .returning();
+    return updated || null;
+  }
+
+  async incrementPendingSignupAttempts(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    await db.update(pendingSignups)
+      .set({ codeAttempts: sql`code_attempts + 1`, updatedAt: new Date() })
+      .where(sql`LOWER(email) = ${normalizedEmail}`);
+  }
+
+  async deletePendingSignup(email: string) {
+    const normalizedEmail = email.toLowerCase().trim();
+    await db.delete(pendingSignups).where(sql`LOWER(email) = ${normalizedEmail}`);
   }
 }
 

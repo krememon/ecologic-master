@@ -1,0 +1,242 @@
+You are working on EcoLogic (React frontend + Node/Express-ish backend + DB + auth + Stripe).  
+
+TASK: Rebuild the entire Sign Up / First Download onboarding flow as a clean multi-step wizard with smooth transitions.
+
+NON-NEGOTIABLE RULES:
+- Keep it mobile-first, modern, clean, Apple-like.
+- VERY clean transitions between steps (no jank, no layout jumping).
+- Email verification is mandatory before setting password.
+- Role decision screen must route user into Owner path vs Employee path.
+- Preserve existing auth patterns and backend structure; do not break login.
+- Do not add fake/demo data.
+- Buttons must have loading states and be disabled during async.
+- Respect prefers-reduced-motion accessibility setting.
+
+========================
+FRONTEND: SIGNUP WIZARD
+========================
+
+Create a new multi-step signup wizard (single route/page, e.g. /signup) with these steps and UI:
+
+GLOBAL WIZARD LAYOUT:
+- Stable header area (EcoLogic logo + "Create your account")
+- Only the form body transitions, NOT the header
+- Form container must have consistent min-height to prevent page jump
+- Add progress indicator:
+  - Show "Step X of Y" (dynamic total based on path)
+  - OR a thin progress bar (preferred)
+- Back button available where appropriate (except after final submission)
+
+TRANSITIONS (VERY IMPORTANT):
+- Implement a reusable step transition wrapper (Framer Motion recommended if already installed; otherwise CSS transitions).
+- Animation spec:
+  - Duration: 240ms
+  - Easing: cubic-bezier(0.22, 1, 0.36, 1)
+  - Forward nav: opacity 0→1 + translateY(8px)→0
+  - Back nav: opacity 0→1 + translateY(-8px)→0 (or same direction if simpler)
+- Ensure exit animation plays (no instant swap)
+- If prefers-reduced-motion is enabled, reduce to simple fade or disable motion.
+
+STEP 1 — IDENTITY (Email-first)
+Fields:
+- First Name
+- Last Name
+- Email
+Button: Continue
+Validation:
+- Required fields
+- Email format
+On Continue:
+- Call backend to start signup + send verification code
+- Move to Step 2 on success
+
+STEP 2 — EMAIL VERIFICATION (Mandatory)
+UI Copy:
+- "We sent a 6-digit code to <email>"
+Inputs:
+- 6 digit code input with auto-advance
+- Allow paste full code into first field and distribute automatically
+Actions:
+- Verify button
+- Resend code link (with 30s cooldown timer and feedback)
+On Verify:
+- Call backend verify endpoint
+- Move to Step 3 on success
+- Show clean inline error on failure (no raw JSON)
+
+STEP 3 — SECURITY (Password after verification)
+Fields:
+- Password
+- Confirm Password
+UI:
+- Subtle strength indicator OK (do not overcomplicate)
+Rules:
+- Confirm must match
+Button: Continue
+On Continue:
+- Call backend to set password / finalize account creation
+- Move to Step 4 on success
+
+STEP 4 — ROLE DECISION (Most important screen)
+Title:
+- "How will you use EcoLogic?"
+Buttons (large card buttons):
+- "I own or manage a company"
+- "I’m an employee"
+Small link:
+- "Not sure yet"
+Behavior:
+- Owner -> Step 5 (Owner industry)
+- Employee -> Step 5E (Invite code)
+- Not sure -> Show educational screen (not an error):
+  Copy: "EcoLogic is built for companies and their teams. If you received an invite, ask your manager for a code."
+  Buttons: Go back, Contact support (simple mailto or support route)
+
+OWNER PATH:
+STEP 5 — INDUSTRY
+Title: "What industry are you in?"
+Options:
+- Plumbing
+- HVAC
+- Electrical
+- General Contractor
+- Other
+Button: Continue
+Store selection in wizard state and backend.
+
+STEP 6 — COMPANY SETUP (Pricing anchor)
+Fields:
+- Company Name
+Employee range (ranges only):
+- Just me (1)
+- 2–5
+- 6–10
+- 11–20
+- 20+
+Button: Continue
+On Continue:
+- Call backend to create company + assign user as Owner
+- Save employee range for pricing tier
+
+STEP 7 — SUBSCRIPTION
+Show plan based on employee range:
+- Plan name
+- Monthly price
+- What’s included (short bullet list)
+Button:
+- "Start Free Trial" or "Subscribe" (use whichever is currently supported in EcoLogic)
+On Continue:
+- Start Stripe checkout or create subscription via existing Stripe flow
+- On success: route into app (dashboard or jobs)
+
+EMPLOYEE PATH:
+STEP 5E — INVITE CODE
+Title: "Join your company"
+Copy: "Enter the invite code your manager gave you."
+Fields:
+- Invite Code
+Button: Continue
+On Continue:
+- Validate invite code via backend
+- Attach user to company + role + permissions inherited
+- Route into app
+
+ERROR/UI HANDLING:
+- Never show raw "400: {message: ...}".
+- Use clean inline validation + top toast for unexpected errors.
+- Keep inputs clean and consistent.
+- Disable buttons and show spinner during async calls.
+- Ensure Back does not break state; if going back, preserve typed values.
+
+========================
+BACKEND: REQUIRED ENDPOINTS
+========================
+
+Implement or ensure these endpoints exist and are wired to the new flow. Keep them secure and simple:
+
+1) POST /api/auth/signup/start
+Input: { firstName, lastName, email }
+Behavior:
+- Create or upsert a "pending signup" record (do NOT create full user session yet)
+- Generate a 6-digit code
+- Store hashed code + expiry (10 min)
+- Email the code to the user
+Return: { ok: true }
+
+2) POST /api/auth/signup/verify-email
+Input: { email, code }
+Behavior:
+- Validate code + expiry
+- Mark email as verified for that pending signup
+Return: { ok: true }
+
+3) POST /api/auth/signup/set-password
+Input: { email, password }
+Behavior:
+- Only allow if email verified
+- Create the real user account (or finalize existing user record)
+- Hash password
+- Create session / login user
+Return: { ok: true, user }
+
+4) POST /api/onboarding/owner/setup
+Auth required
+Input: { industry, companyName, employeeRange }
+Behavior:
+- Create company
+- Assign current user as Owner
+- Save industry + employeeRange on company profile
+Return: { ok: true, companyId }
+
+5) POST /api/onboarding/employee/join
+Auth required
+Input: { inviteCode }
+Behavior:
+- Validate invite code
+- Add membership + role
+Return: { ok: true, companyId, role }
+
+6) GET /api/onboarding/pricing-preview?employeeRange=...
+Optional helper:
+- Return plan name, price, and included bullets for Step 7
+(If pricing is static in frontend for now, ok, but prefer backend-driven later.)
+
+SECURITY REQUIREMENTS:
+- Rate limit verification code requests per email/IP (basic throttling).
+- Verification codes must be hashed in DB (do not store plaintext).
+- Codes expire after 10 minutes.
+- Resend cooldown enforced.
+
+========================
+TRANSITION + FLOW DELIVERABLES
+========================
+
+DELIVERABLES (must all be done):
+- New /signup wizard built exactly to spec above
+- Mandatory email verification before password
+- Owner vs Employee branching
+- Owner path: Industry -> Company setup -> Subscription
+- Employee path: Invite code -> App
+- Clean, premium step transitions (240ms, fade+slide, stable header, no layout jump)
+- Progress indicator works with dynamic path step counts
+- Buttons: loading + disabled on async
+- No raw API errors shown in UI
+
+MANUAL TEST CHECKLIST:
+1) Signup Owner:
+- Step1 -> code sent -> verify -> set password -> role owner -> industry -> company -> subscription -> lands in app
+2) Signup Employee:
+- Step1 -> verify -> set password -> employee -> invite -> lands in app with correct role
+3) Wrong code:
+- Shows clean error, stay on Step 2
+4) Resend code:
+- cooldown works; resend works
+5) Back navigation:
+- Values persist; transitions remain smooth
+6) prefers-reduced-motion:
+- motion reduced/disabled correctly
+
+IMPORTANT:
+- Do not change unrelated pages or auth flows.
+- Reuse existing styling components where possible.
+- Keep everything clean and consistent with EcoLogic’s UI.
