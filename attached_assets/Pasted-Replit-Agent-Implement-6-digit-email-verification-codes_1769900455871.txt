@@ -1,0 +1,95 @@
+Replit Agent — Implement 6-digit email verification codes using Resend (I already have RESEND_API_KEY).
+
+CONTEXT
+EcoLogic needs email verification codes for signup/login. When the user enters their email and clicks Continue, the backend must generate a 6-digit code, store it securely with expiration, and send it to the user’s email via Resend. Then the next step verifies the code.
+
+HARD REQUIREMENTS
+- Use Resend (npm package: "resend") with RESEND_API_KEY already set in Replit Secrets.
+- Do NOT break existing sessions/cookies/auth.
+- Store codes securely (hash the code; do not store plaintext).
+- Code expires in 10 minutes.
+- Limit attempts (max 5) and mark code as used after success.
+- Resend should support “Resend code” (generate a new code, invalidate old ones for that email).
+- Minimal UI changes: just wire up functionality + show basic errors.
+
+BACKEND TASKS
+1) Add/confirm env vars:
+   - RESEND_API_KEY (already exists)
+   - RESEND_FROM (add if missing): e.g. "EcoLogic <no-reply@YOUR_VERIFIED_DOMAIN.com>"
+   If RESEND_FROM is missing, use a safe default from the existing config and log a clear message.
+
+2) Create DB table (or equivalent) for verification codes:
+   Table: email_verification_codes
+   Columns:
+     - id (uuid or serial)
+     - email (text, indexed, stored lowercase)
+     - code_hash (text)
+     - expires_at (timestamp)
+     - attempts (int default 0)
+     - used_at (timestamp nullable)
+     - created_at (timestamp default now)
+   Also add an index on (email, created_at desc).
+
+3) Implement POST /api/auth/send-code
+   Input: { email }
+   Behavior:
+     - Normalize email = trim + lowercase
+     - Generate 6-digit code (000000–999999, padStart(6,'0'))
+     - Hash code (bcrypt recommended; otherwise sha256 + per-code random salt)
+     - Invalidate previous unused codes for this email (set used_at=now or delete them)
+     - Insert new row with expires_at = now + 10 minutes
+     - Send email using Resend with subject "Your EcoLogic verification code"
+       Body example:
+         "Your EcoLogic verification code is: 123456
+          This code expires in 10 minutes."
+     - Return { ok: true } (do NOT return the code)
+
+4) Implement POST /api/auth/verify-code
+   Input: { email, code }
+   Behavior:
+     - Normalize email, trim code
+     - Find the most recent row for email where used_at IS NULL ordered by created_at desc
+     - If none -> 400 "No code found, please resend"
+     - If expired -> 400 "Code expired, please resend"
+     - If attempts >= 5 -> 429 "Too many attempts, please resend"
+     - Compare provided code against code_hash
+     - If mismatch: increment attempts and return 400 "Invalid code"
+     - If match: set used_at=now and return { ok: true }
+   (Do not log plaintext codes.)
+
+5) Resend integration
+   - Install: npm i resend
+   - Create a small helper mailer (server/utils/resend.ts or similar):
+     - new Resend(process.env.RESEND_API_KEY)
+     - resend.emails.send({ from, to, subject, text })
+   - Use RESEND_FROM env var for from address.
+
+FRONTEND TASKS
+6) Wire up the signup/login flow:
+   - On the “Email” step: call POST /api/auth/send-code with the entered email
+   - Then navigate to the “Enter code” step
+   - On the “Enter code” step: call POST /api/auth/verify-code
+   - If ok: proceed to the next step (password creation or login continuation)
+   - Add “Resend code” button that calls /api/auth/send-code again
+
+UX / ERROR HANDLING
+7) Display clear inline errors:
+   - Invalid code
+   - Code expired (offer resend)
+   - Too many attempts (force resend)
+   - Email send failure (show “Couldn’t send code, try again”)
+
+TESTS (must do)
+8) Manual tests:
+   - Send code to a real email and confirm it arrives
+   - Wrong code increments attempts
+   - After 5 wrong attempts -> blocked until resend
+   - Resend generates a NEW code; old code no longer works
+   - Expired code fails after 10 minutes
+   - Successful verify marks used and cannot be reused
+
+DELIVERABLES
+- List files changed
+- Confirm the exact routes implemented
+- Confirm Resend “from” address being used
+- Keep changes minimal; do not redesign UI
