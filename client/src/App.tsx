@@ -96,10 +96,9 @@ function Router() {
     return <UnsubscribeRouter />;
   }
   
-  // Public email preferences page - NO auth required
+  // Public email preferences page - NO auth required (handled by main.tsx)
   if (path.startsWith('/email-preferences')) {
-    const PublicEmailPreferences = require("./pages/PublicEmailPreferences").default;
-    return <PublicEmailPreferences />;
+    return null; // main.tsx handles this route
   }
 
   const { isAuthenticated, isLoading, user } = useAuth();

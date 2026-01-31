@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, CheckCircle, XCircle, Mail, Settings } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Mail } from "lucide-react";
 
 type State = "loading" | "loaded" | "saving" | "success" | "error";
 
@@ -10,7 +10,6 @@ export default function PublicEmailPreferences() {
   const [state, setState] = useState<State>("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [emailOptIn, setEmailOptIn] = useState(true);
-  const [smsOptIn, setSmsOptIn] = useState(true);
   
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
@@ -32,7 +31,6 @@ export default function PublicEmailPreferences() {
           setState("error");
         } else {
           setEmailOptIn(data.emailOptIn ?? true);
-          setSmsOptIn(data.smsOptIn ?? true);
           setState("loaded");
         }
       } catch {
@@ -52,7 +50,7 @@ export default function PublicEmailPreferences() {
       const res = await fetch("/api/public/email-preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, emailOptIn, smsOptIn }),
+        body: JSON.stringify({ token, emailOptIn }),
       });
       
       const data = await res.json();
@@ -106,18 +104,10 @@ export default function PublicEmailPreferences() {
                     onCheckedChange={setEmailOptIn}
                   />
                 </div>
-                
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-5 h-5 text-slate-600" />
-                    <span className="font-medium text-slate-800">Marketing Texts</span>
-                  </div>
-                  <Switch
-                    checked={smsOptIn}
-                    onCheckedChange={setSmsOptIn}
-                  />
-                </div>
               </div>
+              <p className="text-sm text-slate-500 mt-2">
+                {emailOptIn ? "You will receive promotional emails." : "You will not receive promotional emails."}
+              </p>
 
               <Button onClick={handleSave} className="w-full">
                 Save Preferences
