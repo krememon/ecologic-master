@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, CheckCircle, XCircle, Mail, ArrowLeft } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import ecologicDroplet from "@/assets/branding/ecologic-droplet.png";
+import ecologicWordmark from "@/assets/branding/ecologic-wordmark.png";
 
 type State = "loading" | "confirm" | "success" | "resubscribed" | "cancelled" | "error";
 
@@ -107,12 +109,16 @@ export default function PublicUnsubscribe() {
       <Card className="w-full max-w-md">
         <CardContent className="pt-8 pb-8 px-6">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-teal-100 mb-4">
-              <Mail className="w-8 h-8 text-teal-600" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-widest text-slate-800 uppercase">
-              ECOLOGIC
-            </h1>
+            <img 
+              src={ecologicDroplet} 
+              alt="EcoLogic Logo" 
+              className="h-16 sm:h-20 w-auto mx-auto mb-4"
+            />
+            <img 
+              src={ecologicWordmark} 
+              alt="EcoLogic" 
+              className="w-full max-w-[260px] sm:max-w-[320px] h-auto mx-auto"
+            />
           </div>
 
           {state === "loading" && (
