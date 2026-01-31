@@ -171,13 +171,16 @@ export const customers = pgTable("customers", {
 export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
-  createdByUserId: varchar("created_by_user_id", { length: 50 }).notNull(),
+  sentByUserId: varchar("sent_by_user_id", { length: 50 }).notNull(),
   channel: varchar("channel", { length: 20 }).notNull(), // 'email' | 'sms' | 'both'
   subject: varchar("subject", { length: 500 }),
+  body: text("body").notNull(), // Main message body (required)
   emailBody: text("email_body"),
   smsBody: text("sms_body"),
-  status: varchar("status", { length: 20 }).notNull().default("sent"), // 'draft' | 'sent'
+  status: varchar("status", { length: 20 }).default("sent"), // 'draft' | 'sent'
   recipientCount: integer("recipient_count").default(0),
+  emailCount: integer("email_count").default(0),
+  smsCount: integer("sms_count").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   sentAt: timestamp("sent_at"),
 }, (table) => ({

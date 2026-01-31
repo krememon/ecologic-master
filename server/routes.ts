@@ -6658,18 +6658,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         !c.smsUnsubscribedAt
       );
 
+      // Compute body - use emailBody for email/both, smsBody for sms-only
+      const body = channel === 'sms' ? smsBody : emailBody;
+      
       // Create campaign record
       const campaign = await storage.createCampaign({
         companyId: company.id,
-        createdByUserId: userId,
+        sentByUserId: userId,
         channel,
         subject: subject || null,
+        body: body!, // Required - already validated above
         emailBody: emailBody || null,
         smsBody: smsBody || null,
         status: 'sent',
         recipientCount: (channel === 'email' ? emailEligible.length : 0) + 
                         (channel === 'sms' ? smsEligible.length : 0) +
                         (channel === 'both' ? emailEligible.length + smsEligible.length : 0),
+        emailCount: (channel === 'email' || channel === 'both') ? emailEligible.length : 0,
+        smsCount: (channel === 'sms' || channel === 'both') ? smsEligible.length : 0,
       });
 
       const results = {
