@@ -16,9 +16,43 @@ function toAbsoluteUrl(relativeUrl: string | null | undefined): string {
   }
   
   const cleanBase = baseUrl.replace(/\/$/, '');
-  const cleanPath = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+  
+  // Convert /uploads/file.png to /public/uploads/file.png for email clients
+  let cleanPath = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+  if (cleanPath.startsWith('/uploads/') && !cleanPath.startsWith('/public/uploads/')) {
+    cleanPath = `/public${cleanPath}`;
+  }
   
   return `${cleanBase}${cleanPath}`;
+}
+
+async function isImagePubliclyAccessible(url: string): Promise<boolean> {
+  if (!url) return false;
+  
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeout);
+    
+    const contentType = response.headers.get('content-type') || '';
+    const isImage = contentType.startsWith('image/');
+    const isAccessible = response.ok && isImage;
+    
+    if (!isAccessible) {
+      console.warn(`[Email] Image not accessible: ${url} - status=${response.status} contentType=${contentType}`);
+    }
+    
+    return isAccessible;
+  } catch (error: any) {
+    console.warn(`[Email] Image accessibility check failed: ${url} - ${error.message}`);
+    return false;
+  }
 }
 
 interface EmailResult {
@@ -237,14 +271,35 @@ export async function sendBrandedCampaignEmail({
   const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
   
   const brandColor = branding?.primaryColor || '#2563EB';
-  const logoUrl = toAbsoluteUrl(branding?.logoUrl);
-  const headerBannerUrl = toAbsoluteUrl(branding?.headerBannerUrl);
+  let logoUrl = toAbsoluteUrl(branding?.logoUrl);
+  let headerBannerUrl = toAbsoluteUrl(branding?.headerBannerUrl);
   const footerText = branding?.footerText || '';
   const fromName = branding?.fromName || companyName;
   
-  if (logoUrl || headerBannerUrl) {
-    console.log('[Campaign] Email image URLs:', { logoUrl, headerBannerUrl });
+  // Log URLs for debugging
+  console.log('[Campaign] Raw branding URLs:', { 
+    rawLogo: branding?.logoUrl, 
+    rawHeader: branding?.headerBannerUrl 
+  });
+  console.log('[Campaign] Absolute URLs for email:', { logoUrl, headerBannerUrl });
+  
+  // Check if images are publicly accessible, skip if not
+  if (logoUrl) {
+    const isLogoAccessible = await isImagePubliclyAccessible(logoUrl);
+    if (!isLogoAccessible) {
+      console.warn('[Campaign] Logo not publicly accessible, skipping in email:', logoUrl);
+      logoUrl = '';
+    }
   }
+  
+  if (headerBannerUrl) {
+    const isHeaderAccessible = await isImagePubliclyAccessible(headerBannerUrl);
+    if (!isHeaderAccessible) {
+      console.warn('[Campaign] Header banner not publicly accessible, skipping in email:', headerBannerUrl);
+      headerBannerUrl = '';
+    }
+  }
+  
   const showPhone = branding?.showPhone ?? true;
   const showAddress = branding?.showAddress ?? true;
   

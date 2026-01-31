@@ -12,23 +12,24 @@ import { eq, and, sql } from "drizzle-orm";
 const app = express();
 
 // PUBLIC STATIC FILES - MUST be registered FIRST before any middleware
-// This ensures uploads are accessible to email clients without auth
-// Using explicit GET handler instead of express.static to ensure it takes priority
+// Using /public/uploads path to avoid SPA routing conflicts
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-app.get("/uploads/:filename", (req, res) => {
+// Serve files at BOTH /uploads and /public/uploads for compatibility
+const serveUploadedFile = (req: express.Request, res: express.Response) => {
   const filename = req.params.filename;
   // Security: prevent path traversal
-  if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+  if (!filename || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
     return res.status(400).send("Invalid filename");
   }
   
   const filePath = path.join(uploadsDir, filename);
   
   if (!fs.existsSync(filePath)) {
+    console.log(`[Static] File not found: ${filePath}`);
     return res.status(404).send("File not found");
   }
   
@@ -49,8 +50,11 @@ app.get("/uploads/:filename", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=31536000");
   res.sendFile(filePath);
-});
-console.log("[Static] Public /uploads route registered at:", uploadsDir);
+};
+
+app.get("/uploads/:filename", serveUploadedFile);
+app.get("/public/uploads/:filename", serveUploadedFile);
+console.log("[Static] Public upload routes registered: /uploads/:filename and /public/uploads/:filename");
 
 // Disable ETags to prevent 304 responses which break JSON parsing
 app.set("etag", false);
