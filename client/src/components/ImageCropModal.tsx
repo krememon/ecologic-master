@@ -17,14 +17,17 @@ interface ImageCropModalProps {
 
 const CROP_CONFIG = {
   logo: {
-    aspect: 3 / 1,
-    outputWidth: 600,
-    outputHeight: 200,
+    aspect: 1,
+    outputSize: 512,
+    cropShape: "round" as const,
+    showGrid: false,
   },
   banner: {
     aspect: 4 / 1,
     outputWidth: 1200,
     outputHeight: 300,
+    cropShape: "rect" as const,
+    showGrid: true,
   },
 };
 
@@ -32,7 +35,8 @@ async function createCroppedImage(
   imageSrc: string,
   pixelCrop: Area,
   outputWidth: number,
-  outputHeight: number
+  outputHeight: number,
+  circular: boolean
 ): Promise<Blob> {
   const image = new Image();
   image.src = imageSrc;
@@ -47,6 +51,13 @@ async function createCroppedImage(
 
   if (!ctx) {
     throw new Error("Could not get canvas context");
+  }
+
+  if (circular) {
+    ctx.beginPath();
+    ctx.arc(outputWidth / 2, outputHeight / 2, outputWidth / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
   }
 
   ctx.drawImage(
@@ -91,6 +102,7 @@ export default function ImageCropModal({
   const [imageSrc, setImageSrc] = useState<string | null>(null);
 
   const config = CROP_CONFIG[mode];
+  const isLogo = mode === "logo";
 
   const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -123,14 +135,18 @@ export default function ImageCropModal({
 
     setIsProcessing(true);
     try {
+      const outputWidth = isLogo ? CROP_CONFIG.logo.outputSize : CROP_CONFIG.banner.outputWidth;
+      const outputHeight = isLogo ? CROP_CONFIG.logo.outputSize : CROP_CONFIG.banner.outputHeight;
+      
       const croppedBlob = await createCroppedImage(
         imageSrc,
         croppedAreaPixels,
-        config.outputWidth,
-        config.outputHeight
+        outputWidth,
+        outputHeight,
+        isLogo
       );
 
-      const fileName = mode === "logo" ? "logo-cropped.png" : "banner-cropped.png";
+      const fileName = isLogo ? "logo-cropped.png" : "banner-cropped.png";
       const croppedFile = new File([croppedBlob], fileName, { type: "image/png" });
 
       await onCropped(croppedFile);
@@ -147,7 +163,7 @@ export default function ImageCropModal({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-lg max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Edit Image</DialogTitle>
+          <DialogTitle>{isLogo ? "Edit Logo" : "Edit Banner"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -161,10 +177,11 @@ export default function ImageCropModal({
                 crop={crop}
                 zoom={zoom}
                 aspect={config.aspect}
+                cropShape={config.cropShape}
+                showGrid={config.showGrid}
                 onCropChange={setCrop}
                 onCropComplete={onCropComplete}
                 onZoomChange={setZoom}
-                showGrid={true}
               />
             )}
           </div>
@@ -182,7 +199,7 @@ export default function ImageCropModal({
           </div>
 
           <p className="text-xs text-muted-foreground text-center">
-            Drag to reposition, use slider to zoom
+            Drag to reposition. Use slider to zoom.
           </p>
 
           <div className="flex gap-3 justify-end">
@@ -196,7 +213,7 @@ export default function ImageCropModal({
                   Saving...
                 </>
               ) : (
-                "Save"
+                isLogo ? "Save Logo" : "Save Banner"
               )}
             </Button>
           </div>
