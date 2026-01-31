@@ -874,6 +874,7 @@ export function setupAuth(app: Express) {
 
       // Code is valid - log the user in
       const user = await storage.getUserByEmail(normalizedEmail);
+      console.log("[auth] verify-code: found user:", user?.id, user?.email);
       if (!user) {
         return res.status(400).json({ message: "User not found." });
       }
@@ -881,22 +882,27 @@ export function setupAuth(app: Express) {
       // Clean up the challenge
       await storage.deleteLoginChallenge(normalizedEmail);
 
-      // Log in the user
-      req.login(user, (err) => {
-        if (err) {
-          console.error("Login session error:", err);
+      console.log("[auth] verify-code: calling req.login for user:", user.id);
+      
+      // Log in the user using passport
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[auth] verify-code: req.login error:", loginErr);
           return res.status(500).json({ message: "Unable to complete sign in." });
         }
+        
+        console.log("[auth] verify-code: req.login success, session ID:", req.sessionID);
+        console.log("[auth] verify-code: req.user after login:", req.user?.id);
         
         // Explicitly save session before responding
         req.session.save((saveErr) => {
           if (saveErr) {
-            console.error("Session save error:", saveErr);
+            console.error("[auth] verify-code: session.save error:", saveErr);
             return res.status(500).json({ message: "Unable to complete sign in." });
           }
           
-          console.log("[auth] Login MFA complete, session saved for user:", user.email);
-          res.json({
+          console.log("[auth] verify-code: session saved successfully for user:", user.email);
+          return res.json({
             ok: true,
             user: {
               id: user.id,
