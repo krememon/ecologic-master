@@ -923,17 +923,35 @@ export class DatabaseStorage implements IStorage {
       console.log(`[delete-company] Deleting company record...`);
       await tx.delete(companies).where(eq(companies.id, companyId));
       
-      // 20. Delete sessions for all company members
-      console.log(`[delete-company] Deleting sessions...`);
-      for (const memberId of memberUserIds) {
-        await tx.delete(sessions).where(sql`sess->>'passport'->>'user' = ${memberId}`);
-      }
+      // 20. Determine which users now have ZERO remaining memberships (single set-based query)
+      // This is the definitive source of truth - query AFTER membership deletion using NOT EXISTS
+      console.log(`[delete-company] Identifying orphaned users with no remaining memberships...`);
       
-      // 21. Hard-delete all member users (including the owner)
-      // Since we've deleted all FK-referencing data, we can now hard-delete
-      console.log(`[delete-company] Deleting user records...`);
-      if (memberUserIds.length > 0) {
-        await tx.delete(users).where(inArray(users.id, memberUserIds));
+      // Use a single query to get all users from our list who have NO memberships remaining
+      const orphanedUserRows = await tx.execute(sql`
+        SELECT u.id 
+        FROM users u
+        WHERE u.id = ANY(${memberUserIds})
+        AND NOT EXISTS (
+          SELECT 1 FROM company_members cm WHERE cm.user_id = u.id
+        )
+      `);
+      const orphanedUserIds = (orphanedUserRows.rows as { id: string }[]).map(r => r.id);
+      
+      const preservedCount = memberUserIds.length - orphanedUserIds.length;
+      console.log(`[delete-company] ${orphanedUserIds.length} orphaned users, ${preservedCount} preserved users (have other company memberships)`);
+      
+      // 21. Delete sessions for orphaned users only
+      if (orphanedUserIds.length > 0) {
+        console.log(`[delete-company] Deleting sessions for orphaned users...`);
+        for (const userId of orphanedUserIds) {
+          await tx.delete(sessions).where(sql`sess->>'passport'->>'user' = ${userId}`);
+        }
+        
+        // 22. Hard-delete ONLY orphaned users (users with zero company memberships remaining)
+        console.log(`[delete-company] Hard-deleting ${orphanedUserIds.length} orphaned user records...`);
+        await tx.delete(users).where(inArray(users.id, orphanedUserIds));
+        console.log(`[delete-company] Hard-deleted ${orphanedUserIds.length} orphaned users`);
       }
       
       console.log(`[delete-company] Completed full company deletion for companyId=${companyId}`);
