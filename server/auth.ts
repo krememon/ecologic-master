@@ -457,6 +457,8 @@ export function setupAuth(app: Express) {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const codeHash = await hashPassword(code);
       const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      
+      console.log("[signup-code] Generated 6-digit code for email:", normalizedEmail);
 
       // Create or update pending signup
       await storage.createOrUpdatePendingSignup({
@@ -467,12 +469,28 @@ export function setupAuth(app: Express) {
         codeExpiresAt,
       });
 
+      // DEV FALLBACK: Log code to console in development
+      const isDev = process.env.NODE_ENV === "development";
+      if (isDev) {
+        console.log("[signup-code] DEV ONLY code for", normalizedEmail, "=", code);
+      }
+
+      // Check email provider configuration
+      if (!process.env.RESEND_API_KEY) {
+        console.error("[signup-code] RESEND_API_KEY not configured");
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Email provider not configured." });
+      }
+
       // Send verification code email via Resend
+      console.log("[signup-code] Attempting to send email to:", normalizedEmail);
       try {
         const { Resend } = await import("resend");
         const resend = new Resend(process.env.RESEND_API_KEY);
         
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
           from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
           to: normalizedEmail,
           subject: "Your EcoLogic Verification Code",
@@ -487,12 +505,30 @@ export function setupAuth(app: Express) {
             </div>
           `,
         });
+        
+        if (error) {
+          console.error("[signup-code] Resend API returned error:", error);
+          if (isDev) {
+            return res.json({ ok: true, devCode: code });
+          }
+          return res.status(500).json({ message: "Failed to send verification email" });
+        }
+        
+        console.log("[signup-code] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
-        console.error("Failed to send verification code email:", emailError);
-        // Still return success - user can request resend
+        console.error("[signup-code] Email send failed:", emailError);
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
-      res.json({ ok: true });
+      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
+      res.json({ 
+        ok: true,
+        ...(isDev && { devCode: code }),
+        ...(devBypassEnabled && { devBypass: true })
+      });
     } catch (error) {
       console.error("Signup start error:", error);
       res.status(500).json({ message: "Failed to start signup. Please try again." });
@@ -652,6 +688,8 @@ export function setupAuth(app: Express) {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const codeHash = await hashPassword(code);
       const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      
+      console.log("[signup-resend] Generated new 6-digit code for email:", normalizedEmail);
 
       await storage.createOrUpdatePendingSignup({
         email: normalizedEmail,
@@ -661,12 +699,28 @@ export function setupAuth(app: Express) {
         codeExpiresAt,
       });
 
+      // DEV FALLBACK: Log code to console in development
+      const isDev = process.env.NODE_ENV === "development";
+      if (isDev) {
+        console.log("[signup-resend] DEV ONLY code for", normalizedEmail, "=", code);
+      }
+
+      // Check email provider configuration
+      if (!process.env.RESEND_API_KEY) {
+        console.error("[signup-resend] RESEND_API_KEY not configured");
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Email provider not configured." });
+      }
+
       // Send email
+      console.log("[signup-resend] Attempting to send email to:", normalizedEmail);
       try {
         const { Resend } = await import("resend");
         const resend = new Resend(process.env.RESEND_API_KEY);
         
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
           from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
           to: normalizedEmail,
           subject: "Your New EcoLogic Verification Code",
@@ -681,11 +735,30 @@ export function setupAuth(app: Express) {
             </div>
           `,
         });
+        
+        if (error) {
+          console.error("[signup-resend] Resend API returned error:", error);
+          if (isDev) {
+            return res.json({ ok: true, devCode: code });
+          }
+          return res.status(500).json({ message: "Failed to send verification email" });
+        }
+        
+        console.log("[signup-resend] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
-        console.error("Failed to resend verification code:", emailError);
+        console.error("[signup-resend] Email send failed:", emailError);
+        if (isDev) {
+          return res.json({ ok: true, devCode: code });
+        }
+        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
-      res.json({ ok: true });
+      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
+      res.json({ 
+        ok: true,
+        ...(isDev && { devCode: code }),
+        ...(devBypassEnabled && { devBypass: true })
+      });
     } catch (error) {
       console.error("Resend code error:", error);
       res.status(500).json({ message: "Failed to resend code. Please try again." });
@@ -758,6 +831,8 @@ export function setupAuth(app: Express) {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const codeHash = await hashPassword(code);
       const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      
+      console.log("[login-code] Generated 6-digit code for email:", normalizedEmail);
 
       // Update challenge with password verified and code
       await storage.updateLoginChallenge(normalizedEmail, {
@@ -784,11 +859,12 @@ export function setupAuth(app: Express) {
       }
 
       // Send verification code email
+      console.log("[login-code] Attempting to send email to:", normalizedEmail);
       try {
         const { Resend } = await import("resend");
         const resend = new Resend(process.env.RESEND_API_KEY);
         
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
           from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
           to: normalizedEmail,
           subject: "Your EcoLogic Sign-In Code",
@@ -803,13 +879,22 @@ export function setupAuth(app: Express) {
             </div>
           `,
         });
-        console.log("[login-code] initial code sent email=", normalizedEmail);
+        
+        if (error) {
+          console.error("[login-code] Resend API returned error:", error);
+          if (isDev) {
+            return res.json({ ok: true, devCode: code });
+          }
+          return res.status(500).json({ message: "Failed to send verification email" });
+        }
+        
+        console.log("[login-code] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
-        console.error("[login-code] email send failed:", emailError);
+        console.error("[login-code] Email send failed:", emailError);
         if (isDev) {
           return res.json({ ok: true, devCode: code });
         }
-        return res.status(500).json({ message: "Email failed to send. Check server email config." });
+        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
       const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
@@ -950,6 +1035,8 @@ export function setupAuth(app: Express) {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const codeHash = await hashPassword(code);
       const codeExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      
+      console.log("[login-resend] Generated new 6-digit code for email:", normalizedEmail);
 
       await storage.updateLoginChallenge(normalizedEmail, {
         verificationCodeHash: codeHash,
@@ -961,12 +1048,12 @@ export function setupAuth(app: Express) {
       // DEV FALLBACK: Log code to console in development
       const isDev = process.env.NODE_ENV === "development";
       if (isDev) {
-        console.log("[login-code] DEV ONLY code for", normalizedEmail, "=", code);
+        console.log("[login-resend] DEV ONLY code for", normalizedEmail, "=", code);
       }
 
       // Check email provider configuration
       if (!process.env.RESEND_API_KEY) {
-        console.error("[login-code] RESEND_API_KEY not configured");
+        console.error("[login-resend] RESEND_API_KEY not configured");
         if (isDev) {
           return res.json({ ok: true, devCode: code });
         }
@@ -974,11 +1061,12 @@ export function setupAuth(app: Express) {
       }
 
       // Send new code email
+      console.log("[login-resend] Attempting to send email to:", normalizedEmail);
       try {
         const { Resend } = await import("resend");
         const resend = new Resend(process.env.RESEND_API_KEY);
         
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
           from: process.env.EMAIL_FROM || "EcoLogic <noreply@ecologic.app>",
           to: normalizedEmail,
           subject: "Your New EcoLogic Sign-In Code",
@@ -993,13 +1081,22 @@ export function setupAuth(app: Express) {
             </div>
           `,
         });
-        console.log("[login-code] resend sent email=" + normalizedEmail);
+        
+        if (error) {
+          console.error("[login-resend] Resend API returned error:", error);
+          if (isDev) {
+            return res.json({ ok: true, devCode: code });
+          }
+          return res.status(500).json({ message: "Failed to send verification email" });
+        }
+        
+        console.log("[login-resend] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
-        console.error("[login-code] resend email failed:", emailError);
+        console.error("[login-resend] Email send failed:", emailError);
         if (isDev) {
           return res.json({ ok: true, devCode: code });
         }
-        return res.status(500).json({ message: "Email failed to send. Check server email config." });
+        return res.status(500).json({ message: "Failed to send verification email" });
       }
 
       const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
