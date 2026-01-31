@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { Mail, Loader2 } from "lucide-react";
-import { SiGoogle, SiApple } from "react-icons/si";
+import { SiGoogle } from "react-icons/si";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 
 export default function Welcome() {
@@ -24,10 +24,6 @@ export default function Welcome() {
   
   const handleGoogleAuth = () => {
     window.location.href = "/api/auth/google";
-  };
-  
-  const handleAppleAuth = () => {
-    window.location.href = "/api/auth/apple";
   };
   
   if (isLoading) {
@@ -103,15 +99,6 @@ export default function Welcome() {
               >
                 <SiGoogle className="w-5 h-5 mr-3" />
                 Continue with Google
-              </Button>
-              
-              <Button 
-                variant="outline"
-                onClick={handleAppleAuth}
-                className="w-full h-11 font-medium rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-              >
-                <SiApple className="w-5 h-5 mr-3" />
-                Continue with Apple
               </Button>
               
               <Button 
