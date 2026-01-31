@@ -103,8 +103,6 @@ export default function SignInWizard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [devCode, setDevCode] = useState<string | null>(null);
-  const [devBypass, setDevBypass] = useState(false);
   
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
@@ -164,14 +162,7 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/password", { email, password });
-      const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
-      
-      if (data?.devCode) {
-        setDevCode(data.devCode);
-      }
-      if (data?.devBypass) {
-        setDevBypass(true);
-      }
+      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
       setResendCooldown(30);
       goToStep("code");
@@ -251,11 +242,7 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/resend-code", { email });
-      const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
-      
-      if (data?.devCode) {
-        setDevCode(data.devCode);
-      }
+      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
       setResendCooldown(30);
       setVerificationCode(["", "", "", "", "", ""]);
@@ -443,41 +430,6 @@ export default function SignInWizard() {
                   </div>
                   
                   {error && <p className="text-xs text-red-500 text-center">{error}</p>}
-                  
-                  {devBypass && (
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
-                      <p className="text-xs text-green-700 dark:text-green-400 font-mono">
-                        DEV MODE: Use code <span className="font-bold">000000</span>
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setVerificationCode(["0", "0", "0", "0", "0", "0"]);
-                        }}
-                        className="mt-2 text-xs text-green-600 hover:underline"
-                      >
-                        Auto-fill bypass code
-                      </button>
-                    </div>
-                  )}
-                  
-                  {devCode && !devBypass && (
-                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-center">
-                      <p className="text-xs text-amber-700 dark:text-amber-400 font-mono">
-                        DEV code: <span className="font-bold">{devCode}</span>
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const digits = devCode.split("");
-                          setVerificationCode(digits);
-                        }}
-                        className="mt-2 text-xs text-amber-600 hover:underline"
-                      >
-                        Auto-fill code
-                      </button>
-                    </div>
-                  )}
                   
                   <Button type="submit" className="w-full" disabled={isLoading || !isCodeComplete()}>
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}

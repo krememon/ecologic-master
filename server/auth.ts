@@ -484,18 +484,9 @@ export function setupAuth(app: Express) {
         codeExpiresAt,
       });
 
-      // DEV FALLBACK: Log code to console in development
-      const isDev = process.env.NODE_ENV === "development";
-      if (isDev) {
-        console.log("[signup-code] DEV ONLY code for", normalizedEmail, "=", code);
-      }
-
       // Check email provider configuration
       if (!process.env.RESEND_API_KEY) {
         console.error("[signup-code] RESEND_API_KEY not configured");
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Email provider not configured." });
       }
 
@@ -523,27 +514,16 @@ export function setupAuth(app: Express) {
         
         if (error) {
           console.error("[signup-code] Resend API returned error:", error);
-          if (isDev) {
-            return res.json({ ok: true, devCode: code });
-          }
           return res.status(500).json({ message: "Failed to send verification email" });
         }
         
         console.log("[signup-code] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
         console.error("[signup-code] Email send failed:", emailError);
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Failed to send verification email" });
       }
 
-      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
-      res.json({ 
-        ok: true,
-        ...(isDev && { devCode: code }),
-        ...(devBypassEnabled && { devBypass: true })
-      });
+      res.json({ ok: true });
     } catch (error) {
       console.error("Signup start error:", error);
       res.status(500).json({ message: "Failed to start signup. Please try again." });
@@ -714,18 +694,9 @@ export function setupAuth(app: Express) {
         codeExpiresAt,
       });
 
-      // DEV FALLBACK: Log code to console in development
-      const isDev = process.env.NODE_ENV === "development";
-      if (isDev) {
-        console.log("[signup-resend] DEV ONLY code for", normalizedEmail, "=", code);
-      }
-
       // Check email provider configuration
       if (!process.env.RESEND_API_KEY) {
         console.error("[signup-resend] RESEND_API_KEY not configured");
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Email provider not configured." });
       }
 
@@ -753,27 +724,16 @@ export function setupAuth(app: Express) {
         
         if (error) {
           console.error("[signup-resend] Resend API returned error:", error);
-          if (isDev) {
-            return res.json({ ok: true, devCode: code });
-          }
           return res.status(500).json({ message: "Failed to send verification email" });
         }
         
         console.log("[signup-resend] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
         console.error("[signup-resend] Email send failed:", emailError);
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Failed to send verification email" });
       }
 
-      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
-      res.json({ 
-        ok: true,
-        ...(isDev && { devCode: code }),
-        ...(devBypassEnabled && { devBypass: true })
-      });
+      res.json({ ok: true });
     } catch (error) {
       console.error("Resend code error:", error);
       res.status(500).json({ message: "Failed to resend code. Please try again." });
@@ -858,18 +818,9 @@ export function setupAuth(app: Express) {
         codeAttempts: 0,
       });
 
-      // DEV FALLBACK: Log code to console in development
-      const isDev = process.env.NODE_ENV === "development";
-      if (isDev) {
-        console.log("[login-code] DEV ONLY code for", normalizedEmail, "=", code);
-      }
-
       // Check email provider configuration
       if (!process.env.RESEND_API_KEY) {
         console.error("[login-code] RESEND_API_KEY not configured");
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Email provider not configured." });
       }
 
@@ -897,27 +848,16 @@ export function setupAuth(app: Express) {
         
         if (error) {
           console.error("[login-code] Resend API returned error:", error);
-          if (isDev) {
-            return res.json({ ok: true, devCode: code });
-          }
           return res.status(500).json({ message: "Failed to send verification email" });
         }
         
         console.log("[login-code] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
         console.error("[login-code] Email send failed:", emailError);
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Failed to send verification email" });
       }
 
-      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
-      res.json({ 
-        ok: true, 
-        ...(isDev && { devCode: code }),
-        ...(devBypassEnabled && { devBypass: true })
-      });
+      res.json({ ok: true });
     } catch (error) {
       console.error("Login password error:", error);
       res.status(500).json({ message: "Unable to verify password. Please try again." });
@@ -1060,18 +1000,9 @@ export function setupAuth(app: Express) {
         codeAttempts: 0,
       });
 
-      // DEV FALLBACK: Log code to console in development
-      const isDev = process.env.NODE_ENV === "development";
-      if (isDev) {
-        console.log("[login-resend] DEV ONLY code for", normalizedEmail, "=", code);
-      }
-
       // Check email provider configuration
       if (!process.env.RESEND_API_KEY) {
         console.error("[login-resend] RESEND_API_KEY not configured");
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Email provider not configured." });
       }
 
@@ -1099,27 +1030,16 @@ export function setupAuth(app: Express) {
         
         if (error) {
           console.error("[login-resend] Resend API returned error:", error);
-          if (isDev) {
-            return res.json({ ok: true, devCode: code });
-          }
           return res.status(500).json({ message: "Failed to send verification email" });
         }
         
         console.log("[login-resend] Email sent successfully to:", normalizedEmail);
       } catch (emailError) {
         console.error("[login-resend] Email send failed:", emailError);
-        if (isDev) {
-          return res.json({ ok: true, devCode: code });
-        }
         return res.status(500).json({ message: "Failed to send verification email" });
       }
 
-      const devBypassEnabled = isDev && process.env.BYPASS_EMAIL_CODE === "true";
-      res.json({ 
-        ok: true, 
-        ...(isDev && { devCode: code }),
-        ...(devBypassEnabled && { devBypass: true })
-      });
+      res.json({ ok: true });
     } catch (error) {
       console.error("Resend login code error:", error);
       res.status(500).json({ message: "Unable to resend code. Please try again." });
