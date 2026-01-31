@@ -11,6 +11,30 @@ import { apiRequest } from "@/lib/queryClient";
 
 type WizardStep = "email" | "password" | "code";
 
+async function safeParseJson(res: Response): Promise<any> {
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
+  
+  if (contentType.includes("application/json") && text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function handleApiResponse(res: Response, defaultError: string): Promise<any> {
+  const data = await safeParseJson(res);
+  
+  if (!res.ok) {
+    throw new Error(data?.message || defaultError);
+  }
+  
+  return data;
+}
+
 function useReducedMotion() {
   const [reducedMotion, setReducedMotion] = useState(false);
   
@@ -112,14 +136,9 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/start", { email });
+      const data = await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Unable to sign in");
-      }
-      
-      const data = await res.json();
-      if (data.firstName) {
+      if (data?.firstName) {
         setFirstName(data.firstName);
       }
       
@@ -143,11 +162,7 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/password", { email, password });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Incorrect password");
-      }
+      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
       setResendCooldown(30);
       goToStep("code");
@@ -206,11 +221,7 @@ export default function SignInWizard() {
         email,
         code: getCodeString(),
       });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Invalid code");
-      }
+      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
       window.location.href = "/";
     } catch (err: any) {
@@ -226,11 +237,7 @@ export default function SignInWizard() {
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/login/resend-code", { email });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Unable to resend code");
-      }
+      await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
       setResendCooldown(30);
       setVerificationCode(["", "", "", "", "", ""]);

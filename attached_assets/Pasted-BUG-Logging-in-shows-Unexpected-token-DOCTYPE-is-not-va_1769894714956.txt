@@ -1,0 +1,50 @@
+BUG: Logging in shows:
+"Unexpected token '<', '<!DOCTYPE ' ... is not valid JSON"
+This means the frontend is trying to parse HTML as JSON (API route missing or returning index.html).
+
+TASK:
+Fix the login API wiring so login works for existing accounts and frontend never crashes parsing non-JSON.
+
+STEP 1 — FIND THE BAD REQUEST
+1) In the /login flow frontend, locate the fetch() call being made when user enters email and clicks Continue.
+2) Log the exact URL being requested (temporarily) and check Network tab to confirm:
+   - Request URL
+   - Status code
+   - Response headers (Content-Type)
+   - Response body starts with <!DOCTYPE html> (confirm)
+
+STEP 2 — FIX ROUTES (backend must return JSON)
+3) Ensure the backend route being called actually exists under /api/...
+   - If our new flow calls /api/auth/login/start (or similar), implement it in server/routes.ts.
+   - OR, if EcoLogic already has an existing login endpoint, update frontend to call the real existing endpoint.
+4) All /api/auth/login* routes must return JSON always:
+   - On success: { ok: true, ... }
+   - On error: res.status(400/401).json({ message: "..." })
+   - Never return HTML for /api routes.
+
+STEP 3 — FRONTEND SAFE PARSING (no more JSON parse crash)
+5) Update the frontend fetch helper for login calls:
+   - Read res.headers.get("content-type")
+   - If includes "application/json": parse json
+   - Else: read text and throw a friendly error
+Example:
+   const ct = res.headers.get("content-type") || "";
+   const raw = await res.text();
+   const data = ct.includes("application/json") ? JSON.parse(raw) : null;
+   if (!res.ok) throw new Error(data?.message || "Server error. Please try again.");
+
+6) Replace the current inline error text with a clean message:
+   - "We couldn’t reach the server. Please try again."
+   - Do NOT display raw HTML/DOCTYPE errors to the user.
+
+STEP 4 — VERIFY EXISTING ACCOUNT LOGIN
+7) Test login with an existing known email account (pjpell077@gmail.com):
+   - Step Email should proceed (user exists)
+   - Password validation should work
+   - Code send step should work (email code)
+   - Verify code logs user in
+
+DELIVERABLE:
+- Login no longer crashes with DOCTYPE/JSON error
+- Existing account can log in end-to-end
+- /api routes always return JSON
