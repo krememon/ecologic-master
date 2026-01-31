@@ -258,6 +258,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.redirect(302, '/jobs');
   });
 
+  // Auth middleware - MUST be set up before any authenticated routes
+  await setupAuth(app);
+
   // General file upload endpoint (for logos, etc.)
   app.post('/api/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
@@ -285,9 +288,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to upload file' });
     }
   });
-
-  // Auth middleware
-  await setupAuth(app);
 
   // Company logo upload endpoint - uploads file AND saves to company record
   app.post('/api/company/logo', isAuthenticated, (req: any, res, next) => {
