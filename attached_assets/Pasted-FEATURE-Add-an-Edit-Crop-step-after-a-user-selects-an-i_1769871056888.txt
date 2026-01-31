@@ -1,0 +1,65 @@
+FEATURE: Add an Edit/Crop step after a user selects an image for Email Branding (Logo + Header Banner). After selecting a file, show a crop modal where the user can reposition/zoom the image within a fixed frame, then upload the CROPPED result (not the raw file). Keep it clean, mobile-first, and consistent with EcoLogic modals.
+
+HARD RULES
+- Do NOT break existing upload/auth logic.
+- Do NOT crash the app if cropping fails.
+- Do NOT upload the raw image when crop is enabled—upload the cropped blob.
+- Keep “hidden not disabled” RBAC intact.
+- No fake saves—must persist and show after refresh.
+
+UI FLOW
+1) User clicks Upload (Logo or Header Banner)
+2) File picker opens
+3) Immediately open a modal titled “Edit Image”
+4) Modal shows crop frame + zoom slider
+5) Buttons:
+   - Cancel (closes modal, does nothing)
+   - Save (exports cropped image -> uploads -> saves URL -> updates preview)
+
+CROP BEHAVIOR
+- For LOGO:
+  - Fixed aspect ratio: 3:1 (or close, ex 300x100 look)
+  - Output size target: ~600px wide max (optimize)
+- For HEADER BANNER:
+  - Fixed aspect ratio: 4:1 (or close, ex 800x200 look)
+  - Output size target: ~1200px wide max (optimize)
+- Allow zoom + drag reposition.
+- Keep background dimmed outside crop area.
+- Provide a subtle note: “Drag to reposition, pinch/scroll to zoom.”
+
+IMPLEMENTATION DETAILS
+- Use a React crop library (preferred: react-easy-crop).
+- Convert selected File -> object URL for preview.
+- On Save:
+  - Use canvas to render the cropped area at target size.
+  - Export to Blob (image/png or image/jpeg).
+  - Create a new File from blob (ex: "logo-cropped.png").
+  - Upload that file using existing /api/upload endpoint with FormData.
+  - Receive { url } and call PATCH /api/company/email-branding to save:
+    - logoUrl OR headerBannerUrl
+  - Update UI state with returned branding object.
+
+FRONTEND REQUIREMENTS
+- Add a reusable <ImageCropModal /> component.
+- Props:
+  - open, onClose
+  - file (selected File)
+  - mode: "logo" | "banner"
+  - aspect ratio based on mode
+  - onCropped(fileOrBlob) callback
+- Ensure upload fetch uses credentials:"include" and does not set Content-Type manually for FormData.
+- Add loading state while uploading cropped image.
+
+BACKEND REQUIREMENTS
+- No changes required if /api/upload already works with multipart and returns {url}.
+- Ensure /api/company/email-branding PATCH accepts logoUrl/headerBannerUrl updates.
+
+ERROR HANDLING
+- If upload fails: show toast “Upload failed” and keep modal open or return to previous state.
+- If cropping fails: show toast “Could not crop image” and do not crash.
+
+ACCEPTANCE TESTS
+- Upload logo -> crop modal opens -> crop -> save -> logo preview updates and persists after refresh.
+- Upload banner -> crop modal opens -> crop -> save -> banner preview updates and persists.
+- Cancel crop -> no upload occurs.
+- App never crashes during this flow.
