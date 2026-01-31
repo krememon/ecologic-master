@@ -16,8 +16,8 @@ export default function AuthPage() {
   }, [isAuthenticated, isLoading, setLocation]);
 
   const handleLogin = () => {
-    // Redirect to Replit Auth login endpoint
-    window.location.href = "/api/login";
+    // Redirect to custom login page
+    window.location.href = "/login";
   };
 
   if (isLoading || isAuthenticated) {
@@ -51,11 +51,11 @@ export default function AuthPage() {
                 className="w-full h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 <LogIn className="mr-2 h-5 w-5" />
-                Sign In with Replit
+                Sign In
               </Button>
               
               <p className="text-xs text-center text-slate-500 dark:text-slate-400">
-                Secure authentication powered by Replit
+                Continue to sign in
               </p>
             </CardContent>
           </Card>

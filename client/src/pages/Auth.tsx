@@ -718,10 +718,10 @@ export default function Auth() {
           
           <Button 
             type="button"
-            onClick={() => window.location.href = "/api/login"}
+            onClick={() => window.location.href = "/login"}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white"
           >
-            Sign In with Replit
+            Back to Sign In
           </Button>
           
           <Button 

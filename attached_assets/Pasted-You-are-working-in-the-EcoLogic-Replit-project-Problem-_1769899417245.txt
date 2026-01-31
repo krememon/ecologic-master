@@ -1,0 +1,42 @@
+You are working in the EcoLogic Replit project. Problem: when users click "Log in" (or navigate unauthenticated), they get redirected to the Replit Auth "Sign in with Replit" screen. I want to REMOVE that forced behavior. I still want existing sessions to work (do not break current logged-in users). I want unauthenticated users to go to our normal email login screen instead.
+
+GOALS
+1) Ensure these routes are PUBLIC and never trigger auth redirects:
+   - /login
+   - /create-account
+   - /verify-email (or whatever our email code page route is)
+   - /reset-password (if exists)
+2) Ensure any unauthenticated access to PROTECTED app routes redirects to /login (NOT to Replit auth).
+3) Do NOT remove existing session cookies or invalidate sessions. Logged-in users should remain logged in.
+4) If Replit OAuth still exists in the codebase, it must be OPTIONAL only (a button), never an automatic redirect.
+
+TASKS
+A) Find where the app currently redirects unauthenticated users to Replit auth.
+   - Search for: "replit", "auth/replit", "sign in with replit", "requireAuth", "getUserOrRedirect", "redirectToLogin", "useAuth", "withAuth", "ensureAuth", "Unauthorized", "401", middleware that checks session.
+   - Identify the exact file(s) responsible (frontend route guard, backend middleware, or both).
+
+B) Implement a PUBLIC ROUTE allowlist so auth guards do nothing on those routes.
+   - Create a constant PUBLIC_ROUTES array of strings for the routes listed above.
+   - In any auth guard/middleware, if request path matches PUBLIC_ROUTES, skip auth enforcement.
+
+C) Change the default unauthenticated redirect behavior.
+   - Anywhere we currently redirect to Replit auth, replace with redirect("/login") (frontend) or res.redirect("/login") (backend) depending on location.
+   - If the backend returns 401 for /api/auth/user, the frontend should handle it by sending the user to /login, not to Replit auth.
+
+D) Keep sessions working.
+   - Do NOT change session cookie names, signing secrets, expiration logic, or session store.
+   - Do NOT clear cookies.
+   - Only change routing/redirect logic.
+
+E) Verify with manual tests.
+   1) Logged OUT: going to /jobs (or any protected page) should route to /login.
+   2) Logged OUT: going to /login should stay on /login (never show Replit screen).
+   3) Logged OUT: going to /create-account should stay there.
+   4) Logged IN: refresh /jobs should still work and not log the user out.
+   5) Logged IN: going to /login should redirect to /app (or dashboard) if that’s current behavior; otherwise it can just show login but should not break session.
+
+DELIVERABLES
+- List the exact files changed and why.
+- Add minimal console/server logs ONLY if needed, and remove them after confirming.
+- Do not change UI styling unless necessary.
+- Do not introduce new auth providers. Just fix the redirect behavior.
