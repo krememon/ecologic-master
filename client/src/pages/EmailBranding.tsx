@@ -65,10 +65,7 @@ export default function EmailBranding() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: Partial<EmailBranding>) => {
-      return apiRequest('/api/company/email-branding', {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('PUT', '/api/company/email-branding', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/company/email-branding'] });
@@ -81,9 +78,7 @@ export default function EmailBranding() {
 
   const testEmailMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/company/email-branding/test', {
-        method: 'POST',
-      });
+      return apiRequest('POST', '/api/company/email-branding/test');
     },
     onSuccess: (data: any) => {
       toast({ title: "Test Email Sent", description: data.message || "Check your inbox" });
@@ -126,18 +121,15 @@ export default function EmailBranding() {
       }
       
       // Auto-save to server
-      await apiRequest('/api/company/email-branding', {
-        method: 'PUT',
-        body: JSON.stringify({
-          logoUrl: type === 'logo' ? url : (logoUrl || null),
-          headerBannerUrl: type === 'banner' ? url : (headerBannerUrl || null),
-          primaryColor: primaryColor || '#2563EB',
-          fromName: fromName || null,
-          replyToEmail: replyToEmail || null,
-          footerText: footerText || null,
-          showPhone,
-          showAddress,
-        }),
+      await apiRequest('PUT', '/api/company/email-branding', {
+        logoUrl: type === 'logo' ? url : (logoUrl || null),
+        headerBannerUrl: type === 'banner' ? url : (headerBannerUrl || null),
+        primaryColor: primaryColor || '#2563EB',
+        fromName: fromName || null,
+        replyToEmail: replyToEmail || null,
+        footerText: footerText || null,
+        showPhone,
+        showAddress,
       });
       
       queryClient.invalidateQueries({ queryKey: ['/api/company/email-branding'] });
