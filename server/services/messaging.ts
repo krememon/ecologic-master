@@ -305,8 +305,6 @@ export async function sendBrandedCampaignEmail({
   companyName: string;
   branding?: {
     headerBannerUrl?: string | null;
-    headerBackgroundType?: string | null;
-    primaryColor?: string | null;
     fromName?: string | null;
     replyToEmail?: string | null;
     footerText?: string | null;
@@ -334,7 +332,6 @@ export async function sendBrandedCampaignEmail({
   const resend = new Resend(resendApiKey);
   const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
   
-  const brandColor = branding?.primaryColor || '#2563EB';
   const footerText = branding?.footerText || '';
   const fromName = branding?.fromName || companyName;
   
@@ -345,9 +342,8 @@ export async function sendBrandedCampaignEmail({
     contentId: string;
   }> = [];
   
-  // Only load header image if background type is image
-  const useImageHeader = branding?.headerBackgroundType === 'image' && branding?.headerBannerUrl;
-  const headerAttachment = useImageHeader ? loadImageAsAttachment(branding?.headerBannerUrl, 'header') : null;
+  // Only load header image if one is configured (image-only headers)
+  const headerAttachment = branding?.headerBannerUrl ? loadImageAsAttachment(branding.headerBannerUrl, 'header') : null;
   const hasHeader = !!headerAttachment;
   
   if (headerAttachment) {
@@ -376,26 +372,13 @@ export async function sendBrandedCampaignEmail({
     footerParts.push(footerText);
   }
   
-  // Build HTML - header image or solid color bar
-  let headerHtml = '';
-  
-  if (hasHeader) {
-    // Header image
-    headerHtml = `
+  // Build HTML - header image only (no fallback if no image)
+  const headerHtml = hasHeader ? `
           <tr>
             <td style="padding: 0; line-height: 0;">
               <img src="cid:header" alt="${fromName}" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
             </td>
-          </tr>`;
-  } else {
-    // Solid color header bar with company name
-    headerHtml = `
-          <tr>
-            <td style="height: 120px; background-color: ${brandColor}; text-align: center; vertical-align: middle; border-radius: 8px 8px 0 0;">
-              <h1 style="margin: 0; color: white; font-size: 24px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>
-            </td>
-          </tr>`;
-  }
+          </tr>` : '';
   
   const html = `
 <!DOCTYPE html>

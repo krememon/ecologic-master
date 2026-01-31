@@ -870,11 +870,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const company = await storage.getCompany(member.companyId);
       const branding = await storage.getEmailBranding(member.companyId);
       
-      // Always return complete object with defaults
+      // Always return complete object with defaults (image-only header)
       res.json({
         headerBannerUrl: branding?.headerBannerUrl || null,
-        headerBackgroundType: branding?.headerBackgroundType || 'color',
-        primaryColor: branding?.primaryColor || '#2563EB',
         fromName: branding?.fromName || company?.name || 'EcoLogic',
         replyToEmail: branding?.replyToEmail || company?.email || null,
         footerText: branding?.footerText || '',
@@ -902,8 +900,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const {
         headerBannerUrl,
-        headerBackgroundType,
-        primaryColor,
         fromName,
         replyToEmail,
         footerText,
@@ -919,18 +915,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Validate color format if provided
-      if (primaryColor && primaryColor.trim() !== '') {
-        const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-        if (!colorRegex.test(primaryColor)) {
-          return res.status(400).json({ error: 'Invalid color format (use hex, e.g., #2563EB)' });
-        }
-      }
-      
       const branding = await storage.upsertEmailBranding(member.companyId, {
         headerBannerUrl: headerBannerUrl || null,
-        headerBackgroundType: headerBackgroundType || 'color',
-        primaryColor: primaryColor || '#2563EB',
         fromName: fromName || null,
         replyToEmail: replyToEmail || null,
         footerText: footerText || null,
@@ -969,9 +955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import messaging service
       const { messagingService } = await import('./services/messaging');
       
-      // Build branded HTML
-      const brandColor = branding?.primaryColor || '#2563EB';
-      const headerBackgroundType = branding?.headerBackgroundType || 'color';
+      // Build branded HTML (image-only header)
       const headerBannerUrl = branding?.headerBannerUrl || '';
       const footerText = branding?.footerText || '';
       const fromName = branding?.fromName || company?.name || 'EcoLogic';
@@ -990,11 +974,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         footerParts.push(footerText);
       }
       
-      // Determine header HTML based on background type
-      const useImageHeader = headerBackgroundType === 'image' && headerBannerUrl;
-      const headerHtml = useImageHeader 
+      // Header is image-only: if no image, show nothing
+      const headerHtml = headerBannerUrl 
         ? `<tr><td style="padding: 0; line-height: 0;"><img src="${headerBannerUrl}" alt="${fromName}" style="width: 100%; height: auto; display: block; border-radius: 8px 8px 0 0;" /></td></tr>`
-        : `<tr><td style="height: 120px; background-color: ${brandColor}; text-align: center; vertical-align: middle; border-radius: 8px 8px 0 0;"><h1 style="margin: 0; color: white; font-size: 24px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1></td></tr>`;
+        : '';
       
       const html = `
 <!DOCTYPE html>
@@ -1020,7 +1003,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               </p>
               <table cellpadding="0" cellspacing="0" style="margin: 25px 0;">
                 <tr>
-                  <td style="background-color: ${brandColor}; border-radius: 6px; padding: 12px 24px;">
+                  <td style="background-color: #0d9488; border-radius: 6px; padding: 12px 24px;">
                     <span style="color: white; font-weight: 600; text-decoration: none;">Sample Button</span>
                   </td>
                 </tr>
