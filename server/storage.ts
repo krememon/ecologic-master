@@ -942,19 +942,19 @@ export class DatabaseStorage implements IStorage {
       const preservedCount = memberUserIds.length - orphanedUserIds.length;
       console.log(`[delete-company] ${orphanedUserIds.length} orphaned, ${preservedCount} preserved`);
       
-      // 21. Delete sessions and auth identities for orphaned users, then hard-delete users
+      // 21. Delete sessions, auth identities, and user records for orphaned users
       if (orphanedUserIds.length > 0) {
-        // Delete sessions
+        console.log(`[delete-company] deleting orphan sessions for userIds:`, orphanedUserIds);
         for (const userId of orphanedUserIds) {
-          await tx.delete(sessions).where(sql`sess->>'passport'->>'user' = ${userId}`);
+          // Cast TEXT to JSONB and use proper JSON operators: -> for object, ->> for text
+          await tx.delete(sessions).where(sql`(sess::jsonb)->'passport'->>'user' = ${userId}`);
         }
         
-        // Delete auth identities
+        console.log(`[delete-company] deleting orphan auth identities for userIds:`, orphanedUserIds);
         await tx.delete(authIdentities).where(inArray(authIdentities.userId, orphanedUserIds));
         
-        // Hard-delete orphaned user records
+        console.log(`[delete-company] deleting orphan users:`, orphanedUserIds);
         await tx.delete(users).where(inArray(users.id, orphanedUserIds));
-        console.log(`[delete-company] Deleted ${orphanedUserIds.length} orphaned users`);
       }
       
       console.log(`[delete-company] Completed full company deletion for companyId=${companyId}`);
