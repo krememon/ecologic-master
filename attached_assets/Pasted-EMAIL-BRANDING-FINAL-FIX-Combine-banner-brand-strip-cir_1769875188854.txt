@@ -1,0 +1,47 @@
+EMAIL BRANDING FINAL FIX: Combine banner + brand strip + circular logo into ONE single “combined header” image for emails.
+
+Problem:
+Right now email header is built from multiple stacked pieces (banner image row + brand color row + logo), which will always feel like separate blocks and is hard to overlay perfectly across email clients.
+
+Goal:
+Generate ONE combined header PNG (600px wide) that already includes:
+- the banner background image (cropped to top portion)
+- the brand color strip underneath (short, ~90px)
+- the circular logo with white ring centered on the seam
+Then the email HTML uses a single <img> so it looks like ONE header everywhere.
+
+Implementation (server-side):
+1) Use an image library like `sharp` (preferred) to composite:
+- Create canvas 600px wide, total height ~260-320px
+- Top area: banner image scaled/cropped to fit (e.g. 600x170)
+- Bottom area: solid brand color (e.g. 600x90)
+- Logo: place centered horizontally, centered vertically across the seam:
+  - Create white circle behind (radius padding 6px)
+  - Place logo inside (logo ~88px)
+- Output as PNG
+
+2) Cache it:
+- Store generated combined header in CDN/bucket (Cloudflare R2) with key:
+  branding/<companyId>/combined-header-<hash>.png
+- Hash should change when banner/logo/color changes
+- Save combinedHeaderUrl in email branding settings for reuse
+
+3) Email sending:
+- If combinedHeaderUrl exists:
+  - fetch it and embed as inline CID OR use public URL
+  - HTML renders ONLY:
+    <img src="cid:header" width="600" style="display:block;width:100%;height:auto;border-radius:8px 8px 0 0;" />
+- Remove separate banner + color strip rendering when combined header is available.
+- Fallback if combined not available:
+  use current stacked layout.
+
+4) Acceptance:
+- Gmail shows a single unified header that matches preview
+- No stacked “two block” look
+- Logo looks integrated on the seam
+- Works consistently across Gmail/Apple Mail/Outlook
+
+Deliverables:
+- Sharp-based image compositor
+- Combined header generation + caching in R2
+- Email renderer updated to prefer combinedHeaderUrl
