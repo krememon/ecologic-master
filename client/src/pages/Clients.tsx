@@ -726,12 +726,12 @@ export default function Clients() {
 
       {/* Header Section */}
       <div className="space-y-4">
-        {/* Row 1: Title + Action Buttons */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+        {/* Actions Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap min-w-fit">
             All Clients ({customers.length})
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {isSelectMode ? (
               <Button 
                 variant="outline" 
@@ -754,12 +754,19 @@ export default function Clients() {
                   </Button>
                 )}
                 {canSendCampaigns && (
-                  <Button variant="outline" onClick={handleLaunchCampaign}>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleLaunchCampaign}
+                    className="h-10 px-4"
+                  >
                     <Send className="w-4 h-4 mr-2" />
                     Launch Campaign
                   </Button>
                 )}
-                <Button onClick={() => setIsDialogOpen(true)}>
+                <Button 
+                  onClick={() => setIsDialogOpen(true)}
+                  className="h-10 px-4"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add New Client
                 </Button>

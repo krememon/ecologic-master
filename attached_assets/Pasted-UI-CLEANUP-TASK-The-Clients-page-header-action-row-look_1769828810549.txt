@@ -1,0 +1,76 @@
+UI CLEANUP TASK: The Clients page header action row looks cramped/uneven. Clean it up to look modern and consistent (Apple-clean). Specifically fix the “All Clients (5)” wrapping issue and align the select icon + “Launch Campaign” + “Add New Client” buttons so they sit on one clean row with consistent heights and spacing. Do NOT change any logic or functionality.
+
+CURRENT ISSUE
+- “All Clients (5)” is wrapping into multiple lines and pushing the row height awkwardly.
+- Buttons feel misaligned and not balanced.
+- Spacing between elements doesn’t match the clean EcoLogic style.
+
+GOAL DESIGN
+Make a single header section with two rows:
+Row 1:
+- Title “Clients”
+- Subtitle stays under it (already good)
+Row 2 (actions row):
+Left side: “All Clients (5)” in one line (never wraps)
+Right side: [Select Mode button] [Launch Campaign] [Add New Client]
+All buttons same height, aligned, consistent border radius.
+If screen width is too small, buttons should wrap cleanly to a new line (not force “All Clients” to wrap).
+
+IMPLEMENTATION DETAILS (FRONTEND)
+1) Create a container for the actions row:
+- Use a flex layout with:
+  - left label container (All Clients count)
+  - right actions container (buttons)
+- Apply:
+  - display:flex
+  - align-items:center
+  - justify-content:space-between
+  - gap spacing
+
+2) Prevent label wrapping:
+- “All Clients (5)” should be on ONE line always:
+  - white-space: nowrap
+  - min-width: fit-content
+- Make the label slightly smaller if needed on mobile instead of wrapping.
+
+3) Normalize button sizing:
+- Select button, Launch Campaign, Add New Client should share:
+  - same height (e.g. h-11 or h-12)
+  - consistent padding
+  - consistent border radius (match existing)
+  - icon alignment centered vertically
+- Ensure Launch Campaign button doesn’t look taller/shorter than Add New Client.
+
+4) Clean spacing:
+- Add a consistent gap between buttons (e.g. gap-3)
+- Ensure the row has enough breathing room above/below.
+
+5) Responsive rules:
+- If width is tight:
+  - Keep label on left
+  - Allow the RIGHT actions group to wrap to next line cleanly:
+    - flex-wrap: wrap on actions group OR switch to column layout below a breakpoint
+- Do NOT let “All Clients (5)” wrap.
+- If wrapping occurs, it should be the buttons (actions) that wrap, not the label.
+
+6) Visual polish:
+- Keep current colors/icons.
+- Ensure Launch Campaign icon + text are centered and not drifting.
+- Make Launch Campaign slightly less dominant than Add New Client if needed:
+  - Option A: Launch = outline/secondary, Add New = primary
+  - Option B: Keep both filled but make spacing and sizing perfect.
+Pick the option that matches existing EcoLogic design system best.
+
+DO NOT CHANGE
+- No changes to RBAC visibility.
+- No changes to what buttons do.
+- No changes to selection logic.
+- No changes to client list/cards.
+
+ACCEPTANCE TESTS
+- “All Clients (5)” never wraps on common screen sizes.
+- Buttons align perfectly on one row on desktop.
+- On smaller widths, buttons wrap cleanly without breaking layout.
+- No functionality regression.
+
+Deliverable: commit/implement the UI layout update in the Clients page component + minimal CSS/Tailwind changes.
