@@ -107,17 +107,17 @@ export default function PublicUnsubscribe() {
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
-        <CardContent className="pt-8 pb-8 px-6">
-          <div className="text-center mb-6">
+        <CardContent className="pt-6 pb-6 px-5">
+          <div className="text-center mb-4">
             <img 
               src={ecologicDroplet} 
               alt="EcoLogic Logo" 
-              className="h-16 sm:h-20 w-auto mx-auto mb-4"
+              className="h-14 sm:h-16 w-auto mx-auto mb-2"
             />
             <img 
               src={ecologicWordmark} 
               alt="EcoLogic" 
-              className="w-full max-w-[260px] sm:max-w-[320px] h-auto mx-auto"
+              className="w-full max-w-[240px] sm:max-w-[300px] h-auto mx-auto"
             />
           </div>
 
