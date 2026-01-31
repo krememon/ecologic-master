@@ -88,10 +88,13 @@ import {
   type InsertSignatureRequest,
   campaigns,
   campaignRecipients,
+  companyEmailBranding,
   type Campaign,
   type InsertCampaign,
   type CampaignRecipient,
   type InsertCampaignRecipient,
+  type CompanyEmailBranding,
+  type InsertCompanyEmailBranding,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull } from "drizzle-orm";
@@ -300,6 +303,10 @@ export interface IStorage {
   getCampaigns(companyId: number): Promise<Campaign[]>;
   createCampaignRecipient(recipient: InsertCampaignRecipient): Promise<CampaignRecipient>;
   updateCampaignRecipient(id: number, updates: Partial<InsertCampaignRecipient>): Promise<CampaignRecipient>;
+  
+  // Email branding operations
+  getEmailBranding(companyId: number): Promise<CompanyEmailBranding | undefined>;
+  upsertEmailBranding(companyId: number, branding: Partial<InsertCompanyEmailBranding>): Promise<CompanyEmailBranding>;
   
   // Service catalog operations
   getServiceCatalogItems(companyId: number): Promise<ServiceCatalogItem[]>;
@@ -2710,6 +2717,33 @@ export class DatabaseStorage implements IStorage {
       .where(eq(campaignRecipients.id, id))
       .returning();
     return updated;
+  }
+
+  // Email branding operations
+  async getEmailBranding(companyId: number): Promise<CompanyEmailBranding | undefined> {
+    const [branding] = await db
+      .select()
+      .from(companyEmailBranding)
+      .where(eq(companyEmailBranding.companyId, companyId));
+    return branding || undefined;
+  }
+
+  async upsertEmailBranding(companyId: number, branding: Partial<InsertCompanyEmailBranding>): Promise<CompanyEmailBranding> {
+    const existing = await this.getEmailBranding(companyId);
+    if (existing) {
+      const [updated] = await db
+        .update(companyEmailBranding)
+        .set({ ...branding, updatedAt: new Date() })
+        .where(eq(companyEmailBranding.companyId, companyId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(companyEmailBranding)
+        .values({ ...branding, companyId })
+        .returning();
+      return created;
+    }
   }
 
   // Service catalog operations

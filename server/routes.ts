@@ -860,6 +860,212 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // =====================
+  // EMAIL BRANDING ROUTES
+  // =====================
+
+  // Get email branding settings (Owner only)
+  app.get('/api/company/email-branding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const branding = await storage.getEmailBranding(member.companyId);
+      res.json(branding || {});
+    } catch (error: any) {
+      console.error('Error fetching email branding:', error);
+      res.status(500).json({ error: 'Failed to fetch email branding' });
+    }
+  });
+
+  // Update email branding settings (Owner only)
+  app.put('/api/company/email-branding', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const {
+        logoUrl,
+        headerBannerUrl,
+        primaryColor,
+        fromName,
+        replyToEmail,
+        footerText,
+        showPhone,
+        showAddress,
+      } = req.body;
+      
+      // Validate email format if provided
+      if (replyToEmail && replyToEmail.trim() !== '') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(replyToEmail)) {
+          return res.status(400).json({ error: 'Invalid reply-to email format' });
+        }
+      }
+      
+      // Validate color format if provided
+      if (primaryColor && primaryColor.trim() !== '') {
+        const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+        if (!colorRegex.test(primaryColor)) {
+          return res.status(400).json({ error: 'Invalid color format (use hex, e.g., #2563EB)' });
+        }
+      }
+      
+      const branding = await storage.upsertEmailBranding(member.companyId, {
+        logoUrl: logoUrl || null,
+        headerBannerUrl: headerBannerUrl || null,
+        primaryColor: primaryColor || '#2563EB',
+        fromName: fromName || null,
+        replyToEmail: replyToEmail || null,
+        footerText: footerText || null,
+        showPhone: showPhone ?? true,
+        showAddress: showAddress ?? true,
+      });
+      
+      res.json(branding);
+    } catch (error: any) {
+      console.error('Error updating email branding:', error);
+      res.status(500).json({ error: 'Failed to update email branding' });
+    }
+  });
+
+  // Send test email with branding (Owner only)
+  app.post('/api/company/email-branding/test', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const user = await storage.getUser(userId);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member || !user) {
+        return res.status(403).json({ error: 'Not a company member' });
+      }
+      
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      if (!user.email) {
+        return res.status(400).json({ error: 'No email address on your account' });
+      }
+      
+      const company = await storage.getCompany(member.companyId);
+      const branding = await storage.getEmailBranding(member.companyId);
+      
+      // Import messaging service
+      const { messagingService } = await import('./services/messaging');
+      
+      // Build branded HTML
+      const brandColor = branding?.primaryColor || '#2563EB';
+      const logoUrl = branding?.logoUrl || '';
+      const headerBannerUrl = branding?.headerBannerUrl || '';
+      const footerText = branding?.footerText || '';
+      const fromName = branding?.fromName || company?.name || 'EcoLogic';
+      const showPhone = branding?.showPhone ?? true;
+      const showAddress = branding?.showAddress ?? true;
+      
+      const footerParts: string[] = [];
+      if (showPhone && company?.phone) {
+        footerParts.push(`Phone: ${company.phone}`);
+      }
+      if (showAddress && company?.addressLine1) {
+        const addr = [company.addressLine1, company.city, company.state, company.postalCode].filter(Boolean).join(', ');
+        footerParts.push(addr);
+      }
+      if (footerText) {
+        footerParts.push(footerText);
+      }
+      
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
+          ${headerBannerUrl ? `
+          <tr>
+            <td style="padding: 0;">
+              <img src="${headerBannerUrl}" alt="Header" style="width: 100%; height: auto; display: block;" />
+            </td>
+          </tr>
+          ` : ''}
+          <tr>
+            <td style="padding: 30px; background-color: ${brandColor}; text-align: center;">
+              ${logoUrl ? `<img src="${logoUrl}" alt="${fromName}" style="max-height: 60px; max-width: 200px;" />` : `<h1 style="margin: 0; color: white; font-size: 24px;">${fromName}</h1>`}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px;">
+              <h2 style="margin: 0 0 20px 0; color: #333333;">Test Email</h2>
+              <p style="margin: 0 0 15px 0; color: #555555; line-height: 1.6;">
+                This is a test email from ${fromName} to preview your email branding settings.
+              </p>
+              <p style="margin: 0 0 15px 0; color: #555555; line-height: 1.6;">
+                Your customers will see emails styled like this when you send campaigns.
+              </p>
+              <table cellpadding="0" cellspacing="0" style="margin: 25px 0;">
+                <tr>
+                  <td style="background-color: ${brandColor}; border-radius: 6px; padding: 12px 24px;">
+                    <span style="color: white; font-weight: 600; text-decoration: none;">Sample Button</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          ${footerParts.length > 0 ? `
+          <tr>
+            <td style="padding: 20px 30px; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
+              <p style="margin: 0; color: #888888; font-size: 12px; text-align: center; line-height: 1.8;">
+                ${footerParts.join('<br />')}
+              </p>
+            </td>
+          </tr>
+          ` : ''}
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+      
+      // Send via Resend
+      const result = await messagingService.sendEmail({
+        to: user.email,
+        subject: 'Test Email - Your Email Branding Preview',
+        html,
+        replyTo: branding?.replyToEmail || undefined,
+        fromName: fromName,
+      });
+      
+      if (result.success) {
+        res.json({ success: true, message: `Test email sent to ${user.email}` });
+      } else {
+        res.status(500).json({ error: result.error || 'Failed to send test email' });
+      }
+    } catch (error: any) {
+      console.error('Error sending test email:', error);
+      res.status(500).json({ error: 'Failed to send test email' });
+    }
+  });
+
+  // =====================
   // QUICKBOOKS INTEGRATION ROUTES
   // =====================
 
