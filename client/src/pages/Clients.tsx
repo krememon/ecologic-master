@@ -724,61 +724,81 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      {/* Header Toolbar */}
-      <div className="space-y-4">
-        {/* Toolbar Row */}
-        <div className="flex items-center justify-between gap-4 min-h-[44px]">
-          {/* Left: Title */}
-          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap shrink-0">
-            All Clients ({customers.length})
-          </h3>
+      {/* Header Toolbar - Matches Documents page pattern */}
+      <div className="flex flex-col gap-3 mb-6">
+        {/* Row 1: Filter Controls */}
+        <div className="flex items-center gap-2">
+          {/* All Clients pill */}
+          <Button 
+            variant="outline" 
+            className="flex-1 justify-between"
+          >
+            <span className="truncate">All Clients ({customers.length})</span>
+          </Button>
           
-          {/* Right: Actions */}
-          <div className="flex items-center gap-2">
-            {isSelectMode ? (
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={exitSelectMode}
-                className="h-9 w-9 shrink-0 border-slate-300 dark:border-slate-600 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50"
-              >
-                <X className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              </Button>
-            ) : (
-              <>
-                {customers.length > 0 && (
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => setIsSelectMode(true)}
-                    className="h-9 w-9 shrink-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  >
-                    <CheckSquare className="h-4 w-4" />
-                  </Button>
-                )}
-                {canSendCampaigns && (
-                  <Button 
-                    variant="outline" 
-                    onClick={handleLaunchCampaign}
-                    className="h-9 px-3 text-sm font-medium border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    <Send className="w-4 h-4 mr-1.5" />
-                    <span className="hidden sm:inline">Launch Campaign</span>
-                    <span className="sm:hidden">Campaign</span>
-                  </Button>
-                )}
-                <Button 
-                  onClick={() => setIsDialogOpen(true)}
-                  className="h-9 px-3 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  <span className="hidden sm:inline">Add New Client</span>
-                  <span className="sm:hidden">Add</span>
-                </Button>
-              </>
-            )}
-          </div>
+          {/* Campaign button */}
+          {canSendCampaigns && (
+            <Button 
+              variant="outline" 
+              className="flex-1 justify-between"
+              onClick={handleLaunchCampaign}
+            >
+              <span className="truncate">Campaign</span>
+              <Send className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+            </Button>
+          )}
+          
+          {/* Select toggle button */}
+          {customers.length > 0 && (
+            <Button 
+              variant={isSelectMode ? "secondary" : "outline"}
+              size="icon"
+              onClick={() => {
+                if (isSelectMode) {
+                  exitSelectMode();
+                } else {
+                  setIsSelectMode(true);
+                }
+              }}
+              title={isSelectMode ? 'Exit selection' : 'Select clients'}
+            >
+              {isSelectMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+            </Button>
+          )}
         </div>
+        
+        {/* Select mode info row */}
+        {isSelectMode && customers.length > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              {selectedCustomerIds.size} selected
+            </span>
+            <Button 
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const allSelected = customers.every(c => selectedCustomerIds.has(c.id));
+                if (allSelected) {
+                  setSelectedCustomerIds(new Set());
+                } else {
+                  setSelectedCustomerIds(new Set(customers.map(c => c.id)));
+                }
+              }}
+            >
+              {customers.every(c => selectedCustomerIds.has(c.id)) ? 'Deselect All' : 'Select All'}
+            </Button>
+          </div>
+        )}
+
+        {/* Row 2: Primary Action - Full width Add New Client */}
+        <Button 
+          onClick={() => setIsDialogOpen(true)}
+          className="w-full"
+          data-testid="button-add-client"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add New Client
+        </Button>
 
         {/* Search Bar */}
         <div className="relative">

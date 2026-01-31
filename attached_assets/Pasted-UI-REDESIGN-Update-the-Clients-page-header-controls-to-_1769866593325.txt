@@ -1,0 +1,59 @@
+UI REDESIGN: Update the Clients page header controls to match the layout style used in the Documents tab (clean control row + full-width primary action button beneath). Do NOT change any functionality—only layout/styling.
+
+REFERENCE
+Match the Documents page toolbar pattern:
+- Top control row: compact pill controls + square select icon button
+- Second row: one full-width primary action button
+
+CLIENTS PAGE TARGET LAYOUT
+
+Keep the title/subtitle as-is.
+
+Below “All Clients (N)” create two rows:
+
+ROW 1 (controls row)
+Left-to-right, aligned and evenly spaced:
+- A compact pill/button for “All Clients (N)” (same style as Documents “All jobs” pill)
+  - Include optional dropdown chevron ONLY if it actually opens something. If not, no chevron.
+- A compact pill button: “Campaign” (outline style like Documents “All categories”)
+- A square icon button for Select Mode (same style as Documents select icon button)
+
+Row 1 should be:
+- display:flex
+- gap consistent
+- aligned center
+- responsive (wrap if needed, but keep it neat)
+- same heights as Documents controls (do not create new random heights)
+
+ROW 2 (primary action)
+- Full width primary button: “+ Add New Client”
+- Same style as “Upload Document” (big full-width, rounded, centered icon+text)
+- This button must be the main call-to-action and sit below the control row with clean spacing.
+
+BUTTON STYLES / HIERARCHY
+- “All Clients (N)” pill: should look like a selected filter pill (filled blue) OR neutral if that matches your Documents “All jobs” state. Use the same component/styles as Documents to ensure consistency.
+- “Campaign” pill: outline/neutral pill (like “All categories”)
+- Select Mode: square icon button (like Documents select icon button)
+- Add New Client: full-width primary (like Upload Document)
+
+DO NOT CHANGE
+- No logic changes: existing select mode behavior must remain.
+- Campaign button must still open the campaign modal.
+- Add New Client must still open the add client modal.
+- Search bar stays where it is currently (below these controls).
+- Do not remove the existing “All Clients (N)” count—just restyle/reposition it into the pill.
+
+RESPONSIVE RULES
+- On narrow widths:
+  - Row 1 can wrap to 2 lines, but keep consistent gaps and alignment.
+  - Row 2 remains full-width.
+
+ACCEPTANCE TESTS
+- Clients page toolbar now visually matches Documents tab toolbar layout.
+- Controls row looks clean and consistent (same sizes, spacing, rounding).
+- Add New Client is a full-width primary button below the controls.
+- No functionality regressions.
+
+DELIVERABLE
+- Update Clients page header JSX/CSS/Tailwind.
+- Prefer reusing the SAME button/pill components and classes already used on Documents page to guarantee the match.
