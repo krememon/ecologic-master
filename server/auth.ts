@@ -186,6 +186,11 @@ export function setupAuth(app: Express) {
     ttl: 7 * 24 * 60 * 60 * 1000, // 1 week
   });
 
+  // Replit.dev uses HTTPS even in development, so secure must be true
+  const isSecure = process.env.NODE_ENV === "production" || 
+                   process.env.REPLIT_DEV_DOMAIN !== undefined ||
+                   (process.env.REPL_SLUG !== undefined);
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
@@ -193,9 +198,10 @@ export function setupAuth(app: Express) {
     store: sessionStore,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: 'lax', // Required for session to persist after Stripe redirect
+      secure: isSecure,
+      sameSite: isSecure ? 'none' : 'lax', // 'none' required for cross-site cookies with secure
       maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+      path: '/',
     },
   };
 
