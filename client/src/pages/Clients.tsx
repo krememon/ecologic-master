@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertClientSchema, type Client, type Job, type Customer } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import { z } from "zod";
-import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X, Check, CheckSquare } from "lucide-react";
+import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVertical, Briefcase, ChevronDown, ChevronRight, User, Search, X, Check, CheckSquare, Send } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import LocationInput from "@/components/LocationInput";
 import { useCompanyCustomers } from "@/hooks/useCompanyCustomers";
+import CampaignModal from "@/components/CampaignModal";
 
 type ClientFormData = z.infer<typeof insertClientSchema>;
 
@@ -95,6 +96,9 @@ export default function Clients() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [campaignModalOpen, setCampaignModalOpen] = useState(false);
+
+  const canSendCampaigns = user?.role === 'OWNER' || user?.role === 'SUPERVISOR' || user?.role === 'DISPATCHER';
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -769,15 +773,28 @@ export default function Clients() {
           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
             {selectedCustomerIds.size} selected
           </span>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={selectedCustomerIds.size === 0}
-            onClick={() => setDeleteConfirmOpen(true)}
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            Delete
-          </Button>
+          <div className="flex items-center gap-2">
+            {canSendCampaigns && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selectedCustomerIds.size === 0}
+                onClick={() => setCampaignModalOpen(true)}
+              >
+                <Send className="h-4 w-4 mr-1.5" />
+                Send Email/Text
+              </Button>
+            )}
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={selectedCustomerIds.size === 0}
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete
+            </Button>
+          </div>
         </div>
       )}
 
@@ -802,6 +819,13 @@ export default function Clients() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Campaign Modal */}
+      <CampaignModal
+        open={campaignModalOpen}
+        onOpenChange={setCampaignModalOpen}
+        selectedCustomerIds={Array.from(selectedCustomerIds)}
+      />
 
       {/* Clients List (from unified customers table) */}
       {customers.length === 0 ? (
