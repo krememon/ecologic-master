@@ -1,0 +1,86 @@
+UI POLISH: Modernize and clean up the “Launch Campaign” modal so it matches the visual quality of the “Add New Client” modal (rounded container, clean spacing, modern controls, consistent footer). Do NOT change functionality or business logic—only UI/UX and layout.
+
+GOAL
+Make Launch Campaign modal look like a premium, modern EcoLogic modal:
+- same spacing rhythm as Add New Client
+- same footer button layout style
+- clean segmented controls instead of the current “weird switch” channel toggles
+- better visual hierarchy and alignment
+
+DO NOT CHANGE
+- No changes to send logic, preview logic, recipient counting logic, or API calls.
+- Keep all current fields (audience, channel, subject, message, preview recipients, counts, send, cancel).
+- Keep character counting + SMS segments behavior.
+
+DESIGN CHANGES (WHAT TO IMPLEMENT)
+
+1) Modal Header (match Add New Client)
+- Title row: icon + “Launch Campaign” on left, close X on right
+- Add a subtle subtitle under title:
+  “Send an email, text, or both to your clients”
+- Use same header padding + divider line as Add New Client modal
+
+2) Audience display (make it a clean “pill” row)
+Current: large grey box.
+New:
+- A compact info row card/pill:
+  - left icon
+  - “Audience” label (small)
+  - value (bold): “All Clients” or “Selected Clients (X)”
+- Keep it non-editable (unless you already support editing).
+
+3) Channel selector (replace current toggles)
+Replace the 3 switch controls with a segmented control:
+[ Email ] [ Text ] [ Both ]
+- same height, rounded
+- selected state filled (blue tint) and unselected outlined/neutral
+- icons optional but small and aligned
+- tapping changes channel state exactly like before
+
+4) Inputs spacing & labeling
+- Subject field only shows when channel includes Email (email or both)
+- Message label should become:
+  - “Email Message” when Email
+  - “Text Message” when Text
+  - “Message” when Both
+- Increase padding inside textarea and reduce visual emptiness
+- Make textarea slightly shorter on mobile so buttons are visible without scrolling too much
+
+5) Preview Recipients area (make it a compact row)
+Current: big blue button + counts floating.
+New layout:
+- A single row card:
+  Left: “Preview recipients” (button-style row with icon)
+  Right: counts text in muted style:
+    - “5 email • 5 text”
+- Make the whole left side clickable or keep it as a button but visually integrated.
+- Keep the same action when clicked (open the preview list).
+
+6) Character counter
+- Keep it, but make it muted and aligned under the textarea (same width as inputs).
+- Example style:
+  “0 characters • 1 SMS segment” in small muted text.
+
+7) Footer buttons (match Add New Client)
+Replace stacked buttons with a fixed footer row like Add New Client:
+[ Cancel ]   [ Send Campaign ]
+- Both same height
+- Cancel = outline/neutral
+- Send Campaign = primary blue
+- Footer pinned to bottom of modal with padding
+- If Send is disabled due to missing required fields, show disabled state cleanly (not greyed ugly)
+
+8) Overall spacing consistency
+- Use the same spacing scale as Add New Client modal:
+  - section spacing (title -> audience -> channel -> fields -> preview -> footer)
+- Ensure everything aligns to the same left/right padding.
+
+ACCEPTANCE TESTS
+- Modal visually matches Add New Client modal quality (clean header, clean footer, consistent padding).
+- Channel selector is a segmented control (no toggle switches).
+- Preview recipients row looks integrated and modern.
+- No functionality regressions: sending still works, preview still works, counts still correct, character counter still correct.
+
+DELIVERABLE
+- Update the LaunchCampaignModal/CampaignModal component styling/layout only.
+- Minimal new components (prefer reuse existing Button/Input/Textarea components and Tailwind classes).
