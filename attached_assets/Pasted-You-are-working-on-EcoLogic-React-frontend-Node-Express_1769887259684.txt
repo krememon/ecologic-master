@@ -1,0 +1,72 @@
+You are working on EcoLogic (React frontend + Node/Express-ish backend + DB + storage + Stripe). 
+
+TASK: Make the "Delete Account" button in Settings > Security actually delete the user's account and work reliably.
+
+RULES:
+- Preserve existing UI styling and layout. Only add a professional confirmation modal and wire functionality.
+- Do NOT change unrelated features or flows.
+- Respect RBAC and company data boundaries ("hidden not disabled").
+- Ensure UI refresh/log out happens cleanly after delete.
+- Add targeted logs only where needed and remove noisy logs after.
+
+FRONTEND REQUIREMENTS:
+1) On Settings > Security page, the red "Delete Account" button must:
+   - Open a danger confirmation modal (NOT window.confirm).
+   - Require user to type DELETE (all caps) to enable the final button.
+   - Show a short warning: "This permanently deletes your account and signs you out."
+   - Final button: "Delete my account" (disabled until typed confirm matches).
+   - Cancel button closes modal.
+
+2) When confirmed:
+   - Call DELETE /api/account
+   - Show loading state on the confirm button
+   - If successful:
+     - Clear any client auth state
+     - Redirect to /login (or welcome)
+     - Show a simple toast/notification: "Account deleted"
+   - If error:
+     - Show error message returned by API
+
+BACKEND REQUIREMENTS:
+3) Add endpoint: DELETE /api/account
+   - Must require authentication
+   - Determine the current user from session/auth middleware
+
+4) Owner safety rule:
+   - If user.role is "owner" AND user is the last owner for their company:
+     - Return 400 with message:
+       "You are the last Owner for this company. Transfer ownership or delete the company first."
+   - Otherwise proceed with deletion.
+
+5) Subscription cleanup (Stripe):
+   - If user/company has an active Stripe subscription, cancel it immediately.
+   - Then proceed.
+
+6) Data deletion strategy (use DB transactions):
+   - Delete or detach user-related rows so no orphan records remain.
+   - Minimum required:
+     a) Remove user from company membership table
+     b) Delete user auth sessions/tokens
+     c) Delete user profile row
+   - For messaging/DM:
+     - Do NOT destroy entire message history for everyone.
+     - Instead: anonymize the user's display name in messages (e.g., "Deleted User") OR set senderId = null where safe.
+   - For documents:
+     - If documents are owned by company and shared, do NOT delete company documents.
+     - Only remove documents that are truly user-owned (if any exist). Otherwise, just remove user references.
+   - For jobs/estimates created by user:
+     - Keep records for company continuity, but set createdBy to null or "Deleted User" reference.
+
+7) After deletion:
+   - Invalidate session/cookie so user is logged out immediately
+   - Return { ok: true }
+
+DELIVERABLES:
+- Frontend: modal + typed confirmation + DELETE call wired to button
+- Backend: DELETE /api/account route with auth guard + owner safety rule + Stripe cancel + transaction
+- DB: any necessary migration or safe null/anonymize updates
+- Tests/manual steps:
+  1) Non-owner deletes account -> account gone, logged out, cannot log in again
+  2) Owner who is NOT last owner deletes account -> succeeds
+  3) Owner who IS last owner -> blocked with correct message
+  4) DM history still loads for others, but shows "Deleted User" instead of breaking

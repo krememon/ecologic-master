@@ -20,6 +20,7 @@ import CompanyInviteCode from "@/components/CompanyInviteCode";
 import { BillingSection } from "@/components/BillingSection";
 import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
+import DeleteAccountModal from "@/components/DeleteAccountModal";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -38,6 +39,7 @@ export default function Settings() {
   });
   const [emailAvailability, setEmailAvailability] = useState<'checking' | 'available' | 'taken' | null>(null);
   const [emailError, setEmailError] = useState<string>("");
+  const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
@@ -631,11 +633,16 @@ export default function Settings() {
               <Button variant="outline">Change Password</Button>
               <Button variant="outline">Two-Factor Authentication</Button>
               <Button variant="outline">Download Data</Button>
-              <Button variant="destructive">Delete Account</Button>
+              <Button variant="destructive" onClick={() => setDeleteAccountModalOpen(true)}>Delete Account</Button>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <DeleteAccountModal
+        open={deleteAccountModalOpen}
+        onOpenChange={setDeleteAccountModalOpen}
+      />
     </div>
   );
 }
