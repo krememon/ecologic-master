@@ -862,6 +862,8 @@ export function setupAuth(app: Express) {
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      console.log("[login-code] resend requested email=" + normalizedEmail);
+      
       const challenge = await storage.getLoginChallenge(normalizedEmail);
 
       if (!challenge || !challenge.passwordVerified) {
@@ -909,8 +911,9 @@ export function setupAuth(app: Express) {
             </div>
           `,
         });
+        console.log("[login-code] resend sent email=" + normalizedEmail);
       } catch (emailError) {
-        console.error("Failed to resend login code:", emailError);
+        console.error("[login-code] resend email failed:", emailError);
       }
 
       res.json({ ok: true });

@@ -1,0 +1,54 @@
+TASK: Make "Resend code" actually send a new 6-digit verification code to the user's email on the Login/Verify screen.
+
+CONTEXT:
+We have a login flow with a 6-digit code step (email MFA). UI shows:
+"Didn't receive it? Resend code"
+But clicking resend does not actually send an email.
+
+REQUIREMENTS (FRONTEND):
+1) On the code verification screen, "Resend code" must:
+   - Call POST /api/auth/login/resend (or the correct existing route for login-code resend)
+   - Show a loading state while sending
+   - Disable the link during cooldown
+   - Show confirmation message on success: "New code sent"
+   - On failure show clean error message (no raw JSON)
+
+2) Cooldown UX:
+   - After clicking resend, start a 30s countdown:
+     - Show "Resend in 30s" and count down
+     - After countdown ends, show clickable "Resend code" again
+   - Ensure cooldown continues even if user re-renders the component (use state and optionally localStorage keyed by email).
+
+REQUIREMENTS (BACKEND):
+3) Implement POST /api/auth/login/resend (if not already present) that:
+   - Requires the email from the current login attempt context (sent in body) OR looks up the active challenge ID.
+   - Rate limits resend per email + IP:
+       - Minimum 30 seconds between resends
+       - Return 429 with { message: "Please wait before resending." } if spammed
+   - Generates a NEW 6-digit code
+   - Stores the hashed code + updated expiresAt (10 minutes) on the login challenge record
+   - Invalidates any previous code for that challenge
+   - Sends the email using the existing email sending utility (the same one used for initial code)
+   - Returns { ok: true }
+
+4) Code handling:
+   - Store code hashed (do not store plaintext)
+   - Expire after 10 minutes
+   - Limit verify attempts (e.g. 5) before forcing restart login
+
+5) Email sending:
+   - Ensure resend uses the same email template as the original code send
+   - Subject: "Your EcoLogic verification code"
+   - Body includes the 6-digit code clearly
+
+LOGGING (targeted):
+6) Add minimal logs:
+   - [login-code] resend requested email=<email>
+   - [login-code] resend sent email=<email>
+   - Log errors with context but no sensitive code values
+
+DELIVERABLES:
+- Clicking "Resend code" actually sends an email with a NEW 6-digit code
+- Cooldown prevents spamming
+- UI updates smoothly with loading + countdown
+- Verify works with the resent code
