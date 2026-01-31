@@ -57,6 +57,14 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Campaign tracking with `campaigns` and `campaign_recipients` tables for audit trail
   - Rate limiting to 500 recipients per send to prevent abuse
   - Email via Resend and SMS via Twilio with centralized messaging service
+- **Email Unsubscribe System**: Secure one-click unsubscribe for marketing emails. Features:
+  - HMAC-signed unsubscribe tokens with 180-day expiry (`server/services/unsubscribe.ts`)
+  - Public unsubscribe endpoints: `GET /api/public/unsubscribe/email` and `/api/public/unsubscribe/sms`
+  - Per-recipient unique unsubscribe URLs generated at send time
+  - List-Unsubscribe and List-Unsubscribe-Post headers for email client compatibility
+  - Clickable unsubscribe link in email footer with simple HTML confirmation page
+  - Automatic filtering of opted-out recipients (emailOptIn/smsOptIn + unsubscribedAt checks)
+  - Token verification includes company ownership check for cross-tenant security
 - **Security Hardening**: Comprehensive cross-tenant data isolation to prevent IDOR vulnerabilities. Features:
   - Centralized security infrastructure (`server/security/permissions.ts`, `server/security/middleware.ts`) for consistent RBAC and UserContext handling
   - Company-scoped secure storage methods (`getJobSecure`, `getInvoiceSecure`, `getDocumentSecure`, `getCustomerSecure`, `getEstimateSecure`, `getClientSecure`) that enforce company ownership verification via AND clauses
