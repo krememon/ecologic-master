@@ -6766,6 +6766,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const recipients = selectedCustomers.map(c => {
+        const emailUnsubscribed = !!(c.emailUnsubscribedAt || c.emailOptIn === false);
+        const smsUnsubscribed = !!(c.smsUnsubscribedAt || c.smsOptIn === false);
         const emailEligible = !!(c.email && c.emailOptIn === true && !c.emailUnsubscribedAt);
         const smsEligible = !!(c.phone && c.smsOptIn === true && !c.smsUnsubscribedAt);
         
@@ -6795,6 +6797,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           smsEligible,
           emailDisabledReason,
           smsDisabledReason,
+          emailUnsubscribed,
+          smsUnsubscribed,
         };
       });
 

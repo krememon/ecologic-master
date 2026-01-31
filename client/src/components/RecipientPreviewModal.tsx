@@ -17,6 +17,8 @@ interface Recipient {
   smsEligible: boolean;
   emailDisabledReason: string | null;
   smsDisabledReason: string | null;
+  emailUnsubscribed?: boolean;
+  smsUnsubscribed?: boolean;
 }
 
 function getDisplayName(r: Recipient): string {
@@ -48,8 +50,9 @@ interface RecipientPreviewModalProps {
   channel: Channel;
   recipients: Recipient[];
   selectedIds: number[];
-  onConfirm: (ids: number[]) => void;
+  onConfirm: (ids: number[], hasUnsubscribedOverrides: boolean) => void;
   isLoading?: boolean;
+  isAdmin?: boolean;
 }
 
 export default function RecipientPreviewModal({
@@ -60,6 +63,7 @@ export default function RecipientPreviewModal({
   selectedIds,
   onConfirm,
   isLoading = false,
+  isAdmin = false,
 }: RecipientPreviewModalProps) {
   const [localSelectedIds, setLocalSelectedIds] = useState<number[]>(selectedIds);
 
@@ -73,6 +77,12 @@ export default function RecipientPreviewModal({
     if (channel === "email") return r.emailEligible;
     if (channel === "sms") return r.smsEligible;
     return r.emailEligible || r.smsEligible;
+  };
+
+  const isUnsubscribed = (r: Recipient) => {
+    if (channel === "email") return r.emailUnsubscribed === true;
+    if (channel === "sms") return r.smsUnsubscribed === true;
+    return r.emailUnsubscribed === true || r.smsUnsubscribed === true;
   };
 
   const getDisabledReason = (r: Recipient) => {
@@ -91,7 +101,11 @@ export default function RecipientPreviewModal({
   };
 
   const handleConfirm = () => {
-    onConfirm(localSelectedIds);
+    const hasUnsubscribedOverrides = localSelectedIds.some((id) => {
+      const r = recipients.find((rec) => rec.id === id);
+      return r && isUnsubscribed(r);
+    });
+    onConfirm(localSelectedIds, hasUnsubscribedOverrides);
     onOpenChange(false);
   };
 
@@ -101,7 +115,8 @@ export default function RecipientPreviewModal({
   };
 
   const eligibleRecipients = recipients.filter(isEligible);
-  const ineligibleRecipients = recipients.filter((r) => !isEligible(r));
+  const unsubscribedRecipients = recipients.filter((r) => !isEligible(r) && isUnsubscribed(r));
+  const otherIneligibleRecipients = recipients.filter((r) => !isEligible(r) && !isUnsubscribed(r));
   
   const emailSelectedCount = localSelectedIds.filter((id) => {
     const r = recipients.find((rec) => rec.id === id);
@@ -191,15 +206,53 @@ export default function RecipientPreviewModal({
                   );
                 })}
 
-                {/* Ineligible Recipients */}
-                {ineligibleRecipients.length > 0 && (
+                {/* Unsubscribed Recipients - Selectable by Admin */}
+                {unsubscribedRecipients.length > 0 && (
+                  <>
+                    <div className="px-5 py-2 bg-amber-50 dark:bg-amber-900/20">
+                      <p className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                        Unsubscribed ({unsubscribedRecipients.length})
+                      </p>
+                    </div>
+                    {unsubscribedRecipients.map((r) => {
+                      const displayName = getDisplayName(r);
+                      const canSelect = isAdmin;
+                      return (
+                        <div
+                          key={r.id}
+                          onClick={() => canSelect && toggleRecipient(r.id)}
+                          className={`flex items-center gap-3 px-5 py-3 ${canSelect ? 'hover:bg-amber-50/50 dark:hover:bg-amber-900/10 cursor-pointer' : 'opacity-50'}`}
+                        >
+                          <Checkbox 
+                            checked={localSelectedIds.includes(r.id)}
+                            onCheckedChange={() => canSelect && toggleRecipient(r.id)}
+                            disabled={!canSelect}
+                            className="h-5 w-5 flex-shrink-0" 
+                          />
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <p className={`text-sm font-medium truncate ${canSelect ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                              {displayName}
+                            </p>
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                              {getDisabledReason(r)}
+                              {canSelect && " - This recipient has opted out of marketing emails."}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+
+                {/* Other Ineligible Recipients - Always Disabled */}
+                {otherIneligibleRecipients.length > 0 && (
                   <>
                     <div className="px-5 py-2 bg-slate-100 dark:bg-slate-800">
                       <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                        Not Eligible ({ineligibleRecipients.length})
+                        Not Eligible ({otherIneligibleRecipients.length})
                       </p>
                     </div>
-                    {ineligibleRecipients.map((r) => {
+                    {otherIneligibleRecipients.map((r) => {
                       const displayName = getDisplayName(r);
                       return (
                         <div

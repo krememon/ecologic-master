@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, MessageSquare, Send, Users, Loader2, X, ChevronRight } from "lucide-react";
+import { Mail, MessageSquare, Send, Users, Loader2, X, ChevronRight, AlertTriangle } from "lucide-react";
 import RecipientPreviewModal from "./RecipientPreviewModal";
 
 type Channel = "email" | "sms" | "both";
@@ -23,6 +25,8 @@ interface Recipient {
   smsEligible: boolean;
   emailDisabledReason: string | null;
   smsDisabledReason: string | null;
+  emailUnsubscribed?: boolean;
+  smsUnsubscribed?: boolean;
 }
 
 interface CampaignModalProps {
@@ -41,6 +45,7 @@ export default function CampaignModal({
   onSendSuccess 
 }: CampaignModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [channel, setChannel] = useState<Channel>("email");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -48,6 +53,10 @@ export default function CampaignModal({
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [campaignRecipientIds, setCampaignRecipientIds] = useState<number[]>([]);
   const [recipientsLoaded, setRecipientsLoaded] = useState(false);
+  const [showUnsubscribedWarning, setShowUnsubscribedWarning] = useState(false);
+  const [hasUnsubscribedRecipients, setHasUnsubscribedRecipients] = useState(false);
+
+  const isAdmin = user?.role === 'OWNER' || user?.role === 'SUPERVISOR';
 
   useEffect(() => {
     if (open) {
@@ -150,8 +159,17 @@ export default function CampaignModal({
     fetchRecipientsMutation.mutate();
   };
 
-  const handleRecipientConfirm = (ids: number[]) => {
+  const handleRecipientConfirm = (ids: number[], hasUnsubscribedOverrides: boolean) => {
     setCampaignRecipientIds(ids);
+    setHasUnsubscribedRecipients(hasUnsubscribedOverrides);
+  };
+
+  const handleSendClick = () => {
+    if (hasUnsubscribedRecipients) {
+      setShowUnsubscribedWarning(true);
+    } else {
+      handleSend();
+    }
   };
 
   const handleSend = () => {
@@ -354,7 +372,7 @@ export default function CampaignModal({
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleSend}
+                  onClick={handleSendClick}
                   disabled={sendMutation.isPending || !canSend()}
                   className="flex-1 h-11"
                 >
@@ -384,7 +402,32 @@ export default function CampaignModal({
         selectedIds={campaignRecipientIds}
         onConfirm={handleRecipientConfirm}
         isLoading={fetchRecipientsMutation.isPending}
+        isAdmin={isAdmin}
       />
+
+      <AlertDialog open={showUnsubscribedWarning} onOpenChange={setShowUnsubscribedWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Sending to Unsubscribed Recipients
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              One or more selected recipients have unsubscribed from marketing emails. 
+              Are you sure you want to send to them anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowUnsubscribedWarning(false);
+              handleSend();
+            }}>
+              Send Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
