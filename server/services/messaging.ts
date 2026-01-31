@@ -387,7 +387,7 @@ export async function sendBrandedCampaignEmail({
     footerParts.push(footerText);
   }
   
-  // Build HTML with CID references for images - polished unified header design
+  // Build HTML with CID references for images - 3-row header with overlap illusion
   const html = `
 <!DOCTYPE html>
 <html>
@@ -401,22 +401,28 @@ export async function sendBrandedCampaignEmail({
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
           ${hasHeader ? `
+          <!-- ROW 1: Banner Image -->
           <tr>
-            <td style="padding: 0;">
-              <img src="cid:header" alt="Header" style="width: 100%; height: auto; display: block;" />
+            <td style="padding: 0; line-height: 0;">
+              <img src="cid:header" alt="Header" style="width: 100%; max-width: 600px; height: auto; display: block;" />
             </td>
           </tr>
-          ` : ''}
+          <!-- ROW 2: Transparent Spacer for overlap illusion -->
           <tr>
-            <td style="height: 90px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
-              <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+            <td style="height: 40px; background-color: transparent;"></td>
+          </tr>
+          ` : ''}
+          <!-- ROW 3: Brand Strip with Logo -->
+          <tr>
+            <td style="height: 80px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
+              <table cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
                 <tr>
-                  <td align="center" style="vertical-align: middle;">
+                  <td align="center" valign="middle">
                     ${hasLogo ? `
-                    <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                    <table cellpadding="0" cellspacing="0" align="center">
                       <tr>
-                        <td style="background-color: #ffffff; border-radius: 9999px; padding: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
-                          <img src="cid:logo" alt="${fromName}" style="width: 80px; height: 80px; border-radius: 9999px; display: block; object-fit: cover;" />
+                        <td style="background-color: #ffffff; border-radius: 9999px; padding: 6px;">
+                          <img src="cid:logo" alt="${fromName}" width="88" height="88" style="width: 88px; height: 88px; border-radius: 9999px; display: block;" />
                         </td>
                       </tr>
                     </table>
