@@ -876,8 +876,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
       
+      const company = await storage.getCompany(member.companyId);
       const branding = await storage.getEmailBranding(member.companyId);
-      res.json(branding || {});
+      
+      // Always return complete object with defaults
+      res.json({
+        logoUrl: branding?.logoUrl || null,
+        headerBannerUrl: branding?.headerBannerUrl || null,
+        primaryColor: branding?.primaryColor || '#2563EB',
+        fromName: branding?.fromName || company?.name || 'EcoLogic',
+        replyToEmail: branding?.replyToEmail || company?.email || null,
+        footerText: branding?.footerText || '',
+        showPhone: branding?.showPhone ?? true,
+        showAddress: branding?.showAddress ?? true,
+      });
     } catch (error: any) {
       console.error('Error fetching email branding:', error);
       res.status(500).json({ error: 'Failed to fetch email branding' });

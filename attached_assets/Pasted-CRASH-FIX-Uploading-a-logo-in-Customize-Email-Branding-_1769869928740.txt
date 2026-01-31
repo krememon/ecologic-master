@@ -1,0 +1,57 @@
+CRASH FIX: Uploading a logo in Customize → Email Branding crashes the app. The server shows:
+GET /api/company/email-branding 200 :: {}
+So the UI is likely breaking due to missing/default fields.
+
+GOAL
+- Email Branding page must never crash.
+- /api/company/email-branding must never return {} — always return a complete object with defaults.
+- Upload logo must save the logo URL and update the preview without crashing.
+
+BACKEND FIXES
+1) Update GET /api/company/email-branding
+- Always return a full object with default values, even if DB has no saved branding yet.
+Example defaults:
+{
+  logoUrl: null,
+  headerUrl: null,
+  brandColor: "#2563EB",
+  fromName: company.name ?? "EcoLogic",
+  replyTo: company.email ?? null,
+  footerText: "",
+  showPhone: true,
+  showAddress: true
+}
+- Do NOT return {}.
+
+2) Ensure PATCH /api/company/email-branding exists and works
+- Accept partial updates (logoUrl/headerUrl/brandColor/fromName/replyTo/footerText/showPhone/showAddress)
+- Persist to DB (company record or a company_branding table)
+- Return the updated full object (including defaults merged).
+
+FRONTEND FIXES
+3) Add DEFAULTS in the EmailBranding component
+- const DEFAULTS = { logoUrl:null, headerUrl:null, brandColor:"#2563EB", fromName:"", replyTo:"", footerText:"", showPhone:true, showAddress:true }
+- When fetching branding:
+  setBranding({ ...DEFAULTS, ...apiData })
+- Ensure all inputs have safe values (value={branding.fromName || ""} etc.)
+
+4) Make logo upload safe
+- Wrap upload in try/catch
+- On success:
+  - receive upload url (normalize response to {url})
+  - call PATCH /api/company/email-branding with { logoUrl: url }
+  - update UI state with returned branding object (merge defaults)
+- On failure:
+  - show toast error
+  - do NOT set branding to {} or undefined
+  - do NOT crash
+
+5) Guard rendering
+- Only render <img> if logoUrl/headerUrl is truthy.
+- Ensure text color/spacing unchanged.
+
+ACCEPTANCE TESTS
+- Email Branding page loads even if no branding saved yet (no crash).
+- Uploading a logo does not crash.
+- After upload, logo preview shows and persists on refresh.
+- Server no longer returns {} from GET /api/company/email-branding.

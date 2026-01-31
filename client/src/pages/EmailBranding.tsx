@@ -51,7 +51,7 @@ export default function EmailBranding() {
   });
 
   useEffect(() => {
-    if (branding && Object.keys(branding).length > 0) {
+    if (branding) {
       setLogoUrl(branding.logoUrl || "");
       setHeaderBannerUrl(branding.headerBannerUrl || "");
       setPrimaryColor(branding.primaryColor || "#2563EB");
@@ -114,15 +114,36 @@ export default function EmailBranding() {
       const data = await response.json();
       const url = data.url || data.fileUrl;
       
+      if (!url) {
+        throw new Error('No URL returned from upload');
+      }
+      
+      // Update local state
       if (type === 'logo') {
         setLogoUrl(url);
       } else {
         setHeaderBannerUrl(url);
       }
       
-      toast({ title: "Uploaded", description: `${type === 'logo' ? 'Logo' : 'Banner'} uploaded successfully` });
+      // Auto-save to server
+      await apiRequest('/api/company/email-branding', {
+        method: 'PUT',
+        body: JSON.stringify({
+          logoUrl: type === 'logo' ? url : (logoUrl || null),
+          headerBannerUrl: type === 'banner' ? url : (headerBannerUrl || null),
+          primaryColor: primaryColor || '#2563EB',
+          fromName: fromName || null,
+          replyToEmail: replyToEmail || null,
+          footerText: footerText || null,
+          showPhone,
+          showAddress,
+        }),
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/company/email-branding'] });
+      toast({ title: "Uploaded & Saved", description: `${type === 'logo' ? 'Logo' : 'Banner'} uploaded and saved` });
     } catch (error: any) {
-      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+      toast({ title: "Upload Failed", description: error.message || "Failed to upload", variant: "destructive" });
     } finally {
       if (type === 'logo') setUploadingLogo(false);
       else setUploadingBanner(false);
