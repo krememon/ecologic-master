@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, ChevronLeft, Upload, Send } from "lucide-react";
+import { Loader2, ChevronLeft, Upload, Send, Image, Palette, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ interface EmailBranding {
   companyId?: number;
   logoUrl?: string | null;
   headerBannerUrl?: string | null;
+  headerBackgroundType?: string | null;
   primaryColor?: string | null;
   fromName?: string | null;
   replyToEmail?: string | null;
@@ -34,6 +35,7 @@ export default function EmailBranding() {
   
   const [logoUrl, setLogoUrl] = useState("");
   const [headerBannerUrl, setHeaderBannerUrl] = useState("");
+  const [headerBackgroundType, setHeaderBackgroundType] = useState<"color" | "image">("color");
   const [primaryColor, setPrimaryColor] = useState("#2563EB");
   const [fromName, setFromName] = useState("");
   const [replyToEmail, setReplyToEmail] = useState("");
@@ -58,6 +60,7 @@ export default function EmailBranding() {
     if (branding) {
       setLogoUrl(branding.logoUrl || "");
       setHeaderBannerUrl(branding.headerBannerUrl || "");
+      setHeaderBackgroundType((branding.headerBackgroundType as "color" | "image") || "color");
       setPrimaryColor(branding.primaryColor || "#2563EB");
       setFromName(branding.fromName || "");
       setReplyToEmail(branding.replyToEmail || "");
@@ -127,17 +130,17 @@ export default function EmailBranding() {
         throw new Error('No URL returned from upload');
       }
       
-      // Update local state
       if (type === 'logo') {
         setLogoUrl(url);
       } else {
         setHeaderBannerUrl(url);
+        setHeaderBackgroundType("image");
       }
       
-      // Auto-save to server
       await apiRequest('PUT', '/api/company/email-branding', {
         logoUrl: type === 'logo' ? url : (logoUrl || null),
         headerBannerUrl: type === 'banner' ? url : (headerBannerUrl || null),
+        headerBackgroundType: type === 'banner' ? 'image' : headerBackgroundType,
         primaryColor: primaryColor || '#2563EB',
         fromName: fromName || null,
         replyToEmail: replyToEmail || null,
@@ -147,7 +150,7 @@ export default function EmailBranding() {
       });
       
       queryClient.invalidateQueries({ queryKey: ['/api/company/email-branding'] });
-      toast({ title: "Uploaded & Saved", description: `${type === 'logo' ? 'Logo' : 'Banner'} uploaded and saved` });
+      toast({ title: "Uploaded & Saved", description: `${type === 'logo' ? 'Logo' : 'Background'} uploaded and saved` });
     } catch (error: any) {
       toast({ title: "Upload Failed", description: error.message || "Failed to upload", variant: "destructive" });
     } finally {
@@ -160,6 +163,7 @@ export default function EmailBranding() {
     saveMutation.mutate({
       logoUrl: logoUrl || null,
       headerBannerUrl: headerBannerUrl || null,
+      headerBackgroundType,
       primaryColor: primaryColor || '#2563EB',
       fromName: fromName || null,
       replyToEmail: replyToEmail || null,
@@ -167,6 +171,11 @@ export default function EmailBranding() {
       showPhone,
       showAddress,
     });
+  };
+
+  const handleRemoveBackgroundImage = () => {
+    setHeaderBannerUrl("");
+    setHeaderBackgroundType("color");
   };
 
   if (authLoading || isLoading) {
@@ -201,6 +210,10 @@ export default function EmailBranding() {
     footerParts.push(footerText);
   }
 
+  const headerBackground = headerBackgroundType === "image" && headerBannerUrl
+    ? `url(${headerBannerUrl})`
+    : primaryColor;
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="mb-6">
@@ -222,14 +235,34 @@ export default function EmailBranding() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Header</CardTitle>
+              <CardTitle className="text-lg">Email Header</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div>
-                <Label>Logo</Label>
-                <div className="mt-2 flex items-center gap-3">
-                  {logoUrl && (
-                    <img src={logoUrl} alt="Logo" className="h-12 max-w-[120px] object-contain rounded border" />
+                <Label className="text-base font-medium">Logo</Label>
+                <p className="text-xs text-slate-500 mb-3">Your logo will be centered in the header with a circular mask</p>
+                <div className="flex items-center gap-4">
+                  {logoUrl ? (
+                    <div className="relative">
+                      <div 
+                        className="w-20 h-20 rounded-full border-2 border-slate-200 dark:border-slate-600 overflow-hidden bg-slate-100 dark:bg-slate-700"
+                        style={{
+                          backgroundImage: `url(${logoUrl})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }}
+                      />
+                      <button
+                        onClick={() => setLogoUrl("")}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center bg-slate-50 dark:bg-slate-800">
+                      <Upload className="w-6 h-6 text-slate-400" />
+                    </div>
                   )}
                   <label className="cursor-pointer">
                     <input
@@ -242,69 +275,103 @@ export default function EmailBranding() {
                         e.target.value = '';
                       }}
                     />
-                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium">
                       {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      {logoUrl ? 'Change' : 'Upload'}
+                      {logoUrl ? 'Change Logo' : 'Upload Logo'}
                     </div>
                   </label>
-                  {logoUrl && (
-                    <Button variant="ghost" size="sm" onClick={() => setLogoUrl("")}>
-                      Remove
-                    </Button>
-                  )}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Recommended: 200x60px PNG or SVG</p>
               </div>
-              
-              <div>
-                <Label>Header Banner (optional)</Label>
-                <div className="mt-2 flex items-center gap-3">
-                  {headerBannerUrl && (
-                    <img src={headerBannerUrl} alt="Banner" className="h-16 max-w-[200px] object-cover rounded border" />
-                  )}
-                  <label className="cursor-pointer">
+
+              <div className="border-t pt-6">
+                <Label className="text-base font-medium">Background Type</Label>
+                <p className="text-xs text-slate-500 mb-3">Choose between a solid color or custom image</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setHeaderBackgroundType("color")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all ${
+                      headerBackgroundType === "color"
+                        ? "border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300"
+                        : "border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500"
+                    }`}
+                  >
+                    <Palette className="w-5 h-5" />
+                    <span className="font-medium">Solid Color</span>
+                  </button>
+                  <button
+                    onClick={() => setHeaderBackgroundType("image")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all ${
+                      headerBackgroundType === "image"
+                        ? "border-teal-500 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300"
+                        : "border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500"
+                    }`}
+                  >
+                    <Image className="w-5 h-5" />
+                    <span className="font-medium">Image</span>
+                  </button>
+                </div>
+              </div>
+
+              {headerBackgroundType === "color" && (
+                <div>
+                  <Label htmlFor="primaryColor">Brand Color</Label>
+                  <div className="mt-2 flex items-center gap-3">
                     <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) openCropModal(file, 'banner');
-                        e.target.value = '';
-                      }}
+                      type="color"
+                      id="primaryColor"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="h-10 w-14 rounded cursor-pointer border border-slate-200"
                     />
-                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm">
-                      {uploadingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      {headerBannerUrl ? 'Change' : 'Upload'}
-                    </div>
-                  </label>
-                  {headerBannerUrl && (
-                    <Button variant="ghost" size="sm" onClick={() => setHeaderBannerUrl("")}>
-                      Remove
-                    </Button>
-                  )}
+                    <Input
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      placeholder="#2563EB"
+                      className="w-28"
+                    />
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">Full-width banner above header. Recommended: 600x150px</p>
-              </div>
-              
-              <div>
-                <Label htmlFor="primaryColor">Brand Color</Label>
-                <div className="mt-2 flex items-center gap-3">
-                  <input
-                    type="color"
-                    id="primaryColor"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="h-10 w-14 rounded cursor-pointer border border-slate-200"
-                  />
-                  <Input
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    placeholder="#2563EB"
-                    className="w-28"
-                  />
+              )}
+
+              {headerBackgroundType === "image" && (
+                <div>
+                  <Label>Background Image</Label>
+                  <div className="mt-2 flex items-center gap-3">
+                    {headerBannerUrl && (
+                      <div className="relative">
+                        <img 
+                          src={headerBannerUrl} 
+                          alt="Background" 
+                          className="h-16 w-32 object-cover rounded border" 
+                        />
+                        <button
+                          onClick={handleRemoveBackgroundImage}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) openCropModal(file, 'banner');
+                          e.target.value = '';
+                        }}
+                      />
+                      <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium">
+                        {uploadingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        {headerBannerUrl ? 'Change' : 'Upload'}
+                      </div>
+                    </label>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">Recommended: 1200x300px</p>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
@@ -407,17 +474,26 @@ export default function EmailBranding() {
             <CardContent className="p-0">
               <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-b-lg">
                 <div className="bg-white rounded-lg overflow-hidden shadow-sm max-w-[400px] mx-auto">
-                  {headerBannerUrl && (
-                    <img src={headerBannerUrl} alt="Banner" className="w-full h-auto" />
-                  )}
                   <div 
-                    className="p-6 text-center"
-                    style={{ backgroundColor: primaryColor }}
+                    className="relative h-32 flex items-center justify-center"
+                    style={{ 
+                      backgroundColor: headerBackgroundType === "image" && headerBannerUrl ? undefined : primaryColor,
+                      backgroundImage: headerBackgroundType === "image" && headerBannerUrl ? `url(${headerBannerUrl})` : undefined,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
                   >
                     {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="h-10 max-w-[150px] mx-auto object-contain" />
+                      <div 
+                        className="w-20 h-20 rounded-full border-4 border-white shadow-lg"
+                        style={{
+                          backgroundImage: `url(${logoUrl})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }}
+                      />
                     ) : (
-                      <h1 className="text-xl font-bold text-white">{displayFromName}</h1>
+                      <h1 className="text-xl font-bold text-white drop-shadow-lg">{displayFromName}</h1>
                     )}
                   </div>
                   <div className="p-6">
