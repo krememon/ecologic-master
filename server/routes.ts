@@ -6830,10 +6830,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to send campaigns" });
       }
 
-      const { customerIds, channel, subject, emailBody, smsBody, audienceMode } = req.body;
+      const { customerIds, channel, subject, emailBody, smsBody, audienceMode, includeUnsubscribed } = req.body;
       
       if (!channel || !['email', 'sms', 'both'].includes(channel)) {
         return res.status(400).json({ message: "channel must be 'email', 'sms', or 'both'" });
+      }
+      
+      // If includeUnsubscribed is set, verify admin role (OWNER/SUPERVISOR only)
+      const isAdmin = userRole === 'OWNER' || userRole === 'SUPERVISOR';
+      if (includeUnsubscribed && !isAdmin) {
+        return res.status(403).json({ message: "Only administrators can send to unsubscribed recipients" });
       }
       
       // Validate required fields based on channel
@@ -6871,18 +6877,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Filter for email eligibility
-      const emailEligible = selectedCustomers.filter(c => 
-        c.email && 
-        c.emailOptIn === true && 
-        !c.emailUnsubscribedAt
-      );
+      // If admin override is enabled, include unsubscribed recipients
+      const emailEligible = selectedCustomers.filter(c => {
+        if (!c.email) return false;
+        if (includeUnsubscribed && isAdmin) {
+          // Admin override: include even if unsubscribed
+          return true;
+        }
+        return c.emailOptIn === true && !c.emailUnsubscribedAt;
+      });
       
       // Filter for SMS eligibility
-      const smsEligible = selectedCustomers.filter(c => 
-        c.phone && 
-        c.smsOptIn === true && 
-        !c.smsUnsubscribedAt
-      );
+      const smsEligible = selectedCustomers.filter(c => {
+        if (!c.phone) return false;
+        if (includeUnsubscribed && isAdmin) {
+          // Admin override: include even if unsubscribed
+          return true;
+        }
+        return c.smsOptIn === true && !c.smsUnsubscribedAt;
+      });
 
       // Compute body - use emailBody for email/both, smsBody for sms-only
       const body = channel === 'sms' ? smsBody : emailBody;

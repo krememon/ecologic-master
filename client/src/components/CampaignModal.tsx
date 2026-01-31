@@ -115,6 +115,7 @@ export default function CampaignModal({
         emailBody: channel === "email" || channel === "both" ? body : undefined,
         smsBody: channel === "sms" || channel === "both" ? body : undefined,
         audienceMode: campaignRecipientIds.length > 0 ? "selected" : audienceMode,
+        includeUnsubscribed: hasUnsubscribedRecipients,
       });
       return res.json();
     },
