@@ -1,0 +1,134 @@
+You are working on EcoLogic (React frontend + Node/Express-ish backend + DB). Add a “Send Email / Text” bulk action from the Clients page that lets authorized users message selected clients via Email and/or SMS. This must follow EcoLogic’s “hidden, not disabled” RBAC, must respect opt-in/unsubscribe, and must not break any existing features or UI patterns.
+
+HARD RULES
+- Do NOT remove or rename existing routes/components unless absolutely necessary. Keep changes additive.
+- No fake data. Must work with real DB.
+- Preserve existing Clients page layout, spacing, and current select-mode behavior. Add only what’s needed.
+- “Hidden, not disabled”: if user cannot send campaigns, they should not see the Send button at all.
+- Messages must only go to clients who opted in for that channel.
+- Log each recipient send attempt + status. UI should show counts before sending.
+- No noisy success popups. Use existing toast/snackbar patterns if they already exist; otherwise use subtle inline confirmation.
+
+FEATURE OVERVIEW
+1) Clients page: In Select Mode, add a new bulk action button: “Send Email / Text”.
+2) Clicking opens a modal/drawer “Create Campaign” pre-filled with “Selected clients (N)”.
+3) User chooses channel: Email / Text / Both.
+4) User enters:
+   - Email Subject (required if Email or Both)
+   - Email Body (required if Email or Both)
+   - SMS Body (required if Text or Both; show character counter)
+5) Preview section shows counts:
+   - Email recipients: X (selected clients w/ email + email_opt_in true + not unsubscribed)
+   - SMS recipients: Y (selected clients w/ phone + sms_opt_in true + not unsubscribed)
+   - Excluded: list a small summary (no opt-in / missing contact)
+6) Send now (MVP). (Scheduling can be added later; stub a “Schedule” UI but keep hidden/disabled or omit entirely.)
+
+RBAC / VISIBILITY
+- Owner/Admin: can send campaigns
+- Supervisor/Dispatcher: can send IF company setting allows (add company setting default true for Owner/Admin only, false for others OR simplest: allow Supervisor/Dispatcher for now)
+- Estimator/Technician: cannot send campaigns and do not see the button
+
+DATA MODEL CHANGES (DB MIGRATION)
+Add fields to clients table (or client_contacts if you have that; choose clients if simplest):
+- email_opt_in boolean default true (or false if you prefer safer; if unsure choose false and require manual opt-in toggle)
+- sms_opt_in boolean default false (safer)
+- email_unsubscribed_at timestamp nullable
+- sms_unsubscribed_at timestamp nullable
+
+Add campaigns tables:
+A) campaigns
+- id, company_id, created_by_user_id
+- channel enum/text: 'email' | 'sms' | 'both'
+- subject nullable
+- email_body nullable
+- sms_body nullable
+- status: 'draft' | 'sent' (MVP: create as sent when sending)
+- created_at, sent_at
+
+B) campaign_recipients
+- id, campaign_id, client_id, channel ('email'|'sms')
+- destination (email address or phone)
+- status: 'queued'|'sent'|'failed'|'skipped'
+- provider_message_id nullable
+- error_message nullable
+- created_at, updated_at
+
+API ROUTES
+Create new backend endpoints:
+1) POST /api/campaigns/preview
+Input: { clientIds: number[], channel: 'email'|'sms'|'both' }
+Return: counts + arrays of eligible clientIds per channel, plus excluded summary reasons.
+This endpoint must enforce RBAC and company_id scoping.
+
+2) POST /api/campaigns/send
+Input: { clientIds: number[], channel, subject?, emailBody?, smsBody? }
+Behavior:
+- Validate RBAC
+- Create campaign row
+- For each eligible recipient, create campaign_recipients row and attempt send
+- Email: integrate with provider (see below) or if not configured yet, implement a “dev mode” transport:
+   - If EMAIL_PROVIDER_KEY missing, DO NOT silently succeed; mark as failed with clear error_message
+- SMS: integrate with provider (Twilio) or similar dev-mode rules:
+   - If TWILIO creds missing, mark as failed
+- Return: campaignId + results summary
+
+3) POST /api/webhooks/sms (Twilio inbound)
+- Handle STOP/UNSUBSCRIBE keywords
+- Find client by phone and set sms_opt_in=false and sms_unsubscribed_at=now
+- Return 200
+
+4) GET /api/campaigns (optional for later): list last 20 campaigns for company; can stub but not required.
+
+EMAIL/SMS PROVIDER INTEGRATION
+- Use environment variables:
+  - EMAIL_PROVIDER = 'sendgrid'|'mailgun' (start with one; choose sendgrid if already used)
+  - SENDGRID_API_KEY and SENDGRID_FROM_EMAIL (fallback to company profile sender later)
+  - TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER
+- Implement provider wrappers in server/services:
+  - sendEmail({to, subject, html/text})
+  - sendSms({to, body})
+- Include robust error handling and store provider_message_id when available.
+
+UI IMPLEMENTATION DETAILS
+Clients Page:
+- In select mode bulk action bar, add “Send Email / Text” button (icon optional).
+- Button only renders when user has permission.
+- Clicking opens <CampaignModal> with selected client IDs.
+
+CampaignModal:
+- Uses /api/campaigns/preview to show counts dynamically whenever channel changes.
+- Fields show/hide based on channel.
+- SMS body has char counter + warning if > 160 (but still allow).
+- Send button calls /api/campaigns/send.
+- After success: close modal, clear selection mode, and show subtle confirmation (toast).
+- Do not navigate away.
+
+Client Opt-In UI (MVP)
+Add opt-in toggles in the Client details modal/page (where you edit client contact info):
+- “Email Marketing Opt-in”
+- “SMS Opt-in”
+Default sms_opt_in false.
+If you don’t have a client details edit screen, add these toggles to the existing client edit form (where email/phone is edited).
+
+SECURITY / DATA ISOLATION
+- All queries must scope by company_id to prevent cross-tenant leaks.
+- Ensure only clients belonging to the user’s company can be messaged.
+- Rate limiting (MVP lightweight): max 500 recipients per send; reject above with error.
+
+DELIVERABLES
+- DB migration for new columns + tables
+- Backend routes + provider wrappers + webhook
+- Frontend: Clients page bulk action + CampaignModal + opt-in toggles in client edit
+- Tests or at least targeted logs:
+  - Log campaignId and counts, and provider failures (no secrets)
+- Ensure UI updates properly, no stale selection state, no crashes
+
+ACCEPTANCE TESTS (must pass)
+1) As Owner: select 3 clients, send Email only; only email_opt_in clients get queued/sent; results logged.
+2) As Owner: send SMS only; only sms_opt_in clients with phone get sent; STOP sets sms_opt_in false.
+3) As Technician: cannot see Send button at all.
+4) Missing provider keys: send returns failed statuses with clear messages; UI shows summary and does not pretend success.
+5) Cross-company isolation: cannot send to another company’s clients even if ID is guessed.
+
+IMPLEMENTATION NOTE
+Follow existing code style and patterns (routing, DB access, auth middleware, RBAC helpers, UI components, modals, toasts). Keep it mobile-first and visually consistent with the current Clients page.

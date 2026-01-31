@@ -157,10 +157,48 @@ export const customers = pgTable("customers", {
   longitude: doublePrecision("longitude"),
   geocodePrecision: varchar("geocode_precision", { length: 20 }), // 'exact' or 'approximate'
   qboCustomerId: varchar("qbo_customer_id", { length: 100 }),
+  emailOptIn: boolean("email_opt_in").default(true),
+  smsOptIn: boolean("sms_opt_in").default(false),
+  emailUnsubscribedAt: timestamp("email_unsubscribed_at"),
+  smsUnsubscribedAt: timestamp("sms_unsubscribed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
   companyIdx: index("customers_company_idx").on(table.companyId),
+}));
+
+// Campaigns table - for bulk email/SMS campaigns
+export const campaigns = pgTable("campaigns", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  createdByUserId: varchar("created_by_user_id", { length: 50 }).notNull(),
+  channel: varchar("channel", { length: 20 }).notNull(), // 'email' | 'sms' | 'both'
+  subject: varchar("subject", { length: 500 }),
+  emailBody: text("email_body"),
+  smsBody: text("sms_body"),
+  status: varchar("status", { length: 20 }).notNull().default("sent"), // 'draft' | 'sent'
+  recipientCount: integer("recipient_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+}, (table) => ({
+  companyIdx: index("campaigns_company_idx").on(table.companyId),
+}));
+
+// Campaign recipients table - tracks each send attempt
+export const campaignRecipients = pgTable("campaign_recipients", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => campaigns.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  channel: varchar("channel", { length: 20 }).notNull(), // 'email' | 'sms'
+  destination: varchar("destination", { length: 255 }).notNull(), // email address or phone
+  status: varchar("status", { length: 20 }).notNull().default("queued"), // 'queued' | 'sent' | 'failed' | 'skipped'
+  providerMessageId: varchar("provider_message_id", { length: 255 }),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  campaignIdx: index("campaign_recipients_campaign_idx").on(table.campaignId),
+  customerIdx: index("campaign_recipients_customer_idx").on(table.customerId),
 }));
 
 // Subcontractors table
@@ -879,6 +917,28 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
     references: [companies.id],
   }),
   estimates: many(estimates),
+  campaignRecipients: many(campaignRecipients),
+}));
+
+// Campaign relations
+export const campaignsRelations = relations(campaigns, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [campaigns.companyId],
+    references: [companies.id],
+  }),
+  recipients: many(campaignRecipients),
+}));
+
+// Campaign recipients relations
+export const campaignRecipientsRelations = relations(campaignRecipients, ({ one }) => ({
+  campaign: one(campaigns, {
+    fields: [campaignRecipients.campaignId],
+    references: [campaigns.id],
+  }),
+  customer: one(customers, {
+    fields: [campaignRecipients.customerId],
+    references: [customers.id],
+  }),
 }));
 
 export const estimateItemsRelations = relations(estimateItems, ({ one }) => ({
@@ -1039,6 +1099,18 @@ export interface UserPermissions {
 }
 
 export const insertSubcontractorSchema = createInsertSchema(subcontractors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCampaignSchema = createInsertSchema(campaigns).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+
+export const insertCampaignRecipientSchema = createInsertSchema(campaignRecipients).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -1281,6 +1353,10 @@ export type EstimateAttachment = typeof estimateAttachments.$inferSelect;
 export type InsertEstimateAttachment = typeof estimateAttachments.$inferInsert;
 export type EstimateDocument = typeof estimateDocuments.$inferSelect;
 export type InsertEstimateDocument = typeof estimateDocuments.$inferInsert;
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
+export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
+export type InsertCampaignRecipient = z.infer<typeof insertCampaignRecipientSchema>;
 
 // Estimate with items and attachments type
 export interface EstimateWithItems extends Estimate {
