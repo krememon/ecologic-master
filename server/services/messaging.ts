@@ -28,13 +28,24 @@ function toAbsoluteUrl(relativeUrl: string | null | undefined): string {
   return `${cleanBase}${cleanPath}`;
 }
 
-function isImageFileValid(url: string): boolean {
-  if (!url) return false;
+interface InlineAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+  contentId: string;
+}
+
+function getImageFilePath(relativeUrl: string | null | undefined): string | null {
+  if (!relativeUrl) return null;
   
   try {
-    // Extract filename from URL path
-    const urlObj = new URL(url);
-    const pathname = urlObj.pathname;
+    let pathname = relativeUrl;
+    
+    // Handle full URLs by extracting pathname
+    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+      const urlObj = new URL(relativeUrl);
+      pathname = urlObj.pathname;
+    }
     
     // Handle both /uploads/file.png and /public/uploads/file.png
     let filename = '';
@@ -43,15 +54,14 @@ function isImageFileValid(url: string): boolean {
     } else if (pathname.startsWith('/uploads/')) {
       filename = pathname.replace('/uploads/', '');
     } else {
-      // Not a local upload, assume it's accessible
-      console.log(`[Email] External image URL, assuming accessible: ${url}`);
-      return true;
+      console.warn(`[Email] Not a local upload path: ${relativeUrl}`);
+      return null;
     }
     
     // Security: prevent path traversal
     if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-      console.warn(`[Email] Invalid filename in URL: ${url}`);
-      return false;
+      console.warn(`[Email] Invalid filename in URL: ${relativeUrl}`);
+      return null;
     }
     
     // Check if file exists locally
@@ -60,22 +70,52 @@ function isImageFileValid(url: string): boolean {
     
     if (!fs.existsSync(filePath)) {
       console.warn(`[Email] Image file not found: ${filePath}`);
-      return false;
+      return null;
     }
     
-    // Verify it's an image by extension
-    const ext = path.extname(filename).toLowerCase();
-    const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
-    if (!imageExtensions.includes(ext)) {
-      console.warn(`[Email] Not an image file: ${filePath}`);
-      return false;
-    }
-    
-    console.log(`[Email] Image file verified: ${filePath}`);
-    return true;
+    return filePath;
   } catch (error: any) {
-    console.warn(`[Email] Image validation failed: ${url} - ${error.message}`);
-    return false;
+    console.warn(`[Email] Image path extraction failed: ${relativeUrl} - ${error.message}`);
+    return null;
+  }
+}
+
+function getContentType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
+function loadImageAsAttachment(
+  relativeUrl: string | null | undefined,
+  contentId: string
+): InlineAttachment | null {
+  const filePath = getImageFilePath(relativeUrl);
+  if (!filePath) return null;
+  
+  try {
+    const content = fs.readFileSync(filePath);
+    const filename = path.basename(filePath);
+    const contentType = getContentType(filePath);
+    
+    console.log(`[Email] Loaded image for CID attachment: ${filename} (${contentType}, ${content.length} bytes)`);
+    
+    return {
+      filename,
+      content,
+      contentType,
+      contentId,
+    };
+  } catch (error: any) {
+    console.warn(`[Email] Failed to read image file: ${filePath} - ${error.message}`);
+    return null;
   }
 }
 
@@ -295,38 +335,41 @@ export async function sendBrandedCampaignEmail({
   const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
   
   const brandColor = branding?.primaryColor || '#2563EB';
-  let logoUrl = toAbsoluteUrl(branding?.logoUrl);
-  let headerBannerUrl = toAbsoluteUrl(branding?.headerBannerUrl);
   const footerText = branding?.footerText || '';
   const fromName = branding?.fromName || companyName;
   
-  // Log URLs for debugging
-  console.log('[Campaign] Raw branding URLs:', { 
-    rawLogo: branding?.logoUrl, 
-    rawHeader: branding?.headerBannerUrl 
-  });
-  console.log('[Campaign] Absolute URLs for email:', { logoUrl, headerBannerUrl });
+  // Load images as CID inline attachments for reliable Gmail display
+  const attachments: Array<{
+    filename: string;
+    content: Buffer;
+    headers: { 'Content-ID': string };
+  }> = [];
   
-  // Verify images exist locally before embedding in email
-  if (logoUrl) {
-    const isLogoValid = isImageFileValid(logoUrl);
-    if (!isLogoValid) {
-      console.warn('[Campaign] Logo file not found or invalid, skipping in email:', logoUrl);
-      logoUrl = '';
-    } else {
-      console.log('[Campaign] Logo will be included in email:', logoUrl);
-    }
+  const logoAttachment = loadImageAsAttachment(branding?.logoUrl, 'logo');
+  const headerAttachment = loadImageAsAttachment(branding?.headerBannerUrl, 'header');
+  
+  const hasLogo = !!logoAttachment;
+  const hasHeader = !!headerAttachment;
+  
+  if (logoAttachment) {
+    attachments.push({
+      filename: logoAttachment.filename,
+      content: logoAttachment.content,
+      headers: { 'Content-ID': '<logo>' },
+    });
+    console.log('[Campaign] Logo attached with CID: logo');
   }
   
-  if (headerBannerUrl) {
-    const isHeaderValid = isImageFileValid(headerBannerUrl);
-    if (!isHeaderValid) {
-      console.warn('[Campaign] Header banner file not found or invalid, skipping in email:', headerBannerUrl);
-      headerBannerUrl = '';
-    } else {
-      console.log('[Campaign] Header banner will be included in email:', headerBannerUrl);
-    }
+  if (headerAttachment) {
+    attachments.push({
+      filename: headerAttachment.filename,
+      content: headerAttachment.content,
+      headers: { 'Content-ID': '<header>' },
+    });
+    console.log('[Campaign] Header attached with CID: header');
   }
+  
+  console.log('[Campaign] Sending email with', attachments.length, 'inline attachments');
   
   const showPhone = branding?.showPhone ?? true;
   const showAddress = branding?.showAddress ?? true;
@@ -343,6 +386,7 @@ export async function sendBrandedCampaignEmail({
     footerParts.push(footerText);
   }
   
+  // Build HTML with CID references for images
   const html = `
 <!DOCTYPE html>
 <html>
@@ -355,16 +399,16 @@ export async function sendBrandedCampaignEmail({
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
-          ${headerBannerUrl ? `
+          ${hasHeader ? `
           <tr>
             <td style="padding: 0;">
-              <img src="${headerBannerUrl}" alt="Header" style="width: 100%; height: auto; display: block;" />
+              <img src="cid:header" alt="Header" style="width: 100%; height: auto; display: block;" />
             </td>
           </tr>
           ` : ''}
           <tr>
             <td style="padding: 30px; background-color: ${brandColor}; text-align: center;">
-              ${logoUrl ? `<img src="${logoUrl}" alt="${fromName}" style="max-height: 60px; max-width: 200px;" />` : `<h1 style="margin: 0; color: white; font-size: 24px;">${fromName}</h1>`}
+              ${hasLogo ? `<img src="cid:logo" alt="${fromName}" style="max-height: 60px; max-width: 200px;" />` : `<h1 style="margin: 0; color: white; font-size: 24px;">${fromName}</h1>`}
             </td>
           </tr>
           <tr>
@@ -406,6 +450,7 @@ export async function sendBrandedCampaignEmail({
       subject,
       html,
       replyTo: branding?.replyToEmail || undefined,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
     if (error) {
