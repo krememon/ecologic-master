@@ -150,6 +150,8 @@ export interface IStorage {
   rotateInviteCode(companyId: number, newCode: string): Promise<Company>;
   getCompanyMember(companyId: number, userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined>;
   getCompanyMemberByUserId(userId: string): Promise<{ userId: string; companyId: number; role: string } | undefined>;
+  getCompanyMembers(companyId: number): Promise<Array<{ userId: string; companyId: number; role: string }>>;
+  deleteUserAccount(userId: string): Promise<void>;
   
   // Crew assignment operations
   getJobCrewAssignments(jobId: number): Promise<any[]>;
@@ -723,6 +725,69 @@ export class DatabaseStorage implements IStorage {
       })
       .from(companyMembers)
       .where(eq(companyMembers.companyId, companyId));
+  }
+
+  async deleteUserAccount(userId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      // 1. Remove user from company memberships
+      await tx.delete(companyMembers).where(eq(companyMembers.userId, userId));
+      
+      // 2. Remove user from crew assignments
+      await tx.delete(crewAssignments).where(eq(crewAssignments.userId, userId));
+      
+      // 3. Remove user from conversation participants (but keep messages for history)
+      await tx.delete(conversationParticipants).where(eq(conversationParticipants.userId, userId));
+      
+      // 4. Messages: Leave senderId intact - frontend will show "Deleted User" when user lookup fails
+      // Cannot set to null (NOT NULL constraint) or fake ID (FK constraint)
+      
+      // 5. Estimates: Keep records with original createdByUserId - frontend handles missing user
+      // Cannot set to null (NOT NULL constraint)
+      
+      // 6. Signature requests: Keep records with original createdByUserId
+      // Cannot set to null (NOT NULL constraint)
+      
+      // 7. Nullify nullable user references in leads
+      await tx.update(leads).set({ assignedToUserId: null }).where(eq(leads.assignedToUserId, userId));
+      await tx.update(leads).set({ createdByUserId: null }).where(eq(leads.createdByUserId, userId));
+      
+      // 8. Nullify collectedByUserId in payments (nullable)
+      await tx.update(payments).set({ collectedByUserId: null }).where(eq(payments.collectedByUserId, userId));
+      
+      // 9. Nullify createdByUserId in invoices (nullable)
+      await tx.update(invoices).set({ createdByUserId: null }).where(eq(invoices.createdByUserId, userId));
+      
+      // 10. Remove user's time logs
+      await tx.delete(timeLogs).where(eq(timeLogs.userId, userId));
+      
+      // 11. Remove user's notifications
+      await tx.delete(notifications).where(eq(notifications.recipientUserId, userId));
+      
+      // 12. Delete user's sessions from session store
+      await tx.delete(sessions).where(sql`sess->>'passport'->>'user' = ${userId}`);
+      
+      // 13. Soft-delete the user record
+      // We cannot hard-delete because FK references in messages, estimates, and signature requests
+      // point to this user and those columns are NOT NULL. Soft-delete by clearing PII and marking as deleted.
+      await tx.update(users).set({
+        status: 'DELETED',
+        email: `deleted_${userId}@deleted.local`, // Placeholder to avoid null constraint if any
+        firstName: 'Deleted',
+        lastName: 'User',
+        password: null,
+        phone: null,
+        profileImageUrl: null,
+        addressLine1: null,
+        addressLine2: null,
+        city: null,
+        state: null,
+        postalCode: null,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+        emailVerificationToken: null,
+        stripeCustomerId: null,
+      }).where(eq(users.id, userId));
+    });
   }
 
   async getJobCrewAssignments(jobId: number): Promise<any[]> {

@@ -3091,6 +3091,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/account - Delete user's account
+  app.delete('/api/account', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (company) {
+        const member = await storage.getCompanyMember(company.id, userId);
+        const userRole = member?.role?.toUpperCase();
+        
+        // Owner safety check: if user is an owner, ensure they're not the last one
+        if (userRole === 'OWNER') {
+          const allMembers = await storage.getCompanyMembers(company.id);
+          const ownerCount = allMembers.filter(m => m.role?.toUpperCase() === 'OWNER').length;
+          
+          if (ownerCount <= 1) {
+            return res.status(400).json({
+              message: "You are the last Owner for this company. Transfer ownership or delete the company first."
+            });
+          }
+        }
+        
+        // Note: Stripe subscription is NOT cancelled when deleting a user account.
+        // The subscription belongs to the company, not the individual user.
+        // If the last owner is being deleted, the earlier check would have blocked it.
+        // If another owner is being deleted, the company and subscription remain active.
+      }
+      
+      // Delete user account and anonymize related data
+      await storage.deleteUserAccount(userId);
+      
+      // Destroy session to log out user
+      req.logout((err: any) => {
+        if (err) {
+          console.error("[DELETE ACCOUNT] Logout error:", err);
+        }
+      });
+      
+      req.session.destroy((err: any) => {
+        if (err) {
+          console.error("[DELETE ACCOUNT] Session destroy error:", err);
+        }
+      });
+      
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[DELETE ACCOUNT] Error:", error);
+      res.status(500).json({ message: error.message || "Failed to delete account" });
+    }
+  });
+
   app.post('/api/companies', async (req: any, res) => {
     try {
       if (!req.isAuthenticated()) {
