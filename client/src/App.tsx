@@ -51,6 +51,7 @@ import TimeTrackingSettings from "@/pages/TimeTrackingSettings";
 import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
+import SignupWizard from "@/pages/SignupWizard";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -120,6 +121,7 @@ function Router() {
         <Route path="/" component={Landing} />
         <Route path="/auth" component={AuthPage} />
         <Route path="/register" component={Auth} />
+        <Route path="/signup" component={SignupWizard} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
         <Route component={Landing} />
