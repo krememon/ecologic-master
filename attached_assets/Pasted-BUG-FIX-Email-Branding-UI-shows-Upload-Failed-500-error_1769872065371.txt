@@ -1,0 +1,70 @@
+BUG FIX: Email Branding UI shows “Upload Failed: 500 { error: 'Failed to update email branding' }”.
+The logo image appears in the UI, so upload may succeed, but saving branding settings to backend fails.
+
+GOAL
+- PATCH/POST /api/company/email-branding must succeed and persist settings.
+- Backend must return a clear error detail when it fails (not generic).
+- Frontend must send the expected payload shape.
+- Branding should persist after refresh.
+
+STEP 1 — Find the failing route and add real error details
+Locate /api/company/email-branding handler (GET and PATCH/POST).
+Wrap update in try/catch and log the real error:
+console.error("Email branding update failed:", err);
+Return:
+res.status(500).json({ error: "Failed to update email branding", detail: err?.message });
+
+This is required so we can stop guessing.
+
+STEP 2 — Verify payload shape from frontend
+Find the frontend request that saves branding after upload and after changing background type/color.
+Log payload in dev mode.
+Confirm it matches what backend expects.
+
+Current UI now has new fields:
+- backgroundType: "color" | "image"
+- brandColor
+- logoUrl
+- headerBackgroundImageUrl (if backgroundType === "image")
+Make sure backend accepts these keys (or maps them).
+
+STEP 3 — Ensure DB schema supports these fields OR store as JSON
+Preferred solution (fast & future-proof):
+- Add a JSON column on companies table: email_branding JSONB
+Store entire branding object there.
+
+If you already use a separate table for email branding, ensure columns exist:
+- logo_url (text)
+- header_background_type (text)
+- header_background_image_url (text)
+- brand_color (text)
+- updated_at
+
+DO NOT silently drop fields.
+
+STEP 4 — Implement partial update merging (important)
+PATCH should accept partial payload and merge with existing settings:
+existing = getEmailBranding(companyId) (defaults merged)
+updated = { ...existing, ...req.body }
+save updated
+return updated
+
+Never return {}.
+
+STEP 5 — Fix common “undefined” writes
+If the UI sends undefined/null for fields not being changed, avoid overwriting existing values with null unless user explicitly removed.
+Implement logic:
+- If key is missing -> do not change
+- If key is null AND user action is remove -> allow clearing
+
+STEP 6 — Retest
+- Change background type color/image
+- Upload logo
+- Confirm API returns 200
+- Refresh page -> branding persisted
+
+ACCEPTANCE TESTS
+- No more 500 toast
+- Branding saves + persists after refresh
+- API returns updated branding object
+- When backend fails, response includes detail message for debugging
