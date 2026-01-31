@@ -78,5 +78,5 @@ export function verifyUnsubscribeToken(token: string): UnsubscribePayload | null
 export function generateUnsubscribeUrl(companyId: number, customerId: number, channel: 'email' | 'sms' = 'email'): string {
   const token = createUnsubscribeToken({ companyId, customerId, channel });
   const baseUrl = process.env.APP_BASE_URL || '';
-  return `${baseUrl}/api/public/unsubscribe/${channel}?token=${encodeURIComponent(token)}`;
+  return `${baseUrl}/unsubscribe/${channel}?token=${encodeURIComponent(token)}`;
 }

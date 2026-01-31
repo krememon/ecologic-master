@@ -50,6 +50,7 @@ import Timesheets from "@/pages/Timesheets";
 import TimeTrackingSettings from "@/pages/TimeTrackingSettings";
 import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
+import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -83,6 +84,11 @@ function Router() {
   // Public invoice payment page - NO auth required
   if (path.match(/^\/invoice\/\d+\/pay$/)) {
     return <PublicInvoiceRouter />;
+  }
+  
+  // Public unsubscribe pages - NO auth required
+  if (path.startsWith('/unsubscribe/')) {
+    return <PublicUnsubscribe />;
   }
 
   const { isAuthenticated, isLoading, user } = useAuth();

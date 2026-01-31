@@ -9295,72 +9295,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============== PUBLIC UNSUBSCRIBE ENDPOINTS ==============
 
-  // GET /api/public/unsubscribe/email - Unsubscribe from email marketing
-  app.get('/api/public/unsubscribe/email', async (req, res) => {
+  // GET /api/public/unsubscribe/email/status - Validate token without unsubscribing
+  app.get('/api/public/unsubscribe/email/status', async (req, res) => {
     try {
       const { token } = req.query;
       
       if (!token || typeof token !== 'string') {
-        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid link' }));
+        return res.json({ valid: false, message: 'Invalid link' });
       }
       
       const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
       const payload = verifyUnsubscribeToken(token);
       
       if (!payload) {
-        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'This link is invalid or has expired' }));
+        return res.json({ valid: false, message: 'This link is invalid or has expired' });
       }
       
       if (payload.channel !== 'email') {
-        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid unsubscribe link' }));
+        return res.json({ valid: false, message: 'Invalid unsubscribe link' });
       }
       
-      // Verify customer exists and belongs to company
       const customer = await storage.getCustomer(payload.customerId);
       
       if (!customer || customer.companyId !== payload.companyId) {
-        return res.status(404).send(renderUnsubscribePage({ success: false, error: 'Link not found' }));
+        return res.json({ valid: false, message: 'Link not found' });
       }
       
-      // Update customer preferences
+      res.json({ valid: true });
+    } catch (error) {
+      console.error('[Unsub] Error validating token:', error);
+      res.json({ valid: false, message: 'Something went wrong' });
+    }
+  });
+
+  // POST /api/public/unsubscribe/email/confirm - Confirm unsubscribe
+  app.post('/api/public/unsubscribe/email/confirm', async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ ok: false, message: 'Invalid token' });
+      }
+      
+      const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
+      const payload = verifyUnsubscribeToken(token);
+      
+      if (!payload) {
+        return res.status(400).json({ ok: false, message: 'This link is invalid or has expired' });
+      }
+      
+      if (payload.channel !== 'email') {
+        return res.status(400).json({ ok: false, message: 'Invalid unsubscribe link' });
+      }
+      
+      const customer = await storage.getCustomer(payload.customerId);
+      
+      if (!customer || customer.companyId !== payload.companyId) {
+        return res.status(404).json({ ok: false, message: 'Link not found' });
+      }
+      
       await storage.updateCustomer(payload.customerId, {
         emailOptIn: false,
         emailUnsubscribedAt: new Date(),
       });
       
-      console.log(`[Unsub] Email unsubscribe: customerId=${payload.customerId} companyId=${payload.companyId}`);
+      console.log(`[Unsub] Email unsubscribe confirmed: customerId=${payload.customerId} companyId=${payload.companyId}`);
       
-      res.send(renderUnsubscribePage({ success: true }));
+      res.json({ ok: true });
     } catch (error) {
       console.error('[Unsub] Error processing unsubscribe:', error);
-      res.status(500).send(renderUnsubscribePage({ success: false, error: 'Something went wrong' }));
+      res.status(500).json({ ok: false, message: 'Something went wrong' });
     }
   });
 
-  // GET /api/public/unsubscribe/sms - Unsubscribe from SMS marketing (future-ready)
-  app.get('/api/public/unsubscribe/sms', async (req, res) => {
+  // GET /api/public/unsubscribe/sms/status - Validate SMS unsubscribe token
+  app.get('/api/public/unsubscribe/sms/status', async (req, res) => {
     try {
       const { token } = req.query;
       
       if (!token || typeof token !== 'string') {
-        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid link', channel: 'sms' }));
+        return res.json({ valid: false, message: 'Invalid link' });
       }
       
       const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
       const payload = verifyUnsubscribeToken(token);
       
       if (!payload) {
-        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'This link is invalid or has expired', channel: 'sms' }));
+        return res.json({ valid: false, message: 'This link is invalid or has expired' });
       }
       
       if (payload.channel !== 'sms') {
-        return res.status(400).send(renderUnsubscribePage({ success: false, error: 'Invalid unsubscribe link', channel: 'sms' }));
+        return res.json({ valid: false, message: 'Invalid unsubscribe link' });
       }
       
       const customer = await storage.getCustomer(payload.customerId);
       
       if (!customer || customer.companyId !== payload.companyId) {
-        return res.status(404).send(renderUnsubscribePage({ success: false, error: 'Link not found', channel: 'sms' }));
+        return res.json({ valid: false, message: 'Link not found' });
+      }
+      
+      res.json({ valid: true });
+    } catch (error) {
+      console.error('[Unsub] Error validating SMS token:', error);
+      res.json({ valid: false, message: 'Something went wrong' });
+    }
+  });
+
+  // POST /api/public/unsubscribe/sms/confirm - Confirm SMS unsubscribe
+  app.post('/api/public/unsubscribe/sms/confirm', async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ ok: false, message: 'Invalid token' });
+      }
+      
+      const { verifyUnsubscribeToken } = await import('./services/unsubscribe');
+      const payload = verifyUnsubscribeToken(token);
+      
+      if (!payload) {
+        return res.status(400).json({ ok: false, message: 'This link is invalid or has expired' });
+      }
+      
+      if (payload.channel !== 'sms') {
+        return res.status(400).json({ ok: false, message: 'Invalid unsubscribe link' });
+      }
+      
+      const customer = await storage.getCustomer(payload.customerId);
+      
+      if (!customer || customer.companyId !== payload.companyId) {
+        return res.status(404).json({ ok: false, message: 'Link not found' });
       }
       
       await storage.updateCustomer(payload.customerId, {
@@ -9368,12 +9432,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         smsUnsubscribedAt: new Date(),
       });
       
-      console.log(`[Unsub] SMS unsubscribe: customerId=${payload.customerId} companyId=${payload.companyId}`);
+      console.log(`[Unsub] SMS unsubscribe confirmed: customerId=${payload.customerId} companyId=${payload.companyId}`);
       
-      res.send(renderUnsubscribePage({ success: true, channel: 'sms' }));
+      res.json({ ok: true });
     } catch (error) {
       console.error('[Unsub] Error processing SMS unsubscribe:', error);
-      res.status(500).send(renderUnsubscribePage({ success: false, error: 'Something went wrong', channel: 'sms' }));
+      res.status(500).json({ ok: false, message: 'Something went wrong' });
     }
   });
 

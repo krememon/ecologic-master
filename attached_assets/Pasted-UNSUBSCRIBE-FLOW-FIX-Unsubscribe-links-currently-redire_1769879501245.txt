@@ -1,0 +1,66 @@
+UNSUBSCRIBE FLOW FIX: Unsubscribe links currently redirect clients to EcoLogic login. This is wrong. Unsubscribe must be public and not require authentication.
+
+GOAL
+- Clicking unsubscribe in an email opens a PUBLIC confirmation page (no login).
+- Page asks: “Are you sure you want to unsubscribe?”
+- If user confirms, it unsubscribes them and shows “Successfully unsubscribed.”
+- This removes them from future email campaigns (email_marketing_opt_in=false).
+
+ROUTES (PUBLIC)
+1) Create a new PUBLIC frontend page route:
+- /unsubscribe/email?token=...
+
+This page must NOT require auth and must bypass any auth guards / redirects.
+
+UI
+2) The page should be clean and simple:
+- EcoLogic logo + title “Unsubscribe”
+- Text: “Are you sure you want to unsubscribe from promotional emails?”
+- Buttons:
+  - Primary: “Yes, unsubscribe”
+  - Secondary: “Cancel” (closes or navigates to a simple “You’re still subscribed” message)
+
+CONFIRMATION FLOW
+3) On page load:
+- Read token from query string
+- Call GET /api/public/unsubscribe/email/status?token=... (optional) to validate token and display company name/email
+If token invalid -> show “This link is invalid or expired.”
+
+4) On “Yes, unsubscribe”:
+- POST /api/public/unsubscribe/email/confirm with { token }
+- Backend verifies token signature and extracts:
+  - companyId
+  - customerId
+  - channel=email
+- Update DB:
+  - email_marketing_opt_in=false
+  - marketing_unsubscribed_at=now
+- Return { ok: true }
+
+5) Show success state (same page):
+- “Successfully unsubscribed”
+- Small note: “You will no longer receive promotional emails.”
+
+BACKEND (PUBLIC API)
+6) Add public endpoints with NO auth middleware:
+- POST /api/public/unsubscribe/email/confirm
+- (Optional) GET /api/public/unsubscribe/email/status
+
+Token Verification
+7) Ensure tokens are signed (HMAC) and cannot be forged.
+- Use secret UNSUB_TOKEN_SECRET
+- Token includes companyId, customerId, channel, issuedAt, optional exp
+- Verify signature before applying unsubscribe.
+
+CAMPAIGN SENDING
+8) Ensure campaign recipient selection excludes unsubscribed:
+- Skip customers where email_marketing_opt_in=false
+
+IMPORTANT
+- This public page must not redirect to login.
+- This endpoint must not require cookies/session.
+
+ACCEPTANCE TEST
+- Click unsubscribe link from Gmail while logged out/incognito -> shows confirm page (not login).
+- Click “Yes, unsubscribe” -> shows success message.
+- Send another campaign -> that client is not included highlights.
