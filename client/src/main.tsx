@@ -46,23 +46,30 @@ const checkAndClearCache = async () => {
 
 // Check if this is a public signing route - render standalone component
 const isPublicSignRoute = window.location.pathname.startsWith('/sign/');
-// Check if this is a Stripe return route - skip cache-busting to avoid reload loops
-const isStripeReturnRoute = window.location.pathname.startsWith('/stripe/') || 
-                           window.location.pathname.startsWith('/pay/');
+// Check if this is a public unsubscribe route - render standalone component
+const isPublicUnsubscribeRoute = window.location.pathname.startsWith('/unsubscribe/');
+// Check if this is a Stripe return route or public route - skip cache-busting to avoid reload loops
+const isPublicRoute = window.location.pathname.startsWith('/stripe/') || 
+                      window.location.pathname.startsWith('/pay/') ||
+                      window.location.pathname.startsWith('/unsubscribe/');
 
 // Initialize app with cache check
 const initApp = async () => {
-  // Skip cache-busting for payment return routes to prevent reload loops
-  if (!isStripeReturnRoute) {
+  // Skip cache-busting for payment/public routes to prevent reload loops
+  if (!isPublicRoute) {
     const shouldRender = await checkAndClearCache();
     if (!shouldRender) return; // Page is reloading
   } else {
-    console.log("[main.tsx] Payment return route detected, skipping cache check");
+    console.log("[main.tsx] Public route detected, skipping cache check");
   }
   
   if (isPublicSignRoute) {
     console.log("[main.tsx] Public sign route detected, rendering PublicSignApp");
     createRoot(document.getElementById("root")!).render(<PublicSignApp />);
+  } else if (isPublicUnsubscribeRoute) {
+    console.log("[main.tsx] Public unsubscribe route detected, rendering PublicUnsubscribe");
+    const PublicUnsubscribe = (await import("./pages/PublicUnsubscribe")).default;
+    createRoot(document.getElementById("root")!).render(<PublicUnsubscribe />);
   } else {
     createRoot(document.getElementById("root")!).render(<App />);
   }

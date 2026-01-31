@@ -85,11 +85,6 @@ function Router() {
   if (path.match(/^\/invoice\/\d+\/pay$/)) {
     return <PublicInvoiceRouter />;
   }
-  
-  // Public unsubscribe pages - NO auth required
-  if (path.startsWith('/unsubscribe/')) {
-    return <PublicUnsubscribe />;
-  }
 
   const { isAuthenticated, isLoading, user } = useAuth();
   
@@ -199,6 +194,23 @@ function Router() {
 }
 
 function App() {
+  // Check for public routes BEFORE rendering Router (which uses auth hooks)
+  const path = window.location.pathname;
+  
+  // Public unsubscribe pages - NO auth required, render before any auth logic
+  if (path.startsWith('/unsubscribe/')) {
+    return (
+      <ThemeProvider defaultTheme="light" storageKey="ui-theme">
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <PublicUnsubscribe />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    );
+  }
+  
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
