@@ -306,6 +306,7 @@ export async function sendBrandedCampaignEmail({
   branding?: {
     logoUrl?: string | null;
     headerBannerUrl?: string | null;
+    combinedHeaderUrl?: string | null;
     primaryColor?: string | null;
     fromName?: string | null;
     replyToEmail?: string | null;
@@ -346,31 +347,46 @@ export async function sendBrandedCampaignEmail({
     contentId: string;
   }> = [];
   
-  const logoAttachment = loadImageAsAttachment(branding?.logoUrl, 'logo');
-  const headerAttachment = loadImageAsAttachment(branding?.headerBannerUrl, 'header');
+  // Try combined header first (single unified image)
+  const combinedHeaderAttachment = loadImageAsAttachment(branding?.combinedHeaderUrl, 'combinedheader');
   
+  // Fallback to separate logo/header
+  const logoAttachment = !combinedHeaderAttachment ? loadImageAsAttachment(branding?.logoUrl, 'logo') : null;
+  const headerAttachment = !combinedHeaderAttachment ? loadImageAsAttachment(branding?.headerBannerUrl, 'header') : null;
+  
+  const hasCombinedHeader = !!combinedHeaderAttachment;
   const hasLogo = !!logoAttachment;
   const hasHeader = !!headerAttachment;
   
-  if (logoAttachment) {
+  // Add combined header or fallback to separate images
+  if (combinedHeaderAttachment) {
     attachments.push({
-      filename: logoAttachment.filename,
-      content: logoAttachment.content.toString('base64'),
-      contentId: 'logo',
+      filename: combinedHeaderAttachment.filename,
+      content: combinedHeaderAttachment.content.toString('base64'),
+      contentId: 'combinedheader',
     });
-    console.log('[Campaign] Logo attached with contentId: logo');
+    console.log('[Campaign] Combined header attached with contentId: combinedheader');
+  } else {
+    if (logoAttachment) {
+      attachments.push({
+        filename: logoAttachment.filename,
+        content: logoAttachment.content.toString('base64'),
+        contentId: 'logo',
+      });
+      console.log('[Campaign] Logo attached with contentId: logo');
+    }
+    
+    if (headerAttachment) {
+      attachments.push({
+        filename: headerAttachment.filename,
+        content: headerAttachment.content.toString('base64'),
+        contentId: 'header',
+      });
+      console.log('[Campaign] Header attached with contentId: header');
+    }
   }
   
-  if (headerAttachment) {
-    attachments.push({
-      filename: headerAttachment.filename,
-      content: headerAttachment.content.toString('base64'),
-      contentId: 'header',
-    });
-    console.log('[Campaign] Header attached with contentId: header');
-  }
-  
-  console.log('[Campaign] Sending email with', attachments.length, 'inline attachments');
+  console.log('[Campaign] Sending email with', attachments.length, 'inline attachments, combinedHeader:', hasCombinedHeader);
   
   const showPhone = branding?.showPhone ?? true;
   const showAddress = branding?.showAddress ?? true;
@@ -387,32 +403,30 @@ export async function sendBrandedCampaignEmail({
     footerParts.push(footerText);
   }
   
-  // Build HTML with CID references for images - 3-row header with overlap illusion
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
+  // Build HTML - use combined header if available, otherwise fallback layout
+  let headerHtml = '';
+  
+  if (hasCombinedHeader) {
+    // Single unified header image
+    headerHtml = `
+          <tr>
+            <td style="padding: 0; line-height: 0;">
+              <img src="cid:combinedheader" alt="${fromName}" width="600" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
+            </td>
+          </tr>`;
+  } else if (hasHeader || hasLogo) {
+    // Fallback: 3-row layout with separate images
+    headerHtml = `
           ${hasHeader ? `
-          <!-- ROW 1: Banner Image -->
           <tr>
             <td style="padding: 0; line-height: 0;">
               <img src="cid:header" alt="Header" style="width: 100%; max-width: 600px; height: auto; display: block;" />
             </td>
           </tr>
-          <!-- ROW 2: Transparent Spacer for overlap illusion -->
           <tr>
             <td style="height: 40px; background-color: transparent;"></td>
           </tr>
           ` : ''}
-          <!-- ROW 3: Brand Strip with Logo -->
           <tr>
             <td style="height: 80px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
               <table cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
@@ -431,7 +445,30 @@ export async function sendBrandedCampaignEmail({
                 </tr>
               </table>
             </td>
-          </tr>
+          </tr>`;
+  } else {
+    // No images - just brand strip with text
+    headerHtml = `
+          <tr>
+            <td style="height: 80px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
+              <h1 style="margin: 0; color: white; font-size: 22px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>
+            </td>
+          </tr>`;
+  }
+  
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
+          ${headerHtml}
           <tr>
             <td style="padding: 30px;">
               <div style="white-space: pre-wrap; color: #333333; line-height: 1.6;">${body}</div>

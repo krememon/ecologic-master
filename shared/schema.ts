@@ -212,6 +212,7 @@ export const companyEmailBranding = pgTable("company_email_branding", {
   headerBannerUrl: varchar("header_banner_url", { length: 500 }),
   headerBackgroundType: varchar("header_background_type", { length: 20 }).default("color"),
   primaryColor: varchar("primary_color", { length: 20 }).default("#2563EB"),
+  combinedHeaderUrl: varchar("combined_header_url", { length: 500 }),
   fromName: varchar("from_name", { length: 100 }),
   replyToEmail: varchar("reply_to_email", { length: 255 }),
   footerText: text("footer_text"),

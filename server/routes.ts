@@ -903,6 +903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const {
         logoUrl,
         headerBannerUrl,
+        headerBackgroundType,
         primaryColor,
         fromName,
         replyToEmail,
@@ -927,10 +928,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Generate combined header image (hash-based caching handles reuse)
+      const { generateCombinedHeader } = await import('./services/headerGenerator');
+      
+      // Generate combined header - will reuse cached version if inputs unchanged
+      const combinedHeaderUrl = await generateCombinedHeader({
+        companyId: member.companyId,
+        bannerPath: headerBannerUrl,
+        logoPath: logoUrl,
+        brandColor: primaryColor || '#2563EB',
+        backgroundType: headerBackgroundType === 'image' ? 'image' : 'color',
+      });
+      
       const branding = await storage.upsertEmailBranding(member.companyId, {
         logoUrl: logoUrl || null,
         headerBannerUrl: headerBannerUrl || null,
+        headerBackgroundType: headerBackgroundType || 'color',
         primaryColor: primaryColor || '#2563EB',
+        combinedHeaderUrl: combinedHeaderUrl || null,
         fromName: fromName || null,
         replyToEmail: replyToEmail || null,
         footerText: footerText || null,
