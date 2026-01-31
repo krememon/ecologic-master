@@ -415,32 +415,28 @@ export async function sendBrandedCampaignEmail({
             </td>
           </tr>`;
   } else if (hasHeader || hasLogo) {
-    // Fallback: 3-row layout with separate images
+    // Fallback: 2-row layout with negative margin overlap (Gmail-safe)
     headerHtml = `
           ${hasHeader ? `
           <tr>
             <td style="padding: 0; line-height: 0;">
               <img src="cid:header" alt="Header" style="width: 100%; max-width: 600px; height: auto; display: block;" />
             </td>
-          </tr>
+          </tr>` : ''}
           <tr>
-            <td style="height: 40px; background-color: transparent;"></td>
-          </tr>
-          ` : ''}
-          <tr>
-            <td style="height: 80px; background-color: ${brandColor}; text-align: center; vertical-align: middle;">
-              <table cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
+            <td style="height: 90px; background-color: ${brandColor}; text-align: center; vertical-align: top;">
+              <table cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto; margin-top: -56px;">
                 <tr>
                   <td align="center" valign="middle">
                     ${hasLogo ? `
                     <table cellpadding="0" cellspacing="0" align="center">
                       <tr>
-                        <td style="background-color: #ffffff; border-radius: 9999px; padding: 6px;">
+                        <td style="background-color: #ffffff; border-radius: 9999px; padding: 12px;">
                           <img src="cid:logo" alt="${fromName}" width="88" height="88" style="width: 88px; height: 88px; border-radius: 9999px; display: block;" />
                         </td>
                       </tr>
                     </table>
-                    ` : `<h1 style="margin: 0; color: white; font-size: 22px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>`}
+                    ` : `<h1 style="margin: 0; padding-top: 56px; color: white; font-size: 22px; font-weight: 600; letter-spacing: 1px;">${fromName}</h1>`}
                   </td>
                 </tr>
               </table>
