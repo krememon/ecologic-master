@@ -6414,6 +6414,299 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===================
+  // Campaign Routes (Bulk email/SMS messaging)
+  // ===================
+
+  // Helper to check if user can send campaigns (Owner, Supervisor, Dispatcher only)
+  const canSendCampaigns = (role: string): boolean => {
+    const upperRole = role.toUpperCase();
+    return ['OWNER', 'SUPERVISOR', 'DISPATCHER'].includes(upperRole);
+  };
+
+  // POST /api/campaigns/preview - Get counts of eligible recipients
+  app.post('/api/campaigns/preview', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Only Owner/Supervisor/Dispatcher can send campaigns
+      if (!canSendCampaigns(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to send campaigns" });
+      }
+
+      const { customerIds, channel } = req.body;
+      
+      if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+        return res.status(400).json({ message: "customerIds array is required" });
+      }
+      
+      if (!channel || !['email', 'sms', 'both'].includes(channel)) {
+        return res.status(400).json({ message: "channel must be 'email', 'sms', or 'both'" });
+      }
+
+      // Fetch all customers for this company that are in the selection
+      const allCustomers = await storage.getCustomers(company.id);
+      const selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      
+      // Filter for email eligibility
+      const emailEligible = selectedCustomers.filter(c => 
+        c.email && 
+        c.emailOptIn === true && 
+        !c.emailUnsubscribedAt
+      );
+      
+      // Filter for SMS eligibility
+      const smsEligible = selectedCustomers.filter(c => 
+        c.phone && 
+        c.smsOptIn === true && 
+        !c.smsUnsubscribedAt
+      );
+      
+      // Build exclusion summary
+      const excluded: { reason: string; count: number }[] = [];
+      
+      const noEmailOrNotOptedIn = selectedCustomers.filter(c => 
+        !c.email || c.emailOptIn !== true || c.emailUnsubscribedAt
+      ).length;
+      
+      const noPhoneOrNotOptedIn = selectedCustomers.filter(c => 
+        !c.phone || c.smsOptIn !== true || c.smsUnsubscribedAt
+      ).length;
+      
+      if ((channel === 'email' || channel === 'both') && noEmailOrNotOptedIn > 0) {
+        excluded.push({ reason: 'No email or not opted in', count: noEmailOrNotOptedIn });
+      }
+      
+      if ((channel === 'sms' || channel === 'both') && noPhoneOrNotOptedIn > 0) {
+        excluded.push({ reason: 'No phone or not opted in for SMS', count: noPhoneOrNotOptedIn });
+      }
+
+      const result = {
+        emailCount: (channel === 'email' || channel === 'both') ? emailEligible.length : 0,
+        smsCount: (channel === 'sms' || channel === 'both') ? smsEligible.length : 0,
+        emailEligibleIds: (channel === 'email' || channel === 'both') ? emailEligible.map(c => c.id) : [],
+        smsEligibleIds: (channel === 'sms' || channel === 'both') ? smsEligible.map(c => c.id) : [],
+        excluded,
+        totalSelected: selectedCustomers.length,
+      };
+
+      console.log(`[Campaigns] preview userId=${userId} companyId=${company.id} channel=${channel} emailCount=${result.emailCount} smsCount=${result.smsCount}`);
+      res.json(result);
+    } catch (error) {
+      console.error("Error previewing campaign:", error);
+      res.status(500).json({ message: "Failed to preview campaign" });
+    }
+  });
+
+  // POST /api/campaigns/send - Send campaign to selected customers
+  app.post('/api/campaigns/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      // RBAC: Only Owner/Supervisor/Dispatcher can send campaigns
+      if (!canSendCampaigns(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to send campaigns" });
+      }
+
+      const { customerIds, channel, subject, emailBody, smsBody } = req.body;
+      
+      if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+        return res.status(400).json({ message: "customerIds array is required" });
+      }
+      
+      if (!channel || !['email', 'sms', 'both'].includes(channel)) {
+        return res.status(400).json({ message: "channel must be 'email', 'sms', or 'both'" });
+      }
+      
+      // Rate limit: max 500 recipients per send
+      if (customerIds.length > 500) {
+        return res.status(400).json({ message: "Maximum 500 recipients per campaign" });
+      }
+      
+      // Validate required fields based on channel
+      if ((channel === 'email' || channel === 'both') && (!subject || !emailBody)) {
+        return res.status(400).json({ message: "Subject and email body are required for email campaigns" });
+      }
+      
+      if ((channel === 'sms' || channel === 'both') && !smsBody) {
+        return res.status(400).json({ message: "SMS body is required for text campaigns" });
+      }
+
+      // Import messaging service
+      const { sendCampaignEmail, sendCampaignSms } = await import('./services/messaging');
+
+      // Fetch all customers for this company that are in the selection
+      const allCustomers = await storage.getCustomers(company.id);
+      const selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      
+      // Filter for email eligibility
+      const emailEligible = selectedCustomers.filter(c => 
+        c.email && 
+        c.emailOptIn === true && 
+        !c.emailUnsubscribedAt
+      );
+      
+      // Filter for SMS eligibility
+      const smsEligible = selectedCustomers.filter(c => 
+        c.phone && 
+        c.smsOptIn === true && 
+        !c.smsUnsubscribedAt
+      );
+
+      // Create campaign record
+      const campaign = await storage.createCampaign({
+        companyId: company.id,
+        createdByUserId: userId,
+        channel,
+        subject: subject || null,
+        emailBody: emailBody || null,
+        smsBody: smsBody || null,
+        status: 'sent',
+        recipientCount: (channel === 'email' ? emailEligible.length : 0) + 
+                        (channel === 'sms' ? smsEligible.length : 0) +
+                        (channel === 'both' ? emailEligible.length + smsEligible.length : 0),
+      });
+
+      const results = {
+        campaignId: campaign.id,
+        emailSent: 0,
+        emailFailed: 0,
+        smsSent: 0,
+        smsFailed: 0,
+        errors: [] as string[],
+      };
+
+      // Send emails
+      if (channel === 'email' || channel === 'both') {
+        for (const customer of emailEligible) {
+          const recipientRecord = await storage.createCampaignRecipient({
+            campaignId: campaign.id,
+            customerId: customer.id,
+            channel: 'email',
+            destination: customer.email!,
+            status: 'queued',
+          });
+
+          const result = await sendCampaignEmail({
+            to: customer.email!,
+            subject: subject!,
+            body: emailBody!,
+            companyName: company.name,
+          });
+
+          if (result.success) {
+            await storage.updateCampaignRecipient(recipientRecord.id, {
+              status: 'sent',
+              providerMessageId: result.messageId || null,
+            });
+            results.emailSent++;
+          } else {
+            await storage.updateCampaignRecipient(recipientRecord.id, {
+              status: 'failed',
+              errorMessage: result.error || 'Unknown error',
+            });
+            results.emailFailed++;
+            if (result.error && !results.errors.includes(result.error)) {
+              results.errors.push(result.error);
+            }
+          }
+        }
+      }
+
+      // Send SMS
+      if (channel === 'sms' || channel === 'both') {
+        for (const customer of smsEligible) {
+          const recipientRecord = await storage.createCampaignRecipient({
+            campaignId: campaign.id,
+            customerId: customer.id,
+            channel: 'sms',
+            destination: customer.phone!,
+            status: 'queued',
+          });
+
+          const result = await sendCampaignSms({
+            to: customer.phone!,
+            body: smsBody!,
+          });
+
+          if (result.success) {
+            await storage.updateCampaignRecipient(recipientRecord.id, {
+              status: 'sent',
+              providerMessageId: result.messageId || null,
+            });
+            results.smsSent++;
+          } else {
+            await storage.updateCampaignRecipient(recipientRecord.id, {
+              status: 'failed',
+              errorMessage: result.error || 'Unknown error',
+            });
+            results.smsFailed++;
+            if (result.error && !results.errors.includes(result.error)) {
+              results.errors.push(result.error);
+            }
+          }
+        }
+      }
+
+      console.log(`[Campaigns] send campaignId=${campaign.id} userId=${userId} companyId=${company.id} emailSent=${results.emailSent} smsSent=${results.smsSent}`);
+      res.json(results);
+    } catch (error) {
+      console.error("Error sending campaign:", error);
+      res.status(500).json({ message: "Failed to send campaign" });
+    }
+  });
+
+  // POST /api/webhooks/sms - Handle inbound SMS (STOP/unsubscribe)
+  app.post('/api/webhooks/sms', async (req: any, res) => {
+    try {
+      const { From, Body } = req.body;
+      
+      if (!From || !Body) {
+        return res.status(200).send('OK'); // Acknowledge even if incomplete
+      }
+
+      const normalizedBody = Body.trim().toLowerCase();
+      const stopKeywords = ['stop', 'unsubscribe', 'cancel', 'end', 'quit'];
+      
+      if (stopKeywords.includes(normalizedBody)) {
+        // Find customer by phone number
+        const phone = From.replace(/\D/g, '');
+        const customer = await storage.findCustomerByPhone(phone);
+        
+        if (customer) {
+          await storage.updateCustomer(customer.id, {
+            smsOptIn: false,
+            smsUnsubscribedAt: new Date(),
+          });
+          console.log(`[Webhooks] SMS unsubscribe phone=${From} customerId=${customer.id}`);
+        } else {
+          console.log(`[Webhooks] SMS unsubscribe phone=${From} - customer not found`);
+        }
+      }
+
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error("Error processing SMS webhook:", error);
+      res.status(200).send('OK'); // Always acknowledge to Twilio
+    }
+  });
+
+  // ===================
   // Estimate Routes (Job-scoped estimates with line items)
   // ===================
 

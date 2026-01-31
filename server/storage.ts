@@ -86,6 +86,12 @@ import {
   type InsertApprovalHistory,
   type SignatureRequest,
   type InsertSignatureRequest,
+  campaigns,
+  campaignRecipients,
+  type Campaign,
+  type InsertCampaign,
+  type CampaignRecipient,
+  type InsertCampaignRecipient,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull } from "drizzle-orm";
@@ -287,6 +293,13 @@ export interface IStorage {
   deleteCustomer(id: number): Promise<void>;
   deleteCustomerSecure(id: number, companyId: number): Promise<boolean>;
   deleteCustomersBulk(ids: number[]): Promise<number>;
+  findCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  
+  // Campaign operations
+  createCampaign(campaign: InsertCampaign & { companyId: number }): Promise<Campaign>;
+  getCampaigns(companyId: number): Promise<Campaign[]>;
+  createCampaignRecipient(recipient: InsertCampaignRecipient): Promise<CampaignRecipient>;
+  updateCampaignRecipient(id: number, updates: Partial<InsertCampaignRecipient>): Promise<CampaignRecipient>;
   
   // Service catalog operations
   getServiceCatalogItems(companyId: number): Promise<ServiceCatalogItem[]>;
@@ -2647,6 +2660,56 @@ export class DatabaseStorage implements IStorage {
     if (ids.length === 0) return 0;
     const result = await db.delete(customers).where(inArray(customers.id, ids));
     return result.rowCount ?? ids.length;
+  }
+
+  async findCustomerByPhone(phone: string): Promise<Customer | undefined> {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const allCustomers = await db.select().from(customers);
+    const match = allCustomers.find(c => {
+      if (!c.phone) return false;
+      const cPhone = c.phone.replace(/\D/g, '');
+      return cPhone === normalizedPhone || 
+             cPhone.endsWith(normalizedPhone) || 
+             normalizedPhone.endsWith(cPhone);
+    });
+    return match;
+  }
+
+  // Campaign operations
+  async createCampaign(campaign: InsertCampaign & { companyId: number }): Promise<Campaign> {
+    const [created] = await db
+      .insert(campaigns)
+      .values({
+        ...campaign,
+        sentAt: new Date(),
+      })
+      .returning();
+    return created;
+  }
+
+  async getCampaigns(companyId: number): Promise<Campaign[]> {
+    return db
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.companyId, companyId))
+      .orderBy(desc(campaigns.createdAt));
+  }
+
+  async createCampaignRecipient(recipient: InsertCampaignRecipient): Promise<CampaignRecipient> {
+    const [created] = await db
+      .insert(campaignRecipients)
+      .values(recipient)
+      .returning();
+    return created;
+  }
+
+  async updateCampaignRecipient(id: number, updates: Partial<InsertCampaignRecipient>): Promise<CampaignRecipient> {
+    const [updated] = await db
+      .update(campaignRecipients)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(campaignRecipients.id, id))
+      .returning();
+    return updated;
   }
 
   // Service catalog operations
