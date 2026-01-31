@@ -507,6 +507,12 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
+  // Global error handler to prevent hard crashes
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ message: "Server error", detail: err?.message });
+  });
+
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.

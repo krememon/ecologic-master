@@ -1007,7 +1007,11 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return next();
   }
 
-  if (!req.isAuthenticated() || !req.user) {
+  // Safe auth check - handle cases where Passport methods may not exist
+  const hasPassport = typeof req.isAuthenticated === "function";
+  const isAuthed = hasPassport ? req.isAuthenticated() : !!req.user;
+  
+  if (!isAuthed || !req.user) {
     console.log("Authentication failed: no session or user");
     return res.status(401).json({ message: "Unauthorized" });
   }
