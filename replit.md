@@ -48,6 +48,15 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Timesheet Editing (Manager-Only)**: Managers (Owner, Supervisor) can edit time entries to correct mistakes, with audit trail and RBAC enforcement. Edited entries display a blue "Edited" tag.
 - **Notifications System**: In-app notification system with 10 types (e.g., job_assigned, payment_collected), featuring a bell icon with unread badge, slide-over inbox, mark-as-read functionality, and click-to-navigate. Notifications are role-targeted with deduplication.
 - **QuickBooks Online Integration**: Owner-only feature for connecting to QuickBooks Online (Sandbox/Production) via OAuth 2.0. Features secure token storage, automatic token refresh, disconnect functionality, customer mapping (search by DisplayName/email or create), manual invoice sync with "Sync to QB" button on Payment Review page (idempotent), and automatic payment sync (cash/check/card/Stripe) with waiting-state handling when invoice not yet synced. Payment sync includes: atomic compare-and-set locking to prevent duplicate QBO payments, QBO-side de-duplication via PaymentRefNum lookup, DepositToAccountRef to Undeposited Funds or Bank account, and comprehensive [QB-PAY] logging for debugging.
+- **Bulk Email/SMS Campaigns**: A feature enabling managers (Owner, Supervisor, Dispatcher) to send bulk promotional messages to customers from the Clients page. Features:
+  - Multi-select mode on Clients page with "Send Email/Text" bulk action button
+  - CampaignModal component with channel selection (Email, SMS, or Both)
+  - Preview functionality showing eligible recipient counts based on opt-in status
+  - Customer opt-in management via Communication Preferences on ClientDetail page
+  - Automatic SMS unsubscribe handling via STOP keyword webhook (`/api/webhooks/sms`)
+  - Campaign tracking with `campaigns` and `campaign_recipients` tables for audit trail
+  - Rate limiting to 500 recipients per send to prevent abuse
+  - Email via Resend and SMS via Twilio with centralized messaging service
 - **Security Hardening**: Comprehensive cross-tenant data isolation to prevent IDOR vulnerabilities. Features:
   - Centralized security infrastructure (`server/security/permissions.ts`, `server/security/middleware.ts`) for consistent RBAC and UserContext handling
   - Company-scoped secure storage methods (`getJobSecure`, `getInvoiceSecure`, `getDocumentSecure`, `getCustomerSecure`, `getEstimateSecure`, `getClientSecure`) that enforce company ownership verification via AND clauses

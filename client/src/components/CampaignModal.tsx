@@ -13,9 +13,9 @@ import { Mail, MessageSquare, Send, Users, Loader2 } from "lucide-react";
 type Channel = "email" | "sms" | "both";
 
 interface CampaignPreview {
-  emailEligible: number;
-  smsEligible: number;
-  totalUniqueRecipients: number;
+  emailCount: number;
+  smsCount: number;
+  totalSelected: number;
 }
 
 interface CampaignModalProps {
@@ -61,14 +61,16 @@ export default function CampaignModal({ open, onOpenChange, selectedCustomerIds 
         customerIds: selectedCustomerIds,
         channel,
         subject: channel === "email" || channel === "both" ? subject : undefined,
-        body,
+        emailBody: channel === "email" || channel === "both" ? body : undefined,
+        smsBody: channel === "sms" || channel === "both" ? body : undefined,
       });
       return res.json();
     },
     onSuccess: (data) => {
+      const totalSent = (data.emailSent || 0) + (data.smsSent || 0);
       toast({
         title: "Campaign Sent",
-        description: `Successfully sent to ${data.sent} recipient${data.sent !== 1 ? 's' : ''}.`,
+        description: `Successfully sent ${totalSent} message${totalSent !== 1 ? 's' : ''}.`,
       });
       onOpenChange(false);
       resetForm();
@@ -122,9 +124,9 @@ export default function CampaignModal({ open, onOpenChange, selectedCustomerIds 
 
   const getEligibleCount = () => {
     if (!preview) return 0;
-    if (channel === "email") return preview.emailEligible;
-    if (channel === "sms") return preview.smsEligible;
-    return preview.totalUniqueRecipients;
+    if (channel === "email") return preview.emailCount;
+    if (channel === "sms") return preview.smsCount;
+    return preview.emailCount + preview.smsCount;
   };
 
   return (
@@ -216,15 +218,14 @@ export default function CampaignModal({ open, onOpenChange, selectedCustomerIds 
             {preview && (
               <div className="text-sm text-slate-600 dark:text-slate-400">
                 {channel === "email" && (
-                  <span>{preview.emailEligible} email recipient{preview.emailEligible !== 1 ? 's' : ''}</span>
+                  <span>{preview.emailCount} email recipient{preview.emailCount !== 1 ? 's' : ''}</span>
                 )}
                 {channel === "sms" && (
-                  <span>{preview.smsEligible} SMS recipient{preview.smsEligible !== 1 ? 's' : ''}</span>
+                  <span>{preview.smsCount} SMS recipient{preview.smsCount !== 1 ? 's' : ''}</span>
                 )}
                 {channel === "both" && (
                   <span>
-                    {preview.emailEligible} email, {preview.smsEligible} SMS 
-                    ({preview.totalUniqueRecipients} unique)
+                    {preview.emailCount} email, {preview.smsCount} SMS
                   </span>
                 )}
               </div>
