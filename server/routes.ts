@@ -6511,6 +6511,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/campaigns/recipients - Get detailed list of recipients with eligibility
+  app.post('/api/campaigns/recipients', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!canSendCampaigns(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to send campaigns" });
+      }
+
+      const { customerIds, channel, audienceMode } = req.body;
+      
+      if (!channel || !['email', 'sms', 'both'].includes(channel)) {
+        return res.status(400).json({ message: "channel must be 'email', 'sms', or 'both'" });
+      }
+
+      const allCustomers = await storage.getCustomers(company.id);
+      
+      let selectedCustomers;
+      if (audienceMode === 'all') {
+        selectedCustomers = allCustomers;
+      } else {
+        if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+          return res.status(400).json({ message: "customerIds array is required when not using 'all' audience mode" });
+        }
+        selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      }
+      
+      const recipients = selectedCustomers.map(c => {
+        const emailEligible = !!(c.email && c.emailOptIn === true && !c.emailUnsubscribedAt);
+        const smsEligible = !!(c.phone && c.smsOptIn === true && !c.smsUnsubscribedAt);
+        
+        let emailDisabledReason: string | null = null;
+        let smsDisabledReason: string | null = null;
+        
+        if (!emailEligible) {
+          if (!c.email) emailDisabledReason = "No email";
+          else if (c.emailUnsubscribedAt) emailDisabledReason = "Unsubscribed";
+          else if (!c.emailOptIn) emailDisabledReason = "Not opted in";
+        }
+        
+        if (!smsEligible) {
+          if (!c.phone) smsDisabledReason = "No phone";
+          else if (c.smsUnsubscribedAt) smsDisabledReason = "Unsubscribed";
+          else if (!c.smsOptIn) smsDisabledReason = "Not opted in";
+        }
+        
+        return {
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          emailEligible,
+          smsEligible,
+          emailDisabledReason,
+          smsDisabledReason,
+        };
+      });
+
+      const emailCount = recipients.filter(r => r.emailEligible).length;
+      const smsCount = recipients.filter(r => r.smsEligible).length;
+
+      res.json({ recipients, emailCount, smsCount });
+    } catch (error) {
+      console.error("Error fetching campaign recipients:", error);
+      res.status(500).json({ message: "Failed to fetch recipients" });
+    }
+  });
+
   // POST /api/campaigns/send - Send campaign to selected customers
   app.post('/api/campaigns/send', isAuthenticated, async (req: any, res) => {
     try {

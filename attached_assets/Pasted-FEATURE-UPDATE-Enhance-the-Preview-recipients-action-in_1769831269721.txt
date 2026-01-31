@@ -1,0 +1,78 @@
+FEATURE UPDATE: Enhance the “Preview recipients” action in the Launch Campaign modal. When clicked, open a recipient preview modal/drawer that shows the client list and allows the user to select or deselect individual clients for receiving the campaign (email/text/both), before sending.
+
+This is a UI + state enhancement only. Do NOT change campaign sending rules or opt-in enforcement.
+
+CORE BEHAVIOR
+- Clicking “Preview recipients” opens a secondary modal (or drawer) titled “Recipients”.
+- This modal lists eligible clients based on:
+  - Selected channel(s): Email / Text / Both
+  - Client opt-in toggles (Email Campaigns / Text Message Campaigns)
+  - Required contact info (email/phone)
+- The user can check/uncheck clients to include/exclude them from THIS campaign only.
+- Deselecting a client does NOT change their opt-in preferences.
+- Closing the modal saves the selection for the current campaign session.
+
+UI DESIGN (MATCH ECOLOGIC STYLE)
+Header:
+- Title: “Recipients”
+- Subtitle: “Choose who will receive this campaign”
+- Close (X) top-right
+
+Recipient List:
+- Use the same visual style as the Clients page cards, but more compact.
+- Each row includes:
+  - Checkbox (left)
+  - Client name
+  - Small icons showing channel eligibility:
+    - Email icon if eligible for email
+    - Text icon if eligible for SMS
+- If channel = Both:
+  - Show both icons when applicable
+
+Filtering & Info:
+- At top of list, show a small summary line:
+  “5 email recipients • 3 text recipients”
+- If a client is excluded automatically (no opt-in or missing contact):
+  - Show them disabled with a muted label:
+    “Text disabled (no opt-in)” or “Email disabled (no email)”
+  - Disabled clients cannot be selected.
+
+Actions:
+Footer buttons:
+- Left: “Cancel” (reverts to previous selection)
+- Right: “Confirm Recipients”
+Confirm saves the current selection and closes the preview modal.
+
+STATE MANAGEMENT
+- Maintain a local `campaignRecipients` state array:
+  - Initialized when Launch Campaign opens
+  - Defaults to all eligible clients
+- Preview modal edits ONLY this local state.
+- Main Launch Campaign modal uses this list when sending.
+
+IMPORTANT RULES
+- Opt-in rules ALWAYS win:
+  - User cannot force-send to a client who opted out.
+- If all recipients are deselected:
+  - Disable “Send Campaign” button
+  - Show subtle inline warning:
+    “Select at least one recipient to send this campaign.”
+
+DO NOT CHANGE
+- No changes to client opt-in toggles
+- No DB writes when selecting/deselecting
+- No backend changes required for MVP
+- No new permissions logic
+
+ACCEPTANCE TESTS
+1) Click “Preview recipients” → recipient list opens.
+2) Deselect a client → counts update correctly.
+3) Disabled clients (no opt-in/contact) cannot be selected.
+4) Confirm → selection persists back in Launch Campaign modal.
+5) Send Campaign only sends to selected recipients.
+6) Closing without confirming reverts selection.
+
+DELIVERABLE
+- Add RecipientPreviewModal (or drawer) component.
+- Wire it cleanly to Launch Campaign modal state.
+- Keep visuals consistent with Clients list and Add New Client modal.

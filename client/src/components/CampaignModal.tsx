@@ -6,15 +6,21 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, MessageSquare, Send, Users, Loader2, X } from "lucide-react";
+import { Mail, MessageSquare, Send, Users, Loader2, X, ChevronRight } from "lucide-react";
+import RecipientPreviewModal from "./RecipientPreviewModal";
 
 type Channel = "email" | "sms" | "both";
 type AudienceMode = "selected" | "all";
 
-interface CampaignPreview {
-  emailCount: number;
-  smsCount: number;
-  totalSelected: number;
+interface Recipient {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  emailEligible: boolean;
+  smsEligible: boolean;
+  emailDisabledReason: string | null;
+  smsDisabledReason: string | null;
 }
 
 interface CampaignModalProps {
@@ -36,19 +42,28 @@ export default function CampaignModal({
   const [channel, setChannel] = useState<Channel>("email");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [preview, setPreview] = useState<CampaignPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [recipientModalOpen, setRecipientModalOpen] = useState(false);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [campaignRecipientIds, setCampaignRecipientIds] = useState<number[]>([]);
+  const [recipientsLoaded, setRecipientsLoaded] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setPreview(null);
+      setRecipients([]);
+      setCampaignRecipientIds([]);
+      setRecipientsLoaded(false);
     }
-  }, [open, audienceMode, selectedCustomerIds.length]);
+  }, [open]);
 
-  const previewMutation = useMutation({
+  useEffect(() => {
+    if (open && channel) {
+      setRecipientsLoaded(false);
+    }
+  }, [channel]);
+
+  const fetchRecipientsMutation = useMutation({
     mutationFn: async () => {
-      setPreviewLoading(true);
-      const res = await apiRequest("POST", "/api/campaigns/preview", {
+      const res = await apiRequest("POST", "/api/campaigns/recipients", {
         customerIds: audienceMode === "all" ? [] : selectedCustomerIds,
         channel,
         audienceMode,
@@ -56,28 +71,39 @@ export default function CampaignModal({
       return res.json();
     },
     onSuccess: (data) => {
-      setPreview(data);
-      setPreviewLoading(false);
+      setRecipients(data.recipients);
+      const eligibleIds = data.recipients
+        .filter((r: Recipient) => {
+          if (channel === "email") return r.emailEligible;
+          if (channel === "sms") return r.smsEligible;
+          return r.emailEligible || r.smsEligible;
+        })
+        .map((r: Recipient) => r.id);
+      
+      if (!recipientsLoaded) {
+        setCampaignRecipientIds(eligibleIds);
+        setRecipientsLoaded(true);
+      }
+      setRecipientModalOpen(true);
     },
     onError: (error: Error) => {
       toast({
-        title: "Preview Error",
+        title: "Error",
         description: error.message,
         variant: "destructive",
       });
-      setPreviewLoading(false);
     },
   });
 
   const sendMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/campaigns/send", {
-        customerIds: audienceMode === "all" ? [] : selectedCustomerIds,
+        customerIds: campaignRecipientIds.length > 0 ? campaignRecipientIds : (audienceMode === "all" ? [] : selectedCustomerIds),
         channel,
         subject: channel === "email" || channel === "both" ? subject : undefined,
         emailBody: channel === "email" || channel === "both" ? body : undefined,
         smsBody: channel === "sms" || channel === "both" ? body : undefined,
-        audienceMode,
+        audienceMode: campaignRecipientIds.length > 0 ? "selected" : audienceMode,
       });
       return res.json();
     },
@@ -104,7 +130,9 @@ export default function CampaignModal({
     setChannel("email");
     setSubject("");
     setBody("");
-    setPreview(null);
+    setRecipients([]);
+    setCampaignRecipientIds([]);
+    setRecipientsLoaded(false);
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -114,8 +142,12 @@ export default function CampaignModal({
     onOpenChange(open);
   };
 
-  const handlePreview = () => {
-    previewMutation.mutate();
+  const handlePreviewRecipients = () => {
+    fetchRecipientsMutation.mutate();
+  };
+
+  const handleRecipientConfirm = (ids: number[]) => {
+    setCampaignRecipientIds(ids);
   };
 
   const handleSend = () => {
@@ -138,13 +170,6 @@ export default function CampaignModal({
     sendMutation.mutate();
   };
 
-  const getEligibleCount = () => {
-    if (!preview) return 0;
-    if (channel === "email") return preview.emailCount;
-    if (channel === "sms") return preview.smsCount;
-    return preview.emailCount + preview.smsCount;
-  };
-
   const getPreviewLabel = () => {
     if (audienceMode === "selected" && selectedCustomerIds.length > 0) {
       return "Preview selected recipients";
@@ -161,169 +186,201 @@ export default function CampaignModal({
   const canSend = () => {
     if ((channel === "email" || channel === "both") && !subject.trim()) return false;
     if (!body.trim()) return false;
+    if (recipientsLoaded && campaignRecipientIds.length === 0) return false;
     return true;
   };
 
+  const getRecipientSummary = () => {
+    if (!recipientsLoaded) return null;
+    
+    const emailCount = campaignRecipientIds.filter((id) => {
+      const r = recipients.find((rec) => rec.id === id);
+      return r?.emailEligible;
+    }).length;
+    
+    const smsCount = campaignRecipientIds.filter((id) => {
+      const r = recipients.find((rec) => rec.id === id);
+      return r?.smsEligible;
+    }).length;
+
+    if (channel === "email") return `${emailCount} email`;
+    if (channel === "sms") return `${smsCount} text`;
+    return `${emailCount} email • ${smsCount} text`;
+  };
+
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden [&>button]:hidden">
-        <div className="flex flex-col h-full max-h-[85vh]">
-          {/* Fixed Header */}
-          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
-            <button 
-              type="button"
-              onClick={() => handleOpenChange(false)} 
-              className="absolute right-4 top-1/2 -translate-y-1/2"
-            >
-              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-            </button>
-            <div className="text-center">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-center gap-2">
-                <Send className="h-4 w-4" />
-                Launch Campaign
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Send an email, text, or both to your clients</p>
-            </div>
-          </div>
-
-          {/* Scrollable Body */}
-          <div className="px-5 py-4 flex-1 overflow-auto">
-            <div className="space-y-4">
-              {/* Channel Segmented Control */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Channel</label>
-                <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/50">
-                  <button
-                    type="button"
-                    onClick={() => { setChannel("email"); setPreview(null); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                      channel === "email"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                    }`}
-                  >
-                    <Mail className="h-4 w-4" />
-                    Email
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setChannel("sms"); setPreview(null); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                      channel === "sms"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                    }`}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Text
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setChannel("both"); setPreview(null); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                      channel === "both"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                    }`}
-                  >
-                    Both
-                  </button>
-                </div>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden [&>button]:hidden">
+          <div className="flex flex-col h-full max-h-[85vh]">
+            {/* Fixed Header */}
+            <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
+              <button 
+                type="button"
+                onClick={() => handleOpenChange(false)} 
+                className="absolute right-4 top-1/2 -translate-y-1/2"
+              >
+                <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              </button>
+              <div className="text-center">
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-center gap-2">
+                  <Send className="h-4 w-4" />
+                  Launch Campaign
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Send an email, text, or both to your clients</p>
               </div>
+            </div>
 
-              {/* Subject Field (Email or Both) */}
-              {(channel === "email" || channel === "both") && (
+            {/* Scrollable Body */}
+            <div className="px-5 py-4 flex-1 overflow-auto">
+              <div className="space-y-4">
+                {/* Channel Segmented Control */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Subject</label>
-                  <Input
-                    placeholder="Enter email subject..."
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="h-10 text-sm"
-                  />
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Channel</label>
+                  <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/50">
+                    <button
+                      type="button"
+                      onClick={() => setChannel("email")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                        channel === "email"
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Mail className="h-4 w-4" />
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChannel("sms")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                        channel === "sms"
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChannel("both")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                        channel === "both"
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      Both
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {/* Message Field */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">{getMessageLabel()}</label>
-                <Textarea
-                  placeholder={channel === "sms" ? "Enter your text message..." : "Enter your message..."}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="text-sm min-h-[100px] resize-none"
-                />
-                {(channel === "sms" || channel === "both") && (
-                  <p className={`text-xs ${body.length > 160 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {body.length} characters • {Math.ceil(body.length / 160) || 1} SMS segment{Math.ceil(body.length / 160) !== 1 ? 's' : ''}
-                    {body.length > 160 && ' (extra charges may apply)'}
+                {/* Subject Field (Email or Both) */}
+                {(channel === "email" || channel === "both") && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Subject</label>
+                    <Input
+                      placeholder="Enter email subject..."
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="h-10 text-sm"
+                    />
+                  </div>
+                )}
+
+                {/* Message Field */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300">{getMessageLabel()}</label>
+                  <Textarea
+                    placeholder={channel === "sms" ? "Enter your text message..." : "Enter your message..."}
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    className="text-sm min-h-[100px] resize-none"
+                  />
+                  {(channel === "sms" || channel === "both") && (
+                    <p className={`text-xs ${body.length > 160 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {body.length} characters • {Math.ceil(body.length / 160) || 1} SMS segment{Math.ceil(body.length / 160) !== 1 ? 's' : ''}
+                      {body.length > 160 && ' (extra charges may apply)'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Preview Recipients Row */}
+                <div 
+                  onClick={handlePreviewRecipients}
+                  className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    {fetchRecipientsMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                    ) : (
+                      <Users className="h-4 w-4 text-blue-600" />
+                    )}
+                    <span className="text-sm font-medium text-blue-600">{getPreviewLabel()}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {recipientsLoaded && (
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        {getRecipientSummary()}
+                      </span>
+                    )}
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+
+                {/* Warning if no eligible recipients */}
+                {recipientsLoaded && campaignRecipientIds.length === 0 && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400 px-1">
+                    Select at least one recipient to send this campaign.
                   </p>
                 )}
               </div>
+            </div>
 
-              {/* Preview Recipients Row */}
-              <div 
-                onClick={handlePreview}
-                className="flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {previewLoading ? (
-                    <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+            {/* Fixed Footer */}
+            <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => handleOpenChange(false)} 
+                  className="flex-1 h-11"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSend}
+                  disabled={sendMutation.isPending || !canSend()}
+                  className="flex-1 h-11"
+                >
+                  {sendMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Sending...
+                    </>
                   ) : (
-                    <Users className="h-4 w-4 text-blue-600" />
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Campaign
+                    </>
                   )}
-                  <span className="text-sm font-medium text-blue-600">{getPreviewLabel()}</span>
-                </div>
-                {preview && (
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {channel === "email" && `${preview.emailCount} email`}
-                    {channel === "sms" && `${preview.smsCount} text`}
-                    {channel === "both" && `${preview.emailCount} email • ${preview.smsCount} text`}
-                  </span>
-                )}
+                </Button>
               </div>
-
-              {/* Warning if no eligible recipients */}
-              {preview && getEligibleCount() === 0 && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 px-1">
-                  No eligible recipients. Clients must have opt-in enabled and valid contact info.
-                </p>
-              )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Fixed Footer */}
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
-            <div className="flex gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => handleOpenChange(false)} 
-                className="flex-1 h-11"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSend}
-                disabled={sendMutation.isPending || !canSend() || (preview ? getEligibleCount() === 0 : false)}
-                className="flex-1 h-11"
-              >
-                {sendMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Campaign
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <RecipientPreviewModal
+        open={recipientModalOpen}
+        onOpenChange={setRecipientModalOpen}
+        channel={channel}
+        recipients={recipients}
+        selectedIds={campaignRecipientIds}
+        onConfirm={handleRecipientConfirm}
+        isLoading={fetchRecipientsMutation.isPending}
+      />
+    </>
   );
 }
