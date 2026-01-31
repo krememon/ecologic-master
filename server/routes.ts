@@ -3095,50 +3095,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/account', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
+      console.log(`[delete-account] Starting account deletion for userId=${userId}`);
+      
       const company = await storage.getUserCompany(userId);
       
       if (company) {
         const member = await storage.getCompanyMember(company.id, userId);
         const userRole = member?.role?.toUpperCase();
+        const allMembers = await storage.getCompanyMembers(company.id);
+        const ownerCount = allMembers.filter(m => m.role?.toUpperCase() === 'OWNER').length;
+        const isLastOwner = userRole === 'OWNER' && ownerCount <= 1;
         
-        // Owner safety check: if user is an owner, ensure they're not the last one
-        if (userRole === 'OWNER') {
-          const allMembers = await storage.getCompanyMembers(company.id);
-          const ownerCount = allMembers.filter(m => m.role?.toUpperCase() === 'OWNER').length;
+        if (isLastOwner) {
+          // Last owner deleting account -> full company wipe
+          console.log(`[delete-account] User is last owner of company ${company.id}, performing full company deletion`);
           
-          if (ownerCount <= 1) {
-            return res.status(400).json({
-              message: "You are the last Owner for this company. Transfer ownership or delete the company first."
-            });
+          // Cancel Stripe subscription if exists (non-blocking)
+          if (stripe && company.stripeSubscriptionId) {
+            try {
+              await stripe.subscriptions.cancel(company.stripeSubscriptionId);
+              console.log(`[delete-account] Cancelled Stripe subscription ${company.stripeSubscriptionId}`);
+            } catch (stripeError: any) {
+              console.error(`[delete-account] Stripe cancellation failed (continuing):`, stripeError.message);
+              // Continue with deletion even if Stripe fails
+            }
           }
+          
+          // Delete entire company and all related data (including user)
+          await storage.deleteCompanyAndAllData(company.id, userId);
+          console.log(`[delete-account] Full company deletion completed`);
+        } else {
+          // Not last owner -> delete user only, company remains
+          console.log(`[delete-account] User is not last owner, deleting user only`);
+          await storage.deleteUserAccount(userId);
+          console.log(`[delete-account] User deletion completed`);
         }
-        
-        // Note: Stripe subscription is NOT cancelled when deleting a user account.
-        // The subscription belongs to the company, not the individual user.
-        // If the last owner is being deleted, the earlier check would have blocked it.
-        // If another owner is being deleted, the company and subscription remain active.
+      } else {
+        // User has no company -> just delete the user
+        console.log(`[delete-account] User has no company, deleting user only`);
+        await storage.deleteUserAccount(userId);
+        console.log(`[delete-account] User deletion completed`);
       }
-      
-      // Delete user account and anonymize related data
-      await storage.deleteUserAccount(userId);
       
       // Destroy session to log out user
       req.logout((err: any) => {
         if (err) {
-          console.error("[DELETE ACCOUNT] Logout error:", err);
+          console.error("[delete-account] Logout error:", err);
         }
       });
       
       req.session.destroy((err: any) => {
         if (err) {
-          console.error("[DELETE ACCOUNT] Session destroy error:", err);
+          console.error("[delete-account] Session destroy error:", err);
         }
       });
       
       res.json({ ok: true });
     } catch (error: any) {
-      console.error("[DELETE ACCOUNT] Error:", error);
-      res.status(500).json({ message: error.message || "Failed to delete account" });
+      console.error("[delete-account] Error:", error);
+      res.status(500).json({ message: "Something went wrong. Please try again." });
     }
   });
 

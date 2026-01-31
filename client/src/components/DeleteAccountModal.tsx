@@ -39,10 +39,10 @@ export default function DeleteAccountModal({ open, onOpenChange }: DeleteAccount
       });
       window.location.href = "/login";
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
     },

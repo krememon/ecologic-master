@@ -790,6 +790,156 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async deleteCompanyAndAllData(companyId: number, ownerUserId: string): Promise<void> {
+    console.log(`[delete-company] Starting full company deletion for companyId=${companyId}, ownerUserId=${ownerUserId}`);
+    
+    await db.transaction(async (tx) => {
+      // Get all company member user IDs for later cleanup
+      const memberRows = await tx.select({ userId: companyMembers.userId })
+        .from(companyMembers)
+        .where(eq(companyMembers.companyId, companyId));
+      const memberUserIds = memberRows.map(m => m.userId);
+      
+      // Get all job IDs for this company (needed for child table deletions)
+      const jobRows = await tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.companyId, companyId));
+      const jobIds = jobRows.map(j => j.id);
+      
+      // Get all estimate IDs for this company (needed for child table deletions)
+      const estimateRows = await tx.select({ id: estimates.id }).from(estimates).where(eq(estimates.companyId, companyId));
+      const estimateIds = estimateRows.map(e => e.id);
+      
+      // Get all conversation IDs for this company
+      const conversationRows = await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.companyId, companyId));
+      const conversationIds = conversationRows.map(c => c.id);
+      
+      // Get all approval workflow IDs for this company
+      const workflowRows = await tx.select({ id: approvalWorkflows.id }).from(approvalWorkflows).where(eq(approvalWorkflows.companyId, companyId));
+      const workflowIds = workflowRows.map(w => w.id);
+      
+      // Get all campaign IDs for this company
+      const campaignRows = await tx.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.companyId, companyId));
+      const campaignIds = campaignRows.map(c => c.id);
+      
+      // 1. Delete signature requests
+      console.log(`[delete-company] Deleting signature requests...`);
+      await tx.delete(signatureRequests).where(eq(signatureRequests.companyId, companyId));
+      
+      // 2. Delete estimate-related data (child tables first, then estimates)
+      console.log(`[delete-company] Deleting estimate attachments, documents, items...`);
+      await tx.delete(estimateAttachments).where(eq(estimateAttachments.companyId, companyId));
+      await tx.delete(estimateDocuments).where(eq(estimateDocuments.companyId, companyId));
+      if (estimateIds.length > 0) {
+        await tx.delete(estimateItems).where(inArray(estimateItems.estimateId, estimateIds));
+      }
+      await tx.delete(estimates).where(eq(estimates.companyId, companyId));
+      
+      // 3. Delete approval-related data (child tables first via workflowId)
+      console.log(`[delete-company] Deleting approval workflows, signatures, history...`);
+      if (workflowIds.length > 0) {
+        await tx.delete(approvalHistory).where(inArray(approvalHistory.workflowId, workflowIds));
+        await tx.delete(approvalSignatures).where(inArray(approvalSignatures.workflowId, workflowIds));
+      }
+      await tx.delete(approvalWorkflows).where(eq(approvalWorkflows.companyId, companyId));
+      
+      // 4. Delete payments and invoices
+      console.log(`[delete-company] Deleting payments and invoices...`);
+      await tx.delete(payments).where(eq(payments.companyId, companyId));
+      await tx.delete(invoices).where(eq(invoices.companyId, companyId));
+      
+      // 5. Delete job-related data (child tables first via jobId)
+      console.log(`[delete-company] Deleting job photos, line items, assignments...`);
+      if (jobIds.length > 0) {
+        await tx.delete(jobPhotos).where(inArray(jobPhotos.jobId, jobIds));
+        await tx.delete(jobLineItems).where(inArray(jobLineItems.jobId, jobIds));
+        await tx.delete(jobAssignments).where(inArray(jobAssignments.jobId, jobIds));
+      }
+      await tx.delete(crewAssignments).where(eq(crewAssignments.companyId, companyId));
+      await tx.delete(scheduleItems).where(eq(scheduleItems.companyId, companyId));
+      await tx.delete(jobs).where(eq(jobs.companyId, companyId));
+      
+      // 6. Delete documents
+      console.log(`[delete-company] Deleting documents...`);
+      await tx.delete(documents).where(eq(documents.companyId, companyId));
+      
+      // 7. Delete messaging data (child tables first via conversationId)
+      console.log(`[delete-company] Deleting messages and conversations...`);
+      if (conversationIds.length > 0) {
+        await tx.delete(messages).where(inArray(messages.conversationId, conversationIds));
+        await tx.delete(conversationParticipants).where(inArray(conversationParticipants.conversationId, conversationIds));
+      }
+      await tx.delete(conversations).where(eq(conversations.companyId, companyId));
+      
+      // 8. Delete campaign data (child tables first via campaignId)
+      console.log(`[delete-company] Deleting campaigns and recipients...`);
+      if (campaignIds.length > 0) {
+        await tx.delete(campaignRecipients).where(inArray(campaignRecipients.campaignId, campaignIds));
+      }
+      await tx.delete(campaigns).where(eq(campaigns.companyId, companyId));
+      
+      // 9. Delete notifications for all company members
+      console.log(`[delete-company] Deleting notifications...`);
+      if (memberUserIds.length > 0) {
+        await tx.delete(notifications).where(inArray(notifications.recipientUserId, memberUserIds));
+      }
+      
+      // 10. Delete time logs
+      console.log(`[delete-company] Deleting time logs...`);
+      await tx.delete(timeLogs).where(eq(timeLogs.companyId, companyId));
+      
+      // 11. Delete leads
+      console.log(`[delete-company] Deleting leads...`);
+      await tx.delete(leads).where(eq(leads.companyId, companyId));
+      
+      // 12. Delete company taxes
+      console.log(`[delete-company] Deleting company taxes...`);
+      await tx.delete(companyTaxes).where(eq(companyTaxes.companyId, companyId));
+      
+      // 13. Delete service catalog items
+      console.log(`[delete-company] Deleting service catalog items...`);
+      await tx.delete(serviceCatalogItems).where(eq(serviceCatalogItems.companyId, companyId));
+      
+      // 14. Delete company counters
+      console.log(`[delete-company] Deleting company counters...`);
+      await tx.delete(companyCounters).where(eq(companyCounters.companyId, companyId));
+      
+      // 15. Delete company email branding
+      console.log(`[delete-company] Deleting company email branding...`);
+      await tx.delete(companyEmailBranding).where(eq(companyEmailBranding.companyId, companyId));
+      
+      // 16. Delete customers and clients
+      console.log(`[delete-company] Deleting customers and clients...`);
+      await tx.delete(customers).where(eq(customers.companyId, companyId));
+      await tx.delete(clients).where(eq(clients.companyId, companyId));
+      
+      // 17. Delete subcontractors
+      console.log(`[delete-company] Deleting subcontractors...`);
+      await tx.delete(subcontractors).where(eq(subcontractors.companyId, companyId));
+      
+      // 18. Delete company members
+      console.log(`[delete-company] Deleting company members...`);
+      await tx.delete(companyMembers).where(eq(companyMembers.companyId, companyId));
+      
+      // 19. Delete the company itself
+      console.log(`[delete-company] Deleting company record...`);
+      await tx.delete(companies).where(eq(companies.id, companyId));
+      
+      // 20. Delete sessions for all company members
+      console.log(`[delete-company] Deleting sessions...`);
+      for (const memberId of memberUserIds) {
+        await tx.delete(sessions).where(sql`sess->>'passport'->>'user' = ${memberId}`);
+      }
+      
+      // 21. Hard-delete all member users (including the owner)
+      // Since we've deleted all FK-referencing data, we can now hard-delete
+      console.log(`[delete-company] Deleting user records...`);
+      if (memberUserIds.length > 0) {
+        await tx.delete(users).where(inArray(users.id, memberUserIds));
+      }
+      
+      console.log(`[delete-company] Completed full company deletion for companyId=${companyId}`);
+    });
+  }
+
   async getJobCrewAssignments(jobId: number): Promise<any[]> {
     const assignments = await db
       .select({

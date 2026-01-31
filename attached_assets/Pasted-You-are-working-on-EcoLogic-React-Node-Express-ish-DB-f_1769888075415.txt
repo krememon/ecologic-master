@@ -1,0 +1,83 @@
+You are working on EcoLogic (React + Node/Express-ish + DB + file storage + Stripe).
+
+GOAL:
+When user types DELETE and confirms, the delete must ALWAYS work.
+No “transfer ownership” errors. No blocks.
+
+CHANGE IN BEHAVIOR:
+- DELETE ACCOUNT should delete the user.
+- If the user is the last Owner of their company, DELETE ACCOUNT should also delete the entire company and all company data (full wipe).
+- This is intentional: simple and final.
+
+FRONTEND:
+1) Keep the existing typed confirmation modal.
+2) On confirm, call DELETE /api/account
+3) If success:
+   - clear auth state/session
+   - redirect to /login (or welcome)
+   - show toast: "Account deleted"
+4) If error: show a generic friendly message (no raw JSON): "Something went wrong. Please try again."
+
+BACKEND:
+Implement/modify DELETE /api/account to support full deletion even for last owner.
+
+Required steps on backend (must be transactional + safe):
+A) Auth guard: require logged-in user, get userId + companyId + role.
+
+B) Determine if user is last Owner in the company.
+   - If last owner => delete company + all related data (see below).
+   - If not last owner => delete user only (remove membership + anonymize user references).
+
+C) Stripe:
+   - If company has an active subscription/customer:
+     - Cancel subscription immediately
+     - Optionally detach payment method
+   - Continue deletion even if Stripe cancel fails, but log the failure and proceed (do NOT block delete).
+
+D) Storage cleanup:
+   - Delete all files belonging to the company if deleting company.
+   - If only deleting user, delete only user-owned files (if any), otherwise just remove references.
+
+E) Data deletion rules:
+   1) If deleting COMPANY (last owner):
+      - Delete in correct order to satisfy foreign keys:
+        - documents + approvals
+        - document links (job_docs, estimate_docs)
+        - jobs, job_assignments, job_notes, job_events
+        - estimates, estimate_line_items, estimate_assignments
+        - invoices, payments, invoice_line_items
+        - clients
+        - messages/DM threads + participants + messages
+        - notifications
+        - invites
+        - membership rows
+        - company settings/profile
+        - company row
+      - Then delete the user row (and any auth identities/sessions)
+
+   2) If deleting USER only (not last owner):
+      - Remove membership row
+      - Delete auth identities/sessions/tokens
+      - Delete user profile/user row
+      - For historical data:
+        - Keep company jobs/estimates/documents
+        - Replace createdBy / sender references with null or "Deleted User" to avoid breaking UI
+
+F) Logout:
+   - Invalidate session/cookie/token after successful deletion
+   - Return { ok: true }
+
+IMPORTANT IMPLEMENTATION REQUIREMENTS:
+- Use a DB transaction for DB deletes.
+- If you have strict foreign keys, delete child tables first.
+- Add targeted logs: [delete-account] and [delete-company] with companyId + userId.
+- Ensure no raw error JSON reaches the frontend.
+
+DELIVERABLES:
+- DELETE /api/account supports:
+   - normal user delete
+   - last owner => full company wipe + user delete
+- Frontend continues to work and redirects to login after success.
+- Manual tests:
+   1) Last owner: delete account => company gone, user logged out, cannot log back in, no orphan data
+   2) Non-last owner: delete account => user removed, company still exists for others
