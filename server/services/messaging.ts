@@ -173,3 +173,212 @@ export async function sendCampaignSms({
     };
   }
 }
+
+export async function sendBrandedCampaignEmail({
+  to,
+  subject,
+  body,
+  companyName,
+  branding,
+  company,
+}: {
+  to: string;
+  subject: string;
+  body: string;
+  companyName: string;
+  branding?: {
+    logoUrl?: string | null;
+    headerBannerUrl?: string | null;
+    primaryColor?: string | null;
+    fromName?: string | null;
+    replyToEmail?: string | null;
+    footerText?: string | null;
+    showPhone?: boolean | null;
+    showAddress?: boolean | null;
+  } | null;
+  company?: {
+    phone?: string | null;
+    addressLine1?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+  } | null;
+}): Promise<EmailResult> {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  
+  if (!resendApiKey) {
+    console.error('[Campaign] RESEND_API_KEY not configured');
+    return {
+      success: false,
+      error: 'Email service not configured - RESEND_API_KEY missing',
+    };
+  }
+
+  const resend = new Resend(resendApiKey);
+  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
+  
+  const brandColor = branding?.primaryColor || '#2563EB';
+  const logoUrl = branding?.logoUrl || '';
+  const headerBannerUrl = branding?.headerBannerUrl || '';
+  const footerText = branding?.footerText || '';
+  const fromName = branding?.fromName || companyName;
+  const showPhone = branding?.showPhone ?? true;
+  const showAddress = branding?.showAddress ?? true;
+  
+  const footerParts: string[] = [];
+  if (showPhone && company?.phone) {
+    footerParts.push(`Phone: ${company.phone}`);
+  }
+  if (showAddress && company?.addressLine1) {
+    const addr = [company.addressLine1, company.city, company.state, company.postalCode].filter(Boolean).join(', ');
+    footerParts.push(addr);
+  }
+  if (footerText) {
+    footerParts.push(footerText);
+  }
+  
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 100%;">
+          ${headerBannerUrl ? `
+          <tr>
+            <td style="padding: 0;">
+              <img src="${headerBannerUrl}" alt="Header" style="width: 100%; height: auto; display: block;" />
+            </td>
+          </tr>
+          ` : ''}
+          <tr>
+            <td style="padding: 30px; background-color: ${brandColor}; text-align: center;">
+              ${logoUrl ? `<img src="${logoUrl}" alt="${fromName}" style="max-height: 60px; max-width: 200px;" />` : `<h1 style="margin: 0; color: white; font-size: 24px;">${fromName}</h1>`}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px;">
+              <div style="white-space: pre-wrap; color: #333333; line-height: 1.6;">${body}</div>
+            </td>
+          </tr>
+          ${footerParts.length > 0 ? `
+          <tr>
+            <td style="padding: 20px 30px; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
+              <p style="margin: 0; color: #888888; font-size: 12px; text-align: center; line-height: 1.8;">
+                ${footerParts.join('<br />')}
+              </p>
+              <p style="margin: 8px 0 0 0; color: #9ca3af; font-size: 11px; text-align: center;">
+                To unsubscribe, please reply to this email or contact ${companyName} directly.
+              </p>
+            </td>
+          </tr>
+          ` : `
+          <tr>
+            <td style="padding: 20px 30px; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
+              <p style="margin: 0; color: #9ca3af; font-size: 11px; text-align: center;">
+                Sent by ${companyName}. To unsubscribe, please reply to this email.
+              </p>
+            </td>
+          </tr>
+          `}
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: resolvedFrom,
+      to: [to],
+      subject,
+      html,
+      reply_to: branding?.replyToEmail || undefined,
+    });
+
+    if (error) {
+      console.error('[Campaign] Resend API error:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to send email via Resend',
+      };
+    }
+
+    console.log('[Campaign] Branded email sent to=', to, 'id=', data?.id);
+    return {
+      success: true,
+      messageId: data?.id,
+    };
+  } catch (err: any) {
+    console.error('[Campaign] Email failed:', err?.message || err);
+    return {
+      success: false,
+      error: err?.message || 'Failed to send email',
+    };
+  }
+}
+
+export const messagingService = {
+  sendEmail: async ({
+    to,
+    subject,
+    html,
+    replyTo,
+    fromName,
+  }: {
+    to: string;
+    subject: string;
+    html: string;
+    replyTo?: string;
+    fromName?: string;
+  }): Promise<EmailResult> => {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    
+    if (!resendApiKey) {
+      return {
+        success: false,
+        error: 'Email service not configured - RESEND_API_KEY missing',
+      };
+    }
+
+    const resend = new Resend(resendApiKey);
+    const baseFrom = normalizeFromAddress(process.env.EMAIL_FROM);
+    
+    try {
+      const { data, error } = await resend.emails.send({
+        from: baseFrom,
+        to: [to],
+        subject,
+        html,
+        reply_to: replyTo || undefined,
+      });
+
+      if (error) {
+        return {
+          success: false,
+          error: error.message || 'Failed to send email via Resend',
+        };
+      }
+
+      return {
+        success: true,
+        messageId: data?.id,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || 'Failed to send email',
+      };
+    }
+  },
+  
+  sendCampaignEmail,
+  sendBrandedCampaignEmail,
+  sendCampaignSms,
+};

@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link, useSearch } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2 } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2, Mail } from "lucide-react";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -82,6 +82,12 @@ export default function Customize() {
       title: "QuickBooks",
       description: "Connect to QuickBooks Online for accounting",
       href: "/customize/quickbooks",
+    },
+    {
+      icon: Mail,
+      title: "Email Branding",
+      description: "Customize look of campaign emails",
+      href: "/customize/email-branding",
     },
   ];
 
