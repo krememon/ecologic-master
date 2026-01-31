@@ -100,7 +100,6 @@ export default function SignupWizard() {
     firstName: "",
     lastName: "",
     email: "",
-    verificationCode: "",
     password: "",
     confirmPassword: "",
     industry: "",
@@ -108,6 +107,8 @@ export default function SignupWizard() {
     employeeRange: "",
     inviteCode: "",
   });
+  
+  const [verificationCode, setVerificationCode] = useState<string[]>(["", "", "", "", "", ""]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -199,9 +200,12 @@ export default function SignupWizard() {
   
   const handleCodeInput = (index: number, value: string) => {
     if (value.length > 1) {
-      const digits = value.replace(/\D/g, "").slice(0, 6);
-      const newCode = digits.padEnd(6, " ").slice(0, 6);
-      setFormData({ ...formData, verificationCode: newCode.trim() });
+      const digits = value.replace(/\D/g, "").slice(0, 6).split("");
+      const newCode = [...verificationCode];
+      digits.forEach((d, i) => {
+        if (i < 6) newCode[i] = d;
+      });
+      setVerificationCode(newCode);
       
       const focusIndex = Math.min(digits.length, 5);
       codeInputRefs.current[focusIndex]?.focus();
@@ -209,10 +213,9 @@ export default function SignupWizard() {
     }
     
     const digit = value.replace(/\D/g, "");
-    const codeArray = formData.verificationCode.padEnd(6, " ").split("");
-    codeArray[index] = digit || " ";
-    const newCode = codeArray.join("").trim();
-    setFormData({ ...formData, verificationCode: newCode });
+    const newCode = [...verificationCode];
+    newCode[index] = digit;
+    setVerificationCode(newCode);
     
     if (digit && index < 5) {
       codeInputRefs.current[index + 1]?.focus();
@@ -220,15 +223,18 @@ export default function SignupWizard() {
   };
   
   const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !formData.verificationCode[index] && index > 0) {
+    if (e.key === "Backspace" && !verificationCode[index] && index > 0) {
       codeInputRefs.current[index - 1]?.focus();
     }
   };
   
+  const getCodeString = () => verificationCode.join("");
+  const isCodeComplete = () => verificationCode.every(d => d !== "");
+  
   const handleVerifyEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (formData.verificationCode.length !== 6) {
+    if (!isCodeComplete()) {
       setErrors({ code: "Enter the 6-digit code" });
       return;
     }
@@ -237,7 +243,7 @@ export default function SignupWizard() {
     try {
       const res = await apiRequest("POST", "/api/auth/signup/verify-email", {
         email: formData.email,
-        code: formData.verificationCode,
+        code: getCodeString(),
       });
       
       if (!res.ok) {
@@ -511,7 +517,7 @@ export default function SignupWizard() {
                   
                   <p className="text-xs text-center text-slate-500 mt-4">
                     Already have an account?{" "}
-                    <a href="/register" className="text-blue-600 hover:underline">Log in</a>
+                    <a href="/auth" className="text-blue-600 hover:underline">Log in</a>
                   </p>
                 </form>
               )}
@@ -533,7 +539,7 @@ export default function SignupWizard() {
                         type="text"
                         inputMode="numeric"
                         maxLength={index === 0 ? 6 : 1}
-                        value={formData.verificationCode[index] || ""}
+                        value={verificationCode[index] || ""}
                         onChange={(e) => handleCodeInput(index, e.target.value)}
                         onKeyDown={(e) => handleCodeKeyDown(index, e)}
                         className="w-11 h-12 text-center text-xl font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:border-slate-600"
@@ -543,7 +549,7 @@ export default function SignupWizard() {
                   
                   {errors.code && <p className="text-xs text-red-500 text-center">{errors.code}</p>}
                   
-                  <Button type="submit" className="w-full" disabled={isLoading || formData.verificationCode.length !== 6}>
+                  <Button type="submit" className="w-full" disabled={isLoading || !isCodeComplete()}>
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
                   </Button>
                   
