@@ -122,7 +122,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Welcome} />
         <Route path="/welcome" component={Welcome} />
-        <Route path="/auth" component={AuthPage} />
+        <Route path="/auth">{() => <Redirect to="/login" />}</Route>
         <Route path="/login" component={SignInWizard} />
         <Route path="/register" component={Auth} />
         <Route path="/signup" component={SignupWizard} />

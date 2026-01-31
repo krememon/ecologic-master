@@ -263,6 +263,11 @@ export { broadcastToCompany };
 export async function registerRoutes(app: Express): Promise<Server> {
   // Note: uploads directory and static route handled in index.ts (before all middleware)
 
+  // Redirect /auth to /login (no Replit auth screen)
+  app.get('/auth', (req, res) => {
+    res.redirect(302, '/login');
+  });
+
   // SERVER-SIDE STRIPE RETURN HANDLER - Bulletproof redirect to /jobs
   // This ensures Stripe always lands on Jobs even if SPA routing fails
   app.get('/stripe/return', (req, res) => {

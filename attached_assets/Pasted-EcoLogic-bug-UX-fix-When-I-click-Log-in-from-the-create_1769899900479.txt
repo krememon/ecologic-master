@@ -1,0 +1,31 @@
+EcoLogic bug / UX fix: When I click "Log in" from the create-account flow (and/or header links), it routes me to a "Welcome to EcoLogic" gateway page (with a big Sign In button). I do NOT want that page in the flow. I want ALL "Log in" actions to go directly to the real sign-in screen (the multi-step email sign-in page: "Sign in to EcoLogic", Step 1 of 3).
+
+GOALS
+1) Remove/bypass the "Welcome to EcoLogic" gateway screen from the login flow.
+2) Clicking any "Log in" link should navigate directly to the real login route (the page that shows Email + Continue + Google option).
+3) Keep existing sessions working. Do not break authentication or cookies.
+4) Do not change styling or the sign-in page UI. Only routing/navigation.
+
+TASKS
+A) Identify the routes:
+   - Find the route path that renders the "Welcome to EcoLogic" gateway screen (likely something like /auth, /signin, /welcome, /replit, or /).
+   - Find the route path that renders the real sign-in page (likely /login).
+
+B) Fix routing so Log in goes directly to the real sign-in page:
+   - Search the codebase for the "Log in" link/button and update its navigation target to the real sign-in route (e.g. href="/login" or navigate("/login")).
+   - Also check any Create Account screen footer “Already have an account? Log in” and ensure it goes to /login.
+
+C) Make the gateway screen unreachable (or redirect it):
+   - If the gateway screen is currently used as an intermediate step, change that route to immediately redirect to /login.
+   - Example: if gateway route is /auth or /signin, make it <Navigate to="/login" replace /> (frontend) or res.redirect("/login") (backend), depending on where routing is handled.
+   - If the gateway is the root route /, do NOT break the public landing; only change the specific route used by "Log in".
+
+D) Verify behavior:
+   1) Logged out: clicking “Log in” anywhere goes straight to the real sign-in page.
+   2) The "Welcome to EcoLogic" gateway no longer appears.
+   3) Logged in users still work as before (no session breaks).
+
+DELIVERABLES
+- Tell me the exact route path of the gateway screen you removed/bypassed.
+- List files changed (e.g. routes file + header/footer link components).
+- Keep changes minimal and focused on navigation/routing only.

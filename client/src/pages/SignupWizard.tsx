@@ -517,7 +517,7 @@ export default function SignupWizard() {
                   
                   <p className="text-xs text-center text-slate-500 mt-4">
                     Already have an account?{" "}
-                    <a href="/auth" className="text-blue-600 hover:underline">Log in</a>
+                    <a href="/login" className="text-blue-600 hover:underline">Log in</a>
                   </p>
                 </form>
               )}
