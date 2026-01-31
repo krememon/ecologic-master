@@ -1,0 +1,58 @@
+FINAL EMAIL HEADER FIX: Stop rendering the header as separate banner + blue bar + logo rows. This will never look like one unified header in email clients. Instead generate ONE combined header image (PNG) server-side and render ONLY that image in the email.
+
+GOAL
+Make the email header look EXACTLY like the target mock:
+- banner image on top
+- brand-color strip attached under it
+- circular logo with white ring overlapping the seam
+All baked into ONE image so email clients can't break the layout.
+
+IMPLEMENTATION (SERVER)
+1) Add image compositor using `sharp` (preferred).
+- Output width: 600px
+- Banner area height: 170px (crop/cover)
+- Brand strip height: 90px (solid color)
+- Total height: 260px
+- Logo circle:
+  - final circle diameter: 112px (white ring)
+  - inner logo size: 88px
+  - center x = 300px
+  - center y = 170px (exact seam between banner and strip)
+  - Add subtle shadow (optional) baked into PNG
+
+2) Build combined header PNG:
+- Create canvas 600x260
+- Composite banner (cover crop) into y=0..170
+- Composite brand-color strip into y=170..260
+- Composite white circle at center with y so it overlaps both areas
+- Composite logo png inside the circle
+
+3) Cache & store in bucket/CDN
+- Upload combined header to CDN (Cloudflare R2) as:
+  branding/<companyId>/combined-header-<hash>.png
+Hash should change when any of banner/logo/color changes.
+Save combinedHeaderUrl in email branding settings.
+
+IMPLEMENTATION (EMAIL SENDING)
+4) Update email template:
+- If combinedHeaderUrl exists:
+  - fetch bytes
+  - embed as inline CID attachment "combinedHeader"
+  - render:
+    <img src="cid:combinedHeader" width="600" style="display:block;width:100%;height:auto;border-radius:8px 8px 0 0;" />
+- Do NOT render separate banner image row
+- Do NOT render separate blue bar logo row
+Only use combined header image.
+
+Fallback:
+- If combinedHeaderUrl missing or generation fails:
+  use solid color header + text only (no broken images)
+
+TRIGGER
+5) Generate combined header when branding is saved (preferred) OR on send if missing.
+
+ACCEPTANCE TEST
+- Send test campaign to Gmail.
+- Header renders as ONE unified header image exactly (banner + blue strip + overlapped circular logo).
+- No seams, no stacking look, no layout weirdness.
+- Works identically across Gmail + iPhone Mail.
