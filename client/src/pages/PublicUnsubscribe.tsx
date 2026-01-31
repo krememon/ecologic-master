@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle, XCircle, Mail, ArrowLeft } from "lucide-react";
 
-type State = "loading" | "confirm" | "success" | "cancelled" | "error";
+type State = "loading" | "confirm" | "success" | "resubscribed" | "cancelled" | "error";
 
 export default function PublicUnsubscribe() {
   const [state, setState] = useState<State>("loading");
@@ -74,6 +74,34 @@ export default function PublicUnsubscribe() {
     setState("cancelled");
   };
 
+  const handleResubscribe = async () => {
+    if (!token) return;
+    
+    setIsSubmitting(true);
+    try {
+      const optInField = channel === "sms" ? "smsOptIn" : "emailOptIn";
+      const res = await fetch("/api/public/email-preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, [optInField]: true }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.ok) {
+        setState("resubscribed");
+      } else {
+        setErrorMessage(data.message || "Failed to resubscribe");
+        setState("error");
+      }
+    } catch {
+      setErrorMessage("Something went wrong");
+      setState("error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -131,8 +159,33 @@ export default function PublicUnsubscribe() {
             <div className="text-center py-4">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-slate-800 mb-2">Unsubscribed</h2>
-              <p className="text-slate-600">
+              <p className="text-slate-600 mb-4">
                 You have been unsubscribed from marketing {channel === "sms" ? "text messages" : "emails"}.
+              </p>
+              <Button
+                variant="outline"
+                onClick={handleResubscribe}
+                disabled={isSubmitting}
+                className="w-full"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Resubscribing...
+                  </>
+                ) : (
+                  "Changed your mind? Resubscribe"
+                )}
+              </Button>
+            </div>
+          )}
+
+          {state === "resubscribed" && (
+            <div className="text-center py-4">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-slate-800 mb-2">Resubscribed</h2>
+              <p className="text-slate-600">
+                You have been resubscribed to marketing {channel === "sms" ? "text messages" : "emails"}.
               </p>
             </div>
           )}

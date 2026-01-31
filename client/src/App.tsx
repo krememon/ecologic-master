@@ -95,6 +95,12 @@ function Router() {
   if (path.startsWith('/unsubscribe')) {
     return <UnsubscribeRouter />;
   }
+  
+  // Public email preferences page - NO auth required
+  if (path.startsWith('/email-preferences')) {
+    const PublicEmailPreferences = require("./pages/PublicEmailPreferences").default;
+    return <PublicEmailPreferences />;
+  }
 
   const { isAuthenticated, isLoading, user } = useAuth();
   

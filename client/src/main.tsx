@@ -47,11 +47,14 @@ const checkAndClearCache = async () => {
 // Check if this is a public signing route - render standalone component
 const isPublicSignRoute = window.location.pathname.startsWith('/sign/');
 // Check if this is a public unsubscribe route - render standalone component
-const isPublicUnsubscribeRoute = window.location.pathname.startsWith('/unsubscribe/');
+const isPublicUnsubscribeRoute = window.location.pathname.startsWith('/unsubscribe/') || window.location.pathname === '/unsubscribe';
+// Check if this is a public email preferences route - render standalone component
+const isPublicPreferencesRoute = window.location.pathname.startsWith('/email-preferences');
 // Check if this is a Stripe return route or public route - skip cache-busting to avoid reload loops
 const isPublicRoute = window.location.pathname.startsWith('/stripe/') || 
                       window.location.pathname.startsWith('/pay/') ||
-                      window.location.pathname.startsWith('/unsubscribe/');
+                      window.location.pathname.startsWith('/unsubscribe') ||
+                      window.location.pathname.startsWith('/email-preferences');
 
 // Initialize app with cache check
 const initApp = async () => {
@@ -70,6 +73,10 @@ const initApp = async () => {
     console.log("[main.tsx] Public unsubscribe route detected, rendering PublicUnsubscribe");
     const PublicUnsubscribe = (await import("./pages/PublicUnsubscribe")).default;
     createRoot(document.getElementById("root")!).render(<PublicUnsubscribe />);
+  } else if (isPublicPreferencesRoute) {
+    console.log("[main.tsx] Public preferences route detected, rendering PublicEmailPreferences");
+    const PublicEmailPreferences = (await import("./pages/PublicEmailPreferences")).default;
+    createRoot(document.getElementById("root")!).render(<PublicEmailPreferences />);
   } else {
     createRoot(document.getElementById("root")!).render(<App />);
   }
