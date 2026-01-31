@@ -254,9 +254,9 @@ export default function EmailBranding() {
                       />
                       <button
                         onClick={() => setLogoUrl("")}
-                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full inline-flex items-center justify-center p-0 hover:bg-red-600 transition-colors"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ) : (
@@ -346,9 +346,9 @@ export default function EmailBranding() {
                         />
                         <button
                           onClick={handleRemoveBackgroundImage}
-                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                          className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full inline-flex items-center justify-center p-0 hover:bg-red-600 transition-colors"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     )}
