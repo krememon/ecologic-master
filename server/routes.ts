@@ -6829,7 +6829,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Import messaging service
-      const { sendCampaignEmail, sendCampaignSms } = await import('./services/messaging');
+      const { sendBrandedCampaignEmail, sendCampaignSms } = await import('./services/messaging');
+
+      // Fetch email branding settings for this company
+      const emailBranding = await storage.getEmailBranding(company.id);
 
       // Fetch all customers for this company
       const allCustomers = await storage.getCustomers(company.id);
@@ -6904,11 +6907,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: 'queued',
           });
 
-          const result = await sendCampaignEmail({
+          const result = await sendBrandedCampaignEmail({
             to: customer.email!,
             subject: subject!,
             body: emailBody!,
             companyName: company.name,
+            branding: emailBranding,
+            company: company,
           });
 
           if (result.success) {
