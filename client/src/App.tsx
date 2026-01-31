@@ -52,6 +52,7 @@ import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 import SignupWizard from "@/pages/SignupWizard";
+import Welcome from "@/pages/Welcome";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -118,13 +119,16 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
-        <Route path="/" component={Landing} />
+        <Route path="/" component={Welcome} />
+        <Route path="/welcome" component={Welcome} />
         <Route path="/auth" component={AuthPage} />
+        <Route path="/login" component={Auth} />
         <Route path="/register" component={Auth} />
         <Route path="/signup" component={SignupWizard} />
         <Route path="/forgot-password" component={ForgotPassword} />
         <Route path="/reset-password" component={ResetPassword} />
-        <Route component={Landing} />
+        <Route path="/landing" component={Landing} />
+        <Route component={Welcome} />
       </Switch>
     );
   }
