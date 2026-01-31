@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type WizardStep = "email" | "password" | "code";
 
@@ -232,10 +232,15 @@ export default function SignInWizard() {
       });
       await handleApiResponse(res, "We couldn't reach the server. Please try again.");
       
-      window.location.href = "/";
+      // Invalidate auth cache and force refresh
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
+      // Small delay to ensure session cookie is set, then redirect
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 100);
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setIsLoading(false);
     }
   };

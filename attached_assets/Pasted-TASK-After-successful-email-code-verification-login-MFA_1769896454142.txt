@@ -1,0 +1,46 @@
+TASK: After successful email code verification (login MFA), redirect user into the EcoLogic app home page. Right now it redirects back to the sign-in screen.
+
+ROOT CAUSE (likely):
+- The verify endpoint returns ok but does NOT set a session/cookie/token
+OR
+- Frontend does not refresh auth state after verify
+OR
+- Route guard runs before auth state updates and sends user back to /auth
+
+REQUIREMENTS:
+1) BACKEND — Verify must finalize login
+Find the endpoint used by the code verification screen (ex: POST /api/auth/login/verify or similar).
+After code is validated, it MUST:
+- Create a valid session (cookie or token) exactly like your normal login flow
+- Return JSON: { ok: true, user: {...} }
+- Ensure cookie is set with proper options for local dev (httpOnly, sameSite, etc.)
+If you use token_version/session table, ensure it writes it.
+
+2) FRONTEND — Update auth state then redirect
+On successful verify response:
+- Call your existing "refresh current user" method (usually GET /api/auth/user)
+- Update auth context/store so the app knows the user is logged in
+- Only after auth refresh succeeds, navigate to the app home route (ex: / or /dashboard or /jobs)
+- Use replace navigation (so back doesn’t return to verify screen)
+
+3) ROUTE GUARD FIX
+If you have a guard that redirects logged-out users to /auth:
+- Make sure it does NOT trigger during the short window after verify succeeds.
+Best approach:
+- Have an "authLoading" flag while you refresh /api/auth/user after verify.
+- While authLoading, do not redirect anywhere.
+
+4) USER EXPERIENCE
+- On verify click, show loading on Verify button.
+- Disable inputs while verifying.
+- If verify fails, stay on code screen with clean message.
+
+DELIVERABLES:
+- Successful code verification lands user on EcoLogic home page every time.
+- User stays logged in on refresh.
+- No redirect loops back to sign-in.
+
+MANUAL TEST:
+1) Start at /auth -> Sign in -> Email+Password -> code -> Verify
+2) After Verify: user lands in app home page
+3) Refresh browser: user still logged in and stays in app
