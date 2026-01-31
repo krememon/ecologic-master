@@ -429,8 +429,20 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
   res.json({ received: true });
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Skip body parsers for multipart/form-data uploads (handled by multer)
+app.use((req, res, next) => {
+  if (req.headers["content-type"]?.includes("multipart/form-data")) {
+    return next();
+  }
+  express.json()(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.headers["content-type"]?.includes("multipart/form-data")) {
+    return next();
+  }
+  express.urlencoded({ extended: false })(req, res, next);
+});
 
 // PUBLIC SIGNING ROUTE - must be registered BEFORE Vite middleware
 // This route serves the public signing HTML page with NO authentication

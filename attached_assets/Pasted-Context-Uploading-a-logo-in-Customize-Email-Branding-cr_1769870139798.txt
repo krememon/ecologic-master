@@ -1,0 +1,147 @@
+Context:
+Uploading a logo in Customize → Email Branding crashes the entire app. The crash occurs at the Express server level during request parsing. This is caused by multipart/form-data uploads being processed by JSON/urlencoded body parsers.
+
+Goal:
+Fix the backend so logo/header uploads never crash the server, save correctly, and return safe defaults.
+
+🔴 PROBLEM TO FIX (DO NOT SKIP)
+
+Express crashes on file upload
+
+Error occurs before route handler executes
+
+Caused by body parsers touching multipart/form-data
+
+Must be fixed at the server middleware level
+
+✅ REQUIRED FIXES (DO ALL)
+1️⃣ Exclude multipart uploads from body parsers
+
+Update Express middleware so express.json() and express.urlencoded() do NOT run on requests with multipart/form-data.
+
+Example logic (adjust to project structure):
+
+app.use((req, res, next) => {
+  if (req.headers["content-type"]?.includes("multipart/form-data")) {
+    return next()
+  }
+  express.json()(req, res, next)
+})
+
+app.use((req, res, next) => {
+  if (req.headers["content-type"]?.includes("multipart/form-data")) {
+    return next()
+  }
+  express.urlencoded({ extended: true })(req, res, next)
+})
+
+
+⚠️ Do NOT remove body parsers globally — only bypass them for uploads.
+
+2️⃣ Ensure upload routes use multer (or equivalent)
+
+For email branding uploads (logo + header banner):
+
+Use multer
+
+Use upload.single("file")
+
+Never read files from req.body
+
+Example:
+
+import multer from "multer"
+
+const upload = multer({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+})
+
+router.post(
+  "/api/company/email-branding/logo",
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" })
+    }
+
+    // upload to storage
+    // save logoUrl to DB
+    // return updated branding object
+  }
+)
+
+
+Repeat for header banner if separate.
+
+3️⃣ Frontend must use FormData correctly
+
+Verify frontend upload code:
+
+Uses FormData
+
+Does NOT manually set Content-Type
+
+Example:
+
+const formData = new FormData()
+formData.append("file", file)
+
+await fetch("/api/company/email-branding/logo", {
+  method: "POST",
+  body: formData,
+})
+
+4️⃣ Backend must return safe defaults
+
+If no branding exists yet, API must return a fully populated object, not {}.
+
+Example response shape:
+
+{
+  logoUrl: null,
+  headerImageUrl: null,
+  brandColor: "#2563EB",
+  fromName: "EcoLogic",
+  footerText: null
+}
+
+
+No undefined values. No missing keys.
+
+5️⃣ DO NOT
+
+❌ Change UI layout
+
+❌ Change branding feature scope
+
+❌ Add new DB columns unless required
+
+❌ Break existing email sending logic
+
+✅ ACCEPTANCE CRITERIA
+
+Uploading logo does not crash server
+
+Upload persists after refresh
+
+/api/company/email-branding always returns valid data
+
+App remains stable after upload
+
+No Express crashes in console
+
+🧪 TESTING STEPS (YOU MUST TEST)
+
+Start dev server
+
+Open Customize → Email Branding
+
+Upload logo (PNG)
+
+Refresh page
+
+Confirm logo persists
+
+Send test email → logo renders
+
+Proceed carefully. Make minimal, targeted changes.
