@@ -1,0 +1,89 @@
+EcoLogic update: Add a “Launch Campaign” button to the main Clients page (NOT inside each client card). Keep the existing “Communication Preferences” toggles inside each client card exactly as they are (Email Campaigns + Text Message Campaigns). The new button should open the campaign builder modal and use selected clients if Select Mode is active.
+
+HARD RULES
+- Do NOT break or change existing Clients page features: search, add new client, select mode, client cards, toggles, layout.
+- Keep the communication preferences toggles inside client cards exactly as currently implemented.
+- “Hidden, not disabled”: If the user role doesn’t have permission, they should not see the Launch Campaign button at all.
+- Must respect opt-in toggles: Email Campaigns toggle controls eligibility for email, Text Message Campaigns toggle controls eligibility for SMS.
+- No fake data. Must work with real DB and existing client records.
+- No layered/duplicate buttons. Make the UI look native and clean (same style as “Add New Client”).
+
+WHERE TO PUT THE BUTTON (UI)
+On the Clients page header row where you currently have:
+- “All Clients (N)”
+- select-mode button
+- “Add New Client” button
+
+Add a new button: “Launch Campaign”
+Placement: to the right of the select-mode icon, and to the left of “Add New Client” OR next to “Add New Client” depending on spacing.
+Mobile-first: if width is tight, button can collapse to an icon+label or stack to the next line, but keep it clean.
+
+BUTTON BEHAVIOR
+When user clicks “Launch Campaign”:
+
+Case A) Select Mode is ON and at least 1 client is selected:
+- Open CampaignModal with audience locked to “Selected Clients (X)”
+- Do NOT allow changing audience in this case (prevents mistakes)
+- Still apply channel eligibility:
+  - Email only goes to selected clients whose Email Campaigns toggle is ON and have an email
+  - SMS only goes to selected clients whose Text Message Campaigns toggle is ON and have a phone number
+
+Case B) Select Mode is OFF or 0 selected:
+- Open the same CampaignModal but with an audience picker at the top:
+  - “All Clients”
+  - “Selected Clients (0)” (disabled)
+  - “Filtered by Search” (optional if easy: use current search query results; otherwise omit)
+MVP acceptable: only “All Clients” for this case if it’s faster, but still show a clear audience label inside the modal.
+
+CAMPAIGN MODAL (REUSE SAME ONE)
+If CampaignModal already exists from the earlier work, reuse it. Do not create multiple modals.
+Modal fields:
+- Channel: Email / Text / Both
+- If Email or Both:
+  - Subject (required)
+  - Body (required)
+- If Text or Both:
+  - SMS Body (required)
+  - Character counter + warning >160 (still allow)
+Preview panel:
+- “Will send Email to X clients”
+- “Will send Text to Y clients”
+- “Excluded: Z” with small reasons like “no email”, “email toggle off”, “no phone”, “text toggle off”
+Send button:
+- Calls existing send endpoint (or existing send handler)
+After send:
+- Close modal
+- Exit select mode + clear selections (only if Select Mode was active)
+- Show subtle confirmation using existing toast/snackbar pattern
+
+RBAC
+- Owner/Admin: can see/use Launch Campaign
+- Supervisor/Dispatcher: can see/use Launch Campaign (unless you already have a company setting; if you do, respect it)
+- Estimator/Technician: do NOT see Launch Campaign button
+
+DATA / LOGIC REQUIREMENTS
+- The client card toggles must map to the DB fields controlling eligibility.
+  Use existing fields if already created. If not, ensure these exist:
+  - clients.email_opt_in boolean
+  - clients.sms_opt_in boolean
+(These should be exactly what the toggles read/write.)
+- Campaign sending logic must ONLY send to eligible clients per channel.
+
+IMPLEMENTATION STEPS
+1) Clients page: add “Launch Campaign” button in header row near existing controls.
+2) Wire it to open CampaignModal.
+3) Pass audience:
+   - selectedClientIds when in select mode with selections
+   - otherwise default audience = all clients (or add audience picker if already built)
+4) Ensure permission checks hide the button entirely for unauthorized roles.
+5) Ensure UI stays visually aligned with current header layout (same sizing, spacing, rounded corners).
+6) Test both cases:
+   - Select 2 clients -> Launch Campaign -> shows Selected Clients (2)
+   - No selection -> Launch Campaign -> defaults to All Clients
+
+ACCEPTANCE TESTS
+- Owner: can click Launch Campaign, send Email, respects Email Campaigns toggle.
+- Owner: can send Text, respects Text Message Campaigns toggle.
+- Technician: does not see Launch Campaign button at all.
+- If 0 selected in select mode: Launch Campaign does NOT crash; opens with All Clients or shows “Selected Clients (0)” disabled.
+- No duplicate modals / no double buttons / no layout regression.

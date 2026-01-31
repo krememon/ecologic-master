@@ -97,8 +97,24 @@ export default function Clients() {
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
+  const [campaignAudienceMode, setCampaignAudienceMode] = useState<"selected" | "all">("selected");
 
   const canSendCampaigns = user?.role === 'OWNER' || user?.role === 'SUPERVISOR' || user?.role === 'DISPATCHER';
+
+  const handleLaunchCampaign = () => {
+    if (isSelectMode && selectedCustomerIds.size > 0) {
+      setCampaignAudienceMode("selected");
+    } else {
+      setCampaignAudienceMode("all");
+    }
+    setCampaignModalOpen(true);
+  };
+
+  const handleCampaignSendSuccess = () => {
+    if (isSelectMode) {
+      exitSelectMode();
+    }
+  };
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -737,6 +753,12 @@ export default function Clients() {
                     <CheckSquare className="h-5 w-5" />
                   </Button>
                 )}
+                {canSendCampaigns && (
+                  <Button variant="outline" onClick={handleLaunchCampaign}>
+                    <Send className="w-4 h-4 mr-2" />
+                    Launch Campaign
+                  </Button>
+                )}
                 <Button onClick={() => setIsDialogOpen(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add New Client
@@ -825,6 +847,8 @@ export default function Clients() {
         open={campaignModalOpen}
         onOpenChange={setCampaignModalOpen}
         selectedCustomerIds={Array.from(selectedCustomerIds)}
+        audienceMode={campaignAudienceMode}
+        onSendSuccess={handleCampaignSendSuccess}
       />
 
       {/* Clients List (from unified customers table) */}

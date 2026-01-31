@@ -6441,19 +6441,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to send campaigns" });
       }
 
-      const { customerIds, channel } = req.body;
-      
-      if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
-        return res.status(400).json({ message: "customerIds array is required" });
-      }
+      const { customerIds, channel, audienceMode } = req.body;
       
       if (!channel || !['email', 'sms', 'both'].includes(channel)) {
         return res.status(400).json({ message: "channel must be 'email', 'sms', or 'both'" });
       }
 
-      // Fetch all customers for this company that are in the selection
+      // Fetch all customers for this company
       const allCustomers = await storage.getCustomers(company.id);
-      const selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      
+      // Determine selected customers based on audience mode
+      let selectedCustomers;
+      if (audienceMode === 'all') {
+        selectedCustomers = allCustomers;
+      } else {
+        if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+          return res.status(400).json({ message: "customerIds array is required when not using 'all' audience mode" });
+        }
+        selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      }
       
       // Filter for email eligibility
       const emailEligible = selectedCustomers.filter(c => 
@@ -6523,19 +6529,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to send campaigns" });
       }
 
-      const { customerIds, channel, subject, emailBody, smsBody } = req.body;
-      
-      if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
-        return res.status(400).json({ message: "customerIds array is required" });
-      }
+      const { customerIds, channel, subject, emailBody, smsBody, audienceMode } = req.body;
       
       if (!channel || !['email', 'sms', 'both'].includes(channel)) {
         return res.status(400).json({ message: "channel must be 'email', 'sms', or 'both'" });
-      }
-      
-      // Rate limit: max 500 recipients per send
-      if (customerIds.length > 500) {
-        return res.status(400).json({ message: "Maximum 500 recipients per campaign" });
       }
       
       // Validate required fields based on channel
@@ -6550,9 +6547,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Import messaging service
       const { sendCampaignEmail, sendCampaignSms } = await import('./services/messaging');
 
-      // Fetch all customers for this company that are in the selection
+      // Fetch all customers for this company
       const allCustomers = await storage.getCustomers(company.id);
-      const selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      
+      // Determine selected customers based on audience mode
+      let selectedCustomers;
+      if (audienceMode === 'all') {
+        selectedCustomers = allCustomers;
+      } else {
+        if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+          return res.status(400).json({ message: "customerIds array is required when not using 'all' audience mode" });
+        }
+        selectedCustomers = allCustomers.filter(c => customerIds.includes(c.id));
+      }
+      
+      // Rate limit: max 500 recipients per send
+      if (selectedCustomers.length > 500) {
+        return res.status(400).json({ message: "Maximum 500 recipients per campaign" });
+      }
       
       // Filter for email eligibility
       const emailEligible = selectedCustomers.filter(c => 
