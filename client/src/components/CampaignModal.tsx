@@ -145,11 +145,11 @@ export default function CampaignModal({
     return preview.emailCount + preview.smsCount;
   };
 
-  const getAudienceLabel = () => {
-    if (audienceMode === "all") {
-      return "All Clients";
+  const getPreviewLabel = () => {
+    if (audienceMode === "selected" && selectedCustomerIds.length > 0) {
+      return "Preview selected recipients";
     }
-    return `Selected Clients (${selectedCustomerIds.length})`;
+    return "Preview recipients";
   };
 
   const getMessageLabel = () => {
@@ -189,15 +189,6 @@ export default function CampaignModal({
           {/* Scrollable Body */}
           <div className="px-5 py-4 flex-1 overflow-auto">
             <div className="space-y-4">
-              {/* Audience Pill */}
-              <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                <Users className="h-4 w-4 text-slate-500 dark:text-slate-400 flex-shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 font-medium">Audience</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{getAudienceLabel()}</span>
-                </div>
-              </div>
-
               {/* Channel Segmented Control */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Channel</label>
@@ -281,7 +272,7 @@ export default function CampaignModal({
                   ) : (
                     <Users className="h-4 w-4 text-blue-600" />
                   )}
-                  <span className="text-sm font-medium text-blue-600">Preview recipients</span>
+                  <span className="text-sm font-medium text-blue-600">{getPreviewLabel()}</span>
                 </div>
                 {preview && (
                   <span className="text-sm text-slate-500 dark:text-slate-400">
