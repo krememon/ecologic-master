@@ -129,81 +129,55 @@ function UnsubscribeRouter() {
 
 function AuthenticatedRouter() {
   const path = window.location.pathname;
-  const { isAuthenticated, isLoading, user, error } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   
   useWebSocket();
   usePushNotifications();
 
-  // Get onboarding state for debug
+  // Get onboarding state
   const onboardingChoice = localStorage.getItem("onboardingChoice");
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
   const nextRoute = !isLoading && isAuthenticated && user 
     ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry })
     : null;
 
-  // Debug overlay - ALWAYS visible in dev
-  const DebugOverlay = () => (
-    <div style={{position:"fixed",top:30,left:0,zIndex:99998,background:"rgba(0,0,0,0.9)",color:"#fff",padding:"8px",fontFamily:"monospace",fontSize:"11px",maxWidth:"350px"}}>
-      <div style={{color:"#0ff"}}>AuthenticatedRouter State:</div>
-      <div>Path: {path}</div>
-      <div>Loading: <span style={{color:isLoading?"#ff0":"#0f0"}}>{String(isLoading)}</span></div>
-      <div>Auth: <span style={{color:isAuthenticated?"#0f0":"#f00"}}>{String(isAuthenticated)}</span></div>
-      <div>Error: {error ? String(error) : 'none'}</div>
-      <div>User ID: {user?.id || 'null'}</div>
-      <div>Company ID: {user?.company?.id || 'null'}</div>
-      <div>SubStatus: {user?.company?.subscriptionStatus || 'null'}</div>
-      <div>Choice: {onboardingChoice || 'null'}</div>
-      <div>Industry: {onboardingIndustry || 'null'}</div>
-      <div>NextRoute: <span style={{color:"#ff0"}}>{nextRoute || 'null (onboarded)'}</span></div>
-    </div>
-  );
-
   if (isLoading) {
     return (
-      <>
-        <DebugOverlay />
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading EcoLogic...</p>
-          </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading EcoLogic...</p>
         </div>
-      </>
+      </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <>
-        <DebugOverlay />
-        <Switch>
-          <Route path="/" component={Welcome} />
-          <Route path="/welcome" component={Welcome} />
-          <Route path="/auth">{() => <Redirect to="/login" />}</Route>
-          <Route path="/login" component={SignInWizard} />
-          <Route path="/register" component={Auth} />
-          <Route path="/signup" component={SignupWizard} />
-          <Route path="/forgot-password" component={ForgotPassword} />
-          <Route path="/reset-password" component={ResetPassword} />
-          <Route path="/landing" component={Landing} />
-          <Route component={Welcome} />
-        </Switch>
-      </>
+      <Switch>
+        <Route path="/" component={Welcome} />
+        <Route path="/welcome" component={Welcome} />
+        <Route path="/auth">{() => <Redirect to="/login" />}</Route>
+        <Route path="/login" component={SignInWizard} />
+        <Route path="/register" component={Auth} />
+        <Route path="/signup" component={SignupWizard} />
+        <Route path="/forgot-password" component={ForgotPassword} />
+        <Route path="/reset-password" component={ResetPassword} />
+        <Route path="/landing" component={Landing} />
+        <Route component={Welcome} />
+      </Switch>
     );
   }
 
   // If onboarding is incomplete, force user to complete it
   if (nextRoute) {
     return (
-      <>
-        <DebugOverlay />
-        <Switch>
-          <Route path="/onboarding/industry" component={IndustryOnboarding} />
-          <Route path="/onboarding/company" component={OnboardingCompany} />
-          <Route path="/join-company" component={JoinCompany} />
-          <Route>{() => <Redirect to={nextRoute} />}</Route>
-        </Switch>
-      </>
+      <Switch>
+        <Route path="/onboarding/industry" component={IndustryOnboarding} />
+        <Route path="/onboarding/company" component={OnboardingCompany} />
+        <Route path="/join-company" component={JoinCompany} />
+        <Route>{() => <Redirect to={nextRoute} />}</Route>
+      </Switch>
     );
   }
   
@@ -215,9 +189,7 @@ function AuthenticatedRouter() {
   }
 
   return (
-    <>
-      <DebugOverlay />
-      <Layout>
+    <Layout>
       <Switch>
         <Route path="/choose-plan" component={ChoosePlan} />
         <Route path="/" component={Home} />
@@ -274,8 +246,7 @@ function AuthenticatedRouter() {
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>
       </Switch>
-      </Layout>
-    </>
+    </Layout>
   );
 }
 

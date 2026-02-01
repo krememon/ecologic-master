@@ -77,27 +77,20 @@ const initApp = async () => {
   
   const root = createRoot(rootEl);
   
-  // CANARY: Always render a visible banner first to confirm React works
-  const CanaryBanner = () => (
-    <div style={{position:"fixed",top:0,left:0,right:0,zIndex:99999,background:"#000",color:"#0f0",padding:"8px 12px",fontFamily:"monospace",fontSize:"12px"}}>
-      React Mounted ✅ | Path: {window.location.pathname}
-    </div>
-  );
-  
   if (isPublicSignRoute) {
     console.log("[main.tsx] Public sign route detected, rendering PublicSignApp");
-    root.render(<ErrorBoundary><CanaryBanner /><PublicSignApp /></ErrorBoundary>);
+    root.render(<ErrorBoundary><PublicSignApp /></ErrorBoundary>);
   } else if (isPublicUnsubscribeRoute) {
     console.log("[main.tsx] Public unsubscribe route detected, rendering PublicUnsubscribe");
     const PublicUnsubscribe = (await import("./pages/PublicUnsubscribe")).default;
-    root.render(<ErrorBoundary><CanaryBanner /><PublicUnsubscribe /></ErrorBoundary>);
+    root.render(<ErrorBoundary><PublicUnsubscribe /></ErrorBoundary>);
   } else if (isPublicPreferencesRoute) {
     console.log("[main.tsx] Public preferences route detected, rendering PublicEmailPreferences");
     const PublicEmailPreferences = (await import("./pages/PublicEmailPreferences")).default;
-    root.render(<ErrorBoundary><CanaryBanner /><PublicEmailPreferences /></ErrorBoundary>);
+    root.render(<ErrorBoundary><PublicEmailPreferences /></ErrorBoundary>);
   } else {
     console.log("[main.tsx] Rendering main App");
-    root.render(<ErrorBoundary><CanaryBanner /><App /></ErrorBoundary>);
+    root.render(<ErrorBoundary><App /></ErrorBoundary>);
   }
 };
 
