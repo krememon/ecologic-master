@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,6 +8,50 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+
+// Centralized onboarding route logic for owners
+function getNextOnboardingRoute(params: {
+  user: any;
+  onboardingChoice: string | null;
+  onboardingIndustry: string | null;
+}): string | null {
+  const { user, onboardingChoice, onboardingIndustry } = params;
+  
+  // Step 1: No choice made yet
+  if (!onboardingChoice) {
+    return "/onboarding/choice";
+  }
+  
+  // Step 2: Employee path
+  if (onboardingChoice === "employee") {
+    if (!user?.company) {
+      return "/join-company";
+    }
+    return null; // Employee with company can access app
+  }
+  
+  // Step 3: Owner path - check industry selection
+  if (onboardingChoice === "owner") {
+    if (!onboardingIndustry) {
+      return "/onboarding/industry";
+    }
+    
+    // Step 4: Check company creation
+    if (!user?.company) {
+      return "/onboarding/company";
+    }
+    
+    // Step 5: Check trial/subscription status
+    const status = user.company.subscriptionStatus;
+    const hasActiveSub = status === "active" || status === "trialing";
+    if (!hasActiveSub) {
+      return "/onboarding/company"; // Shows subscription step
+    }
+  }
+  
+  // All steps complete - allow dashboard access
+  return null;
+}
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/auth-page";
@@ -136,53 +180,34 @@ function Router() {
     );
   }
 
-  if (!user?.company) {
-    const onboardingChoice = localStorage.getItem("onboardingChoice");
-    const onboardingIndustry = localStorage.getItem("onboardingIndustry");
-    console.log("[app-router] no company, onboardingChoice:", onboardingChoice, "industry:", onboardingIndustry);
-    
-    if (onboardingChoice === "owner") {
-      // If industry not selected yet, redirect to industry grid (Step 3)
-      const defaultRoute = onboardingIndustry ? "/onboarding/company" : "/onboarding/industry";
-      return (
-        <Switch>
-          <Route path="/onboarding/industry" component={IndustryOnboarding} />
-          <Route path="/onboarding/company" component={OnboardingCompany} />
-          <Route path="/onboarding/choice" component={OnboardingChoice} />
-          <Route>{() => <Redirect to={defaultRoute} />}</Route>
-        </Switch>
-      );
-    }
-    
-    if (onboardingChoice === "employee") {
-      return (
-        <Switch>
-          <Route path="/join-company" component={JoinCompany} />
-          <Route path="/onboarding/choice" component={OnboardingChoice} />
-          <Route>{() => <Redirect to="/join-company" />}</Route>
-        </Switch>
-      );
-    }
-    
+  // Centralized onboarding gating
+  const onboardingChoice = localStorage.getItem("onboardingChoice");
+  const onboardingIndustry = localStorage.getItem("onboardingIndustry");
+  const nextRoute = getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry });
+  
+  console.log("[app-router] user:", user?.id, "company:", user?.company?.id, 
+    "subscriptionStatus:", user?.company?.subscriptionStatus,
+    "onboardingChoice:", onboardingChoice, "onboardingIndustry:", onboardingIndustry,
+    "nextRoute:", nextRoute);
+  
+  // If onboarding is incomplete, force user to complete it
+  if (nextRoute) {
     return (
       <Switch>
         <Route path="/onboarding/choice" component={OnboardingChoice} />
+        <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
         <Route path="/join-company" component={JoinCompany} />
-        <Route>{() => <Redirect to="/onboarding/choice" />}</Route>
+        <Route>{() => <Redirect to={nextRoute} />}</Route>
       </Switch>
     );
   }
-
-  // Clear onboarding state once company is created
-  if (user.company) {
-    const onboardingChoice = localStorage.getItem("onboardingChoice");
-    const onboardingIndustry = localStorage.getItem("onboardingIndustry");
-    if (onboardingChoice || onboardingIndustry) {
-      console.log("[app-router] user with company, clearing onboarding state");
-      localStorage.removeItem("onboardingChoice");
-      localStorage.removeItem("onboardingIndustry");
-    }
+  
+  // Onboarding complete - clear any stale state
+  if (onboardingChoice || onboardingIndustry) {
+    console.log("[app-router] onboarding complete, clearing state");
+    localStorage.removeItem("onboardingChoice");
+    localStorage.removeItem("onboardingIndustry");
   }
 
   return (

@@ -1,0 +1,53 @@
+Onboarding gating is still broken: users can reach /jobs without completing required owner onboarding steps (Industry Grid step 4 and Start Trial step 6).
+
+REQUIREMENTS
+1) Owner onboarding must be enforced. If steps are incomplete, user must be redirected away from /jobs to the next required onboarding route.
+2) Steps that must be enforced for Owners:
+   - Industry Grid (route: /onboarding/industry) must be completed before company creation.
+   - Start Trial (route: /onboarding/trial OR the current “Start Free Trial” step) must be completed before accessing /jobs.
+3) Employees should never see owner onboarding.
+4) No “best guess” redirects.
+
+TASKS
+A) Identify where protected route gating happens (likely App layout/router wrapper).
+   - Ensure it runs for ALL protected routes (not just /).
+   - Protected routes include: /jobs, /documents, /messages, /settings, etc.
+
+B) Implement a single function:
+   getNextOnboardingRoute({ user, company, onboardingChoice, onboardingIndustry, trialStatus })
+   Return order for Owner:
+     1) if onboardingChoice not set -> /onboarding/choice
+     2) if onboardingChoice === "employee" -> /join-company
+     3) if onboardingChoice === "owner" and onboardingIndustry not set -> /onboarding/industry
+     4) if company not created -> /onboarding/company (company details + team size)
+     5) if trial not started (or subscription status not ACTIVE/TRIALING) -> /onboarding/trial (start free trial screen)
+     6) else -> null (allow dashboard)
+
+C) Enforce this in the router:
+   - On every protected page load, call getNextOnboardingRoute.
+   - If it returns a route and currentPath is not that route, redirect (replace) to it.
+   - Do NOT allow /jobs to render until nextRoute === null.
+
+D) Fix Start Trial completion signal:
+   - Define a reliable check such as:
+     company.subscriptionStatus in ("TRIALING","ACTIVE")
+     OR company.trialStartedAt exists
+     OR stripeSubscriptionId exists with status
+   - Use whatever fields currently exist in DB.
+   - If none exist yet, add a boolean/field on company like trialStartedAt and set it when user clicks Start Free Trial.
+
+E) Ensure Industry Grid completion signal:
+   - Set onboardingIndustry in a durable place (company draft record or user onboarding state).
+   - Do not clear it until company is created.
+
+TESTS (must pass)
+1) New owner signs up -> cannot reach /jobs.
+   Must go: /onboarding/choice -> /onboarding/industry -> /onboarding/company -> /onboarding/trial -> /jobs
+2) Owner with industry set but no company -> goes to /onboarding/company
+3) Owner with company but no trial -> goes to /onboarding/trial
+4) Employee -> goes to /join-company, never sees owner steps.
+
+DELIVERABLES
+- Tell me which file enforces the protected-route guard now.
+- Show getNextOnboardingRoute logic.
+- Confirm Step 4 and Step 6 are enforced and cannot be skipped.

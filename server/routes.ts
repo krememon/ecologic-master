@@ -416,7 +416,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           logo: company.logo,
           primaryColor: company.primaryColor,
           secondaryColor: company.secondaryColor,
-          onboardingCompleted: company.onboardingCompleted ?? false
+          onboardingCompleted: company.onboardingCompleted ?? false,
+          subscriptionStatus: company.subscriptionStatus ?? 'inactive',
+          trialEndsAt: company.trialEndsAt
         } : null
       };
       
@@ -3257,9 +3259,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Subscription routes removed - app is now free to use
   // Legacy endpoint for backwards compatibility with onboarding flow
   app.post('/api/subscriptions/start-trial', isAuthenticated, async (req: any, res) => {
-    // App is now free - just return success
-    console.log('[start-trial] User', req.user?.id || req.user?.claims?.sub, 'starting trial (free tier)');
-    res.json({ ok: true, message: 'Trial started successfully' });
+    try {
+      const userId = req.user?.id || req.user?.claims?.sub;
+      console.log('[start-trial] User', userId, 'starting trial (free tier)');
+      
+      // Get user's company
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(400).json({ message: 'No company found. Please create a company first.' });
+      }
+      
+      // Update subscription status to trialing
+      await storage.updateCompany(company.id, {
+        subscriptionStatus: 'trialing',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+      });
+      
+      console.log('[start-trial] Company', company.id, 'subscription status set to trialing');
+      res.json({ ok: true, message: 'Trial started successfully' });
+    } catch (error: any) {
+      console.error('[start-trial] Error:', error);
+      res.status(500).json({ message: 'Failed to start trial' });
+    }
   });
 
   // Client routes

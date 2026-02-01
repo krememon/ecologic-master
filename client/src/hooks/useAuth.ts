@@ -11,6 +11,8 @@ interface AuthUser extends User {
     primaryColor: string;
     secondaryColor: string;
     onboardingCompleted?: boolean;
+    subscriptionStatus?: string;
+    trialEndsAt?: string | null;
   };
 }
 
