@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, Users, HelpCircle, ArrowLeft, LogOut } from "lucide-react";
+import { Building2, Users, HelpCircle, LogOut, Loader2 } from "lucide-react";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -8,17 +9,33 @@ import { useToast } from "@/hooks/use-toast";
 export default function OnboardingChoice() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onboardingChoice = localStorage.getItem("onboardingChoice");
-  console.log("[onboarding-choice] current choice:", onboardingChoice, "route:", window.location.pathname);
-
-  const handleChoice = (choice: "owner" | "employee") => {
-    localStorage.setItem("onboardingChoice", choice);
-    console.log("[onboarding-choice] selected:", choice);
-    if (choice === "owner") {
-      setLocation("/onboarding/company");
-    } else {
-      setLocation("/join-company");
+  const handleChoice = async (choice: "owner" | "employee") => {
+    setIsSubmitting(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/onboarding-choice", { choice });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to save choice");
+      }
+      
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      
+      localStorage.setItem("onboardingChoice", choice);
+      
+      if (choice === "owner") {
+        setLocation("/onboarding/industry");
+      } else {
+        setLocation("/join-company");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save your choice",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
     }
   };
 
@@ -26,6 +43,7 @@ export default function OnboardingChoice() {
     try {
       await apiRequest("POST", "/api/logout", {});
       localStorage.removeItem("onboardingChoice");
+      localStorage.removeItem("onboardingIndustry");
       await queryClient.invalidateQueries();
       setLocation("/");
     } catch (error) {
@@ -58,10 +76,15 @@ export default function OnboardingChoice() {
               <button
                 type="button"
                 onClick={() => handleChoice("owner")}
-                className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4"
+                disabled={isSubmitting}
+                className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  {isSubmitting ? (
+                    <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
+                  ) : (
+                    <Building2 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  )}
                 </div>
                 <div>
                   <p className="font-medium text-slate-800 dark:text-white">I'm a business owner</p>
@@ -72,10 +95,15 @@ export default function OnboardingChoice() {
               <button
                 type="button"
                 onClick={() => handleChoice("employee")}
-                className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4"
+                disabled={isSubmitting}
+                className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                  <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  {isSubmitting ? (
+                    <Loader2 className="w-6 h-6 text-green-600 dark:text-green-400 animate-spin" />
+                  ) : (
+                    <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
+                  )}
                 </div>
                 <div>
                   <p className="font-medium text-slate-800 dark:text-white">I'm an employee</p>

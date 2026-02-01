@@ -558,6 +558,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Set onboarding choice (owner or employee)
+  app.post('/api/auth/onboarding-choice', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { choice } = req.body;
+
+      if (!choice || !['owner', 'employee'].includes(choice)) {
+        return res.status(400).json({ message: "Invalid choice. Must be 'owner' or 'employee'" });
+      }
+
+      const updatedUser = await storage.updateUser(userId, { onboardingChoice: choice });
+      
+      res.json({ ok: true, onboardingChoice: updatedUser.onboardingChoice });
+    } catch (error) {
+      console.error("Error setting onboarding choice:", error);
+      res.status(500).json({ message: "Failed to set onboarding choice" });
+    }
+  });
+
   // Company routes (Owner/Supervisor only)
   app.get('/api/company', requirePerm('org.view'), async (req: any, res) => {
     try {

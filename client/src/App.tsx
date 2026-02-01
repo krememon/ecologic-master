@@ -58,7 +58,6 @@ import OnboardingChoice from "@/pages/OnboardingChoice";
 import OnboardingCompany from "@/pages/OnboardingCompany";
 
 // Centralized onboarding route logic
-// Role selection happens ONLY in /signup - no separate /onboarding/choice
 function getNextOnboardingRoute(params: {
   user: any;
   onboardingChoice: string | null;
@@ -71,7 +70,6 @@ function getNextOnboardingRoute(params: {
     const { onboardingCompleted, subscriptionStatus } = user.company;
     
     // Existing company with onboarding complete -> go to dashboard
-    // Treat any company with onboardingCompleted=true as fully set up
     if (onboardingCompleted) {
       return null; // Go to dashboard
     }
@@ -87,12 +85,17 @@ function getNextOnboardingRoute(params: {
   }
   
   // No company yet - check which path they're on
+  // If no choice made yet, redirect to choice screen
+  if (!onboardingChoice) {
+    return "/onboarding/choice";
+  }
+  
   // Employee path
   if (onboardingChoice === "employee") {
     return "/join-company";
   }
   
-  // Owner path (explicit or default)
+  // Owner path
   if (!onboardingIndustry) {
     return "/onboarding/industry";
   }
@@ -134,8 +137,8 @@ function AuthenticatedRouter() {
   useWebSocket();
   usePushNotifications();
 
-  // Get onboarding state
-  const onboardingChoice = localStorage.getItem("onboardingChoice");
+  // Get onboarding state - prefer user.onboardingChoice from DB, fallback to localStorage
+  const onboardingChoice = user?.onboardingChoice || localStorage.getItem("onboardingChoice");
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
   const nextRoute = !isLoading && isAuthenticated && user 
     ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry })
@@ -173,6 +176,7 @@ function AuthenticatedRouter() {
   if (nextRoute) {
     return (
       <Switch>
+        <Route path="/onboarding/choice" component={OnboardingChoice} />
         <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
         <Route path="/join-company" component={JoinCompany} />
