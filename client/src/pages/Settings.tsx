@@ -20,6 +20,7 @@ import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
+import Disable2FAModal from "@/components/Disable2FAModal";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -41,6 +42,7 @@ export default function Settings() {
   const [emailError, setEmailError] = useState<string>("");
   const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
   const [twoFactorModalOpen, setTwoFactorModalOpen] = useState(false);
+  const [disable2FAModalOpen, setDisable2FAModalOpen] = useState(false);
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
@@ -447,13 +449,20 @@ export default function Settings() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <Button variant="outline" onClick={() => setChangePasswordModalOpen(true)}>Change Password</Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setTwoFactorModalOpen(true)}
-                className={twoFactorStatus?.enabled ? "border-green-500 text-green-600 hover:bg-green-50" : ""}
-              >
-                {twoFactorStatus?.enabled ? "2FA Enabled" : "Two-Factor Authentication"}
-              </Button>
+              {twoFactorStatus?.enabled ? (
+                <Button 
+                  variant="destructive"
+                  onClick={() => setDisable2FAModalOpen(true)}
+                >
+                  Disable 2FA
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => setTwoFactorModalOpen(true)}
+                >
+                  Set Up Authenticator
+                </Button>
+              )}
               <Button variant="outline">Download Data</Button>
               <Button variant="destructive" onClick={() => setDeleteAccountModalOpen(true)}>Delete Account</Button>
             </div>
@@ -476,6 +485,11 @@ export default function Settings() {
         open={twoFactorModalOpen}
         onOpenChange={setTwoFactorModalOpen}
         isEnabled={twoFactorStatus?.enabled || false}
+      />
+
+      <Disable2FAModal
+        open={disable2FAModalOpen}
+        onOpenChange={setDisable2FAModalOpen}
       />
     </div>
   );

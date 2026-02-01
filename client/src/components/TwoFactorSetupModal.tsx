@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, X, Copy, CheckCircle, ShieldCheck, ShieldOff, KeyRound } from "lucide-react";
+import { Loader2, X, Copy, CheckCircle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface TwoFactorSetupModalProps {
@@ -14,12 +14,12 @@ interface TwoFactorSetupModalProps {
   isEnabled: boolean;
 }
 
-type Step = "initial" | "setup" | "confirm" | "backup" | "disable";
+type Step = "intro" | "scan" | "verify" | "backup";
 
 export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: TwoFactorSetupModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>(isEnabled ? "initial" : "setup");
+  const [step, setStep] = useState<Step>("intro");
   const [qrCode, setQrCode] = useState<string>("");
   const [manualKey, setManualKey] = useState<string>("");
   const [code, setCode] = useState("");
@@ -27,6 +27,19 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
   const [savedBackupCodes, setSavedBackupCodes] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setStep("intro");
+      setQrCode("");
+      setManualKey("");
+      setCode("");
+      setBackupCodes([]);
+      setSavedBackupCodes(false);
+      setError(null);
+      setCopied(false);
+    }
+  }, [open]);
 
   const startSetupMutation = useMutation({
     mutationFn: async () => {
@@ -40,7 +53,7 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
     onSuccess: (data) => {
       setQrCode(data.qrCodeDataUrl);
       setManualKey(data.manualKey);
-      setStep("confirm");
+      setStep("scan");
     },
     onError: (err: Error) => {
       setError(err.message);
@@ -48,8 +61,8 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
   });
 
   const confirmSetupMutation = useMutation({
-    mutationFn: async (code: string) => {
-      const res = await apiRequest("POST", "/api/auth/2fa/setup/confirm", { code });
+    mutationFn: async (verifyCode: string) => {
+      const res = await apiRequest("POST", "/api/auth/2fa/setup/confirm", { code: verifyCode });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Invalid code");
@@ -59,44 +72,7 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
     onSuccess: (data) => {
       setBackupCodes(data.backupCodes);
       setStep("backup");
-    },
-    onError: (err: Error) => {
-      setError(err.message);
-    },
-  });
-
-  const disableMutation = useMutation({
-    mutationFn: async (code: string) => {
-      const res = await apiRequest("POST", "/api/auth/2fa/disable", { code });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to disable 2FA");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa/status"] });
-      toast({ title: "2FA Disabled", description: "Two-factor authentication has been turned off." });
-      handleClose();
-    },
-    onError: (err: Error) => {
-      setError(err.message);
-    },
-  });
-
-  const regenerateBackupMutation = useMutation({
-    mutationFn: async (code: string) => {
-      const res = await apiRequest("POST", "/api/auth/2fa/backup/regenerate", { code });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to regenerate backup codes");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setBackupCodes(data.backupCodes);
-      setSavedBackupCodes(false);
-      setCode("");
     },
     onError: (err: Error) => {
       setError(err.message);
@@ -104,19 +80,14 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
   });
 
   const handleClose = () => {
-    setStep(isEnabled ? "initial" : "setup");
-    setQrCode("");
-    setManualKey("");
-    setCode("");
-    setBackupCodes([]);
-    setSavedBackupCodes(false);
-    setError(null);
-    setCopied(false);
     onOpenChange(false);
   };
 
   const handleFinish = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa/status"] });
+    toast({ 
+      title: "2FA Enabled", 
+      description: "Two-factor authentication is now active on your account." 
+    });
     handleClose();
   };
 
@@ -133,48 +104,17 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
 
   const renderStep = () => {
     switch (step) {
-      case "initial":
+      case "intro":
         return (
           <div className="space-y-4">
             <div className="text-center">
-              <div className="w-12 h-12 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-3">
-                <ShieldCheck className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="w-12 h-12 mx-auto bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-3">
+                <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-400">
-                Two-factor authentication is currently enabled on your account.
+                Add an extra layer of security to your account using an authenticator app like Google Authenticator or Authy.
               </p>
             </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStep("confirm");
-                  setBackupCodes([]);
-                }}
-                className="flex-1 h-11 rounded-xl"
-              >
-                <KeyRound className="h-4 w-4 mr-2" />
-                Regenerate Codes
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => setStep("disable")}
-                className="flex-1 h-11 rounded-xl"
-              >
-                <ShieldOff className="h-4 w-4 mr-2" />
-                Disable 2FA
-              </Button>
-            </div>
-          </div>
-        );
-
-      case "setup":
-        return (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-              Add an extra layer of security to your account using an authenticator app.
-            </p>
             <Button
               onClick={() => startSetupMutation.mutate()}
               disabled={startSetupMutation.isPending}
@@ -186,7 +126,7 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
                   Setting up...
                 </>
               ) : (
-                "Set Up Authenticator"
+                "Continue"
               )}
             </Button>
             {error && (
@@ -195,46 +135,7 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
           </div>
         );
 
-      case "confirm":
-        if (backupCodes.length > 0) {
-          return (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-                Enter a code from your authenticator to regenerate backup codes.
-              </p>
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder="000000"
-                value={code}
-                onChange={(e) => {
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                  setError(null);
-                }}
-                maxLength={6}
-                className="text-center text-lg tracking-widest font-mono h-12 rounded-xl"
-                autoFocus
-              />
-              {error && (
-                <p className="text-sm text-red-600 dark:text-red-400 text-center">{error}</p>
-              )}
-              <Button
-                onClick={() => regenerateBackupMutation.mutate(code)}
-                disabled={code.length !== 6 || regenerateBackupMutation.isPending}
-                className="w-full h-11 rounded-xl font-medium"
-              >
-                {regenerateBackupMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Regenerating...
-                  </>
-                ) : (
-                  "Regenerate Backup Codes"
-                )}
-              </Button>
-            </div>
-          );
-        }
+      case "scan":
         return (
           <div className="space-y-4">
             <div className="text-center">
@@ -248,50 +149,68 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
               )}
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 text-center">
                 Or enter this key manually:
               </p>
               <div className="flex items-center gap-2">
-                <div className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
-                  <code className="text-xs font-mono text-slate-700 dark:text-slate-300 break-all">
-                    {manualKey}
-                  </code>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={copyManualKey}
-                  className="h-10 w-10 rounded-xl shrink-0"
-                >
+                <code className="flex-1 text-xs font-mono text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-2 rounded-lg text-center break-all">
+                  {manualKey}
+                </code>
+                <Button variant="outline" size="sm" onClick={copyManualKey} className="shrink-0">
                   {copied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
 
-            <div className="pt-2 space-y-2">
-              <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-                Enter the 6-digit code from your app:
-              </p>
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder="000000"
-                value={code}
-                onChange={(e) => {
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                  setError(null);
-                }}
-                maxLength={6}
-                className="text-center text-lg tracking-widest font-mono h-12 rounded-xl"
-              />
-              {error && (
-                <p className="text-sm text-red-600 dark:text-red-400 text-center">{error}</p>
-              )}
+            <Button
+              onClick={() => setStep("verify")}
+              className="w-full h-11 rounded-xl font-medium"
+            >
+              Next
+            </Button>
+          </div>
+        );
+
+      case "verify":
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
+              Enter the 6-digit code from your authenticator app to verify setup.
+            </p>
+            <Input
+              type="text"
+              inputMode="numeric"
+              placeholder="000000"
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                setError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && code.length === 6) {
+                  confirmSetupMutation.mutate(code);
+                }
+              }}
+              maxLength={6}
+              className="text-center text-lg tracking-widest font-mono h-12 rounded-xl"
+              autoFocus
+            />
+            {error && (
+              <p className="text-sm text-red-600 dark:text-red-400 text-center">{error}</p>
+            )}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setStep("scan")}
+                className="flex-1 h-11 rounded-xl"
+              >
+                Back
+              </Button>
               <Button
                 onClick={() => confirmSetupMutation.mutate(code)}
                 disabled={code.length !== 6 || confirmSetupMutation.isPending}
-                className="w-full h-11 rounded-xl font-medium"
+                className="flex-1 h-11 rounded-xl font-medium"
               >
                 {confirmSetupMutation.isPending ? (
                   <>
@@ -314,7 +233,7 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <p className="text-sm font-medium text-slate-900 dark:text-white">
-                {isEnabled ? "New Backup Codes Generated" : "2FA Enabled!"}
+                2FA Enabled!
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Save these backup codes securely. Each can only be used once.
@@ -323,9 +242,9 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
 
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
               <div className="grid grid-cols-2 gap-2">
-                {backupCodes.map((code, i) => (
+                {backupCodes.map((backupCode, i) => (
                   <div key={i} className="font-mono text-sm text-slate-700 dark:text-slate-300 text-center py-1 bg-white dark:bg-slate-900 rounded-lg">
-                    {code}
+                    {backupCode}
                   </div>
                 ))}
               </div>
@@ -361,69 +280,21 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
             </Button>
           </div>
         );
-
-      case "disable":
-        return (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400 text-center">
-              Enter a code from your authenticator or a backup code to disable 2FA.
-            </p>
-            <Input
-              type="text"
-              placeholder="Code or backup code"
-              value={code}
-              onChange={(e) => {
-                setCode(e.target.value);
-                setError(null);
-              }}
-              className="text-center text-lg tracking-widest font-mono h-12 rounded-xl"
-              autoFocus
-            />
-            {error && (
-              <p className="text-sm text-red-600 dark:text-red-400 text-center">{error}</p>
-            )}
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStep("initial");
-                  setCode("");
-                  setError(null);
-                }}
-                className="flex-1 h-11 rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => disableMutation.mutate(code)}
-                disabled={!code.trim() || disableMutation.isPending}
-                className="flex-1 h-11 rounded-xl"
-              >
-                {disableMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Disabling...
-                  </>
-                ) : (
-                  "Disable 2FA"
-                )}
-              </Button>
-            </div>
-          </div>
-        );
     }
   };
 
   const getTitle = () => {
     switch (step) {
-      case "initial": return "Two-Factor Authentication";
-      case "setup": return "Set Up 2FA";
-      case "confirm": return backupCodes.length > 0 ? "Regenerate Backup Codes" : "Verify Setup";
+      case "intro": return "Set Up Two-Factor Authentication";
+      case "scan": return "Scan QR Code";
+      case "verify": return "Verify Setup";
       case "backup": return "Backup Codes";
-      case "disable": return "Disable 2FA";
     }
   };
+
+  if (isEnabled) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
