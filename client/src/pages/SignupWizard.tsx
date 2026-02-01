@@ -324,8 +324,8 @@ export default function SignupWizard() {
     localStorage.setItem("onboardingChoice", role);
     console.log("[onboarding] choice saved:", role);
     if (role === "owner") {
-      // Skip industry step - go directly to company details
-      goToStep("company");
+      // Redirect to Industry Grid page (Step 3)
+      setLocation("/onboarding/industry");
     } else {
       goToStep("invite");
     }

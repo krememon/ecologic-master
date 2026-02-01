@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { 
   Wrench, 
@@ -38,38 +36,25 @@ const INDUSTRIES = [
 export default function IndustryOnboarding() {
   const [, setLocation] = useLocation();
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
-  const queryClient = useQueryClient();
   
   const onboardingChoice = localStorage.getItem("onboardingChoice");
   console.log("[industry-onboarding] mounted, choice:", onboardingChoice, "route:", window.location.pathname);
   
   useEffect(() => {
-    // Industry step is no longer part of onboarding - redirect to dashboard
-    console.log("[industry-onboarding] redirecting to dashboard (industry step removed from onboarding)");
-    setLocation("/", { replace: true });
-  }, [setLocation]);
-
-  const industryMutation = useMutation({
-    mutationFn: async (industry: string) => {
-      const res = await apiRequest("PATCH", "/api/company/industry", { industry });
-      return res.json();
-    },
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/company"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/service-catalog"] });
-      // Wait for auth user refetch to complete before navigating
-      // This ensures onboardingCompleted is updated in state before routing
-      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-      // Clear onboarding choice now that industry onboarding is complete
-      localStorage.removeItem("onboardingChoice");
-      console.log("Industry saved, redirecting to /customize/price-book");
-      setLocation("/customize/price-book");
-    },
-  });
+    // Guard: only owners should access this page
+    if (onboardingChoice !== "owner") {
+      console.log("[industry-onboarding] not owner path, redirecting to /onboarding/choice");
+      setLocation("/onboarding/choice", { replace: true });
+    }
+  }, [onboardingChoice, setLocation]);
 
   const handleContinue = () => {
     if (selectedIndustry) {
-      industryMutation.mutate(selectedIndustry);
+      // Save industry to localStorage for use in company creation
+      localStorage.setItem("onboardingIndustry", selectedIndustry);
+      console.log("[industry-onboarding] saved industry:", selectedIndustry);
+      // Navigate to company details step
+      setLocation("/onboarding/company");
     }
   };
 
@@ -122,20 +107,14 @@ export default function IndustryOnboarding() {
           <div className="flex justify-center">
             <Button
               onClick={handleContinue}
-              disabled={!selectedIndustry || industryMutation.isPending}
+              disabled={!selectedIndustry}
               size="lg"
               className="px-12"
               data-testid="button-continue"
             >
-              {industryMutation.isPending ? "Setting up..." : "Continue"}
+              Continue
             </Button>
           </div>
-
-          {industryMutation.isError && (
-            <p className="text-center text-red-500 mt-4">
-              Failed to save industry. Please try again.
-            </p>
-          )}
         </div>
       </div>
     </div>

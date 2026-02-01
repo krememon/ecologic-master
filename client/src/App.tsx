@@ -138,14 +138,18 @@ function Router() {
 
   if (!user?.company) {
     const onboardingChoice = localStorage.getItem("onboardingChoice");
-    console.log("[app-router] no company, onboardingChoice:", onboardingChoice);
+    const onboardingIndustry = localStorage.getItem("onboardingIndustry");
+    console.log("[app-router] no company, onboardingChoice:", onboardingChoice, "industry:", onboardingIndustry);
     
     if (onboardingChoice === "owner") {
+      // If industry not selected yet, redirect to industry grid (Step 3)
+      const defaultRoute = onboardingIndustry ? "/onboarding/company" : "/onboarding/industry";
       return (
         <Switch>
+          <Route path="/onboarding/industry" component={IndustryOnboarding} />
           <Route path="/onboarding/company" component={OnboardingCompany} />
           <Route path="/onboarding/choice" component={OnboardingChoice} />
-          <Route>{() => <Redirect to="/onboarding/company" />}</Route>
+          <Route>{() => <Redirect to={defaultRoute} />}</Route>
         </Switch>
       );
     }
@@ -170,13 +174,14 @@ function Router() {
     );
   }
 
-  // Industry onboarding step removed - owners go directly to dashboard after company creation
-  // Clear any stale onboarding choice since onboarding is now complete
-  if (user.role === 'OWNER' && user.company) {
+  // Clear onboarding state once company is created
+  if (user.company) {
     const onboardingChoice = localStorage.getItem("onboardingChoice");
-    if (onboardingChoice) {
-      console.log("[app-router] owner with company, clearing stale onboardingChoice");
+    const onboardingIndustry = localStorage.getItem("onboardingIndustry");
+    if (onboardingChoice || onboardingIndustry) {
+      console.log("[app-router] user with company, clearing onboarding state");
       localStorage.removeItem("onboardingChoice");
+      localStorage.removeItem("onboardingIndustry");
     }
   }
 

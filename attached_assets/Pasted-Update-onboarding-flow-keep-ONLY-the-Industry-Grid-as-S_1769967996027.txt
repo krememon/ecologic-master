@@ -1,0 +1,47 @@
+Update onboarding flow: keep ONLY the Industry Grid as Step 3.
+
+CONTEXT
+We have two "industry" screens:
+- Old/basic Industry selection (list style) -> should remain REMOVED.
+- Industry Grid page (/onboarding/industry) -> we want this as Step 3 for owners.
+
+GOALS
+1) Make Industry Grid (/onboarding/industry) be Step 3 in the OWNER onboarding flow.
+2) Keep the old/basic industry selection screen removed and unreachable from onboarding.
+3) Ensure Industry Grid appears ONLY for owners (not employees).
+4) After Industry Grid selection, continue to Company details + employee count (Step 4).
+5) Ensure after sign-in, user is NOT routed to /onboarding/industry unless they are in owner onboarding and Step 3 is incomplete.
+6) Update progress UI to show correct step counts (now 5 steps total).
+
+IMPLEMENTATION REQUIREMENTS
+A) Routing / state machine
+- Track onboardingChoice ("owner"|"employee"|null).
+- Track onboarding step completion for owner:
+  ownerIndustrySelected (boolean) or ownerIndustry (string).
+- Redirect rules:
+  - If no company + onboardingChoice null -> /onboarding/choose
+  - If onboardingChoice employee -> /onboarding/invite
+  - If onboardingChoice owner and industry not selected -> /onboarding/industry
+  - If onboardingChoice owner and industry selected -> /onboarding/company-details (or existing company step)
+
+B) Industry Grid page behavior
+- On selecting an industry tile, persist selection (db or onboarding state).
+- Trigger price book template preload if that’s what it currently does.
+- Then navigate to the company details step.
+
+C) Remove old industry selection from any onboarding routes/buttons
+- Search for old route usage and remove links/redirects to it.
+- Ensure no code references it as Step 3 anymore.
+
+TESTS
+1) New signup -> choose Owner -> goes to /onboarding/industry (grid) as Step 3.
+2) Choose industry -> goes to company details + employee count (Step 4).
+3) New signup -> choose Employee -> never sees /onboarding/industry.
+4) After login:
+   - If owner and hasn’t selected industry yet -> resume at /onboarding/industry
+   - Otherwise -> resume at correct next step (not industry).
+
+DELIVERABLES
+- List files changed.
+- Confirm old industry list screen is not used anywhere in onboarding.
+- Confirm industry grid is step 3 and step count/progress UI updated.

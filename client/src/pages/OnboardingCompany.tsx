@@ -68,8 +68,12 @@ export default function OnboardingCompany() {
     
     setIsLoading(true);
     try {
+      // Get industry from localStorage (set during industry grid step)
+      const industry = localStorage.getItem("onboardingIndustry") || "other";
+      
       const res = await apiRequest("POST", "/api/companies", {
         name: companyName,
+        industry,
         employeeRange,
       });
       
