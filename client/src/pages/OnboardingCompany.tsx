@@ -31,24 +31,42 @@ export default function OnboardingCompany() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const onboardingChoice = localStorage.getItem("onboardingChoice");
-  console.log("[onboarding-company] choice:", onboardingChoice, "step:", step, "hasCompany:", !!user?.company);
+  
+  // Check if user has company but needs subscription
+  const hasCompany = !!user?.company;
+  const subscriptionStatus = user?.company?.subscriptionStatus;
+  const needsSubscription = hasCompany && subscriptionStatus !== "active" && subscriptionStatus !== "trialing";
+  
+  console.log("[onboarding-company] choice:", onboardingChoice, "step:", step, 
+    "hasCompany:", hasCompany, "subscriptionStatus:", subscriptionStatus, 
+    "needsSubscription:", needsSubscription);
 
+  // If user has company with active subscription, they're done - go to dashboard
   useEffect(() => {
-    if (!authLoading && user?.company) {
+    if (!authLoading && hasCompany && !needsSubscription) {
+      console.log("[onboarding-company] fully onboarded, redirecting to /");
       localStorage.removeItem("onboardingChoice");
+      localStorage.removeItem("onboardingIndustry");
       setLocation("/", { replace: true });
     }
-  }, [user, authLoading, setLocation]);
+  }, [authLoading, hasCompany, needsSubscription, setLocation]);
+
+  // If user has company but needs subscription, skip to subscription step
+  useEffect(() => {
+    if (!authLoading && needsSubscription && step === "company") {
+      console.log("[onboarding-company] has company but needs subscription, jumping to subscription step");
+      setStep("subscription");
+    }
+  }, [authLoading, needsSubscription, step]);
 
   useEffect(() => {
     // Employees should go to join-company instead
     if (onboardingChoice === "employee") {
       setLocation("/join-company", { replace: true });
     }
-    // If no choice set, assume owner path (they came from /signup)
   }, [onboardingChoice, setLocation]);
 
-  if (authLoading || user?.company) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
