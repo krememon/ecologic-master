@@ -131,6 +131,8 @@ function AuthenticatedRouter() {
   const path = window.location.pathname;
   const { isAuthenticated, isLoading, user } = useAuth();
   
+  console.log("[AuthenticatedRouter] path:", path, "isAuthenticated:", isAuthenticated, "isLoading:", isLoading);
+  
   useWebSocket();
   usePushNotifications();
 
@@ -250,8 +252,26 @@ function AuthenticatedRouter() {
   );
 }
 
+// Public reset password router - renders BEFORE any auth checks
+function PublicResetPasswordRouter() {
+  return <ResetPassword />;
+}
+
 function Router() {
-  const path = window.location.pathname;
+  const [location] = useLocation();
+  const path = location;
+  
+  // Check window.location first for full page navigation (email link clicks)
+  const windowPath = window.location.pathname;
+  
+  console.log("[Router] wouter path:", path, "window.location.pathname:", windowPath);
+  
+  // Password reset is PUBLIC - check BOTH wouter and window.location
+  // This handles both client-side navigation and full page loads
+  if (path.startsWith('/reset-password') || windowPath.startsWith('/reset-password')) {
+    console.log("[Router] Rendering ResetPassword page");
+    return <PublicResetPasswordRouter />;
+  }
   
   if (path.startsWith('/pay/') || path.startsWith('/stripe/')) {
     return <PaymentRouter />;
@@ -272,12 +292,8 @@ function Router() {
       </div>
     );
   }
-  
-  // Password reset is PUBLIC - works whether logged in or out
-  if (path.startsWith('/reset-password')) {
-    return <ResetPassword />;
-  }
 
+  console.log("[Router] Falling through to AuthenticatedRouter");
   return <AuthenticatedRouter />;
 }
 
