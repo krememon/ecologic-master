@@ -1,0 +1,46 @@
+Bug: After first-time account creation and sign-in, user is still redirected to /onboarding/industry automatically. This is incorrect.
+
+REQUIREMENT
+- /onboarding/industry must NEVER be the default landing page after login.
+- User must only reach /onboarding/industry after explicitly choosing "Owner" on /onboarding/choose.
+
+RULES (must implement exactly)
+1) After login success:
+   - If user has a company -> redirect to /jobs (or main app home)
+   - If user has NO company and onboardingChoice is NULL/undefined -> redirect to /onboarding/choose
+   - If onboardingChoice === "employee" -> redirect to /onboarding/invite
+   - If onboardingChoice === "owner" -> continue owner onboarding:
+        /onboarding/industry (then company details, then subscription)
+
+2) Add a hard guard on /onboarding/industry:
+   - If onboardingChoice !== "owner" -> redirect to /onboarding/choose (replace)
+   - If user already has company -> redirect to /jobs
+
+TASKS
+A) Find the post-auth redirect logic (where we route after login/verify-code/signup).
+   - Search for "/onboarding/industry" in the frontend and backend.
+   - Search for "navigate(" or "redirectTo" or "returnTo" logic after auth success.
+   - There is likely logic like: if (!company) navigate("/onboarding/industry") — remove/replace it.
+
+B) Implement onboardingChoice persistence (if not already):
+   - onboardingChoice: "owner" | "employee" | null
+   - Default MUST be null (do not default to owner or employee)
+   - Only set onboardingChoice when user clicks the choice buttons.
+
+C) Update /onboarding/choose buttons:
+   - Owner button sets onboardingChoice="owner" then routes to /onboarding/industry
+   - Employee button sets onboardingChoice="employee" then routes to /onboarding/invite
+
+D) Update /onboarding/industry page:
+   - On mount, if onboardingChoice !== "owner", immediately Navigate to /onboarding/choose (replace)
+   - Do not flash the industry UI before redirect.
+
+TESTS
+1) Brand new user signs up -> signs in -> lands on /onboarding/choose (NOT /onboarding/industry).
+2) Click Owner -> goes to /onboarding/industry.
+3) Click Employee -> goes to /onboarding/invite.
+4) Directly visiting /onboarding/industry without choosing Owner redirects to /onboarding/choose.
+
+DELIVERABLES
+- List files changed.
+- Paste the old redirect condition that caused /onboarding/industry to be the default, and the new logic.

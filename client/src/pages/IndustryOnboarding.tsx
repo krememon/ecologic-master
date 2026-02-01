@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -40,7 +40,15 @@ export default function IndustryOnboarding() {
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const queryClient = useQueryClient();
   
-  console.log("[industry-onboarding] mounted, route:", window.location.pathname);
+  const onboardingChoice = localStorage.getItem("onboardingChoice");
+  console.log("[industry-onboarding] mounted, choice:", onboardingChoice, "route:", window.location.pathname);
+  
+  useEffect(() => {
+    if (onboardingChoice !== "owner") {
+      console.log("[industry-onboarding] no owner choice, redirecting to /onboarding/choice");
+      setLocation("/onboarding/choice", { replace: true });
+    }
+  }, [onboardingChoice, setLocation]);
 
   const industryMutation = useMutation({
     mutationFn: async (industry: string) => {
@@ -53,6 +61,8 @@ export default function IndustryOnboarding() {
       // Wait for auth user refetch to complete before navigating
       // This ensures onboardingCompleted is updated in state before routing
       await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+      // Clear onboarding choice now that industry onboarding is complete
+      localStorage.removeItem("onboardingChoice");
       console.log("Industry saved, redirecting to /customize/price-book");
       setLocation("/customize/price-book");
     },

@@ -101,10 +101,10 @@ export default function OnboardingCompany() {
         throw new Error(data.message || "Failed to start trial");
       }
       
-      localStorage.removeItem("onboardingChoice");
+      // Don't clear onboardingChoice yet - still need it for /onboarding/industry
       setLocation("/");
     } catch (error: any) {
-      localStorage.removeItem("onboardingChoice");
+      // Don't clear onboardingChoice - let the flow continue
       setLocation("/");
     } finally {
       setIsLoading(false);
