@@ -880,7 +880,7 @@ export function setupAuth(app: Express) {
         }
       }
 
-      // Code is valid - log the user in
+      // Code is valid - check for 2FA before logging in
       const user = await storage.getUserByEmail(normalizedEmail);
       console.log("[auth] verify-code: found user:", user?.id, user?.email);
       if (!user) {
@@ -889,6 +889,22 @@ export function setupAuth(app: Express) {
 
       // Clean up the challenge
       await storage.deleteLoginChallenge(normalizedEmail);
+
+      // Check if 2FA is enabled
+      if (user.twoFactorEnabled) {
+        console.log("[auth] verify-code: 2FA required for user:", user.id);
+        (req.session as any).twoFactorPendingUserId = user.id;
+        return req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[auth] verify-code: session.save error:", saveErr);
+            return res.status(500).json({ message: "Unable to complete sign in." });
+          }
+          return res.json({
+            ok: true,
+            twoFactorRequired: true,
+          });
+        });
+      }
 
       console.log("[auth] verify-code: calling req.login for user:", user.id);
       
@@ -1040,7 +1056,40 @@ export function setupAuth(app: Express) {
 
   // Social Auth Routes
   app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-  app.get("/api/auth/google/callback", passport.authenticate("google", { successRedirect: "/", failureRedirect: "/auth" }));
+  app.get("/api/auth/google/callback", (req, res, next) => {
+    passport.authenticate("google", async (err: any, user: any, info: any) => {
+      if (err) {
+        console.error("[google-auth] Error:", err);
+        return res.redirect("/auth?error=oauth_failed");
+      }
+      if (!user) {
+        return res.redirect("/auth?error=oauth_cancelled");
+      }
+      
+      // Check if 2FA is enabled for this user
+      const fullUser = await storage.getUser(user.id);
+      if (fullUser?.twoFactorEnabled) {
+        // Set pending 2FA flag and redirect to 2FA page
+        (req.session as any).twoFactorPendingUserId = user.id;
+        return req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[google-auth] Session save error:", saveErr);
+            return res.redirect("/auth?error=session_error");
+          }
+          return res.redirect("/two-factor");
+        });
+      }
+      
+      // No 2FA - complete login normally
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[google-auth] Login error:", loginErr);
+          return res.redirect("/auth?error=login_failed");
+        }
+        return res.redirect("/");
+      });
+    })(req, res, next);
+  });
 
   app.get("/api/auth/facebook", passport.authenticate("facebook", { scope: ["email"] }));
   app.get("/api/auth/facebook/callback", passport.authenticate("facebook", { successRedirect: "/", failureRedirect: "/auth" }));
@@ -1153,10 +1202,22 @@ export function setupAuth(app: Express) {
   });
 
   // Get Current User
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", async (req, res) => {
+    // Check if there's a pending 2FA verification
+    const pendingUserId = (req.session as any).twoFactorPendingUserId;
+    if (pendingUserId) {
+      return res.json({
+        authenticated: false,
+        twoFactorRequired: true,
+      });
+    }
+    
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+    
+    // Get fresh user data for 2FA status
+    const user = await storage.getUser(req.user.id);
     
     res.json({
       id: req.user.id,
@@ -1165,6 +1226,7 @@ export function setupAuth(app: Express) {
       lastName: req.user.lastName,
       profileImageUrl: req.user.profileImageUrl,
       emailVerified: req.user.emailVerified,
+      twoFactorEnabled: user?.twoFactorEnabled || false,
     });
   });
 
