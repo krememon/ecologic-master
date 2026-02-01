@@ -86,7 +86,8 @@ export const users = pgTable("users", {
   emailVerificationToken: varchar("email_verification_token"),
   resetPasswordToken: varchar("reset_password_token"),
   resetPasswordExpires: timestamp("reset_password_expires"),
-  googleLinked: boolean("google_linked").default(false), // Track Google account linking
+  googleId: varchar("google_id").unique(), // Google OAuth sub ID for account linking
+  googleLinked: boolean("google_linked").default(false), // Track Google account linking (derived from googleId presence)
   stripeCustomerId: varchar("stripe_customer_id"),
   phone: varchar("phone"),
   addressLine1: varchar("address_line_1"),
