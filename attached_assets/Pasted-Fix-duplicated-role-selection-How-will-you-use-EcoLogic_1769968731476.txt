@@ -1,0 +1,54 @@
+Fix duplicated role selection (“How will you use EcoLogic?” shows twice).
+
+PROBLEM
+We currently have role selection in TWO places:
+1) Step 3 inside /signup (Role Selection)
+2) /onboarding/choice page (“How will you use EcoLogic?”)
+
+This causes the choice screen to appear twice and breaks the intended flow.
+
+INTENDED FLOW (single source of truth)
+Step 1-3 are inside /signup:
+1) Identity + Email
+2) Verify + Password
+3) Role Selection (Owner vs Employee)
+
+After /signup completes:
+- If role === OWNER -> route to /onboarding/industry
+- If role === EMPLOYEE -> route to /join-company (invite code)
+No /onboarding/choice in this flow.
+
+GOALS
+1) Remove /onboarding/choice from the signup/onboarding routing logic so it NEVER shows after /signup.
+2) Use the role selection result from /signup as the ONLY onboardingChoice source of truth.
+3) Keep /onboarding/choice page only as an optional fallback if someone manually visits it (or remove it), but it must not be used in redirects.
+4) Ensure resume behavior uses role chosen in signup:
+   - OWNER resumes /onboarding/industry -> /onboarding/company -> /onboarding/trial -> /jobs
+   - EMPLOYEE resumes /join-company
+
+TASKS
+A) Find the global onboarding redirect logic (the guard that redirects after login / on app load).
+   - Remove any redirect path that sends users to /onboarding/choice.
+   - Replace "no choice yet" logic with: fetch role from user profile (owner/employee) OR saved onboardingChoice from /signup.
+
+B) Ensure /signup writes onboardingChoice/role to a persistent place:
+   - Prefer DB user field (e.g. user.onboardingRole or user.roleIntent)
+   - If using localStorage, ensure it is set once during signup and not duplicated.
+
+C) Make /signup completion navigate directly:
+   - Owner -> /onboarding/industry
+   - Employee -> /join-company
+   - Do not navigate to /onboarding/choice anywhere.
+
+D) Update any step tables/progress UI if it references /onboarding/choice.
+
+TESTS
+1) New signup -> role selection in /signup -> should NOT see /onboarding/choice at all.
+2) Choosing Owner -> goes to /onboarding/industry
+3) Choosing Employee -> goes to /join-company
+4) Logging out/in -> resumes correct step without ever seeing /onboarding/choice.
+
+DELIVERABLES
+- List files changed
+- Show where the redirect-to-/onboarding/choice was removed
+- Confirm role selection appears only once

@@ -41,9 +41,11 @@ export default function OnboardingCompany() {
   }, [user, authLoading, setLocation]);
 
   useEffect(() => {
-    if (onboardingChoice !== "owner") {
-      setLocation("/onboarding/choice", { replace: true });
+    // Employees should go to join-company instead
+    if (onboardingChoice === "employee") {
+      setLocation("/join-company", { replace: true });
     }
+    // If no choice set, assume owner path (they came from /signup)
   }, [onboardingChoice, setLocation]);
 
   if (authLoading || user?.company) {
@@ -119,7 +121,8 @@ export default function OnboardingCompany() {
 
   const handleBack = () => {
     if (step === "company") {
-      setLocation("/onboarding/choice");
+      // Go back to industry selection
+      setLocation("/onboarding/industry");
     }
   };
 

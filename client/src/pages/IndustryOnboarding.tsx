@@ -41,11 +41,12 @@ export default function IndustryOnboarding() {
   console.log("[industry-onboarding] mounted, choice:", onboardingChoice, "route:", window.location.pathname);
   
   useEffect(() => {
-    // Guard: only owners should access this page
-    if (onboardingChoice !== "owner") {
-      console.log("[industry-onboarding] not owner path, redirecting to /onboarding/choice");
-      setLocation("/onboarding/choice", { replace: true });
+    // Guard: employees should go to join-company instead
+    if (onboardingChoice === "employee") {
+      console.log("[industry-onboarding] employee path, redirecting to /join-company");
+      setLocation("/join-company", { replace: true });
     }
+    // If no choice set, assume owner path (they came from /signup)
   }, [onboardingChoice, setLocation]);
 
   const handleContinue = () => {

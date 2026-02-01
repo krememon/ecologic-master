@@ -9,7 +9,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
-// Centralized onboarding route logic for owners
+// Centralized onboarding route logic
+// Role selection happens ONLY in /signup - no separate /onboarding/choice
 function getNextOnboardingRoute(params: {
   user: any;
   onboardingChoice: string | null;
@@ -17,40 +18,41 @@ function getNextOnboardingRoute(params: {
 }): string | null {
   const { user, onboardingChoice, onboardingIndustry } = params;
   
-  // Step 1: No choice made yet
-  if (!onboardingChoice) {
-    return "/onboarding/choice";
-  }
-  
-  // Step 2: Employee path
-  if (onboardingChoice === "employee") {
-    if (!user?.company) {
-      return "/join-company";
-    }
-    return null; // Employee with company can access app
-  }
-  
-  // Step 3: Owner path - check industry selection
-  if (onboardingChoice === "owner") {
-    if (!onboardingIndustry) {
-      return "/onboarding/industry";
-    }
-    
-    // Step 4: Check company creation
-    if (!user?.company) {
-      return "/onboarding/company";
-    }
-    
-    // Step 5: Check trial/subscription status
+  // If user has a company, onboarding is complete
+  if (user?.company) {
     const status = user.company.subscriptionStatus;
     const hasActiveSub = status === "active" || status === "trialing";
     if (!hasActiveSub) {
       return "/onboarding/company"; // Shows subscription step
     }
+    return null; // Fully onboarded
   }
   
-  // All steps complete - allow dashboard access
-  return null;
+  // No company yet - check which path they're on
+  // Employee path
+  if (onboardingChoice === "employee") {
+    return "/join-company";
+  }
+  
+  // Owner path (explicit choice or default for users without choice)
+  // If no choice made yet, assume owner (they selected in /signup)
+  if (onboardingChoice === "owner" || !onboardingChoice) {
+    // If they got here without a choice, they skipped signup - set owner as default
+    if (!onboardingChoice && !onboardingIndustry) {
+      // No signup completed yet, but authenticated - rare edge case
+      // They should complete the full flow
+      return "/onboarding/industry";
+    }
+    
+    if (!onboardingIndustry) {
+      return "/onboarding/industry";
+    }
+    
+    return "/onboarding/company";
+  }
+  
+  // Fallback - should not reach here
+  return "/onboarding/industry";
 }
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
@@ -194,7 +196,7 @@ function Router() {
   if (nextRoute) {
     return (
       <Switch>
-        <Route path="/onboarding/choice" component={OnboardingChoice} />
+        {/* /onboarding/choice removed - role selection is in /signup only */}
         <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
         <Route path="/join-company" component={JoinCompany} />
