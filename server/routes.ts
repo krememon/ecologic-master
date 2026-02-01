@@ -11408,7 +11408,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create DM notification for recipients
       const sender = await storage.getUser(userId);
-      if (sender && sender.companyId) {
+      const senderCompany = await storage.getUserCompany(userId);
+      if (sender && senderCompany) {
         const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Someone';
         const messagePreview = body.trim().length > 50 
           ? body.trim().substring(0, 50) + '...' 
@@ -11417,7 +11418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const { userId: recipientId } of participants) {
           try {
             await storage.createNotification({
-              companyId: sender.companyId,
+              companyId: senderCompany.id,
               recipientUserId: recipientId,
               type: 'dm_message',
               title: senderName,
