@@ -3142,19 +3142,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[delete-account] User deletion completed`);
       }
       
-      // Destroy session to log out user
-      req.logout((err: any) => {
-        if (err) {
-          console.error("[delete-account] Logout error:", err);
-        }
-      });
-      
-      req.session.destroy((err: any) => {
-        if (err) {
-          console.error("[delete-account] Session destroy error:", err);
-        }
-      });
-      
+      // Session was already deleted in deleteUserAccount(), so just respond
+      // The client will redirect to login page after receiving success
       res.json({ ok: true });
     } catch (error: any) {
       console.error("[delete-account] Error:", error);
