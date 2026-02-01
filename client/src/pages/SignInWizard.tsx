@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
-import { SiGoogle } from "react-icons/si";
+import { SiGoogle, SiApple } from "react-icons/si";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -350,6 +350,16 @@ export default function SignInWizard() {
                   >
                     <SiGoogle className="w-4 h-4 mr-2" />
                     Continue with Google
+                  </Button>
+                  
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => toast({ title: "Coming Soon", description: "Apple Sign-In coming soon" })}
+                    className="w-full"
+                  >
+                    <SiApple className="w-4 h-4 mr-2" />
+                    Continue with Apple
                   </Button>
                   
                   <p className="text-xs text-center text-slate-500 mt-4">
