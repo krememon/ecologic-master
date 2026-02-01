@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import PublicSignApp from "./public/PublicSignApp";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./index.css";
 import "./i18n/config";
 
@@ -66,19 +67,22 @@ const initApp = async () => {
     console.log("[main.tsx] Public route detected, skipping cache check");
   }
   
+  const root = createRoot(document.getElementById("root")!);
+  
   if (isPublicSignRoute) {
     console.log("[main.tsx] Public sign route detected, rendering PublicSignApp");
-    createRoot(document.getElementById("root")!).render(<PublicSignApp />);
+    root.render(<ErrorBoundary><PublicSignApp /></ErrorBoundary>);
   } else if (isPublicUnsubscribeRoute) {
     console.log("[main.tsx] Public unsubscribe route detected, rendering PublicUnsubscribe");
     const PublicUnsubscribe = (await import("./pages/PublicUnsubscribe")).default;
-    createRoot(document.getElementById("root")!).render(<PublicUnsubscribe />);
+    root.render(<ErrorBoundary><PublicUnsubscribe /></ErrorBoundary>);
   } else if (isPublicPreferencesRoute) {
     console.log("[main.tsx] Public preferences route detected, rendering PublicEmailPreferences");
     const PublicEmailPreferences = (await import("./pages/PublicEmailPreferences")).default;
-    createRoot(document.getElementById("root")!).render(<PublicEmailPreferences />);
+    root.render(<ErrorBoundary><PublicEmailPreferences /></ErrorBoundary>);
   } else {
-    createRoot(document.getElementById("root")!).render(<App />);
+    console.log("[main.tsx] Rendering main App");
+    root.render(<ErrorBoundary><App /></ErrorBoundary>);
   }
 };
 

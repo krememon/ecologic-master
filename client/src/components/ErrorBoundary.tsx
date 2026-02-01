@@ -23,7 +23,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error('[ErrorBoundary] Caught error:', error);
+    console.error('[ErrorBoundary] Component stack:', errorInfo.componentStack);
   }
 
   resetError = () => {
@@ -38,15 +39,22 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="text-center max-w-md">
-            <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
-            <p className="text-muted-foreground mb-4">
-              {this.state.error?.message || "An unexpected error occurred"}
-            </p>
-            <Button onClick={this.resetError}>
-              Try Again
+        <div className="min-h-screen flex items-center justify-center p-4 bg-red-50">
+          <div className="text-center max-w-2xl bg-white rounded-lg shadow-lg p-6">
+            <AlertTriangle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+            <h2 className="text-xl font-semibold mb-2 text-red-800">Application Error</h2>
+            <div className="bg-red-100 border border-red-300 rounded p-3 mb-4 text-left">
+              <p className="font-mono text-sm text-red-800 break-all">
+                {this.state.error?.message || "An unexpected error occurred"}
+              </p>
+              {this.state.error?.stack && (
+                <pre className="mt-2 text-xs text-red-600 overflow-auto max-h-40 whitespace-pre-wrap">
+                  {this.state.error.stack}
+                </pre>
+              )}
+            </div>
+            <Button onClick={() => window.location.reload()}>
+              Reload Page
             </Button>
           </div>
         </div>

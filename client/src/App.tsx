@@ -117,33 +117,8 @@ function UnsubscribeRouter() {
   return <PublicUnsubscribe />;
 }
 
-function Router() {
-  // Check for public payment/stripe routes BEFORE any auth hooks
+function AuthenticatedRouter() {
   const path = window.location.pathname;
-  if (path.startsWith('/pay/') || path.startsWith('/stripe/')) {
-    return <PaymentRouter />;
-  }
-  
-  // Public invoice payment page - NO auth required
-  if (path.match(/^\/invoice\/\d+\/pay$/)) {
-    return <PublicInvoiceRouter />;
-  }
-  
-  // Public unsubscribe page - NO auth required
-  if (path.startsWith('/unsubscribe')) {
-    return <UnsubscribeRouter />;
-  }
-  
-  // Public email preferences page - NO auth required (handled by main.tsx)
-  if (path.startsWith('/email-preferences')) {
-    // Return loading spinner instead of null - main.tsx handles this route
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   const { isAuthenticated, isLoading, user } = useAuth();
   
   useWebSocket();
@@ -281,24 +256,33 @@ function Router() {
   );
 }
 
-function App() {
-  // Check for public routes BEFORE rendering Router (which uses auth hooks)
+function Router() {
   const path = window.location.pathname;
   
-  // Public unsubscribe pages - NO auth required, render before any auth logic
-  if (path.startsWith('/unsubscribe/')) {
-    return (
-      <ThemeProvider defaultTheme="light" storageKey="ui-theme">
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Toaster />
-            <PublicUnsubscribe />
-          </TooltipProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
-    );
+  if (path.startsWith('/pay/') || path.startsWith('/stripe/')) {
+    return <PaymentRouter />;
   }
   
+  if (path.match(/^\/invoice\/\d+\/pay$/)) {
+    return <PublicInvoiceRouter />;
+  }
+  
+  if (path.startsWith('/unsubscribe')) {
+    return <UnsubscribeRouter />;
+  }
+  
+  if (path.startsWith('/email-preferences')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return <AuthenticatedRouter />;
+}
+
+function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
