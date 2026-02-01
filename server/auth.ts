@@ -121,9 +121,6 @@ async function sendPasswordResetEmail(email: string, token: string) {
   const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5000';
   const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   
-  console.log("[password-reset] APP_BASE_URL:", baseUrl);
-  console.log("[password-reset] Reset URL:", resetUrl);
-  
   const { Resend } = await import("resend");
   const resend = new Resend(resendApiKey);
   

@@ -51,11 +51,14 @@ const isPublicSignRoute = window.location.pathname.startsWith('/sign/');
 const isPublicUnsubscribeRoute = window.location.pathname.startsWith('/unsubscribe/') || window.location.pathname === '/unsubscribe';
 // Check if this is a public email preferences route - render standalone component
 const isPublicPreferencesRoute = window.location.pathname.startsWith('/email-preferences');
+// Check if this is a password reset route - render standalone component
+const isPasswordResetRoute = window.location.pathname.startsWith('/reset-password');
 // Check if this is a Stripe return route or public route - skip cache-busting to avoid reload loops
 const isPublicRoute = window.location.pathname.startsWith('/stripe/') || 
                       window.location.pathname.startsWith('/pay/') ||
                       window.location.pathname.startsWith('/unsubscribe') ||
-                      window.location.pathname.startsWith('/email-preferences');
+                      window.location.pathname.startsWith('/email-preferences') ||
+                      window.location.pathname.startsWith('/reset-password');
 
 // Initialize app with cache check
 const initApp = async () => {
@@ -88,6 +91,10 @@ const initApp = async () => {
     console.log("[main.tsx] Public preferences route detected, rendering PublicEmailPreferences");
     const PublicEmailPreferences = (await import("./pages/PublicEmailPreferences")).default;
     root.render(<ErrorBoundary><PublicEmailPreferences /></ErrorBoundary>);
+  } else if (isPasswordResetRoute) {
+    console.log("[main.tsx] Password reset route detected, rendering ResetPassword directly");
+    const ResetPassword = (await import("./pages/ResetPassword")).default;
+    root.render(<ErrorBoundary><ResetPassword /></ErrorBoundary>);
   } else {
     console.log("[main.tsx] Rendering main App");
     root.render(<ErrorBoundary><App /></ErrorBoundary>);
