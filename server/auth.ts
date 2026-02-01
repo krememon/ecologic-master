@@ -1,8 +1,9 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { Strategy as FacebookStrategy } from "passport-facebook";
-import { Strategy as MicrosoftStrategy } from "passport-microsoft";
+// Facebook and Microsoft strategies disabled - not configured
+// import { Strategy as FacebookStrategy } from "passport-facebook";
+// import { Strategy as MicrosoftStrategy } from "passport-microsoft";
 import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -11,7 +12,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
-import { User as SelectUser, InsertUser } from "@shared/schema";
+import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
 
 // SECURITY: Rate limiters for auth endpoints to prevent brute force attacks
@@ -259,34 +260,54 @@ export function setupAuth(app: Express) {
         },
         async (accessToken, refreshToken, profile, done) => {
           try {
-            let user = await storage.getUserByProvider("google", profile.id);
+            const googleId = profile.id;
+            const email = profile.emails?.[0]?.value?.toLowerCase().trim();
             
-            if (!user) {
-              // Check if user exists with same email
-              user = await storage.getUserByEmail(profile.emails?.[0]?.value || "");
-              
-              if (user) {
-                // Link Google account to existing user
-                await storage.updateUser(user.id, {
-                  provider: "google",
-                  providerId: profile.id,
-                });
-              } else {
-                // Create new user
-                user = await storage.createUser({
-                  email: profile.emails?.[0]?.value || "",
-                  firstName: profile.name?.givenName || "",
-                  lastName: profile.name?.familyName || "",
-                  profileImageUrl: profile.photos?.[0]?.value || "",
-                  provider: "google",
-                  providerId: profile.id,
-                  emailVerified: true, // Google emails are pre-verified
-                });
-              }
+            // Guard: Google must provide an email
+            if (!email) {
+              console.error("[google-auth] Google profile has no email");
+              return done(null, false, { message: "Google account has no email" });
             }
+            
+            // Step 1: Try to find user by googleId
+            let user = await storage.getUserByGoogleId(googleId);
+            
+            if (user) {
+              // User already linked to this Google account
+              console.log("[google-auth] Found user by googleId:", user.id);
+              return done(null, user);
+            }
+            
+            // Step 2: Try to find user by email
+            user = await storage.getUserByEmail(email);
+            
+            if (user) {
+              // Link Google account to existing user
+              console.log("[google-auth] Linking googleId to existing user:", user.id);
+              await storage.updateUser(user.id, {
+                googleId,
+                googleLinked: true,
+              });
+              // Refetch to get updated user
+              user = await storage.getUser(user.id);
+              return done(null, user!);
+            }
+            
+            // Step 3: Create new user
+            console.log("[google-auth] Creating new user for email:", email);
+            user = await storage.createUser({
+              email,
+              firstName: profile.name?.givenName || "",
+              lastName: profile.name?.familyName || "",
+              profileImageUrl: profile.photos?.[0]?.value || "",
+              googleId,
+              googleLinked: true,
+              emailVerified: true, // Google emails are pre-verified
+            });
             
             return done(null, user);
           } catch (error) {
+            console.error("[google-auth] Error:", error);
             return done(error);
           }
         }
@@ -294,93 +315,11 @@ export function setupAuth(app: Express) {
     );
   }
 
-  // Facebook Strategy
-  if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
-    passport.use(
-      new FacebookStrategy(
-        {
-          clientID: process.env.FACEBOOK_APP_ID,
-          clientSecret: process.env.FACEBOOK_APP_SECRET,
-          callbackURL: "/api/auth/facebook/callback",
-          profileFields: ["id", "emails", "name", "picture"],
-        },
-        async (accessToken, refreshToken, profile, done) => {
-          try {
-            let user = await storage.getUserByProvider("facebook", profile.id);
-            
-            if (!user) {
-              user = await storage.getUserByEmail(profile.emails?.[0]?.value || "");
-              
-              if (user) {
-                await storage.updateUser(user.id, {
-                  provider: "facebook",
-                  providerId: profile.id,
-                });
-              } else {
-                user = await storage.createUser({
-                  email: profile.emails?.[0]?.value || "",
-                  firstName: profile.name?.givenName || "",
-                  lastName: profile.name?.familyName || "",
-                  profileImageUrl: profile.photos?.[0]?.value || "",
-                  provider: "facebook",
-                  providerId: profile.id,
-                  emailVerified: true,
-                });
-              }
-            }
-            
-            return done(null, user);
-          } catch (error) {
-            return done(error);
-          }
-        }
-      )
-    );
-  }
-
-  // Microsoft Strategy
-  if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
-    passport.use(
-      new MicrosoftStrategy(
-        {
-          clientID: process.env.MICROSOFT_CLIENT_ID,
-          clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-          callbackURL: "/api/auth/microsoft/callback",
-          scope: ["user.read"],
-        },
-        async (accessToken, refreshToken, profile, done) => {
-          try {
-            let user = await storage.getUserByProvider("microsoft", profile.id);
-            
-            if (!user) {
-              user = await storage.getUserByEmail(profile.emails?.[0]?.value || "");
-              
-              if (user) {
-                await storage.updateUser(user.id, {
-                  provider: "microsoft",
-                  providerId: profile.id,
-                });
-              } else {
-                user = await storage.createUser({
-                  email: profile.emails?.[0]?.value || "",
-                  firstName: profile.name?.givenName || "",
-                  lastName: profile.name?.familyName || "",
-                  profileImageUrl: profile.photos?.[0]?.value || "",
-                  provider: "microsoft",
-                  providerId: profile.id,
-                  emailVerified: true,
-                });
-              }
-            }
-            
-            return done(null, user);
-          } catch (error) {
-            return done(error);
-          }
-        }
-      )
-    );
-  }
+  // Facebook Strategy (disabled - not configured)
+  // TODO: Implement facebookId column if Facebook OAuth is needed
+  
+  // Microsoft Strategy (disabled - not configured)
+  // TODO: Implement microsoftId column if Microsoft OAuth is needed
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
