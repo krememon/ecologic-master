@@ -1,0 +1,43 @@
+Fix Start Free Trial button so it forwards to dashboard immediately (no manual refresh).
+
+CURRENT BEHAVIOR
+- Clicking Start Free Trial successfully calls POST /api/subscriptions/start-trial (200) and sets subscription to trialing.
+- UI does NOT navigate to dashboard until the user manually refreshes.
+This means client state is stale and onboarding gate still thinks user is not onboarded until a full reload.
+
+GOALS
+1) After successful start-trial, immediately navigate to /jobs (dashboard).
+2) Before navigating, force-refresh the app’s auth/company state so onboarding gate sees subscriptionStatus=trialing without needing a refresh.
+3) Prevent double-submit: button should disable while request is pending and only fire once.
+
+IMPLEMENTATION
+A) In the Start Free Trial click handler:
+   1) setIsSubmitting(true)
+   2) await POST /api/subscriptions/start-trial with credentials:"include"
+   3) if ok:
+        - FORCE refresh the company/auth state using the same source of truth the router uses:
+          - await refetchAuthUser() (or queryClient.invalidateQueries(["authUser"]))
+          - await refetchCompany()  (or invalidateQueries(["company"]))
+          - If there is no query cache, call:
+              await fetch("/api/company", { credentials:"include" })
+              await fetch("/api/auth/user", { credentials:"include" })
+          - Update state/store with returned values
+        - THEN navigate("/jobs", { replace:true })
+
+B) Ensure onboarding routing uses LIVE state, not cached localStorage only:
+   - getNextOnboardingRoute should read current company.subscriptionStatus from the refreshed state.
+   - After refresh, nextRoute must be null and allow /jobs.
+
+C) Fix the button:
+   - Ensure type="button" (not submit)
+   - Disable while isSubmitting
+   - Show "Starting…" while pending
+
+TEST
+1) Click Start Free Trial once -> exactly one POST call
+2) Immediately routes to /jobs (no refresh)
+3) Refresh on /jobs stays on /jobs
+
+DELIVERABLE
+- Tell me which component file contains the Start Free Trial handler
+- Show the added refetch/invalidate logic and navigate("/jobs")

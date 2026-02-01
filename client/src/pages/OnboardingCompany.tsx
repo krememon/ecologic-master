@@ -133,8 +133,8 @@ export default function OnboardingCompany() {
       localStorage.removeItem("onboardingChoice");
       localStorage.removeItem("onboardingIndustry");
       
-      // Refresh auth state so subscriptionStatus is "trialing" before navigation
-      await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      // Force refetch auth state (await ensures data is loaded before navigation)
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
       
       // Navigate to dashboard
       setLocation("/jobs", { replace: true });
@@ -273,8 +273,14 @@ export default function OnboardingCompany() {
                 </div>
                 
                 <Button type="button" onClick={handleStartTrial} className="w-full" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Start Free Trial
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Starting...
+                    </>
+                  ) : (
+                    "Start Free Trial"
+                  )}
                 </Button>
               </div>
             )}
