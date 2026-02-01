@@ -19,6 +19,7 @@ import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
+import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -39,9 +40,15 @@ export default function Settings() {
   const [emailAvailability, setEmailAvailability] = useState<'checking' | 'available' | 'taken' | null>(null);
   const [emailError, setEmailError] = useState<string>("");
   const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
+  const [twoFactorModalOpen, setTwoFactorModalOpen] = useState(false);
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
+  
+  // 2FA status query
+  const { data: twoFactorStatus } = useQuery<{ enabled: boolean; enabledAt: string | null }>({
+    queryKey: ["/api/auth/2fa/status"],
+  });
 
   // Initialize profile data when user loads
   useEffect(() => {
@@ -440,7 +447,13 @@ export default function Settings() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <Button variant="outline" onClick={() => setChangePasswordModalOpen(true)}>Change Password</Button>
-              <Button variant="outline">Two-Factor Authentication</Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setTwoFactorModalOpen(true)}
+                className={twoFactorStatus?.enabled ? "border-green-500 text-green-600 hover:bg-green-50" : ""}
+              >
+                {twoFactorStatus?.enabled ? "2FA Enabled" : "Two-Factor Authentication"}
+              </Button>
               <Button variant="outline">Download Data</Button>
               <Button variant="destructive" onClick={() => setDeleteAccountModalOpen(true)}>Delete Account</Button>
             </div>
@@ -457,6 +470,12 @@ export default function Settings() {
       <DeleteAccountModal
         open={deleteAccountModalOpen}
         onOpenChange={setDeleteAccountModalOpen}
+      />
+
+      <TwoFactorSetupModal
+        open={twoFactorModalOpen}
+        onOpenChange={setTwoFactorModalOpen}
+        isEnabled={twoFactorStatus?.enabled || false}
       />
     </div>
   );

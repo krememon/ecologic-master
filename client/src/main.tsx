@@ -53,12 +53,15 @@ const isPublicUnsubscribeRoute = window.location.pathname.startsWith('/unsubscri
 const isPublicPreferencesRoute = window.location.pathname.startsWith('/email-preferences');
 // Check if this is a password reset route - render standalone component
 const isPasswordResetRoute = window.location.pathname.startsWith('/reset-password');
+// Check if this is a two-factor verification route - render standalone component
+const isTwoFactorRoute = window.location.pathname === '/two-factor';
 // Check if this is a Stripe return route or public route - skip cache-busting to avoid reload loops
 const isPublicRoute = window.location.pathname.startsWith('/stripe/') || 
                       window.location.pathname.startsWith('/pay/') ||
                       window.location.pathname.startsWith('/unsubscribe') ||
                       window.location.pathname.startsWith('/email-preferences') ||
-                      window.location.pathname.startsWith('/reset-password');
+                      window.location.pathname.startsWith('/reset-password') ||
+                      window.location.pathname === '/two-factor';
 
 // Initialize app with cache check
 const initApp = async () => {
@@ -95,6 +98,10 @@ const initApp = async () => {
     console.log("[main.tsx] Password reset route detected, rendering ResetPassword directly");
     const ResetPassword = (await import("./pages/ResetPassword")).default;
     root.render(<ErrorBoundary><ResetPassword /></ErrorBoundary>);
+  } else if (isTwoFactorRoute) {
+    console.log("[main.tsx] Two-factor route detected, rendering TwoFactor directly");
+    const TwoFactor = (await import("./pages/TwoFactor")).default;
+    root.render(<ErrorBoundary><TwoFactor /></ErrorBoundary>);
   } else {
     console.log("[main.tsx] Rendering main App");
     root.render(<ErrorBoundary><App /></ErrorBoundary>);
