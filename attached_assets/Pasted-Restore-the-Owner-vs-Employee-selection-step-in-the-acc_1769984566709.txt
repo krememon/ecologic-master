@@ -1,0 +1,46 @@
+Restore the “Owner vs Employee” selection step in the account creation flow.
+
+CURRENT BUG
+During signup, after email confirmation, the flow no longer asks whether the user is an Employee or an Owner. The employee route is missing.
+
+REQUIRED FLOW
+1) /signup: email -> send code
+2) /signup: verify code (email confirmed)
+3) Immediately after verification, show a screen:
+   “How will you use EcoLogic?”
+   - I’m a business owner (set up my company)
+   - I’m an employee (join a company with invite code)
+4) If Owner: proceed to /onboarding/industry (industry grid), then /onboarding/company-details, then /onboarding/trial, then /jobs
+5) If Employee: go to /join-company (invite code), then once joined -> /jobs (or appropriate landing)
+
+IMPLEMENTATION REQUIREMENTS
+A) Persist the selection durably (so refresh doesn’t break):
+   - Save onboardingChoice = "owner" | "employee" on the USER record in DB (preferred)
+   - Fallback: localStorage, but DB is preferred because of all the redirect logic.
+
+B) Enforce routing rules:
+   - If authenticated AND user has no company AND onboardingChoice is null:
+       redirect to /onboarding/choice (or show this selection step inside /signup after verify)
+   - If onboardingChoice === "employee":
+       redirect to /join-company
+   - If onboardingChoice === "owner":
+       continue owner onboarding (industry -> company-details -> trial)
+
+C) Make sure this selection shows only ONCE:
+   - Existing users with a company should never see it.
+   - New users see it right after email verification.
+
+D) UI
+   - Use the existing “How will you use EcoLogic?” design (the one with the two cards)
+   - Keep it consistent with the current auth UI and spacing.
+
+TESTS
+1) New signup -> verify email -> selection screen appears
+2) Choose Employee -> invite code screen appears
+3) Choose Owner -> industry grid appears
+4) Existing user with company -> signs in -> goes to /jobs (no selection step)
+
+DELIVERABLES
+- List files changed
+- Confirm where onboardingChoice is stored (DB field name or localStorage key)
+- Confirm employee path is restored and reachable
