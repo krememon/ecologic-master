@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } from "lucide-react";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type WizardStep = 
   | "identity" 
@@ -306,6 +306,10 @@ export default function SignupWizard() {
         const data = await res.json();
         throw new Error(data.message || "Failed to create account");
       }
+      
+      // Invalidate and refetch auth state to reflect new login
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      console.log("[signup] Account created, session established");
       
       goToStep("role");
     } catch (error: any) {

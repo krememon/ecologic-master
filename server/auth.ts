@@ -638,14 +638,23 @@ export function setupAuth(app: Express) {
           return res.status(500).json({ message: "Account created but login failed. Please log in manually." });
         }
         
-        res.json({ 
-          ok: true, 
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
+        // Save session before responding to ensure cookie is set
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("Session save error after signup:", saveErr);
+            return res.status(500).json({ message: "Account created but session failed. Please log in manually." });
           }
+          
+          console.log("[set-password] User logged in successfully:", user.id);
+          res.json({ 
+            ok: true, 
+            user: {
+              id: user.id,
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+            }
+          });
         });
       });
     } catch (error) {
