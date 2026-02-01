@@ -1175,4 +1175,253 @@ export function setupAuth(app: Express) {
       res.json({ message: "Logout successful" });
     });
   });
+
+  // ============================================
+  // TWO-FACTOR AUTHENTICATION (2FA) ROUTES
+  // ============================================
+
+  // Start 2FA setup - generate secret and QR code
+  app.post("/api/auth/2fa/setup/start", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const user = await storage.getUser(req.user.id);
+      if (!user?.email) {
+        return res.status(400).json({ message: "Email required for 2FA setup" });
+      }
+
+      if (user.twoFactorEnabled) {
+        return res.status(400).json({ message: "2FA is already enabled" });
+      }
+
+      const { generateSecret, generateQRCode } = await import("./services/totp");
+      
+      const { secret, otpauthUrl } = generateSecret(user.email, "EcoLogic");
+      const qrCodeDataUrl = await generateQRCode(otpauthUrl);
+
+      // Store secret temporarily in session
+      (req.session as any).pending2FASecret = secret;
+
+      res.json({
+        qrCodeDataUrl,
+        manualKey: secret,
+        otpauthUrl,
+      });
+    } catch (error) {
+      console.error("[2fa-setup-start] Error:", error);
+      res.status(500).json({ message: "Failed to start 2FA setup" });
+    }
+  });
+
+  // Confirm 2FA setup - verify code and enable 2FA
+  app.post("/api/auth/2fa/setup/confirm", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { code } = req.body;
+      if (!code || typeof code !== "string" || !/^\d{6}$/.test(code)) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      const pendingSecret = (req.session as any).pending2FASecret;
+      if (!pendingSecret) {
+        return res.status(400).json({ message: "No pending 2FA setup. Please start over." });
+      }
+
+      const { verifyToken, encrypt, generateBackupCodes, hashBackupCode } = await import("./services/totp");
+      
+      if (!verifyToken(pendingSecret, code)) {
+        return res.status(400).json({ message: "Invalid verification code. Please try again." });
+      }
+
+      // Generate backup codes
+      const backupCodes = generateBackupCodes(8);
+      const hashedBackupCodes = backupCodes.map(hashBackupCode);
+
+      // Encrypt and store
+      const encryptedSecret = encrypt(pendingSecret);
+      const encryptedBackupCodes = encrypt(JSON.stringify(hashedBackupCodes));
+
+      await storage.enable2FA(req.user.id, encryptedSecret, encryptedBackupCodes);
+
+      // Clear pending secret
+      delete (req.session as any).pending2FASecret;
+
+      res.json({
+        ok: true,
+        backupCodes,
+      });
+    } catch (error) {
+      console.error("[2fa-setup-confirm] Error:", error);
+      res.status(500).json({ message: "Failed to enable 2FA" });
+    }
+  });
+
+  // Verify 2FA code (for login)
+  app.post("/api/auth/2fa/verify", async (req, res) => {
+    try {
+      const pendingUserId = (req.session as any).twoFactorPendingUserId;
+      if (!pendingUserId) {
+        return res.status(400).json({ message: "No pending 2FA verification" });
+      }
+
+      const { code } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Verification code required" });
+      }
+
+      const user = await storage.getUser(pendingUserId);
+      if (!user || !user.twoFactorEnabled || !user.twoFactorSecretEnc) {
+        return res.status(400).json({ message: "2FA not configured" });
+      }
+
+      const { decrypt, verifyToken, verifyBackupCode } = await import("./services/totp");
+      
+      const secret = decrypt(user.twoFactorSecretEnc);
+      const normalizedCode = code.replace(/\s/g, "");
+
+      // Check if it's a TOTP code (6 digits)
+      if (/^\d{6}$/.test(normalizedCode)) {
+        if (!verifyToken(secret, normalizedCode)) {
+          return res.status(400).json({ message: "Invalid verification code" });
+        }
+      } else {
+        // Try as backup code
+        if (!user.twoFactorBackupCodesEnc) {
+          return res.status(400).json({ message: "Invalid verification code" });
+        }
+
+        const hashedCodes: string[] = JSON.parse(decrypt(user.twoFactorBackupCodesEnc));
+        const result = verifyBackupCode(normalizedCode, hashedCodes);
+
+        if (!result.valid) {
+          return res.status(400).json({ message: "Invalid backup code" });
+        }
+
+        // Remove used backup code
+        hashedCodes.splice(result.index, 1);
+        const { encrypt } = await import("./services/totp");
+        await storage.updateBackupCodes(user.id, encrypt(JSON.stringify(hashedCodes)));
+      }
+
+      // Complete login
+      delete (req.session as any).twoFactorPendingUserId;
+      
+      await new Promise<void>((resolve, reject) => {
+        req.login(user, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[2fa-verify] Error:", error);
+      res.status(500).json({ message: "2FA verification failed" });
+    }
+  });
+
+  // Disable 2FA
+  app.post("/api/auth/2fa/disable", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { code } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Verification code required" });
+      }
+
+      const user = await storage.getUser(req.user.id);
+      if (!user?.twoFactorEnabled || !user.twoFactorSecretEnc) {
+        return res.status(400).json({ message: "2FA is not enabled" });
+      }
+
+      const { decrypt, verifyToken, verifyBackupCode } = await import("./services/totp");
+      
+      const secret = decrypt(user.twoFactorSecretEnc);
+      const normalizedCode = code.replace(/\s/g, "");
+
+      let isValid = false;
+      if (/^\d{6}$/.test(normalizedCode)) {
+        isValid = verifyToken(secret, normalizedCode);
+      } else if (user.twoFactorBackupCodesEnc) {
+        const hashedCodes: string[] = JSON.parse(decrypt(user.twoFactorBackupCodesEnc));
+        isValid = verifyBackupCode(normalizedCode, hashedCodes).valid;
+      }
+
+      if (!isValid) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      await storage.disable2FA(user.id);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[2fa-disable] Error:", error);
+      res.status(500).json({ message: "Failed to disable 2FA" });
+    }
+  });
+
+  // Regenerate backup codes
+  app.post("/api/auth/2fa/backup/regenerate", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { code } = req.body;
+      if (!code || typeof code !== "string" || !/^\d{6}$/.test(code)) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      const user = await storage.getUser(req.user.id);
+      if (!user?.twoFactorEnabled || !user.twoFactorSecretEnc) {
+        return res.status(400).json({ message: "2FA is not enabled" });
+      }
+
+      const { decrypt, verifyToken, generateBackupCodes, hashBackupCode, encrypt } = await import("./services/totp");
+      
+      const secret = decrypt(user.twoFactorSecretEnc);
+      if (!verifyToken(secret, code)) {
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      const backupCodes = generateBackupCodes(8);
+      const hashedBackupCodes = backupCodes.map(hashBackupCode);
+      const encryptedBackupCodes = encrypt(JSON.stringify(hashedBackupCodes));
+
+      await storage.updateBackupCodes(user.id, encryptedBackupCodes);
+
+      res.json({
+        ok: true,
+        backupCodes,
+      });
+    } catch (error) {
+      console.error("[2fa-backup-regenerate] Error:", error);
+      res.status(500).json({ message: "Failed to regenerate backup codes" });
+    }
+  });
+
+  // Get 2FA status
+  app.get("/api/auth/2fa/status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const user = await storage.getUser(req.user.id);
+      res.json({
+        enabled: user?.twoFactorEnabled || false,
+        enabledAt: user?.twoFactorEnabledAt || null,
+      });
+    } catch (error) {
+      console.error("[2fa-status] Error:", error);
+      res.status(500).json({ message: "Failed to get 2FA status" });
+    }
+  });
 }

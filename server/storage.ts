@@ -126,6 +126,11 @@ export interface IStorage {
   setResetPasswordToken(email: string, token: string, expires: Date): Promise<void>;
   resetPassword(token: string, newPassword: string): Promise<User | undefined>;
   
+  // Two-factor authentication
+  enable2FA(userId: string, encryptedSecret: string, encryptedBackupCodes: string): Promise<void>;
+  disable2FA(userId: string): Promise<void>;
+  updateBackupCodes(userId: string, encryptedBackupCodes: string): Promise<void>;
+  
   // Role-based operations
   isBusinessOwner(userId: string, companyId: number): Promise<boolean>;
   getUserRole(userId: string, companyId: number): Promise<{ role: UserRole } | undefined>;
@@ -487,6 +492,42 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return updatedUser;
+  }
+  
+  async enable2FA(userId: string, encryptedSecret: string, encryptedBackupCodes: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        twoFactorEnabled: true,
+        twoFactorSecretEnc: encryptedSecret,
+        twoFactorBackupCodesEnc: encryptedBackupCodes,
+        twoFactorEnabledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+  
+  async disable2FA(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        twoFactorEnabled: false,
+        twoFactorSecretEnc: null,
+        twoFactorBackupCodesEnc: null,
+        twoFactorEnabledAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+  
+  async updateBackupCodes(userId: string, encryptedBackupCodes: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        twoFactorBackupCodesEnc: encryptedBackupCodes,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
   }
   
   async isBusinessOwner(userId: string, companyId: number): Promise<boolean> {
