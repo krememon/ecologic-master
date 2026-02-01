@@ -64,6 +64,8 @@ export default function JoinCompany() {
       // Invalidate all queries to refresh data with new company
       await queryClient.invalidateQueries();
       
+      localStorage.removeItem("onboardingChoice");
+      
       toast({
         title: "Success",
         description: "You've joined the company successfully!",

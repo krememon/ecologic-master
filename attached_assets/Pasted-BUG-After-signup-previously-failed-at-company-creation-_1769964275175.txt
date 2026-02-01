@@ -1,0 +1,47 @@
+BUG: After signup previously failed at company creation step, once the backend fix checkpoint is applied and the app refreshes, the user is automatically routed to the employee invite/company code screen without choosing "I’m an employee".
+
+REQUIREMENT
+The app must NEVER navigate to the employee invite/code screen unless the user explicitly clicks the "I’m an employee" option.
+
+GOALS
+1) Fix onboarding routing so it is deterministic and cannot “guess” employee.
+2) If onboarding is incomplete and no choice has been made, route to the “How will you use EcoLogic?” choice screen.
+3) Preserve existing functionality for users who did choose employee or owner.
+4) Minimal UI changes. Focus on routing/state.
+
+TASKS
+A) Find the onboarding routing logic that decides where to send users after signup/login or on refresh.
+   - Search for navigation to invite/code screen routes ("/invite", "/company-code", "/join", etc).
+   - Look for logic checking missing company/companyId and defaulting to employee.
+
+B) Introduce an explicit onboarding choice state:
+   - onboardingChoice: "owner" | "employee" | null
+   - Persist it (localStorage or DB) ONLY when user clicks the choice.
+   - Default must be null (not "employee").
+
+C) Update redirects:
+   - If onboardingChoice === null -> route to /onboarding/choose (choice screen)
+   - If onboardingChoice === "owner" -> continue owner flow (industry -> company -> subscription)
+   - If onboardingChoice === "employee" -> go to invite/code screen
+   - Absolutely no code path should route to invite/code when onboardingChoice !== "employee".
+
+D) Fix the failed company creation resume behavior:
+   - If company creation fails, keep user on company step and show the error.
+   - On refresh, if onboardingChoice === "owner" and company not created, return to company step (NOT invite).
+
+E) Add a small debug log (temporary) showing:
+   - onboardingChoice
+   - current route
+   - companyId presence
+   Remove after verified.
+
+TESTS
+1) New user signup -> verify email -> set password -> choice screen appears.
+2) Choose Owner -> proceed to company creation.
+3) Force company creation error -> user stays on company step; refresh returns to company step.
+4) Choose Employee -> goes to invite/code screen.
+5) At no time does invite/code appear unless Employee was clicked.
+
+DELIVERABLES
+- List files changed.
+- Identify the exact previous logic that was causing the auto-route to invite/code and how it was removed.

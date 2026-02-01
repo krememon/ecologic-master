@@ -317,6 +317,8 @@ export default function SignupWizard() {
   
   const handleRoleSelect = (role: "owner" | "employee") => {
     setUserPath(role);
+    localStorage.setItem("onboardingChoice", role);
+    console.log("[onboarding] choice saved:", role);
     if (role === "owner") {
       goToStep("industry");
     } else {
@@ -380,8 +382,10 @@ export default function SignupWizard() {
         throw new Error(data.message || "Failed to start trial");
       }
       
+      localStorage.removeItem("onboardingChoice");
       setLocation("/");
     } catch (error: any) {
+      localStorage.removeItem("onboardingChoice");
       setLocation("/");
     } finally {
       setIsLoading(false);
@@ -407,6 +411,7 @@ export default function SignupWizard() {
         throw new Error(data.message || "Invalid invite code");
       }
       
+      localStorage.removeItem("onboardingChoice");
       setLocation("/");
     } catch (error: any) {
       setErrors({ inviteCode: error.message });

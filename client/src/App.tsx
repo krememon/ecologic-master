@@ -54,6 +54,8 @@ import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
+import OnboardingChoice from "@/pages/OnboardingChoice";
+import OnboardingCompany from "@/pages/OnboardingCompany";
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
@@ -135,10 +137,35 @@ function Router() {
   }
 
   if (!user?.company) {
+    const onboardingChoice = localStorage.getItem("onboardingChoice");
+    console.log("[app-router] no company, onboardingChoice:", onboardingChoice);
+    
+    if (onboardingChoice === "owner") {
+      return (
+        <Switch>
+          <Route path="/onboarding/company" component={OnboardingCompany} />
+          <Route path="/onboarding/choice" component={OnboardingChoice} />
+          <Route>{() => <Redirect to="/onboarding/company" />}</Route>
+        </Switch>
+      );
+    }
+    
+    if (onboardingChoice === "employee") {
+      return (
+        <Switch>
+          <Route path="/join-company" component={JoinCompany} />
+          <Route path="/onboarding/choice" component={OnboardingChoice} />
+          <Route>{() => <Redirect to="/join-company" />}</Route>
+        </Switch>
+      );
+    }
+    
     return (
       <Switch>
+        <Route path="/onboarding/choice" component={OnboardingChoice} />
+        <Route path="/onboarding/company" component={OnboardingCompany} />
         <Route path="/join-company" component={JoinCompany} />
-        <Route>{() => <Redirect to="/join-company" />}</Route>
+        <Route>{() => <Redirect to="/onboarding/choice" />}</Route>
       </Switch>
     );
   }
