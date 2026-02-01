@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { Mail, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 
@@ -91,25 +91,14 @@ export default function Welcome() {
               </div>
             </div>
             
-            <div className="space-y-3">
-              <Button 
-                variant="outline"
-                onClick={handleGoogleAuth}
-                className="w-full h-11 font-medium rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-              >
-                <SiGoogle className="w-5 h-5 mr-3" />
-                Continue with Google
-              </Button>
-              
-              <Button 
-                variant="outline"
-                onClick={() => setLocation("/signup")}
-                className="w-full h-11 font-medium rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-              >
-                <Mail className="w-5 h-5 mr-3" />
-                Continue with Email
-              </Button>
-            </div>
+            <Button 
+              variant="outline"
+              onClick={handleGoogleAuth}
+              className="w-full h-11 font-medium rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+            >
+              <SiGoogle className="w-5 h-5 mr-3" />
+              Continue with Google
+            </Button>
           </div>
           
           <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-6">
