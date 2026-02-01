@@ -117,6 +117,7 @@ export interface IStorage {
   
   // Email authentication operations
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
   createUser(userData: any): Promise<User>;
   updateUser(id: string, user: Partial<UpsertUser>): Promise<User>;
   
@@ -388,7 +389,13 @@ export class DatabaseStorage implements IStorage {
 
   // Email authentication operations
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const normalizedEmail = email.toLowerCase().trim();
+    const [user] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+    return user || undefined;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
     return user || undefined;
   }
 
