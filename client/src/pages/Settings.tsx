@@ -9,10 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { Settings as SettingsIcon, User, Moon, Sun, Bell, Shield, Camera, Upload, Globe, CheckCircle, Mail, X } from "lucide-react";
-import { FaGoogle } from "react-icons/fa";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTranslation } from "react-i18next";
 import LanguageSelector from "@/components/LanguageSelector";
@@ -109,77 +106,6 @@ export default function Settings() {
       return;
     }
   }, [isAuthenticated, isLoading, toast]);
-
-  // Handle URL parameters for Google account linking feedback
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get('success');
-    const error = urlParams.get('error');
-    const message = urlParams.get('message');
-
-    if (success === 'google_linked') {
-      toast({
-        title: "Success",
-        description: message || "Google account linked successfully",
-        variant: "default",
-      });
-      // Clear URL parameters
-      window.history.replaceState({}, '', window.location.pathname);
-      // Refresh linked accounts data
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/linked-accounts"] });
-    } else if (error === 'email_mismatch') {
-      toast({
-        title: "Email Mismatch",
-        description: message || "Google account email doesn't match your current account email",
-        variant: "destructive",
-      });
-      // Clear URL parameters
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [toast]);
-
-  const { data: company = {} } = useQuery<any>({
-    queryKey: ["/api/company"],
-    enabled: isAuthenticated,
-  });
-
-  // Fetch linked accounts for authentication methods section
-  const { data: linkedAccounts, isLoading: linkedAccountsLoading, error: linkedAccountsError } = useQuery<{
-    hasEmailPassword: boolean;
-    hasGoogle: boolean;
-    profileImageUrl?: string;
-  }>({
-    queryKey: ["/api/auth/linked-accounts"],
-    enabled: isAuthenticated,
-    retry: false,
-  });
-
-  // Handle URL parameters for Google account linking feedback
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get('success');
-    const error = urlParams.get('error');
-    const message = urlParams.get('message');
-
-    if (success === 'google_linked') {
-      toast({
-        title: "Google Account Linked",
-        description: message || "Your Google account has been successfully linked.",
-      });
-      // Refresh linked accounts data
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/linked-accounts"] });
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (error === 'email_mismatch') {
-      toast({
-        title: "Email Mismatch",
-        description: message || "The Google account email doesn't match your current account.",
-        variant: "destructive",
-      });
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, [toast]);
 
   // Profile picture upload mutation
   const updateProfilePictureMutation = useMutation({
@@ -434,34 +360,6 @@ export default function Settings() {
 
 
 
-        {/* Company Settings - Owner/Supervisor Only */}
-        {canManageCompany && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SettingsIcon className="h-5 w-5" />
-                Company
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="companyName">Company Name</Label>
-                <Input id="companyName" defaultValue={company?.name || ""} />
-              </div>
-              <div>
-                <Label htmlFor="companyEmail">Company Email</Label>
-                <Input id="companyEmail" type="email" defaultValue={company?.email || ""} />
-              </div>
-              <div>
-                <Label htmlFor="companyPhone">Phone Number</Label>
-                <Input id="companyPhone" defaultValue={company?.phone || ""} />
-              </div>
-              
-              <Button className="w-full">Update Company</Button>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Appearance & Language Settings */}
         <Card>
           <CardHeader>
@@ -521,97 +419,6 @@ export default function Settings() {
 
         {/* Company Management - Owner/Supervisor Only */}
         {canManageCompany && <CompanyInviteCode />}
-
-        {/* Authentication Methods */}
-        <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800 border-0 rounded-2xl overflow-hidden">
-          <CardHeader className="pb-6">
-            <CardTitle className="text-2xl font-bold flex items-center gap-3 text-slate-800 dark:text-slate-100">
-              <Shield className="h-7 w-7 text-blue-600 dark:text-blue-400" />
-              Authentication Methods
-            </CardTitle>
-            <p className="text-slate-600 dark:text-slate-400 text-base">
-              Secure ways to access your account
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {linkedAccountsLoading ? (
-              <div className="space-y-4">
-                <div className="animate-pulse">
-                  <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-                </div>
-                <div className="animate-pulse">
-                  <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-                </div>
-              </div>
-            ) : linkedAccountsError ? (
-              <div className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 rounded-xl">
-                Unable to load authentication methods
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Email/Password Method */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md relative">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                        <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                            Email & Password
-                          </h3>
-                          {linkedAccounts?.hasEmailPassword && (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          )}
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-400">
-                          Traditional email and password authentication
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Google Method */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6 transition-all hover:shadow-md relative">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
-                        <FaGoogle className="h-6 w-6 text-red-600 dark:text-red-400" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                            Google
-                          </h3>
-                          {linkedAccounts?.hasGoogle ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <X className="h-4 w-4 text-red-500" />
-                          )}
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-400">
-                          Sign in with your Google account
-                        </p>
-                      </div>
-                    </div>
-                    {!linkedAccounts?.hasGoogle && (
-                      <div className="flex items-center">
-                        <Button
-                          onClick={() => window.location.href = '/api/auth/google/link'}
-                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 rounded-full px-6 py-2.5 font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                        >
-                          Link Google Account
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Billing & Subscription - Owner Only */}
         {user?.role === 'OWNER' && (
