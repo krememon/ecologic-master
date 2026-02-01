@@ -1,0 +1,40 @@
+Bug: After completing signup and clicking "Start Free Trial" (Step 7/7), user is redirected to Sign in. Expected: user should already be signed in and should land on the main dashboard automatically.
+
+GOALS
+1) After a successful signup (set-password), the user must be authenticated (session created).
+2) Clicking "Start Free Trial" must NOT log the user out or require re-login.
+3) After trial starts successfully, redirect to the main dashboard (e.g. /jobs or /dashboard).
+4) Keep existing auth system (passport sessions) working.
+
+BACKEND TASKS
+A) Verify signup flow:
+   - In POST /api/auth/signup/set-password (or the final signup endpoint), after user is created/updated, call:
+     req.login(user, (err) => { ... })
+     then save session (req.session.save) before responding.
+   - Response should include { ok: true } and user basics (no secrets).
+
+B) Verify trial endpoint:
+   - Identify the endpoint called by "Start Free Trial" (e.g. POST /api/billing/start-trial or similar).
+   - This endpoint must require an authenticated session. If req.user is missing, return 401 (do not redirect silently).
+   - Ensure it does not modify/destroy session.
+   - If it creates Stripe customer/subscription, do it and return { ok:true }.
+
+FRONTEND TASKS
+C) Ensure fetch calls include cookies:
+   - Any auth/trial-related fetch must use credentials: "include".
+   - Especially the "Start Free Trial" request.
+
+D) After "Start Free Trial" success:
+   - Call /api/auth/user to refresh auth state
+   - Navigate to main dashboard route (/jobs or /dashboard)
+   - Do NOT route to /login.
+
+TESTS
+1) Complete signup -> immediately check /api/auth/user returns 200 (user is logged in).
+2) Click Start Free Trial -> should return 200 and then user is still authenticated.
+3) After trial starts -> redirect to dashboard without seeing login screen.
+
+DELIVERABLES
+- Identify the exact endpoint called by the Start Free Trial button.
+- List files changed (signup endpoint + trial endpoint + frontend fetch).
+- Confirm session cookie is set after signup and remains after trial start.

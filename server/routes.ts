@@ -3255,6 +3255,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Subscription routes removed - app is now free to use
+  // Legacy endpoint for backwards compatibility with onboarding flow
+  app.post('/api/subscriptions/start-trial', isAuthenticated, async (req: any, res) => {
+    // App is now free - just return success
+    console.log('[start-trial] User', req.user?.id || req.user?.claims?.sub, 'starting trial (free tier)');
+    res.json({ ok: true, message: 'Trial started successfully' });
+  });
 
   // Client routes
   app.get('/api/clients', isAuthenticated, async (req: any, res) => {
