@@ -1,0 +1,219 @@
+Implement Two-Factor Authentication (2FA) in EcoLogic using TOTP
+(Google Authenticator / Authy / 1Password compatible).
+
+Stack context:
+- React frontend
+- Node/Express backend
+- Passport + session-based auth
+- Google login, email/password login already working
+- Existing Settings → Security → Two-Factor Authentication entry
+- Principle: hidden, not disabled (only show what applies)
+
+DO NOT break existing auth flows.
+DO NOT add SMS-based 2FA.
+This is Authenticator-app only.
+
+================================================
+1) DEPENDENCIES
+================================================
+Add:
+- speakeasy (TOTP generation & verification)
+- qrcode (QR code generation)
+- Node crypto (for encryption)
+
+================================================
+2) DATABASE CHANGES
+================================================
+Update users table (shared/schema.ts + migration):
+
+Add fields:
+- twoFactorEnabled BOOLEAN DEFAULT false
+- twoFactorSecretEnc TEXT NULL
+- twoFactorBackupCodesEnc TEXT NULL
+- twoFactorEnabledAt TIMESTAMP NULL
+
+Security rules:
+- Do NOT store TOTP secret in plaintext
+- Encrypt secret using AES-256-GCM
+- Use env var: TOTP_ENCRYPTION_KEY (32 bytes, base64)
+- Backup codes may be encrypted JSON or hashed; raw codes shown ONCE only
+
+================================================
+3) BACKEND ROUTES (AUTH REQUIRED)
+================================================
+
+A) POST /api/auth/2fa/setup/start
+Purpose: Begin 2FA setup
+
+Behavior:
+- Generate a new TOTP secret (base32)
+- Generate otpauth:// URL
+- Generate QR code (data URL)
+- Store secret TEMPORARILY in session (NOT DB yet)
+
+Return:
+{
+  qrCodeDataUrl,
+  manualKey,      // base32 string
+  otpauthUrl
+}
+
+IMPORTANT:
+- Always return the manualKey (for mobile users)
+- Do not commit to DB yet
+
+----------------------------------------------
+
+B) POST /api/auth/2fa/setup/confirm
+Body: { code }
+
+Behavior:
+- Validate 6-digit code using the pending session secret
+- If valid:
+  - Encrypt and store secret in DB
+  - Enable twoFactorEnabled
+  - Generate 8–10 one-time backup codes
+  - Store backup codes securely
+- Clear pending session secret
+
+Return:
+{
+  ok: true,
+  backupCodes: [ ... ] // shown ONCE
+}
+
+----------------------------------------------
+
+C) POST /api/auth/2fa/disable
+Body: { codeOrBackupCode }
+
+Behavior:
+- Require valid TOTP code OR unused backup code
+- Disable 2FA
+- Clear secret + backup codes
+
+----------------------------------------------
+
+D) POST /api/auth/2fa/backup/regenerate
+Body: { code }
+
+Behavior:
+- Validate current TOTP code
+- Generate new backup codes
+- Replace old ones
+- Return new codes ONCE
+
+================================================
+4) LOGIN ENFORCEMENT (CRITICAL)
+================================================
+
+After ANY successful login:
+- Google OAuth
+- Email/password
+- Email-code login
+
+If user.twoFactorEnabled === true:
+- DO NOT allow access to app yet
+- Store session flag:
+  req.session.twoFactorPendingUserId = user.id
+- Do NOT mark user fully authenticated
+
+Redirect user to:
+  /two-factor
+
+----------------------------------------------
+
+Create:
+POST /api/auth/2fa/verify
+Body: { code }
+
+Behavior:
+- Load user using session pending ID
+- Verify TOTP code (or backup code)
+- If valid:
+  - Mark session fully authenticated
+  - Clear pending flag
+  - Return ok
+
+Update /api/auth/user:
+- If session pending 2FA:
+  return {
+    authenticated: false,
+    twoFactorRequired: true
+  }
+
+================================================
+5) FRONTEND UI
+================================================
+
+A) SETTINGS → SECURITY → TWO-FACTOR AUTHENTICATION
+
+When clicked:
+- Open modal or page with clean, modern UI
+
+SETUP FLOW:
+Step 1: Set up authenticator
+- Show QR code (desktop users)
+- ALSO show Manual Setup Key (base32) with Copy button
+- Instruction text:
+  "On your phone: Google Authenticator → + → Enter setup key → Time-based"
+
+Step 2: Confirm
+- Input for 6-digit code
+- Confirm button
+- Inline error handling
+
+Step 3: Backup Codes
+- Display backup codes ONCE
+- Copy button
+- Checkbox: "I saved these"
+- Finish button
+
+After enabled:
+- Show status: "2FA is ON"
+- Buttons:
+  - Regenerate backup codes
+  - Disable 2FA
+
+----------------------------------------------
+
+B) /two-factor PAGE (REQUIRED)
+
+Create a dedicated page at:
+  /two-factor
+
+Behavior:
+- Shown immediately after login if 2FA required
+- Input: 6-digit code
+- Submit button
+- Inline error messaging
+- Optional link: "Use a backup code"
+
+Success:
+- Redirect to /jobs (or last page)
+
+IMPORTANT:
+- User CANNOT access the app until verified
+- This page must block navigation elsewhere
+
+================================================
+6) UX REQUIREMENTS
+================================================
+- Modern, tight spacing
+- Match existing modal/card styles
+- No giant icons
+- Loading states on buttons
+- Inline errors (no alert popups)
+- Mobile-friendly (manual key is REQUIRED)
+
+================================================
+7) DELIVERABLES
+================================================
+- List files changed
+- New env var: TOTP_ENCRYPTION_KEY + how to generate it
+- Confirm flows:
+  1) Enable 2FA on desktop
+  2) Enable 2FA on phone using manual key
+  3) Login requires 2FA
+  4) Wrong code blocks access
+  5) Backup codes work

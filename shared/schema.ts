@@ -88,6 +88,10 @@ export const users = pgTable("users", {
   resetPasswordExpires: timestamp("reset_password_expires"),
   googleId: varchar("google_id").unique(), // Google OAuth sub ID for account linking
   googleLinked: boolean("google_linked").default(false), // Track Google account linking (derived from googleId presence)
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  twoFactorSecretEnc: text("two_factor_secret_enc"),
+  twoFactorBackupCodesEnc: text("two_factor_backup_codes_enc"),
+  twoFactorEnabledAt: timestamp("two_factor_enabled_at"),
   stripeCustomerId: varchar("stripe_customer_id"),
   phone: varchar("phone"),
   addressLine1: varchar("address_line_1"),
