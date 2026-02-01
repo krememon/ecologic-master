@@ -1,0 +1,51 @@
+Onboarding flow is rendering now, but logic is still wrong because a Company record exists while onboardingChoice and onboardingIndustry are null (debug shows: Company ID present, Choice null, Industry null, SubStatus inactive). This causes new users to skip Role/Industry and land on company-created/trial steps.
+
+REQUIREMENT
+For NEW accounts, do NOT create a company until the owner completes:
+1) Role selection (in /signup)
+2) Industry grid selection (/onboarding/industry)
+3) Company details + team size (/onboarding/company-details)
+
+Only THEN create the company record, then show trial screen.
+
+GOALS
+1) Make onboarding deterministic with no weird “company exists but choice/industry null” states.
+2) Enforce correct ordering:
+   - Role selection -> Industry grid -> Company details -> Start trial -> Dashboard
+3) Employee path:
+   - Role selection -> /join-company (invite code)
+4) Preserve existing companies:
+   - If company exists already, do NOT force role/industry screens.
+   - Only force Start Trial if subscription is inactive.
+
+TASKS
+A) Stop creating company early:
+   - Find where company is being created automatically before company details are completed.
+   - Change it so company creation happens ONLY when user submits company details form.
+   - Until then, store onboardingChoice + onboardingIndustry in user onboarding state (DB user fields or localStorage).
+
+B) Fix gating logic:
+   - If onboardingChoice is null -> send to /signup role selection completion (or /onboarding/choice if you keep it, but do NOT show twice).
+   - If onboardingChoice == owner AND industry not selected -> /onboarding/industry
+   - If onboardingChoice == owner AND company not created -> /onboarding/company-details
+   - If company exists AND subscription inactive -> /onboarding/trial (NOT company details)
+   - If company exists AND subscription active -> /jobs
+
+C) Split routes cleanly:
+   - /onboarding/company-details = company name + team size form
+   - /onboarding/trial = start free trial screen
+   (Right now /onboarding/company seems to be doing both; separate or ensure state-based rendering is correct.)
+
+D) Clear onboarding local state ONLY after company is created + trial started:
+   - then remove onboardingChoice/onboardingIndustry so it doesn’t keep redirecting.
+
+TESTS
+1) Brand new owner signup -> sees industry grid before company is created.
+2) Submits company details -> company gets created -> goes to trial screen.
+3) Starts trial -> lands on /jobs.
+4) Existing company + inactive subscription -> goes straight to trial screen.
+5) Employee -> goes to /join-company.
+
+DELIVERABLES
+- Tell me exactly where company used to be created early and what you changed.
+- Confirm choice/industry are never null once company exists for new users.
