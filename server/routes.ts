@@ -3157,7 +3157,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const user = req.user;
+      const userId = (req.user as any)?.id ?? (req.user as any)?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      console.log("[companies] create: userId=", userId, "provider=", (req.user as any)?.provider);
+      
       const { name, logo, primaryColor, secondaryColor } = req.body;
       
       const { generateUniqueInviteCode } = await import("@shared/inviteCode");
@@ -3172,7 +3178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logo,
         primaryColor,
         secondaryColor,
-        ownerId: user.claims.sub
+        ownerId: userId
       });
       
       res.status(201).json(company);
