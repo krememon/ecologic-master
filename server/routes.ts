@@ -11406,6 +11406,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
+      // Create DM notification for recipients
+      const sender = await storage.getUser(userId);
+      if (sender && sender.companyId) {
+        const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Someone';
+        const messagePreview = body.trim().length > 50 
+          ? body.trim().substring(0, 50) + '...' 
+          : body.trim();
+
+        for (const { userId: recipientId } of participants) {
+          try {
+            await storage.createNotification({
+              companyId: sender.companyId,
+              recipientUserId: recipientId,
+              type: 'dm_message',
+              title: senderName,
+              body: messagePreview,
+              entityType: 'conversation',
+              entityId: conversationId,
+              linkUrl: `/messages?conversation=${conversationId}`,
+              meta: {
+                conversationId,
+                senderId: userId,
+                messageId: message.id,
+              },
+            });
+          } catch (notifError) {
+            console.error('[DM notification] Failed to create notification:', notifError);
+          }
+        }
+      }
+
       res.json(message);
     } catch (error) {
       console.error('Error sending message:', error);

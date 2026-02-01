@@ -24,6 +24,7 @@ interface Notification {
   linkUrl: string | null;
   readAt: string | null;
   createdAt: string;
+  meta?: { conversationId?: number; senderId?: string; messageId?: number };
 }
 
 interface HeaderProps {
@@ -226,9 +227,12 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
                       <div className={cn("flex-1 min-w-0", notification.readAt && "ml-5")}>
                         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                           {notification.title}
+                          {notification.type === 'dm_message' && (
+                            <span className="font-normal text-slate-500 dark:text-slate-400"> sent you a message</span>
+                          )}
                         </p>
                         <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
-                          {notification.body}
+                          {notification.type === 'dm_message' ? `"${notification.body}"` : notification.body}
                         </p>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                           {formatTime(notification.createdAt)}
