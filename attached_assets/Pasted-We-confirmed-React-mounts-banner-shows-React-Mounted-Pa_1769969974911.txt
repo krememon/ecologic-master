@@ -1,0 +1,45 @@
+We confirmed React mounts (banner shows “React Mounted ✅ | Path: /”), but the app content is still blank white. Also logs show /api/auth/user returns 200 then later 401, which suggests a second auth call without credentials or duplicate auth bootstraps.
+
+GOALS
+1) App must never show a blank white content area. Always render either:
+   - the actual routed page, OR
+   - a visible Loading / Redirecting screen.
+2) Fix auth bootstrap so /api/auth/user is consistent (no 200 then 401 due to missing cookies).
+3) Fix routing/guard logic so it never returns null while redirecting.
+
+TASKS
+A) Find where the main router is rendered (likely App.tsx or a Router component).
+   - Identify any code paths that return null/empty fragment when redirecting or loading.
+   - Replace with a visible full-screen component:
+     “Loading EcoLogic…” + spinner (simple div ok).
+
+B) Fix redirect implementation:
+   - Do NOT call setLocation() and then return null.
+   - If you need to redirect, either:
+     1) return <Navigate to={target} replace />
+     OR
+     2) use navigate(target, { replace:true }) inside useEffect BUT still render the Loading UI.
+
+C) Fix duplicate /api/auth/user calls and cookie usage:
+   - Search the client for fetch("/api/auth/user") and ensure ALL calls include:
+       credentials: "include"
+   - If there are multiple auth hooks/providers (useAuth in two places), consolidate to ONE source of truth.
+   - Ensure we do not trigger auth bootstrap twice on initial load.
+
+D) Add a temporary debug panel (dev only) under the top banner:
+   - show: authStatus (loading/authed/unauthed),
+           lastAuthResponseCode,
+           nextRoute computed,
+           currentPath
+   This must render even during loading so we can see what state we’re stuck in.
+
+E) Verify routes render:
+   - /login renders login
+   - /signup renders signup
+   - / redirects deterministically based on auth + onboarding state
+   - No blank content at any time.
+
+DELIVERABLES
+- Tell me which component was returning null and what it now returns.
+- Show where you added credentials:"include" for the auth/user fetch.
+- Confirm the app now shows either real UI or Loading screen instead of blank.

@@ -119,71 +119,81 @@ function UnsubscribeRouter() {
 
 function AuthenticatedRouter() {
   const path = window.location.pathname;
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, error } = useAuth();
   
   useWebSocket();
   usePushNotifications();
 
-  // Debug overlay for development
+  // Get onboarding state for debug
+  const onboardingChoice = localStorage.getItem("onboardingChoice");
+  const onboardingIndustry = localStorage.getItem("onboardingIndustry");
+  const nextRoute = !isLoading && isAuthenticated && user 
+    ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry })
+    : null;
+
+  // Debug overlay - ALWAYS visible in dev
   const DebugOverlay = () => (
-    <div className="fixed top-0 left-0 bg-black/80 text-white text-xs p-2 z-50 max-w-xs">
+    <div style={{position:"fixed",top:30,left:0,zIndex:99998,background:"rgba(0,0,0,0.9)",color:"#fff",padding:"8px",fontFamily:"monospace",fontSize:"11px",maxWidth:"350px"}}>
+      <div style={{color:"#0ff"}}>AuthenticatedRouter State:</div>
       <div>Path: {path}</div>
-      <div>Loading: {String(isLoading)}</div>
-      <div>Auth: {String(isAuthenticated)}</div>
-      <div>User: {user?.id || 'null'}</div>
-      <div>Company: {user?.company?.id || 'null'}</div>
+      <div>Loading: <span style={{color:isLoading?"#ff0":"#0f0"}}>{String(isLoading)}</span></div>
+      <div>Auth: <span style={{color:isAuthenticated?"#0f0":"#f00"}}>{String(isAuthenticated)}</span></div>
+      <div>Error: {error ? String(error) : 'none'}</div>
+      <div>User ID: {user?.id || 'null'}</div>
+      <div>Company ID: {user?.company?.id || 'null'}</div>
       <div>SubStatus: {user?.company?.subscriptionStatus || 'null'}</div>
-      <div>Choice: {localStorage.getItem("onboardingChoice") || 'null'}</div>
-      <div>Industry: {localStorage.getItem("onboardingIndustry") || 'null'}</div>
+      <div>Choice: {onboardingChoice || 'null'}</div>
+      <div>Industry: {onboardingIndustry || 'null'}</div>
+      <div>NextRoute: <span style={{color:"#ff0"}}>{nextRoute || 'null (onboarded)'}</span></div>
     </div>
   );
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <>
         <DebugOverlay />
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading EcoLogic...</p>
+          </div>
+        </div>
+      </>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <Switch>
-        <Route path="/" component={Welcome} />
-        <Route path="/welcome" component={Welcome} />
-        <Route path="/auth">{() => <Redirect to="/login" />}</Route>
-        <Route path="/login" component={SignInWizard} />
-        <Route path="/register" component={Auth} />
-        <Route path="/signup" component={SignupWizard} />
-        <Route path="/forgot-password" component={ForgotPassword} />
-        <Route path="/reset-password" component={ResetPassword} />
-        <Route path="/landing" component={Landing} />
-        <Route component={Welcome} />
-      </Switch>
+      <>
+        <DebugOverlay />
+        <Switch>
+          <Route path="/" component={Welcome} />
+          <Route path="/welcome" component={Welcome} />
+          <Route path="/auth">{() => <Redirect to="/login" />}</Route>
+          <Route path="/login" component={SignInWizard} />
+          <Route path="/register" component={Auth} />
+          <Route path="/signup" component={SignupWizard} />
+          <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/reset-password" component={ResetPassword} />
+          <Route path="/landing" component={Landing} />
+          <Route component={Welcome} />
+        </Switch>
+      </>
     );
   }
 
-  // Centralized onboarding gating
-  const onboardingChoice = localStorage.getItem("onboardingChoice");
-  const onboardingIndustry = localStorage.getItem("onboardingIndustry");
-  const nextRoute = getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry });
-  
-  console.log("[app-router] user:", user?.id, "company:", user?.company?.id, 
-    "subscriptionStatus:", user?.company?.subscriptionStatus,
-    "onboardingChoice:", onboardingChoice, "onboardingIndustry:", onboardingIndustry,
-    "nextRoute:", nextRoute);
-  
   // If onboarding is incomplete, force user to complete it
   if (nextRoute) {
     return (
-      <Switch>
-        {/* /onboarding/choice removed - role selection is in /signup only */}
-        <Route path="/onboarding/industry" component={IndustryOnboarding} />
-        <Route path="/onboarding/company" component={OnboardingCompany} />
-        <Route path="/join-company" component={JoinCompany} />
-        <Route>{() => <Redirect to={nextRoute} />}</Route>
-      </Switch>
+      <>
+        <DebugOverlay />
+        <Switch>
+          <Route path="/onboarding/industry" component={IndustryOnboarding} />
+          <Route path="/onboarding/company" component={OnboardingCompany} />
+          <Route path="/join-company" component={JoinCompany} />
+          <Route>{() => <Redirect to={nextRoute} />}</Route>
+        </Switch>
+      </>
     );
   }
   
@@ -195,7 +205,9 @@ function AuthenticatedRouter() {
   }
 
   return (
-    <Layout>
+    <>
+      <DebugOverlay />
+      <Layout>
       <Switch>
         <Route path="/choose-plan" component={ChoosePlan} />
         <Route path="/" component={Home} />
@@ -252,7 +264,8 @@ function AuthenticatedRouter() {
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>
       </Switch>
-    </Layout>
+      </Layout>
+    </>
   );
 }
 
