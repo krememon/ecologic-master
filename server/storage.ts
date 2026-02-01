@@ -765,9 +765,9 @@ export class DatabaseStorage implements IStorage {
       // 11. Remove user's notifications
       await tx.delete(notifications).where(eq(notifications.recipientUserId, userId));
       
-      // 12. Delete user's sessions from session store
-      // Use -> for intermediate JSON access, ->> only for final text extraction
-      await tx.delete(sessions).where(sql`sess->'passport'->>'user' = ${userId}`);
+      // 12. Skip session deletion - sessions will become invalid automatically
+      // since the user is soft-deleted and subsequent auth checks will fail.
+      // Deleting sessions during an active request causes passport to crash.
       
       // 13. Soft-delete the user record
       // We cannot hard-delete because FK references in messages, estimates, and signature requests
@@ -945,14 +945,9 @@ export class DatabaseStorage implements IStorage {
       const preservedCount = memberUserIds.length - orphanedUserIds.length;
       console.log(`[delete-company] ${orphanedUserIds.length} orphaned, ${preservedCount} preserved`);
       
-      // 21. Delete sessions and user records for orphaned users
+      // 21. Delete user records for orphaned users (skip session deletion to avoid crash)
+      // Sessions will become invalid since users are deleted/soft-deleted
       if (orphanedUserIds.length > 0) {
-        console.log(`[delete-company] deleting orphan sessions for userIds:`, orphanedUserIds);
-        for (const userId of orphanedUserIds) {
-          // Cast TEXT to JSONB and use proper JSON operators: -> for object, ->> for text
-          await tx.delete(sessions).where(sql`(sess::jsonb)->'passport'->>'user' = ${userId}`);
-        }
-        
         console.log(`[delete-company] deleting orphan users:`, orphanedUserIds);
         await tx.delete(users).where(inArray(users.id, orphanedUserIds));
       }
