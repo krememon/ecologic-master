@@ -1573,7 +1573,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "invoice_paid",
   "missed_clockout",
   "job_rescheduled",
-  "job_cancelled"
+  "job_cancelled",
+  "dm_message"
 ]);
 
 // Notifications table
@@ -1614,4 +1615,5 @@ export type NotificationType =
   | "invoice_paid"
   | "missed_clockout"
   | "job_rescheduled"
-  | "job_cancelled";
+  | "job_cancelled"
+  | "dm_message";
