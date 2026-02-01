@@ -112,22 +112,42 @@ async function sendVerificationEmail(email: string, token: string) {
 }
 
 async function sendPasswordResetEmail(email: string, token: string) {
-  if (!process.env.SMTP_USER) return; // Skip if no email configured
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    console.warn("[password-reset] RESEND_API_KEY not configured, skipping email");
+    return;
+  }
   
-  const resetUrl = `${process.env.BASE_URL || 'http://localhost:5000'}/reset-password?token=${token}`;
+  const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5000';
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+  const { Resend } = await import("resend");
+  const resend = new Resend(resendApiKey);
+  
+  const { error } = await resend.emails.send({
+    from: getResendFrom(),
     to: email,
     subject: "Reset your EcoLogic password",
     html: `
-      <h2>Password Reset Request</h2>
-      <p>Click the link below to reset your password:</p>
-      <a href="${resetUrl}">Reset Password</a>
-      <p>This link will expire in 1 hour.</p>
-      <p>If you didn't request this, please ignore this email.</p>
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+        <h2 style="margin: 0 0 24px; font-size: 24px; font-weight: 600; color: #1f2937;">Reset Your Password</h2>
+        <p style="margin: 0 0 24px; color: #666; font-size: 16px;">You requested to reset your password. Click the button below to set a new password:</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Reset Password</a>
+        </div>
+        <p style="margin: 0 0 16px; color: #666; font-size: 14px;">Or copy and paste this link:</p>
+        <p style="margin: 0 0 24px; word-break: break-all; font-size: 12px; color: #999;">${resetUrl}</p>
+        <p style="margin: 0; color: #999; font-size: 14px;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+      </div>
     `,
   });
+  
+  if (error) {
+    console.error("[password-reset] Resend API error:", error);
+    throw new Error("Failed to send password reset email");
+  }
+  
+  console.log("[password-reset] Email sent successfully to:", email);
 }
 
 // Send signature request email to customer
@@ -1045,6 +1065,38 @@ export function setupAuth(app: Express) {
     } catch (error) {
       console.error("Email verification error:", error);
       res.status(500).json({ message: "Email verification failed" });
+    }
+  });
+
+  // Authenticated Password Reset Request (for logged-in users via Settings)
+  app.post("/api/auth/request-password-reset", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const email = req.user.email?.toLowerCase().trim();
+      if (!email) {
+        return res.status(400).json({ message: "No email associated with account" });
+      }
+      
+      const resetToken = generateToken();
+      const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      
+      await storage.setResetPasswordToken(email, resetToken, expires);
+      
+      try {
+        await sendPasswordResetEmail(email, resetToken);
+      } catch (error) {
+        console.error("[auth-password-reset] Failed to send reset email:", error);
+        return res.status(500).json({ message: "Failed to send reset email" });
+      }
+      
+      // Always return success to prevent email enumeration
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("[auth-password-reset] Error:", error);
+      res.status(500).json({ message: "Password reset request failed" });
     }
   });
 
