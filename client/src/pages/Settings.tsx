@@ -18,6 +18,7 @@ import { BillingSection } from "@/components/BillingSection";
 import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -28,6 +29,7 @@ export default function Settings() {
   const [notifications, setNotifications] = useState(true);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
   const [profileData, setProfileData] = useState({
     firstName: "",
     lastName: "",
@@ -437,7 +439,7 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <Button variant="outline">Change Password</Button>
+              <Button variant="outline" onClick={() => setChangePasswordModalOpen(true)}>Change Password</Button>
               <Button variant="outline">Two-Factor Authentication</Button>
               <Button variant="outline">Download Data</Button>
               <Button variant="destructive" onClick={() => setDeleteAccountModalOpen(true)}>Delete Account</Button>
@@ -445,6 +447,12 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      <ChangePasswordModal
+        open={changePasswordModalOpen}
+        onOpenChange={setChangePasswordModalOpen}
+        userEmail={user?.email || undefined}
+      />
 
       <DeleteAccountModal
         open={deleteAccountModalOpen}
