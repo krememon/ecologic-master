@@ -101,10 +101,12 @@ export default function OnboardingCompany() {
         throw new Error(data.message || "Failed to start trial");
       }
       
-      // Don't clear onboardingChoice yet - still need it for /onboarding/industry
+      // Clear onboardingChoice - onboarding is complete (no industry step anymore)
+      localStorage.removeItem("onboardingChoice");
       setLocation("/");
     } catch (error: any) {
-      // Don't clear onboardingChoice - let the flow continue
+      // Clear onboardingChoice and continue to dashboard
+      localStorage.removeItem("onboardingChoice");
       setLocation("/");
     } finally {
       setIsLoading(false);

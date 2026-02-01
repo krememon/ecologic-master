@@ -170,21 +170,14 @@ function Router() {
     );
   }
 
-  // Check if owner needs to complete industry onboarding
-  // Only redirect to /onboarding/industry if user explicitly chose "owner" in onboarding
-  if (user.role === 'OWNER' && user.company?.onboardingCompleted === false) {
+  // Industry onboarding step removed - owners go directly to dashboard after company creation
+  // Clear any stale onboarding choice since onboarding is now complete
+  if (user.role === 'OWNER' && user.company) {
     const onboardingChoice = localStorage.getItem("onboardingChoice");
-    console.log("[app-router] owner with incomplete onboarding, choice:", onboardingChoice);
-    
-    if (onboardingChoice === "owner") {
-      return (
-        <Switch>
-          <Route path="/onboarding/industry" component={IndustryOnboarding} />
-          <Route>{() => <Redirect to="/onboarding/industry" />}</Route>
-        </Switch>
-      );
+    if (onboardingChoice) {
+      console.log("[app-router] owner with company, clearing stale onboardingChoice");
+      localStorage.removeItem("onboardingChoice");
     }
-    // If no explicit choice, let them use the main app - they can complete onboarding later
   }
 
   return (

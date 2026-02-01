@@ -44,11 +44,10 @@ export default function IndustryOnboarding() {
   console.log("[industry-onboarding] mounted, choice:", onboardingChoice, "route:", window.location.pathname);
   
   useEffect(() => {
-    if (onboardingChoice !== "owner") {
-      console.log("[industry-onboarding] no owner choice, redirecting to /onboarding/choice");
-      setLocation("/onboarding/choice", { replace: true });
-    }
-  }, [onboardingChoice, setLocation]);
+    // Industry step is no longer part of onboarding - redirect to dashboard
+    console.log("[industry-onboarding] redirecting to dashboard (industry step removed from onboarding)");
+    setLocation("/", { replace: true });
+  }, [setLocation]);
 
   const industryMutation = useMutation({
     mutationFn: async (industry: string) => {

@@ -1,0 +1,40 @@
+Remove the /onboarding/industry (price book preload) step from owner onboarding.
+
+CONTEXT
+Right now after "How many employees do you have?" the app routes to /onboarding/industry to preload a starter price book.
+I want to completely REMOVE this step/screen from the onboarding flow.
+
+GOALS
+1) /onboarding/industry should NOT appear in onboarding anymore.
+2) After employee count screen, go directly to the next intended step (company details / subscription / dashboard).
+3) Price book preloading must not break anything:
+   - If price book is required, use a generic default (same for everyone) or skip preload entirely.
+   - No blocking errors, no redirects back to /onboarding/industry.
+4) Keep routing deterministic (no hidden auto-redirects back into industry).
+
+TASKS
+A) Find the onboarding flow controller / router logic that runs after the employee count step.
+   - Remove the navigation to "/onboarding/industry".
+   - Update progress/step count if shown.
+
+B) Find any backend call that expects an industry selection for price book creation.
+   Choose ONE safe approach:
+   Option 1 (preferred): do not preload a price book during onboarding. Create it lazily when user first opens Price Book.
+   Option 2: auto-create a generic default price book on company creation with no industry needed.
+
+C) Remove any guards that force /onboarding/industry when price book missing.
+   - Search for redirects like: if (!priceBook) navigate("/onboarding/industry")
+   - Delete/replace with a non-blocking default behavior.
+
+D) Ensure /onboarding/industry is no longer reachable from onboarding.
+   - It can remain as a standalone admin page if you want, but it must not be in the onboarding path.
+
+TESTS
+1) New owner signup -> employee count -> should NOT see industry page -> continues onboarding -> reaches dashboard.
+2) App functions without a preloaded price book (no crashes).
+3) Price book page (if exists) should either show empty state or create defaults automatically.
+
+DELIVERABLES
+- List files changed.
+- Confirm the onboarding path no longer includes /onboarding/industry.
+- Confirm price book no longer blocks onboarding.

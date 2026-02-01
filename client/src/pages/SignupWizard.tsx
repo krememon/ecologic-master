@@ -324,7 +324,8 @@ export default function SignupWizard() {
     localStorage.setItem("onboardingChoice", role);
     console.log("[onboarding] choice saved:", role);
     if (role === "owner") {
-      goToStep("industry");
+      // Skip industry step - go directly to company details
+      goToStep("company");
     } else {
       goToStep("invite");
     }
