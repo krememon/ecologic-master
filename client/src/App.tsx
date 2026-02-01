@@ -272,6 +272,11 @@ function Router() {
       </div>
     );
   }
+  
+  // Password reset is PUBLIC - works whether logged in or out
+  if (path.startsWith('/reset-password')) {
+    return <ResetPassword />;
+  }
 
   return <AuthenticatedRouter />;
 }

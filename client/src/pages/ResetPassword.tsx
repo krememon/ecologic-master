@@ -17,6 +17,7 @@ export default function ResetPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [success, setSuccess] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -79,11 +80,11 @@ export default function ResetPassword() {
       });
       
       if (response.ok) {
-        toast({
-          title: "Password Reset Successful",
-          description: "You're now logged in with your new password.",
-        });
-        window.location.href = "/";
+        setSuccess(true);
+        // Redirect to sign-in after 3 seconds
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 3000);
       } else {
         const errorData = await response.json();
         if (errorData.message?.includes("Invalid") || errorData.message?.includes("expired")) {
@@ -130,6 +131,39 @@ export default function ResetPassword() {
             className="bg-blue-500 hover:bg-blue-600 text-white"
           >
             Request New Reset Link
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6">
+        <div className="w-full max-w-md mx-auto p-8 text-center">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full overflow-hidden bg-white shadow-lg">
+            <img 
+              src={logoImage} 
+              alt="EcoLogic Logo" 
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+            <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            Password Updated
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">
+            Your password has been successfully reset. Redirecting to sign in...
+          </p>
+          <Button
+            onClick={() => window.location.href = "/login"}
+            className="bg-blue-500 hover:bg-blue-600 text-white"
+          >
+            Sign In Now
           </Button>
         </div>
       </div>
@@ -269,7 +303,7 @@ export default function ResetPassword() {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => window.location.href = "/"}
+              onClick={() => window.location.href = "/login"}
               className="text-sm text-blue-600 hover:text-blue-700 underline focus:outline-none"
             >
               Back to Sign In
