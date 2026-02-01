@@ -1,0 +1,46 @@
+EMERGENCY: Entire app shows a blank white screen on every route. Backend is fine (GET /api/auth/user 200). ErrorBoundary + debug overlay did not appear, so React may not be mounting or root render is failing.
+
+GOAL
+Make the UI render something immediately, then fix the underlying cause. No more blank screen.
+
+STEP 1 — Confirm React mount (CANARY)
+1) In client/src/main.tsx (or the entry that calls createRoot), render a temporary canary component ABOVE the app:
+   - Replace App with:
+     <div style={{padding:20,fontFamily:"system-ui"}}>EcoLogic UI Booted ✅</div>
+   - Verify this text shows on screen.
+2) If it DOES show, React mount is OK. Restore App rendering and proceed to Step 2.
+3) If it does NOT show, root mounting is broken:
+   - Verify index.html has <div id="root"></div>
+   - Verify createRoot(document.getElementById("root")!) is correct
+   - Fix any entrypoint import errors so the canary shows.
+
+STEP 2 — Find the first crash (restore App incrementally)
+4) Restore App but wrap it so we always see output:
+   - Render a top banner outside routing:
+     <div style={{position:"fixed",top:0,left:0,zIndex:9999,background:"#000",color:"#fff",padding:"6px 10px"}}>App Mounted</div>
+   - Then render <App /> below it.
+   If banner shows but rest is white, App is returning nothing or routing is stuck.
+
+STEP 3 — Fix routing so App ALWAYS returns JSX
+5) In client/src/App.tsx, guarantee the component ALWAYS returns some JSX:
+   - During auth bootstrap: show a visible loading screen with text “Loading EcoLogic…”
+   - Never do: setLocation(...) then return null
+   - If redirect needed, use <Navigate /> OR navigate() in useEffect while still rendering the loading screen.
+
+STEP 4 — Capture client errors
+6) Open browser DevTools console and fix the FIRST red error (don’t guess).
+   Common offenders:
+   - “Invalid hook call” / hooks used conditionally
+   - “useNavigate outside a Router”
+   - “Cannot read properties of undefined”
+   - Import/export mismatch
+
+STEP 5 — Make "/" route render something deterministic
+7) Ensure "/" matches a route that renders:
+   - Either <Welcome/> or <Navigate to="/jobs" />
+   - Ensure there is a catch-all NotFound route.
+
+DELIVERABLES
+- Tell me: Did the canary render show? (yes/no)
+- If yes: paste the first console error after restoring App.
+- List exactly which file caused the white screen and how it was fixed.
