@@ -115,6 +115,7 @@ export default function OnboardingCompany() {
   };
 
   const handleStartTrial = async () => {
+    if (isLoading) return; // Prevent double-submit
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/subscriptions/start-trial", {});
@@ -128,15 +129,22 @@ export default function OnboardingCompany() {
         throw new Error(data.message || "Failed to start trial");
       }
       
-      // Clear onboardingChoice - onboarding is complete (no industry step anymore)
+      // Clear onboarding state
       localStorage.removeItem("onboardingChoice");
-      setLocation("/");
+      localStorage.removeItem("onboardingIndustry");
+      
+      // Refresh auth state so subscriptionStatus is "trialing" before navigation
+      await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      
+      // Navigate to dashboard
+      setLocation("/jobs", { replace: true });
     } catch (error: any) {
-      // Clear onboardingChoice and continue to dashboard
-      localStorage.removeItem("onboardingChoice");
-      setLocation("/");
-    } finally {
       setIsLoading(false);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to start trial. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -264,7 +272,7 @@ export default function OnboardingCompany() {
                   </p>
                 </div>
                 
-                <Button onClick={handleStartTrial} className="w-full" disabled={isLoading}>
+                <Button type="button" onClick={handleStartTrial} className="w-full" disabled={isLoading}>
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Start Free Trial
                 </Button>
