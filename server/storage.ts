@@ -766,7 +766,8 @@ export class DatabaseStorage implements IStorage {
       await tx.delete(notifications).where(eq(notifications.recipientUserId, userId));
       
       // 12. Delete user's sessions from session store
-      await tx.delete(sessions).where(sql`sess->>'passport'->>'user' = ${userId}`);
+      // Use -> for intermediate JSON access, ->> only for final text extraction
+      await tx.delete(sessions).where(sql`sess->'passport'->>'user' = ${userId}`);
       
       // 13. Soft-delete the user record
       // We cannot hard-delete because FK references in messages, estimates, and signature requests

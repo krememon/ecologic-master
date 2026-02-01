@@ -388,7 +388,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
       
-      console.log("Auth user endpoint - userId:", userId, "user object:", req.user);
+      console.log("Auth user endpoint - userId:", userId);
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -431,7 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/linked-accounts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      console.log("Linked accounts endpoint - userId:", userId, "user object:", req.user);
+      console.log("Linked accounts endpoint - userId:", userId);
       
       const linkedAccounts = await storage.getLinkedAccountMethods(userId);
       console.log("Linked accounts result:", linkedAccounts);
