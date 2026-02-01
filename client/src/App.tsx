@@ -137,8 +137,8 @@ function AuthenticatedRouter() {
   useWebSocket();
   usePushNotifications();
 
-  // Get onboarding state - prefer user.onboardingChoice from DB, fallback to localStorage
-  const onboardingChoice = user?.onboardingChoice || localStorage.getItem("onboardingChoice");
+  // Get onboarding state from user object (DB is authoritative)
+  const onboardingChoice = user?.onboardingChoice || null;
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
   const nextRoute = !isLoading && isAuthenticated && user 
     ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry })

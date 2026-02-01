@@ -559,15 +559,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Set onboarding choice (owner or employee)
+  const onboardingChoiceSchema = z.object({
+    choice: z.enum(["owner", "employee"])
+  });
+  
   app.post('/api/auth/onboarding-choice', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const { choice } = req.body;
-
-      if (!choice || !['owner', 'employee'].includes(choice)) {
+      const parsed = onboardingChoiceSchema.safeParse(req.body);
+      
+      if (!parsed.success) {
         return res.status(400).json({ message: "Invalid choice. Must be 'owner' or 'employee'" });
       }
-
+      
+      const { choice } = parsed.data;
       const updatedUser = await storage.updateUser(userId, { onboardingChoice: choice });
       
       res.json({ ok: true, onboardingChoice: updatedUser.onboardingChoice });

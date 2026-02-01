@@ -22,8 +22,6 @@ export default function OnboardingChoice() {
       
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       
-      localStorage.setItem("onboardingChoice", choice);
-      
       if (choice === "owner") {
         setLocation("/onboarding/industry");
       } else {
@@ -35,6 +33,7 @@ export default function OnboardingChoice() {
         description: error.message || "Failed to save your choice",
         variant: "destructive",
       });
+    } finally {
       setIsSubmitting(false);
     }
   };
