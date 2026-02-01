@@ -9,14 +9,6 @@ import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 
-const INDUSTRIES = [
-  { value: "plumbing", label: "Plumbing" },
-  { value: "hvac", label: "HVAC" },
-  { value: "electrical", label: "Electrical" },
-  { value: "general_contractor", label: "General Contractor" },
-  { value: "other", label: "Other" },
-];
-
 const EMPLOYEE_RANGES = [
   { value: "1", label: "Just me (1)" },
   { value: "2-5", label: "2–5" },
@@ -25,15 +17,14 @@ const EMPLOYEE_RANGES = [
   { value: "20+", label: "20+" },
 ];
 
-type Step = "industry" | "company" | "subscription";
+type Step = "company" | "subscription";
 
 export default function OnboardingCompany() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
 
-  const [step, setStep] = useState<Step>("industry");
-  const [industry, setIndustry] = useState("");
+  const [step, setStep] = useState<Step>("company");
   const [companyName, setCompanyName] = useState("");
   const [employeeRange, setEmployeeRange] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -63,11 +54,6 @@ export default function OnboardingCompany() {
     );
   }
 
-  const handleIndustrySelect = (value: string) => {
-    setIndustry(value);
-    setStep("company");
-  };
-
   const handleCompanySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -84,7 +70,6 @@ export default function OnboardingCompany() {
     try {
       const res = await apiRequest("POST", "/api/companies", {
         name: companyName,
-        industry,
         employeeRange,
       });
       
@@ -128,8 +113,6 @@ export default function OnboardingCompany() {
 
   const handleBack = () => {
     if (step === "company") {
-      setStep("industry");
-    } else if (step === "industry") {
       setLocation("/onboarding/choice");
     }
   };
@@ -150,7 +133,7 @@ export default function OnboardingCompany() {
   };
 
   const getStepInfo = () => {
-    const steps: Step[] = ["industry", "company", "subscription"];
+    const steps: Step[] = ["company", "subscription"];
     return { current: steps.indexOf(step) + 1, total: steps.length };
   };
 
@@ -190,27 +173,6 @@ export default function OnboardingCompany() {
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Back
               </button>
-            )}
-            
-            {step === "industry" && (
-              <div className="space-y-4">
-                <div className="text-center mb-6">
-                  <h2 className="text-lg font-semibold text-slate-800 dark:text-white">What industry are you in?</h2>
-                </div>
-                
-                <div className="grid gap-3">
-                  {INDUSTRIES.map((ind) => (
-                    <button
-                      key={ind.value}
-                      type="button"
-                      onClick={() => handleIndustrySelect(ind.value)}
-                      className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left"
-                    >
-                      <p className="font-medium text-slate-800 dark:text-white">{ind.label}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
             
             {step === "company" && (

@@ -39,6 +39,8 @@ export default function IndustryOnboarding() {
   const [, setLocation] = useLocation();
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  
+  console.log("[industry-onboarding] mounted, route:", window.location.pathname);
 
   const industryMutation = useMutation({
     mutationFn: async (industry: string) => {

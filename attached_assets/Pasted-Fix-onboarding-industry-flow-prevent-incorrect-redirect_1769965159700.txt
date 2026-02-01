@@ -1,0 +1,42 @@
+Fix onboarding industry flow + prevent incorrect redirect after login.
+
+PROBLEM
+- We currently have two different industry selection screens:
+  1) Old simple list page (used during account creation)
+  2) /onboarding/industry grid page (the one we want)
+- After creating an account and starting the 14-day trial, the app forwards to sign-in again.
+  After signing in (email code + password), the user gets routed to /onboarding/industry which is wrong.
+  Industry should only be filled out when creating a company (owner onboarding), not just after login.
+
+GOALS
+1) Make /onboarding/industry (grid page) the ONLY industry selection screen used for owner company onboarding.
+2) Remove/disable the old list-style industry selection in the signup/company flow (do not use it anymore).
+3) After signing in, do NOT route to /onboarding/industry unless the user is actively in owner onboarding and needs it.
+4) Enforce routing rules:
+   - If user has an associated company -> go to main app (e.g. /jobs or dashboard)
+   - If user has NO company and onboardingChoice is null -> /onboarding/choose
+   - If onboardingChoice === "employee" -> /onboarding/invite
+   - If onboardingChoice === "owner" and company not created -> continue owner flow:
+       /onboarding/industry -> company details -> subscription/trial
+   - Never default to /onboarding/industry without onboardingChoice === "owner"
+
+TASKS
+A) Identify both industry pages/components and their routes.
+   - Confirm route for old list page and where it’s used.
+B) Update the signup/company onboarding flow so it navigates to /onboarding/industry (grid) when industry is required.
+   - Ensure selected industry is saved in the same place as before (DB/local onboarding state).
+C) Fix post-login redirect logic (the code that decides where to send user after auth).
+   - Remove any unconditional redirect like "if no company -> /onboarding/industry"
+   - Implement routing rules above.
+D) Add a guard to /onboarding/industry itself:
+   - If onboardingChoice !== "owner" -> redirect to /onboarding/choose
+   - If user already has company -> redirect to /jobs (or dashboard)
+E) Test scenarios:
+   1) New user signup -> owner -> industry -> company -> trial -> app
+   2) User finishes trial step and is asked to sign in again -> after sign in they should resume the correct next owner onboarding step (NOT jump backwards or duplicate industry)
+   3) Employee user -> never sees /onboarding/industry unless they become owner.
+
+DELIVERABLES
+- List the files changed.
+- State which route is now the single source of truth for industry (/onboarding/industry).
+- Confirm post-login no longer routes to /onboarding/industry incorrectly.
