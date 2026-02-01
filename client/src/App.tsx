@@ -8,52 +8,6 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-
-// Centralized onboarding route logic
-// Role selection happens ONLY in /signup - no separate /onboarding/choice
-function getNextOnboardingRoute(params: {
-  user: any;
-  onboardingChoice: string | null;
-  onboardingIndustry: string | null;
-}): string | null {
-  const { user, onboardingChoice, onboardingIndustry } = params;
-  
-  // If user has a company, onboarding is complete
-  if (user?.company) {
-    const status = user.company.subscriptionStatus;
-    const hasActiveSub = status === "active" || status === "trialing";
-    if (!hasActiveSub) {
-      return "/onboarding/company"; // Shows subscription step
-    }
-    return null; // Fully onboarded
-  }
-  
-  // No company yet - check which path they're on
-  // Employee path
-  if (onboardingChoice === "employee") {
-    return "/join-company";
-  }
-  
-  // Owner path (explicit choice or default for users without choice)
-  // If no choice made yet, assume owner (they selected in /signup)
-  if (onboardingChoice === "owner" || !onboardingChoice) {
-    // If they got here without a choice, they skipped signup - set owner as default
-    if (!onboardingChoice && !onboardingIndustry) {
-      // No signup completed yet, but authenticated - rare edge case
-      // They should complete the full flow
-      return "/onboarding/industry";
-    }
-    
-    if (!onboardingIndustry) {
-      return "/onboarding/industry";
-    }
-    
-    return "/onboarding/company";
-  }
-  
-  // Fallback - should not reach here
-  return "/onboarding/industry";
-}
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/auth-page";
@@ -102,6 +56,39 @@ import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
 import OnboardingChoice from "@/pages/OnboardingChoice";
 import OnboardingCompany from "@/pages/OnboardingCompany";
+
+// Centralized onboarding route logic
+// Role selection happens ONLY in /signup - no separate /onboarding/choice
+function getNextOnboardingRoute(params: {
+  user: any;
+  onboardingChoice: string | null;
+  onboardingIndustry: string | null;
+}): string | null {
+  const { user, onboardingChoice, onboardingIndustry } = params;
+  
+  // If user has a company, check subscription status
+  if (user?.company) {
+    const status = user.company.subscriptionStatus;
+    const hasActiveSub = status === "active" || status === "trialing";
+    if (!hasActiveSub) {
+      return "/onboarding/company"; // Shows subscription step
+    }
+    return null; // Fully onboarded
+  }
+  
+  // No company yet - check which path they're on
+  // Employee path
+  if (onboardingChoice === "employee") {
+    return "/join-company";
+  }
+  
+  // Owner path (explicit or default)
+  if (!onboardingIndustry) {
+    return "/onboarding/industry";
+  }
+  
+  return "/onboarding/company";
+}
 
 // Separate component for public payment pages - NO auth hooks
 function PaymentRouter() {
