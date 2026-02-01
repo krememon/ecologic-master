@@ -1,0 +1,41 @@
+Fix onboarding logic for existing users.
+
+BUG
+When I sign into my long-time account (already has a company), I get sent to "Set up your company" and see "Company Created! Start Free Trial" screen. This should NEVER happen for existing accounts, and after sign-in I should land on the dashboard (/jobs).
+
+GOALS
+1) Existing users with an existing company must go straight to /jobs after login.
+2) The "Company Created / Start Free Trial" screen should ONLY appear for brand-new onboarding flows, not existing companies.
+3) Subscription status (inactive) must NOT force existing users into onboarding/company created screens.
+4) Keep onboarding flow for truly new users: role -> industry -> company details -> trial -> dashboard.
+
+IMPLEMENTATION (REQUIRED)
+A) Add a reliable flag:
+   - company.onboardingComplete (boolean) OR company.setupCompletedAt timestamp
+   - Set it to true (or set timestamp) when company details step completes successfully for NEW onboarding.
+   - For existing companies in DB, default it to true (migration or fallback logic: if company createdAt is old / has jobs / has members -> treat as complete).
+
+B) Update getNextOnboardingRoute logic:
+   - If company exists AND onboardingComplete === true:
+       return null (allow /jobs) AND never route to /onboarding/company or trial.
+   - If company exists AND onboardingComplete !== true:
+       continue onboarding: if subscription/trial needed -> /onboarding/trial
+   - Do NOT use subStatus===inactive alone to decide onboarding.
+
+C) Update OnboardingCompany page:
+   - If company exists AND onboardingComplete === true:
+       redirect to /jobs immediately (replace) and do NOT show "Company Created".
+   - Only show "Company Created" after we actually created it in this session and onboardingComplete is not yet true.
+
+D) Ensure post-login landing:
+   - After login success (verify-code), navigate to /jobs if onboardingComplete true.
+
+TESTS
+1) Existing user with company -> login -> lands on /jobs
+2) New user owner -> completes company details -> sees trial screen -> then /jobs
+3) No company -> must go through onboarding steps
+
+DELIVERABLES
+- List files changed
+- Show the updated getNextOnboardingRoute logic
+- Confirm existing users never see the company created screen again

@@ -32,29 +32,32 @@ export default function OnboardingCompany() {
 
   const onboardingChoice = localStorage.getItem("onboardingChoice");
   
-  // Check if user has company but needs subscription
+  // Check if user has company and its state
   const hasCompany = !!user?.company;
+  const onboardingCompleted = user?.company?.onboardingCompleted;
   const subscriptionStatus = user?.company?.subscriptionStatus;
-  const needsSubscription = hasCompany && subscriptionStatus !== "active" && subscriptionStatus !== "trialing";
+  const needsSubscription = hasCompany && !onboardingCompleted && 
+    subscriptionStatus !== "active" && subscriptionStatus !== "trialing";
   
   console.log("[onboarding-company] choice:", onboardingChoice, "step:", step, 
-    "hasCompany:", hasCompany, "subscriptionStatus:", subscriptionStatus, 
-    "needsSubscription:", needsSubscription);
+    "hasCompany:", hasCompany, "onboardingCompleted:", onboardingCompleted,
+    "subscriptionStatus:", subscriptionStatus, "needsSubscription:", needsSubscription);
 
-  // If user has company with active subscription, they're done - go to dashboard
+  // If user has company with onboarding complete, redirect to dashboard immediately
+  // This prevents existing users from seeing "Company Created" screen
   useEffect(() => {
-    if (!authLoading && hasCompany && !needsSubscription) {
-      console.log("[onboarding-company] fully onboarded, redirecting to /");
+    if (!authLoading && hasCompany && onboardingCompleted) {
+      console.log("[onboarding-company] existing user, onboarding already complete, redirecting to /");
       localStorage.removeItem("onboardingChoice");
       localStorage.removeItem("onboardingIndustry");
       setLocation("/", { replace: true });
     }
-  }, [authLoading, hasCompany, needsSubscription, setLocation]);
+  }, [authLoading, hasCompany, onboardingCompleted, setLocation]);
 
-  // If user has company but needs subscription, skip to subscription step
+  // If user has company but needs subscription (new company), skip to subscription step
   useEffect(() => {
     if (!authLoading && needsSubscription && step === "company") {
-      console.log("[onboarding-company] has company but needs subscription, jumping to subscription step");
+      console.log("[onboarding-company] new company needs subscription, jumping to subscription step");
       setStep("subscription");
     }
   }, [authLoading, needsSubscription, step]);

@@ -66,14 +66,24 @@ function getNextOnboardingRoute(params: {
 }): string | null {
   const { user, onboardingChoice, onboardingIndustry } = params;
   
-  // If user has a company, check subscription status
+  // If user has a company
   if (user?.company) {
-    const status = user.company.subscriptionStatus;
-    const hasActiveSub = status === "active" || status === "trialing";
-    if (!hasActiveSub) {
-      return "/onboarding/company"; // Shows subscription step
+    const { onboardingCompleted, subscriptionStatus } = user.company;
+    
+    // Existing company with onboarding complete -> go to dashboard
+    // Treat any company with onboardingCompleted=true as fully set up
+    if (onboardingCompleted) {
+      return null; // Go to dashboard
     }
-    return null; // Fully onboarded
+    
+    // NEW company that hasn't completed onboarding yet
+    // Check if they need to start a trial
+    const hasActiveSub = subscriptionStatus === "active" || subscriptionStatus === "trialing";
+    if (!hasActiveSub) {
+      return "/onboarding/company"; // Shows subscription/trial step
+    }
+    
+    return null; // Subscription active, go to dashboard
   }
   
   // No company yet - check which path they're on
