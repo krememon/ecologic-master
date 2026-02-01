@@ -1,0 +1,40 @@
+URGENT: After latest onboarding routing changes, the app loads a blank white screen at "/". This likely indicates either:
+1) an infinite redirect loop, OR
+2) a frontend runtime error (reading undefined) during initial auth/onboarding checks.
+
+GOALS
+- App must never show a blank white screen.
+- "/" must always render something (either a loading state, or redirect safely).
+- Onboarding redirects must be guarded and never loop.
+
+TASKS
+A) Reproduce and capture the frontend error:
+   - Open browser DevTools console and identify the first thrown error.
+   - Fix the root cause (do not silence errors).
+
+B) Add a safe global loading state for auth bootstrap:
+   - Wherever we fetch /api/auth/user or bootstrap auth state, ensure we render a loading UI (spinner) until resolved.
+   - Do NOT run onboarding redirect logic until auth state is known (user loaded OR confirmed unauthenticated).
+
+C) Fix redirect loop risk:
+   - Ensure onboarding redirect logic does NOT run when current path is already the target path.
+   - Example: only redirect if nextRoute && location.pathname !== nextRoute
+   - Ensure "/" redirect logic and onboarding route guards do not bounce each other.
+
+D) Make onboardingChoice access safe:
+   - Any reference to onboardingChoice / onboardingIndustry must handle null/undefined without throwing.
+   - If onboardingChoice missing, do NOT crash; route to /signup or /login appropriately.
+
+E) Verify "/" behavior:
+   - If unauthenticated -> show Welcome/Login page or redirect to /login (consistent with current product decision).
+   - If authenticated -> compute next onboarding route; redirect safely OR show dashboard.
+
+TESTS
+1) Hard refresh on "/" while logged out -> should show login/welcome, not white screen.
+2) Hard refresh on "/" while logged in -> should route to correct page, not white screen.
+3) Visit /onboarding/industry directly -> should not loop; should redirect once or render.
+
+DELIVERABLES
+- Tell me the exact frontend error that caused the white screen.
+- List files changed.
+- Confirm no infinite redirects and no blank screen.

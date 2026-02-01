@@ -136,7 +136,12 @@ function Router() {
   
   // Public email preferences page - NO auth required (handled by main.tsx)
   if (path.startsWith('/email-preferences')) {
-    return null; // main.tsx handles this route
+    // Return loading spinner instead of null - main.tsx handles this route
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
 
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -144,9 +149,24 @@ function Router() {
   useWebSocket();
   usePushNotifications();
 
+  // Debug overlay for development
+  const DebugOverlay = () => (
+    <div className="fixed top-0 left-0 bg-black/80 text-white text-xs p-2 z-50 max-w-xs">
+      <div>Path: {path}</div>
+      <div>Loading: {String(isLoading)}</div>
+      <div>Auth: {String(isAuthenticated)}</div>
+      <div>User: {user?.id || 'null'}</div>
+      <div>Company: {user?.company?.id || 'null'}</div>
+      <div>SubStatus: {user?.company?.subscriptionStatus || 'null'}</div>
+      <div>Choice: {localStorage.getItem("onboardingChoice") || 'null'}</div>
+      <div>Industry: {localStorage.getItem("onboardingIndustry") || 'null'}</div>
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
+        <DebugOverlay />
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
     );

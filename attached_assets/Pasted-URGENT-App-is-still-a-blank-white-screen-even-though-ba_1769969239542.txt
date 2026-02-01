@@ -1,0 +1,47 @@
+URGENT: App is still a blank white screen even though backend auth works.
+
+Evidence:
+- Server logs show GET /api/auth/user 200 (user is authenticated)
+- UI renders completely blank (no spinner, no page)
+
+This is a frontend rendering/routing bug. Likely App.tsx returns null/empty during redirect logic or gets stuck in a redirect decision without rendering.
+
+GOALS
+1) The app must NEVER render a blank white screen.
+2) While auth is loading or while deciding onboarding redirect, show a real loading UI.
+3) Redirect logic must use React Router (Navigate/useNavigate) and must not rely on setLocation + returning null.
+
+TASKS
+A) Open client/src/App.tsx (the file you recently edited).
+   - Find any code path that returns null, empty fragment, or no JSX during auth bootstrap or onboarding redirect checks.
+   - Replace it with a proper full-screen Loading component (or a simple centered spinner + “Loading…”).
+
+B) Fix redirect implementation:
+   - If you are currently doing:
+       setLocation("/some-route"); return null;
+     change to:
+       return <Navigate to="/some-route" replace />;
+     OR use navigate() inside a useEffect AND still render the Loading UI.
+
+C) Ensure router always has a rendered route:
+   - Confirm "/" always renders something: either the actual Home page or a <Navigate>.
+   - Confirm there is a NotFound route as a fallback.
+
+D) Add TEMP debug overlay (only in development) so we can see state instead of blank:
+   - Show: current pathname, auth loading state, user id/email, computed nextRoute.
+   - This should render even during loading (top-left small text).
+   - Remove after confirmed.
+
+E) Verify in browser DevTools console:
+   - If there are any red errors, fix them (don’t ignore).
+   - Most common: hooks used conditionally, navigate called during render, undefined access, or import/JSX issues.
+
+TESTS
+1) Hard refresh on "/" while logged in -> should show Loading then redirect to correct page (no blank screen).
+2) Hard refresh on "/jobs" -> should either show Loading then render /jobs, or redirect to onboarding step (no blank).
+3) Logged out -> should render login/welcome immediately (no blank).
+
+DELIVERABLES
+- Tell me which code path was returning nothing and what you changed it to.
+- Confirm the loading UI appears during auth bootstrap.
+- Confirm redirects use <Navigate> or navigate() properly.
