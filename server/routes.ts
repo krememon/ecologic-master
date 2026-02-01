@@ -11433,6 +11433,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create DM notification for recipients
       const sender = await storage.getUser(userId);
       const senderCompany = await storage.getUserCompany(userId);
+      console.log('[DM-NOTIF] senderId:', userId, 'recipients:', participants.map(p => p.userId), 'senderCompany:', senderCompany?.id);
+      
       if (sender && senderCompany) {
         const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Someone';
         const messagePreview = body.trim().length > 50 
@@ -11441,7 +11443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (const { userId: recipientId } of participants) {
           try {
-            await storage.createNotification({
+            const notification = await storage.createNotification({
               companyId: senderCompany.id,
               recipientUserId: recipientId,
               type: 'dm_message',
@@ -11456,10 +11458,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 messageId: message.id,
               },
             });
+            console.log('[DM-NOTIF] Created notification id:', notification.id, 'for recipient:', recipientId);
           } catch (notifError) {
             console.error('[DM notification] Failed to create notification:', notifError);
           }
         }
+      } else {
+        console.log('[DM-NOTIF] SKIP: no sender or company', { sender: !!sender, senderCompany: !!senderCompany });
       }
 
       res.json(message);
@@ -12123,6 +12128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getUserId(req.user);
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
       const notifications = await storage.getNotifications(userId, limit);
+      console.log('[NOTIF-GET] userId:', userId, 'count:', notifications.length);
       res.json(notifications);
     } catch (error: any) {
       console.error('Error fetching notifications:', error);
