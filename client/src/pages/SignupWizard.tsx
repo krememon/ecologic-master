@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } from "lucide-react";
-import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type WizardStep = 
@@ -452,13 +451,18 @@ export default function SignupWizard() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src={logoImage} alt="EcoLogic" className="w-24 h-24 mx-auto mb-4 rounded-2xl shadow-lg" />
-            <img 
-              data-testid="ecologic-wordmark"
-              src="/branding/ecologic-wordmark.png" 
-              alt="EcoLogic" 
-              className="h-8 mx-auto" 
-            />
+            <h1 
+              className="text-5xl md:text-6xl mx-auto mb-2"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                color: "#0B0B0D",
+              }}
+            >
+              EcoLogic
+            </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Professional contractor management</p>
           </div>
           
