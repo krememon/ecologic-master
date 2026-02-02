@@ -47,7 +47,7 @@ export default function Welcome() {
           className="w-full max-w-md transition-all"
           style={{
             opacity: isVisible ? 1 : 0,
-            transform: isVisible ? "translateY(320px)" : "translateY(332px)",
+            transform: isVisible ? "translateY(240px)" : "translateY(252px)",
             transitionDuration: "300ms",
             transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
           }}
