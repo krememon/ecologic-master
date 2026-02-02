@@ -39,7 +39,10 @@ export default function Welcome() {
   
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-      <div className="flex-1 flex flex-col items-center justify-start pt-20 md:pt-28 p-4">
+      <div 
+        className="flex-1 flex flex-col items-center px-6"
+        style={{ paddingTop: "clamp(80px, 12vh, 160px)" }}
+      >
         <div
           className="w-full max-w-md transition-all"
           style={{
