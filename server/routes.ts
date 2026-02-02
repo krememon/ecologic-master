@@ -12169,9 +12169,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         });
 
-        // Add specific user targets
+        // Add specific user targets (only if they belong to the same company)
+        const memberUserIds = new Set(allMembers.map(m => m.userId));
         userTargets.forEach((targetUserId) => {
-          if (targetUserId !== userId) {
+          if (targetUserId !== userId && memberUserIds.has(targetUserId)) {
             recipientUserIds.add(targetUserId);
           }
         });
