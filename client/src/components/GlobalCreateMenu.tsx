@@ -205,9 +205,9 @@ export function GlobalCreateMenu() {
                       setIsOpen(false);
                       setShowAnnouncementModal(true);
                     }}
-                    className="w-11 h-11 flex items-center justify-center rounded-full bg-amber-500 text-white shadow-lg"
+                    className="w-11 h-11 flex items-center justify-center rounded-full bg-blue-600 text-white shadow-lg"
                     aria-label="Create Announcement"
-                    whileHover={{ scale: 1.08, backgroundColor: "#d97706" }}
+                    whileHover={{ scale: 1.08, backgroundColor: "#1d4ed8" }}
                     whileTap={{ scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   >
