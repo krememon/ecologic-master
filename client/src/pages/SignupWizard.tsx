@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } from "lucide-react";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
-import wordmarkImage from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1769995918556.png";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type WizardStep = 
@@ -454,7 +453,12 @@ export default function SignupWizard() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <img src={logoImage} alt="EcoLogic" className="w-24 h-24 mx-auto mb-4 rounded-2xl shadow-lg" />
-            <img src={wordmarkImage} alt="EcoLogic" className="h-8 mx-auto" />
+            <img 
+              data-testid="ecologic-wordmark"
+              src="/branding/ecologic-wordmark.png" 
+              alt="EcoLogic" 
+              className="h-8 mx-auto" 
+            />
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Professional contractor management</p>
           </div>
           

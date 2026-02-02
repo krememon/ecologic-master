@@ -7,6 +7,7 @@ import { SiGoogle } from "react-icons/si";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 
 export default function Welcome() {
+  console.log("AUTH BRANDING: rendering wordmark image");
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
@@ -56,9 +57,12 @@ export default function Welcome() {
               alt="EcoLogic" 
               className="w-20 h-20 mx-auto mb-6 rounded-2xl shadow-lg" 
             />
-            <h1 className="text-3xl font-bold tracking-wide text-slate-800 dark:text-white mb-2">
-              ECOLOGIC
-            </h1>
+            <img 
+              data-testid="ecologic-wordmark"
+              src="/branding/ecologic-wordmark.png" 
+              alt="EcoLogic" 
+              className="h-8 mx-auto mb-2" 
+            />
             <p className="text-slate-500 dark:text-slate-400">
               Professional contractor management
             </p>
