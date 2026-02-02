@@ -1,0 +1,139 @@
+Goal: Restyle the “Create Announcement” modal so it matches the EcoLogic UI theme and the “Select Customer” modal style. Do not change any backend logic, only UI/UX + layout. Also, we are doing Specific Users only (no All Employees, no By Role).
+
+Must Match Theme (Reference)
+
+Use the “Select Customer” modal as the exact design reference:
+
+white rounded modal card
+
+clean spacing
+
+subtle borders / light gray dividers
+
+blue primary actions
+
+search bar style
+
+list rows with avatar initials, name, subtext
+
+1) Remove Off-Theme Recipient Options
+
+Remove these sections entirely from the Announcement modal:
+
+“Send to All Employees”
+
+“By Role” (Supervisor/Dispatcher/Estimator/Technician)
+
+We only want:
+
+Specific People (multi-select list)
+
+2) Modal Layout (New)
+Header
+
+Left: Title: “Create Announcement”
+
+Right: X close button
+
+Remove the orange megaphone or make it subtle gray if you keep an icon.
+
+Add a thin divider line under header (like Select Customer).
+
+Message Section
+
+Label: “Message”
+
+Textarea should be tighter and cleaner:
+
+border radius same as search bar
+
+light gray border
+
+focus ring in EcoLogic blue
+
+reduce oversized padding/height so it feels modern
+
+Keep “0/1000” but make it subtle gray and aligned bottom-right.
+
+Recipients Section (matches Select Customer)
+
+Label row: “Recipients”
+
+Under it: a search bar identical styling to Select Customer:
+
+placeholder: “Search employees…”
+
+Under search bar: a scroll list identical to Select Customer rows:
+
+left: avatar circle with initials
+
+middle: name (bold) + role (subtext)
+
+right: a clean checkbox OR a checkmark pill when selected
+
+Each row should be clickable (toggle select), with a light hover state.
+
+Selected Count (simple)
+
+Above the list (or below search bar), add:
+
+“Selected: X” in subtle gray text
+
+Optional small “Clear” button on the right (only shows when X > 0)
+
+3) Footer Buttons (Match Theme)
+
+Replace the orange “Send Announcement” with theme blue.
+
+Left: “Cancel” (secondary ghost/outline)
+
+Right: Primary button “Send”
+
+EcoLogic blue background
+
+white text
+
+disabled state if message empty OR no recipients selected
+
+loading spinner when sending
+
+Remove the orange styling entirely.
+
+4) Empty State
+
+If no employees found:
+
+show a small centered empty message like Select Customer style:
+
+“No employees found”
+
+subtle gray
+No big spacing gaps.
+
+5) Spacing + Polish Rules
+
+Reduce excessive vertical gaps (current modal feels stretched)
+
+Use consistent section spacing:
+
+12–16px between label and input
+
+16–20px between sections
+
+Ensure modal width and padding matches Select Customer
+
+Keep everything aligned and balanced.
+
+6) Do NOT Break Anything
+
+Don’t change send logic, API payload, or notification creation.
+
+Only change:
+
+layout
+
+styling
+
+removing role/all toggles
+
+adding search + list UI for specific people selection
