@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, ShieldCheck, KeyRound } from "lucide-react";
 import logoPath from "@assets/IMG_6171 2_1749763982284.jpg";
+import wordmarkImage from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1769995918556.png";
 
 export default function TwoFactor() {
   const [, setLocation] = useLocation();
@@ -52,9 +53,7 @@ export default function TwoFactor() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6">
           <div className="text-center mb-6">
             <img src={logoPath} alt="EcoLogic" className="w-20 h-20 mx-auto mb-3 rounded-2xl shadow-lg" />
-            <h1 className="text-xl font-extrabold tracking-widest text-slate-900 dark:text-white uppercase mb-3">
-              ECOLOGIC
-            </h1>
+            <img src={wordmarkImage} alt="EcoLogic" className="h-7 mx-auto mb-3" />
             <div className="w-12 h-12 mx-auto bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-3">
               <ShieldCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>

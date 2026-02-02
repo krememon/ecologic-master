@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { SiGoogle, SiApple } from "react-icons/si";
 import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
+import wordmarkImage from "@assets/ChatGPT_Image_Jan_31,_2026,_01_21_03_PM_1769995918556.png";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type WizardStep = "email" | "password" | "code";
@@ -280,9 +281,7 @@ export default function SignInWizard() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <img src={logoImage} alt="EcoLogic" className="w-24 h-24 mx-auto mb-4 rounded-2xl shadow-lg" />
-            <h1 className="text-2xl font-extrabold tracking-widest text-slate-900 dark:text-white uppercase">
-              ECOLOGIC
-            </h1>
+            <img src={wordmarkImage} alt="EcoLogic" className="h-8 mx-auto" />
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Professional contractor management
             </p>
