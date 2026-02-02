@@ -12116,6 +12116,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ ANNOUNCEMENTS API ============
+
+  // POST /api/announcements - Create announcement (Owner only)
+  const announcementSchema = z.object({
+    message: z.string().min(1).max(1000),
+    roleTargets: z.array(z.string()).default([]),
+    userTargets: z.array(z.string()).default([]),
+    sendToAll: z.boolean().default(false),
+  });
+
+  app.post('/api/announcements', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+
+      // Get user's role - Owner only
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member || member.role.toUpperCase() !== 'OWNER') {
+        return res.status(403).json({ message: 'Only owners can send announcements' });
+      }
+
+      const parsed = announcementSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid request', errors: parsed.error.errors });
+      }
+
+      const { message, roleTargets, userTargets, sendToAll } = parsed.data;
+
+      // Resolve recipients
+      const allMembers = await storage.getCompanyMembers(company.id);
+      const recipientUserIds = new Set<string>();
+
+      if (sendToAll) {
+        // All employees except the owner
+        allMembers.forEach((m) => {
+          if (m.userId !== userId) {
+            recipientUserIds.add(m.userId);
+          }
+        });
+      } else {
+        // Add users matching roleTargets
+        roleTargets.forEach((role) => {
+          allMembers.forEach((m) => {
+            if (m.role.toUpperCase() === role.toUpperCase() && m.userId !== userId) {
+              recipientUserIds.add(m.userId);
+            }
+          });
+        });
+
+        // Add specific user targets
+        userTargets.forEach((targetUserId) => {
+          if (targetUserId !== userId) {
+            recipientUserIds.add(targetUserId);
+          }
+        });
+      }
+
+      if (recipientUserIds.size === 0) {
+        return res.status(400).json({ message: 'No recipients selected' });
+      }
+
+      // Get sender info
+      const sender = await storage.getUser(userId);
+      const senderName = sender 
+        ? [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Owner'
+        : 'Owner';
+
+      // Create notifications for each recipient
+      const notifications = [];
+      for (const recipientId of recipientUserIds) {
+        try {
+          const notification = await storage.createNotification({
+            companyId: company.id,
+            recipientUserId: recipientId,
+            type: 'announcement',
+            title: 'Announcement',
+            body: message,
+            entityType: 'announcement',
+            entityId: null,
+            linkUrl: null,
+            meta: {
+              senderId: userId,
+              senderName,
+            },
+          });
+          notifications.push(notification);
+        } catch (err) {
+          console.error('[Announcement] Failed to create notification for', recipientId, err);
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        recipientCount: notifications.length 
+      });
+    } catch (error: any) {
+      console.error('Error creating announcement:', error);
+      res.status(500).json({ message: 'Failed to create announcement' });
+    }
+  });
+
   // ============ NOTIFICATIONS API ============
 
   // GET /api/notifications - Get current user's notifications
