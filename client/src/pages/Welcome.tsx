@@ -54,7 +54,7 @@ export default function Welcome() {
               data-testid="ecologic-wordmark"
               src="/branding/ecologic-wordmark.png" 
               alt="EcoLogic" 
-              className="w-60 h-auto mx-auto mb-3" 
+              className="w-72 md:w-80 h-auto mx-auto mb-2" 
             />
             <p className="text-slate-500 dark:text-slate-400 text-sm font-light">
               Professional contractor management
