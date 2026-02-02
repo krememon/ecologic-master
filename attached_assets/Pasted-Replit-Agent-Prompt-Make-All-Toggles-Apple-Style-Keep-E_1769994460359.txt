@@ -1,0 +1,127 @@
+Replit Agent Prompt — Make All Toggles Apple-Style (Keep EcoLogic Blue)
+
+Goal: Update ALL toggle switches / slide bars across the app to use an Apple iOS-style switch (pill track + circular thumb). Keep the app’s theme, specifically:
+
+ON: EcoLogic blue track (not green)
+
+OFF: light gray track
+
+Thumb stays white
+
+Smooth animation like iOS
+
+Important: Do not change toggle behavior / logic anywhere—visuals only.
+
+1) Global Strategy (Do This First)
+A) Create ONE reusable ToggleSwitch component
+
+Create a shared component (ex: components/ui/ToggleSwitch.tsx)
+
+Replace existing toggle UI usages with this component where possible
+
+If you already have a shared switch, restyle it instead of creating a new one
+
+B) If toggles are coming from a UI library
+
+If we use Radix / shadcn switch, override styles to match iOS look
+
+Keep accessibility: keyboard toggle, focus ring, aria labels
+
+2) Apple-Style Specs (Exact Look)
+
+Track:
+
+height: 28px
+
+width: 50px
+
+border-radius: 9999px
+
+OFF background: #E5E7EB (light gray)
+
+ON background: EcoLogic blue (use existing primary blue var)
+
+Thumb:
+
+size: 24px
+
+background: white
+
+border-radius: 9999px
+
+subtle shadow (very light)
+
+Positions:
+
+OFF: thumb left with 2px padding
+
+ON: thumb translates right with 2px padding
+
+Animation:
+
+transition: background-color 180ms ease, transform 180ms ease;
+
+3) Styling Implementation (CSS / Tailwind)
+If Tailwind:
+
+Use a structure like:
+
+outer button: relative, inline-flex, rounded-full, transition
+
+thumb span: absolute, rounded-full, bg-white, shadow-sm, transition-transform
+
+Focus / Accessibility
+
+Focus ring should be EcoLogic blue, subtle:
+
+focus-visible:ring-2 focus-visible:ring-[themeBlue] focus-visible:ring-offset-2
+
+Must support click + keyboard (space/enter)
+
+4) Replace All Existing Toggles
+
+Search the codebase for:
+
+Switch
+
+toggle
+
+checkbox used as toggle
+
+any custom “slider” UI
+
+Replace each with the unified ToggleSwitch component OR apply the same class overrides everywhere.
+
+Do not miss:
+
+settings toggles (2FA, notifications, preferences)
+
+modals
+
+onboarding toggles
+
+any admin/owner toggles
+
+5) Keep Blue (Important)
+
+Do NOT use green when ON.
+
+ON state must use the same blue as primary buttons/icons in the app.
+
+If the theme uses CSS variables, use:
+
+var(--primary) or the existing blue token
+
+6) Deliverables
+
+All toggles now match Apple iOS style
+
+ON state is EcoLogic blue
+
+OFF state light gray
+
+White thumb with subtle shadow
+
+Smooth animation
+
+No functional behavior changes
