@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell, Check, Trash2 } from "lucide-react";
+import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 import LanguageSelector from "./LanguageSelector";
@@ -24,8 +24,19 @@ interface Notification {
   linkUrl: string | null;
   readAt: string | null;
   createdAt: string;
-  meta?: { conversationId?: number; senderId?: string; messageId?: number };
+  meta?: { conversationId?: number; senderId?: string; messageId?: number; senderName?: string };
 }
+
+const getNotificationIcon = (type: string) => {
+  switch (type) {
+    case 'announcement':
+      return <Megaphone className="h-4 w-4 text-amber-500" />;
+    case 'dm_message':
+      return <MessageSquare className="h-4 w-4 text-blue-500" />;
+    default:
+      return <Briefcase className="h-4 w-4 text-slate-500" />;
+  }
+};
 
 interface HeaderProps {
   title: string;
@@ -221,14 +232,28 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      {!notification.readAt && (
-                        <span className="mt-2 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-                      )}
-                      <div className={cn("flex-1 min-w-0", notification.readAt && "ml-5")}>
+                      <div className="mt-1 flex-shrink-0 flex items-center gap-2">
+                        {!notification.readAt && (
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        )}
+                        {getNotificationIcon(notification.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                          {notification.title}
-                          {notification.type === 'dm_message' && (
-                            <span className="font-normal text-slate-500 dark:text-slate-400"> sent you a message</span>
+                          {notification.type === 'announcement' ? (
+                            <>
+                              Announcement
+                              {notification.meta?.senderName && (
+                                <span className="font-normal text-slate-500 dark:text-slate-400"> from {notification.meta.senderName}</span>
+                              )}
+                            </>
+                          ) : notification.type === 'dm_message' ? (
+                            <>
+                              {notification.title}
+                              <span className="font-normal text-slate-500 dark:text-slate-400"> sent you a message</span>
+                            </>
+                          ) : (
+                            notification.title
                           )}
                         </p>
                         <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
