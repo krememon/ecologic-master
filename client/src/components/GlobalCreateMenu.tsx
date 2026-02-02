@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Briefcase, FileText, Receipt, UserPlus, CalendarPlus } from "lucide-react";
+import { Plus, Briefcase, FileText, Receipt, UserPlus, CalendarPlus, Megaphone } from "lucide-react";
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { AnnouncementModal } from "./AnnouncementModal";
 
 interface MenuItem {
   id: string;
@@ -38,9 +39,12 @@ const useReducedMotion = () => {
 
 export function GlobalCreateMenu() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [, setLocation] = useLocation();
   const { can, role } = useCan();
   const reducedMotion = useReducedMotion();
+  
+  const isOwner = role === "OWNER";
 
   const visibleItems = menuItems.filter(item => can(item.permission as any));
 
@@ -170,10 +174,56 @@ export function GlobalCreateMenu() {
                   </motion.button>
                 </motion.div>
               ))}
+              
+              {/* Announcement bubble - Owner only */}
+              {isOwner && (
+                <motion.div
+                  className="flex items-center gap-3"
+                  initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                  transition={{
+                    duration,
+                    delay: (visibleItems.length + 1) * staggerDelay,
+                    ease: [0.25, 0.46, 0.45, 0.94],
+                  }}
+                >
+                  <motion.span 
+                    className="text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg shadow-sm"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    transition={{
+                      duration,
+                      delay: (visibleItems.length + 1) * staggerDelay + 0.02,
+                    }}
+                  >
+                    Announcement
+                  </motion.span>
+                  <motion.button
+                    onClick={() => {
+                      setIsOpen(false);
+                      setShowAnnouncementModal(true);
+                    }}
+                    className="w-11 h-11 flex items-center justify-center rounded-full bg-amber-500 text-white shadow-lg"
+                    aria-label="Create Announcement"
+                    whileHover={{ scale: 1.08, backgroundColor: "#d97706" }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  >
+                    <Megaphone className="h-5 w-5" />
+                  </motion.button>
+                </motion.div>
+              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+      
+      <AnnouncementModal 
+        open={showAnnouncementModal} 
+        onOpenChange={setShowAnnouncementModal} 
+      />
     </>
   );
 }
