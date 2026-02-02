@@ -374,18 +374,18 @@ export default function Auth() {
         
         {/* Logo and Branding */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full overflow-hidden bg-white shadow-lg">
+          <div className="w-24 h-24 mx-auto mb-4 rounded-2xl overflow-hidden shadow-lg">
             <img 
               src={logoImage} 
               alt="EcoLogic Logo" 
               className="w-full h-full object-cover"
             />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2 tracking-wider uppercase">
-            EcoLogic
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-1 tracking-widest uppercase">
+            ECOLOGIC
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm">
-            Create your account
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            Professional contractor management
           </p>
         </div>
 

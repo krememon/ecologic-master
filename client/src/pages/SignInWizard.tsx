@@ -279,12 +279,12 @@ export default function SignInWizard() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src={logoImage} alt="EcoLogic" className="w-16 h-16 mx-auto mb-4 rounded-xl" />
-            <h1 className="text-2xl font-bold tracking-wide text-slate-800 dark:text-white">
-              Sign in to EcoLogic
+            <img src={logoImage} alt="EcoLogic" className="w-24 h-24 mx-auto mb-4 rounded-2xl shadow-lg" />
+            <h1 className="text-2xl font-extrabold tracking-widest text-slate-900 dark:text-white uppercase">
+              ECOLOGIC
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Secure access to your company
+              Professional contractor management
             </p>
           </div>
           
