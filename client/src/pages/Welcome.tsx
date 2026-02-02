@@ -47,10 +47,9 @@ export default function Welcome() {
           className="w-full max-w-md transition-all"
           style={{
             opacity: isVisible ? 1 : 0,
-            transform: isVisible ? "translateY(140px)" : "translateY(152px)",
+            transform: isVisible ? "translateY(clamp(140px, 20vh, 260px))" : "translateY(clamp(152px, 21vh, 272px))",
             transitionDuration: "300ms",
             transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-            outline: "2px solid red",
           }}
         >
           <div className="text-center mb-6">
