@@ -1,0 +1,243 @@
+Goal: Add an “Announcement” quick-action bubble (like Job / Estimate / Invoice / Lead / Event). Only the Owner can see/use it. When clicked, it opens a modal where the Owner can:
+
+type announcement text
+
+choose who to send to (roles and/or specific users)
+
+send → announcement shows up in the Notifications tab for recipients
+
+Requirements / Rules
+
+Do not change or break any existing functionality.
+
+Follow EcoLogic principle: hidden, not disabled.
+
+Only Owner can see the Announcement bubble and open the modal.
+
+Announcement should create notifications for recipients and appear in the existing Notifications panel.
+
+Notifications should be unread by default and become read when opened (or when user clicks it—match existing notification behavior).
+
+UI must look clean and modern, matching current bubble design + modal style.
+
+1) Frontend (UI)
+A) Add the “Announcement” bubble
+
+In the same component that renders the quick-action bubbles (where you have Job / Estimate / Invoice / Lead / Event):
+
+Add a new bubble row:
+
+Label: Announcement
+
+Icon: megaphone/speaker (use whatever icon set we’re already using)
+
+Render it only if current user role is Owner.
+
+Make sure spacing and alignment match the existing bubbles exactly.
+
+B) Announcement Modal
+
+When the Owner clicks Announcement bubble:
+
+Open a modal with:
+
+Title: “Create Announcement”
+
+Textarea (required)
+
+Placeholder: “Type your announcement…”
+
+Character count optional (nice to have)
+
+Recipients picker (required)
+
+Provide two ways to target:
+
+By Role (checkboxes): Supervisor, Dispatcher, Estimator, Technician, Admin (if Admin exists separately), and optionally “All Employees”
+
+By Specific People (multi-select list with search)
+
+If “All Employees” is selected, disable other selections OR allow combined but dedupe.
+
+Buttons:
+
+Primary: Send Announcement
+
+Secondary: Cancel
+
+Validate:
+
+Must have announcement text
+
+Must have at least one recipient target
+
+On send:
+
+Call backend endpoint (below)
+
+Show loading state
+
+Close modal on success + toast “Announcement sent”
+
+Handle errors with a toast
+
+2) Backend (API)
+A) Endpoints
+
+Add:
+
+POST /api/announcements
+
+Owner-only authorization
+
+Body:
+
+{
+  "message": "string",
+  "roleTargets": ["technician","dispatcher"], 
+  "userTargets": [123,456],
+  "sendToAll": false
+}
+
+
+Server logic:
+
+Verify user is Owner
+
+Resolve recipients:
+
+If sendToAll: all active users in company (except maybe Owner optional)
+
+Else:
+
+all users matching roleTargets
+
+plus userTargets
+
+Deduplicate recipients
+
+Create notification entries for each recipient
+
+Return { success: true, recipientCount: N }
+
+GET /api/announcements (optional)
+
+If notifications system already fetches notifications, you might not need this.
+
+Only needed if we want a dedicated “Announcements” list later.
+
+B) Notifications integration
+
+If you already have a notifications table and /api/notifications feed:
+
+Insert new rows with a type like:
+
+type = "announcement"
+
+title = "Announcement" (optional)
+
+message = <announcement message>
+
+createdByUserId = <owner id>
+
+createdAt = now()
+
+readAt = null
+
+If notifications table doesn’t exist yet (or is too limited), create/extend it as below.
+
+3) Database
+Preferred (simple + works with existing notifications UI)
+
+If you already have notifications, extend it minimally:
+
+notifications
+
+id (pk)
+
+companyId
+
+userId (recipient)
+
+type (e.g. “announcement”, “dm”, etc.)
+
+title (nullable)
+
+message (text)
+
+metadata (json nullable) (optional: createdBy, roles, etc.)
+
+createdAt
+
+readAt (nullable)
+
+If notifications doesn’t exist, create it and plug into the Notifications panel.
+
+Optional (if you want first-class announcement records)
+
+Add:
+announcements
+
+id
+
+companyId
+
+createdByUserId
+
+message
+
+createdAt
+
+announcement_recipients
+
+id
+
+announcementId
+
+userId
+
+Then still create notifications OR render announcements directly in Notifications. (Simpler is: just create notifications and skip extra tables for now.)
+
+4) Notification UI behavior
+
+In the Notifications panel:
+
+Announcements should display like:
+
+Icon (megaphone)
+
+Title “Announcement”
+
+Message preview (truncate)
+
+Timestamp
+
+Unread indicator (dot/bold)
+
+Clicking an announcement:
+
+Opens a small modal/detail view OR expands inline to show full message
+
+Marks it as read (calls existing mark-read endpoint or create one if missing)
+
+5) RBAC / Security (must-have)
+
+Frontend: hide Announcement bubble if not Owner.
+
+Backend: hard block non-Owner:
+
+return 403 “Forbidden”
+
+Ensure announcement recipients are only within the same company.
+
+6) Deliverables
+
+New Announcement bubble appears for Owner only
+
+Modal works (text + recipients + send)
+
+Recipients receive a notification in Notifications tab
+
+Notifications are unread initially and can be marked read
+
+No existing flows break
