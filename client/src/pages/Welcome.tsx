@@ -50,12 +50,18 @@ export default function Welcome() {
           }}
         >
           <div className="text-center mb-6">
-            <img 
-              data-testid="ecologic-wordmark"
-              src="/branding/ecologic-wordmark.png" 
-              alt="EcoLogic" 
-              className="w-72 md:w-80 h-auto mx-auto mb-2" 
-            />
+            <h1 
+              className="text-5xl md:text-6xl mx-auto mb-2"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                color: "#0B0B0D",
+              }}
+            >
+              EcoLogic
+            </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm font-light">
               Professional contractor management
             </p>
