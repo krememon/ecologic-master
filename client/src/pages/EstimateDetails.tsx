@@ -811,47 +811,65 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
       </div>
 
       <Dialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Approve Estimate</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Approve Estimate
+            </DialogTitle>
+            <button 
+              onClick={() => setIsApproveDialogOpen(false)} 
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 space-y-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center">
               You are about to approve this estimate.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-center text-2xl font-bold">
+            </p>
+            <p className="text-center text-2xl font-bold text-slate-900 dark:text-slate-100">
               {formatCurrency(estimate.totalCents)}
             </p>
-            <p className="text-center text-muted-foreground mt-2">
+            <p className="text-center text-sm text-slate-500 dark:text-slate-400">
               Once approved, this estimate cannot be edited.
             </p>
+            <div className="pt-2 space-y-2">
+              <Button onClick={handleConfirmApprove} className="w-full h-11 rounded-xl font-medium">
+                Approve
+              </Button>
+              <Button variant="outline" onClick={() => setIsApproveDialogOpen(false)} className="w-full h-11 rounded-xl font-medium">
+                Cancel
+              </Button>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsApproveDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmApprove} className="bg-green-600 hover:bg-green-700">
-              Approve
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isSignatureModalOpen} onOpenChange={setIsSignatureModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Sign to Approve</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Sign to Approve
+            </DialogTitle>
+            <button 
+              onClick={() => setIsSignatureModalOpen(false)} 
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 space-y-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center">
               Draw your signature below to confirm approval.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="border rounded-lg bg-white p-2">
+            </p>
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 p-3">
               <canvas
                 ref={canvasRef}
                 width={350}
                 height={150}
-                className="w-full touch-none cursor-crosshair"
+                className="w-full touch-none cursor-crosshair bg-white dark:bg-slate-900 rounded-lg"
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
@@ -861,25 +879,30 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                 onTouchEnd={stopDrawing}
               />
             </div>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Draw your signature above
-            </p>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={clearSignature}
+                className="text-xs text-red-500 hover:text-red-600 font-medium"
+              >
+                Clear
+              </button>
+              <p className="text-xs text-slate-400">
+                Draw your signature above
+              </p>
+            </div>
+            <div className="pt-1 space-y-2">
+              <Button
+                onClick={saveSignature}
+                disabled={!hasSignature || approveMutation.isPending}
+                className="w-full h-11 rounded-xl font-medium"
+              >
+                {approveMutation.isPending ? "Saving..." : "Save Signature"}
+              </Button>
+              <Button variant="outline" onClick={() => setIsSignatureModalOpen(false)} className="w-full h-11 rounded-xl font-medium">
+                Cancel
+              </Button>
+            </div>
           </div>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={clearSignature}>
-              Clear
-            </Button>
-            <Button variant="outline" onClick={() => setIsSignatureModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={saveSignature}
-              disabled={!hasSignature || approveMutation.isPending}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {approveMutation.isPending ? "Saving..." : "Save Signature"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

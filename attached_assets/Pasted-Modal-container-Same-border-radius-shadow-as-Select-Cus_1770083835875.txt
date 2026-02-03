@@ -1,0 +1,121 @@
+Modal container
+
+Same border radius + shadow as Select Customer modal
+
+Same header padding and close “X” placement
+
+Add subtle header divider line if Select Customer uses one
+
+Typography
+
+Titles bold, centered
+
+Helper text muted gray, smaller, consistent line-height
+
+Reduce excessive whitespace so it feels tighter + premium
+
+Buttons (IMPORTANT)
+
+Replace ALL green primary buttons with EcoLogic blue primary button style (same as your main blue buttons)
+
+Secondary buttons should be neutral/outlined (like Cancel in other modals)
+
+Consistent button height and radius across all modals
+
+Never change behavior
+
+Approval logic stays identical
+
+Signature capture stays identical
+
+Time picker logic stays identical
+
+1) Approve Estimate modal — specific changes
+
+Current issues: green button + spacing feels empty.
+
+Do:
+
+Keep title “Approve Estimate”
+
+Keep confirmation text, but tighten spacing
+
+Amount “$350.00” should remain the visual focus:
+
+Large, bold
+
+Slightly closer to the explanatory line under it
+
+Primary button:
+
+Approve in EcoLogic blue
+
+Secondary:
+
+Cancel neutral outline
+
+2) Sign to Approve modal — specific changes
+
+Current issues: too much vertical spacing + button stack is heavy.
+
+Do:
+
+Keep title + helper text
+
+Signature pad should look like a clean card:
+
+subtle border
+
+rounded corners
+
+light background
+
+Remove redundant helper “Draw your signature above” OR reduce it to tiny muted text (keep if needed for clarity)
+
+Buttons:
+
+Primary (EcoLogic blue): Save Signature
+
+Secondary outline: Cancel
+
+Tertiary text/ghost: Clear
+
+“Clear” should NOT look like a full second outline button (make it smaller, ghost/text style, red or muted)
+
+3 & 4) Time Picker modals — specific changes
+
+They already look close, but make them match the Select Customer polish.
+
+Do:
+
+Ensure modal padding and header spacing match the Select Customer modal exactly
+
+The wheel picker container should have:
+
+slightly more rounded corners
+
+subtle border/background (like a card)
+
+The selected time readout (9:00 AM) should be:
+
+bold but not oversized
+
+slightly closer to the picker, not floating
+
+Buttons:
+
+Primary EcoLogic blue: Done
+
+Secondary outline: Cancel
+
+Make sure the “Done” button uses the SAME blue and radius as other primary buttons
+
+Deliverable
+
+After changes:
+✅ All 4 modals visually match Select Customer
+✅ No green primary buttons anywhere
+✅ Spacing feels premium and consistent
+✅ No logic changes
+
+Tell me which files/components you edited.

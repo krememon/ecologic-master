@@ -212,35 +212,39 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
       </button>
       
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent hideCloseButton className="sm:max-w-[300px] p-5">
-          <DialogHeader className="pb-3">
-            <DialogTitle className="text-center text-lg">{label || 'Select Time'}</DialogTitle>
-          </DialogHeader>
-          
-          <div 
-            className="flex items-center justify-center bg-white dark:bg-slate-950 rounded-xl py-2"
-            style={{ gap: '4px' }}
-          >
-            <WheelColumn items={HOURS} value={hour} onChange={setHour} width={60} />
-            <span className="text-2xl font-bold text-slate-400 flex-shrink-0">:</span>
-            <WheelColumn items={MINUTES} value={minute} onChange={setMinute} width={60} />
-            <WheelColumn items={PERIODS} value={period} onChange={setPeriod} width={60} />
+        <DialogContent hideCloseButton className="w-[95vw] max-w-[300px] p-0 gap-0 overflow-hidden rounded-2xl">
+          <div className="flex items-center justify-center px-4 h-12 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              {label || 'Select Time'}
+            </DialogTitle>
           </div>
           
-          <div className="text-center py-3 border-t border-slate-100 dark:border-slate-800 mt-2">
-            <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
-              {getCurrentSelection()}
-            </span>
+          <div className="bg-white dark:bg-slate-900 p-4 space-y-3">
+            <div 
+              className="flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-xl py-3 border border-slate-200 dark:border-slate-700"
+              style={{ gap: '4px' }}
+            >
+              <WheelColumn items={HOURS} value={hour} onChange={setHour} width={60} />
+              <span className="text-2xl font-bold text-slate-400 flex-shrink-0">:</span>
+              <WheelColumn items={MINUTES} value={minute} onChange={setMinute} width={60} />
+              <WheelColumn items={PERIODS} value={period} onChange={setPeriod} width={60} />
+            </div>
+            
+            <div className="text-center py-2">
+              <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                {getCurrentSelection()}
+              </span>
+            </div>
+            
+            <div className="space-y-2">
+              <Button onClick={handleSave} className="w-full h-11 rounded-xl font-medium">
+                Done
+              </Button>
+              <Button variant="outline" onClick={() => setIsOpen(false)} className="w-full h-11 rounded-xl font-medium">
+                Cancel
+              </Button>
+            </div>
           </div>
-          
-          <DialogFooter className="flex gap-3 pt-2">
-            <Button variant="outline" onClick={() => setIsOpen(false)} className="flex-1">
-              Cancel
-            </Button>
-            <Button onClick={handleSave} className="flex-1">
-              Done
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
