@@ -342,34 +342,10 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Checkout</h1>
           
           {canSyncQbo && (
-            <div className="flex items-center gap-2">
-              {invoice.qboInvoiceId ? (
-                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <Cloud className="h-3 w-3" />
-                  Synced
-                </span>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleQboSync}
-                  disabled={isSyncingQbo}
-                  className="text-xs h-7"
-                >
-                  {isSyncingQbo ? (
-                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  ) : (
-                    <Cloud className="h-3 w-3 mr-1" />
-                  )}
-                  Sync to QB
-                </Button>
-              )}
-              {qboSyncResult && (
-                <span className={`text-xs ${qboSyncResult.success ? 'text-green-600' : 'text-red-600'}`}>
-                  {qboSyncResult.message}
-                </span>
-              )}
-            </div>
+            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
+              <Cloud className="h-3 w-3" />
+              Automatically synced to QuickBooks
+            </span>
           )}
         </div>
 
