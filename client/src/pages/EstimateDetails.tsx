@@ -795,13 +795,15 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <img
-                src={estimate.signatureDataUrl}
-                alt="Approval signature"
-                className="max-w-xs border rounded bg-white"
-              />
+              <div className="w-full h-32 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center p-3">
+                <img
+                  src={estimate.signatureDataUrl}
+                  alt="Approval signature"
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
               {estimate.approvedAt && (
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-sm text-muted-foreground mt-3">
                   Approved on {new Date(estimate.approvedAt).toLocaleString()}
                 </p>
               )}
