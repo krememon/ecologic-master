@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard } from "lucide-react";
+import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface JobInvoiceModalProps {
@@ -324,71 +324,86 @@ export function JobInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={pdfUrl && step === 1 ? "max-w-2xl" : "max-w-md"}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {step === 1 ? (
-              <>
-                <FileText className="h-5 w-5" />
-                Generate Invoice PDF
-              </>
-            ) : (
-              <>
-                <Mail className="h-5 w-5" />
-                Send Invoice
-              </>
-            )}
+      <DialogContent className={pdfUrl && step === 1 ? "w-[95vw] max-w-2xl p-0 gap-0 overflow-hidden rounded-2xl" : "w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl"} hideCloseButton>
+        <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+          <div className="min-w-[44px]" />
+          <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {step === 1 ? "Generate Invoice PDF" : "Send Invoice"}
           </DialogTitle>
-          <DialogDescription>
-            {step === 1
-              ? `Generate a PDF invoice for "${jobTitle}"`
-              : "Enter the recipient details to send the invoice via email."}
-          </DialogDescription>
-        </DialogHeader>
+          <button 
+            onClick={handleClose} 
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
         {step === 1 && (
-          <div className="py-4">
+          <div className="bg-white dark:bg-slate-900">
             {loadingExisting ? (
-              <div className="text-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
-                <p className="text-sm text-slate-500">Checking for existing invoice...</p>
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-400 mr-2" />
+                <span className="text-sm text-slate-500">Checking for existing invoice...</span>
               </div>
             ) : errorMessage ? (
-              <div className="text-center py-6">
-                <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                  {errorMessage}
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => setErrorMessage(null)}
-                >
-                  Try Again
-                </Button>
+              <div className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    {errorMessage}
+                  </p>
+                </div>
+                <div className="pt-2 space-y-2">
+                  <Button
+                    className="w-full h-11 rounded-xl font-medium"
+                    onClick={() => setErrorMessage(null)}
+                  >
+                    Try Again
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full h-11 rounded-xl font-medium"
+                    onClick={handleClose}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             ) : !pdfUrl ? (
-              <div className="text-center">
-                <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-                  Click the button below to generate an invoice PDF for this job
+              <div className="p-4 space-y-4">
+                <div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Generate a PDF invoice for</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{jobTitle}</p>
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Click Generate to download a PDF for this job.
                 </p>
-                <Button
-                  onClick={handleGeneratePdf}
-                  disabled={generatePdfMutation.isPending}
-                  className="w-full"
-                >
-                  {generatePdfMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="h-4 w-4 mr-2" />
-                      Generate Invoice
-                    </>
-                  )}
-                </Button>
+                <div className="pt-1 space-y-2">
+                  <Button
+                    onClick={handleGeneratePdf}
+                    disabled={generatePdfMutation.isPending}
+                    className="w-full h-11 rounded-xl font-medium"
+                  >
+                    {generatePdfMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Generate Invoice
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full h-11 rounded-xl font-medium"
+                    onClick={handleClose}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
@@ -497,8 +512,8 @@ export function JobInvoiceModal({
         )}
 
         {step === 2 && (
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
+          <div className="bg-white dark:bg-slate-900 p-4 space-y-4">
+            <div className="space-y-1.5">
               <Label htmlFor="toEmail">To</Label>
               <Input
                 id="toEmail"
@@ -506,6 +521,7 @@ export function JobInvoiceModal({
                 placeholder="customer@email.com"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
+                className="h-10 rounded-xl"
               />
               {!customerEmail && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -513,95 +529,36 @@ export function JobInvoiceModal({
                 </p>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="subject">Subject</Label>
               <Input
                 id="subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
+                className="h-10 rounded-xl"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="message">Message</Label>
               <Textarea
                 id="message"
-                rows={5}
+                rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                className="rounded-xl"
               />
             </div>
-            <div className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <div className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
               <FileText className="h-4 w-4 text-slate-500" />
-              <span className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="text-sm text-slate-600 dark:text-slate-400 truncate">
                 Attachment: {pdfFileName}
               </span>
             </div>
-          </div>
-        )}
-
-        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
-          {step === 1 ? (
-            <>
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              {pdfUrl && invoiceId && canShowPayButton && (
-                <Button
-                  variant="outline"
-                  onClick={handleGetPaymentLink}
-                  disabled={paymentLinkLoading}
-                  className="text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
-                >
-                  {paymentLinkLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Pay Invoice
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button
-                onClick={() => setStep(2)}
-                disabled={!pdfUrl}
-              >
-                Next
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="outline" onClick={() => setStep(1)}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              {invoiceId && canShowPayButton && (
-                <Button
-                  variant="outline"
-                  onClick={handleGetPaymentLink}
-                  disabled={paymentLinkLoading}
-                  className="text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
-                >
-                  {paymentLinkLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Pay Invoice
-                    </>
-                  )}
-                </Button>
-              )}
+            <div className="pt-1 space-y-2">
               <Button
                 onClick={handleSendEmail}
                 disabled={!isEmailValid || sendEmailMutation.isPending}
+                className="w-full h-11 rounded-xl font-medium"
               >
                 {sendEmailMutation.isPending ? (
                   <>
@@ -615,9 +572,76 @@ export function JobInvoiceModal({
                   </>
                 )}
               </Button>
-            </>
-          )}
-        </DialogFooter>
+              {invoiceId && canShowPayButton && (
+                <Button
+                  variant="outline"
+                  onClick={handleGetPaymentLink}
+                  disabled={paymentLinkLoading}
+                  className="w-full h-11 rounded-xl font-medium text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
+                >
+                  {paymentLinkLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Pay Invoice
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => setStep(1)}
+                className="w-full h-11 rounded-xl font-medium"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && pdfUrl && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-2">
+            <Button
+              onClick={() => setStep(2)}
+              className="w-full h-11 rounded-xl font-medium"
+            >
+              Next
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+            {invoiceId && canShowPayButton && (
+              <Button
+                variant="outline"
+                onClick={handleGetPaymentLink}
+                disabled={paymentLinkLoading}
+                className="w-full h-11 rounded-xl font-medium text-green-600 border-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-400 dark:hover:bg-green-950"
+              >
+                {paymentLinkLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Pay Invoice
+                  </>
+                )}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              className="w-full h-11 rounded-xl font-medium"
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

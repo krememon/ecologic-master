@@ -1,0 +1,111 @@
+Goal: Redesign the Generate Invoice PDF modal to match the clean style of the Select Customer modal (simple header, light background, clean spacing). Do NOT change any functionality. Only UI/UX cleanup.
+
+Reference modal (style guide)
+
+Use Select Customer modal as the design reference:
+
+rounded card
+
+simple header
+
+subtle divider
+
+clean spacing
+
+minimal icon usage
+
+primary action looks crisp, secondary is neutral
+
+1) Modal Header (match Select Customer)
+
+Keep the title: “Generate Invoice PDF”
+
+Keep the X close button top-right
+
+Use a clean header row like Select Customer:
+
+icon optional (small) but if included it must be subtle, not oversized
+
+Add the subtle divider under the header (same as Select Customer)
+
+Change: Remove the big centered document icon in the body (it makes it feel dated and spaced out).
+
+2) Body copy (tight + modern)
+
+Replace the long stacked text with 2 short lines max:
+
+Small muted helper line:
+Generate a PDF invoice for
+
+Bold job name line (truncate if long):
+“Job for Brennan Synch”
+
+Then one short instruction:
+Click Generate to download a PDF for this job.
+
+No giant empty space.
+
+3) Buttons (match the clean pattern)
+
+Right now there are too many actions:
+
+Primary: Generate Invoice (good)
+
+Cancel (good)
+
+Next (why is this here?)
+
+Required button layout:
+
+Primary button: “Generate Invoice” (full width, blue, with small icon if you want)
+
+Secondary button: “Cancel” (full width but neutral/white like Select Customer)
+
+Remove:
+
+Remove the Next button completely if it is not used
+
+If “Next” is part of a wizard flow and must exist:
+
+keep it, but place it as a small ghost link below the buttons OR hide it unless needed
+
+do not show a big disabled button that clutters the modal
+
+4) Spacing + sizing rules (mirror Select Customer)
+
+Modal width, border radius, padding should match Select Customer
+
+Reduce vertical spacing between sections
+
+Buttons should be closer to the content (not floating far below)
+
+5) Visual consistency
+
+Use the same:
+
+font sizes
+
+gray tones
+
+divider color
+
+button radius
+as Select Customer modal.
+
+6) Do NOT change functionality
+
+The “Generate Invoice” click must do exactly what it currently does
+
+Don’t change the API / PDF generation logic
+
+Don’t change routing
+
+Only update layout/styles/components
+
+Deliverable checklist
+
+After the update:
+✅ Looks like it belongs in the same design system as Select Customer
+✅ Only two buttons (Generate + Cancel) unless Next is truly required
+✅ No huge icon, no excessive whitespace
+✅ Clean job name display (bold, truncated)
