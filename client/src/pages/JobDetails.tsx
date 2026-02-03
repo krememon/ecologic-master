@@ -1203,29 +1203,39 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
 
       {/* Notes Modal */}
       <Dialog open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Job Notes</DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-12 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Job Notes
+            </DialogTitle>
+            <button 
+              onClick={() => setIsNotesModalOpen(false)} 
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-4 space-y-3">
             <Textarea
               placeholder="Add notes about this job..."
               value={editedNotes}
               onChange={(e) => setEditedNotes(e.target.value)}
-              rows={6}
-              className="resize-none"
+              rows={5}
+              className="resize-none rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
             />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setIsNotesModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={saveNotes}
-              disabled={updateNotesMutation.isPending}
-            >
-              {updateNotesMutation.isPending ? 'Saving...' : 'Save'}
-            </Button>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setIsNotesModalOpen(false)} className="h-10 px-4 rounded-xl">
+                Cancel
+              </Button>
+              <Button 
+                onClick={saveNotes}
+                disabled={updateNotesMutation.isPending}
+                className="h-10 px-4 rounded-xl"
+              >
+                {updateNotesMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
