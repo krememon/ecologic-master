@@ -1243,77 +1243,91 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       {/* Employee Picker Modal */}
       <Dialog open={employeesModalOpen} onOpenChange={setEmployeesModalOpen}>
         <DialogContent 
-          className="w-[95vw] max-w-md p-0 gap-0" 
+          className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" 
           hideCloseButton
           onInteractOutside={(e) => e.preventDefault()}
           preventAutoFocus
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b">
+          <div className="flex items-center justify-between px-4 h-12 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
             <button 
               onClick={() => setEmployeesModalOpen(false)} 
-              className="text-sm text-blue-500 font-medium"
+              className="text-sm text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-slate-300 transition-colors min-w-[60px] text-left"
               disabled={isSavingCrew}
             >
               Cancel
             </button>
-            <DialogTitle className="text-base font-semibold">ASSIGN TECHNICIANS</DialogTitle>
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Assign Technicians
+            </DialogTitle>
             <button 
               onClick={saveCrewAssignments} 
-              className="text-sm text-blue-500 font-medium"
+              className="text-sm text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 dark:hover:text-blue-300 transition-colors min-w-[60px] text-right"
               disabled={isSavingCrew}
             >
               {isSavingCrew ? 'Saving...' : 'Done'}
             </button>
           </div>
 
-          <div className="p-4 border-b">
+          <div className="px-4 py-3 bg-white dark:bg-slate-900">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search by name"
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
               />
             </div>
           </div>
 
-          <ScrollArea className="max-h-64">
-            <div className="py-2">
+          <div className="border-t border-slate-100 dark:border-slate-800" />
+
+          <ScrollArea className="max-h-72">
+            <div className="bg-white dark:bg-slate-900">
               {employeesLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
                 </div>
               ) : filteredEmployees.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <Users className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                  <p className="font-medium">No team members found</p>
+                <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                    <Users className="h-7 w-7 text-slate-400" />
+                  </div>
+                  <p className="font-medium text-slate-600 dark:text-slate-400 text-center">
+                    {employeeSearch ? "No team members match your search" : "No team members found"}
+                  </p>
                 </div>
               ) : (
-                filteredEmployees.map((employee) => (
-                  <button
-                    key={employee.id}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
-                      selectedEmployees.includes(employee.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                    }`}
-                    onClick={() => toggleEmployee(employee.id)}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                      <User className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                <div className="py-1">
+                  {filteredEmployees.map((employee, index) => (
+                    <div key={employee.id}>
+                      <button
+                        className={`w-full flex items-center gap-3 px-4 min-h-[56px] text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors ${
+                          selectedEmployees.includes(employee.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                        }`}
+                        onClick={() => toggleEmployee(employee.id)}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center text-sm font-semibold text-slate-600 dark:text-slate-300">
+                          {(employee.firstName?.charAt(0) || '').toUpperCase()}{(employee.lastName?.charAt(0) || '').toUpperCase() || '?'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                            {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}
+                          </p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 capitalize">{employee.role?.toLowerCase()}</p>
+                        </div>
+                        {selectedEmployees.includes(employee.id) && (
+                          <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        )}
+                      </button>
+                      {index < filteredEmployees.length - 1 && (
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">
-                        {`${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed'}
-                      </p>
-                      <p className="text-xs text-slate-500 capitalize">{employee.role?.toLowerCase()}</p>
-                    </div>
-                    {selectedEmployees.includes(employee.id) && (
-                      <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                        <span className="text-white text-xs">✓</span>
-                      </div>
-                    )}
-                  </button>
-                ))
+                  ))}
+                </div>
               )}
             </div>
           </ScrollArea>
