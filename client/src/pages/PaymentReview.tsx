@@ -338,11 +338,10 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="space-y-1.5 mb-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Checkout</h1>
-          
           {canSyncQbo && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
+            <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
               <Cloud className="h-3 w-3" />
               Automatically synced to QuickBooks
             </span>
