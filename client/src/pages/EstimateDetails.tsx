@@ -392,33 +392,47 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(getReturnUrl())}>
+      <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-3 min-w-0">
+          <button 
+            onClick={() => navigate(getReturnUrl())}
+            className="flex-shrink-0 w-11 h-11 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors -ml-2"
+          >
             <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{estimate.title || estimate.estimateNumber}</h1>
-            <p className="text-sm text-muted-foreground">{estimate.estimateNumber}</p>
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
+              {estimate.customerName || 'Unnamed Customer'}
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Estimate • {estimate.estimateNumber}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {canShareEstimates && (
-            <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)}>
-              <Share2 className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => setIsShareModalOpen(true)} className="h-8 rounded-lg text-xs">
+              <Share2 className="h-3.5 w-3.5 mr-1.5" />
               Share
             </Button>
           )}
-          <Badge variant={getStatusBadgeVariant(estimate.status)} className="text-sm capitalize">
+          <span className={`inline-flex items-center gap-1 px-3 h-7 rounded-full text-xs font-medium capitalize ${
+            estimate.status === 'approved' 
+              ? 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400' 
+              : estimate.status === 'draft'
+              ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+              : 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400'
+          }`}>
+            {estimate.status === 'approved' && <CheckCircle className="h-3 w-3" />}
             {estimate.status}
-          </Badge>
+          </span>
         </div>
       </div>
 
       {canApprove && (
         <Button 
           onClick={handleApproveClick} 
-          className="w-full mb-6 bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold"
+          className="w-full mb-6 py-6 text-lg font-semibold rounded-xl"
           disabled={approveMutation.isPending}
         >
           <CheckCircle className="h-5 w-5 mr-2" />
