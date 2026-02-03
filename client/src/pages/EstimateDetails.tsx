@@ -923,55 +923,72 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
 
       {/* Schedule Job Modal - appears after estimate approval */}
       <Dialog open={isScheduleModalOpen} onOpenChange={(open) => !open && handleSkipSchedule()}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-green-600" />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px] flex items-center">
+              <Calendar className="h-4 w-4 text-slate-400" />
+            </div>
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
               Schedule Job
             </DialogTitle>
-            <DialogDescription>
+            <button 
+              onClick={handleSkipSchedule} 
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-900 p-4 space-y-4">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               When would you like to schedule the job?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Date</label>
+            </p>
+            
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Date</label>
               <input
                 type="date"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                className="w-full h-10 px-3 border rounded-xl bg-slate-100 dark:bg-slate-800 border-0 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start Time</label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Start Time</label>
               <TimeWheelPicker
                 value={scheduledTime}
                 onChange={setScheduledTime}
                 label="Select Start Time"
+                className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End Time</label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-900 dark:text-slate-100">End Time</label>
               <TimeWheelPicker
                 value={scheduledEndTime}
                 onChange={setScheduledEndTime}
                 label="Select End Time"
+                className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            
+            <div className="pt-2 space-y-2">
+              <Button 
+                onClick={handleScheduleJob}
+                disabled={scheduleMutation.isPending}
+                className="w-full h-11 rounded-xl font-medium"
+              >
+                {scheduleMutation.isPending ? "Scheduling..." : "Schedule"}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleSkipSchedule}
+                className="w-full h-11 rounded-xl font-medium"
+              >
+                Skip
+              </Button>
+            </div>
           </div>
-          <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button variant="outline" onClick={handleSkipSchedule}>
-              Skip
-            </Button>
-            <Button 
-              onClick={handleScheduleJob}
-              disabled={scheduleMutation.isPending}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              {scheduleMutation.isPending ? "Scheduling..." : "Schedule"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

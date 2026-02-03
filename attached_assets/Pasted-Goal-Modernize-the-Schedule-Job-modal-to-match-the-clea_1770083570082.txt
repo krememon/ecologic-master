@@ -1,0 +1,82 @@
+Goal: Modernize the Schedule Job modal to match the clean design system of Select Customer (rounded container, subtle divider, consistent input styling, EcoLogic blue accents). Do not change functionality — only UI styling and layout polish.
+
+1) Header (match Select Customer)
+
+Keep title: Schedule Job
+
+Keep small calendar icon + X close button
+
+Use same header spacing/padding as Select Customer
+
+Add subtle divider under header (same style)
+
+Subtitle:
+
+Keep: “When would you like to schedule the job?”
+
+Make it muted gray, smaller, same style as helper text in Select Customer
+
+2) Inputs — make them consistent (IMPORTANT)
+
+Update Date / Start Time / End Time fields to match Select Customer search field style:
+
+Same input height
+
+Same rounded corners
+
+Same border color and background
+
+Same padding
+
+Icons (calendar/clock) should be subtle and aligned like the search icon
+
+Most important fix:
+✅ Replace the orange focus ring with EcoLogic blue:
+
+Focus border: EcoLogic blue
+
+Optional soft glow: faint blue, not orange
+
+No thick orange outline
+
+3) Field layout + spacing
+
+Reduce vertical gaps slightly so it feels tighter and modern (like Select Customer list spacing)
+
+Keep clear labels but match label style:
+
+label font-weight: medium
+
+label color: near-black
+
+smaller size than the title
+
+4) Buttons — use EcoLogic style (no green)
+
+Right now the green “Schedule” button is off-theme.
+
+Change buttons to match your app primary/secondary system:
+
+Primary: Schedule (EcoLogic blue, same button style as “Create account”)
+
+Secondary: Skip (neutral/white outlined like “Cancel” in other modals)
+
+Keep full width + same radius as your other buttons.
+
+5) Do NOT change functionality
+
+Date picker behavior stays the same
+
+Time picker behavior stays the same
+
+Schedule/Skip actions stay the same
+
+6) Deliverable checklist
+
+After update:
+✅ Looks like it belongs with Select Customer modal
+✅ Focus ring is blue (no orange anywhere)
+✅ Primary button is EcoLogic blue (no green)
+✅ Cleaner spacing and consistent input styling
+
+Tell me which file/component you updated.

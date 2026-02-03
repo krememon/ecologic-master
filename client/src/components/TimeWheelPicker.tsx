@@ -203,7 +203,7 @@ export function TimeWheelPicker({ value, onChange, label, className }: TimeWheel
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`w-full h-10 flex items-center justify-between px-3 border rounded-md bg-background border-input text-base md:text-sm text-left ${className || ''}`}
+        className={`w-full h-10 flex items-center justify-between px-3 border rounded-xl bg-background border-input text-base md:text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0 ${className || ''}`}
       >
         <span className={value ? 'text-foreground' : 'text-muted-foreground'}>
           {formatDisplayTime()}
