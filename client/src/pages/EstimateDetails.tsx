@@ -393,10 +393,10 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="mb-5 pb-4 border-b border-slate-100 dark:border-slate-800 space-y-3">
-        <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => navigate(getReturnUrl())}
-            className="flex-shrink-0 w-11 h-11 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors -ml-2 -mt-1"
+            className="flex-shrink-0 w-11 h-11 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
