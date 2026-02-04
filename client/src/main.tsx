@@ -3,7 +3,6 @@ import App from "./App";
 import PublicSignApp from "./public/PublicSignApp";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./index.css";
-import "./i18n/config";
 
 // Global error handlers to catch any crashes
 window.addEventListener("error", (e) => {

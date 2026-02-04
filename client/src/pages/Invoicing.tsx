@@ -11,12 +11,10 @@ import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Invoice } from "@shared/schema";
 import { NewInvoiceSheet } from "@/components/NewInvoiceSheet";
-import { useTranslation } from "react-i18next";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Invoicing() {
   const { toast } = useToast();
-  const { t } = useTranslation();
   const { user, isAuthenticated, isLoading } = useAuth();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [, setLocation] = useLocation();

@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
-import LanguageSelector from "./LanguageSelector";
 import { ThemeToggle } from "./ThemeToggle";
 import { GlobalCreateMenu } from "./GlobalCreateMenu";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -150,7 +149,6 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
         </div>
         
         <div className="flex items-center space-x-2">
-          <LanguageSelector variant="button" showLabel={false} />
           <ThemeToggle />
           <button
             onClick={() => setNotificationsOpen(true)}

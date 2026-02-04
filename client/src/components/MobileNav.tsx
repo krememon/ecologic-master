@@ -21,7 +21,6 @@ import {
   Clock
 } from "lucide-react";
 import EcoLogicLogo from "./EcoLogicLogo";
-import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
 import { GlobalCreateMenu } from "./GlobalCreateMenu";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -46,20 +45,20 @@ interface Notification {
 }
 
 // Navigation items with permission requirements - must match Sidebar.tsx
-const getNavigation = (t: any, role: string | undefined) => [
-  { href: "/", icon: LayoutDashboard, label: t('navigation.home'), permission: null },
-  { href: "/schedule", icon: Brain, label: t('navigation.schedule'), permission: "schedule.view" as Permission },
+const getNavigation = (role: string | undefined) => [
+  { href: "/", icon: LayoutDashboard, label: "Home", permission: null },
+  { href: "/schedule", icon: Brain, label: "Schedule", permission: "schedule.view" as Permission },
   { href: "/timesheets", icon: Clock, label: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
-  { href: "/jobs", icon: Building2, label: t('navigation.jobs'), permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
+  { href: "/jobs", icon: Building2, label: "Jobs", permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
   { href: "/leads", icon: Target, label: "Leads", permission: "leads.view" as Permission },
-  { href: "/subcontractors", icon: UserCheck, label: t('navigation.subcontractors'), permission: "clients.manage" as Permission },
-  { href: "/clients", icon: Users, label: t('navigation.clients'), permission: "clients.manage" as Permission },
-  { href: "/invoicing", icon: FileText, label: t('navigation.invoicing'), permission: "invoicing.manage" as Permission },
+  { href: "/subcontractors", icon: UserCheck, label: "Subcontractors", permission: "clients.manage" as Permission },
+  { href: "/clients", icon: Users, label: "Clients", permission: "clients.manage" as Permission },
+  { href: "/invoicing", icon: FileText, label: "Invoicing", permission: "invoicing.manage" as Permission },
   { href: "/payments", icon: DollarSign, label: "Payments", permission: "invoicing.manage" as Permission },
-  { href: "/documents", icon: FolderOpen, label: t('navigation.documents'), permission: "documents.view" as Permission },
-  { href: "/messages", icon: MessageSquare, label: t('navigation.messages'), permission: null },
+  { href: "/documents", icon: FolderOpen, label: "Documents", permission: "documents.view" as Permission },
+  { href: "/messages", icon: MessageSquare, label: "Messages", permission: null },
   { href: "/employees", icon: UsersIcon, label: "Employees", permission: "users.view" as Permission },
-  { href: "/settings", icon: Settings, label: t('navigation.settings'), permission: null },
+  { href: "/settings", icon: Settings, label: "Settings", permission: null },
 ];
 
 interface MobileNavProps {
@@ -71,7 +70,6 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [location, setLocation] = useLocation();
-  const { t } = useTranslation();
   const { can, canAny, role } = useCan();
   
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
@@ -152,7 +150,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   // Filter navigation items based on current user's permissions
   // This recalculates when role changes (e.g., after login/logout)
   const navigationItems = useMemo(() => {
-    const navigation = getNavigation(t, effectiveRole);
+    const navigation = getNavigation(effectiveRole);
     
     // If no role yet, show base items without permissions or excludeRoles
     if (!effectiveRole) {
@@ -171,7 +169,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       // Otherwise, check the single permission (or allow if no permission required)
       return !item.permission || can(item.permission);
     });
-  }, [t, effectiveRole, can, canAny]);
+  }, [effectiveRole, can, canAny]);
 
   const handleToggle = () => {
     console.log('Mobile nav toggle clicked, current state:', isOpen);

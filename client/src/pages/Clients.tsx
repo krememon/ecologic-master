@@ -19,7 +19,6 @@ import { Plus, UserCheck, Mail, Phone, MapPin, Building, Edit2, Trash2, MoreVert
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import LocationInput from "@/components/LocationInput";
 import { useCompanyCustomers } from "@/hooks/useCompanyCustomers";
@@ -83,7 +82,6 @@ function ClientJobsHistory({ clientId }: { clientId: number }) {
 }
 
 export default function Clients() {
-  const { t } = useTranslation();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -441,8 +439,8 @@ export default function Clients() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('clients.title')}</h1>
-        <p className="text-slate-600 dark:text-slate-400">{t('clients.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Clients</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage your clients and their information</p>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -458,7 +456,7 @@ export default function Clients() {
                 <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
               </button>
               <div className="text-center">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('clients.addClient')}</h3>
+                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Add Client</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Add a new client to your system</p>
               </div>
             </div>
@@ -478,9 +476,9 @@ export default function Clients() {
                       name="name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.name')}</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">Name</FormLabel>
                           <FormControl>
-                            <Input placeholder={t('clients.fields.name')} {...field} className="h-9 text-sm" data-testid="input-client-name" />
+                            <Input placeholder="Name" {...field} className="h-9 text-sm" data-testid="input-client-name" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -493,9 +491,9 @@ export default function Clients() {
                         name="email"
                         render={({ field }) => (
                           <FormItem className="min-w-0">
-                            <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.email')}</FormLabel>
+                            <FormLabel className="text-xs font-medium mb-1">Email</FormLabel>
                             <FormControl>
-                              <Input type="email" placeholder={t('clients.fields.email')} {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-email" />
+                              <Input type="email" placeholder="Email" {...field} value={field.value || ""} className="h-9 text-sm" data-testid="input-client-email" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -507,10 +505,10 @@ export default function Clients() {
                         name="phone"
                         render={({ field }) => (
                           <FormItem className="min-w-0">
-                            <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.phone')}</FormLabel>
+                            <FormLabel className="text-xs font-medium mb-1">Phone</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder={t('clients.fields.phone')} 
+                                placeholder="Phone" 
                                 {...field} 
                                 value={field.value || ""} 
                                 onChange={(e) => field.onChange(formatPhoneInput(e.target.value))}
@@ -531,7 +529,7 @@ export default function Clients() {
                       name="address"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.address')}</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">Address</FormLabel>
                           <FormControl>
                             <LocationInput
                               value={field.value || ""}
@@ -541,7 +539,7 @@ export default function Clients() {
                               onAddressSelected={(addr) => {
                                 form.setValue("address", addr.formatted_address || addr.street);
                               }}
-                              placeholder={t('clients.fields.address')}
+                              placeholder="Address"
                             />
                           </FormControl>
                           <FormMessage />
@@ -554,9 +552,9 @@ export default function Clients() {
                       name="notes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium mb-1">{t('clients.fields.notes')}</FormLabel>
+                          <FormLabel className="text-xs font-medium mb-1">Notes</FormLabel>
                           <FormControl>
-                            <Textarea placeholder={t('clients.fields.notes')} {...field} value={field.value || ""} className="text-sm min-h-[100px] resize-none" data-testid="input-client-notes" />
+                            <Textarea placeholder="Notes" {...field} value={field.value || ""} className="text-sm min-h-[100px] resize-none" data-testid="input-client-notes" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -569,7 +567,7 @@ export default function Clients() {
                 <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1 h-11" data-testid="button-cancel-client">
-                      {t('common.cancel')}
+                      Cancel
                     </Button>
                     <Button 
                       type="submit" 
@@ -578,7 +576,7 @@ export default function Clients() {
                       className="flex-1 h-11"
                       data-testid="button-submit-client"
                     >
-                      {isSubmitting ? "Adding..." : t('clients.addClient')}
+                      {isSubmitting ? "Adding..." : "Add Client"}
                     </Button>
                   </div>
                 </div>

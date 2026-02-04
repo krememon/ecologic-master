@@ -11,8 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
 import { User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useTranslation } from "react-i18next";
-import LanguageSelector from "@/components/LanguageSelector";
 import CompanyInviteCode from "@/components/CompanyInviteCode";
 import { BillingSection } from "@/components/BillingSection";
 import { useCan } from "@/hooks/useCan";
@@ -26,7 +24,6 @@ export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
   const { can } = useCan();
-  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
@@ -230,8 +227,8 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('settings.title')}</h1>
-        <p className="text-slate-600 dark:text-slate-400">{t('settings.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Settings</h1>
+        <p className="text-slate-600 dark:text-slate-400">Manage your account and preferences</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -367,20 +364,20 @@ export default function Settings() {
 
 
 
-        {/* Appearance & Language Settings */}
+        {/* Appearance Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {theme === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-              {t('settings.appearance')}
+              Appearance
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="dark-mode">{t('settings.darkMode')}</Label>
+                <Label htmlFor="dark-mode">Dark Mode</Label>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {t('settings.darkModeDescription')}
+                  Toggle dark mode theme
                 </p>
               </div>
               <Switch
@@ -388,13 +385,6 @@ export default function Settings() {
                 checked={theme === 'dark'}
                 onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
               />
-            </div>
-            
-            <div className="border-t pt-4">
-              <LanguageSelector showLabel={true} />
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-                {t('settings.languageDescription')}
-              </p>
             </div>
           </CardContent>
         </Card>

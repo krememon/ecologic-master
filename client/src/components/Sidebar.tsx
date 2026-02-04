@@ -4,22 +4,21 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import EcoLogicLogo from "./EcoLogicLogo";
-import { useTranslation } from "react-i18next";
 import { useCan } from "@/hooks/useCan";
 import type { Permission } from "@shared/permissions";
 
-const getNavigation = (t: any, role: string | undefined) => [
-  { name: t('navigation.home'), href: "/", icon: LayoutDashboard, permission: null },
-  { name: t('navigation.schedule'), href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
+const getNavigation = (role: string | undefined) => [
+  { name: "Home", href: "/", icon: LayoutDashboard, permission: null },
+  { name: "Schedule", href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
   { name: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", href: "/timesheets", icon: Clock, permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
-  { name: t('navigation.jobs'), href: "/jobs", icon: Building2, permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
+  { name: "Jobs", href: "/jobs", icon: Building2, permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
   { name: "Leads", href: "/leads", icon: Target, permission: "leads.view" as Permission },
-  { name: t('navigation.subcontractors'), href: "/subcontractors", icon: Users, permission: "clients.manage" as Permission },
-  { name: t('navigation.clients'), href: "/clients", icon: UserCheck, permission: "clients.manage" as Permission },
-  { name: t('navigation.invoicing'), href: "/invoicing", icon: FileText, permission: "invoicing.manage" as Permission },
+  { name: "Subcontractors", href: "/subcontractors", icon: Users, permission: "clients.manage" as Permission },
+  { name: "Clients", href: "/clients", icon: UserCheck, permission: "clients.manage" as Permission },
+  { name: "Invoicing", href: "/invoicing", icon: FileText, permission: "invoicing.manage" as Permission },
   { name: "Payments", href: "/payments", icon: DollarSign, permission: "invoicing.manage" as Permission },
-  { name: t('navigation.documents'), href: "/documents", icon: FolderOpen, permission: "documents.view" as Permission },
-  { name: t('navigation.messages'), href: "/messages", icon: MessageSquare, permission: null },
+  { name: "Documents", href: "/documents", icon: FolderOpen, permission: "documents.view" as Permission },
+  { name: "Messages", href: "/messages", icon: MessageSquare, permission: null },
   { name: "Employees", href: "/employees", icon: UsersIcon, permission: "users.view" as Permission },
 ];
 
@@ -32,7 +31,6 @@ interface SidebarProps {
 
 export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
-  const { t } = useTranslation();
   const { can, canAny, role: hookRole } = useCan();
   
   // Use role from user prop as fallback (user prop comes from Layout which has auth data)
@@ -46,7 +44,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
   // Filter navigation items based on current user's permissions
   // useMemo ensures this recalculates when role changes (e.g., after login/logout)
   const filteredNavigation = useMemo(() => {
-    const navigation = getNavigation(t, role);
+    const navigation = getNavigation(role);
     
     // If no role yet (auth loading), show base navigation items that don't require permissions
     if (!role) {
@@ -65,7 +63,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       // Otherwise, check the single permission (or allow if no permission required)
       return !item.permission || can(item.permission);
     });
-  }, [t, role, can, canAny]);
+  }, [role, can, canAny]);
 
   // Debug logging
   useEffect(() => {
@@ -162,7 +160,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
               : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
           )}>
             <Settings className="w-4 h-4" />
-            <span>{t('navigation.settings')}</span>
+            <span>Settings</span>
           </button>
         </Link>
 

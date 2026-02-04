@@ -30,7 +30,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AdvancedAnalytics } from "./AdvancedAnalytics";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { AIJobScoping } from "./AIJobScoping";
-import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
 
 // Recent Alerts Component
@@ -134,7 +133,6 @@ function RecentAlertsCard({ jobs, invoices }: { jobs: any[], invoices: any[] }) 
 }
 
 export default function Dashboard() {
-  const { t } = useTranslation();
   const { toast } = useToast();
 
   // Data queries
