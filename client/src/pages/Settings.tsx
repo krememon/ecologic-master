@@ -449,7 +449,6 @@ export default function Settings() {
                   Set Up Authenticator
                 </Button>
               )}
-              <Button variant="outline">Download Data</Button>
               <Button variant="destructive" onClick={() => setDeleteAccountModalOpen(true)}>Delete Account</Button>
             </div>
           </CardContent>
