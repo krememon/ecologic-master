@@ -331,7 +331,6 @@ export default function SignInWizard() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       className={error ? "border-red-500" : ""}
-                      autoFocus
                     />
                     {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
                   </div>
@@ -395,7 +394,6 @@ export default function SignInWizard() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className={error ? "border-red-500 pr-10" : "pr-10"}
-                        autoFocus
                       />
                       <button
                         type="button"
@@ -441,7 +439,6 @@ export default function SignInWizard() {
                         onChange={(e) => handleCodeInput(index, e.target.value)}
                         onKeyDown={(e) => handleCodeKeyDown(index, e)}
                         className="w-11 h-12 text-center text-xl font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:border-slate-600"
-                        autoFocus={index === 0}
                       />
                     ))}
                   </div>

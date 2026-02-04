@@ -82,7 +82,6 @@ export default function TwoFactor() {
                 onChange={handleCodeChange}
                 maxLength={useBackupCode ? 9 : 6}
                 className="text-center text-lg tracking-widest font-mono h-12 rounded-xl"
-                autoFocus
                 autoComplete="one-time-code"
               />
               {error && (
