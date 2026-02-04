@@ -1,0 +1,53 @@
+Language settings upgrade
+
+Goal A — Remove flags:
+- In the Language dropdown, remove all flag icons everywhere (selected value + dropdown list).
+- Keep the same spacing, alignment, hover/selected styles.
+- The dropdown should show only the language name text (e.g., “English”, “Español”, etc.).
+
+Goal B — Make language switching translate the whole app:
+- When a language is selected, the entire UI should switch to that language immediately:
+  - Settings page text
+  - Sidebar labels
+  - Buttons
+  - Form labels/placeholders
+  - Dialog titles/body text
+  - Toasts/errors (where applicable)
+- Persist the selected language per user (DB) and also cache locally (localStorage) for fast load.
+- On app load, initialize i18n using:
+  1) user saved preference (from /api/auth/user or profile endpoint),
+  2) else localStorage,
+  3) else browser language (navigator.language) fallback,
+  4) default to English.
+- IMPORTANT: Do not break RBAC/hidden-not-disabled behavior. This is text only.
+
+Implementation requirements:
+1) Use a real i18n solution:
+   - Prefer react-i18next + i18next.
+   - Create translation JSON files:
+     - en.json, es.json, fr.json, de.json, it.json, pt.json
+2) Add a `t()` wrapper for UI strings:
+   - Replace hardcoded strings in key screens first:
+     - Settings (Language section)
+     - Sidebar nav items
+     - Auth screens (welcome/login/signup)
+     - Common modals (Confirm, Cancel, Save, Delete)
+   - If you can’t finish the entire app in one pass, do it in phases:
+     Phase 1: App shell + Settings + Auth + Sidebar + Global buttons/modal labels
+     Phase 2: Jobs/Estimates/Invoices/Scheduling/Docs/Messaging
+3) Update the Language dropdown component:
+   - Data shape should be like:
+     [{ code: 'en', label: 'English' }, ...]
+   - No icons/flags.
+   - On selection, call i18n.changeLanguage(code) and persist:
+     - POST /api/users/me/language (or existing profile update route)
+     - Also save to localStorage "ecologic_lang"
+4) Ensure language applies without refresh, but also survives refresh.
+
+Deliverables:
+- Tell me which files you changed.
+- Confirm:
+  - Flags are gone.
+  - Switching language updates the whole app UI immediately.
+  - Refresh keeps the selected language.
+  - Fallback logic works when user has no saved language.
