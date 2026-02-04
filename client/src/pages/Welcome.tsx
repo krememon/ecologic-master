@@ -43,7 +43,7 @@ export default function Welcome() {
         className="flex-1 flex flex-col items-center justify-center px-6"
         style={{ 
           minHeight: "100vh",
-          transform: "translateY(clamp(4px, 1vh, 18px))"
+          transform: "translateY(clamp(10px, 2vh, 28px))"
         }}
       >
         <div
