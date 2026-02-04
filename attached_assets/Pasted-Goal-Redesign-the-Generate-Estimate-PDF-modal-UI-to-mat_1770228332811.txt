@@ -1,0 +1,108 @@
+Goal: Redesign the Generate Estimate PDF modal UI to match the clean “Select Customer” modal theme (rounded, centered header, subtle divider, clean icon, consistent buttons).
+CRITICAL: Do NOT change any functionality. Keep the same handlers, button actions, disabled logic, and step flow (Generate PDF → Next → Cancel). Styling/layout only.
+
+Reference design to match
+
+Match the look/spacing of Select Customer modal:
+
+Rounded corners
+
+Clean header row
+
+Subtle divider line
+
+Softer typography + spacing
+
+Primary button styling consistent with EcoLogic blue
+
+Secondary button style consistent (white, border)
+
+1) Header cleanup
+
+Keep the doc icon, but make it smaller + aligned with title
+
+Title: “Generate Estimate PDF” (same text)
+
+Subtitle: “Generate a PDF document of this estimate.” (same text)
+
+Use a centered modal header layout like Select Customer:
+
+Title left-aligned inside header area
+
+X close top-right
+
+Add a thin divider line under header
+
+2) Body layout cleanup
+
+Right now it feels stretched + redundant.
+
+New body structure (clean + modern)
+
+Center a single document icon (smaller than now)
+
+One short message line:
+
+“Generate a PDF for estimate”
+
+Then show the estimate number as a pill/badge:
+
+EST-000089 inside a light gray rounded pill
+
+✅ Remove the long sentence:
+“Click the button below to generate a PDF of estimate …”
+It’s wordy and looks dated.
+
+3) Buttons — make consistent + remove weird stacking feel
+
+You currently have: Generate PDF (primary), Next (disabled), Cancel (secondary) but spacing feels off.
+
+Keep the same button order + behavior, just redesign:
+
+Primary: Generate PDF (EcoLogic blue, full width)
+
+Secondary/disabled: Next (full width, disabled state is subtle)
+
+Tertiary: Cancel (full width, white background, gray border)
+
+Spacing rules
+
+Reduce vertical gaps so it feels tighter and modern
+
+All three buttons should have the same height and corner radius
+
+Disabled “Next” should look disabled but still clean (no harsh opacity)
+
+4) Visual polish (match Select Customer)
+
+Modal padding: consistent with Select Customer (don’t let content touch edges)
+
+Icon color: light neutral gray
+
+Typography:
+
+Title bold
+
+Subtitle smaller and muted gray
+
+Body text medium gray
+
+Keep everything vertically balanced (no huge empty space)
+
+5) Do NOT change
+
+Generate PDF click logic
+
+Next button enable/disable logic
+
+Cancel behavior
+
+Any state transitions / routing
+
+Deliverable
+
+After change, this modal should feel like the same design family as Select Customer: clean, modern, “Apple-like”, not stretched, not wordy.
+
+Also tell me:
+
+Which file/component you edited
