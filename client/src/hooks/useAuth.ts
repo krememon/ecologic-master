@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { getQueryFn } from "@/lib/queryClient";
 import { User } from "@shared/schema";
+import { initializeUserLanguage } from "@/i18n/config";
 
 interface AuthUser extends User {
   role?: 'OWNER' | 'SUPERVISOR' | 'DISPATCHER' | 'ESTIMATOR' | 'TECHNICIAN' | null;
@@ -25,6 +27,12 @@ export function useAuth() {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  useEffect(() => {
+    if (!isLoading) {
+      initializeUserLanguage(user?.language);
+    }
+  }, [user?.language, isLoading]);
 
   return {
     user,

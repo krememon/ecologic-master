@@ -391,7 +391,7 @@ export default function Settings() {
             </div>
             
             <div className="border-t pt-4">
-              <LanguageSelector variant="dropdown" showLabel={true} />
+              <LanguageSelector showLabel={true} />
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
                 {t('settings.languageDescription')}
               </p>

@@ -558,6 +558,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user language preference
+  app.patch('/api/users/me/language', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { language } = req.body;
+      
+      const validLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt'];
+      if (!language || !validLanguages.includes(language)) {
+        return res.status(400).json({ message: "Invalid language code" });
+      }
+      
+      const updatedUser = await storage.updateUser(userId, { language });
+      res.json({ success: true, language: updatedUser.language });
+    } catch (error: any) {
+      console.error("Error updating language preference:", error);
+      res.status(500).json({ message: "Failed to update language" });
+    }
+  });
+
   // Set onboarding choice (owner or employee)
   const onboardingChoiceSchema = z.object({
     choice: z.enum(["owner", "employee"])

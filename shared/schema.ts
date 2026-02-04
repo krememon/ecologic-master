@@ -103,6 +103,7 @@ export const users = pgTable("users", {
   status: varchar("status").default("ACTIVE").notNull(), // 'ACTIVE' | 'INACTIVE'
   tokenVersion: integer("token_version").default(0).notNull(), // For session invalidation
   onboardingChoice: varchar("onboarding_choice", { length: 20 }), // 'owner' | 'employee' | null
+  language: varchar("language", { length: 10 }).default("en"), // 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt'
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

@@ -422,6 +422,8 @@ const resources = {
   }
 };
 
+const LANGUAGE_STORAGE_KEY = 'ecologic_lang';
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -436,8 +438,24 @@ i18n
     
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
+      lookupLocalStorage: LANGUAGE_STORAGE_KEY,
       caches: ['localStorage'],
     },
   });
+
+export function initializeUserLanguage(userLanguage?: string | null) {
+  const storedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  const browserLanguage = navigator.language?.split('-')[0];
+  
+  const language = userLanguage || storedLanguage || browserLanguage || 'en';
+  const validLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt'];
+  const finalLanguage = validLanguages.includes(language) ? language : 'en';
+  
+  if (i18n.language !== finalLanguage) {
+    i18n.changeLanguage(finalLanguage);
+  }
+  
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, finalLanguage);
+}
 
 export default i18n;
