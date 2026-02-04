@@ -170,10 +170,6 @@ export default function Settings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      toast({
-        title: "Success",
-        description: "Profile updated successfully",
-      });
       setEmailError("");
     },
     onError: (error: Error) => {
