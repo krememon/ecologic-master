@@ -38,34 +38,38 @@ export default function Welcome() {
   }
   
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-auto">
       <div 
-        className="flex-1 flex flex-col items-center px-6"
-        style={{ paddingTop: "clamp(80px, 12vh, 160px)" }}
+        className="flex-1 flex flex-col items-center justify-center px-6"
+        style={{ 
+          minHeight: "100vh",
+          transform: "translateY(clamp(-60px, -5vh, -100px))"
+        }}
       >
         <div
           className="w-full max-w-md transition-all"
           style={{
             opacity: isVisible ? 1 : 0,
-            transform: isVisible ? "translateY(240px)" : "translateY(252px)",
+            transform: isVisible ? "translateY(0)" : "translateY(12px)",
             transitionDuration: "300ms",
             transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          <div className="text-center mb-6">
+          <div className="text-center mb-5">
             <h1 
-              className="text-5xl md:text-6xl mx-auto mb-2"
+              className="text-5xl md:text-6xl mx-auto"
               style={{
                 fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
                 fontWeight: 800,
                 letterSpacing: "-0.02em",
                 lineHeight: 1.05,
+                marginBottom: "-2px",
                 color: "#0B0B0D",
               }}
             >
               EcoLogic
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-light">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-light mt-1">
               Professional contractor management
             </p>
           </div>
