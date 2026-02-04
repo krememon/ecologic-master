@@ -1,0 +1,43 @@
+TASK: UI consistency — Make “Generate Estimate PDF” modal match “Generate Invoice PDF” modal EXACTLY.
+
+Context:
+We already have a “Generate Invoice PDF” modal that looks clean. The newer “Generate Estimate PDF” modal was redesigned and I don’t like it. I want the Estimate PDF modal to look the SAME as the Jobs/Invoice PDF modal (same header, same body layout, same spacing, same button stack, same icon sizing). Do not change any backend logic — layout only.
+
+What to change:
+1) Find the components for both modals:
+   - GenerateInvoicePDF modal (the “good” one)
+   - GenerateEstimatePDF modal (the “bad” one)
+   If there’s a shared modal component, reuse it.
+
+2) Update GenerateEstimatePDF modal to mirror the GenerateInvoicePDF modal:
+   Header:
+   - Left: small document icon (same as invoice modal)
+   - Title: “Generate Estimate PDF”
+   - Subtitle: same style as invoice modal subtitle (muted gray), e.g. “Generate a PDF estimate for ‘EST-000089’” or “Generate a PDF document for this estimate” (keep it short, one line).
+   - Right: X close button aligned exactly like invoice modal
+
+   Body:
+   - Centered large document icon (same size/color as invoice modal)
+   - One short helper sentence (same typography as invoice modal), e.g.:
+     “Click the button below to generate an estimate PDF for this estimate”
+   - If estimate number is shown, show it in the same way invoice modal shows job name (plain text line). 
+     IMPORTANT: remove the “pill/badge” style and remove the circular icon background — do NOT use the new style.
+
+   Buttons (same order and spacing as invoice modal):
+   - Primary: “Generate PDF” (same width, height, radius, blue, icon on left)
+   - Secondary: “Cancel” (same styling as invoice modal cancel)
+   - If there is a “Next” button required by flow, keep it in the same position + disabled style as invoice modal (but do NOT change behavior).
+   - Ensure buttons are full-width like invoice modal and have the same vertical spacing.
+
+3) Spacing rules:
+   - Match invoice modal padding, gaps, and center alignment exactly.
+   - Do not add extra top/bottom whitespace.
+   - Make sure the body content is vertically balanced like the invoice modal.
+
+4) Do NOT change:
+   - Any API calls, state machine, wizard flow, step logic, PDF generation logic, or routing.
+   - Only markup/classes/styling.
+
+Deliverable:
+- The GenerateEstimatePDF modal should be visually indistinguishable from the GenerateInvoicePDF modal (except the word “Estimate” and the estimate identifier).
+- Tell me which file(s) you edited and what you reused/copied from the invoice modal.

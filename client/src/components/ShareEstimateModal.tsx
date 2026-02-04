@@ -172,21 +172,15 @@ export function ShareEstimateModal({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent 
-        className={`${pdfUrl && step === 1 ? "max-w-2xl" : "max-w-md"} p-0 gap-0 overflow-hidden rounded-2xl`}
+        className={`${pdfUrl && step === 1 ? "w-[95vw] max-w-2xl" : "w-[95vw] max-w-md"} p-0 gap-0 overflow-hidden rounded-2xl`}
         hideCloseButton
       >
-        {/* Header */}
+        {/* Header - matches Invoice modal exactly */}
         <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="flex items-center gap-2">
-            {step === 1 ? (
-              <FileText className="h-4 w-4 text-slate-500" />
-            ) : (
-              <Mail className="h-4 w-4 text-slate-500" />
-            )}
-            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {step === 1 ? "Generate Estimate PDF" : "Send Estimate"}
-            </DialogTitle>
-          </div>
+          <div className="min-w-[44px]" />
+          <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            {step === 1 ? "Generate Estimate PDF" : "Send Estimate"}
+          </DialogTitle>
           <button 
             onClick={handleClose} 
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
@@ -198,26 +192,24 @@ export function ShareEstimateModal({
         {step === 1 && (
           <div className="bg-white dark:bg-slate-900">
             {loadingExisting ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-400 mb-3" />
-                <p className="text-sm text-slate-500">Checking for existing PDF...</p>
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-400 mr-2" />
+                <span className="text-sm text-slate-500">Checking for existing PDF...</span>
               </div>
             ) : !pdfUrl ? (
-              <div className="flex flex-col items-center px-6 py-8">
-                <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-                  <FileText className="h-7 w-7 text-slate-400" />
+              <div className="p-4 space-y-4">
+                <div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Generate a PDF estimate for</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{estimateNumber}</p>
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                  Generate a PDF for estimate
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Click Generate to download a PDF for this estimate.
                 </p>
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 mb-6">
-                  {estimateNumber}
-                </span>
-                <div className="w-full space-y-2">
+                <div className="pt-1 space-y-2">
                   <Button
                     onClick={handleGeneratePdf}
                     disabled={generatePdfMutation.isPending}
-                    className="w-full h-11 rounded-xl"
+                    className="w-full h-11 rounded-xl font-medium"
                   >
                     {generatePdfMutation.isPending ? (
                       <>
@@ -227,31 +219,22 @@ export function ShareEstimateModal({
                     ) : (
                       <>
                         <FileText className="h-4 w-4 mr-2" />
-                        Generate PDF
+                        Generate Estimate
                       </>
                     )}
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setStep(2)}
-                    disabled={!pdfUrl}
-                    className="w-full h-11 rounded-xl disabled:opacity-40"
-                  >
-                    Next
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                  <Button
-                    variant="ghost"
+                    className="w-full h-11 rounded-xl font-medium"
                     onClick={handleClose}
-                    className="w-full h-11 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                   >
                     Cancel
                   </Button>
                 </div>
               </div>
             ) : (
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between px-1">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-green-600" />
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -292,11 +275,11 @@ export function ShareEstimateModal({
                   </div>
                 </div>
                 <div 
-                  className="relative rounded-xl overflow-hidden cursor-pointer group bg-slate-100 dark:bg-slate-800 p-3 shadow-inner" 
-                  style={{ height: '50vh' }}
+                  className="relative rounded-lg overflow-hidden cursor-pointer group bg-slate-100 dark:bg-slate-800 p-4 shadow-inner" 
+                  style={{ height: '55vh' }}
                   onClick={() => window.open(`${pdfUrl}#view=Fit`, "_blank")}
                 >
-                  <div className="bg-white dark:bg-slate-900 rounded-lg shadow-lg mx-auto h-full overflow-hidden">
+                  <div className="bg-white dark:bg-slate-900 rounded shadow-lg mx-auto h-full overflow-hidden">
                     {previewImageUrl ? (
                       <img
                         src={previewImageUrl}
@@ -319,7 +302,7 @@ export function ShareEstimateModal({
                     {previewLoading && (
                       <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80">
                         <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
                           <span className="text-sm text-slate-500">Loading preview...</span>
                         </div>
                       </div>
@@ -327,12 +310,11 @@ export function ShareEstimateModal({
                     {previewError && !previewLoading && (
                       <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
                         <div className="flex flex-col items-center gap-3 text-center p-4">
-                          <FileText className="h-10 w-10 text-slate-300" />
+                          <FileText className="h-12 w-12 text-slate-300" />
                           <p className="text-sm text-slate-500">Preview not available on this device</p>
                           <Button 
                             variant="outline" 
                             size="sm"
-                            className="rounded-xl"
                             onClick={(e) => { e.stopPropagation(); window.open(pdfUrl!, "_blank"); }}
                           >
                             <ExternalLink className="h-4 w-4 mr-2" />
@@ -347,26 +329,9 @@ export function ShareEstimateModal({
                       <Maximize2 className="h-5 w-5 text-slate-700 dark:text-slate-300" />
                     </div>
                   </div>
-                  <div className="absolute bottom-4 left-4 text-xs text-slate-500 bg-white/90 dark:bg-slate-800/90 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute bottom-6 left-6 text-xs text-slate-500 bg-white/90 dark:bg-slate-800/90 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                     Tap to enlarge
                   </div>
-                </div>
-                {/* Buttons for PDF ready state */}
-                <div className="space-y-2 pt-2">
-                  <Button
-                    onClick={() => setStep(2)}
-                    className="w-full h-11 rounded-xl"
-                  >
-                    Next
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={handleClose}
-                    className="w-full h-11 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                  >
-                    Cancel
-                  </Button>
                 </div>
               </div>
             )}
@@ -375,48 +340,47 @@ export function ShareEstimateModal({
 
         {step === 2 && (
           <div className="bg-white dark:bg-slate-900 p-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="toEmail" className="text-sm font-medium text-slate-700 dark:text-slate-300">To</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="toEmail">To</Label>
               <Input
                 id="toEmail"
                 type="email"
                 placeholder="customer@email.com"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
-                className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+                className="h-10 rounded-xl"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="subject" className="text-sm font-medium text-slate-700 dark:text-slate-300">Subject</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="subject">Subject</Label>
               <Input
                 id="subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+                className="h-10 rounded-xl"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="message" className="text-sm font-medium text-slate-700 dark:text-slate-300">Message</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="message">Message</Label>
               <Textarea
                 id="message"
                 rows={4}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className="rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0 resize-none"
+                className="rounded-xl"
               />
             </div>
             <div className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
               <FileText className="h-4 w-4 text-slate-500" />
-              <span className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="text-sm text-slate-600 dark:text-slate-400 truncate">
                 Attachment: {pdfFileName}
               </span>
             </div>
-            {/* Buttons for step 2 */}
-            <div className="space-y-2 pt-2">
+            <div className="pt-1 space-y-2">
               <Button
                 onClick={handleSendEmail}
                 disabled={!isEmailValid || sendEmailMutation.isPending}
-                className="w-full h-11 rounded-xl"
+                className="w-full h-11 rounded-xl font-medium"
               >
                 {sendEmailMutation.isPending ? (
                   <>
@@ -433,7 +397,7 @@ export function ShareEstimateModal({
               <Button
                 variant="outline"
                 onClick={() => setStep(1)}
-                className="w-full h-11 rounded-xl"
+                className="w-full h-11 rounded-xl font-medium"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
