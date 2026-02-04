@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Globe } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { LANGUAGE_STORAGE_KEY } from "@/i18n/config";
 
 const languages = [
   { code: 'en', name: 'English' },
@@ -11,8 +12,6 @@ const languages = [
   { code: 'it', name: 'Italiano' },
   { code: 'pt', name: 'Português' },
 ];
-
-const LANGUAGE_STORAGE_KEY = 'ecologic_lang';
 
 interface LanguageSelectorProps {
   showLabel?: boolean;

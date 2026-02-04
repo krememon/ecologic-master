@@ -1,0 +1,56 @@
+FIX: Language snaps back to English after navigation
+
+Symptom:
+- I select Español (or any language) and it partially changes.
+- As soon as I navigate / switch pages, it reverts to English.
+
+Root cause (likely):
+- i18n is being initialized multiple times (or on each route change) and defaulting to 'en'
+- or the i18n Provider / App shell is remounting and losing the in-memory language
+- or language is not loaded early (before first render) and not persisted properly
+
+Hard requirements:
+1) i18n must be initialized exactly ONCE in a single module (e.g. src/i18n.ts) and imported once at app startup.
+   - Do NOT call i18n.init() inside page components.
+   - Do NOT call i18n.init() inside hooks that run on route changes.
+   - Ensure the <I18nextProvider> wraps the entire app at the highest level (main.tsx / index.tsx).
+
+2) Make language “sticky” immediately:
+   - On dropdown selection:
+     - i18n.changeLanguage(code)
+     - localStorage.setItem('ecologic_lang', code)
+     - also persist to backend (optional, but do not block UI on it)
+
+3) Apply saved language BEFORE rendering routes:
+   - In the i18n init file:
+     const saved = localStorage.getItem('ecologic_lang')
+     const initial = saved || detectBrowserLanguage() || 'en'
+     i18n.init({ lng: initial, fallbackLng: 'en', ... })
+   - This ensures route changes cannot reset it because i18n already has the correct language.
+
+4) If we also persist per-user in DB:
+   - When auth user loads, if user.language exists and differs from localStorage:
+     - set localStorage to user.language
+     - i18n.changeLanguage(user.language)
+   - BUT: do this only once after login/user fetch (guard with a ref like didSyncLangRef)
+   - Do NOT re-run this on every route change.
+
+5) Do NOT force English anywhere:
+   - Search for any code doing: i18n.changeLanguage('en') or setting lng: 'en' dynamically.
+   - Remove/replace.
+
+Implementation checklist:
+- Create/confirm these files:
+  - src/i18n.ts (single initialization point)
+  - main.tsx / index.tsx imports './i18n' before rendering <App />
+- Ensure router is NOT re-mounting the whole app on navigation (App layout should persist).
+- Add console logs TEMPORARILY to prove:
+  - i18n.language at startup
+  - when dropdown changes language
+  - after route navigation, i18n.language stays the same
+  Remove logs after confirmed.
+
+Deliverable:
+- After fix: switch to Español, navigate to 3 different pages, it stays Español every time.
+- Refresh page: it still stays Español.
+- Tell me which files you changed.

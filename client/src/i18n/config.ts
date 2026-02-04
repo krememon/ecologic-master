@@ -1,6 +1,5 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import LanguageDetector from 'i18next-browser-languagedetector';
 
 // Translation resources
 const resources = {
@@ -422,40 +421,55 @@ const resources = {
   }
 };
 
-const LANGUAGE_STORAGE_KEY = 'ecologic_lang';
+export const LANGUAGE_STORAGE_KEY = 'ecologic_lang';
+const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt'];
+
+function getInitialLanguage(): string {
+  const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (saved && VALID_LANGUAGES.includes(saved)) {
+    return saved;
+  }
+  const browserLang = navigator.language?.split('-')[0];
+  if (browserLang && VALID_LANGUAGES.includes(browserLang)) {
+    return browserLang;
+  }
+  return 'en';
+}
+
+const initialLanguage = getInitialLanguage();
 
 i18n
-  .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources,
+    lng: initialLanguage,
     fallbackLng: 'en',
     debug: false,
     
     interpolation: {
       escapeValue: false,
     },
-    
-    detection: {
-      order: ['localStorage', 'navigator', 'htmlTag'],
-      lookupLocalStorage: LANGUAGE_STORAGE_KEY,
-      caches: ['localStorage'],
-    },
   });
 
-export function initializeUserLanguage(userLanguage?: string | null) {
-  const storedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  const browserLanguage = navigator.language?.split('-')[0];
+let didSyncUserLanguage = false;
+
+export function syncUserLanguage(userLanguage?: string | null) {
+  if (didSyncUserLanguage) return;
+  didSyncUserLanguage = true;
   
-  const language = userLanguage || storedLanguage || browserLanguage || 'en';
-  const validLanguages = ['en', 'es', 'fr', 'de', 'it', 'pt'];
-  const finalLanguage = validLanguages.includes(language) ? language : 'en';
-  
-  if (i18n.language !== finalLanguage) {
-    i18n.changeLanguage(finalLanguage);
+  if (userLanguage && VALID_LANGUAGES.includes(userLanguage)) {
+    const currentStored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (currentStored !== userLanguage) {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, userLanguage);
+      if (i18n.language !== userLanguage) {
+        i18n.changeLanguage(userLanguage);
+      }
+    }
   }
-  
-  localStorage.setItem(LANGUAGE_STORAGE_KEY, finalLanguage);
+}
+
+export function resetLanguageSync() {
+  didSyncUserLanguage = false;
 }
 
 export default i18n;
