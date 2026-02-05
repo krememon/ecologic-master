@@ -11829,13 +11829,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to record payments" });
       }
 
-      const { invoiceId, method, checkNumber } = req.body;
+      const { invoiceId, method, checkNumber, amountCents: requestedAmountCents, paymentMethod } = req.body;
+      const paymentMethodValue = paymentMethod || method;
       
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
       }
       
-      if (!method || !['cash', 'check'].includes(method.toLowerCase())) {
+      if (!paymentMethodValue || !['cash', 'check'].includes(paymentMethodValue.toLowerCase())) {
         return res.status(400).json({ message: "Payment method must be 'cash' or 'check'" });
       }
 
@@ -11854,14 +11855,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           success: true,
           alreadyPaid: true,
           amountCents: invoice.totalCents || Math.round(parseFloat(invoice.amount) * 100),
-          method: existingPayment?.paymentMethod || method.toLowerCase(),
+          method: existingPayment?.paymentMethod || paymentMethodValue.toLowerCase(),
           invoiceId,
         });
       }
 
-      // Calculate amount from invoice totalCents (includes tax)
-      const amountCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+      // Calculate current balance and payment amount
+      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+      const currentPaidAmountCents = invoice.paidAmountCents || 0;
+      const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
+      
+      // Validate and clamp requested amount
+      let amountCents: number;
+      if (requestedAmountCents !== undefined) {
+        const parsedAmount = parseInt(String(requestedAmountCents), 10);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          return res.status(400).json({ message: "Payment amount must be a positive number" });
+        }
+        amountCents = Math.min(parsedAmount, currentBalanceDueCents);
+      } else {
+        amountCents = currentBalanceDueCents;
+      }
+      
+      if (amountCents <= 0) {
+        return res.status(400).json({ message: "No balance remaining on this invoice" });
+      }
       const amountDollars = (amountCents / 100).toFixed(2);
+
+      // Calculate new balance
+      const newPaidAmountCents = currentPaidAmountCents + amountCents;
+      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
+      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
 
       // Create payment record
       const payment = await storage.createPayment({
@@ -11871,29 +11895,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerId: invoice.customerId || null,
         amount: amountDollars,
         amountCents: amountCents,
-        paymentMethod: method.toLowerCase(),
+        paymentMethod: paymentMethodValue.toLowerCase(),
         status: 'paid',
         collectedByUserId: userId,
         collectedByRole: userRole,
-        checkNumber: method.toLowerCase() === 'check' ? (checkNumber || null) : null,
+        checkNumber: paymentMethodValue.toLowerCase() === 'check' ? (checkNumber || null) : null,
         paidDate: new Date(),
-        notes: `Manual ${method.toLowerCase()} payment recorded`,
+        notes: `Manual ${paymentMethodValue.toLowerCase()} payment recorded`,
       });
 
-      // Mark invoice as paid
+      // Update invoice with new payment amounts and status
       await storage.updateInvoice(invoiceId, {
-        status: 'paid',
-        paidDate: new Date().toISOString().split('T')[0],
-        paidAt: new Date(),
+        status: newStatus,
+        paidAmountCents: newPaidAmountCents,
+        balanceDueCents: newBalanceDueCents,
+        ...(newStatus === 'paid' ? {
+          paidDate: new Date().toISOString().split('T')[0],
+          paidAt: new Date(),
+        } : {}),
       } as any);
 
-      // Update job paymentStatus to 'paid' if invoice is associated with a job
+      // Update job paymentStatus if invoice is associated with a job
       if (invoice.jobId) {
-        await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
-        console.log(`[Payment] Job ${invoice.jobId} paymentStatus updated to 'paid'`);
+        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+        await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+        console.log(`[Payment] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
       }
 
-      console.log(`[Payment] Manual ${method} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
+      console.log(`[Payment] Manual ${paymentMethodValue} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
 
       // Sync payment to QuickBooks (non-blocking)
       syncPaymentToQbo(payment.id, company.id).then(result => {
@@ -11910,7 +11939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await notifyManagers(company.id, {
         type: 'payment_collected',
         title: 'Payment Collected',
-        body: `${payerName} collected a $${amountDollars} ${method.toLowerCase()} payment`,
+        body: `${payerName} collected a $${amountDollars} ${paymentMethodValue.toLowerCase()} payment`,
         entityType: 'invoice',
         entityId: invoiceId,
         linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
@@ -11919,9 +11948,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         amountCents,
-        method: method.toLowerCase(),
+        method: paymentMethodValue.toLowerCase(),
         invoiceId,
         paymentId: payment.id,
+        newStatus,
+        balanceRemaining: newBalanceDueCents,
       });
     } catch (error: any) {
       console.error('Error recording manual payment:', error);
