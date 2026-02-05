@@ -146,6 +146,12 @@ export interface IStorage {
     pendingTotalCents: number;
     completedTotalCents: number;
   }>;
+  getPaymentsStats(companyId: number): Promise<{
+    thisMonthTotalCents: number;
+    stillOwedTotalCents: number;
+    paidTodayTotalCents: number;
+    overdueCount: number;
+  }>;
   createPayment(payment: any): Promise<any>;
   updatePayment(id: number, payment: any): Promise<any>;
   
@@ -687,6 +693,74 @@ export class DatabaseStorage implements IStorage {
       cardTotalCents,
       pendingTotalCents,
       completedTotalCents: cashTotalCents + checkTotalCents + cardTotalCents,
+    };
+  }
+
+  async getPaymentsStats(companyId: number): Promise<{
+    thisMonthTotalCents: number;
+    stillOwedTotalCents: number;
+    paidTodayTotalCents: number;
+    overdueCount: number;
+  }> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    
+    const allPayments = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.companyId, companyId));
+    
+    let thisMonthTotalCents = 0;
+    let paidTodayTotalCents = 0;
+    
+    for (const p of allPayments) {
+      const status = (p.status || '').toLowerCase();
+      if (status !== 'paid' && status !== 'completed') continue;
+      
+      const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
+      if (!paidDate) continue;
+      
+      const amountCents = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+      
+      if (paidDate >= startOfMonth) {
+        thisMonthTotalCents += amountCents;
+      }
+      if (paidDate >= startOfDay && paidDate <= endOfDay) {
+        paidTodayTotalCents += amountCents;
+      }
+    }
+    
+    const allInvoices = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.companyId, companyId));
+    
+    let stillOwedTotalCents = 0;
+    let overdueCount = 0;
+    const todayStr = now.toISOString().split('T')[0];
+    
+    for (const inv of allInvoices) {
+      const invStatus = (inv.status || '').toLowerCase();
+      if (invStatus === 'cancelled' || invStatus === 'void' || invStatus === 'paid') continue;
+      
+      const balanceCents = inv.balanceDueCents || (inv.totalCents - (inv.paidAmountCents || 0));
+      if (balanceCents > 0) {
+        stillOwedTotalCents += balanceCents;
+        
+        const dueDate = inv.dueDate;
+        if (dueDate && dueDate < todayStr) {
+          overdueCount++;
+        }
+      }
+    }
+    
+    return {
+      thisMonthTotalCents,
+      stillOwedTotalCents,
+      paidTodayTotalCents,
+      overdueCount,
     };
   }
 

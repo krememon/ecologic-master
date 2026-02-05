@@ -10005,6 +10005,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/payments/stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const stats = await storage.getPaymentsStats(company.id);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching payments stats:", error);
+      res.status(500).json({ message: "Failed to fetch payments stats" });
+    }
+  });
+
   app.get('/api/payments/breakdown', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
