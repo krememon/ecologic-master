@@ -41,6 +41,14 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Tax Management**: Owner-only feature for creating custom tax rates (name, percentage) to apply to invoices, with inline validation and duplicate name prevention.
 - **Line Item Tax Selection**: Job line items support per-item tax selection. When "Taxable" is ON, a tax selector appears, allowing users to pick from saved company taxes. Tax data is stored per line item to preserve the rate at selection time.
 - **Payment Collection**: Multi-method payment collection (Cash, Check, Card via Stripe) on the Payment Review screen. Includes idempotent manual payment processing and RBAC enforcement.
+- **Payments Tracker**: Contractor-first payments dashboard with real-time financial overview. Features:
+  - Scoreboard with This Month, Still Owed, Paid Today, and Overdue statistics
+  - Filter tabs for All, Paid, Partial, Unpaid, and Overdue invoices
+  - Receipt-style payment feed showing invoice cards with status badges and amounts
+  - Partial payment support with paidAmountCents and balanceDueCents tracking on invoices
+  - Record Payment modal with client/invoice selection and payment method options
+  - Payment Details modal with timeline view showing payment history
+  - Job paymentStatus syncs with invoice status (unpaid/partial/paid)
 - **Invoice Sending**: Invoices can be sent via Email (Resend) or SMS (Twilio) with a segmented toggle in the Send Invoice modal. Email mode sends branded HTML emails; Text mode sends SMS via Twilio with invoice details and a payment link.
 - **Leads Management**: A dedicated section for tracking potential customers, linked to existing customers. Features customer data, description, notes, source tracking, status workflow, and timestamps. RBAC enforced to restrict access to managers.
 - **Time Tracking (Clock In/Out)**: A "Time Today" section on the homepage for job-aware time tracking. Technicians can clock in/out to specific jobs or non-job categories, view their logged hours, and switch jobs. Owners/Supervisors/Dispatchers see aggregate "Labor Today" data.
