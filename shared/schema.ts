@@ -377,7 +377,9 @@ export const invoices = pgTable("invoices", {
   subtotalCents: integer("subtotal_cents").notNull().default(0),
   taxCents: integer("tax_cents").notNull().default(0),
   totalCents: integer("total_cents").notNull().default(0),
-  status: varchar("status").notNull().default("draft"), // draft, pending, sent, paid, overdue, cancelled
+  paidAmountCents: integer("paid_amount_cents").notNull().default(0),
+  balanceDueCents: integer("balance_due_cents").notNull().default(0),
+  status: varchar("status").notNull().default("draft"), // draft, pending, sent, paid, partial, overdue, cancelled
   issueDate: date("issue_date").notNull(),
   dueDate: date("due_date").notNull(),
   paidDate: date("paid_date"),

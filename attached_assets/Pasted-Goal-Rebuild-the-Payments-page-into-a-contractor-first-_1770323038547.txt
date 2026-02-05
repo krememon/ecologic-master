@@ -1,0 +1,203 @@
+Goal:
+Rebuild the Payments page into a contractor-first, real-time money dashboard with a top scoreboard, clean payment feed, filters, and consistent behavior.
+
+🚫 DO NOT
+
+Do NOT change any existing auth logic
+
+Do NOT break QuickBooks sync
+
+Do NOT rename existing tables unless necessary
+
+Do NOT introduce placeholders or dummy data
+
+Do NOT remove existing functionality
+
+Only extend and organize.
+
+🧱 1. TOP SCOREBOARD (BIG NUMBERS)
+
+At top of Payments page, add a horizontal stats card with:
+
+This Month → total payments received this month
+
+Still Owed → sum of remaining balances on all unpaid + partial invoices
+
+Paid Today → sum of payments recorded today
+
+Overdue → count of invoices where:
+today > job_scheduled_date AND balance > 0
+
+These must update live whenever a payment is recorded.
+
+📋 2. PAYMENT FEED (RECEIPT STYLE)
+
+Each row shows:
+
+Customer name
+
+Invoice number
+
+Amount
+
+Status badge (PAID, PARTIAL, UNPAID, OVERDUE)
+
+Payment method if paid (Cash, Check, Card)
+
+Timestamp or Due label
+
+Example layout:
+
+Jennifer Pellegrino
+Invoice #1023
+$350 PAID (Card)
+Today • 2:41 PM
+
+John Smith
+Invoice #1041
+$1,200 UNPAID
+Due Yesterday
+
+Color rules:
+
+Green → Paid
+
+Yellow → Partial
+
+Gray → Unpaid
+
+Red → Overdue
+
+🔍 3. FILTER TABS
+
+Add tabs:
+
+All | Paid | Unpaid | Overdue | Partial
+
+Filtering must be instant and frontend-only once data is loaded.
+
+➕ 4. RECORD PAYMENT FLOW
+
+Add floating button:
+
+Record Payment
+
+Flow:
+
+Select client (or Add New)
+
+Select invoice
+
+Enter amount
+
+Choose payment method: Cash | Check
+
+Save
+
+Saving must:
+
+Create payment record
+
+Reduce invoice balance
+
+Update invoice status
+
+Update scoreboard
+
+Add row to feed
+
+Trigger QuickBooks sync
+
+🧮 5. PARTIAL PAYMENT LOGIC
+
+If invoice total = 1000
+and payment = 400
+
+Then:
+
+balance = 600
+
+status = PARTIAL
+
+If balance = 0 → status becomes PAID.
+
+🧾 6. CLICKING A PAYMENT ROW
+
+Open details modal with timeline:
+
+Invoice Created
+Estimate Approved
+Invoice Sent
+Payment Received
+Synced to QuickBooks
+
+Read-only.
+
+🗃️ 7. BACKEND REQUIREMENTS
+
+If not present, ensure:
+
+payments table fields:
+
+id
+
+invoice_id
+
+customer_id
+
+amount
+
+method
+
+created_at
+
+Invoices must have:
+
+total_amount
+
+balance_due
+
+status
+
+Add server endpoints:
+
+GET /api/payments
+POST /api/payments
+GET /api/payments/stats
+
+Stats endpoint returns:
+
+thisMonthTotal
+stillOwedTotal
+paidTodayTotal
+overdueCount
+
+🎨 8. UI STYLE
+
+Card-based
+
+Rounded
+
+Minimal
+
+No clutter
+
+Mobile-first
+
+Matches existing EcoLogic design system
+
+✅ DELIVERABLES
+
+Payments page shows scoreboard
+
+Payment feed works
+
+Filters work
+
+Record Payment modal works
+
+Partial payments supported
+
+No console errors
+
+QuickBooks sync preserved
