@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,8 @@ interface Invoice {
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
+  paidAmountCents?: number;
+  balanceDueCents?: number;
   status: string;
   createdAt: string;
   qboInvoiceId?: string | null;
@@ -69,9 +73,14 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [viewState, setViewState] = useState<ViewState>('review');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [resultNewStatus, setResultNewStatus] = useState<string>('paid');
+  const [resultBalanceRemaining, setResultBalanceRemaining] = useState<number>(0);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSyncingQbo, setIsSyncingQbo] = useState(false);
   const [qboSyncResult, setQboSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [partialEnabled, setPartialEnabled] = useState(false);
+  const [partialAmountStr, setPartialAmountStr] = useState("");
 
   const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
@@ -104,6 +113,22 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     staleTime: 0,
   });
 
+  const invoiceTotalCents = invoice
+    ? (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100))
+    : 0;
+  const currentPaidCents = invoice?.paidAmountCents || 0;
+  const balanceRemainingCents = invoice?.balanceDueCents || (invoiceTotalCents - currentPaidCents);
+
+  useEffect(() => {
+    if (invoice && !partialEnabled) {
+      setPartialAmountStr((balanceRemainingCents / 100).toFixed(2));
+    }
+  }, [invoice, balanceRemainingCents, partialEnabled]);
+
+  const partialAmountCents = Math.round(parseFloat(partialAmountStr || "0") * 100);
+  const isPartialValid = partialAmountCents > 0 && partialAmountCents <= balanceRemainingCents;
+  const paymentAmountCents = partialEnabled ? partialAmountCents : balanceRemainingCents;
+
   const handleClose = () => {
     if (window.history.length > 1) {
       window.history.back();
@@ -113,6 +138,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   };
 
   const handleMethodSelect = (method: PaymentMethod) => {
+    if (partialEnabled && !isPartialValid) return;
     if (method === 'card') {
       handleStripeCheckout();
     } else {
@@ -131,6 +157,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       const response = await apiRequest("POST", "/api/payments/checkout", {
         invoiceId: numericInvoiceId,
         returnBaseUrl: window.location.origin,
+        ...(partialEnabled ? { amountCents: paymentAmountCents } : {}),
       });
       const data = await response.json();
       
@@ -148,6 +175,25 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     }
   };
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/dashboard/today'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments/stats'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
+    queryClient.invalidateQueries({ predicate: (query) => 
+      Array.isArray(query.queryKey) && 
+      typeof query.queryKey[0] === 'string' && 
+      (query.queryKey[0].includes('/api/customers/') && query.queryKey[0].includes('/jobs') ||
+       query.queryKey[0].startsWith('/api/schedule-items'))
+    });
+  };
+
   const handleManualPaymentConfirm = async () => {
     if (!selectedMethod || isConfirming) return;
     
@@ -161,27 +207,15 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       const response = await apiRequest("POST", "/api/payments/manual", {
         invoiceId: numericInvoiceId,
         method: selectedMethod,
+        amountCents: paymentAmountCents,
       });
       const data = await response.json();
       
       if (data.success) {
         setPaidAmount(data.amountCents);
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', numericJobId, 'invoice'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/today'] });
-        // Invalidate payments queries for live UI update
-        queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
-        queryClient.invalidateQueries({ predicate: (query) => 
-          Array.isArray(query.queryKey) && 
-          typeof query.queryKey[0] === 'string' && 
-          (query.queryKey[0].includes('/api/customers/') && query.queryKey[0].includes('/jobs') ||
-           query.queryKey[0].startsWith('/api/schedule-items'))
-        });
+        setResultNewStatus(data.newStatus || 'paid');
+        setResultBalanceRemaining(data.balanceRemaining || 0);
+        invalidateAll();
         setViewState('success');
       } else {
         throw new Error(data.message || "Payment failed");
@@ -273,6 +307,8 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   if (viewState === 'success') {
     const paidDollars = paidAmount / 100;
+    const isPartial = resultNewStatus === 'partial';
+    const remainingDollars = resultBalanceRemaining / 100;
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
         <div className="text-center space-y-6">
@@ -282,8 +318,13 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           <div className="space-y-2">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payment Successful</h1>
             <p className="text-lg text-gray-600 dark:text-gray-400">
-              This invoice has been marked as paid.
+              {formatCurrency(paidDollars)} received
             </p>
+            {isPartial && (
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                {formatCurrency(remainingDollars)} still owed on this invoice
+              </p>
+            )}
           </div>
           <Button onClick={handleDone} className="px-8">
             Done
@@ -300,7 +341,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Already Paid</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            This invoice has already been paid.
+            This invoice has already been paid in full.
           </p>
           <Button onClick={() => navigate('/jobs', { replace: true })}>
             Back to Jobs
@@ -312,13 +353,14 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   const subtotalDollars = (invoice.subtotalCents || 0) / 100;
   const taxDollars = (invoice.taxCents || 0) / 100;
-  const totalDollars = invoice.totalCents > 0 
-    ? invoice.totalCents / 100 
-    : parseFloat(invoice.amount) || 0;
+  const totalDollars = invoiceTotalCents / 100;
+  const balanceDollars = balanceRemainingCents / 100;
+  const isPartialInvoice = currentPaidCents > 0;
   
   const maxVisible = 5;
   const hasMoreItems = lineItems.length > maxVisible;
   const visibleItems = showAllItems ? lineItems : lineItems.slice(0, maxVisible);
+  const paymentDisabled = isLoading || (partialEnabled && !isPartialValid);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -364,7 +406,6 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               <>
                 {visibleItems.map((item, index) => {
                   const qty = parseFloat(item.quantity) || 1;
-                  // Compute line total from quantity and unitPriceCents, with fallbacks
                   const computedLineTotalCents = Math.round(qty * (item.unitPriceCents || 0));
                   const lineTotalCents = item.lineTotalCents || item.subtotalCents || computedLineTotalCents;
                   const taxCents = item.taxCents || 0;
@@ -445,9 +486,77 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
                   {formatCurrency(totalDollars)}
                 </span>
               </div>
+              {isPartialInvoice && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-600 dark:text-green-400 text-sm">Previously paid</span>
+                    <span className="text-green-600 dark:text-green-400 text-sm font-medium">
+                      {formatCurrency(currentPaidCents / 100)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-gray-100 dark:border-gray-700">
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">Balance Due</span>
+                    <span className="font-bold text-lg text-amber-600 dark:text-amber-400">
+                      {formatCurrency(balanceDollars)}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">Partial Payment</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Pay less than the full amount</p>
+            </div>
+            <Switch
+              checked={partialEnabled}
+              onCheckedChange={(checked) => {
+                setPartialEnabled(checked);
+                if (checked) {
+                  setPartialAmountStr("");
+                } else {
+                  setPartialAmountStr((balanceRemainingCents / 100).toFixed(2));
+                }
+              }}
+            />
+          </div>
+          {partialEnabled && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                Amount to pay today
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={(balanceRemainingCents / 100).toFixed(2)}
+                  placeholder={(balanceRemainingCents / 100).toFixed(2)}
+                  value={partialAmountStr}
+                  onChange={(e) => setPartialAmountStr(e.target.value)}
+                  className="pl-7 h-10 rounded-lg text-base tabular-nums"
+                />
+              </div>
+              {partialAmountStr && !isPartialValid && (
+                <p className="text-xs text-red-500">
+                  {partialAmountCents <= 0
+                    ? "Enter an amount greater than $0"
+                    : `Cannot exceed balance of ${formatCurrency(balanceRemainingCents / 100)}`}
+                </p>
+              )}
+              {partialEnabled && isPartialValid && partialAmountCents < balanceRemainingCents && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatCurrency((balanceRemainingCents - partialAmountCents) / 100)} will remain after this payment
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {!showNote ? (
           <button
@@ -473,16 +582,23 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         )}
 
         <div className="space-y-3 pt-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Select payment method
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Select payment method
+            </h2>
+            {partialEnabled && isPartialValid && (
+              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                {formatCurrency(paymentAmountCents / 100)}
+              </span>
+            )}
+          </div>
           
           <div className="grid grid-cols-3 gap-3">
             <Button
               variant="outline"
               className="flex flex-col items-center gap-2 h-24 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
               onClick={() => handleMethodSelect('cash')}
-              disabled={isLoading}
+              disabled={paymentDisabled}
             >
               <Banknote className="h-8 w-8 text-green-600" />
               <span className="text-sm font-medium">Cash</span>
@@ -492,7 +608,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               variant="outline"
               className="flex flex-col items-center gap-2 h-24 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
               onClick={() => handleMethodSelect('check')}
-              disabled={isLoading}
+              disabled={paymentDisabled}
             >
               <FileCheck className="h-8 w-8 text-blue-600" />
               <span className="text-sm font-medium">Check</span>
@@ -502,7 +618,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               variant="outline"
               className="flex flex-col items-center gap-2 h-24 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20"
               onClick={() => handleMethodSelect('card')}
-              disabled={isLoading}
+              disabled={paymentDisabled}
             >
               {isLoading ? (
                 <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
@@ -522,7 +638,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               {selectedMethod === 'cash' ? 'Cash payment' : 'Check payment'}
             </DialogTitle>
             <DialogDescription>
-              You're collecting payment by {selectedMethod === 'cash' ? 'cash' : 'check'}.
+              Collecting {formatCurrency(paymentAmountCents / 100)} by {selectedMethod === 'cash' ? 'cash' : 'check'}.
+              {partialEnabled && paymentAmountCents < balanceRemainingCents && (
+                <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                  {formatCurrency((balanceRemainingCents - paymentAmountCents) / 100)} will remain on this invoice.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

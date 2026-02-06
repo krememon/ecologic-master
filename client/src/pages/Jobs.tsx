@@ -36,6 +36,7 @@ interface JobWithClient extends Job {
   } | null;
   primaryLineItem?: string | null;
   isPaid?: boolean;
+  invoicePaymentStatus?: string | null;
 }
 
 interface JobPhoto {
@@ -1058,6 +1059,12 @@ export default function Jobs() {
                     >
                       Paid
                     </Badge>
+                  ) : selectedJob.invoicePaymentStatus === 'partial' ? (
+                    <Badge 
+                      className="text-sm bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-100"
+                    >
+                      Partial
+                    </Badge>
                   ) : (
                     <Badge 
                       variant={selectedJob.status === 'active' ? 'default' : 'secondary'}
@@ -1900,12 +1907,17 @@ export default function Jobs() {
                   <X className="h-3 w-3" />
                   Cancelled
                 </Badge>
-              ) : job.isPaid && (
+              ) : job.isPaid ? (
                 <Badge className="absolute top-3 right-3 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
                   <CheckCircle2 className="h-3 w-3" />
                   Paid
                 </Badge>
-              )}
+              ) : job.invoicePaymentStatus === 'partial' ? (
+                <Badge className="absolute top-3 right-3 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
+                  <DollarSign className="h-3 w-3" />
+                  Partial
+                </Badge>
+              ) : null}
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 pr-14">

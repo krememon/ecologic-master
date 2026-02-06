@@ -12248,7 +12248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to create payment links" });
       }
 
-      const { invoiceId, returnBaseUrl } = req.body;
+      const { invoiceId, returnBaseUrl, amountCents: requestedAmountCents } = req.body;
       
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
@@ -12275,6 +12275,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "This invoice has already been paid" });
       }
 
+      // Calculate balance remaining
+      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+      const currentPaidAmountCents = invoice.paidAmountCents || 0;
+      const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
+
+      // Determine charge amount (support partial payments)
+      let amountInCents: number;
+      if (requestedAmountCents !== undefined && requestedAmountCents !== null) {
+        const parsed = parseInt(String(requestedAmountCents), 10);
+        if (isNaN(parsed) || parsed <= 0) {
+          return res.status(400).json({ message: "Payment amount must be a positive number" });
+        }
+        if (parsed > currentBalanceDueCents) {
+          return res.status(400).json({ message: "Payment amount cannot exceed balance due" });
+        }
+        amountInCents = parsed;
+      } else {
+        amountInCents = currentBalanceDueCents;
+      }
+
       // Log request headers for debugging origin issues
       console.log(`[Checkout] req origin: ${req.headers.origin}`);
       console.log(`[Checkout] host: ${req.headers.host}`);
@@ -12296,12 +12316,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
         }
       }
-      
-      // Use totalCents from invoice (includes tax), fall back to amount calculation for older invoices
-      const amountInCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+
+      const isPartialPayment = amountInCents < currentBalanceDueCents;
+      const description = isPartialPayment 
+        ? `Partial payment for invoice ${invoice.invoiceNumber}`
+        : (invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`);
 
       console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
-      console.log(`[Stripe] Charging amount: ${amountInCents} cents (totalCents: ${invoice.totalCents}, amount: ${invoice.amount})`);
+      console.log(`[Stripe] Charging amount: ${amountInCents} cents (balance: ${currentBalanceDueCents}, total: ${invoiceTotalCents})`);
       console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return`);
       console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return`);
 
@@ -12314,7 +12336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               currency: 'usd',
               product_data: {
                 name: `Invoice ${invoice.invoiceNumber}`,
-                description: invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`,
+                description,
               },
               unit_amount: amountInCents,
             },
@@ -12325,6 +12347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           invoiceId: String(invoice.id),
           companyId: String(company.id),
           jobId: invoice.jobId ? String(invoice.jobId) : '',
+          isPartialPayment: isPartialPayment ? 'true' : 'false',
         },
         success_url: `${appBaseUrl}/stripe/return`,
         cancel_url: `${appBaseUrl}/stripe/return`,
@@ -12359,22 +12382,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (invoice && invoice.status !== 'paid') {
           const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
-          // Mark invoice as paid with balance fields
+          const amountCents = session.amount_total || invoiceTotalCents;
+          const prevPaidCents = invoice.paidAmountCents || 0;
+          const newPaidAmountCents = Math.min(invoiceTotalCents, prevPaidCents + amountCents);
+          const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
+          const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
+
           await storage.updateInvoice(invoiceId, {
-            status: 'paid',
-            paidDate: new Date().toISOString().split('T')[0],
-            paidAt: new Date(),
-            paidAmountCents: invoiceTotalCents,
-            balanceDueCents: 0,
+            status: newStatus,
+            paidAmountCents: newPaidAmountCents,
+            balanceDueCents: newBalanceDueCents,
+            ...(newStatus === 'paid' ? {
+              paidDate: new Date().toISOString().split('T')[0],
+              paidAt: new Date(),
+            } : {}),
             stripeCheckoutSessionId: session.id,
             stripePaymentIntentId: session.payment_intent as string,
           } as any);
-          console.log(`[Stripe] Invoice ${invoiceId} marked as paid from session check`);
+          console.log(`[Stripe] Invoice ${invoiceId} updated to '${newStatus}' from session check (paid: ${newPaidAmountCents}, balance: ${newBalanceDueCents})`);
 
-          // Create payment record (idempotency: check if already exists)
-          const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
+          // Create payment record (idempotency: check by stripePaymentIntentId)
+          const paymentIntentId = session.payment_intent as string;
+          let existingPayment = null;
+          if (paymentIntentId) {
+            const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
+            existingPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === paymentIntentId) || null;
+          }
           if (!existingPayment) {
-            const amountCents = session.amount_total || invoiceTotalCents;
             const stripePayment = await storage.createPayment({
               companyId: invoice.companyId,
               invoiceId: invoiceId,
@@ -12384,10 +12418,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               amountCents: amountCents,
               paymentMethod: 'stripe',
               status: 'paid',
-              stripePaymentIntentId: session.payment_intent as string,
+              stripePaymentIntentId: paymentIntentId,
               stripeCheckoutSessionId: session.id,
               paidDate: new Date(),
-              notes: 'Online card payment',
+              notes: amountCents < invoiceTotalCents ? 'Partial card payment' : 'Online card payment',
             });
             console.log(`[Stripe] Payment record created for invoice ${invoiceId}`);
 
@@ -12401,16 +12435,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }).catch(err => console.error('[QB] Stripe payment sync error:', err));
           }
 
-          // Update job paymentStatus to 'paid' if invoice is associated with a job
+          // Update job paymentStatus
           if (invoice.jobId) {
-            await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
-            console.log(`[Stripe] Job ${invoice.jobId} paymentStatus updated to 'paid'`);
+            const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+            await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+            console.log(`[Stripe] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
           }
 
-          // Send invoice_paid notification to managers
-          const amountDollars = invoice.totalCents > 0 
-            ? (invoice.totalCents / 100).toFixed(2) 
-            : parseFloat(invoice.amount).toFixed(2);
+          // Send notification to managers
+          const amountDollars = (amountCents / 100).toFixed(2);
           await notifyManagers(invoice.companyId, {
             type: 'invoice_paid',
             title: 'Invoice Paid',

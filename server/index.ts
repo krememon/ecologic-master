@@ -6,7 +6,7 @@ import path from "path";
 import fs from "fs";
 import Stripe from "stripe";
 import { db } from "./db";
-import { invoices, payments, customers, companies } from "../shared/schema";
+import { invoices, payments, customers, companies, jobs } from "../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 const app = express();
@@ -406,22 +406,41 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         return res.json({ received: true, message: 'Already processed' });
       }
 
-      // Mark invoice as paid
+      // Calculate partial payment amounts
       const now = new Date();
+      const amountCents = session.amount_total || 0;
+      const invoiceTotalCents = existingInvoice.totalCents > 0 ? existingInvoice.totalCents : Math.round(parseFloat(existingInvoice.amount) * 100);
+      const prevPaidCents = existingInvoice.paidAmountCents || 0;
+      const newPaidAmountCents = Math.min(invoiceTotalCents, prevPaidCents + amountCents);
+      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
+      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
+
+      // Update invoice with payment amounts and status
       await db
         .update(invoices)
         .set({
-          status: 'paid',
-          paidAt: now,
-          paidDate: now.toISOString().split('T')[0],
+          status: newStatus,
+          paidAmountCents: newPaidAmountCents,
+          balanceDueCents: newBalanceDueCents,
+          ...(newStatus === 'paid' ? {
+            paidAt: now,
+            paidDate: now.toISOString().split('T')[0],
+          } : {}),
           stripeCheckoutSessionId: session.id,
           stripePaymentIntentId: session.payment_intent as string,
           updatedAt: now,
         })
         .where(eq(invoices.id, parseInt(invoiceId)));
 
-      // Create payment record (idempotency: check for existing payment by paymentIntentId)
-      const amountCents = session.amount_total || 0;
+      // Update job paymentStatus
+      if (existingInvoice.jobId) {
+        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+        await db
+          .update(jobs)
+          .set({ paymentStatus: jobPaymentStatus })
+          .where(eq(jobs.id, existingInvoice.jobId));
+        console.log(`[Stripe Webhook] Job ${existingInvoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
+      }
       const [existingPayment] = await db
         .select()
         .from(payments)

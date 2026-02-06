@@ -1293,6 +1293,7 @@ export class DatabaseStorage implements IStorage {
     if (jobIds.length === 0) return jobsList.map(job => ({
       ...job,
       isPaid: false,
+      invoicePaymentStatus: null,
       primaryLineItem: null,
     }));
     
@@ -1305,11 +1306,17 @@ export class DatabaseStorage implements IStorage {
       .from(invoices)
       .where(inArray(invoices.jobId, jobIds));
     
-    // Build map of job -> isPaid (true if any invoice is paid)
+    // Build map of job -> isPaid and invoicePaymentStatus
     const paidStatusByJob: Record<number, boolean> = {};
+    const invoicePaymentStatusByJob: Record<number, string> = {};
     for (const inv of invoiceStatuses) {
-      if (inv.jobId && inv.status?.toLowerCase() === 'paid') {
+      if (!inv.jobId) continue;
+      const status = inv.status?.toLowerCase();
+      if (status === 'paid') {
         paidStatusByJob[inv.jobId] = true;
+        invoicePaymentStatusByJob[inv.jobId] = 'paid';
+      } else if (status === 'partial' && !paidStatusByJob[inv.jobId]) {
+        invoicePaymentStatusByJob[inv.jobId] = 'partial';
       }
     }
     
@@ -1391,11 +1398,12 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    // Merge primary line item, isPaid, crew assignments, and customer into jobs
+    // Merge primary line item, isPaid, invoicePaymentStatus, crew assignments, and customer into jobs
     return jobsList.map(job => ({
       ...job,
       primaryLineItem: firstLineItemByJob[job.id] || null,
       isPaid: paidStatusByJob[job.id] || false,
+      invoicePaymentStatus: invoicePaymentStatusByJob[job.id] || null,
       crewAssignments: crewByJob[job.id] || [],
       customer: job.customerId ? customerMap[job.customerId] || null : null,
     }));

@@ -1,0 +1,118 @@
+Title: Add Partial Payment option to Job Checkout (pay less than total)
+
+Goal
+On the Job Checkout page, allow the user to choose a custom “Amount to pay today” (partial payment). After payment succeeds, the system must record the payment, update the invoice totals, and reflect “Partial” status across Jobs, Payments, and Invoices.
+
+UI Changes (Job Checkout page)
+
+Where: the checkout page shown at route like /jobs/:jobId/pay/:invoiceId (or your current checkout component)
+
+Add a small UI control under the totals card:
+
+Label: Partial Payment
+
+UI: a checkbox/toggle OR a text link “Partial Payment” that expands a field.
+
+When Partial Payment is enabled:
+
+Show an input: Amount to pay today
+
+Placeholder: $0.00
+
+Default value: full invoice total (or blank, but better default to total)
+
+Validation:
+
+Must be > 0
+
+Must be <= invoice remaining balance (for now assume remaining = invoice total until backend supports paidCents)
+
+If invalid, disable payment buttons and show small inline error text.
+
+When Partial Payment is NOT enabled:
+
+Payment amount = invoice total (existing behavior)
+
+When user taps Cash/Check/Card:
+
+Use the “amount to pay today” if partial is enabled
+
+Otherwise use the full total
+
+After success, route user back to:
+
+the Job details page OR Payments page (choose the existing post-success behavior)
+
+Ensure the UI reflects updated status after redirect (refetch data)
+
+Backend / Data Requirements (must work for partial)
+
+IMPORTANT: We are sticking to your rule: payment succeeds → it should appear everywhere and status updates automatically.
+
+Add support for invoices tracking partial paid:
+
+Add paidCents to invoices table (default 0)
+
+Status values: unpaid | partial | paid
+
+Payment creation logic must support multiple payments for same invoice:
+
+When a payment is created for an invoice:
+
+Insert a row into payments with amountCents, method, invoiceId, jobId (if available), recordedByUserId, paidAt
+
+Update invoice:
+
+paidCents = min(totalCents, paidCents + paymentAmountCents)
+
+If paidCents == 0 → unpaid
+
+If 0 < paidCents < totalCents → partial
+
+If paidCents >= totalCents → paid
+
+Update any existing “mark invoice as paid” logic so it does NOT force paid unless paidCents reaches totalCents.
+
+Ensure the Payments page and Invoices page are reading status correctly:
+
+Payments page filters should include Partial (already present)
+
+Invoice cards should show a Partial pill when invoice.status === 'partial'
+
+Jobs list / job details should show a Partial pill when invoice.status === 'partial' (or when invoice balance > 0 but paidCents > 0)
+
+Behavior Rules
+
+If user enters $200 on a $500 invoice:
+
+A payment for $200 is created
+
+Invoice becomes Partial
+
+Still owed becomes $300
+
+If later another payment comes in, it should move to Paid when fully covered.
+
+DO NOT
+
+Do not add due dates
+
+Do not add “pay remaining next week” scheduler logic yet
+
+Do not remove the full payment flow
+
+Do not break RBAC
+
+Deliverables
+
+Checkout shows Partial Payment option with amount input
+
+Successful partial payment creates a payment row and updates invoice status to Partial
+
+Jobs show Partial pill
+
+Payments tab shows the payment and it appears under Partial filter
+
+Invoices tab shows Partial pill on the invoice card
+
+No “No Open Invoices” popup blocks recording payments

@@ -160,6 +160,8 @@ export default function Invoicing() {
     switch (status) {
       case 'paid':
         return 'default';
+      case 'partial':
+        return 'secondary';
       case 'sent':
       case 'pending':
         return 'secondary';
