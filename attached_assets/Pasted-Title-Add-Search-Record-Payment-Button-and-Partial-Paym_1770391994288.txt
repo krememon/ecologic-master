@@ -1,0 +1,197 @@
+Title: Add Search, Record Payment Button, and Partial Payment UI to Payments Page (UI + minimal backend)
+
+GOAL
+
+Enhance the Payments page with:
+
+Search bar (filters payments)
+
+Primary “Record Payment” button + modal
+
+Visual support for partial payments
+
+WITHOUT breaking:
+
+Existing API endpoints
+
+Existing calculations
+
+Existing navigation
+
+QuickBooks sync
+
+Stats scoreboard
+
+DO NOT CHANGE
+
+Any existing API route signatures
+
+Any existing database tables
+
+Any calculations logic
+
+Any navigation behavior
+
+Any other pages
+
+Only extend safely.
+
+FILES TO TOUCH (likely)
+
+client/src/pages/payments-page.tsx
+
+client/src/components/modals/RecordPaymentModal.tsx (new)
+
+server/routes/payments.ts (if needed)
+
+server/storage/payments.ts (if needed)
+
+1️⃣ ADD SEARCH BAR
+
+Place below filter tabs and above payment list.
+
+UI
+
+Placeholder:
+
+Search payments…
+
+Behavior
+
+Typing filters visible list by:
+
+customer name
+
+invoice number
+
+amount
+
+Case-insensitive.
+
+Implementation
+
+Frontend-only filter:
+
+payment.customerName
+payment.invoiceNumber
+payment.amount
+
+
+No backend changes required.
+
+2️⃣ ADD “RECORD PAYMENT” BUTTON
+
+Top-right of Payments header:
+
+➕ Record Payment
+
+MODAL FLOW
+
+Title: Record Payment
+
+Fields:
+
+Select Customer (reuse existing SelectCustomer modal/component)
+
+Amount (number input)
+
+Payment Method dropdown:
+
+Cash
+
+Check
+
+Card
+
+Buttons:
+
+Cancel | Record Payment
+
+ON SUBMIT
+
+Call existing or new endpoint:
+
+POST /api/payments/record
+
+Payload:
+
+{
+  "customerId": "...",
+  "amount": 150,
+  "method": "cash"
+}
+
+BACKEND LOGIC (MINIMAL)
+
+When payment recorded:
+
+Create payment row
+
+Attach to invoice
+
+Update invoice:
+
+If totalPaid < invoiceTotal
+→ status = "partial"
+
+If totalPaid === invoiceTotal
+→ status = "paid"
+
+3️⃣ PARTIAL PAYMENT SUPPORT (VISUAL ONLY)
+
+In payment row:
+
+If status === "partial":
+
+Show:
+
+$150 / $350
+🟡 Partial
+
+Instead of:
+
+$350 Paid
+
+BADGE COLORS
+
+Paid → green
+Unpaid → orange
+Partial → yellow
+Overdue → red
+
+FILTER UPDATE
+
+Add "Partial" tab.
+
+Filtering logic:
+
+status === "partial"
+
+AFTER ACTIONS
+
+After recording payment:
+
+Close modal
+
+Refresh payments list
+
+Update top scoreboard
+
+No page reload.
+
+SUCCESS CRITERIA
+
+✔ Search filters instantly
+✔ Record Payment creates payment
+✔ Partial badge appears
+✔ Filters work
+✔ No console errors
+✔ Existing payments still load
+
+DELIVERABLE
+
+Tell me:
+
+Which files were edited
+
+Confirm search, record payment, and partial payments working
