@@ -1,0 +1,161 @@
+ALL payments — no matter where they come from — must create a payment row
+
+Whether:
+
+• Online payment
+• Invoice payment
+• Job checkout
+• Estimate checkout
+• Record Payment modal
+
+They must ALL:
+
+1) Create payment row
+2) Link payment -> invoice
+3) Update invoice status
+4) Show in payments list
+5) Open details screen
+
+
+Think of the payments table as the single source of truth.
+
+🧱 New Rule
+
+If money is collected → a Payment record MUST exist.
+
+No exceptions.
+
+🛠 What needs to change
+
+When these actions happen:
+
+Pay invoice
+
+Checkout job
+
+Pay estimate
+
+Instead of only:
+
+UPDATE invoice SET status = 'paid'
+
+
+They must ALSO:
+
+INSERT INTO payments (...)
+
+🧩 Data that must be saved for every payment
+id
+companyId
+customerId
+invoiceId
+amountCents
+method (card, cash, check)
+source (invoice | job | estimate | manual | online)
+status (paid)
+createdAt
+createdByUserId
+notes
+
+
+Once this exists → everything else becomes easy.
+
+🧭 Result After Fix
+
+✔ Every payment row opens
+✔ Payment details page always works
+✔ Search works
+✔ Filters work
+✔ Stats are correct
+✔ QuickBooks sync consistent
+
+This locks in scalability.
+
+✅ REPLIT AGENT PROMPT (COPY / PASTE)
+
+Use this EXACTLY:
+
+Title: Ensure ALL invoice/job/estimate payments create Payment records
+
+Goal
+
+Whenever a payment is made from:
+
+Invoice payment flow
+
+Job checkout
+
+Estimate checkout
+
+The system must ALSO create a row in the payments table, same as the Record Payment modal.
+
+Critical Rule
+
+If money is collected → a payment record must exist.
+
+Backend Tasks
+
+Find backend routes that mark invoices paid (examples may include):
+
+POST /api/invoices/:id/pay
+POST /api/jobs/:id/checkout
+POST /api/estimates/:id/pay
+
+
+In EACH of those routes:
+
+After invoice is updated to paid, INSERT into payments table:
+
+Fields:
+
+companyId
+customerId
+invoiceId
+amountCents
+method
+status = 'paid'
+source = 'invoice' | 'job' | 'estimate'
+createdByUserId
+notes = 'Auto payment'
+
+
+Return the created payment record.
+
+Frontend Tasks
+
+Payments list already navigates to payment details when a payment has an id.
+
+Ensure that payments coming from invoices/jobs/estimates now include:
+
+payment.id
+
+
+Do NOT change existing navigation logic.
+
+Validation Checklist
+
+Pay invoice → appears in Payments list
+
+Click row → opens Payment Details
+
+Record Payment modal still works
+
+Stats still correct
+
+No console errors
+
+Do NOT change
+
+Existing DB schema
+
+Any payment calculations
+
+Any UI styling
+
+Deliverable
+
+Tell me:
+
+Which backend files were edited
+
+Which routes were updated

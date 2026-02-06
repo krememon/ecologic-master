@@ -12294,11 +12294,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const invoice = await storage.getInvoice(invoiceId);
         
         if (invoice && invoice.status !== 'paid') {
-          // Mark invoice as paid
+          const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+          // Mark invoice as paid with balance fields
           await storage.updateInvoice(invoiceId, {
             status: 'paid',
             paidDate: new Date().toISOString().split('T')[0],
             paidAt: new Date(),
+            paidAmountCents: invoiceTotalCents,
+            balanceDueCents: 0,
             stripeCheckoutSessionId: session.id,
             stripePaymentIntentId: session.payment_intent as string,
           } as any);
@@ -12307,7 +12310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Create payment record (idempotency: check if already exists)
           const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
           if (!existingPayment) {
-            const amountCents = session.amount_total || (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100));
+            const amountCents = session.amount_total || invoiceTotalCents;
             const stripePayment = await storage.createPayment({
               companyId: invoice.companyId,
               invoiceId: invoiceId,
@@ -12320,6 +12323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               stripePaymentIntentId: session.payment_intent as string,
               stripeCheckoutSessionId: session.id,
               paidDate: new Date(),
+              notes: 'Online card payment',
             });
             console.log(`[Stripe] Payment record created for invoice ${invoiceId}`);
 
