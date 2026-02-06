@@ -1,0 +1,110 @@
+itle: Fix Payments: remove Due Date + ensure all paid invoices create payment records + stats update
+
+Goal
+
+Remove all “Due” / “Due Date” display from Payments page + payment rows (we are NOT using due dates yet).
+
+Ensure payments created from Jobs/Invoices automatically create a real payments table record (same as “Record Payment”).
+
+Ensure /api/payments returns ALL payments (manual + automatic).
+
+Fix /api/payments/stats so Paid Today and This Month update correctly for payments made through jobs/invoices.
+
+After this, clicking ANY payment row (manual or automatic) must open the Payment Details screen without issues.
+
+DO NOT CHANGE
+
+RBAC rules
+
+Any navigation structure besides enabling the payment details route for all rows
+
+Any existing invoice/job payment functionality (just add the missing payment record + fix display)
+
+Backend changes (required)
+
+A) Whenever an invoice becomes PAID (from jobs/invoices online payment flow), create a payment record
+
+Find where invoice is marked as paid (likely in an invoices route, job invoice route, or Stripe/checkout success handler).
+
+After setting invoice status to “paid”, insert into payments table:
+
+Fields should match what the Payment Details screen expects:
+
+companyId
+
+customerId
+
+invoiceId
+
+amountCents
+
+paymentMethod (card/cash/check)
+
+status (“paid”)
+
+paidAt (or createdAt if that’s what your model uses)
+
+recordedByUserId (if available; for system payments you can set null or the current user)
+
+notes (optional: “Online payment” / “Job payment”)
+
+IMPORTANT: Prevent duplicates:
+
+If a payment already exists for that invoice (paid), don’t create another.
+
+B) Fix stats source of truth
+/api/payments/stats MUST calculate:
+
+Paid Today = sum of payments where status=paid AND date is today
+
+This Month = sum of payments where status=paid AND date is in current month
+
+Still Owed = sum of invoices where status != paid (or outstanding amount if partial support exists)
+
+Overdue = set to 0 for now OR keep existing logic, but DO NOT show “due date” on UI
+
+This ensures stats update when invoice payments happen.
+
+Frontend changes (required)
+
+1) Remove “Due / Due Date” UI everywhere on Payments page
+
+On the payment row subtitle, do NOT show “Due Mar 8”
+
+Replace with:
+
+Paid rows: “Paid • Today” (or Paid date)
+
+Unpaid rows: “Unpaid” (no date)
+
+Partial rows: “Partial” (no due date)
+
+2) Payments list MUST be built from /api/payments
+Do not build it from invoices. Payments page = payments table.
+
+3) Clicking any payment row routes to payment details
+
+Route: /payments/:paymentId
+
+Ensure row uses the payment’s actual id from /api/payments
+
+Deliverables
+
+✅ No “Due” or “Due Date” appears anywhere on Payments page
+
+✅ Paying an invoice through Jobs/Invoices automatically creates a payments record
+
+✅ Payment appears in list immediately
+
+✅ Stats update (Paid Today + This Month) after payment
+
+✅ Clicking ANY payment row opens the details page
+
+✅ No console errors
+
+Debug logging (temporary)
+Add 2 targeted logs then remove after verified:
+
+When invoice is marked paid: log invoiceId + amount + method
+
+When payment record is created: log paymentId + invoiceId
