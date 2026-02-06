@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
@@ -80,6 +81,7 @@ function getCustomerNameStatic(invoice: Invoice): string {
 }
 
 export default function PaymentsPage() {
+  const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
@@ -326,6 +328,10 @@ export default function PaymentsPage() {
             return (
               <div
                 key={invoice.id}
+                onClick={() => {
+                  const p = payments.find((pm) => pm.invoiceId === invoice.id);
+                  if (p) navigate(`/payments/${p.id}`);
+                }}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
                 <div className="flex-1 min-w-0">

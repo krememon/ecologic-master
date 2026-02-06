@@ -10053,6 +10053,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/payments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const paymentId = parseInt(req.params.id, 10);
+      if (isNaN(paymentId)) return res.status(400).json({ message: "Invalid payment ID" });
+
+      const allPayments = await storage.getPayments(company.id);
+      const payment = allPayments.find((p: any) => p.id === paymentId);
+      if (!payment) return res.status(404).json({ message: "Payment not found" });
+
+      let customerName = [payment.clientFirstName, payment.clientLastName].filter(Boolean).join(" ") || null;
+      if (!customerName && payment.customerId) {
+        const customer = await storage.getCustomer(payment.customerId);
+        if (customer) customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.companyName || null;
+      }
+
+      let invoiceNumber = null;
+      if (payment.invoiceId) {
+        const invoice = await storage.getInvoice(payment.invoiceId);
+        if (invoice) invoiceNumber = invoice.invoiceNumber;
+      }
+
+      let collectedByName = null;
+      if (payment.collectedByUserId) {
+        const collector = await storage.getUser(payment.collectedByUserId);
+        if (collector) collectedByName = [collector.firstName, collector.lastName].filter(Boolean).join(" ") || collector.username || null;
+      }
+
+      res.json({
+        ...payment,
+        customerName: customerName || "Unknown Customer",
+        invoiceNumber,
+        collectedByName,
+      });
+    } catch (error) {
+      console.error("Error fetching payment details:", error);
+      res.status(500).json({ message: "Failed to fetch payment details" });
+    }
+  });
+
   app.post('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
