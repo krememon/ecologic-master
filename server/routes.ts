@@ -10175,6 +10175,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/invoices/:id/payments - Get payments for an invoice
+  app.get('/api/invoices/:id/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      const invoicePayments = await storage.getPaymentsByInvoiceId(invoiceId);
+      res.json(invoicePayments);
+    } catch (error) {
+      console.error("Error fetching invoice payments:", error);
+      res.status(500).json({ message: "Failed to fetch invoice payments" });
+    }
+  });
+
   // PATCH /api/invoices/:id - Update invoice (mark as paid, void, etc.)
   app.patch('/api/invoices/:id', isAuthenticated, async (req: any, res) => {
     try {

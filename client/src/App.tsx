@@ -51,6 +51,7 @@ import TimeTrackingSettings from "@/pages/TimeTrackingSettings";
 import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
 import PaymentDetails from "@/pages/payment-details";
+import InvoicePaymentDetails from "@/pages/invoice-payment-details";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
@@ -213,6 +214,9 @@ function AuthenticatedRouter() {
           {(params) => <InvoiceDetails invoiceId={params.id} />}
         </Route>
         <Route path="/payments" component={PaymentsPage} />
+        <Route path="/payments/invoice/:id">
+          {(params) => <InvoicePaymentDetails invoiceId={params.id} />}
+        </Route>
         <Route path="/payments/:id">
           {(params) => <PaymentDetails paymentId={params.id} />}
         </Route>

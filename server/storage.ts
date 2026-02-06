@@ -139,6 +139,7 @@ export interface IStorage {
   // Payment operations
   getPayments(companyId: number): Promise<any[]>;
   getPaymentByInvoiceId(invoiceId: number): Promise<any | null>;
+  getPaymentsByInvoiceId(invoiceId: number): Promise<any[]>;
   getPaymentsBreakdown(companyId: number, startDate: Date, endDate: Date): Promise<{
     cashTotalCents: number;
     checkTotalCents: number;
@@ -615,6 +616,14 @@ export class DatabaseStorage implements IStorage {
       .from(payments)
       .where(eq(payments.invoiceId, invoiceId));
     return payment || null;
+  }
+
+  async getPaymentsByInvoiceId(invoiceId: number): Promise<any[]> {
+    return await db
+      .select()
+      .from(payments)
+      .where(eq(payments.invoiceId, invoiceId))
+      .orderBy(desc(payments.paidDate), desc(payments.createdAt));
   }
   
   async createPayment(payment: any): Promise<any> {

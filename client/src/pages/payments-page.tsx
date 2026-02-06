@@ -13,29 +13,31 @@ import {
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
-type PaymentRow = {
+type Invoice = {
   id: number;
-  invoiceId: number | null;
-  customerId: number | null;
-  jobId: number | null;
-  amount: string;
-  amountCents: number | null;
-  paymentMethod: string;
+  invoiceNumber: string;
   status: string;
-  paidDate: string | null;
-  createdAt: string | null;
-  notes: string | null;
-  checkNumber: string | null;
-  jobTitle: string | null;
-  clientFirstName: string | null;
-  clientLastName: string | null;
-};
-
-type StatsData = {
-  thisMonthTotalCents: number;
-  stillOwedTotalCents: number;
-  paidTodayTotalCents: number;
-  overdueCount: number;
+  amount: string;
+  totalCents: number;
+  paidAmountCents?: number;
+  balanceDueCents?: number;
+  dueDate?: string;
+  paidDate?: string;
+  createdAt?: string;
+  jobId: number;
+  estimateId?: number | null;
+  customer?: {
+    firstName?: string;
+    lastName?: string;
+    companyName?: string;
+  };
+  client?: {
+    name?: string;
+  };
+  job?: {
+    title?: string;
+    clientName?: string;
+  };
 };
 
 const formatCents = (cents: number): string => {
@@ -52,14 +54,37 @@ const safeParseDate = (dateStr: string | undefined | null): Date | null => {
   }
 };
 
-type FilterTab = "all" | "paid" | "cash" | "check" | "card";
+type FilterTab = "all" | "unpaid" | "paid" | "overdue" | "partial";
 
-function getCustomerName(payment: PaymentRow): string {
-  return [payment.clientFirstName, payment.clientLastName].filter(Boolean).join(" ") || "Unknown Customer";
+function getCustomerName(invoice: Invoice): string {
+  if (invoice.customer) {
+    const { firstName, lastName, companyName } = invoice.customer;
+    if (companyName) return companyName;
+    return [firstName, lastName].filter(Boolean).join(" ") || "Unknown";
+  }
+  if (invoice.client?.name) return invoice.client.name;
+  if (invoice.job?.clientName) return invoice.job.clientName;
+  return "Unknown Customer";
 }
 
-function getPaymentAmountCents(payment: PaymentRow): number {
-  return payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
+function getInvoiceStatus(invoice: Invoice): string {
+  const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || "0") * 100);
+  const paidCents = invoice.paidAmountCents || 0;
+  const balanceCents = invoice.balanceDueCents ?? (totalCents - paidCents);
+
+  if (invoice.status === "paid" || balanceCents <= 0) return "paid";
+  if (paidCents > 0 && balanceCents > 0) return "partial";
+
+  if (invoice.dueDate) {
+    const due = safeParseDate(invoice.dueDate);
+    if (due) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (due < today && invoice.status !== "paid") return "overdue";
+    }
+  }
+
+  return "unpaid";
 }
 
 export default function PaymentsPage() {
@@ -68,48 +93,72 @@ export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
 
-  const { data: stats, isLoading: statsLoading } = useQuery<StatsData>({
-    queryKey: ["/api/payments/stats"],
+  const { data: allInvoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({
+    queryKey: ["/api/invoices"],
   });
 
-  const { data: payments = [], isLoading: paymentsLoading } = useQuery<PaymentRow[]>({
-    queryKey: ["/api/payments"],
-  });
+  const invoices = useMemo(() => {
+    return allInvoices.filter((inv) => !inv.estimateId);
+  }, [allInvoices]);
 
-  const filteredPayments = useMemo(() => {
-    let list = payments;
-    if (activeTab !== "all") {
-      if (activeTab === "paid") {
-        list = list.filter((p) => (p.status || "").toLowerCase() === "paid");
-      } else {
-        list = list.filter((p) => {
-          const method = (p.paymentMethod || "").toLowerCase();
-          if (activeTab === "card") return method === "card" || method === "credit_card" || method === "stripe";
-          return method === activeTab;
-        });
+  const stats = useMemo(() => {
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let thisMonthTotalCents = 0;
+    let stillOwedTotalCents = 0;
+    let paidTodayTotalCents = 0;
+    let overdueCount = 0;
+
+    for (const inv of invoices) {
+      const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || "0") * 100);
+      const paidCents = inv.paidAmountCents || 0;
+      const balanceCents = inv.balanceDueCents ?? (totalCents - paidCents);
+      const status = getInvoiceStatus(inv);
+
+      if (status === "paid" && inv.paidDate) {
+        const pd = safeParseDate(inv.paidDate);
+        if (pd && pd >= thisMonthStart) thisMonthTotalCents += totalCents;
+        if (pd && pd >= todayStart) paidTodayTotalCents += totalCents;
       }
+
+      if (status === "unpaid" || status === "partial" || status === "overdue") {
+        stillOwedTotalCents += balanceCents;
+      }
+
+      if (status === "overdue") overdueCount++;
+    }
+
+    return { thisMonthTotalCents, stillOwedTotalCents, paidTodayTotalCents, overdueCount };
+  }, [invoices]);
+
+  const filteredInvoices = useMemo(() => {
+    let list = invoices;
+    if (activeTab !== "all") {
+      list = list.filter((inv) => getInvoiceStatus(inv) === activeTab);
     }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      list = list.filter((p) => {
-        const name = getCustomerName(p).toLowerCase();
-        const cents = getPaymentAmountCents(p);
-        const amountStr = (cents / 100).toFixed(2);
-        const method = (p.paymentMethod || "").toLowerCase();
-        const job = (p.jobTitle || "").toLowerCase();
-        return name.includes(q) || amountStr.includes(q) || method.includes(q) || job.includes(q);
+      list = list.filter((inv) => {
+        const name = getCustomerName(inv).toLowerCase();
+        const num = (inv.invoiceNumber || "").toLowerCase();
+        const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || "0") * 100);
+        const amountStr = (totalCents / 100).toFixed(2);
+        return name.includes(q) || num.includes(q) || amountStr.includes(q);
       });
     }
     return list;
-  }, [payments, activeTab, searchTerm]);
+  }, [invoices, activeTab, searchTerm]);
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { color: string; label: string }> = {
       paid: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Paid" },
-      failed: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Failed" },
-      refunded: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Refunded" },
+      partial: { color: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/40 dark:text-yellow-400", label: "Partial" },
+      unpaid: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Unpaid" },
+      overdue: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Overdue" },
     };
-    const config = configs[(status || "paid").toLowerCase()] || configs.paid;
+    const config = configs[status] || configs.unpaid;
     return (
       <span className={`${config.color} text-[11px] font-semibold px-2 py-0.5 rounded-full`}>
         {config.label}
@@ -117,33 +166,50 @@ export default function PaymentsPage() {
     );
   };
 
-  const getMethodLabel = (method: string): string => {
-    const m = (method || "").toLowerCase();
-    if (m === "cash") return "Cash";
-    if (m === "check") return "Check";
-    if (m === "card" || m === "credit_card") return "Card";
-    if (m === "stripe") return "Card";
-    if (m === "other") return "Other";
-    return method || "—";
+  const getDateDisplay = (invoice: Invoice): string => {
+    const status = getInvoiceStatus(invoice);
+
+    if (status === "paid") {
+      const paidDate = safeParseDate(invoice.paidDate);
+      if (paidDate) {
+        if (isToday(paidDate)) return "Paid Today";
+        if (isYesterday(paidDate)) return "Paid Yesterday";
+        return `Paid ${format(paidDate, "MMM d")}`;
+      }
+    }
+
+    const dueDate = safeParseDate(invoice.dueDate);
+    if (dueDate) {
+      if (isToday(dueDate)) return "Due Today";
+      return `Due ${format(dueDate, "MMM d")}`;
+    }
+
+    return "";
   };
 
-  const getDateDisplay = (payment: PaymentRow): string => {
-    const date = safeParseDate(payment.paidDate) || safeParseDate(payment.createdAt);
-    if (!date) return "";
-    if (isToday(date)) return "Today";
-    if (isYesterday(date)) return "Yesterday";
-    return format(date, "MMM d, yyyy");
+  const getAmountDisplay = (invoice: Invoice) => {
+    const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || "0") * 100);
+    const paidCents = invoice.paidAmountCents || 0;
+    const status = getInvoiceStatus(invoice);
+
+    if (status === "paid") {
+      return { primary: formatCents(totalCents), secondary: null };
+    }
+    if (status === "partial") {
+      return { primary: formatCents(paidCents), secondary: `/ ${formatCents(totalCents)}` };
+    }
+    return { primary: formatCents(totalCents), secondary: null };
   };
 
   const tabs: { key: FilterTab; label: string }[] = [
     { key: "all", label: "All" },
+    { key: "unpaid", label: "Unpaid" },
     { key: "paid", label: "Paid" },
-    { key: "cash", label: "Cash" },
-    { key: "check", label: "Check" },
-    { key: "card", label: "Card" },
+    { key: "overdue", label: "Overdue" },
+    { key: "partial", label: "Partial" },
   ];
 
-  if (paymentsLoading || statsLoading) {
+  if (invoicesLoading) {
     return (
       <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto">
         <div className="animate-pulse space-y-4">
@@ -163,29 +229,28 @@ export default function PaymentsPage() {
   const scoreboardItems = [
     {
       label: "This Month",
-      value: stats ? formatCents(stats.thisMonthTotalCents) : "$0.00",
+      value: formatCents(stats.thisMonthTotalCents),
       color: "text-slate-900 dark:text-slate-100",
     },
     {
       label: "Still Owed",
-      value: stats ? formatCents(stats.stillOwedTotalCents) : "$0.00",
+      value: formatCents(stats.stillOwedTotalCents),
       color: "text-amber-600 dark:text-amber-400",
     },
     {
       label: "Paid Today",
-      value: stats ? formatCents(stats.paidTodayTotalCents) : "$0.00",
+      value: formatCents(stats.paidTodayTotalCents),
       color: "text-slate-900 dark:text-slate-100",
     },
     {
       label: "Overdue",
-      value: stats ? String(stats.overdueCount) : "0",
-      color: stats && stats.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-slate-100",
+      value: String(stats.overdueCount),
+      color: stats.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-slate-100",
     },
   ];
 
   return (
     <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Payments</h1>
         <Button
@@ -197,7 +262,6 @@ export default function PaymentsPage() {
         </Button>
       </div>
 
-      {/* Scoreboard */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
         <div className="grid grid-cols-2">
           {scoreboardItems.map((item, i) => (
@@ -218,7 +282,6 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Segmented Control */}
       <div className="bg-slate-100 dark:bg-slate-800/60 rounded-xl p-[3px] flex">
         {tabs.map((tab) => (
           <button
@@ -235,11 +298,10 @@ export default function PaymentsPage() {
         ))}
       </div>
 
-      {/* Search Bar */}
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <Input
-          placeholder="Search payments..."
+          placeholder="Search invoices..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10 pr-9 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 text-sm"
@@ -254,46 +316,49 @@ export default function PaymentsPage() {
         )}
       </div>
 
-      {/* Payments List */}
-      {filteredPayments.length === 0 ? (
+      {filteredInvoices.length === 0 ? (
         <div className="text-center py-14 px-4">
           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
             <Receipt className="w-5 h-5 text-slate-400" />
           </div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            {searchTerm ? "No matching payments" : activeTab !== "all" ? "No matching payments" : "No payments yet"}
+            {searchTerm ? "No matching invoices" : activeTab !== "all" ? "No matching invoices" : "No invoices yet"}
           </p>
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-          {filteredPayments.map((payment) => {
-            const amountCents = getPaymentAmountCents(payment);
-            const dateStr = getDateDisplay(payment);
+          {filteredInvoices.map((invoice) => {
+            const status = getInvoiceStatus(invoice);
+            const amount = getAmountDisplay(invoice);
+            const dateStr = getDateDisplay(invoice);
 
             return (
               <div
-                key={payment.id}
-                onClick={() => navigate(`/payments/${payment.id}`)}
+                key={invoice.id}
+                onClick={() => navigate(`/payments/invoice/${invoice.id}`)}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2 mb-0.5">
                     <p className="font-semibold text-[14px] text-slate-900 dark:text-slate-100 leading-snug break-words">
-                      {getCustomerName(payment)}
+                      {getCustomerName(invoice)}
                     </p>
-                    {getStatusBadge(payment.status)}
+                    {getStatusBadge(status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                    {getMethodLabel(payment.paymentMethod)}
+                    #{invoice.invoiceNumber}
                     {dateStr && <span className="ml-1.5">· {dateStr}</span>}
-                    {payment.jobTitle && <span className="ml-1.5">· {payment.jobTitle}</span>}
+                    {invoice.job?.title && <span className="ml-1.5">· {invoice.job.title}</span>}
                   </p>
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">
                   <p className="text-[15px] font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                    {formatCents(amountCents)}
+                    {amount.primary}
                   </p>
+                  {amount.secondary && (
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{amount.secondary}</p>
+                  )}
                 </div>
 
                 <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
@@ -303,7 +368,6 @@ export default function PaymentsPage() {
         </div>
       )}
 
-      {/* Record Payment Modal */}
       <RecordPaymentModal
         open={recordModalOpen}
         onOpenChange={setRecordModalOpen}
