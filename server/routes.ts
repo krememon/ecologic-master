@@ -9997,8 +9997,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      const payments = await storage.getPayments(company.id);
-      res.json(payments);
+      const allPayments = await storage.getPayments(company.id);
+
+      const invoiceGroups: Record<number, any[]> = {};
+      const standalone: any[] = [];
+
+      const invoiceBalanceCache: Record<number, number> = {};
+      for (const p of allPayments) {
+        if (p.invoiceId && p.invoiceStatus === 'paid') {
+          if (!(p.invoiceId in invoiceBalanceCache)) {
+            const inv = await storage.getInvoice(p.invoiceId);
+            invoiceBalanceCache[p.invoiceId] = inv ? (inv.balanceDueCents ?? -1) : -1;
+          }
+          const balance = invoiceBalanceCache[p.invoiceId];
+          if (balance !== null && balance <= 0) {
+            if (!invoiceGroups[p.invoiceId]) invoiceGroups[p.invoiceId] = [];
+            invoiceGroups[p.invoiceId].push(p);
+          } else {
+            standalone.push(p);
+          }
+        } else {
+          standalone.push(p);
+        }
+      }
+
+      const result: any[] = [...standalone];
+
+      for (const [invoiceIdStr, group] of Object.entries(invoiceGroups)) {
+        const invoiceId = parseInt(invoiceIdStr, 10);
+        if (group.length <= 1) {
+          result.push(...group);
+          continue;
+        }
+
+        const totalAmountCents = group.reduce((sum: number, p: any) => {
+          return sum + (p.amountCents || Math.round(parseFloat(p.amount || '0') * 100));
+        }, 0);
+
+        const methods = new Set(group.map((p: any) => (p.paymentMethod || '').toLowerCase()));
+        const method = methods.size > 1 ? 'mixed' : (group[0].paymentMethod || '');
+
+        const mostRecent = group.reduce((latest: any, p: any) => {
+          const d1 = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : new Date(0);
+          const d2 = latest.paidDate ? new Date(latest.paidDate) : latest.createdAt ? new Date(latest.createdAt) : new Date(0);
+          return d1 > d2 ? p : latest;
+        }, group[0]);
+
+        result.push({
+          id: `invoice_${invoiceId}`,
+          type: 'invoice_paid_group',
+          companyId: group[0].companyId,
+          invoiceId,
+          jobId: group[0].jobId,
+          customerId: group[0].customerId,
+          amount: (totalAmountCents / 100).toFixed(2),
+          amountCents: totalAmountCents,
+          paymentMethod: method,
+          status: 'paid',
+          paidDate: mostRecent.paidDate,
+          createdAt: mostRecent.createdAt,
+          jobTitle: group[0].jobTitle,
+          clientName: group[0].clientName,
+          clientFirstName: group[0].clientFirstName,
+          clientLastName: group[0].clientLastName,
+          invoiceTotalCents: group[0].invoiceTotalCents,
+          invoiceStatus: 'paid',
+          paymentCount: group.length,
+        });
+      }
+
+      result.sort((a: any, b: any) => {
+        const da = a.paidDate ? new Date(a.paidDate).getTime() : a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db2 = b.paidDate ? new Date(b.paidDate).getTime() : b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db2 - da;
+      });
+
+      res.json(result);
     } catch (error) {
       console.error("Error fetching payments:", error);
       res.status(500).json({ message: "Failed to fetch payments" });
@@ -10050,6 +10124,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching payments breakdown:", error);
       res.status(500).json({ message: "Failed to fetch payments breakdown" });
+    }
+  });
+
+  app.get('/api/payments/invoice/:invoiceId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const invoiceId = parseInt(req.params.invoiceId, 10);
+      if (isNaN(invoiceId)) return res.status(400).json({ message: "Invalid invoice ID" });
+
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      const invoicePayments = await storage.getPaymentsByInvoiceId(invoiceId);
+
+      let customerName: string | null = null;
+      if (invoice.customerId) {
+        const customer = await storage.getCustomer(invoice.customerId);
+        if (customer) customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.companyName || null;
+      }
+
+      let jobTitle: string | null = null;
+      if (invoice.jobId) {
+        const job = await storage.getJob(invoice.jobId);
+        if (job) jobTitle = job.title || null;
+      }
+
+      const enrichedPayments = await Promise.all(invoicePayments.map(async (p: any) => {
+        let collectedByName: string | null = null;
+        if (p.collectedByUserId) {
+          const collector = await storage.getUser(p.collectedByUserId);
+          if (collector) collectedByName = [collector.firstName, collector.lastName].filter(Boolean).join(" ") || collector.username || null;
+        }
+        return {
+          ...p,
+          customerName: customerName || "Unknown Customer",
+          collectedByName,
+        };
+      }));
+
+      res.json({
+        invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+        invoiceTotalCents: invoice.totalCents,
+        paidAmountCents: invoice.paidAmountCents,
+        balanceDueCents: invoice.balanceDueCents,
+        invoiceStatus: invoice.status,
+        customerName: customerName || "Unknown Customer",
+        jobTitle,
+        jobId: invoice.jobId,
+        payments: enrichedPayments,
+      });
+    } catch (error) {
+      console.error("Error fetching invoice payments:", error);
+      res.status(500).json({ message: "Failed to fetch invoice payments" });
     }
   });
 

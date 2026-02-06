@@ -1,0 +1,52 @@
+TASK: Collapse multiple partial payments into a single “Paid” row after the invoice/job is fully paid
+
+Current behavior:
+- When an invoice is paid in multiple partial payments, the Payments page shows 2+ rows (each marked Partial).
+- Even after the remaining balance hits $0, it still shows multiple rows instead of one clean “Paid” entry.
+
+Goal:
+- While invoice.balanceDueCents > 0:
+  - show individual payment rows normally (Partial).
+- When invoice.balanceDueCents === 0 (fully paid):
+  - Payments page should show ONE “Paid” row for that invoice (collapsed/aggregated).
+  - Tapping that row opens a details screen showing the full breakdown of the multiple payments.
+
+Rules:
+- Do NOT delete payment rows from DB (we need history/audit).
+- This is a display/aggregation change for the Payments list.
+- The aggregated row should represent the invoice being fully paid.
+
+Backend (preferred approach):
+1) Update /api/payments (or whichever endpoint feeds the Payments page) to support grouping by invoiceId.
+2) For each invoiceId:
+   - If invoice.paymentStatus === "paid":
+     - return a single “grouped payment” item with:
+       - id: "invoice_<invoiceId>" (string id so it won’t collide)
+       - type: "invoice_paid_group"
+       - invoiceId
+       - customerName
+       - amountCents: invoiceTotalCents
+       - status: "paid"
+       - method: "mixed" if >1 method else the only method
+       - date: most recent payment date
+       - payments: [list of underlying payments] OR return a flag that details page can fetch them
+   - Else (unpaid/partial):
+     - return the individual payments as normal.
+
+Frontend:
+1) Update Payments list rendering:
+   - If item.type === "invoice_paid_group":
+     - show one row with Paid pill and invoiceTotalCents
+     - show “Mixed” method if needed
+2) Clicking the grouped row should open Payment Details:
+   - It can either:
+     A) fetch `/api/payments?invoiceId=...` to show all underlying payments, OR
+     B) use item.payments if backend included them.
+3) Keep existing behavior for individual payment rows (partial/unpaid).
+
+Deliverables:
+- Multiple partial payments remain visible while balanceDueCents > 0
+- Once balanceDueCents hits 0, the Payments page shows only ONE row marked Paid for that invoice
+- Payment Details shows the full breakdown of partial payments
+- No regressions in stats/top scoreboard
+- Tell me which files were edited

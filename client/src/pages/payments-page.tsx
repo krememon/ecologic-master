@@ -14,7 +14,8 @@ import {
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
 type Payment = {
-  id: number;
+  id: number | string;
+  type?: string;
   companyId: number;
   jobId?: number | null;
   invoiceId?: number | null;
@@ -32,6 +33,7 @@ type Payment = {
   clientLastName?: string | null;
   invoiceTotalCents?: number | null;
   invoiceStatus?: string | null;
+  paymentCount?: number;
 };
 
 type StatsData = {
@@ -65,6 +67,8 @@ function getCustomerName(payment: Payment): string {
 }
 
 function getPaymentStatus(payment: Payment): string {
+  if (payment.type === "invoice_paid_group") return "paid";
+
   const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
   const invoiceTotal = payment.invoiceTotalCents;
 
@@ -273,12 +277,14 @@ export default function PaymentsPage() {
             const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
             const dateStr = getDateDisplay(payment);
             const method = (payment.paymentMethod || "").toLowerCase();
-            const methodLabel = method === "stripe" ? "Card" : method === "credit_card" ? "Card" : method === "check" ? "Check" : method === "cash" ? "Cash" : method || "";
+            const methodLabel = method === "mixed" ? "Mixed" : method === "stripe" ? "Card" : method === "credit_card" ? "Card" : method === "check" ? "Check" : method === "cash" ? "Cash" : method || "";
+            const isGroup = payment.type === "invoice_paid_group";
+            const detailUrl = isGroup ? `/payments/invoice/${payment.invoiceId}` : `/payments/${payment.id}`;
 
             return (
               <div
                 key={payment.id}
-                onClick={() => navigate(`/payments/${payment.id}`)}
+                onClick={() => navigate(detailUrl)}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
                 <div className="flex-1 min-w-0">
@@ -292,6 +298,9 @@ export default function PaymentsPage() {
                     {status === "paid" ? `Paid · ${dateStr}` : status === "partial" ? `Partial · ${dateStr}` : dateStr}
                     {methodLabel && <span className="ml-1.5">· {methodLabel}</span>}
                     {payment.jobTitle && <span className="ml-1.5">· {payment.jobTitle}</span>}
+                    {isGroup && payment.paymentCount && payment.paymentCount > 1 && (
+                      <span className="ml-1.5">· {payment.paymentCount} payments</span>
+                    )}
                   </p>
                 </div>
 
