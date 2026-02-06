@@ -10205,8 +10205,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: any = {};
       if (status) updateData.status = status;
       if (paidAt) updateData.paidAt = new Date(paidAt);
+
+      if (status === 'paid' && invoice.status !== 'paid') {
+        const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+        updateData.paidAmountCents = invoiceTotalCents;
+        updateData.balanceDueCents = 0;
+        updateData.paidDate = new Date().toISOString().split('T')[0];
+        if (!paidAt) updateData.paidAt = new Date();
+      }
       
       const updatedInvoice = await storage.updateInvoice(invoiceId, updateData);
+
+      if (status === 'paid' && invoice.status !== 'paid') {
+        const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+        const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
+        if (!existingPayment) {
+          const payment = await storage.createPayment({
+            companyId: company.id,
+            jobId: invoice.jobId || null,
+            invoiceId: invoiceId,
+            customerId: invoice.customerId || null,
+            amount: (invoiceTotalCents / 100).toFixed(2),
+            amountCents: invoiceTotalCents,
+            paymentMethod: 'other',
+            status: 'paid',
+            collectedByUserId: userId,
+            collectedByRole: userRole,
+            paidDate: new Date(),
+            notes: 'Invoice marked as paid',
+          });
+          console.log(`[Invoice] Auto-created payment ${payment.id} for invoice ${invoiceId}`);
+
+          syncPaymentToQbo(payment.id, company.id).then(result => {
+            if (result.success) console.log(`[QB] Payment ${payment.id} synced: ${result.qboPaymentId}`);
+            else console.log(`[QB] Payment ${payment.id} sync: ${result.error}`);
+          }).catch(err => console.error('[QB] Payment sync error:', err));
+        }
+
+        if (invoice.jobId) {
+          await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
+          console.log(`[Invoice] Job ${invoice.jobId} paymentStatus updated to paid`);
+        }
+      }
       
       console.log(`[Invoice] Updated invoice`, { invoiceId, status, userId });
       res.json(updatedInvoice);
