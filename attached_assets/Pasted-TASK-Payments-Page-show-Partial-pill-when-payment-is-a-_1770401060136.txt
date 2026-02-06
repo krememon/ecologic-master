@@ -1,0 +1,50 @@
+TASK: Payments Page — show “Partial” pill when payment is a partial payment
+
+Context:
+- Partial payment feature is working (user can enter a partial amount at checkout and it records a payment).
+- On the Payments page, the payment rows currently show a green “Paid” pill even for partial payments.
+- We need the Payments page list row + details to show “Partial” (yellow) when the payment amount is less than the invoice total / amount due.
+
+Requirements:
+1) Payments list rows:
+   - If a payment is tied to an invoice/job AND the payment amount < invoice total, show a pill: “Partial” (NOT “Paid”).
+   - If fully paid, show “Paid”.
+   - If unpaid/open invoice row (if any appear on this page), show “Unpaid”.
+   - Do not break existing filters/tabs (All / Paid / Unpaid / Partial).
+
+2) Partial tab behavior:
+   - The “Partial” filter should include:
+     - payments where amount < invoice total
+     - (and/or) invoices whose balanceRemaining > 0 if you already compute that
+   - Paid tab should exclude partials (only fully paid).
+   - All tab shows everything.
+
+3) Keep logic consistent:
+   - Use a single helper function to compute display status for each row:
+     - return "partial" | "paid" | "unpaid"
+   - Use that status for:
+     - pill text + color
+     - filter matching
+
+Implementation notes (do this safely):
+- Find the Payments page component (likely `client/src/pages/payments-page.tsx`).
+- Identify where pill text/color is decided.
+- Add a computed status:
+   - Get `invoiceTotalCents` and `amountCents` (or equivalent)
+   - If invoiceTotalCents exists and amountCents exists:
+        if amountCents > 0 and amountCents < invoiceTotalCents => partial
+        if amountCents >= invoiceTotalCents => paid
+   - If there is a `balanceRemainingCents` field available, you can use:
+        if balanceRemainingCents > 0 and amountCents > 0 => partial
+- If invoice total is not currently available on the payment row object, do NOT guess.
+   - Either:
+     A) Use an existing field already returned by the backend on /api/payments (check response shape), OR
+     B) Add invoiceTotalCents to the /api/payments response by joining invoices in the backend query.
+- Do NOT change styling of the whole page—only the pill logic + filter logic.
+
+Deliverables:
+- Partial payment rows show “Partial” pill on Payments page.
+- Partial filter works correctly.
+- Paid filter shows only fully paid.
+- No console errors.
+- Tell me exactly which files you edited.

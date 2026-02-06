@@ -30,6 +30,8 @@ type Payment = {
   clientName?: string | null;
   clientFirstName?: string | null;
   clientLastName?: string | null;
+  invoiceTotalCents?: number | null;
+  invoiceStatus?: string | null;
 };
 
 type StatsData = {
@@ -63,6 +65,17 @@ function getCustomerName(payment: Payment): string {
 }
 
 function getPaymentStatus(payment: Payment): string {
+  const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
+  const invoiceTotal = payment.invoiceTotalCents;
+
+  if (invoiceTotal && invoiceTotal > 0 && paymentAmountCents > 0 && paymentAmountCents < invoiceTotal) {
+    return "partial";
+  }
+
+  if (payment.invoiceStatus === "partial") {
+    return "partial";
+  }
+
   const status = (payment.status || "").toLowerCase();
   if (status === "paid" || status === "completed") return "paid";
   if (status === "partial") return "partial";
@@ -120,7 +133,7 @@ export default function PaymentsPage() {
     const status = getPaymentStatus(payment);
     const date = safeParseDate(payment.paidDate) || safeParseDate(payment.createdAt);
 
-    if (status === "paid" && date) {
+    if ((status === "paid" || status === "partial") && date) {
       if (isToday(date)) return "Today";
       if (isYesterday(date)) return "Yesterday";
       return format(date, "MMM d");
@@ -276,7 +289,7 @@ export default function PaymentsPage() {
                     {getStatusBadge(status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                    {status === "paid" ? `Paid · ${dateStr}` : dateStr}
+                    {status === "paid" ? `Paid · ${dateStr}` : status === "partial" ? `Partial · ${dateStr}` : dateStr}
                     {methodLabel && <span className="ml-1.5">· {methodLabel}</span>}
                     {payment.jobTitle && <span className="ml-1.5">· {payment.jobTitle}</span>}
                   </p>

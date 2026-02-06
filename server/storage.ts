@@ -595,10 +595,13 @@ export class DatabaseStorage implements IStorage {
         jobTitle: jobs.title,
         clientFirstName: customers.firstName,
         clientLastName: customers.lastName,
+        invoiceTotalCents: invoices.totalCents,
+        invoiceStatus: invoices.status,
       })
       .from(payments)
       .leftJoin(jobs, eq(payments.jobId, jobs.id))
       .leftJoin(customers, eq(payments.customerId, customers.id))
+      .leftJoin(invoices, eq(payments.invoiceId, invoices.id))
       .where(eq(payments.companyId, companyId))
       .orderBy(desc(payments.paidDate), desc(payments.createdAt));
     
