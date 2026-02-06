@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SelectCustomerModal } from "@/components/CustomerModals";
-import { useLocation } from "wouter";
 import type { Customer } from "@shared/schema";
 import {
   X,
@@ -16,7 +15,6 @@ import {
   CreditCard,
   Loader2,
   User,
-  FileWarning,
 } from "lucide-react";
 
 export function RecordPaymentModal({
@@ -27,13 +25,10 @@ export function RecordPaymentModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const [, navigate] = useLocation();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<"cash" | "check" | "card">("cash");
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
-  const [noInvoicesModalOpen, setNoInvoicesModalOpen] = useState(false);
-  const [checking, setChecking] = useState(false);
 
   const recordMutation = useMutation({
     mutationFn: async () => {
@@ -63,47 +58,12 @@ export function RecordPaymentModal({
     setSelectedCustomer(null);
     setAmount("");
     setMethod("cash");
-    setNoInvoicesModalOpen(false);
     onOpenChange(false);
-  };
-
-  const handleRecordPayment = async () => {
-    if (!selectedCustomer) return;
-    const amountVal = parseFloat(amount);
-    if (isNaN(amountVal) || amountVal <= 0) {
-      toast({ title: "Error", description: "Enter a valid amount", variant: "destructive" });
-      return;
-    }
-
-    setChecking(true);
-    try {
-      const res = await fetch("/api/invoices", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load invoices");
-      const invoices = await res.json();
-      const unpaid = invoices.filter((inv: any) => {
-        if (inv.customerId !== selectedCustomer.id) return false;
-        const status = (inv.status || "").toLowerCase();
-        return status === "unpaid" || status === "partial";
-      });
-
-      if (unpaid.length === 0) {
-        setNoInvoicesModalOpen(true);
-        return;
-      }
-
-      recordMutation.mutate();
-    } catch {
-      recordMutation.mutate();
-    } finally {
-      setChecking(false);
-    }
   };
 
   const customerDisplayName = selectedCustomer
     ? (selectedCustomer.companyName || [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Unknown")
     : null;
-
-  const isSubmitting = checking || recordMutation.isPending;
 
   return (
     <>
@@ -201,11 +161,11 @@ export function RecordPaymentModal({
                 Cancel
               </Button>
               <Button
-                onClick={handleRecordPayment}
-                disabled={!selectedCustomer || !amount || isSubmitting}
+                onClick={() => recordMutation.mutate()}
+                disabled={!selectedCustomer || !amount || recordMutation.isPending}
                 className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium"
               >
-                {isSubmitting ? (
+                {recordMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   "Record Payment"
@@ -225,40 +185,6 @@ export function RecordPaymentModal({
         }}
         canCreateCustomer={false}
       />
-
-      <Dialog open={noInvoicesModalOpen} onOpenChange={setNoInvoicesModalOpen}>
-        <DialogContent className="w-[95vw] max-w-[380px] rounded-2xl p-0 gap-0 overflow-hidden [&>button]:hidden">
-          <div className="flex flex-col items-center px-6 pt-7 pb-6">
-            <div className="w-14 h-14 bg-amber-50 dark:bg-amber-950/30 rounded-full flex items-center justify-center mb-4">
-              <FileWarning className="w-7 h-7 text-amber-500 dark:text-amber-400" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1.5">
-              No Open Invoices
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center leading-relaxed">
-              This customer has no unpaid invoices.{"\n"}Create an invoice before recording a payment.
-            </p>
-          </div>
-          <div className="flex gap-3 px-5 pb-5">
-            <Button
-              variant="outline"
-              onClick={() => setNoInvoicesModalOpen(false)}
-              className="flex-1 h-11 rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                resetAndClose();
-                navigate("/invoicing");
-              }}
-              className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium"
-            >
-              Create Invoice
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

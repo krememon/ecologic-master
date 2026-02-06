@@ -12011,11 +12011,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return dateA < dateB ? -1 : dateA > dateB ? 1 : 0;
         });
 
-      if (customerInvoices.length === 0) {
-        return res.status(404).json({ message: "No unpaid invoices found for this customer" });
+      let invoice;
+      if (customerInvoices.length > 0) {
+        invoice = customerInvoices[0];
+      } else {
+        const amountDollarsStr = (requestedAmountCents / 100).toFixed(2);
+        const today = new Date().toISOString().split('T')[0];
+        const invoiceNumber = `INV-${Date.now()}`;
+        invoice = await storage.createInvoice({
+          companyId: company.id,
+          customerId: customerId,
+          invoiceNumber,
+          amount: amountDollarsStr,
+          subtotalCents: requestedAmountCents,
+          taxCents: 0,
+          totalCents: requestedAmountCents,
+          paidAmountCents: 0,
+          balanceDueCents: requestedAmountCents,
+          status: 'unpaid',
+          issueDate: today,
+          dueDate: today,
+          lineItems: [{ name: 'Payment', quantity: 1, unitPrice: requestedAmountCents / 100 }],
+          createdByUserId: userId,
+          createdByRole: userRole,
+        } as any);
+        console.log(`[Payment] Auto-created invoice ${invoice.id} (${invoiceNumber}) for customer ${customerId}: $${amountDollarsStr}`);
       }
 
-      const invoice = customerInvoices[0];
       const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
       const currentPaidAmountCents = invoice.paidAmountCents || 0;
       const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
