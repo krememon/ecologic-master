@@ -11960,6 +11960,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/payments/record - Record a payment by customer (finds oldest unpaid invoice)
+  app.post('/api/payments/record', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+      
+      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+        return res.status(403).json({ message: "You do not have permission to record payments" });
+      }
+
+      const { customerId, amount, method } = req.body;
+      
+      if (!customerId) {
+        return res.status(400).json({ message: "Customer is required" });
+      }
+      
+      const paymentMethodValue = (method || '').toLowerCase();
+      if (!['cash', 'check', 'card'].includes(paymentMethodValue)) {
+        return res.status(400).json({ message: "Payment method must be 'cash', 'check', or 'card'" });
+      }
+
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: "Amount must be a positive number" });
+      }
+      const requestedAmountCents = Math.round(parsedAmount * 100);
+
+      // Find oldest unpaid invoice for this customer in this company
+      const allInvoices = await storage.getInvoices(company.id);
+      const customerInvoices = allInvoices
+        .filter((inv: any) => {
+          const matchesCustomer = inv.customerId === customerId;
+          const isPaid = inv.status?.toLowerCase() === 'paid';
+          const totalCents = inv.totalCents > 0 ? inv.totalCents : Math.round(parseFloat(inv.amount || '0') * 100);
+          const paidCents = inv.paidAmountCents || 0;
+          const balance = inv.balanceDueCents ?? (totalCents - paidCents);
+          return matchesCustomer && !isPaid && balance > 0;
+        })
+        .sort((a: any, b: any) => {
+          const dateA = a.issueDate || a.createdAt || '';
+          const dateB = b.issueDate || b.createdAt || '';
+          return dateA < dateB ? -1 : dateA > dateB ? 1 : 0;
+        });
+
+      if (customerInvoices.length === 0) {
+        return res.status(404).json({ message: "No unpaid invoices found for this customer" });
+      }
+
+      const invoice = customerInvoices[0];
+      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+      const currentPaidAmountCents = invoice.paidAmountCents || 0;
+      const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
+      
+      const amountCents = Math.min(requestedAmountCents, currentBalanceDueCents);
+      if (amountCents <= 0) {
+        return res.status(400).json({ message: "No balance remaining on this invoice" });
+      }
+      const amountDollars = (amountCents / 100).toFixed(2);
+
+      const newPaidAmountCents = currentPaidAmountCents + amountCents;
+      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
+      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
+
+      const payment = await storage.createPayment({
+        companyId: company.id,
+        jobId: invoice.jobId || null,
+        invoiceId: invoice.id,
+        customerId: customerId,
+        amount: amountDollars,
+        amountCents: amountCents,
+        paymentMethod: paymentMethodValue,
+        status: 'paid',
+        collectedByUserId: userId,
+        collectedByRole: userRole,
+        paidDate: new Date(),
+        notes: `Manual ${paymentMethodValue} payment recorded`,
+      });
+
+      await storage.updateInvoice(invoice.id, {
+        status: newStatus,
+        paidAmountCents: newPaidAmountCents,
+        balanceDueCents: newBalanceDueCents,
+        ...(newStatus === 'paid' ? {
+          paidDate: new Date().toISOString().split('T')[0],
+          paidAt: new Date(),
+        } : {}),
+      } as any);
+
+      if (invoice.jobId) {
+        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+        await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+      }
+
+      console.log(`[Payment] Customer ${customerId} payment recorded: $${amountDollars} via ${paymentMethodValue} → invoice ${invoice.id} (${newStatus})`);
+
+      syncPaymentToQbo(payment.id, company.id).then(result => {
+        if (result.success) {
+          console.log(`[QB] Payment ${payment.id} synced to QuickBooks: ${result.qboPaymentId}`);
+        } else {
+          console.log(`[QB] Payment ${payment.id} sync: ${result.error}`);
+        }
+      }).catch(err => console.error('[QB] Payment sync error:', err));
+
+      const payer = await storage.getUser(userId);
+      const payerName = payer ? `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || 'Someone' : 'Someone';
+      await notifyManagers(company.id, {
+        type: 'payment_collected',
+        title: 'Payment Collected',
+        body: `${payerName} collected a $${amountDollars} ${paymentMethodValue} payment`,
+        entityType: 'invoice',
+        entityId: invoice.id,
+        linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
+      });
+
+      res.json({
+        success: true,
+        amountCents,
+        method: paymentMethodValue,
+        invoiceId: invoice.id,
+        paymentId: payment.id,
+        newStatus,
+        balanceRemaining: newBalanceDueCents,
+      });
+    } catch (error: any) {
+      console.error('Error recording customer payment:', error);
+      res.status(500).json({ message: error.message || "Failed to record payment" });
+    }
+  });
+
   // POST /api/payments/checkout - Create a Stripe Checkout session for an invoice
   app.post('/api/payments/checkout', isAuthenticated, async (req: any, res) => {
     try {

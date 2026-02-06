@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { SelectCustomerModal } from "@/components/CustomerModals";
+import type { Customer } from "@shared/schema";
 import {
   DollarSign,
   TrendingUp,
@@ -19,7 +21,9 @@ import {
   X,
   Banknote,
   FileText,
+  CreditCard,
   Loader2,
+  User,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
@@ -83,58 +87,29 @@ type FilterTab = "all" | "unpaid" | "paid" | "overdue" | "partial";
 function RecordPaymentModal({
   open,
   onOpenChange,
-  invoices,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  invoices: Invoice[];
 }) {
   const { toast } = useToast();
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<"cash" | "check">("cash");
-  const [invoiceSearch, setInvoiceSearch] = useState("");
-
-  const unpaidInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || "0") * 100);
-      const paidCents = inv.paidAmountCents || 0;
-      const balance = inv.balanceDueCents ?? (totalCents - paidCents);
-      return balance > 0 && inv.status !== "paid";
-    });
-  }, [invoices]);
-
-  const filteredUnpaidInvoices = useMemo(() => {
-    if (!invoiceSearch.trim()) return unpaidInvoices;
-    const q = invoiceSearch.toLowerCase();
-    return unpaidInvoices.filter((inv) => {
-      const name = getCustomerNameStatic(inv).toLowerCase();
-      return name.includes(q) || inv.invoiceNumber?.toLowerCase().includes(q);
-    });
-  }, [unpaidInvoices, invoiceSearch]);
-
-  const selectedInvoice = invoices.find((i) => i.id === selectedInvoiceId);
-
-  const getBalance = (inv: Invoice) => {
-    const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || "0") * 100);
-    const paidCents = inv.paidAmountCents || 0;
-    return inv.balanceDueCents ?? (totalCents - paidCents);
-  };
+  const [method, setMethod] = useState<"cash" | "check" | "card">("cash");
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
 
   const recordMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedInvoiceId) throw new Error("Select an invoice");
+      if (!selectedCustomer) throw new Error("Select a customer");
       const amountVal = parseFloat(amount);
       if (isNaN(amountVal) || amountVal <= 0) throw new Error("Enter a valid amount");
-      const amountCents = Math.round(amountVal * 100);
-      const res = await apiRequest("POST", "/api/payments/manual", {
-        invoiceId: selectedInvoiceId,
+      const res = await apiRequest("POST", "/api/payments/record", {
+        customerId: selectedCustomer.id,
+        amount: amountVal,
         method,
-        amountCents,
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: "Payment recorded" });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
@@ -147,156 +122,141 @@ function RecordPaymentModal({
   });
 
   const resetAndClose = () => {
-    setSelectedInvoiceId(null);
+    setSelectedCustomer(null);
     setAmount("");
     setMethod("cash");
-    setInvoiceSearch("");
     onOpenChange(false);
   };
 
+  const customerDisplayName = selectedCustomer
+    ? (selectedCustomer.companyName || [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Unknown")
+    : null;
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) resetAndClose(); else onOpenChange(v); }}>
-      <DialogContent className="w-[95vw] max-w-[420px] rounded-2xl p-0 gap-0 overflow-hidden [&>button]:hidden">
-        <DialogHeader className="px-5 pt-5 pb-3">
-          <div className="flex items-center justify-between">
-            <div className="min-w-[44px]" />
-            <DialogTitle className="text-base font-semibold text-center flex-1">Record Payment</DialogTitle>
-            <button onClick={resetAndClose} className="min-w-[44px] flex items-center justify-end">
-              <X className="w-5 h-5 text-slate-400" />
-            </button>
-          </div>
-        </DialogHeader>
-
-        <div className="px-5 pb-5 space-y-4">
-          {/* Invoice Selection */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Invoice</Label>
-            {selectedInvoice ? (
-              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {getCustomerNameStatic(selectedInvoice)}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    #{selectedInvoice.invoiceNumber} · Balance: {formatCents(getBalance(selectedInvoice))}
-                  </p>
-                </div>
-                <button onClick={() => setSelectedInvoiceId(null)} className="text-slate-400 hover:text-slate-600">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    placeholder="Search invoices..."
-                    value={invoiceSearch}
-                    onChange={(e) => setInvoiceSearch(e.target.value)}
-                    className="pl-9 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                  />
-                </div>
-                <div className="max-h-[180px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                  {filteredUnpaidInvoices.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-6">No unpaid invoices</p>
-                  ) : (
-                    filteredUnpaidInvoices.map((inv) => (
-                      <button
-                        key={inv.id}
-                        onClick={() => {
-                          setSelectedInvoiceId(inv.id);
-                          const bal = getBalance(inv);
-                          setAmount((bal / 100).toFixed(2));
-                        }}
-                        className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                      >
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                          {getCustomerNameStatic(inv)}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          #{inv.invoiceNumber} · {formatCents(getBalance(inv))} owed
-                        </p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Amount */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount</Label>
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="pl-8 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 tabular-nums"
-              />
+    <>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) resetAndClose(); else onOpenChange(v); }}>
+        <DialogContent className="w-[95vw] max-w-[420px] rounded-2xl p-0 gap-0 overflow-hidden [&>button]:hidden">
+          <DialogHeader className="px-5 pt-5 pb-3">
+            <div className="flex items-center justify-between">
+              <div className="min-w-[44px]" />
+              <DialogTitle className="text-base font-semibold text-center flex-1">Record Payment</DialogTitle>
+              <button onClick={resetAndClose} className="min-w-[44px] flex items-center justify-end">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
             </div>
-            {selectedInvoice && (
-              <p className="text-xs text-slate-400">
-                Balance: {formatCents(getBalance(selectedInvoice))}
-              </p>
-            )}
-          </div>
+          </DialogHeader>
 
-          {/* Payment Method */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Method</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                { key: "cash" as const, label: "Cash", icon: Banknote },
-                { key: "check" as const, label: "Check", icon: FileText },
-              ]).map((m) => {
-                const Icon = m.icon;
-                return (
-                  <button
-                    key={m.key}
-                    onClick={() => setMethod(m.key)}
-                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                      method === m.key
-                        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400"
-                        : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {m.label}
+          <div className="px-5 pb-5 space-y-4">
+            {/* Customer Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Customer</Label>
+              {selectedCustomer ? (
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {customerDisplayName}
+                    </p>
+                  </div>
+                  <button onClick={() => setSelectedCustomer(null)} className="text-slate-400 hover:text-slate-600">
+                    <X className="w-4 h-4" />
                   </button>
-                );
-              })}
+                </div>
+              ) : (
+                <button
+                  onClick={() => setCustomerPickerOpen(true)}
+                  className="w-full flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-left hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <span className="text-sm text-slate-400">Select customer...</span>
+                </button>
+              )}
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount</Label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="pl-8 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 tabular-nums"
+                />
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Method</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: "cash" as const, label: "Cash", icon: Banknote },
+                  { key: "check" as const, label: "Check", icon: FileText },
+                  { key: "card" as const, label: "Card", icon: CreditCard },
+                ]).map((m) => {
+                  const Icon = m.icon;
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => setMethod(m.key)}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                        method === m.key
+                          ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400"
+                          : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <Button
+                variant="outline"
+                onClick={resetAndClose}
+                className="flex-1 h-11 rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => recordMutation.mutate()}
+                disabled={!selectedCustomer || !amount || recordMutation.isPending}
+                className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              >
+                {recordMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Record Payment"
+                )}
+              </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-1">
-            <Button
-              variant="outline"
-              onClick={resetAndClose}
-              className="flex-1 h-11 rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => recordMutation.mutate()}
-              disabled={!selectedInvoiceId || !amount || recordMutation.isPending}
-              className="flex-1 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium"
-            >
-              {recordMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Record Payment"
-              )}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <SelectCustomerModal
+        open={customerPickerOpen}
+        onOpenChange={setCustomerPickerOpen}
+        onSelectCustomer={(customer) => {
+          setSelectedCustomer(customer);
+          setCustomerPickerOpen(false);
+        }}
+        canCreateCustomer={false}
+      />
+    </>
   );
 }
 
@@ -592,7 +552,6 @@ export default function PaymentsPage() {
       <RecordPaymentModal
         open={recordModalOpen}
         onOpenChange={setRecordModalOpen}
-        invoices={invoices}
       />
     </div>
   );
