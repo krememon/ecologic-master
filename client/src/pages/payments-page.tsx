@@ -348,8 +348,17 @@ export default function PaymentsPage() {
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
                     #{invoice.invoiceNumber}
                     {dateStr && <span className="ml-1.5">· {dateStr}</span>}
-                    {invoice.job?.title && <span className="ml-1.5">· {invoice.job.title}</span>}
                   </p>
+                  {invoice.jobId && invoice.job?.title && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-[1px] rounded-full leading-snug">
+                        From Job
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[200px]">
+                        {invoice.job.title}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">

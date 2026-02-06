@@ -1,0 +1,47 @@
+REPLIT AGENT PROMPT — Add “From Job” labeling to invoices (UI only, no logic changes)
+
+Goal:
+On the Invoices page, make it obvious which invoices came from a Job vs invoices created manually in the Invoices tab, by adding a subtle “From Job” label (and job title) on invoice rows.
+
+Critical Rules:
+- DO NOT change any invoice/payment logic, calculations, or API behavior.
+- DO NOT create separate sections/lists. Keep ONE unified invoice list.
+- This is UI/metadata display only.
+- Keep the design consistent with EcoLogic’s clean, Apple-like theme (subtle, not loud).
+
+What to implement:
+
+1) Determine invoice origin:
+- If invoice has a jobId OR jobTitle available from the invoices API:
+  -> Treat as “From Job”
+- Else:
+  -> Treat as “Manual” (optional to show; “From Job” is the main one we care about)
+
+2) Update Invoice row UI:
+For each invoice row/card, under the primary line (customer + invoice number), add a small muted subline:
+- If From Job:
+  - Show a small pill/badge: “From Job”
+  - Next to it (or below it), show the Job title (e.g., “Job: Water heater install”)
+- If not from job:
+  - Either show nothing (preferred, keeps UI clean)
+  - OR show a subtle “Manual” pill (only if it looks clean)
+
+Style:
+- Badge should be small, rounded pill, light gray background, dark gray text.
+- Keep spacing tight and consistent.
+- Do not overpower the invoice amount/status. It’s a secondary hint.
+
+3) Make it clickable (if it already exists):
+- If invoice is linked to a job, and there is already a job detail route, optionally make “Job: {title}” clickable to open that job.
+- If this is not already supported, skip (do NOT add new routing complexity).
+
+4) Data requirements:
+- If the current /api/invoices response does NOT include jobId and/or jobTitle:
+  - Update backend to include jobId and job title in the invoices list response (read-only), without changing any other behavior.
+  - Use a safe join/query so it’s efficient.
+
+Deliverables:
+- Invoices list remains one unified list.
+- Invoices linked to jobs display a subtle “From Job” badge + job title.
+- No layout regressions, no console errors.
+- Tell me which file(s) you edited (frontend + backend if needed).
