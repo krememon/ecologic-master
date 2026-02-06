@@ -409,6 +409,16 @@ export default function Invoicing() {
                   <DollarSign className="h-4 w-4" />
                   {formatAmount(invoice)}
                 </div>
+                {invoice.jobId && (invoice as any).job?.title && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-[1px] rounded-full border border-slate-200 dark:border-slate-700 leading-snug">
+                      From Job
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
+                      {(invoice as any).job.title}
+                    </span>
+                  </div>
+                )}
                 {invoice.dueDate && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <Calendar className="h-4 w-4" />

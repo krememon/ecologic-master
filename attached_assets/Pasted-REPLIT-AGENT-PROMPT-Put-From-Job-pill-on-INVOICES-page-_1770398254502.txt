@@ -1,0 +1,52 @@
+REPLIT AGENT PROMPT — Put “From Job” pill on INVOICES page cards (NOT Payments)
+
+Problem:
+You accidentally added the “From Job” pill to the Payments page (client/src/pages/payments-page.tsx).
+This is WRONG.
+
+Goal:
+Move/implement the “From Job” pill ONLY on the INVOICES page invoice cards/rows.
+
+Hard Rules:
+- DO NOT change anything on the Payments page (do not touch /payments UI at all).
+- Remove the “From Job” pill code you added to payments-page.tsx (revert that UI change).
+- Do NOT change any backend logic or calculations.
+- This is a UI-only labeling change on the Invoices list page.
+
+What to do:
+
+1) Revert Payments page change
+- Open client/src/pages/payments-page.tsx
+- Remove the “From Job” pill / job title UI that was added.
+- Ensure Payments page looks exactly like it did before that pill was added.
+- No layout shifts, no console errors.
+
+2) Find the Invoices page file and invoice row component
+- Locate the page that renders the Invoices list (likely something like):
+  client/src/pages/invoices-page.tsx
+  OR client/src/pages/invoices.tsx
+  OR a shared component like client/src/components/InvoiceRow.tsx / InvoiceCard.tsx
+- Identify where each invoice “card/row” is rendered.
+
+3) Add “From Job” labeling to invoice cards
+For each invoice item:
+- If invoice has jobId OR invoice.job?.title (whatever exists in the current invoice object):
+  - Show a small pill badge: “From Job”
+  - Next to it or below it: “Job: {jobTitle}” (truncate cleanly if long)
+- If not from job:
+  - Show nothing (preferred)
+
+Design rules:
+- Pill: small, rounded, light gray background, subtle border, uppercase optional, not loud.
+- Job title: muted text, smaller size, single-line with ellipsis.
+- Keep spacing tight and consistent with the other invoice metadata.
+
+4) Keep list unified
+- Do NOT create separate sections.
+- Do NOT change sorting/filtering behavior.
+- Just add the visual hint on each invoice card.
+
+Deliverables:
+- “From Job” pill appears on INVOICES page invoice cards only.
+- Payments page has no “From Job” pill (fully reverted).
+- Tell me exactly which file(s) you edited.
