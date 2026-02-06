@@ -1,0 +1,51 @@
+TASK: After partial payment succeeds, update the “amount owed” shown on the Job Pay (checkout) page
+
+Problem:
+- Partial payments work and create a payment row.
+- BUT the Job Pay page still shows the original total owed ($300) instead of the remaining balance after partial payment.
+
+Goal:
+- When a partial payment is recorded successfully (cash/check/card), the invoice should immediately reflect the reduced balance.
+- The pay page must show the NEW remaining amount owed.
+
+Rules:
+- invoiceTotalCents = original total
+- amountPaidCents = sum of successful payments for that invoice
+- balanceDueCents = invoiceTotalCents - amountPaidCents
+- If balanceDueCents > 0 => status “partial”
+- If balanceDueCents <= 0 => status “paid” and balanceDueCents = 0
+
+Backend changes (required):
+1) Add/confirm invoice fields:
+   - invoiceTotalCents (or totalCents)
+   - amountPaidCents
+   - balanceDueCents
+   - paymentStatus: "unpaid" | "partial" | "paid"
+2) When a payment is created (including partial):
+   - In the same transaction:
+     a) insert payment row
+     b) recompute amountPaidCents by summing payments for that invoice (or increment safely)
+     c) update invoice.amountPaidCents, invoice.balanceDueCents, invoice.paymentStatus
+3) Ensure the API that feeds the pay page returns these updated fields.
+   - If pay page loads invoice via `/api/jobs/:jobId/invoice` or `/api/invoices/:id`, include amountPaidCents + balanceDueCents + paymentStatus.
+
+Frontend changes (pay/checkout page):
+1) On load, display:
+   - Total (invoiceTotal)
+   - Paid so far (amountPaid)
+   - Remaining due (balanceDue)  <-- this is the main number to pay
+2) When Partial Payment toggle is OFF:
+   - default payment amount should be balanceDue (remaining due), not the original total.
+3) After successful payment:
+   - refetch invoice data (or update local state) so UI immediately shows new balanceDue.
+   - If balanceDue becomes 0, show Paid state and disable further payments.
+
+Do NOT:
+- Break existing full-payment flow
+- Change unrelated UI styling
+
+Deliverables:
+- After recording a partial payment, invoice balanceDue updates correctly.
+- Pay page shows the new remaining amount owed.
+- Payment status becomes Partial until fully paid.
+- Tell me exactly which files were edited.
