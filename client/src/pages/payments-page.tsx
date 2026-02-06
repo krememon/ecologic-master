@@ -13,38 +13,22 @@ import {
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
-type Invoice = {
+type PaymentRow = {
   id: number;
-  invoiceNumber: string;
-  status: string;
+  invoiceId: number | null;
+  customerId: number | null;
+  jobId: number | null;
   amount: string;
-  totalCents: number;
-  paidAmountCents?: number;
-  balanceDueCents?: number;
-  dueDate?: string;
-  paidDate?: string;
-  createdAt?: string;
-  jobId: number;
-  jobTitle?: string;
-  customer?: {
-    firstName?: string;
-    lastName?: string;
-    companyName?: string;
-  };
-  client?: {
-    name?: string;
-  };
-};
-
-type Payment = {
-  id: number;
-  invoiceId: number;
-  amount: string;
-  amountCents?: number;
+  amountCents: number | null;
   paymentMethod: string;
-  paidDate?: string;
-  createdAt?: string;
   status: string;
+  paidDate: string | null;
+  createdAt: string | null;
+  notes: string | null;
+  checkNumber: string | null;
+  jobTitle: string | null;
+  clientFirstName: string | null;
+  clientLastName: string | null;
 };
 
 type StatsData = {
@@ -68,16 +52,14 @@ const safeParseDate = (dateStr: string | undefined | null): Date | null => {
   }
 };
 
-type FilterTab = "all" | "unpaid" | "paid" | "overdue" | "partial";
+type FilterTab = "all" | "paid" | "cash" | "check" | "card";
 
-function getCustomerNameStatic(invoice: Invoice): string {
-  if (invoice.customer) {
-    const { firstName, lastName, companyName } = invoice.customer;
-    if (companyName) return companyName;
-    return [firstName, lastName].filter(Boolean).join(" ") || "Unknown";
-  }
-  if (invoice.client?.name) return invoice.client.name;
-  return "Unknown Customer";
+function getCustomerName(payment: PaymentRow): string {
+  return [payment.clientFirstName, payment.clientLastName].filter(Boolean).join(" ") || "Unknown Customer";
+}
+
+function getPaymentAmountCents(payment: PaymentRow): number {
+  return payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
 }
 
 export default function PaymentsPage() {
@@ -90,60 +72,44 @@ export default function PaymentsPage() {
     queryKey: ["/api/payments/stats"],
   });
 
-  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({
-    queryKey: ["/api/invoices"],
-  });
-
-  const { data: payments = [] } = useQuery<Payment[]>({
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery<PaymentRow[]>({
     queryKey: ["/api/payments"],
   });
 
-  const getInvoiceStatus = (invoice: Invoice): string => {
-    const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || "0") * 100);
-    const paidCents = invoice.paidAmountCents || 0;
-    const balanceCents = invoice.balanceDueCents ?? (totalCents - paidCents);
-
-    if (invoice.status === "paid" || balanceCents <= 0) return "paid";
-    if (paidCents > 0 && balanceCents > 0) return "partial";
-
-    if (invoice.dueDate) {
-      const due = safeParseDate(invoice.dueDate);
-      if (due) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (due < today && invoice.status !== "paid") return "overdue";
-      }
-    }
-
-    return "unpaid";
-  };
-
-  const filteredInvoices = useMemo(() => {
-    let list = invoices;
+  const filteredPayments = useMemo(() => {
+    let list = payments;
     if (activeTab !== "all") {
-      list = list.filter((inv) => getInvoiceStatus(inv) === activeTab);
+      if (activeTab === "paid") {
+        list = list.filter((p) => (p.status || "").toLowerCase() === "paid");
+      } else {
+        list = list.filter((p) => {
+          const method = (p.paymentMethod || "").toLowerCase();
+          if (activeTab === "card") return method === "card" || method === "credit_card" || method === "stripe";
+          return method === activeTab;
+        });
+      }
     }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      list = list.filter((inv) => {
-        const name = getCustomerNameStatic(inv).toLowerCase();
-        const num = (inv.invoiceNumber || "").toLowerCase();
-        const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || "0") * 100);
-        const amountStr = (totalCents / 100).toFixed(2);
-        return name.includes(q) || num.includes(q) || amountStr.includes(q);
+      list = list.filter((p) => {
+        const name = getCustomerName(p).toLowerCase();
+        const cents = getPaymentAmountCents(p);
+        const amountStr = (cents / 100).toFixed(2);
+        const method = (p.paymentMethod || "").toLowerCase();
+        const job = (p.jobTitle || "").toLowerCase();
+        return name.includes(q) || amountStr.includes(q) || method.includes(q) || job.includes(q);
       });
     }
     return list;
-  }, [invoices, activeTab, searchTerm]);
+  }, [payments, activeTab, searchTerm]);
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { color: string; label: string }> = {
       paid: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Paid" },
-      partial: { color: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/40 dark:text-yellow-400", label: "Partial" },
-      unpaid: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Unpaid" },
-      overdue: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Overdue" },
+      failed: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Failed" },
+      refunded: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Refunded" },
     };
-    const config = configs[status] || configs.unpaid;
+    const config = configs[(status || "paid").toLowerCase()] || configs.paid;
     return (
       <span className={`${config.color} text-[11px] font-semibold px-2 py-0.5 rounded-full`}>
         {config.label}
@@ -151,53 +117,33 @@ export default function PaymentsPage() {
     );
   };
 
-  const getDateDisplay = (invoice: Invoice): string => {
-    const status = getInvoiceStatus(invoice);
-
-    if (status === "paid" || status === "partial") {
-      const relatedPayment = payments.find((p) => p.invoiceId === invoice.id);
-      const paidDate = relatedPayment?.paidDate || relatedPayment?.createdAt;
-      const date = safeParseDate(paidDate);
-      if (date) {
-        if (isToday(date)) return "Today";
-        if (isYesterday(date)) return "Yesterday";
-        return format(date, "MMM d, yyyy");
-      }
-    }
-
-    const dueDate = safeParseDate(invoice.dueDate);
-    if (dueDate) {
-      if (isToday(dueDate)) return "Due Today";
-      return `Due ${format(dueDate, "MMM d")}`;
-    }
-
-    return "";
+  const getMethodLabel = (method: string): string => {
+    const m = (method || "").toLowerCase();
+    if (m === "cash") return "Cash";
+    if (m === "check") return "Check";
+    if (m === "card" || m === "credit_card") return "Card";
+    if (m === "stripe") return "Card";
+    if (m === "other") return "Other";
+    return method || "—";
   };
 
-  const getAmountDisplay = (invoice: Invoice) => {
-    const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || "0") * 100);
-    const paidCents = invoice.paidAmountCents || 0;
-    const balanceCents = invoice.balanceDueCents ?? (totalCents - paidCents);
-    const status = getInvoiceStatus(invoice);
-
-    if (status === "paid") {
-      return { primary: formatCents(totalCents), secondary: null };
-    }
-    if (status === "partial") {
-      return { primary: formatCents(paidCents), secondary: `/ ${formatCents(totalCents)}` };
-    }
-    return { primary: formatCents(totalCents), secondary: null };
+  const getDateDisplay = (payment: PaymentRow): string => {
+    const date = safeParseDate(payment.paidDate) || safeParseDate(payment.createdAt);
+    if (!date) return "";
+    if (isToday(date)) return "Today";
+    if (isYesterday(date)) return "Yesterday";
+    return format(date, "MMM d, yyyy");
   };
 
   const tabs: { key: FilterTab; label: string }[] = [
     { key: "all", label: "All" },
-    { key: "unpaid", label: "Unpaid" },
     { key: "paid", label: "Paid" },
-    { key: "overdue", label: "Overdue" },
-    { key: "partial", label: "Partial" },
+    { key: "cash", label: "Cash" },
+    { key: "check", label: "Check" },
+    { key: "card", label: "Card" },
   ];
 
-  if (invoicesLoading || statsLoading) {
+  if (paymentsLoading || statsLoading) {
     return (
       <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto">
         <div className="animate-pulse space-y-4">
@@ -308,52 +254,46 @@ export default function PaymentsPage() {
         )}
       </div>
 
-      {/* Invoice List */}
-      {filteredInvoices.length === 0 ? (
+      {/* Payments List */}
+      {filteredPayments.length === 0 ? (
         <div className="text-center py-14 px-4">
           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
             <Receipt className="w-5 h-5 text-slate-400" />
           </div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            {searchTerm ? "No matching payments" : activeTab !== "all" ? "No matching invoices" : "No invoices yet"}
+            {searchTerm ? "No matching payments" : activeTab !== "all" ? "No matching payments" : "No payments yet"}
           </p>
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-          {filteredInvoices.map((invoice) => {
-            const status = getInvoiceStatus(invoice);
-            const amount = getAmountDisplay(invoice);
-            const dateStr = getDateDisplay(invoice);
+          {filteredPayments.map((payment) => {
+            const amountCents = getPaymentAmountCents(payment);
+            const dateStr = getDateDisplay(payment);
 
             return (
               <div
-                key={invoice.id}
-                onClick={() => {
-                  const p = payments.find((pm) => pm.invoiceId === invoice.id);
-                  if (p) navigate(`/payments/${p.id}`);
-                }}
+                key={payment.id}
+                onClick={() => navigate(`/payments/${payment.id}`)}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2 mb-0.5">
                     <p className="font-semibold text-[14px] text-slate-900 dark:text-slate-100 leading-snug break-words">
-                      {getCustomerNameStatic(invoice)}
+                      {getCustomerName(payment)}
                     </p>
-                    {getStatusBadge(status)}
+                    {getStatusBadge(payment.status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                    #{invoice.invoiceNumber}
+                    {getMethodLabel(payment.paymentMethod)}
                     {dateStr && <span className="ml-1.5">· {dateStr}</span>}
+                    {payment.jobTitle && <span className="ml-1.5">· {payment.jobTitle}</span>}
                   </p>
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">
                   <p className="text-[15px] font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                    {amount.primary}
+                    {formatCents(amountCents)}
                   </p>
-                  {amount.secondary && (
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{amount.secondary}</p>
-                  )}
                 </div>
 
                 <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
