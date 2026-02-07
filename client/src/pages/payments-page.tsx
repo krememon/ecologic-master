@@ -294,6 +294,9 @@ export default function PaymentsPage() {
                   <p className={`text-[15px] font-bold tabular-nums ${amountColor}`}>
                     {formatCents(displayAmount)}{amountSuffix}
                   </p>
+                  {hasRefunds && !isOwed && (
+                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">Net Collected</p>
+                  )}
                 </div>
 
                 <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
