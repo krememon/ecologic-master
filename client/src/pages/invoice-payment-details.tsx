@@ -92,8 +92,8 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const payments: any[] = data.payments || [];
 
   const paidCents = data.paidAmountCents || 0;
-  const balanceCents = data.balanceDueCents ?? (totalCents - paidCents);
-  const isPaid = balanceCents <= 0;
+  const balanceCents = Math.max(totalCents - paidCents, 0);
+  const isPaid = balanceCents === 0 && totalCents > 0;
   const isPartial = paidCents > 0 && balanceCents > 0;
 
   const details = [
@@ -117,17 +117,17 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
         <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 tracking-tight tabular-nums mb-3">
           {formatCents(totalCents)}
         </p>
-        {data.invoiceStatus === "paid" || (data.balanceDueCents != null && data.balanceDueCents <= 0) ? (
+        {isPaid ? (
           <span className="bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1 rounded-full">
             Paid
           </span>
-        ) : data.invoiceStatus === "partial" ? (
+        ) : isPartial ? (
           <span className="bg-yellow-50 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full">
             Partial
           </span>
         ) : (
           <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-semibold px-3 py-1 rounded-full">
-            {data.invoiceStatus || "Unpaid"}
+            Unpaid
           </span>
         )}
       </div>

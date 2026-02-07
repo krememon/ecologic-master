@@ -10114,12 +10114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .map((inv: any) => {
           const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
           const paidCents = inv.paidAmountCents || 0;
-          const balanceCents = inv.balanceDueCents ?? (totalCents - paidCents);
+          const balanceCents = Math.max(totalCents - paidCents, 0);
 
           let computedStatus: string;
-          if (balanceCents <= 0) {
+          if (balanceCents === 0 && totalCents > 0) {
             computedStatus = 'paid';
-          } else if (paidCents > 0) {
+          } else if (paidCents > 0 && balanceCents > 0) {
             computedStatus = 'partial';
           } else {
             computedStatus = 'unpaid';
