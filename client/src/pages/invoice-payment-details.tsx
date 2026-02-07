@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -12,6 +13,8 @@ import {
   Briefcase,
   Receipt,
   RotateCcw,
+  Plus,
+  X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -69,6 +72,20 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
     queryKey: ["/api/user/membership"],
   });
   const canRefund = REFUND_ROLES.has((membership?.role || "").toUpperCase());
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  function handleRefundClick() {
+    const refundable = (data?.payments || []).filter((p: any) => {
+      const amt = p.amountCents || Math.round(parseFloat(p.amount || "0") * 100);
+      return p.id && (p.refundedAmountCents || 0) < amt;
+    });
+    if (refundable.length === 0) return;
+    if (refundable.length === 1) {
+      navigate(`/refunds/new?paymentId=${refundable[0].id}`);
+    } else {
+      setPickerOpen(true);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -162,10 +179,22 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
           <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
             Payment History
           </p>
+          {canRefund && payments.some((p: any) => {
+            const amt = p.amountCents || Math.round(parseFloat(p.amount || "0") * 100);
+            return p.id && (p.refundedAmountCents || 0) < amt;
+          }) && (
+            <button
+              onClick={handleRefundClick}
+              className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 inline-flex items-center gap-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1"
+            >
+              <Plus className="w-4 h-4" />
+              Refund
+            </button>
+          )}
         </div>
         {payments.length === 0 ? (
           <div className="text-center py-10 px-4">
@@ -184,7 +213,6 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
 
               const refundedCents = payment.refundedAmountCents || 0;
               const isFullyRefunded = refundedCents >= paymentCents;
-              const showRefundBtn = canRefund && !isFullyRefunded && payment.id;
 
               return (
                 <div key={payment.id || idx} className="flex items-center gap-3 px-4 py-3.5">
@@ -204,26 +232,70 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
                       {payment.notes && <span className="ml-1.5">· {payment.notes}</span>}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <p className={`text-sm font-bold tabular-nums ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
-                      +{formatCents(paymentCents)}
-                    </p>
-                    {showRefundBtn && (
-                      <button
-                        onClick={() => navigate(`/refunds/new?paymentId=${payment.id}`)}
-                        className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-red-50 hover:border-red-200 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:border-red-800 dark:hover:text-red-400 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 focus-visible:ring-offset-1"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        Refund
-                      </button>
-                    )}
-                  </div>
+                  <p className={`text-sm font-bold tabular-nums shrink-0 ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
+                    +{formatCents(paymentCents)}
+                  </p>
                 </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {pickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setPickerOpen(false)} />
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Select Payment to Refund</h3>
+              <button onClick={() => setPickerOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {payments
+                .filter((p: any) => {
+                  const amt = p.amountCents || Math.round(parseFloat(p.amount || "0") * 100);
+                  return p.id && (p.refundedAmountCents || 0) < amt;
+                })
+                .map((payment: any) => {
+                  const paymentCents = payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
+                  const methodKey = (payment.paymentMethod || "").toLowerCase();
+                  const MethodIcon = methodIcons[methodKey] || DollarSign;
+                  const methodLabel = methodLabels[methodKey] || payment.paymentMethod || "—";
+                  const refundedCents = payment.refundedAmountCents || 0;
+
+                  return (
+                    <button
+                      key={payment.id}
+                      onClick={() => {
+                        setPickerOpen(false);
+                        navigate(`/refunds/new?paymentId=${payment.id}`);
+                      }}
+                      className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                    >
+                      <div className="w-9 h-9 bg-green-50 dark:bg-green-950/40 rounded-full flex items-center justify-center shrink-0">
+                        <MethodIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {methodLabel}
+                          {refundedCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
+                        </p>
+                        <p className="text-[12px] text-slate-400 dark:text-slate-500">
+                          {safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy")}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums shrink-0">
+                        {formatCents(paymentCents)}
+                      </p>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {data.refunds && data.refunds.length > 0 && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
