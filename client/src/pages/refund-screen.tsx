@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import {
   FileCheck,
   Loader2,
   AlertCircle,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -43,19 +45,38 @@ interface RefundContext {
   existingRefunds: ExistingRefund[];
 }
 
+interface InvoicePayment {
+  id: number;
+  amountCents: number;
+  refundedAmountCents: number;
+  paymentMethod: string;
+  paidDate: string | null;
+  createdAt: string;
+  stripePaymentIntentId?: string | null;
+}
+
 function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function safeFormatDate(dateStr: string | null | undefined): string {
+function safeFormatDate(dateStr: string | null | undefined, fmt = "MMM d, yyyy"): string {
   if (!dateStr) return "—";
   try {
     const d = parseISO(dateStr);
-    return isNaN(d.getTime()) ? "—" : format(d, "MMM d, yyyy");
+    return isNaN(d.getTime()) ? "—" : format(d, fmt);
   } catch {
     return "—";
   }
 }
+
+const methodLabels: Record<string, string> = {
+  cash: "Cash",
+  check: "Check",
+  card: "Card",
+  credit_card: "Credit Card",
+  stripe: "Card (Stripe)",
+  other: "Other",
+};
 
 const methodConfig: Record<RefundMethod, { icon: typeof CreditCard; label: string; confirmLabel: string }> = {
   card: { icon: CreditCard, label: "Card", confirmLabel: "Issue Card Refund" },
@@ -70,39 +91,68 @@ export default function RefundScreen() {
   const { toast } = useToast();
 
   const searchParams = new URLSearchParams(window.location.search);
-  const paymentId = searchParams.get("paymentId");
+  const paramPaymentId = searchParams.get("paymentId");
+  const paramInvoiceId = searchParams.get("invoiceId");
 
+  const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(paramPaymentId ? parseInt(paramPaymentId) : null);
+  const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<RefundMethod | null>(null);
   const [amountStr, setAmountStr] = useState("");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: ctx, isLoading, error } = useQuery<RefundContext>({
-    queryKey: ["/api/payments", paymentId, "refund-context"],
+  const invoiceQuery = useQuery<{
+    invoiceId: number;
+    customerName: string;
+    payments: InvoicePayment[];
+  }>({
+    queryKey: ["/api/payments/invoice", paramInvoiceId],
     queryFn: async () => {
-      const res = await fetch(`/api/payments/${paymentId}/refund-context`, { credentials: "include" });
+      const res = await fetch(`/api/payments/invoice/${paramInvoiceId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load invoice");
+      return res.json();
+    },
+    enabled: !!paramInvoiceId && !paramPaymentId,
+  });
+
+  const refundablePayments = (invoiceQuery.data?.payments || []).filter((p) => {
+    const amt = p.amountCents || 0;
+    return p.id && (p.refundedAmountCents || 0) < amt;
+  });
+
+  useEffect(() => {
+    if (paramInvoiceId && !paramPaymentId && refundablePayments.length > 0 && !selectedPaymentId) {
+      const sorted = [...refundablePayments].sort((a, b) => {
+        const da = new Date(a.paidDate || a.createdAt || 0).getTime();
+        const db = new Date(b.paidDate || b.createdAt || 0).getTime();
+        return db - da;
+      });
+      setSelectedPaymentId(sorted[0].id);
+    }
+  }, [refundablePayments.length, paramInvoiceId, paramPaymentId, selectedPaymentId]);
+
+  const activePaymentId = selectedPaymentId || (paramPaymentId ? parseInt(paramPaymentId) : null);
+
+  const { data: ctx, isLoading: ctxLoading, error: ctxError } = useQuery<RefundContext>({
+    queryKey: ["/api/payments", activePaymentId, "refund-context"],
+    queryFn: async () => {
+      const res = await fetch(`/api/payments/${activePaymentId}/refund-context`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load refund context");
       return res.json();
     },
-    enabled: !!paymentId,
+    enabled: !!activePaymentId,
   });
+
+  useEffect(() => {
+    setAmountStr("");
+    setSelectedMethod(null);
+  }, [activePaymentId]);
+
+  const isLoading = paramInvoiceId && !paramPaymentId ? invoiceQuery.isLoading || ctxLoading : ctxLoading;
+  const hasError = paramInvoiceId && !paramPaymentId ? invoiceQuery.error || ctxError : ctxError;
 
   const maxDollars = ctx ? ctx.maxRefundable / 100 : 0;
   const amount = parseFloat(amountStr || "0");
-  const amountCents = Math.round(amount * 100);
-  const isAmountValid = amount > 0 && amountCents <= (ctx?.maxRefundable ?? 0);
-
-  const defaultAmount = ctx && !amountStr ? maxDollars.toFixed(2) : amountStr;
-
-  const handleAmountChange = (val: string) => {
-    setAmountStr(val);
-  };
-
-  const handleAmountFocus = () => {
-    if (!amountStr && ctx) {
-      setAmountStr(maxDollars.toFixed(2));
-    }
-  };
 
   const effectiveAmount = amountStr ? amount : maxDollars;
   const effectiveAmountCents = Math.round(effectiveAmount * 100);
@@ -116,17 +166,16 @@ export default function RefundScreen() {
     !(selectedMethod === "card" && isCardDisabled);
 
   const handleConfirm = async () => {
-    if (!canSubmit || !ctx || !paymentId) return;
+    if (!canSubmit || !ctx || !activePaymentId) return;
 
     setIsSubmitting(true);
     try {
-      const res = await apiRequest("POST", "/api/refunds", {
-        paymentId: parseInt(paymentId),
+      await apiRequest("POST", "/api/refunds", {
+        paymentId: activePaymentId,
         method: selectedMethod,
         amountCents: effectiveAmountCents,
         reason: reason.trim() || undefined,
       });
-      const data = await res.json();
 
       toast({ title: "Refund recorded", description: `${formatCents(effectiveAmountCents)} refunded via ${methodConfig[selectedMethod!].label}` });
 
@@ -134,8 +183,9 @@ export default function RefundScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
 
-      if (ctx.invoiceId) {
-        navigate(`/payments/invoice/${ctx.invoiceId}`);
+      const invoiceId = ctx.invoiceId || (paramInvoiceId ? parseInt(paramInvoiceId) : null);
+      if (invoiceId) {
+        navigate(`/payments/invoice/${invoiceId}`);
       } else {
         navigate("/payments");
       }
@@ -154,7 +204,28 @@ export default function RefundScreen() {
     }
   };
 
-  if (!paymentId) {
+  const handleAmountFocus = () => {
+    if (!amountStr && ctx) {
+      setAmountStr(maxDollars.toFixed(2));
+    }
+  };
+
+  if (paramInvoiceId && !paramPaymentId && !invoiceQuery.isLoading && refundablePayments.length === 0 && invoiceQuery.data) {
+    return (
+      <div className="p-4 sm:p-5 max-w-2xl mx-auto">
+        <button onClick={handleBack} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-6">
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </button>
+        <div className="text-center py-14">
+          <AlertCircle className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+          <p className="text-sm text-slate-500 dark:text-slate-400">No refundable payments on this invoice</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!paramPaymentId && !paramInvoiceId) {
     return (
       <div className="p-4 sm:p-5 max-w-2xl mx-auto">
         <button onClick={() => navigate("/payments")} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-6">
@@ -163,7 +234,7 @@ export default function RefundScreen() {
         </button>
         <div className="text-center py-14">
           <AlertCircle className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">No payment ID provided</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No payment or invoice specified</p>
         </div>
       </div>
     );
@@ -188,7 +259,7 @@ export default function RefundScreen() {
     );
   }
 
-  if (error || !ctx) {
+  if (hasError || !ctx) {
     return (
       <div className="p-4 sm:p-5 max-w-2xl mx-auto">
         <button onClick={handleBack} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 mb-6">
@@ -202,6 +273,9 @@ export default function RefundScreen() {
       </div>
     );
   }
+
+  const showPaymentSelector = paramInvoiceId && !paramPaymentId && refundablePayments.length > 1;
+  const selectedPaymentInfo = refundablePayments.find((p) => p.id === activePaymentId);
 
   const methods: { key: RefundMethod; disabled: boolean; helperText?: string }[] = [
     {
@@ -228,6 +302,68 @@ export default function RefundScreen() {
       <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
         How would you like to refund {ctx.customerName}?
       </h1>
+
+      {showPaymentSelector && selectedPaymentInfo && (
+        <div className="relative">
+          <button
+            onClick={() => setSelectorOpen(!selectorOpen)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 transition-colors text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">Refunding</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                {methodLabels[(selectedPaymentInfo.paymentMethod || "").toLowerCase()] || selectedPaymentInfo.paymentMethod || "Payment"}
+                <span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span>
+                <span className="text-green-600 dark:text-green-400 font-semibold tabular-nums">{formatCents(selectedPaymentInfo.amountCents)}</span>
+                <span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span>
+                <span className="text-slate-500 dark:text-slate-400">{safeFormatDate(selectedPaymentInfo.paidDate || selectedPaymentInfo.createdAt)}</span>
+              </p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${selectorOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {selectorOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setSelectorOpen(false)} />
+              <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
+                {refundablePayments.map((p) => {
+                  const isActive = p.id === activePaymentId;
+                  const pMethodLabel = methodLabels[(p.paymentMethod || "").toLowerCase()] || p.paymentMethod || "Payment";
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setSelectedPaymentId(p.id);
+                        setSelectorOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                        isActive ? "bg-blue-50 dark:bg-blue-950/20" : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                          {pMethodLabel}
+                          <span className="mx-1.5 text-slate-300 dark:text-slate-600">·</span>
+                          <span className="tabular-nums">{formatCents(p.amountCents)}</span>
+                        </p>
+                        <p className="text-[12px] text-slate-400 dark:text-slate-500">
+                          {safeFormatDate(p.paidDate || p.createdAt)}
+                          {(p.refundedAmountCents || 0) > 0 && (
+                            <span className="ml-1.5 text-amber-500 font-medium">
+                              · {formatCents(p.refundedAmountCents)} refunded
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      {isActive && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {ctx.existingRefunds.length > 0 && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
@@ -328,7 +464,7 @@ export default function RefundScreen() {
               placeholder={maxDollars.toFixed(2)}
               value={amountStr}
               onFocus={handleAmountFocus}
-              onChange={(e) => handleAmountChange(e.target.value)}
+              onChange={(e) => setAmountStr(e.target.value)}
               className="pl-8 h-11 rounded-xl bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-700 text-sm tabular-nums"
             />
           </div>
