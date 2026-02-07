@@ -13,27 +13,21 @@ import {
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
-type Payment = {
-  id: number | string;
-  type?: string;
-  companyId: number;
-  jobId?: number | null;
-  invoiceId?: number | null;
-  customerId?: number | null;
-  amount: string;
-  amountCents?: number | null;
-  paymentMethod?: string | null;
+type LedgerItem = {
+  invoiceId: number;
+  invoiceNumber: string | null;
+  customerId: number | null;
+  customerName: string;
+  jobId: number | null;
+  jobTitle: string | null;
+  totalCents: number;
+  paidCents: number;
+  balanceCents: number;
   status: string;
-  paidDate?: string | null;
-  notes?: string | null;
-  createdAt?: string | null;
-  jobTitle?: string | null;
-  clientName?: string | null;
-  clientFirstName?: string | null;
-  clientLastName?: string | null;
-  invoiceTotalCents?: number | null;
-  invoiceStatus?: string | null;
-  paymentCount?: number;
+  dueDate: string | null;
+  issueDate: string | null;
+  createdAt: string | null;
+  lastActivityDate: string | null;
 };
 
 type StatsData = {
@@ -59,65 +53,38 @@ const safeParseDate = (dateStr: string | undefined | null): Date | null => {
 
 type FilterTab = "all" | "unpaid" | "paid" | "partial";
 
-function getCustomerName(payment: Payment): string {
-  if (payment.clientName) return payment.clientName;
-  const parts = [payment.clientFirstName, payment.clientLastName].filter(Boolean);
-  if (parts.length > 0) return parts.join(" ");
-  return "Unknown Customer";
-}
-
-function getPaymentStatus(payment: Payment): string {
-  if (payment.type === "invoice_paid_group") return "paid";
-
-  const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
-  const invoiceTotal = payment.invoiceTotalCents;
-
-  if (invoiceTotal && invoiceTotal > 0 && paymentAmountCents > 0 && paymentAmountCents < invoiceTotal) {
-    return "partial";
-  }
-
-  if (payment.invoiceStatus === "partial") {
-    return "partial";
-  }
-
-  const status = (payment.status || "").toLowerCase();
-  if (status === "paid" || status === "completed") return "paid";
-  if (status === "partial") return "partial";
-  return "unpaid";
-}
-
 export default function PaymentsPage() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
 
-  const { data: allPayments = [], isLoading: paymentsLoading } = useQuery<Payment[]>({
-    queryKey: ["/api/payments"],
+  const { data: ledgerItems = [], isLoading: ledgerLoading } = useQuery<LedgerItem[]>({
+    queryKey: ["/api/payments/ledger"],
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery<StatsData>({
     queryKey: ["/api/payments/stats"],
   });
 
-  const filteredPayments = useMemo(() => {
-    let list = allPayments;
+  const filteredItems = useMemo(() => {
+    let list = ledgerItems;
     if (activeTab !== "all") {
-      list = list.filter((p) => getPaymentStatus(p) === activeTab);
+      list = list.filter((item) => item.status === activeTab);
     }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      list = list.filter((p) => {
-        const name = getCustomerName(p).toLowerCase();
-        const amountCents = p.amountCents || Math.round(parseFloat(p.amount || "0") * 100);
-        const amountStr = (amountCents / 100).toFixed(2);
-        const method = (p.paymentMethod || "").toLowerCase();
-        const job = (p.jobTitle || "").toLowerCase();
-        return name.includes(q) || amountStr.includes(q) || method.includes(q) || job.includes(q);
+      list = list.filter((item) => {
+        const name = (item.customerName || "").toLowerCase();
+        const invNum = (item.invoiceNumber || "").toLowerCase();
+        const totalStr = (item.totalCents / 100).toFixed(2);
+        const balanceStr = (item.balanceCents / 100).toFixed(2);
+        const job = (item.jobTitle || "").toLowerCase();
+        return name.includes(q) || invNum.includes(q) || totalStr.includes(q) || balanceStr.includes(q) || job.includes(q);
       });
     }
     return list;
-  }, [allPayments, activeTab, searchTerm]);
+  }, [ledgerItems, activeTab, searchTerm]);
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { color: string; label: string }> = {
@@ -133,18 +100,12 @@ export default function PaymentsPage() {
     );
   };
 
-  const getDateDisplay = (payment: Payment): string => {
-    const status = getPaymentStatus(payment);
-    const date = safeParseDate(payment.paidDate) || safeParseDate(payment.createdAt);
-
-    if ((status === "paid" || status === "partial") && date) {
-      if (isToday(date)) return "Today";
-      if (isYesterday(date)) return "Yesterday";
-      return format(date, "MMM d");
-    }
-
-    if (status === "partial") return "Partial";
-    return "Unpaid";
+  const getDateDisplay = (item: LedgerItem): string => {
+    const date = safeParseDate(item.lastActivityDate) || safeParseDate(item.createdAt);
+    if (!date) return "";
+    if (isToday(date)) return "Today";
+    if (isYesterday(date)) return "Yesterday";
+    return format(date, "MMM d");
   };
 
   const tabs: { key: FilterTab; label: string }[] = [
@@ -154,7 +115,7 @@ export default function PaymentsPage() {
     { key: "partial", label: "Partial" },
   ];
 
-  if (paymentsLoading || statsLoading) {
+  if (ledgerLoading || statsLoading) {
     return (
       <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto">
         <div className="animate-pulse space-y-4">
@@ -261,7 +222,7 @@ export default function PaymentsPage() {
         )}
       </div>
 
-      {filteredPayments.length === 0 ? (
+      {filteredItems.length === 0 ? (
         <div className="text-center py-14 px-4">
           <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
             <Receipt className="w-5 h-5 text-slate-400" />
@@ -272,41 +233,33 @@ export default function PaymentsPage() {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-          {filteredPayments.map((payment) => {
-            const status = getPaymentStatus(payment);
-            const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount || "0") * 100);
-            const dateStr = getDateDisplay(payment);
-            const method = (payment.paymentMethod || "").toLowerCase();
-            const methodLabel = method === "mixed" ? "Mixed" : method === "stripe" ? "Card" : method === "credit_card" ? "Card" : method === "check" ? "Check" : method === "cash" ? "Cash" : method || "";
-            const isGroup = payment.type === "invoice_paid_group";
-            const detailUrl = isGroup ? `/payments/invoice/${payment.invoiceId}` : `/payments/${payment.id}`;
+          {filteredItems.map((item) => {
+            const dateStr = getDateDisplay(item);
+            const displayAmount = item.status === "unpaid" ? item.balanceCents : item.status === "partial" ? item.balanceCents : item.totalCents;
 
             return (
               <div
-                key={payment.id}
-                onClick={() => navigate(detailUrl)}
+                key={item.invoiceId}
+                onClick={() => navigate(`/payments/invoice/${item.invoiceId}`)}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/60"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start gap-2 mb-0.5">
                     <p className="font-semibold text-[14px] text-slate-900 dark:text-slate-100 leading-snug break-words">
-                      {getCustomerName(payment)}
+                      {item.customerName}
                     </p>
-                    {getStatusBadge(status)}
+                    {getStatusBadge(item.status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                    {status === "paid" ? `Paid · ${dateStr}` : status === "partial" ? `Partial · ${dateStr}` : dateStr}
-                    {methodLabel && <span className="ml-1.5">· {methodLabel}</span>}
-                    {payment.jobTitle && <span className="ml-1.5">· {payment.jobTitle}</span>}
-                    {isGroup && payment.paymentCount && payment.paymentCount > 1 && (
-                      <span className="ml-1.5">· {payment.paymentCount} payments</span>
-                    )}
+                    {item.status === "paid" ? `Paid · ${dateStr}` : item.status === "partial" ? `Partial · ${dateStr}` : dateStr}
+                    {item.invoiceNumber && <span className="ml-1.5">· #{item.invoiceNumber}</span>}
+                    {item.jobTitle && <span className="ml-1.5">· {item.jobTitle}</span>}
                   </p>
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">
-                  <p className="text-[15px] font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                    {formatCents(amountCents)}
+                  <p className={`text-[15px] font-bold tabular-nums ${item.status === "unpaid" ? "text-amber-600 dark:text-amber-400" : item.status === "partial" ? "text-yellow-600 dark:text-yellow-400" : "text-slate-900 dark:text-slate-100"}`}>
+                    {item.status === "unpaid" || item.status === "partial" ? `${formatCents(displayAmount)} owed` : formatCents(displayAmount)}
                   </p>
                 </div>
 

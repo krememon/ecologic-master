@@ -1,0 +1,60 @@
+TASK: Make the “Unpaid” tab show open balances from Jobs + Invoices even when no payment exists yet
+
+Problem:
+- Payments page currently shows mostly payment transactions.
+- The “Unpaid” filter is empty unless a payment record exists.
+- In real life, Unpaid must show invoices/jobs that have a $ amount but haven’t been paid yet (even if $0 collected).
+
+Goal:
+- Payments page should show:
+  - Paid: fully paid items
+  - Partial: partially paid items
+  - Unpaid: invoices/jobs with total > 0 and paid == 0
+- Unpaid MUST include:
+  - invoices created in the Invoice tab
+  - job-generated invoices (jobs with invoice totals)
+  - anything that has an invoice total and is not paid
+
+Implementation approach (do not break current Paid/Partial):
+1) Build the Payments page list from INVOICES as the “source of truth” for what’s owed:
+   - Use /api/invoices (or add a new endpoint like /api/payments/ledger if cleaner)
+   - Each invoice row should include:
+     - invoiceId, invoiceNumber
+     - customer name
+     - totalCents
+     - paidCents (sum of payments applied)
+     - balanceDueCents = total - paid
+     - status computed: 
+       - if balanceDueCents == 0 => Paid
+       - else if paidCents > 0 => Partial
+       - else => Unpaid
+     - lastActivityDate = latest payment date OR invoice created date
+     - source label: “From Job” if jobId exists
+2) Keep payment transaction history for details:
+   - When a row is clicked, open the details page and show:
+     - invoice info
+     - list of underlying payment transactions (if any)
+3) Filters:
+   - All: show all invoices with total > 0
+   - Paid: balanceDueCents == 0
+   - Partial: paidCents > 0 AND balanceDueCents > 0
+   - Unpaid: paidCents == 0 AND totalCents > 0
+4) Search bar should search across:
+   - customer name
+   - invoice #
+   - amount
+5) IMPORTANT:
+   - Do not remove existing recorded payment rows from DB.
+   - This is a view/model change: “Payments page is an Accounts Receivable ledger view.”
+
+UI:
+- Unpaid rows should look like current rows but with:
+  - pill “Unpaid”
+  - right-side amount should show “$X owed” (balanceDue) not a paid amount
+  - subtitle shows invoice # and created date
+
+Deliverables:
+- Unpaid tab shows invoices/jobs with balances due even if zero payments exist
+- Paid/Partial still work
+- Clicking any row opens details without errors (paid, partial, unpaid)
+- Tell me which files you edited

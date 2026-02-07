@@ -91,12 +91,19 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const totalCents = data.invoiceTotalCents || 0;
   const payments: any[] = data.payments || [];
 
+  const paidCents = data.paidAmountCents || 0;
+  const balanceCents = data.balanceDueCents ?? (totalCents - paidCents);
+  const isPaid = balanceCents <= 0;
+  const isPartial = paidCents > 0 && balanceCents > 0;
+
   const details = [
     { icon: User, label: "Customer", value: data.customerName || "Unknown Customer" },
     ...(data.invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${data.invoiceNumber}` }] : []),
     ...(data.jobTitle ? [{ icon: Briefcase, label: "Job", value: data.jobTitle }] : []),
     { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
-    { icon: Receipt, label: "Payments Made", value: `${payments.length} payment${payments.length !== 1 ? "s" : ""}` },
+    ...(isPaid || isPartial ? [{ icon: DollarSign, label: "Amount Paid", value: formatCents(paidCents) }] : []),
+    ...(!isPaid ? [{ icon: DollarSign, label: "Balance Due", value: formatCents(balanceCents) }] : []),
+    ...(payments.length > 0 ? [{ icon: Receipt, label: "Payments Made", value: `${payments.length} payment${payments.length !== 1 ? "s" : ""}` }] : []),
   ];
 
   return (
@@ -149,7 +156,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
           <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            Payment Breakdown
+            Payment History
           </p>
         </div>
         {payments.length === 0 ? (
@@ -157,7 +164,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
             <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2.5">
               <Receipt className="w-4 h-4 text-slate-400" />
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">No payments found</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">No payments recorded yet</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">

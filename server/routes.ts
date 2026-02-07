@@ -10096,6 +10096,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/payments/ledger', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const allInvoices = await storage.getInvoices(company.id);
+
+      const ledger = allInvoices
+        .filter((inv: any) => {
+          const s = (inv.status || '').toLowerCase();
+          if (s === 'cancelled' || s === 'void' || s === 'draft') return false;
+          const total = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
+          return total > 0;
+        })
+        .map((inv: any) => {
+          const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
+          const paidCents = inv.paidAmountCents || 0;
+          const balanceCents = inv.balanceDueCents ?? (totalCents - paidCents);
+
+          let computedStatus: string;
+          if (balanceCents <= 0) {
+            computedStatus = 'paid';
+          } else if (paidCents > 0) {
+            computedStatus = 'partial';
+          } else {
+            computedStatus = 'unpaid';
+          }
+
+          let customerName = 'Unknown Customer';
+          if (inv.customer?.firstName || inv.customer?.lastName) {
+            customerName = [inv.customer.firstName, inv.customer.lastName].filter(Boolean).join(' ');
+          } else if (inv.customer?.companyName) {
+            customerName = inv.customer.companyName;
+          } else if (inv.client?.name) {
+            customerName = inv.client.name;
+          } else if (inv.job?.clientName) {
+            customerName = inv.job.clientName;
+          }
+
+          const jobTitle = inv.job?.title || null;
+
+          const lastActivityDate = inv.paidDate || inv.updatedAt || inv.createdAt;
+
+          return {
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            customerId: inv.customerId,
+            customerName,
+            jobId: inv.jobId,
+            jobTitle,
+            totalCents,
+            paidCents,
+            balanceCents,
+            status: computedStatus,
+            dueDate: inv.dueDate,
+            issueDate: inv.issueDate,
+            createdAt: inv.createdAt,
+            lastActivityDate,
+          };
+        });
+
+      ledger.sort((a: any, b: any) => {
+        const da = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
+        const db2 = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
+        return db2 - da;
+      });
+
+      res.json(ledger);
+    } catch (error) {
+      console.error("Error fetching payments ledger:", error);
+      res.status(500).json({ message: "Failed to fetch payments ledger" });
+    }
+  });
+
   app.get('/api/payments/breakdown', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
