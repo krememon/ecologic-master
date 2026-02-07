@@ -19,6 +19,8 @@ interface InvoicePaymentDetailsProps {
   invoiceId: string;
 }
 
+const REFUND_ROLES = new Set(["OWNER", "ADMIN", "MANAGER", "SUPERVISOR"]);
+
 function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -62,6 +64,11 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
       return res.json();
     },
   });
+
+  const { data: membership } = useQuery<{ role: string }>({
+    queryKey: ["/api/user/membership"],
+  });
+  const canRefund = REFUND_ROLES.has((membership?.role || "").toUpperCase());
 
   if (isLoading) {
     return (
@@ -177,41 +184,40 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
 
               const refundedCents = payment.refundedAmountCents || 0;
               const isFullyRefunded = refundedCents >= paymentCents;
+              const showRefundBtn = canRefund && !isFullyRefunded && payment.id;
 
               return (
-                <div key={payment.id || idx} className="px-4 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isFullyRefunded ? "bg-red-50 dark:bg-red-950/40" : "bg-green-50 dark:bg-green-950/40"}`}>
-                      <MethodIcon className={`w-4 h-4 ${isFullyRefunded ? "text-red-500 dark:text-red-400" : "text-green-600 dark:text-green-400"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {methodLabel}
-                        {isFullyRefunded && <span className="ml-1.5 text-[11px] text-red-500 font-semibold">Refunded</span>}
-                        {!isFullyRefunded && refundedCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
-                      </p>
-                      <p className="text-[12px] text-slate-400 dark:text-slate-500">
-                        {safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy 'at' h:mm a")}
-                        {payment.checkNumber && <span className="ml-1.5">· Check #{payment.checkNumber}</span>}
-                        {payment.collectedByName && <span className="ml-1.5">· by {payment.collectedByName}</span>}
-                        {payment.notes && <span className="ml-1.5">· {payment.notes}</span>}
-                      </p>
-                    </div>
-                    <p className={`text-sm font-bold tabular-nums shrink-0 ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
-                      +{formatCents(paymentCents)}
+                <div key={payment.id || idx} className="flex items-center gap-3 px-4 py-3.5">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isFullyRefunded ? "bg-red-50 dark:bg-red-950/40" : "bg-green-50 dark:bg-green-950/40"}`}>
+                    <MethodIcon className={`w-4 h-4 ${isFullyRefunded ? "text-red-500 dark:text-red-400" : "text-green-600 dark:text-green-400"}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {methodLabel}
+                      {isFullyRefunded && <span className="ml-1.5 text-[11px] text-red-500 font-semibold">Refunded</span>}
+                      {!isFullyRefunded && refundedCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
+                    </p>
+                    <p className="text-[12px] text-slate-400 dark:text-slate-500">
+                      {safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy 'at' h:mm a")}
+                      {payment.checkNumber && <span className="ml-1.5">· Check #{payment.checkNumber}</span>}
+                      {payment.collectedByName && <span className="ml-1.5">· by {payment.collectedByName}</span>}
+                      {payment.notes && <span className="ml-1.5">· {payment.notes}</span>}
                     </p>
                   </div>
-                  {!isFullyRefunded && payment.id && (
-                    <div className="mt-2 ml-11">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <p className={`text-sm font-bold tabular-nums ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
+                      +{formatCents(paymentCents)}
+                    </p>
+                    {showRefundBtn && (
                       <button
                         onClick={() => navigate(`/refunds/new?paymentId=${payment.id}`)}
-                        className="text-[12px] text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 transition-colors flex items-center gap-1"
+                        className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-red-50 hover:border-red-200 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:border-red-800 dark:hover:text-red-400 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 focus-visible:ring-offset-1"
                       >
                         <RotateCcw className="w-3 h-3" />
                         Refund
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}
