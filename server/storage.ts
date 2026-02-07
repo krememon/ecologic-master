@@ -91,12 +91,18 @@ import {
   campaigns,
   campaignRecipients,
   companyEmailBranding,
+  refunds,
+  plaidAccounts,
   type Campaign,
   type InsertCampaign,
   type CampaignRecipient,
   type InsertCampaignRecipient,
   type CompanyEmailBranding,
   type InsertCompanyEmailBranding,
+  type Refund,
+  type InsertRefund,
+  type PlaidAccount,
+  type InsertPlaidAccount,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull } from "drizzle-orm";
@@ -374,6 +380,18 @@ export interface IStorage {
   updateCompanyAutoClockOutTime(companyId: number, time: string): Promise<void>;
   getTimeEntryById(id: number): Promise<TimeLog | null>;
   updateTimeEntry(id: number, data: { clockInAt: Date; clockOutAt: Date; editedByUserId: string; editReason: string }): Promise<TimeLog | null>;
+
+  // Refund operations
+  getPaymentById(id: number): Promise<any>;
+  getRefundsByPaymentId(paymentId: number): Promise<Refund[]>;
+  getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]>;
+  createRefund(refund: InsertRefund): Promise<Refund>;
+  updateRefundStatus(id: number, status: string, updates?: Partial<InsertRefund>): Promise<Refund>;
+
+  // Plaid account operations
+  getPlaidAccount(companyId: number, entityType: string, entityId: number): Promise<PlaidAccount | undefined>;
+  createPlaidAccount(account: InsertPlaidAccount): Promise<PlaidAccount>;
+  updatePlaidAccountStatus(id: number, status: string): Promise<PlaidAccount>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3897,6 +3915,45 @@ export class DatabaseStorage implements IStorage {
   async deleteLoginChallenge(email: string) {
     const normalizedEmail = email.toLowerCase().trim();
     await db.delete(loginChallenges).where(sql`LOWER(email) = ${normalizedEmail}`);
+  }
+
+  async getPaymentById(id: number): Promise<any> {
+    const [payment] = await db.select().from(payments).where(eq(payments.id, id));
+    return payment || null;
+  }
+
+  async getRefundsByPaymentId(paymentId: number): Promise<Refund[]> {
+    return db.select().from(refunds).where(eq(refunds.paymentId, paymentId)).orderBy(desc(refunds.createdAt));
+  }
+
+  async getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]> {
+    return db.select().from(refunds).where(eq(refunds.invoiceId, invoiceId)).orderBy(desc(refunds.createdAt));
+  }
+
+  async createRefund(refund: InsertRefund): Promise<Refund> {
+    const [created] = await db.insert(refunds).values(refund).returning();
+    return created;
+  }
+
+  async updateRefundStatus(id: number, status: string, updates?: Partial<InsertRefund>): Promise<Refund> {
+    const [updated] = await db.update(refunds).set({ status: status as any, ...updates }).where(eq(refunds.id, id)).returning();
+    return updated;
+  }
+
+  async getPlaidAccount(companyId: number, entityType: string, entityId: number): Promise<PlaidAccount | undefined> {
+    const [account] = await db.select().from(plaidAccounts)
+      .where(and(eq(plaidAccounts.companyId, companyId), eq(plaidAccounts.entityType, entityType), eq(plaidAccounts.entityId, entityId), eq(plaidAccounts.status, 'active')));
+    return account;
+  }
+
+  async createPlaidAccount(account: InsertPlaidAccount): Promise<PlaidAccount> {
+    const [created] = await db.insert(plaidAccounts).values(account).returning();
+    return created;
+  }
+
+  async updatePlaidAccountStatus(id: number, status: string): Promise<PlaidAccount> {
+    const [updated] = await db.update(plaidAccounts).set({ status }).where(eq(plaidAccounts.id, id)).returning();
+    return updated;
   }
 }
 

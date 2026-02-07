@@ -519,6 +519,7 @@ export const payments = pgTable("payments", {
   paidDate: timestamp("paid_date"),
   notes: text("notes"),
   meta: jsonb("meta"),
+  refundedAmountCents: integer("refunded_amount_cents").notNull().default(0),
   // QuickBooks sync fields
   qboPaymentId: varchar("qbo_payment_id", { length: 100 }),
   qboPaymentSyncStatus: varchar("qbo_payment_sync_status", { length: 20 }), // pending, synced, failed, waiting
@@ -1622,3 +1623,53 @@ export type NotificationType =
   | "job_rescheduled"
   | "job_cancelled"
   | "dm_message";
+
+export const refundMethodEnum = pgEnum("refund_method", ["card", "bank", "cash", "check"]);
+export const refundProviderEnum = pgEnum("refund_provider", ["stripe", "plaid", "manual"]);
+export const refundStatusEnum = pgEnum("refund_status", ["pending", "succeeded", "posted", "settled", "failed", "returned", "cancelled"]);
+
+export const refunds = pgTable("refunds", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  invoiceId: integer("invoice_id").references(() => invoices.id),
+  paymentId: integer("payment_id").notNull().references(() => payments.id),
+  customerId: integer("customer_id").references(() => customers.id),
+  amountCents: integer("amount_cents").notNull(),
+  method: refundMethodEnum("method").notNull(),
+  provider: refundProviderEnum("provider").notNull(),
+  status: refundStatusEnum("status").notNull().default("pending"),
+  stripeRefundId: varchar("stripe_refund_id"),
+  plaidTransferId: varchar("plaid_transfer_id"),
+  reason: text("reason"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertRefundSchema = createInsertSchema(refunds).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type Refund = typeof refunds.$inferSelect;
+export type InsertRefund = z.infer<typeof insertRefundSchema>;
+
+export const plaidAccounts = pgTable("plaid_accounts", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  entityType: varchar("entity_type").notNull(), // company | customer
+  entityId: integer("entity_id").notNull(),
+  plaidAccessToken: text("plaid_access_token"),
+  plaidAccountId: varchar("plaid_account_id"),
+  institutionName: varchar("institution_name"),
+  maskLast4: varchar("mask_last4"),
+  status: varchar("status").notNull().default("active"), // active | disabled
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPlaidAccountSchema = createInsertSchema(plaidAccounts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PlaidAccount = typeof plaidAccounts.$inferSelect;
+export type InsertPlaidAccount = z.infer<typeof insertPlaidAccountSchema>;

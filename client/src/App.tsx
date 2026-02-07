@@ -52,6 +52,7 @@ import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
 import PaymentDetails from "@/pages/payment-details";
 import InvoicePaymentDetails from "@/pages/invoice-payment-details";
+import RefundScreen from "@/pages/refund-screen";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
@@ -214,6 +215,7 @@ function AuthenticatedRouter() {
           {(params) => <InvoiceDetails invoiceId={params.id} />}
         </Route>
         <Route path="/payments" component={PaymentsPage} />
+        <Route path="/refunds/new" component={RefundScreen} />
         <Route path="/payments/invoice/:invoiceId">
           {(params) => <InvoicePaymentDetails invoiceId={params.invoiceId} />}
         </Route>

@@ -10243,6 +10243,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       }));
 
+      let invoiceRefunds: any[] = [];
+      try {
+        invoiceRefunds = await storage.getRefundsByInvoiceId(invoiceId);
+      } catch (e) {}
+
       res.json({
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
@@ -10254,6 +10259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobTitle,
         jobId: invoice.jobId,
         payments: enrichedPayments,
+        refunds: invoiceRefunds,
       });
     } catch (error) {
       console.error("Error fetching invoice payments:", error);
@@ -12671,6 +12677,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error retrieving session:', error);
       res.status(500).json({ message: "Failed to retrieve session" });
+    }
+  });
+
+  // ============ REFUNDS API ============
+
+  app.get('/api/payments/:id/refund-context', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) return res.status(403).json({ message: "Access denied" });
+      const role = member.role.toUpperCase();
+      if (role === 'TECHNICIAN' || role === 'ESTIMATOR') {
+        return res.status(403).json({ message: "You don't have permission to issue refunds" });
+      }
+
+      const paymentId = parseInt(req.params.id);
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment || payment.companyId !== company.id) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
+      const refundedAmountCents = payment.refundedAmountCents || 0;
+      const maxRefundable = amountCents - refundedAmountCents;
+
+      let customerName = 'Unknown Customer';
+      if (payment.customerId) {
+        const customer = await storage.getCustomer(payment.customerId);
+        if (customer) {
+          customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.companyName || 'Unknown Customer';
+        }
+      }
+
+      const hasStripeRef = !!(payment.stripePaymentIntentId || payment.stripeCheckoutSessionId);
+
+      let companyBankLinked = false;
+      let customerBankLinked = false;
+      try {
+        const companyBank = await storage.getPlaidAccount(company.id, 'company', company.id);
+        companyBankLinked = !!companyBank;
+        if (payment.customerId) {
+          const customerBank = await storage.getPlaidAccount(company.id, 'customer', payment.customerId);
+          customerBankLinked = !!customerBank;
+        }
+      } catch (e) {}
+
+      const existingRefunds = await storage.getRefundsByPaymentId(paymentId);
+
+      res.json({
+        paymentId: payment.id,
+        invoiceId: payment.invoiceId,
+        customerId: payment.customerId,
+        customerName,
+        amountCents,
+        refundedAmountCents,
+        maxRefundable,
+        hasStripeRef,
+        stripePaymentIntentId: payment.stripePaymentIntentId,
+        companyBankLinked,
+        customerBankLinked,
+        paymentMethod: payment.paymentMethod,
+        existingRefunds,
+      });
+    } catch (error) {
+      console.error("Error fetching refund context:", error);
+      res.status(500).json({ message: "Failed to fetch refund context" });
+    }
+  });
+
+  app.post('/api/refunds', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) return res.status(403).json({ message: "Access denied" });
+      const role = member.role.toUpperCase();
+      if (role === 'TECHNICIAN' || role === 'ESTIMATOR') {
+        return res.status(403).json({ message: "You don't have permission to issue refunds" });
+      }
+
+      const refundSchema = z.object({
+        paymentId: z.number().int().positive(),
+        method: z.enum(['card', 'bank', 'cash', 'check']),
+        amountCents: z.number().int().positive(),
+        reason: z.string().optional(),
+      });
+
+      const parsed = refundSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid refund request", errors: parsed.error.flatten().fieldErrors });
+      }
+      const { paymentId, method, amountCents, reason } = parsed.data;
+
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment || payment.companyId !== company.id) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
+      const alreadyRefunded = payment.refundedAmountCents || 0;
+      const maxRefundable = paymentAmountCents - alreadyRefunded;
+
+      if (amountCents > maxRefundable) {
+        return res.status(400).json({ message: `Refund amount exceeds maximum refundable ($${(maxRefundable / 100).toFixed(2)})` });
+      }
+
+      let provider: 'stripe' | 'plaid' | 'manual' = 'manual';
+      let status: string = 'succeeded';
+      let stripeRefundId: string | null = null;
+      let plaidTransferId: string | null = null;
+
+      if (method === 'card') {
+        if (!payment.stripePaymentIntentId) {
+          return res.status(400).json({ message: "No original card charge exists for this payment" });
+        }
+        if (!stripe) {
+          return res.status(500).json({ message: "Stripe is not configured" });
+        }
+        provider = 'stripe';
+        try {
+          const stripeRefund = await stripe.refunds.create({
+            payment_intent: payment.stripePaymentIntentId,
+            amount: amountCents,
+            reason: 'requested_by_customer',
+          });
+          stripeRefundId = stripeRefund.id;
+          status = stripeRefund.status === 'succeeded' ? 'succeeded' : 'pending';
+        } catch (stripeError: any) {
+          console.error("[Refund] Stripe refund failed:", stripeError.message);
+          return res.status(400).json({ message: `Stripe refund failed: ${stripeError.message}` });
+        }
+      } else if (method === 'bank') {
+        provider = 'plaid';
+        status = 'pending';
+        return res.status(501).json({ message: "Bank refunds via Plaid are not yet configured. Please use another refund method." });
+      }
+
+      const refund = await storage.createRefund({
+        companyId: company.id,
+        invoiceId: payment.invoiceId,
+        paymentId: payment.id,
+        customerId: payment.customerId,
+        amountCents,
+        method: method as any,
+        provider,
+        status: status as any,
+        stripeRefundId,
+        plaidTransferId,
+        reason: reason || null,
+        createdByUserId: userId,
+      });
+
+      const newRefundedTotal = alreadyRefunded + amountCents;
+      let paymentStatus = 'paid';
+      if (newRefundedTotal >= paymentAmountCents) {
+        paymentStatus = 'refunded';
+      } else if (newRefundedTotal > 0) {
+        paymentStatus = 'partially_refunded';
+      }
+
+      await storage.updatePayment(payment.id, {
+        refundedAmountCents: newRefundedTotal,
+        status: paymentStatus,
+      });
+
+      if (payment.invoiceId && (status === 'succeeded' || status === 'posted' || status === 'settled')) {
+        const invoice = await storage.getInvoice(payment.invoiceId);
+        if (invoice) {
+          const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
+          const allPayments = await storage.getPaymentsByInvoiceId(payment.invoiceId);
+          let totalNetPaid = 0;
+          for (const p of allPayments) {
+            const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+            const pRefunded = p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0);
+            totalNetPaid += (pAmt - pRefunded);
+          }
+          totalNetPaid = Math.max(0, totalNetPaid);
+          const newBalanceDue = Math.max(0, invoiceTotalCents - totalNetPaid);
+          let invoiceStatus = 'pending';
+          if (newBalanceDue === 0 && invoiceTotalCents > 0) {
+            invoiceStatus = 'paid';
+          } else if (totalNetPaid > 0) {
+            invoiceStatus = 'partial';
+          }
+
+          await storage.updateInvoice(payment.invoiceId, {
+            paidAmountCents: totalNetPaid,
+            balanceDueCents: newBalanceDue,
+            status: invoiceStatus,
+          } as any);
+
+          if (invoice.jobId) {
+            const jobPaymentStatus = invoiceStatus === 'paid' ? 'paid' : totalNetPaid > 0 ? 'partial' : 'unpaid';
+            await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+          }
+        }
+      }
+
+      res.json({
+        refund,
+        payment: {
+          id: payment.id,
+          refundedAmountCents: newRefundedTotal,
+          status: paymentStatus,
+        },
+      });
+    } catch (error) {
+      console.error("Error creating refund:", error);
+      res.status(500).json({ message: "Failed to create refund" });
+    }
+  });
+
+  app.get('/api/refunds/payment/:paymentId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const paymentId = parseInt(req.params.paymentId);
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment || payment.companyId !== company.id) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const refundsList = await storage.getRefundsByPaymentId(paymentId);
+      res.json(refundsList);
+    } catch (error) {
+      console.error("Error fetching refunds:", error);
+      res.status(500).json({ message: "Failed to fetch refunds" });
     }
   });
 

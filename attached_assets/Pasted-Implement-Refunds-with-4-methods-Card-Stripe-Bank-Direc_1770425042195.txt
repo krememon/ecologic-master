@@ -1,0 +1,143 @@
+Implement Refunds with 4 methods: Card (Stripe), Bank (Direct Deposit via Plaid), Cash, Check.
+
+UX FLOW
+1) Add a “Refund” button on each Payment Card.
+   - Clicking navigates to Refund Screen with paymentId.
+   - Route: /refunds/new?paymentId=xxx (preferred)
+
+2) Refund Screen UI
+- Header: “How would you like to refund {CustomerName}?”
+- Show 4 selectable option tiles/cards:
+  1) Card (refund back to original card via Stripe)
+  2) Bank (Direct Deposit) (send business bank -> customer bank via Plaid Transfer credit)
+  3) Cash (manual record)
+  4) Check (manual record)
+- Below selection:
+  - Amount input (default = max refundable for this payment)
+  - Reason (optional)
+  - Confirm button text changes based on method:
+    - Card: “Issue Card Refund”
+    - Bank: “Send Direct Deposit”
+    - Cash/Check: “Record Refund”
+  - Cancel goes back
+
+METHOD RULES
+A) Card (Stripe)
+- If payment has Stripe reference (payment_intent or charge id) => allow and call Stripe refund API.
+- If payment has NO Stripe reference (cash/check original) => disable the Card option and show helper text:
+  “No original card charge exists for this payment.”
+
+B) Bank (Direct Deposit via Plaid)
+- Always allowed as an option, BUT requires bank connections:
+  - Business funding account linked (company)
+  - Customer destination account linked (customer)
+- If company bank not linked => show CTA “Connect EcoLogic Bank”
+- If customer bank not linked => show CTA “Connect {CustomerName} Bank”
+- Once both are linked => allow “Send Direct Deposit”
+- Create Plaid Transfer payout (type=credit, network=ach) and store status.
+
+C) Cash / Check
+- Manual refund record only (no processor calls).
+
+ACCOUNTING / STATUS HANDLING (IMPORTANT)
+- Support partial refunds.
+- Never let refund exceed (payment.amount - payment.refunded_amount).
+- Create a refunds record for ALL refund types.
+- Update payments.refunded_amount_cents and payments.status (succeeded/partially_refunded/refunded).
+- For Bank (Plaid) payouts: set refund status to “pending” until Plaid webhook says posted/settled.
+  - Show “Pending” status in UI.
+  - If transfer fails/returns, mark refund as failed/returned and adjust invoice/payment totals accordingly.
+
+DB CHANGES
+1) refunds table:
+- id uuid
+- company_id uuid
+- invoice_id uuid nullable
+- payment_id uuid required
+- customer_id uuid required
+- amount_cents int required
+- method enum: card|bank|cash|check
+- provider enum: stripe|plaid|manual
+- status enum: pending|succeeded|posted|settled|failed|returned|cancelled
+- stripe_refund_id text nullable
+- plaid_transfer_id text nullable
+- reason text nullable
+- created_by_user_id uuid
+- created_at timestamp
+
+2) payments table additions:
+- refunded_amount_cents int default 0
+- status enum: succeeded|partially_refunded|refunded (default succeeded)
+- store stripe identifiers if not already stored: stripe_payment_intent_id or stripe_charge_id (use existing field if present)
+
+3) plaid_accounts table (linked accounts for company + customer):
+- id uuid
+- company_id uuid
+- entity_type enum: company|customer
+- entity_id uuid
+- plaid_access_token encrypted text
+- plaid_account_id text
+- institution_name text nullable
+- mask_last4 text nullable
+- status enum: active|disabled
+- created_at timestamp
+
+BACKEND ENDPOINTS
+1) GET /api/payments/:id/refund-context
+Returns:
+- payment info, invoiceId, customerId, customerName
+- payment.amount_cents, payment.refunded_amount_cents
+- maxRefundable
+- payment stripe reference presence
+- company bank linked? customer bank linked?
+
+2) POST /api/refunds
+Body: { paymentId, method, amountCents, reason }
+Logic:
+- RBAC: Owner/Admin allowed; Dispatcher allowed only if they already can manage payments; deny Technician/Estimator.
+- Validate company ownership and maxRefundable.
+- If method=card:
+   - require stripe ref; call Stripe refunds.create; status=succeeded; provider=stripe
+- If method=bank:
+   - require plaid company + customer linked
+   - call Plaid Transfer:
+     a) transfer/authorization/create (type=credit, network=ach)
+     b) transfer/create
+   - status=pending; provider=plaid; store plaid_transfer_id
+- If method=cash/check:
+   - provider=manual; status=succeeded
+- Insert refunds row
+- Update payment refunded_amount_cents and payment.status appropriately
+- Update invoice totals:
+   - For card/cash/check: apply immediately
+   - For bank: mark as “pending refund” until settled (create a separate pending field or adjust carefully + reverse on fail)
+Return: refund + updated payment/invoice summary.
+
+3) Plaid link endpoints
+- POST /api/plaid/link_token { mode: company|customer, customerId? }
+- POST /api/plaid/exchange_public_token { public_token, mode, customerId?, account_id }
+Store encrypted access_token + selected account_id in plaid_accounts.
+
+4) Webhook
+- POST /api/plaid/webhook
+Verify webhook signature properly.
+On transfer events:
+- update refunds.status based on Plaid transfer status (posted/settled/failed/returned)
+- if failed/returned: revert invoice/payment impacts if they were applied (or mark “pending” impacts and only apply on settled)
+
+FRONTEND IMPLEMENTATION
+- Add Refund button on PaymentCard (only visible if user has refund permission).
+- Build RefundScreen page:
+  - fetch refund-context
+  - show option tiles + connect-bank CTAs for bank option
+  - submit to POST /api/refunds
+  - show status + refresh payment/invoice views without full reload
+
+DELIVERABLES
+- Refund button on payment cards
+- Refund screen with 4 methods + customer name
+- Stripe refunds work when eligible
+- Plaid bank “direct deposit” payout flow works in sandbox including linking + creating transfer
+- Plaid webhook updates status
+- Accurate invoice/payment accounting with partial refunds and pending bank refunds
+- Minimal logs; remove noisy logs after verified
