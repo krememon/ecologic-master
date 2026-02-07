@@ -383,9 +383,11 @@ export interface IStorage {
 
   // Refund operations
   getPaymentById(id: number): Promise<any>;
+  getRefundById(id: number): Promise<Refund | undefined>;
   getRefundsByPaymentId(paymentId: number): Promise<Refund[]>;
   getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]>;
   getRefundsByCompanyId(companyId: number): Promise<Refund[]>;
+  getRefundByPlaidTransferId(plaidTransferId: string): Promise<Refund | undefined>;
   createRefund(refund: InsertRefund): Promise<Refund>;
   updateRefundStatus(id: number, status: string, updates?: Partial<InsertRefund>): Promise<Refund>;
 
@@ -3927,12 +3929,22 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(refunds).where(eq(refunds.paymentId, paymentId)).orderBy(desc(refunds.createdAt));
   }
 
+  async getRefundById(id: number): Promise<Refund | undefined> {
+    const [found] = await db.select().from(refunds).where(eq(refunds.id, id));
+    return found;
+  }
+
   async getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]> {
     return db.select().from(refunds).where(eq(refunds.invoiceId, invoiceId)).orderBy(desc(refunds.createdAt));
   }
 
   async getRefundsByCompanyId(companyId: number): Promise<Refund[]> {
     return db.select().from(refunds).where(eq(refunds.companyId, companyId)).orderBy(desc(refunds.createdAt));
+  }
+
+  async getRefundByPlaidTransferId(plaidTransferId: string): Promise<Refund | undefined> {
+    const [found] = await db.select().from(refunds).where(eq(refunds.plaidTransferId, plaidTransferId));
+    return found;
   }
 
   async createRefund(refund: InsertRefund): Promise<Refund> {

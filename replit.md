@@ -41,6 +41,15 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Tax Management**: Owner-only feature for creating custom tax rates (name, percentage) to apply to invoices, with inline validation and duplicate name prevention.
 - **Line Item Tax Selection**: Job line items support per-item tax selection. When "Taxable" is ON, a tax selector appears, allowing users to pick from saved company taxes. Tax data is stored per line item to preserve the rate at selection time.
 - **Payment Collection**: Multi-method payment collection (Cash, Check, Card via Stripe) on the Payment Review screen. Includes idempotent manual payment processing and RBAC enforcement.
+- **Refund System**: Multi-method refund support (Card via Stripe, Bank via Plaid, Cash, Check) with RBAC enforcement. Features:
+  - Card refunds process immediately via Stripe API
+  - Bank (Plaid) refunds use pending-until-settled accounting: refund created with status 'pending', totals NOT updated until Plaid webhook confirms 'settled'
+  - Cash/Check refunds apply immediately as 'succeeded'
+  - Aggregation separates settled refunds (succeeded/settled) from pending refunds (pending/posted) for accurate Net Collected calculations
+  - Plaid webhook endpoint (`/api/webhooks/plaid/refund`) with secret verification handles status transitions and applies totals atomically on settlement
+  - Frontend shows "Pending refund: $X" inline note on invoice cards and detail pages without affecting displayed totals
+  - Payment history distinguishes settled vs pending refund lines per payment
+  - Failed/returned refunds marked accordingly without affecting totals
 - **Payments Tracker**: Contractor-first payments dashboard with real-time financial overview. Features:
   - Scoreboard with This Month, Still Owed, Paid Today, and Overdue statistics
   - Filter tabs for All, Paid, Partial, Unpaid, and Overdue invoices

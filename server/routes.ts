@@ -7170,6 +7170,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/webhooks/plaid/refund', async (req: any, res) => {
+    try {
+      const webhookSecret = process.env.PLAID_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const providedSecret = req.headers['x-plaid-webhook-secret'] || req.body?.webhook_secret;
+        if (providedSecret !== webhookSecret) {
+          console.warn('[Plaid Webhook] Unauthorized: invalid webhook secret');
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        console.warn('[Plaid Webhook] No PLAID_WEBHOOK_SECRET configured - webhook verification skipped');
+      }
+
+      const { transfer_id, new_status } = req.body;
+      if (!transfer_id || !new_status) {
+        return res.status(200).json({ received: true });
+      }
+
+      const refund = await storage.getRefundByPlaidTransferId(transfer_id);
+      if (!refund) {
+        console.log(`[Plaid Webhook] Refund not found for transfer_id=${transfer_id}`);
+        return res.status(200).json({ received: true });
+      }
+
+      const validStatuses = new Set(['posted', 'settled', 'failed', 'returned']);
+      if (!validStatuses.has(new_status)) {
+        console.log(`[Plaid Webhook] Unknown status "${new_status}" for transfer_id=${transfer_id}`);
+        return res.status(200).json({ received: true });
+      }
+
+      const statusMap: Record<string, string> = {
+        posted: 'pending',
+        settled: 'settled',
+        failed: 'failed',
+        returned: 'returned',
+      };
+      const mappedStatus = statusMap[new_status] || new_status;
+
+      await storage.updateRefundStatus(refund.id, mappedStatus);
+      console.log(`[Plaid Webhook] Refund #${refund.id} status -> ${mappedStatus} (plaid: ${new_status})`);
+
+      const isNowSettled = mappedStatus === 'settled' || mappedStatus === 'succeeded';
+      if (isNowSettled) {
+        const payment = await storage.getPaymentById(refund.paymentId);
+        if (payment) {
+          const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
+
+          const allPaymentRefunds = await storage.getRefundsByPaymentId(refund.paymentId);
+          const settledStatuses = new Set(['succeeded', 'settled']);
+          let settledRefundTotal = 0;
+          for (const r of allPaymentRefunds) {
+            if (settledStatuses.has(r.id === refund.id ? mappedStatus : r.status)) {
+              settledRefundTotal += r.amountCents;
+            }
+          }
+
+          let paymentStatus = 'paid';
+          if (settledRefundTotal >= paymentAmountCents) {
+            paymentStatus = 'refunded';
+          } else if (settledRefundTotal > 0) {
+            paymentStatus = 'partially_refunded';
+          }
+
+          await storage.updatePayment(payment.id, {
+            refundedAmountCents: settledRefundTotal,
+            status: paymentStatus,
+          });
+
+          if (payment.invoiceId) {
+            const invoice = await storage.getInvoice(payment.invoiceId);
+            if (invoice) {
+              const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
+              const allPayments = await storage.getPaymentsByInvoiceId(payment.invoiceId);
+
+              let totalPaymentsCents = 0;
+              let totalRefundedOnPayments = 0;
+              for (const p of allPayments) {
+                const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+                totalPaymentsCents += pAmt;
+                totalRefundedOnPayments += (p.id === payment.id ? settledRefundTotal : (p.refundedAmountCents || 0));
+              }
+
+              const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
+
+              let invoiceStatus: string;
+              if (totalPaymentsCents === 0) {
+                invoiceStatus = 'pending';
+              } else if (totalPaymentsCents < invoiceTotalCents) {
+                invoiceStatus = 'partial';
+              } else {
+                if (totalRefundedOnPayments === 0) {
+                  invoiceStatus = 'paid';
+                } else if (totalRefundedOnPayments >= totalPaymentsCents) {
+                  invoiceStatus = 'refunded';
+                } else {
+                  invoiceStatus = 'partially_refunded';
+                }
+              }
+
+              await storage.updateInvoice(payment.invoiceId, {
+                paidAmountCents: totalPaymentsCents,
+                balanceDueCents,
+                status: invoiceStatus,
+              } as any);
+
+              if (invoice.jobId) {
+                const jobPaymentStatus = balanceDueCents === 0 && totalPaymentsCents > 0 ? 'paid' : totalPaymentsCents > 0 ? 'partial' : 'unpaid';
+                await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+              }
+            }
+          }
+        }
+      }
+
+      res.status(200).json({ received: true, status: mappedStatus });
+    } catch (error) {
+      console.error("[Plaid Webhook] Error processing refund webhook:", error);
+      res.status(200).json({ received: true });
+    }
+  });
+
   // ===================
   // Estimate Routes (Job-scoped estimates with line items)
   // ===================
@@ -10108,11 +10229,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         allRefunds = await storage.getRefundsByCompanyId(company.id);
       } catch (e) {}
-      const succeededStatuses = new Set(['succeeded', 'settled', 'posted']);
+      const settledStatuses = new Set(['succeeded', 'settled']);
+      const pendingStatuses = new Set(['pending', 'posted']);
       const refundTotalsByInvoice: Record<number, number> = {};
+      const pendingRefundTotalsByInvoice: Record<number, number> = {};
       for (const r of allRefunds) {
-        if (r.invoiceId && succeededStatuses.has(r.status)) {
+        if (r.invoiceId && settledStatuses.has(r.status)) {
           refundTotalsByInvoice[r.invoiceId] = (refundTotalsByInvoice[r.invoiceId] || 0) + r.amountCents;
+        }
+        if (r.invoiceId && pendingStatuses.has(r.status)) {
+          pendingRefundTotalsByInvoice[r.invoiceId] = (pendingRefundTotalsByInvoice[r.invoiceId] || 0) + r.amountCents;
         }
       }
 
@@ -10128,6 +10254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const paidCents = inv.paidAmountCents || 0;
           const balanceCents = Math.max(totalCents - paidCents, 0);
           const refundedCents = refundTotalsByInvoice[inv.id] || 0;
+          const pendingRefundedCents = pendingRefundTotalsByInvoice[inv.id] || 0;
           const netCollectedCents = Math.max(0, paidCents - refundedCents);
 
           const dbStatus = (inv.status || '').toLowerCase();
@@ -10168,6 +10295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             paidCents,
             balanceCents,
             refundedCents,
+            pendingRefundedCents,
             netCollectedCents,
             status: computedStatus,
             dueDate: inv.dueDate,
@@ -10276,11 +10404,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalRefundedOnPayments += ((p as any).refundedAmountCents || 0);
       }
 
-      const succeededRefundStatuses = new Set(['succeeded', 'settled', 'posted']);
+      const settledRefundStatuses = new Set(['succeeded', 'settled']);
+      const pendingRefundStatuses = new Set(['pending', 'posted']);
       let totalRefundsCents = 0;
+      let pendingRefundsCents = 0;
       for (const r of invoiceRefunds) {
-        if (succeededRefundStatuses.has(r.status)) {
+        if (settledRefundStatuses.has(r.status)) {
           totalRefundsCents += r.amountCents;
+        }
+        if (pendingRefundStatuses.has(r.status)) {
+          pendingRefundsCents += r.amountCents;
         }
       }
 
@@ -10309,6 +10442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paidAmountCents: totalPaymentsCents,
         totalPaymentsCents,
         totalRefundsCents,
+        pendingRefundsCents,
         netCollectedCents,
         balanceDueCents,
         invoiceStatus: computedStatus,
@@ -12873,7 +13007,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (method === 'bank') {
         provider = 'plaid';
         status = 'pending';
-        return res.status(501).json({ message: "Bank refunds via Plaid are not yet configured. Please use another refund method." });
       }
 
       const refund = await storage.createRefund({
@@ -12891,70 +13024,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdByUserId: userId,
       });
 
-      const newRefundedTotal = alreadyRefunded + amountCents;
-      let paymentStatus = 'paid';
-      if (newRefundedTotal >= paymentAmountCents) {
-        paymentStatus = 'refunded';
-      } else if (newRefundedTotal > 0) {
-        paymentStatus = 'partially_refunded';
-      }
+      const isPendingRefund = status === 'pending' || status === 'posted';
 
-      await storage.updatePayment(payment.id, {
-        refundedAmountCents: newRefundedTotal,
-        status: paymentStatus,
-      });
+      if (!isPendingRefund) {
+        const newRefundedTotal = alreadyRefunded + amountCents;
+        let paymentStatus = 'paid';
+        if (newRefundedTotal >= paymentAmountCents) {
+          paymentStatus = 'refunded';
+        } else if (newRefundedTotal > 0) {
+          paymentStatus = 'partially_refunded';
+        }
 
-      if (payment.invoiceId && (status === 'succeeded' || status === 'posted' || status === 'settled')) {
-        const invoice = await storage.getInvoice(payment.invoiceId);
-        if (invoice) {
-          const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
-          const allPayments = await storage.getPaymentsByInvoiceId(payment.invoiceId);
+        await storage.updatePayment(payment.id, {
+          refundedAmountCents: newRefundedTotal,
+          status: paymentStatus,
+        });
 
-          let totalPaymentsCents = 0;
-          let totalRefundedOnPayments = 0;
-          for (const p of allPayments) {
-            const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
-            totalPaymentsCents += pAmt;
-            totalRefundedOnPayments += (p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0));
-          }
+        if (payment.invoiceId) {
+          const invoice = await storage.getInvoice(payment.invoiceId);
+          if (invoice) {
+            const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
+            const allPayments = await storage.getPaymentsByInvoiceId(payment.invoiceId);
 
-          const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
-
-          let invoiceStatus: string;
-          if (totalPaymentsCents === 0) {
-            invoiceStatus = 'pending';
-          } else if (totalPaymentsCents < invoiceTotalCents) {
-            invoiceStatus = 'partial';
-          } else {
-            if (totalRefundedOnPayments === 0) {
-              invoiceStatus = 'paid';
-            } else if (totalRefundedOnPayments >= totalPaymentsCents) {
-              invoiceStatus = 'refunded';
-            } else {
-              invoiceStatus = 'partially_refunded';
+            let totalPaymentsCents = 0;
+            let totalRefundedOnPayments = 0;
+            for (const p of allPayments) {
+              const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+              totalPaymentsCents += pAmt;
+              totalRefundedOnPayments += (p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0));
             }
-          }
 
-          await storage.updateInvoice(payment.invoiceId, {
-            paidAmountCents: totalPaymentsCents,
-            balanceDueCents,
-            status: invoiceStatus,
-          } as any);
+            const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
 
-          if (invoice.jobId) {
-            const jobPaymentStatus = balanceDueCents === 0 && totalPaymentsCents > 0 ? 'paid' : totalPaymentsCents > 0 ? 'partial' : 'unpaid';
-            await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+            let invoiceStatus: string;
+            if (totalPaymentsCents === 0) {
+              invoiceStatus = 'pending';
+            } else if (totalPaymentsCents < invoiceTotalCents) {
+              invoiceStatus = 'partial';
+            } else {
+              if (totalRefundedOnPayments === 0) {
+                invoiceStatus = 'paid';
+              } else if (totalRefundedOnPayments >= totalPaymentsCents) {
+                invoiceStatus = 'refunded';
+              } else {
+                invoiceStatus = 'partially_refunded';
+              }
+            }
+
+            await storage.updateInvoice(payment.invoiceId, {
+              paidAmountCents: totalPaymentsCents,
+              balanceDueCents,
+              status: invoiceStatus,
+            } as any);
+
+            if (invoice.jobId) {
+              const jobPaymentStatus = balanceDueCents === 0 && totalPaymentsCents > 0 ? 'paid' : totalPaymentsCents > 0 ? 'partial' : 'unpaid';
+              await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+            }
           }
         }
       }
 
       res.json({
         refund,
-        payment: {
-          id: payment.id,
-          refundedAmountCents: newRefundedTotal,
-          status: paymentStatus,
-        },
+        isPending: isPendingRefund,
       });
     } catch (error) {
       console.error("Error creating refund:", error);

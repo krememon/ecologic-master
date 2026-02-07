@@ -159,11 +159,11 @@ export default function RefundScreen() {
   const effectiveAmountValid = effectiveAmount > 0 && effectiveAmountCents <= (ctx?.maxRefundable ?? 0);
 
   const isCardDisabled = !ctx?.hasStripeRef;
-  const isBankDisabled = true;
+  const isBankDisabled = false;
 
   const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting &&
-    selectedMethod !== "bank" &&
-    !(selectedMethod === "card" && isCardDisabled);
+    !(selectedMethod === "card" && isCardDisabled) &&
+    !(selectedMethod === "bank" && isBankDisabled);
 
   const handleConfirm = async () => {
     if (!canSubmit || !ctx || !activePaymentId) return;
@@ -177,11 +177,18 @@ export default function RefundScreen() {
         reason: reason.trim() || undefined,
       });
 
-      toast({ title: "Refund recorded", description: `${formatCents(effectiveAmountCents)} refunded via ${methodConfig[selectedMethod!].label}` });
+      const isPending = selectedMethod === "bank";
+      toast({
+        title: isPending ? "Refund initiated" : "Refund recorded",
+        description: isPending
+          ? `${formatCents(effectiveAmountCents)} bank refund pending settlement`
+          : `${formatCents(effectiveAmountCents)} refunded via ${methodConfig[selectedMethod!].label}`,
+      });
 
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/invoice"] });
 
       const invoiceId = ctx.invoiceId || (paramInvoiceId ? parseInt(paramInvoiceId) : null);
       if (invoiceId) {

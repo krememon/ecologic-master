@@ -24,6 +24,7 @@ type LedgerItem = {
   paidCents: number;
   balanceCents: number;
   refundedCents: number;
+  pendingRefundedCents: number;
   netCollectedCents: number;
   status: string;
   dueDate: string | null;
@@ -246,6 +247,7 @@ export default function PaymentsPage() {
             const dateStr = getDateDisplay(item);
             const isOwed = item.status === "unpaid" || item.status === "partial";
             const hasRefunds = (item.refundedCents || 0) > 0;
+            const hasPendingRefunds = (item.pendingRefundedCents || 0) > 0;
 
             let displayAmount: number;
             let amountSuffix = "";
@@ -288,6 +290,11 @@ export default function PaymentsPage() {
                     {item.invoiceNumber && <span className="ml-1.5">· #{item.invoiceNumber}</span>}
                     {item.jobTitle && <span className="ml-1.5">· {item.jobTitle}</span>}
                   </p>
+                  {hasPendingRefunds && (
+                    <p className="text-[11px] text-amber-500 dark:text-amber-400 mt-0.5">
+                      Pending refund: {formatCents(item.pendingRefundedCents)}
+                    </p>
+                  )}
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">

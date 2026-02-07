@@ -116,6 +116,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
 
   const totalPaymentsCents = data.totalPaymentsCents || data.paidAmountCents || 0;
   const totalRefundsCents = data.totalRefundsCents || 0;
+  const pendingRefundsCents = data.pendingRefundsCents || 0;
   const netCollectedCents = data.netCollectedCents ?? Math.max(0, totalPaymentsCents - totalRefundsCents);
   const balanceCents = data.balanceDueCents ?? Math.max(0, totalCents - totalPaymentsCents);
 
@@ -153,6 +154,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
     { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
     ...(totalPaymentsCents > 0 ? [{ icon: DollarSign, label: "Total Payments", value: formatCents(totalPaymentsCents) }] : []),
     ...(totalRefundsCents > 0 ? [{ icon: RotateCcw, label: "Total Refunded", value: `-${formatCents(totalRefundsCents)}`, valueColor: "text-red-500 dark:text-red-400" }] : []),
+    ...(pendingRefundsCents > 0 ? [{ icon: RotateCcw, label: "Pending Refund", value: formatCents(pendingRefundsCents), valueColor: "text-amber-500 dark:text-amber-400" }] : []),
     ...(totalRefundsCents > 0 ? [{ icon: DollarSign, label: "Net Collected", value: formatCents(netCollectedCents) }] : []),
     ...(!isPaid ? [{ icon: DollarSign, label: "Balance Due", value: formatCents(balanceCents) }] : []),
     ...(payments.length > 0 ? [{ icon: Receipt, label: "Payments Made", value: `${payments.length} payment${payments.length !== 1 ? "s" : ""}` }] : []),
@@ -173,6 +175,11 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
           <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Net Collected</p>
         )}
         {statusPill}
+        {pendingRefundsCents > 0 && (
+          <p className="text-[12px] text-amber-500 dark:text-amber-400 mt-2">
+            Pending refund: {formatCents(pendingRefundsCents)}
+          </p>
+        )}
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
@@ -230,15 +237,31 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
               const methodLabel = methodLabels[methodKey] || payment.paymentMethod || "—";
 
               const refundedCents = payment.refundedAmountCents || 0;
-              const isFullyRefunded = refundedCents >= paymentCents;
               const paymentRefunds = refundsByPaymentId[payment.id] || [];
-              const refundCount = paymentRefunds.length;
 
-              const refundSummary = refundedCents > 0
-                ? refundCount > 1
-                  ? `Refunded ${formatCents(refundedCents)} across ${refundCount} refunds`
-                  : `Refunded ${formatCents(refundedCents)}${paymentRefunds[0]?.status ? ` · ${(refundStatusConfig[paymentRefunds[0].status]?.label || paymentRefunds[0].status)}` : ""}`
-                : null;
+              const settledStatuses = new Set(['succeeded', 'settled']);
+              const pendingStatuses = new Set(['pending', 'posted']);
+              let settledRefundCents = 0;
+              let pendingRefundCents = 0;
+              for (const r of paymentRefunds) {
+                if (settledStatuses.has(r.status)) settledRefundCents += r.amountCents;
+                else if (pendingStatuses.has(r.status)) pendingRefundCents += r.amountCents;
+              }
+              const isFullyRefunded = settledRefundCents >= paymentCents;
+
+              const refundLines: { text: string; color: string }[] = [];
+              if (settledRefundCents > 0) {
+                refundLines.push({
+                  text: `Refunded ${formatCents(settledRefundCents)}`,
+                  color: "text-red-500 dark:text-red-400",
+                });
+              }
+              if (pendingRefundCents > 0) {
+                refundLines.push({
+                  text: `Refund pending: ${formatCents(pendingRefundCents)}`,
+                  color: "text-amber-500 dark:text-amber-400",
+                });
+              }
 
               return (
                 <div key={payment.id || idx} className="flex items-center gap-3 px-4 py-3.5">
@@ -249,7 +272,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
                     <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
                       {methodLabel}
                       {isFullyRefunded && <span className="ml-1.5 text-[11px] text-red-500 font-semibold">Refunded</span>}
-                      {!isFullyRefunded && refundedCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
+                      {!isFullyRefunded && settledRefundCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
                     </p>
                     <p className="text-[12px] text-slate-400 dark:text-slate-500">
                       {safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy 'at' h:mm a")}
@@ -257,11 +280,11 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
                       {payment.collectedByName && <span className="ml-1.5">· by {payment.collectedByName}</span>}
                       {payment.notes && <span className="ml-1.5">· {payment.notes}</span>}
                     </p>
-                    {refundSummary && (
-                      <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5 font-medium">
-                        {refundSummary}
+                    {refundLines.map((line, ri) => (
+                      <p key={ri} className={`text-[11px] ${line.color} mt-0.5 font-medium`}>
+                        {line.text}
                       </p>
-                    )}
+                    ))}
                   </div>
                   <p className={`text-sm font-bold tabular-nums shrink-0 ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
                     +{formatCents(paymentCents)}
