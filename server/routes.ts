@@ -10104,6 +10104,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allInvoices = await storage.getInvoices(company.id);
 
+      let allRefunds: any[] = [];
+      try {
+        allRefunds = await storage.getRefundsByCompanyId(company.id);
+      } catch (e) {}
+      const succeededStatuses = new Set(['succeeded', 'settled', 'posted']);
+      const refundTotalsByInvoice: Record<number, number> = {};
+      for (const r of allRefunds) {
+        if (r.invoiceId && succeededStatuses.has(r.status)) {
+          refundTotalsByInvoice[r.invoiceId] = (refundTotalsByInvoice[r.invoiceId] || 0) + r.amountCents;
+        }
+      }
+
       const ledger = allInvoices
         .filter((inv: any) => {
           const s = (inv.status || '').toLowerCase();
@@ -10115,6 +10127,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
           const paidCents = inv.paidAmountCents || 0;
           const balanceCents = Math.max(totalCents - paidCents, 0);
+          const refundedCents = refundTotalsByInvoice[inv.id] || 0;
+          const netCollectedCents = Math.max(0, paidCents - refundedCents);
 
           const dbStatus = (inv.status || '').toLowerCase();
           let computedStatus: string;
@@ -10153,6 +10167,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalCents,
             paidCents,
             balanceCents,
+            refundedCents,
+            netCollectedCents,
             status: computedStatus,
             dueDate: inv.dueDate,
             issueDate: inv.issueDate,

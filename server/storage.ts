@@ -385,6 +385,7 @@ export interface IStorage {
   getPaymentById(id: number): Promise<any>;
   getRefundsByPaymentId(paymentId: number): Promise<Refund[]>;
   getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]>;
+  getRefundsByCompanyId(companyId: number): Promise<Refund[]>;
   createRefund(refund: InsertRefund): Promise<Refund>;
   updateRefundStatus(id: number, status: string, updates?: Partial<InsertRefund>): Promise<Refund>;
 
@@ -3928,6 +3929,10 @@ export class DatabaseStorage implements IStorage {
 
   async getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]> {
     return db.select().from(refunds).where(eq(refunds.invoiceId, invoiceId)).orderBy(desc(refunds.createdAt));
+  }
+
+  async getRefundsByCompanyId(companyId: number): Promise<Refund[]> {
+    return db.select().from(refunds).where(eq(refunds.companyId, companyId)).orderBy(desc(refunds.createdAt));
   }
 
   async createRefund(refund: InsertRefund): Promise<Refund> {

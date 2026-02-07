@@ -23,6 +23,8 @@ type LedgerItem = {
   totalCents: number;
   paidCents: number;
   balanceCents: number;
+  refundedCents: number;
+  netCollectedCents: number;
   status: string;
   dueDate: string | null;
   issueDate: string | null;
@@ -243,7 +245,30 @@ export default function PaymentsPage() {
           {filteredItems.map((item) => {
             const dateStr = getDateDisplay(item);
             const isOwed = item.status === "unpaid" || item.status === "partial";
-            const displayAmount = isOwed ? item.balanceCents : item.totalCents;
+            const hasRefunds = (item.refundedCents || 0) > 0;
+
+            let displayAmount: number;
+            let amountSuffix = "";
+            let amountColor: string;
+
+            if (isOwed) {
+              displayAmount = item.balanceCents;
+              amountSuffix = " owed";
+              amountColor = item.status === "unpaid" ? "text-amber-600 dark:text-amber-400" : "text-yellow-600 dark:text-yellow-400";
+            } else if (hasRefunds) {
+              displayAmount = item.netCollectedCents;
+              amountColor = item.status === "refunded" ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-slate-100";
+            } else {
+              displayAmount = item.totalCents;
+              amountColor = "text-slate-900 dark:text-slate-100";
+            }
+
+            let subtitle: string;
+            if (item.status === "paid") subtitle = `Paid · ${dateStr}`;
+            else if (item.status === "partial") subtitle = `Partial · ${dateStr}`;
+            else if (item.status === "refunded") subtitle = `Paid · Refunded · ${dateStr}`;
+            else if (item.status === "partially_refunded") subtitle = `Paid · Refunded ${formatCents(item.refundedCents || 0)} · ${dateStr}`;
+            else subtitle = dateStr;
 
             return (
               <div
@@ -259,15 +284,15 @@ export default function PaymentsPage() {
                     {getStatusBadge(item.status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                    {item.status === "paid" ? `Paid · ${dateStr}` : item.status === "partial" ? `Partial · ${dateStr}` : item.status === "refunded" ? `Refunded · ${dateStr}` : item.status === "partially_refunded" ? `Partially Refunded · ${dateStr}` : dateStr}
+                    {subtitle}
                     {item.invoiceNumber && <span className="ml-1.5">· #{item.invoiceNumber}</span>}
                     {item.jobTitle && <span className="ml-1.5">· {item.jobTitle}</span>}
                   </p>
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">
-                  <p className={`text-[15px] font-bold tabular-nums ${isOwed ? (item.status === "unpaid" ? "text-amber-600 dark:text-amber-400" : "text-yellow-600 dark:text-yellow-400") : item.status === "refunded" ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-slate-100"}`}>
-                    {isOwed ? `${formatCents(displayAmount)} owed` : formatCents(displayAmount)}
+                  <p className={`text-[15px] font-bold tabular-nums ${amountColor}`}>
+                    {formatCents(displayAmount)}{amountSuffix}
                   </p>
                 </div>
 
