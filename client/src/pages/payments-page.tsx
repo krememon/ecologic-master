@@ -95,15 +95,15 @@ export default function PaymentsPage() {
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { color: string; label: string }> = {
-      paid: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Paid" },
-      partial: { color: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/40 dark:text-yellow-400", label: "Partial" },
-      unpaid: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Unpaid" },
-      refunded: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Refunded" },
-      partially_refunded: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Partially Refunded" },
+      paid: { color: "bg-green-50 text-green-600 border-green-200/60 dark:bg-green-950/40 dark:text-green-400 dark:border-green-800/40", label: "Paid" },
+      partial: { color: "bg-yellow-50 text-yellow-600 border-yellow-200/60 dark:bg-yellow-950/40 dark:text-yellow-400 dark:border-yellow-800/40", label: "Partial" },
+      unpaid: { color: "bg-amber-50 text-amber-600 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40", label: "Unpaid" },
+      refunded: { color: "bg-red-50 text-red-600 border-red-200/60 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800/40", label: "Refunded" },
+      partially_refunded: { color: "bg-amber-50 text-amber-600 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/40", label: "Partial refund" },
     };
     const config = configs[status] || configs.unpaid;
     return (
-      <span className={`${config.color} text-[11px] font-semibold px-2 py-0.5 rounded-full`}>
+      <span className={`${config.color} text-[12px] font-semibold px-2.5 h-[26px] inline-flex items-center rounded-full border whitespace-nowrap leading-none`}>
         {config.label}
       </span>
     );
@@ -294,9 +294,6 @@ export default function PaymentsPage() {
                   <p className={`text-[15px] font-bold tabular-nums ${amountColor}`}>
                     {formatCents(displayAmount)}{amountSuffix}
                   </p>
-                  {hasRefunds && !isOwed && (
-                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">Net Collected</p>
-                  )}
                 </div>
 
                 <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
