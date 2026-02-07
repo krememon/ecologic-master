@@ -9,10 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -633,38 +629,49 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       </div>
 
       <Dialog open={confirmModalOpen} onOpenChange={setConfirmModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative">
+            <button
+              onClick={() => setConfirmModalOpen(false)}
+              className="absolute right-4 top-1/2 -translate-y-1/2"
+              disabled={isConfirming}
+            >
+              <X className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+            </button>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               {selectedMethod === 'cash' ? 'Cash payment' : 'Check payment'}
-            </DialogTitle>
-            <DialogDescription>
+            </h3>
+          </div>
+          <div className="p-4 space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               Collecting {formatCurrency(paymentAmountCents / 100)} by {selectedMethod === 'cash' ? 'cash' : 'check'}.
               {partialEnabled && paymentAmountCents < balanceRemainingCents && (
                 <span className="block mt-1 text-amber-600 dark:text-amber-400">
                   {formatCurrency((balanceRemainingCents - paymentAmountCents) / 100)} will remain on this invoice.
                 </span>
               )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setConfirmModalOpen(false)}
-              disabled={isConfirming}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleManualPaymentConfirm}
-              disabled={isConfirming}
-            >
-              {isConfirming ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              Confirm
-            </Button>
-          </DialogFooter>
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                className="w-full"
+                onClick={handleManualPaymentConfirm}
+                disabled={isConfirming}
+              >
+                {isConfirming ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                Confirm
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setConfirmModalOpen(false)}
+                disabled={isConfirming}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
