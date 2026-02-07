@@ -70,7 +70,12 @@ export default function PaymentsPage() {
   const filteredItems = useMemo(() => {
     let list = ledgerItems;
     if (activeTab !== "all") {
-      list = list.filter((item) => item.status === activeTab);
+      list = list.filter((item) => {
+        if (activeTab === "paid") {
+          return item.status === "paid" || item.status === "refunded" || item.status === "partially_refunded";
+        }
+        return item.status === activeTab;
+      });
     }
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
@@ -91,6 +96,8 @@ export default function PaymentsPage() {
       paid: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Paid" },
       partial: { color: "bg-yellow-50 text-yellow-600 dark:bg-yellow-950/40 dark:text-yellow-400", label: "Partial" },
       unpaid: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Unpaid" },
+      refunded: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Refunded" },
+      partially_refunded: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Partially Refunded" },
     };
     const config = configs[status] || configs.unpaid;
     return (
@@ -235,7 +242,8 @@ export default function PaymentsPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
           {filteredItems.map((item) => {
             const dateStr = getDateDisplay(item);
-            const displayAmount = item.status === "unpaid" ? item.balanceCents : item.status === "partial" ? item.balanceCents : item.totalCents;
+            const isOwed = item.status === "unpaid" || item.status === "partial";
+            const displayAmount = isOwed ? item.balanceCents : item.totalCents;
 
             return (
               <div
@@ -251,15 +259,15 @@ export default function PaymentsPage() {
                     {getStatusBadge(item.status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                    {item.status === "paid" ? `Paid · ${dateStr}` : item.status === "partial" ? `Partial · ${dateStr}` : dateStr}
+                    {item.status === "paid" ? `Paid · ${dateStr}` : item.status === "partial" ? `Partial · ${dateStr}` : item.status === "refunded" ? `Refunded · ${dateStr}` : item.status === "partially_refunded" ? `Partially Refunded · ${dateStr}` : dateStr}
                     {item.invoiceNumber && <span className="ml-1.5">· #{item.invoiceNumber}</span>}
                     {item.jobTitle && <span className="ml-1.5">· {item.jobTitle}</span>}
                   </p>
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">
-                  <p className={`text-[15px] font-bold tabular-nums ${item.status === "unpaid" ? "text-amber-600 dark:text-amber-400" : item.status === "partial" ? "text-yellow-600 dark:text-yellow-400" : "text-slate-900 dark:text-slate-100"}`}>
-                    {item.status === "unpaid" || item.status === "partial" ? `${formatCents(displayAmount)} owed` : formatCents(displayAmount)}
+                  <p className={`text-[15px] font-bold tabular-nums ${isOwed ? (item.status === "unpaid" ? "text-amber-600 dark:text-amber-400" : "text-yellow-600 dark:text-yellow-400") : item.status === "refunded" ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-slate-100"}`}>
+                    {isOwed ? `${formatCents(displayAmount)} owed` : formatCents(displayAmount)}
                   </p>
                 </div>
 

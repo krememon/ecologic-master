@@ -54,6 +54,23 @@ const methodIcons: Record<string, typeof Banknote> = {
   other: DollarSign,
 };
 
+const refundMethodLabels: Record<string, string> = {
+  card: "Card Refund",
+  bank: "Bank Refund",
+  cash: "Cash Refund",
+  check: "Check Refund",
+};
+
+const refundStatusConfig: Record<string, { color: string; label: string }> = {
+  succeeded: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Succeeded" },
+  settled: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Settled" },
+  posted: { color: "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400", label: "Posted" },
+  pending: { color: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400", label: "Pending" },
+  failed: { color: "bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400", label: "Failed" },
+  returned: { color: "bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "Returned" },
+  cancelled: { color: "bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400", label: "Cancelled" },
+};
+
 export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetailsProps) {
   const [, navigate] = useLocation();
 
@@ -103,18 +120,48 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
 
   const totalCents = data.invoiceTotalCents || 0;
   const payments: any[] = data.payments || [];
+  const refundsList: any[] = data.refunds || [];
 
-  const paidCents = data.paidAmountCents || 0;
-  const balanceCents = Math.max(totalCents - paidCents, 0);
-  const isPaid = balanceCents === 0 && totalCents > 0;
-  const isPartial = paidCents > 0 && balanceCents > 0;
+  const totalPaymentsCents = data.totalPaymentsCents || data.paidAmountCents || 0;
+  const totalRefundsCents = data.totalRefundsCents || 0;
+  const netCollectedCents = data.netCollectedCents ?? Math.max(0, totalPaymentsCents - totalRefundsCents);
+  const balanceCents = data.balanceDueCents ?? Math.max(0, totalCents - totalPaymentsCents);
+
+  const computedStatus = data.invoiceStatus || "unpaid";
+  const isRefundedStatus = computedStatus === "refunded" || computedStatus === "partially_refunded";
+  const isPaid = computedStatus === "paid" || isRefundedStatus;
+  const isPartial = computedStatus === "partial";
+
+  const refundsByPaymentId: Record<number, any[]> = {};
+  for (const r of refundsList) {
+    const pid = r.paymentId;
+    if (!refundsByPaymentId[pid]) refundsByPaymentId[pid] = [];
+    refundsByPaymentId[pid].push(r);
+  }
+
+  const statusPill = (() => {
+    switch (computedStatus) {
+      case "paid":
+        return <span className="bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1 rounded-full">Paid</span>;
+      case "refunded":
+        return <span className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs font-semibold px-3 py-1 rounded-full">Refunded</span>;
+      case "partially_refunded":
+        return <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-semibold px-3 py-1 rounded-full">Partially Refunded</span>;
+      case "partial":
+        return <span className="bg-yellow-50 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full">Partial</span>;
+      default:
+        return <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-semibold px-3 py-1 rounded-full">Unpaid</span>;
+    }
+  })();
 
   const details = [
     { icon: User, label: "Customer", value: data.customerName || "Unknown Customer" },
     ...(data.invoiceNumber ? [{ icon: Hash, label: "Invoice", value: `#${data.invoiceNumber}` }] : []),
     ...(data.jobTitle ? [{ icon: Briefcase, label: "Job", value: data.jobTitle }] : []),
     { icon: DollarSign, label: "Invoice Total", value: formatCents(totalCents) },
-    ...(isPaid || isPartial ? [{ icon: DollarSign, label: "Amount Paid", value: formatCents(paidCents) }] : []),
+    ...(totalPaymentsCents > 0 ? [{ icon: DollarSign, label: "Total Payments", value: formatCents(totalPaymentsCents) }] : []),
+    ...(totalRefundsCents > 0 ? [{ icon: RotateCcw, label: "Total Refunded", value: `-${formatCents(totalRefundsCents)}`, valueColor: "text-red-500 dark:text-red-400" }] : []),
+    ...(totalRefundsCents > 0 ? [{ icon: DollarSign, label: "Net Collected", value: formatCents(netCollectedCents) }] : []),
     ...(!isPaid ? [{ icon: DollarSign, label: "Balance Due", value: formatCents(balanceCents) }] : []),
     ...(payments.length > 0 ? [{ icon: Receipt, label: "Payments Made", value: `${payments.length} payment${payments.length !== 1 ? "s" : ""}` }] : []),
   ];
@@ -130,19 +177,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
         <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 tracking-tight tabular-nums mb-3">
           {formatCents(totalCents)}
         </p>
-        {isPaid ? (
-          <span className="bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1 rounded-full">
-            Paid
-          </span>
-        ) : isPartial ? (
-          <span className="bg-yellow-50 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full">
-            Partial
-          </span>
-        ) : (
-          <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-semibold px-3 py-1 rounded-full">
-            Unpaid
-          </span>
-        )}
+        {statusPill}
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
@@ -157,7 +192,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
                 <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">
                   {item.label}
                 </p>
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 break-words">
+                <p className={`text-sm font-medium break-words ${(item as any).valueColor || "text-slate-900 dark:text-slate-100"}`}>
                   {item.value}
                 </p>
               </div>
@@ -184,7 +219,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
             </button>
           )}
         </div>
-        {payments.length === 0 ? (
+        {payments.length === 0 && refundsList.length === 0 ? (
           <div className="text-center py-10 px-4">
             <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2.5">
               <Receipt className="w-4 h-4 text-slate-400" />
@@ -201,75 +236,70 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
 
               const refundedCents = payment.refundedAmountCents || 0;
               const isFullyRefunded = refundedCents >= paymentCents;
+              const paymentRefunds = refundsByPaymentId[payment.id] || [];
 
               return (
-                <div key={payment.id || idx} className="flex items-center gap-3 px-4 py-3.5">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isFullyRefunded ? "bg-red-50 dark:bg-red-950/40" : "bg-green-50 dark:bg-green-950/40"}`}>
-                    <MethodIcon className={`w-4 h-4 ${isFullyRefunded ? "text-red-500 dark:text-red-400" : "text-green-600 dark:text-green-400"}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {methodLabel}
-                      {isFullyRefunded && <span className="ml-1.5 text-[11px] text-red-500 font-semibold">Refunded</span>}
-                      {!isFullyRefunded && refundedCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
+                <div key={payment.id || idx}>
+                  <div className="flex items-center gap-3 px-4 py-3.5">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isFullyRefunded ? "bg-red-50 dark:bg-red-950/40" : "bg-green-50 dark:bg-green-950/40"}`}>
+                      <MethodIcon className={`w-4 h-4 ${isFullyRefunded ? "text-red-500 dark:text-red-400" : "text-green-600 dark:text-green-400"}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {methodLabel}
+                        {isFullyRefunded && <span className="ml-1.5 text-[11px] text-red-500 font-semibold">Refunded</span>}
+                        {!isFullyRefunded && refundedCents > 0 && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Partial Refund</span>}
+                      </p>
+                      <p className="text-[12px] text-slate-400 dark:text-slate-500">
+                        {safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy 'at' h:mm a")}
+                        {payment.checkNumber && <span className="ml-1.5">· Check #{payment.checkNumber}</span>}
+                        {payment.collectedByName && <span className="ml-1.5">· by {payment.collectedByName}</span>}
+                        {payment.notes && <span className="ml-1.5">· {payment.notes}</span>}
+                      </p>
+                      {refundedCents > 0 && (
+                        <p className="text-[11px] text-red-500 dark:text-red-400 mt-0.5 font-medium">
+                          Refunded {formatCents(refundedCents)}
+                        </p>
+                      )}
+                    </div>
+                    <p className={`text-sm font-bold tabular-nums shrink-0 ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
+                      +{formatCents(paymentCents)}
                     </p>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500">
-                      {safeFormat(payment.paidDate || payment.createdAt, "MMM d, yyyy 'at' h:mm a")}
-                      {payment.checkNumber && <span className="ml-1.5">· Check #{payment.checkNumber}</span>}
-                      {payment.collectedByName && <span className="ml-1.5">· by {payment.collectedByName}</span>}
-                      {payment.notes && <span className="ml-1.5">· {payment.notes}</span>}
-                    </p>
                   </div>
-                  <p className={`text-sm font-bold tabular-nums shrink-0 ${isFullyRefunded ? "text-red-500 dark:text-red-400 line-through" : "text-green-600 dark:text-green-400"}`}>
-                    +{formatCents(paymentCents)}
-                  </p>
+
+                  {paymentRefunds.map((refund: any) => {
+                    const statusCfg = refundStatusConfig[refund.status] || refundStatusConfig.pending;
+                    return (
+                      <div key={`refund-${refund.id}`} className="flex items-center gap-3 px-4 py-3 pl-8 bg-slate-50/50 dark:bg-slate-800/20">
+                        <div className="w-7 h-7 bg-red-50 dark:bg-red-950/40 rounded-full flex items-center justify-center shrink-0">
+                          <RotateCcw className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[13px] font-medium text-slate-700 dark:text-slate-300">
+                              Refund — {refundMethodLabels[refund.method] || refund.method}
+                            </p>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${statusCfg.color}`}>
+                              {statusCfg.label}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                            {safeFormat(refund.createdAt, "MMM d, yyyy 'at' h:mm a")}
+                            {refund.reason && <span className="ml-1.5">· {refund.reason}</span>}
+                          </p>
+                        </div>
+                        <p className="text-[13px] font-bold text-red-500 dark:text-red-400 tabular-nums shrink-0">
+                          -{formatCents(refund.amountCents)}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
           </div>
         )}
       </div>
-
-      {data.refunds && data.refunds.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-              Refunds
-            </p>
-          </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {data.refunds.map((refund: any) => {
-              const statusColors: Record<string, string> = {
-                succeeded: "text-red-500",
-                pending: "text-amber-500",
-                failed: "text-slate-400",
-                returned: "text-slate-400",
-                cancelled: "text-slate-400",
-              };
-              return (
-                <div key={refund.id} className="flex items-center gap-3 px-4 py-3.5">
-                  <div className="w-8 h-8 bg-red-50 dark:bg-red-950/40 rounded-full flex items-center justify-center shrink-0">
-                    <RotateCcw className="w-4 h-4 text-red-500 dark:text-red-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {refund.method === 'card' ? 'Card Refund' : refund.method === 'bank' ? 'Bank Refund' : refund.method === 'check' ? 'Check Refund' : 'Cash Refund'}
-                      {refund.status === 'pending' && <span className="ml-1.5 text-[11px] text-amber-500 font-semibold">Pending</span>}
-                    </p>
-                    <p className="text-[12px] text-slate-400 dark:text-slate-500">
-                      {safeFormat(refund.createdAt, "MMM d, yyyy 'at' h:mm a")}
-                      {refund.reason && <span className="ml-1.5">· {refund.reason}</span>}
-                    </p>
-                  </div>
-                  <p className={`text-sm font-bold tabular-nums shrink-0 ${statusColors[refund.status] || "text-red-500"}`}>
-                    -{formatCents(refund.amountCents)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

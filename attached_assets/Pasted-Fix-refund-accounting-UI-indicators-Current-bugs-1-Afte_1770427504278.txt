@@ -1,0 +1,43 @@
+Fix refund accounting + UI indicators.
+
+Current bugs
+1) After a refund, Payment History does not show “Refunded” anywhere.
+2) After refunding, invoice flips back to Partial and shows $ still owed. This is wrong: a refund should NOT make the customer “owe” again.
+
+Goal
+- Refunds should be tracked separately from payments.
+- Invoice “Still owed / Balance due” must be based on invoice total minus PAYMENTS RECEIVED only (not reduced by refunds).
+- UI should clearly display refund info (refunded amount + refund rows).
+
+Backend / Data
+1) Ensure refund records exist (refunds table).
+2) Add invoice computed fields (or compute server-side):
+   - totalPaymentsCents = sum(payments.amount_cents)
+   - totalRefundsCents = sum(refunds.amount_cents where status in ['succeeded','settled','posted'])
+   - netCollectedCents = totalPaymentsCents - totalRefundsCents
+   - balanceDueCents = max(0, invoice.total_cents - totalPaymentsCents)   // IMPORTANT: refunds do not increase due
+3) Invoice status rules:
+   - if totalPaymentsCents == 0 => Unpaid
+   - else if totalPaymentsCents < invoice.total_cents => Partial
+   - else (payments >= total):
+       - if totalRefundsCents == 0 => Paid
+       - else if totalRefundsCents < totalPaymentsCents => Partially Refunded
+       - else if totalRefundsCents >= totalPaymentsCents => Refunded
+   NOTE: Do NOT revert to Partial just because refunds happened.
+
+Frontend UI
+1) Payment History:
+   - For each payment row, show a small “Refunded $X” line beneath it if refunds exist for that payment.
+   - Also render each refund as its own row item:
+     - Title: “Refund — {method}”
+     - Amount: -$X
+     - Status pill (Succeeded/Settled/Pending/etc)
+2) Invoice cards/list screen:
+   - “Still owed” should use balanceDueCents (based only on invoice total - payments).
+   - Add optional “Net collected” display later (payments - refunds) if desired, but not required now.
+   - If invoice is Paid but has refunds, show status pill “Refunded” or “Partially Refunded” instead of flipping to Partial.
+
+Deliverable
+- Refunds visibly shown under Payment History + as refund rows
+- Invoice no longer shows “owed” after refund unless it was already unpaid before
+- Status pills reflect Paid/Refunded correctly

@@ -10116,8 +10116,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const paidCents = inv.paidAmountCents || 0;
           const balanceCents = Math.max(totalCents - paidCents, 0);
 
+          const dbStatus = (inv.status || '').toLowerCase();
           let computedStatus: string;
-          if (balanceCents === 0 && totalCents > 0) {
+          if (dbStatus === 'refunded' || dbStatus === 'partially_refunded') {
+            computedStatus = dbStatus;
+          } else if (balanceCents === 0 && totalCents > 0) {
             computedStatus = 'paid';
           } else if (paidCents > 0 && balanceCents > 0) {
             computedStatus = 'partial';
@@ -10248,13 +10251,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceRefunds = await storage.getRefundsByInvoiceId(invoiceId);
       } catch (e) {}
 
+      const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
+      let totalPaymentsCents = 0;
+      let totalRefundedOnPayments = 0;
+      for (const p of invoicePayments) {
+        const pAmt = (p as any).amountCents || Math.round(parseFloat((p as any).amount || '0') * 100);
+        totalPaymentsCents += pAmt;
+        totalRefundedOnPayments += ((p as any).refundedAmountCents || 0);
+      }
+
+      const succeededRefundStatuses = new Set(['succeeded', 'settled', 'posted']);
+      let totalRefundsCents = 0;
+      for (const r of invoiceRefunds) {
+        if (succeededRefundStatuses.has(r.status)) {
+          totalRefundsCents += r.amountCents;
+        }
+      }
+
+      const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
+      const netCollectedCents = Math.max(0, totalPaymentsCents - totalRefundsCents);
+
+      let computedStatus: string;
+      if (totalPaymentsCents === 0) {
+        computedStatus = 'unpaid';
+      } else if (totalPaymentsCents < invoiceTotalCents) {
+        computedStatus = 'partial';
+      } else {
+        if (totalRefundsCents === 0) {
+          computedStatus = 'paid';
+        } else if (totalRefundsCents >= totalPaymentsCents) {
+          computedStatus = 'refunded';
+        } else {
+          computedStatus = 'partially_refunded';
+        }
+      }
+
       res.json({
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
-        invoiceTotalCents: invoice.totalCents,
-        paidAmountCents: invoice.paidAmountCents,
-        balanceDueCents: invoice.balanceDueCents,
-        invoiceStatus: invoice.status,
+        invoiceTotalCents,
+        paidAmountCents: totalPaymentsCents,
+        totalPaymentsCents,
+        totalRefundsCents,
+        netCollectedCents,
+        balanceDueCents,
+        invoiceStatus: computedStatus,
         customerName: customerName || "Unknown Customer",
         jobTitle,
         jobId: invoice.jobId,
@@ -12852,29 +12893,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (invoice) {
           const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
           const allPayments = await storage.getPaymentsByInvoiceId(payment.invoiceId);
-          let totalNetPaid = 0;
+
+          let totalPaymentsCents = 0;
+          let totalRefundedOnPayments = 0;
           for (const p of allPayments) {
             const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
-            const pRefunded = p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0);
-            totalNetPaid += (pAmt - pRefunded);
+            totalPaymentsCents += pAmt;
+            totalRefundedOnPayments += (p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0));
           }
-          totalNetPaid = Math.max(0, totalNetPaid);
-          const newBalanceDue = Math.max(0, invoiceTotalCents - totalNetPaid);
-          let invoiceStatus = 'pending';
-          if (newBalanceDue === 0 && invoiceTotalCents > 0) {
-            invoiceStatus = 'paid';
-          } else if (totalNetPaid > 0) {
+
+          const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
+
+          let invoiceStatus: string;
+          if (totalPaymentsCents === 0) {
+            invoiceStatus = 'pending';
+          } else if (totalPaymentsCents < invoiceTotalCents) {
             invoiceStatus = 'partial';
+          } else {
+            if (totalRefundedOnPayments === 0) {
+              invoiceStatus = 'paid';
+            } else if (totalRefundedOnPayments >= totalPaymentsCents) {
+              invoiceStatus = 'refunded';
+            } else {
+              invoiceStatus = 'partially_refunded';
+            }
           }
 
           await storage.updateInvoice(payment.invoiceId, {
-            paidAmountCents: totalNetPaid,
-            balanceDueCents: newBalanceDue,
+            paidAmountCents: totalPaymentsCents,
+            balanceDueCents,
             status: invoiceStatus,
           } as any);
 
           if (invoice.jobId) {
-            const jobPaymentStatus = invoiceStatus === 'paid' ? 'paid' : totalNetPaid > 0 ? 'partial' : 'unpaid';
+            const jobPaymentStatus = balanceDueCents === 0 && totalPaymentsCents > 0 ? 'paid' : totalPaymentsCents > 0 ? 'partial' : 'unpaid';
             await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
           }
         }
