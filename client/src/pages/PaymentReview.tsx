@@ -184,6 +184,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
     queryClient.invalidateQueries({ queryKey: ['/api/dashboard/today'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments/ledger'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payments/stats'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payments/breakdown'] });
     queryClient.invalidateQueries({ predicate: (query) => 

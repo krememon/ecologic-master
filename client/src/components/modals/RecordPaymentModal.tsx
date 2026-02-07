@@ -45,6 +45,7 @@ export function RecordPaymentModal({
     onSuccess: () => {
       toast({ title: "Payment recorded" });
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       resetAndClose();
