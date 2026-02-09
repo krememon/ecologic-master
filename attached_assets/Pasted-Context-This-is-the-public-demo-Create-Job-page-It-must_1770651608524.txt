@@ -1,0 +1,97 @@
+Context: This is the public /demo “Create Job” page. It must remain fully isolated (no auth, no API, no access to the real app). Only localStorage/state.
+
+GOALS (Do all 4)
+1) Fix placeholder text (no random examples)
+
+Update placeholders so they match the field name (greyed out), not examples.
+
+Client Name placeholder: “Client Name”
+
+Job Title placeholder: “Job Title”
+
+Job Type placeholder: “Job Type” (or “Select job type” but not random)
+
+Address placeholder: “Address”
+
+Notes placeholder: “Notes”
+
+Do not use “e.g. John Smith” or “Kitchen Plumbing Repair” etc.
+
+2) Remove “Exit Demo” completely
+
+Remove the Exit Demo button/link from the demo UI entirely.
+
+Also ensure there is no way for a demo visitor to reach the main app:
+
+Keep the demo route guard in place
+
+If demo mode flag is enabled OR visitor is on /demo, any navigation attempt to other routes should redirect back to /demo
+
+Do not provide any UI element that routes to /, /login, /jobs, etc.
+
+3) Replace the save toast with an inline success state (cleaner)
+
+I don’t like the toast popup.
+
+After the user clicks Save Job:
+
+Do NOT show a toast
+
+Instead show a clean inline success banner at the top of the form (inside the card) that says:
+
+“Job created ✅ (Demo)”
+Subtext: “Saved locally for demo purposes.”
+
+Behavior:
+
+Banner fades away after ~3 seconds OR has a small “x” close
+
+Keep it subtle and modern
+
+After saving, optionally clear the form (recommended)
+
+4) Time Window should use our time selector (start/end time picker)
+
+Right now Time Window is a dropdown. Change it to use the same time selector UI we already have in the app (the iOS-style time picker modal shown in screenshots).
+
+Requirement:
+
+Time Window should be two fields:
+
+Start Time
+
+End Time
+
+Clicking either opens the existing time picker modal
+
+Must allow selecting any time (not fixed windows)
+
+Display chosen times like: 9:00 AM and 11:30 AM
+
+Auto validate: end time must be after start time (simple check)
+
+IMPORTANT:
+
+If there is an existing reusable TimePicker component in the codebase, reuse it (do not reinvent).
+
+If it exists in another page, import and use it in the demo page.
+
+Keep it fully client-side; do not call backend.
+
+FILES / LOCATIONS
+
+Update the demo page component (ex: client/src/pages/DemoCreateJob.jsx or whatever the demo page filename is)
+
+If needed, add/reuse a TimePickerModal component from existing app components
+
+ACCEPTANCE CHECKLIST
+
+Placeholders show the field names (Client Name, Job Title, Job Type, Address, Notes)
+
+No Exit Demo button/link anywhere on demo
+
+Saving shows inline success banner instead of toast
+
+Start/End time picker works using our existing time selector modal
+
+Demo remains isolated: no API calls, no real app access, no auth required

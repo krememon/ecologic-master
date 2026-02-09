@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { TimeWheelPicker } from "@/components/TimeWheelPicker";
 import {
   Briefcase,
   MapPin,
@@ -20,9 +19,9 @@ import {
   FileText,
   User,
   Trash2,
-  LogOut,
   CheckCircle2,
   Sparkles,
+  X,
 } from "lucide-react";
 
 const STORAGE_KEY = "ecologic_demo_jobs";
@@ -35,13 +34,13 @@ interface DemoJob {
   jobType: string;
   address: string;
   date: string;
-  timeWindow: string;
+  startTime: string;
+  endTime: string;
   notes: string;
   createdAt: string;
 }
 
 const JOB_TYPES = ["Service Call", "Install", "Maintenance", "Emergency"];
-const TIME_WINDOWS = ["8–10 AM", "10–12 PM", "12–2 PM", "2–4 PM", "4–6 PM"];
 
 function loadDemoJobs(): DemoJob[] {
   try {
@@ -56,9 +55,17 @@ function saveDemoJobs(jobs: DemoJob[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
 }
 
+function formatTime(value: string): string {
+  if (!value) return "";
+  const [h, m] = value.split(":");
+  let hourNum = parseInt(h, 10);
+  const period = hourNum >= 12 ? "PM" : "AM";
+  if (hourNum === 0) hourNum = 12;
+  else if (hourNum > 12) hourNum -= 12;
+  return `${hourNum}:${m.padStart(2, "0")} ${period}`;
+}
+
 export default function DemoCreateJob() {
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const [jobs, setJobs] = useState<DemoJob[]>(loadDemoJobs);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -67,19 +74,23 @@ export default function DemoCreateJob() {
   const [jobType, setJobType] = useState("");
   const [address, setAddress] = useState("");
   const [date, setDate] = useState("");
-  const [timeWindow, setTimeWindow] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [notes, setNotes] = useState("");
 
-  const [errors, setErrors] = useState<{ clientName?: string; jobTitle?: string }>({});
+  const [errors, setErrors] = useState<{ clientName?: string; jobTitle?: string; time?: string }>({});
 
   useEffect(() => {
     localStorage.setItem(DEMO_MODE_KEY, "1");
   }, []);
 
   const handleSave = () => {
-    const newErrors: { clientName?: string; jobTitle?: string } = {};
+    const newErrors: { clientName?: string; jobTitle?: string; time?: string } = {};
     if (!clientName.trim()) newErrors.clientName = "Client name is required";
     if (!jobTitle.trim()) newErrors.jobTitle = "Job title is required";
+    if (startTime && endTime && startTime >= endTime) {
+      newErrors.time = "End time must be after start time";
+    }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -93,7 +104,8 @@ export default function DemoCreateJob() {
       jobType: jobType || "Service Call",
       address: address.trim(),
       date: date || new Date().toISOString().split("T")[0],
-      timeWindow: timeWindow || "8–10 AM",
+      startTime,
+      endTime,
       notes: notes.trim(),
       createdAt: new Date().toISOString(),
     };
@@ -107,27 +119,17 @@ export default function DemoCreateJob() {
     setJobType("");
     setAddress("");
     setDate("");
-    setTimeWindow("");
+    setStartTime("");
+    setEndTime("");
     setNotes("");
 
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
-
-    toast({
-      title: "Job created ✅ (Demo)",
-      description: `"${newJob.jobTitle}" for ${newJob.clientName} saved locally.`,
-    });
   };
 
   const handleClear = () => {
     setJobs([]);
     localStorage.removeItem(STORAGE_KEY);
-    toast({ title: "Demo data cleared", description: "All demo jobs removed." });
-  };
-
-  const handleExitDemo = () => {
-    localStorage.removeItem(DEMO_MODE_KEY);
-    setLocation("/");
   };
 
   return (
@@ -137,18 +139,6 @@ export default function DemoCreateJob() {
           <Sparkles className="w-3.5 h-3.5" />
           Demo Mode
         </span>
-      </div>
-
-      <div className="fixed top-4 right-4 z-50">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleExitDemo}
-          className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 gap-1.5"
-        >
-          <LogOut className="w-4 h-4" />
-          Exit Demo
-        </Button>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-12 sm:py-16">
@@ -177,6 +167,24 @@ export default function DemoCreateJob() {
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 sm:p-8 mb-6">
+          {showSuccess && (
+            <div className="mb-5 flex items-center justify-between p-3 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <span className="font-medium">Job created ✅ (Demo)</span>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">Saved locally for demo purposes.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSuccess(false)}
+                className="p-1 rounded-md hover:bg-green-100 dark:hover:bg-green-800/50 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <div className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -186,7 +194,7 @@ export default function DemoCreateJob() {
                 </Label>
                 <Input
                   id="clientName"
-                  placeholder="e.g. John Smith"
+                  placeholder="Client Name"
                   value={clientName}
                   onChange={(e) => { setClientName(e.target.value); setErrors((p) => ({ ...p, clientName: undefined })); }}
                   className={errors.clientName ? "border-red-400 focus:ring-red-400" : ""}
@@ -201,7 +209,7 @@ export default function DemoCreateJob() {
                 </Label>
                 <Input
                   id="jobTitle"
-                  placeholder="e.g. Kitchen Plumbing Repair"
+                  placeholder="Job Title"
                   value={jobTitle}
                   onChange={(e) => { setJobTitle(e.target.value); setErrors((p) => ({ ...p, jobTitle: undefined })); }}
                   className={errors.jobTitle ? "border-red-400 focus:ring-red-400" : ""}
@@ -218,7 +226,7 @@ export default function DemoCreateJob() {
                 </Label>
                 <Select value={jobType} onValueChange={setJobType}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder="Job Type" />
                   </SelectTrigger>
                   <SelectContent>
                     {JOB_TYPES.map((t) => (
@@ -235,43 +243,53 @@ export default function DemoCreateJob() {
                 </Label>
                 <Input
                   id="address"
-                  placeholder="123 Main St, City"
+                  placeholder="Address"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                 />
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="date" className="text-sm font-medium flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                Date
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="date" className="text-sm font-medium flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  Date
+                <Label className="text-sm font-medium flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  Start Time
                 </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                <TimeWheelPicker
+                  value={startTime}
+                  onChange={(val) => { setStartTime(val); setErrors((p) => ({ ...p, time: undefined })); }}
+                  label="Start Time"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-slate-400" />
-                  Time Window
+                  End Time
                 </Label>
-                <Select value={timeWindow} onValueChange={setTimeWindow}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select window" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_WINDOWS.map((w) => (
-                      <SelectItem key={w} value={w}>{w}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <TimeWheelPicker
+                  value={endTime}
+                  onChange={(val) => { setEndTime(val); setErrors((p) => ({ ...p, time: undefined })); }}
+                  label="End Time"
+                />
               </div>
+              {errors.time && (
+                <p className="text-xs text-red-500 sm:col-span-2 -mt-2">{errors.time}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -281,7 +299,7 @@ export default function DemoCreateJob() {
               </Label>
               <Textarea
                 id="notes"
-                placeholder="Any special instructions or details..."
+                placeholder="Notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
@@ -295,13 +313,6 @@ export default function DemoCreateJob() {
               Save Job
             </Button>
           </div>
-
-          {showSuccess && (
-            <div className="mt-4 flex items-center gap-2 p-3 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-              <span>Job created successfully! (Demo — saved locally only)</span>
-            </div>
-          )}
         </div>
 
         {showSuccess && (
@@ -321,14 +332,6 @@ export default function DemoCreateJob() {
                 Track time and schedule with AI-powered tools
               </li>
             </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4 rounded-lg"
-              onClick={() => { localStorage.removeItem(DEMO_MODE_KEY); setLocation("/signup"); }}
-            >
-              Sign up for free trial
-            </Button>
           </div>
         )}
 
@@ -367,7 +370,7 @@ export default function DemoCreateJob() {
                     {job.jobType}
                   </span>
                 </div>
-                {(job.date || job.timeWindow) && (
+                {(job.date || job.startTime || job.endTime) && (
                   <div className="mt-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                     {job.date && (
                       <span className="flex items-center gap-1">
@@ -375,10 +378,14 @@ export default function DemoCreateJob() {
                         {new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                       </span>
                     )}
-                    {job.timeWindow && (
+                    {(job.startTime || job.endTime) && (
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {job.timeWindow}
+                        {job.startTime && job.endTime
+                          ? `${formatTime(job.startTime)} – ${formatTime(job.endTime)}`
+                          : job.startTime
+                            ? formatTime(job.startTime)
+                            : formatTime(job.endTime)}
                       </span>
                     )}
                   </div>
