@@ -1,0 +1,171 @@
+Goal: Add a public interactive demo that only allows “Create Job” and fake-saves locally. No login. No API calls. No access to any other EcoLogic pages.
+
+UI Requirements
+
+Public route: /demo
+
+Page shows:
+
+EcoLogic logo/title
+
+“Interactive Demo — Create a Job”
+
+Job creation form (clean, modern)
+
+Save button
+
+On save:
+
+Show toast/banner: “Job created ✅ (Demo)”
+
+Add the job to a small local demo list below the form
+
+Include “Clear demo data” button to reset list
+
+Absolutely no navigation to other parts of the app
+
+If the user manually tries any route besides /demo, they should be redirected to /demo (only when the visitor is in demo mode)
+
+Security/Isolation Requirements
+
+Demo page must not:
+
+Call any /api/* routes
+
+Read user session
+
+Access real app state (jobs, clients, invoices, documents)
+
+Demo data stored only in:
+
+localStorage (preferred) or React state
+
+Add a small “Demo Mode” badge so it’s obvious
+
+IMPLEMENTATION TASKS
+
+Create a new page component
+
+File: client/src/pages/DemoCreateJob.jsx (or .tsx if TS)
+
+Build a simple “Create Job” form with fields:
+
+Client name
+
+Job title
+
+Job type (dropdown: Service Call, Install, Maintenance, Emergency)
+
+Address
+
+Date
+
+Time window (dropdown: 8–10, 10–12, 12–2, 2–4, 4–6)
+
+Notes
+
+Add Save button
+
+Validate: require Client name + Job title
+
+Fake-save behavior
+
+On Save:
+
+Create a demo job object:
+
+id = demo-${Date.now()}
+
+createdAt
+
+form fields
+
+Append it to a local list and persist list to localStorage key:
+
+ecologic_demo_jobs
+
+Show “Job created ✅ (Demo)” toast or inline success
+
+Render the local list below the form:
+
+Show newest first
+
+Each item shows:
+
+Job title, client, scheduled date/time window
+
+Add “Clear demo data” button that clears localStorage + state
+
+Add routing
+
+In your router file (likely client/src/App.jsx or client/src/router/...):
+
+Add route:
+
+/demo → DemoCreateJob
+
+Make sure this route is public and doesn’t require auth.
+
+Lock down navigation for demo visitors
+
+Add a tiny “demo lock” that only triggers when the URL starts with /demo.
+
+Behavior:
+
+If path starts with /demo, hide your normal sidebar/topnav entirely for that page (no links).
+
+If user tries to go to any other path from the demo page (or manually types it), redirect them back to /demo.
+
+Implement this with a small component guard:
+
+Example: DemoRouteGuard checks location:
+
+if localStorage.ecologic_demo_mode === "1" OR current path is /demo, then force redirect non-demo routes to /demo.
+
+On entering /demo, set:
+
+localStorage.ecologic_demo_mode = "1"
+
+Provide a small “Exit Demo” link that clears the flag and routes to / (marketing site or login).
+
+Do NOT modify backend
+
+No server changes, no database writes, no API calls.
+
+DELIVERABLES
+
+/demo works publicly
+
+Submitting form shows success and adds to a local list
+
+Refreshing page keeps demo jobs (localStorage)
+
+No access to any other app pages while demo mode is active
+
+Exit Demo returns to home/login and clears demo lock
+
+IMPORTANT
+
+Do not break existing RBAC or auth.
+
+Do not change any existing API routes or business logic.
+
+Keep styling consistent with EcoLogic (modern, clean, dark background, rounded cards).
+
+Add minimal console logs only if needed, remove them after.
+
+Proceed step-by-step and tell me which files you changed.
+
+
+---
+
+## Quick note (so this feels legit)
+To make Option A feel “real enough,” I recommend:
+- after Save, show a little “Next steps” box:
+  - “Assign crew (coming soon in demo)”
+  - “Create invoice (available after signup)”
+This keeps them excited without giving access.
+
+---
+
+If you want, send me your current **router file name** (`App.jsx` or whatever) and I’ll tailor the prompt to your exact file structure so the agent nails it first try.

@@ -59,6 +59,7 @@ import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
 import OnboardingChoice from "@/pages/OnboardingChoice";
 import OnboardingCompany from "@/pages/OnboardingCompany";
+import DemoCreateJob from "@/pages/DemoCreateJob";
 
 // Centralized onboarding route logic
 function getNextOnboardingRoute(params: {
@@ -285,6 +286,14 @@ function Router() {
   
   if (path.startsWith('/unsubscribe')) {
     return <UnsubscribeRouter />;
+  }
+
+  if (path === '/demo') {
+    return <DemoCreateJob />;
+  }
+
+  if (localStorage.getItem('ecologic_demo_mode') === '1') {
+    return <Redirect to="/demo" />;
   }
   
   if (path.startsWith('/email-preferences')) {
