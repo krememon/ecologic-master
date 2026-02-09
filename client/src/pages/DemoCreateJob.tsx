@@ -77,12 +77,14 @@ export default function DemoCreateJob() {
 
     const handleBeforeUnload = () => {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(DEMO_MODE_KEY);
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(DEMO_MODE_KEY);
     };
   }, []);
 
