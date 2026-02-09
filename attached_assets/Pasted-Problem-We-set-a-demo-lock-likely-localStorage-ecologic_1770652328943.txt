@@ -1,0 +1,112 @@
+Problem: We set a demo lock (likely localStorage.ecologic_demo_mode = "1" or similar) that redirects any non-demo route back to /demo. Now the owner (me) can’t get back to the real app/login in Replit preview.
+
+Goal:
+
+Demo visitors stay locked to /demo
+
+I (the owner/dev) can always escape back to normal app (/login or /) from inside the same browser
+
+No one can discover a public “Exit Demo” button on the demo page
+
+STEP 1 — Add a “demo lock bypass” using a URL param (dev-only)
+
+Implement this rule in the demo route guard (wherever the redirect-to-/demo logic lives):
+
+If URL contains ?demo=0 OR ?demo=off then:
+
+clear demo flag(s):
+
+localStorage.removeItem("ecologic_demo_mode")
+
+localStorage.removeItem("ecologic_demo_jobs")
+
+and allow navigation to normal routes immediately (do NOT redirect back to /demo)
+
+then redirect to /login (or / if that’s your normal entry)
+
+This gives me an “escape hatch” without adding UI.
+
+Example:
+https://<your-replit-url>/demo?demo=0
+→ clears demo mode
+→ sends me to /login
+
+Also support this if I’m currently on /demo already.
+
+STEP 2 — Make demo lock only apply when visitor is actually on /demo
+
+Right now it sounds like the lock applies globally once the flag is set.
+
+Change it so demo lock ONLY activates when:
+
+current path starts with /demo
+OR
+
+a session variable specifically says it’s a demo visitor for this tab only
+
+Preferred behavior:
+
+Use sessionStorage for the lock instead of localStorage, so it doesn’t trap people forever.
+
+Change:
+
+Replace localStorage.ecologic_demo_mode with sessionStorage.ecologic_demo_mode
+
+Only set it when entering /demo
+
+Clear it on beforeunload and on unmount
+
+This prevents the “stuck forever” problem.
+
+STEP 3 — Add a hidden dev shortcut (keyboard) for emergency exit (optional but recommended)
+
+Inside the demo page component:
+
+If user presses:
+
+Shift + Escape
+Then:
+
+clear demo flags
+
+navigate to /login
+
+This is not visible to normal users.
+
+STEP 4 — Confirm redirect rules still protect the demo
+
+After changes:
+
+If a public visitor is on /demo and manually types /jobs or /login, they should be forced back to /demo
+
+But if I go to /demo?demo=0, it should clear the lock and let me access the real app again.
+
+FILES TO EDIT
+
+Search for the demo guard logic in:
+
+client/src/App.jsx
+
+routing file (router, Routes, ProtectedRoute, etc.)
+
+any file that checks ecologic_demo_mode
+
+Then update it accordingly.
+
+ACCEPTANCE TESTS
+
+✅ Open /demo → still locked to demo only
+✅ Try going to /jobs → redirected back to /demo
+✅ Open /demo?demo=0 → demo mode clears → routes to /login
+✅ Refresh after escape → stays normal (not stuck)
+✅ Demo jobs still reset to 0 on refresh/close
+
+Proceed step-by-step and list changed files.
+Quick way to escape right now (if you need it immediately)
+
+While the agent is fixing it, you can also manually clear the flag:
+
+Open DevTools Console and run:
+
+localStorage.removeItem("ecologic_demo_mode"); localStorage.removeItem("ecologic_demo_jobs");
+…but implement the proper fix above so you never get trapped again.

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +58,7 @@ function formatTime(value: string): string {
 }
 
 export default function DemoCreateJob() {
+  const [, setLocation] = useLocation();
   const [jobs, setJobs] = useState<DemoJob[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -71,22 +73,42 @@ export default function DemoCreateJob() {
 
   const [errors, setErrors] = useState<{ clientName?: string; jobTitle?: string; time?: string }>({});
 
+  const escapeDemo = useCallback(() => {
+    sessionStorage.removeItem(DEMO_MODE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    setLocation("/login");
+  }, [setLocation]);
+
   useEffect(() => {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.setItem(DEMO_MODE_KEY, "1");
+    sessionStorage.setItem(DEMO_MODE_KEY, "1");
+
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get("demo") === "0" || searchParams.get("demo") === "off") {
+      escapeDemo();
+      return;
+    }
 
     const handleBeforeUnload = () => {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(DEMO_MODE_KEY);
+      sessionStorage.removeItem(DEMO_MODE_KEY);
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key === "Escape") {
+        escapeDemo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("keydown", handleKeyDown);
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(DEMO_MODE_KEY);
+      sessionStorage.removeItem(DEMO_MODE_KEY);
     };
-  }, []);
+  }, [escapeDemo]);
 
   const handleSave = () => {
     const newErrors: { clientName?: string; jobTitle?: string; time?: string } = {};

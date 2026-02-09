@@ -288,11 +288,23 @@ function Router() {
     return <UnsubscribeRouter />;
   }
 
+  if (localStorage.getItem('ecologic_demo_mode')) {
+    localStorage.removeItem('ecologic_demo_mode');
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.get('demo') === '0' || searchParams.get('demo') === 'off') {
+    sessionStorage.removeItem('ecologic_demo_mode');
+    localStorage.removeItem('ecologic_demo_jobs');
+    window.history.replaceState({}, '', '/login');
+    return <Redirect to="/login" />;
+  }
+
   if (path === '/demo') {
     return <DemoCreateJob />;
   }
 
-  if (localStorage.getItem('ecologic_demo_mode') === '1') {
+  if (sessionStorage.getItem('ecologic_demo_mode') === '1') {
     return <Redirect to="/demo" />;
   }
   
