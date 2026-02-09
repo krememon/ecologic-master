@@ -42,15 +42,6 @@ interface DemoJob {
 
 const JOB_TYPES = ["Service Call", "Install", "Maintenance", "Emergency"];
 
-function loadDemoJobs(): DemoJob[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
 function saveDemoJobs(jobs: DemoJob[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
 }
@@ -66,7 +57,7 @@ function formatTime(value: string): string {
 }
 
 export default function DemoCreateJob() {
-  const [jobs, setJobs] = useState<DemoJob[]>(loadDemoJobs);
+  const [jobs, setJobs] = useState<DemoJob[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const [clientName, setClientName] = useState("");
@@ -81,7 +72,18 @@ export default function DemoCreateJob() {
   const [errors, setErrors] = useState<{ clientName?: string; jobTitle?: string; time?: string }>({});
 
   useEffect(() => {
+    localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(DEMO_MODE_KEY, "1");
+
+    const handleBeforeUnload = () => {
+      localStorage.removeItem(STORAGE_KEY);
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      localStorage.removeItem(STORAGE_KEY);
+    };
   }, []);
 
   const handleSave = () => {
