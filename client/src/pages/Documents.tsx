@@ -468,7 +468,7 @@ export default function Documents() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 pb-24">
+    <div className="w-full pb-24">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Documents & Approvals</h1>
         <p className="text-slate-600 dark:text-slate-400">Manage project documents and e-signature approval workflows</p>
@@ -897,7 +897,7 @@ export default function Documents() {
           {/* Sticky Bottom Action Bar for Bulk Selection */}
           {selectMode && selectedIds.size > 0 && (
             <div className="fixed bottom-20 left-0 right-0 z-50 w-full px-4">
-              <div className="w-full max-w-md mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3">
+              <div className="w-full max-w-2xl mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-3">
                 <div className="flex items-center justify-between gap-2">
                   {/* Left: Cancel */}
                   <Button

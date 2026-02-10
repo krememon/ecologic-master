@@ -127,7 +127,7 @@ export default function PaymentsPage() {
 
   if (ledgerLoading || statsLoading) {
     return (
-      <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto">
+      <div className="p-4 sm:p-5 space-y-4 max-w-5xl mx-auto">
         <div className="animate-pulse space-y-4">
           <div className="h-7 bg-slate-200 dark:bg-slate-700 rounded-lg w-28"></div>
           <div className="h-[140px] bg-slate-200 dark:bg-slate-700 rounded-2xl"></div>
@@ -166,7 +166,7 @@ export default function PaymentsPage() {
   ];
 
   return (
-    <div className="p-4 sm:p-5 space-y-4 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-5 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Payments</h1>
         <Button
@@ -179,13 +179,13 @@ export default function PaymentsPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4">
           {scoreboardItems.map((item, i) => (
             <div
               key={item.label}
-              className={`px-5 py-4 ${
-                i < 2 ? "border-b border-slate-100 dark:border-slate-800" : ""
-              } ${i % 2 === 0 ? "border-r border-slate-100 dark:border-slate-800" : ""}`}
+              className={`px-5 py-4 border-slate-100 dark:border-slate-800 ${
+                i < 2 ? "border-b lg:border-b-0" : ""
+              } ${i % 2 === 0 ? "border-r" : "lg:border-r"} ${i === 3 ? "lg:border-r-0" : ""}`}
             >
               <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                 {item.label}

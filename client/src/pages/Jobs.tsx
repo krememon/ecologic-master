@@ -977,7 +977,7 @@ export default function Jobs() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 pb-24">
+    <div className="w-full pb-24">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Jobs & Estimates</h1>
         <p className="text-slate-600 dark:text-slate-400">Manage projects and create estimates for your clients</p>
@@ -1626,7 +1626,7 @@ export default function Jobs() {
             </Card>
           ) : (
             <>
-            <div className={`flex flex-col gap-4 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
+            <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
               {filteredEstimates.map((estimate) => {
                 const job = jobs.find(j => j.id === estimate.jobId);
                 const isSelected = selectedEstimateIds.has(estimate.id);
@@ -1842,12 +1842,8 @@ export default function Jobs() {
         {/* JOBS TAB CONTENT */}
         <TabsContent value="jobs" className="mt-6">
           {/* Create Job + Search */}
-          <div className="flex flex-col gap-3 mb-6">
-            <Button className="w-full" onClick={() => setIsDialogOpen(true)} data-testid="button-create-job">
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Job
-            </Button>
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search"
@@ -1857,6 +1853,10 @@ export default function Jobs() {
                 data-testid="input-search-jobs"
               />
             </div>
+            <Button className="sm:w-auto" onClick={() => setIsDialogOpen(true)} data-testid="button-create-job">
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Job
+            </Button>
           </div>
 
           {jobs.length === 0 ? (
@@ -1884,7 +1884,7 @@ export default function Jobs() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredJobs.map((job: JobWithClient) => (
             <Card 
               key={job.id} 

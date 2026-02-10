@@ -1,0 +1,105 @@
+You are working in EcoLogic.
+
+TASK THEME: UI/UX CLEANUP ONLY (Laptop/Desktop layout polish)
+❌ Do NOT change logic, API calls, state, validation, or data flow
+✅ Layout, spacing, alignment, responsive CSS only
+
+TARGET: Overall laptop/desktop layout across the app (starting with Jobs & Estimates page)
+PROBLEM (from screenshot): The main content area is too narrow and feels “floating” with too much empty space on the right. Cards are cramped, grid doesn’t use available width, and overall desktop layout doesn’t feel like a true SaaS app.
+
+GOAL
+Make EcoLogic feel like a real desktop SaaS on laptop:
+- Use available horizontal space (without going edge-to-edge)
+- Add a consistent max-width container for pages (wider than current)
+- Improve two-column/grid behavior on desktop
+- Reduce wasted whitespace
+- Keep sidebar + content proportions balanced
+- Ensure all pages still look great on mobile/tablet
+
+STRICT RULES
+1) DO NOT touch any business logic, API calls, state, validation, or data flow.
+2) Only CSS/layout changes: containers, max-widths, grid columns, gaps, padding, responsive breakpoints.
+3) Do NOT break Jobs tab (we had prior white-screen issues—avoid refactoring shared logic).
+
+PLAN
+A) Create/standardize a “PageShell” layout wrapper (CSS-only)
+- Identify where page content is currently being wrapped (likely AppLayout/MainLayout).
+- Add a consistent desktop container:
+  - Centered content
+  - Wider max-width than now (example: max-w-[1200px] to max-w-[1400px])
+  - Responsive padding (px-4 mobile, px-6 md, px-8 lg)
+- Ensure the main content uses `w-full` so it can expand.
+
+B) Fix sidebar + content proportions (desktop)
+- Sidebar should remain fixed width (example ~240–280px).
+- Main area should expand naturally.
+- Add consistent left padding/gutter between sidebar and main content.
+
+C) Jobs & Estimates page: use desktop space correctly
+- The cards grid should expand on laptop:
+  - Increase grid columns at lg/xl:
+    - md: 2 columns
+    - lg: 3 columns
+    - xl: 4 columns (if space allows)
+  - Reduce “skinny column” effect by allowing container width to grow.
+- Ensure the header (“Jobs & Estimates”), tabs, Create button, search align to same width.
+- Keep cards consistent size, but allow more columns rather than huge empty margins.
+
+D) Top controls polish (desktop)
+- Align tabs + Create button + Search to a single visual column.
+- Increase the max width of this control stack to match the grid width.
+- Avoid “centered tiny column” look.
+
+E) Global responsive rules
+- Mobile stays the same.
+- Tablet stays the same.
+- Desktop (>=1024px) gets:
+  - wider page container
+  - more grid columns
+  - slightly larger horizontal padding
+  - consistent spacing scale across pages
+
+IMPLEMENTATION DETAILS (WHAT TO EDIT)
+1) Find the main layout wrapper component:
+- Search filenames: Layout, AppLayout, MainLayout, DashboardLayout, Shell, PageLayout
+- Locate the element that wraps the routed page content (the main <main>).
+
+2) Add a consistent centered container inside main:
+Example (Tailwind-ish — adapt to your codebase):
+- <main className="flex-1">
+    <div className="w-full px-4 md:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1280px]">
+        {children}
+      </div>
+    </div>
+  </main>
+
+(If you already have a container, increase max-w and ensure w-full is not constrained.)
+
+3) Jobs grid:
+- Find the Jobs list/grid wrapper and update responsive columns:
+  - `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`
+- Adjust gap for desktop:
+  - `gap-3 md:gap-4 lg:gap-5` (avoid giant gaps)
+
+4) Cards:
+- Remove any fixed max-width on the cards container that’s forcing narrow columns.
+- Cards should be `w-full` inside grid cells.
+
+DELIVERABLES
+1) Desktop container system applied globally so pages don’t look narrow on laptop.
+2) Jobs & Estimates page grid uses width properly (3–4 columns on desktop depending on space).
+3) Controls (tabs/button/search) align with grid and feel balanced.
+4) No functional changes and no regressions.
+
+QA CHECKLIST
+- Mobile layout unchanged
+- Sidebar still works
+- Jobs page renders (no white screen)
+- Grid expands on desktop and doesn’t overflow
+- Buttons/tabs/search still function the same
+- Check at widths: 375px, 768px, 1024px, 1280px, 1440px
+
+IMPORTANT
+Do these changes first on the shared layout wrapper + Jobs page only.
+After Jobs looks perfect on laptop, apply the same container rules to other pages if needed (still UI-only).
