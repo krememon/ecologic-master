@@ -138,6 +138,7 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
           >
             <Menu className="h-5 w-5" />
           </Button>
+          <EcoAiButton onClick={() => setEcoAiOpen(true)} />
           <div>
             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               {title}
@@ -152,7 +153,6 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
         
         <div className="flex items-center space-x-1.5">
           <ThemeToggle />
-          <EcoAiButton onClick={() => setEcoAiOpen(true)} />
           <button
             onClick={() => setNotificationsOpen(true)}
             className="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

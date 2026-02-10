@@ -54,7 +54,7 @@ export function EcoAiButton({ onClick, className = "" }: EcoAiButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`relative w-9 h-9 -mr-0.5 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${className}`}
+      className={`relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${className}`}
       aria-label="Open Eco-Intelligence"
       title="Eco-Intelligence"
     >
