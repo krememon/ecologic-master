@@ -62,7 +62,7 @@ export function EcoAiButton({ onClick, className = "" }: EcoAiButtonProps) {
         src={outlineLogo}
         alt="Eco-AI"
         className="object-contain"
-        style={{ width: 26, height: 26, opacity: 0.95, filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.35))" }}
+        style={{ width: 24, height: 24, opacity: 0.95, filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.35))" }}
       />
     </button>
   );
