@@ -13372,6 +13372,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   };
 
+  function generateFriendlyReply(msg: string): string {
+    const greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy', 'yo', 'sup', 'what\'s up', 'whats up'];
+    const farewells = ['bye', 'goodbye', 'see you', 'later', 'take care', 'goodnight', 'good night'];
+
+    if (greetings.some(g => msg.startsWith(g) || msg === g)) {
+      const replies = [
+        "Hey there! How can I help you today?",
+        "Hi! What can I do for you?",
+        "Hello! I'm here if you need anything.",
+        "Hey! Ready to help whenever you are.",
+      ];
+      return replies[Math.floor(Math.random() * replies.length)];
+    }
+
+    if (farewells.some(g => msg.includes(g))) {
+      return "Take care! I'll be here whenever you need me.";
+    }
+
+    if (msg.includes('how are you') || msg.includes('how\'s it going') || msg.includes('how you doing')) {
+      return "I'm doing great — ready to help. What's on your mind?";
+    }
+
+    if (msg.includes('what time') || msg.includes('current time') || msg === 'time') {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+      return `It's currently ${timeStr} (Eastern).`;
+    }
+
+    if (msg.includes('what day') || msg.includes('today\'s date') || msg.includes('what date') || msg === 'date') {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+      return `Today is ${dateStr}.`;
+    }
+
+    if (msg.includes('thank') || msg.includes('thanks') || msg.includes('thx') || msg.includes('appreciate')) {
+      return "You're welcome! Let me know if there's anything else.";
+    }
+
+    if (msg.includes('joke') || msg.includes('funny') || msg.includes('make me laugh')) {
+      const jokes = [
+        "Why did the contractor bring a ladder to the meeting? Because he wanted to reach new heights!",
+        "What's a contractor's favorite type of music? Heavy metal — and concrete beats.",
+        "Why don't contractors ever get lost? Because they always follow the blueprints!",
+      ];
+      return jokes[Math.floor(Math.random() * jokes.length)];
+    }
+
+    if (msg.includes('who are you') || msg.includes('what are you') || msg.includes('what do you do')) {
+      return "I'm Eco-Intelligence, your AI assistant built into EcoLogic. I can help you manage jobs, clients, scheduling, and messaging — or just chat!";
+    }
+
+    if (msg.includes('help') || msg.includes('what can you do') || msg.includes('capabilities')) {
+      return "I can help you with:\n\n• **Create clients** — \"Create client John Smith\"\n• **Create jobs** — \"Create a job for Maria at 22 Bay Ave\"\n• **Schedule appointments** — \"Schedule job #101 for tomorrow at 9am\"\n• **Send messages** — \"Message saying: on my way\"\n\nOr just chat — I'm happy to talk!";
+    }
+
+    if (msg.includes('weather')) {
+      return "I don't have live weather data right now, but you can check the weather widget on your dashboard for local conditions.";
+    }
+
+    return "I'm here to chat or help manage your work — jobs, clients, scheduling, and more. Just let me know what you need!";
+  }
+
   function parseEcoAiIntent(message: string): { tool: string; payload: Record<string, any>; missingFields: string[] } | null {
     const lower = message.toLowerCase();
 
@@ -13468,48 +13530,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.createEcoAiMessage({ conversationId, role: 'user', content: userMessage });
 
-      const intent = parseEcoAiIntent(userMessage);
+      const WORK_INTENTS = [
+        'create job', 'new job', 'add job',
+        'create client', 'new client', 'add client',
+        'schedule', 'appointment',
+        'send message', 'message saying', 'text saying',
+        'create invoice', 'new invoice',
+        'create estimate', 'new estimate',
+      ];
+      const msgLower = userMessage.toLowerCase().trim();
+      const hasWorkIntent = WORK_INTENTS.some(k => msgLower.includes(k));
+
       let assistantMessage = '';
       let proposedActions: any[] = [];
 
-      if (intent) {
-        console.log(`[eco-ai] intent detected: ${intent.tool}`, intent.payload);
-        const toolDef = ecoAiTools[intent.tool];
-        if (!toolDef) {
-          assistantMessage = "I understood your request but that action isn't available yet.";
-        } else {
-          const hasPermission = toolDef.requiredPermissions.length === 0 ||
-            toolDef.requiredPermissions.some(perm => can(role, perm));
-          if (!hasPermission) {
-            assistantMessage = `Sorry, your role (${role}) doesn't have permission to ${toolDef.friendlyName.toLowerCase()}. Please ask an admin or supervisor.`;
-          } else if (intent.missingFields.length > 0) {
-            assistantMessage = `I'd like to help you ${toolDef.friendlyName.toLowerCase()}, but I need a few more details:\n${intent.missingFields.map(f => `• ${f}`).join('\n')}\n\nCould you provide those?`;
+      if (hasWorkIntent) {
+        const intent = parseEcoAiIntent(userMessage);
+        if (intent) {
+          console.log(`[eco-ai] intent detected: ${intent.tool}`, intent.payload);
+          const toolDef = ecoAiTools[intent.tool];
+          if (!toolDef) {
+            assistantMessage = "I understood your request but that action isn't available yet.";
           } else {
-            assistantMessage = `I can ${toolDef.friendlyName.toLowerCase()} with these details:`;
-            const action = await storage.createEcoAiAction({
-              conversationId,
-              tool: intent.tool,
-              payload: intent.payload,
-              status: 'proposed',
-              createdById: userId,
-            });
-            proposedActions.push({
-              id: action.id,
-              tool: intent.tool,
-              friendlyName: toolDef.friendlyName,
-              payload: intent.payload,
-              status: 'proposed',
-            });
-            console.log(`[eco-ai] proposed action: ${intent.tool} id=${action.id}`);
+            const hasPermission = toolDef.requiredPermissions.length === 0 ||
+              toolDef.requiredPermissions.some(perm => can(role, perm));
+            if (!hasPermission) {
+              assistantMessage = `Sorry, your role (${role}) doesn't have permission to ${toolDef.friendlyName.toLowerCase()}. Please ask an admin or supervisor.`;
+            } else if (intent.missingFields.length > 0) {
+              assistantMessage = `I'd like to help you ${toolDef.friendlyName.toLowerCase()}, but I need a few more details:\n${intent.missingFields.map(f => `• ${f}`).join('\n')}\n\nCould you provide those?`;
+            } else {
+              assistantMessage = `I can ${toolDef.friendlyName.toLowerCase()} with these details:`;
+              const action = await storage.createEcoAiAction({
+                conversationId,
+                tool: intent.tool,
+                payload: intent.payload,
+                status: 'proposed',
+                createdById: userId,
+              });
+              proposedActions.push({
+                id: action.id,
+                tool: intent.tool,
+                friendlyName: toolDef.friendlyName,
+                payload: intent.payload,
+                status: 'proposed',
+              });
+              console.log(`[eco-ai] proposed action: ${intent.tool} id=${action.id}`);
+            }
           }
+        } else {
+          assistantMessage = "I caught that you want to do something work-related, but I need a bit more detail. Could you try rephrasing? For example:\n• \"Create a job for Maria at 22 Bay Ave\"\n• \"Schedule job #101 for tomorrow at 9am\"\n• \"Create client John Smith\"";
         }
       } else {
-        const greetings = ['hi', 'hello', 'hey', 'help', 'what can you do'];
-        if (greetings.some(g => userMessage.toLowerCase().trim().startsWith(g))) {
-          assistantMessage = `Hi! I'm your Eco-Intelligence assistant. Here's what I can help you with:\n\n• **Create a client** — "Create client John Smith"\n• **Create a job** — "Create a job for Maria at 22 Bay Ave"\n• **Schedule an appointment** — "Schedule job #101 for tomorrow at 9am"\n• **Send a message** — "Message saying: on my way"\n\nJust tell me what you need!`;
-        } else {
-          assistantMessage = `I'm not sure what you'd like to do. Try something like:\n• "Create a job for [client name] at [address]"\n• "Schedule job #[number] for tomorrow at 9am"\n• "Create client [name]"`;
-        }
+        assistantMessage = generateFriendlyReply(msgLower);
       }
 
       const assistantMsg = await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });

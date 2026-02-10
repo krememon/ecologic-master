@@ -40,7 +40,7 @@ const TOOL_COLORS: Record<string, string> = {
   sendMessage: "text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-900/30",
 };
 
-const GREETING = `Hi! I'm your Eco-Intelligence assistant. Here's what I can help with:\n\n• **Create a client** — "Create client John Smith"\n• **Create a job** — "Create a job for Maria at 22 Bay Ave"\n• **Schedule** — "Schedule job #101 for tomorrow at 9am"\n• **Send a message** — "Message saying: on my way"`;
+const GREETING = `Hey! I'm Eco-Intelligence, your AI assistant. I can chat, answer questions, or help you manage your work — just ask!`;
 
 interface EcoAiPanelProps {
   open: boolean;

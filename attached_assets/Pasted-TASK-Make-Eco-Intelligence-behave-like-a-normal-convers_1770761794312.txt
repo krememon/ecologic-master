@@ -1,0 +1,91 @@
+TASK: Make Eco-Intelligence behave like a normal conversational AI by default, and only enter work-mode when actionable intent is detected.
+
+PROBLEM
+Eco-AI currently responds with “I’m not sure what you’d like to do” for normal conversation. This feels robotic and broken.
+
+GOAL
+Eco-AI should:
+- Chat naturally for general conversation
+- Answer basic questions
+- Only show work suggestions when user intent is detected
+
+IMPLEMENTATION
+
+1) In POST /api/eco-ai/chat logic:
+
+BEFORE intent parsing, add a conversational fallback:
+
+If message does NOT contain work-related intent:
+- respond with a normal AI-style reply
+- do NOT show example commands
+- do NOT say “I’m not sure what you’d like to do”
+
+2) Define simple intent keywords list:
+
+const WORK_INTENTS = [
+  "create job",
+  "new job",
+  "schedule",
+  "create client",
+  "add client",
+  "message",
+  "text",
+  "send message",
+  "invoice",
+  "estimate"
+];
+
+3) Detect intent:
+
+const hasWorkIntent = WORK_INTENTS.some(k =>
+  message.toLowerCase().includes(k)
+);
+
+4) If hasWorkIntent === false:
+
+Return:
+
+assistantMessage = generateFriendlyReply(message)
+
+proposedActions = []
+
+5) Implement generateFriendlyReply(message):
+
+Basic rules:
+- Greetings → greeting response
+- Time/date → return current server time/date
+- Small talk → friendly short response
+- Unknown → “I can chat or help manage jobs, scheduling, clients, and messages.”
+
+Example implementation:
+
+if (message includes "how are you"):
+  return "I'm doing great — ready to help. What’s up?"
+
+if (message includes "time"):
+  return `It’s ${currentTime}.`
+
+else:
+  return "I'm here to chat or help with jobs, scheduling, clients, and more."
+
+6) Only run existing job/schedule/client logic IF hasWorkIntent === true.
+
+7) Remove fallback messages that say:
+"I'm not sure what you'd like to do. Try something like..."
+
+REPLACE with:
+
+"I'm here to chat or help manage your work. Just let me know what you need."
+
+QA
+
+- "How are you" gets a friendly response
+- "What time is it" returns time
+- "Tell me a joke" returns playful response
+- "Schedule job 12 tomorrow" still triggers tool flow
+- No work suggestions unless user seems to want work
+
+DELIVERABLE
+
+- Eco-AI chats like a normal assistant
+- Work mode only activates when appropriate
