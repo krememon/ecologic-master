@@ -1,0 +1,83 @@
+TASK: Make Eco-Intelligence handle partial inputs intelligently (auto-match names, disambiguate only when needed, and keep conversation state).
+
+PROBLEM
+User: "Schedule Jennifer for 5 today"
+AI still asks "Which job should I schedule?" and prints unrelated job list.
+Then user replies "Jennifer" and AI ignores it / resets to generic help.
+
+GOAL
+Eco-AI should:
+- Extract entities (name/time/date) from the original message
+- Auto-select the best match when unambiguous
+- If ambiguous, show a list ONLY of matching candidates (not all active jobs)
+- When the user replies with a name or number, treat it as a selection and continue the scheduling flow
+- Maintain state across turns
+
+IMPLEMENTATION
+
+1) Add conversation state object stored per conversationId:
+   state = {
+     pendingIntent: null | "schedule",
+     pending: { clientQuery, time, date, jobCandidates: [], selectedJobId: null },
+   }
+
+2) When a message comes in, first check if there is a pending intent:
+   if (state.pendingIntent === "schedule" && state.pending.jobCandidates.length > 0 && !state.pending.selectedJobId) {
+     // interpret this message as a selection
+   }
+
+3) Scheduling intent handler:
+
+A) Extract from user message:
+   - clientQuery (e.g., "Jennifer")
+   - time (e.g., "5", "5:00")
+   - date (today/tomorrow or actual date)
+
+B) If clientQuery exists:
+   - Search accessible jobs (or clients+jobs) filtered by clientQuery
+   - Candidates MUST be only matches (Jennifer*, not unrelated names)
+
+C) Candidate outcomes:
+   - 0 matches:
+     assistant: "I couldn't find a client/job named Jennifer. Do you mean a different name?"
+     keep pendingIntent="schedule" and pending.clientQuery
+   - 1 match:
+     auto-select it:
+       state.pending.selectedJobId = match.jobId
+     assistant: "Got it — scheduling Jennifer Pellegrino at 5:00 today. Want to assign a tech or keep current crew?"
+     propose scheduleAppointment action immediately if date+time are present.
+   - 2+ matches:
+     assistant:
+       "I found multiple matches for Jennifer. Which one did you mean?"
+       1) Jennifer Pellegrino — 321 Astor Dr
+       2) Jennifer Smith — 88 Lake St
+     Save these candidates into state.pending.jobCandidates
+     Ask user to reply with number or full name.
+
+4) Selection parsing (when pending candidates exist):
+   - If user replies "1" -> pick candidate[0]
+   - If user replies "Jennifer Pellegrino" -> fuzzy match candidate list
+   - If user replies "Jennifer" and only one Jennifer candidate exists -> pick it
+   - After pick:
+     set selectedJobId
+     continue schedule flow using stored time/date from previous message
+
+5) IMPORTANT: stop dumping "Here are your active jobs" unless you have zero context.
+   Only list MATCHING jobs to the name query.
+
+6) Ensure the assistant does NOT reset to generic help while a scheduling flow is pending.
+   It should continue the flow until completed or user cancels.
+
+7) Add a cancel command:
+   If user types "cancel" or "never mind", clear pendingIntent and pending state.
+
+QA TESTS
+- "Schedule Jennifer for 5:00 today" -> auto-select Jennifer Pellegrino if single match and proceed
+- If 2 Jennifers -> shows only those 2 options
+- Reply "Jennifer" after options -> selects best match and continues, does NOT reset
+- Reply "1" -> selects and continues
+- No internal IDs shown to the user
+
+DELIVERABLE
+- Slot-filling + disambiguation + conversation state for scheduling
+- Natural wording improvements
