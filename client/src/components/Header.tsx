@@ -5,6 +5,7 @@ import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import { GlobalCreateMenu } from "./GlobalCreateMenu";
+import EcoAiPanel, { EcoAiButton } from "./EcoAiPanel";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -47,6 +48,7 @@ interface HeaderProps {
 export default function Header({ title, subtitle, user, className }: HeaderProps) {
   const { toggle } = useSidebar();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [ecoAiOpen, setEcoAiOpen] = useState(false);
   const [, setLocation] = useLocation();
 
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
@@ -148,8 +150,9 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
           </div>
         </div>
         
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1.5">
           <ThemeToggle />
+          <EcoAiButton onClick={() => setEcoAiOpen(true)} />
           <button
             onClick={() => setNotificationsOpen(true)}
             className="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -163,6 +166,8 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
           <GlobalCreateMenu />
         </div>
       </header>
+
+      <EcoAiPanel open={ecoAiOpen} onOpenChange={setEcoAiOpen} />
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md">

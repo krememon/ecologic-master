@@ -1,0 +1,73 @@
+TASK: Add Eco-AI icon to the global header (left of notification bell) using the EcoLogic droplet logo. Clicking it opens Eco-Intelligence (side panel preferred).
+
+CONSTRAINTS
+- Do NOT break any existing header functions (notifications, profile menu, routing, auth).
+- Must display on ALL pages that use the global header.
+- Place Eco-AI icon immediately to the LEFT of the notification bell.
+- Use the provided EcoLogic droplet logo image as the icon.
+- Keep styling modern, tight spacing, and consistent with existing header icon sizes.
+- Must be keyboard accessible (tab focus, Enter/Space triggers).
+- If the header is hidden on some routes (login/signup/public pages), do not force it there.
+
+ASSET
+1) Add the EcoLogic droplet logo image to the correct place:
+   - Prefer: client/public/assets/ecologic-logo.png (or .webp)
+   - If we already have a logo asset path, reuse it (do not duplicate).
+
+IMPLEMENTATION (FRONTEND)
+2) Find the global Header component (likely one of these):
+   - client/src/components/Header.jsx
+   - client/src/components/layout/Header.jsx
+   - client/src/layout/AppHeader.jsx
+   - or similar.
+3) In the right-side header actions cluster where the notification bell exists:
+   - Insert a new Eco-AI button/icon just before the bell.
+   - Structure should look like: [EcoAIIconButton] [NotificationBell] [Profile/Menu...]
+
+UI DETAILS
+4) Eco-AI Icon Button:
+   - Use <button> not <div> for accessibility.
+   - Use the logo image inside:
+     <img src="/assets/ecologic-logo.png" alt="Eco-AI" />
+   - Size: 26–28px square image, button hit area 36–40px.
+   - Add subtle hover: background rgba white/black depending on theme, with rounded-full.
+   - Add tooltip text on hover: “Eco-Intelligence”
+   - Add aria-label="Open Eco-Intelligence"
+
+OPEN BEHAVIOR
+5) On click:
+   - Preferred: open a right-side slide-over panel (EcoAI Panel) that overlays the current page.
+   - If a slide-over system already exists (like your modals), reuse that pattern.
+   - If not, implement a minimal panel:
+     - Fixed position, right:0, top under header, full height minus header
+     - width: 380–440px desktop; 100% on mobile
+     - backdrop overlay closes on click outside + ESC closes
+   - Panel contains the Eco-Intelligence chat UI (can start as “Coming soon” placeholder if needed),
+     but wire the open/close fully now.
+
+STATE MANAGEMENT
+6) Keep open/close state in a safe global place:
+   - If you have a UI store/context (like UIContext), add `ecoAiOpen` there.
+   - Otherwise, manage state in Header’s parent Layout component so it persists across pages.
+   - Ensure route changes do NOT break it.
+
+ROUTING FALLBACK
+7) If implementing a panel is too invasive right now, fallback behavior:
+   - Clicking icon navigates to /eco-intelligence
+   - (But still keep icon placement + styling exactly as requested.)
+   - Use whichever is already implemented or easiest without breaking anything.
+
+RESPONSIVE
+8) On very small widths:
+   - keep the Eco-AI icon visible
+   - ensure it doesn’t overlap the bell/profile (reduce gap before hiding it).
+
+QA / ACCEPTANCE
+- Eco-AI icon appears in header on all authenticated app pages.
+- It sits directly left of the notification bell with clean spacing.
+- Hover shows tooltip, click opens panel (or routes to /eco-intelligence).
+- Notifications bell still works exactly the same.
+- No console errors, no broken layout.
+
+DELIVERABLES
+- PR includes: header change, asset placement/reuse, EcoAI panel component (or route fallback), and minimal styling.
