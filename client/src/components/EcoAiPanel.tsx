@@ -5,7 +5,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import dropletLogo from "@/assets/branding/ecologic-droplet.png";
 const outlineLogo = "/assets/ecologic-outline-cropped.png";
 
 interface EcoAiPanelProps {
@@ -18,8 +17,7 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-[420px] flex flex-col">
         <SheetHeader className="pb-4 border-b border-slate-200 dark:border-slate-800">
-          <SheetTitle className="flex items-center gap-2.5">
-            <img src={dropletLogo} alt="" className="w-6 h-6 object-contain" />
+          <SheetTitle className="flex items-center gap-2">
             <span>Eco-Intelligence</span>
             <Sparkles className="h-4 w-4 text-amber-500" />
           </SheetTitle>
