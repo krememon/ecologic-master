@@ -6,7 +6,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import dropletLogo from "@/assets/branding/ecologic-droplet.png";
-const outlineLogo = "/assets/ecologic-outline.png";
+const outlineLogo = "/assets/ecologic-outline-cropped.png";
 
 interface EcoAiPanelProps {
   open: boolean;
@@ -54,15 +54,15 @@ export function EcoAiButton({ onClick, className = "" }: EcoAiButtonProps) {
   return (
     <button
       onClick={onClick}
-      className={`relative w-11 h-11 p-0 flex items-center justify-center rounded-full opacity-90 hover:opacity-100 hover:ring-2 hover:ring-teal-400/40 transition-all duration-150 ease-in-out ${className}`}
+      className={`relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${className}`}
       aria-label="Open Eco-Intelligence"
       title="Eco-Intelligence"
     >
       <img
         src={outlineLogo}
         alt="Eco-AI"
-        className="block object-contain"
-        style={{ width: 36, height: 36, minWidth: 36, minHeight: 36 }}
+        className="h-5 w-5 object-contain"
+        style={{ opacity: 0.95, filter: "drop-shadow(0 0 0.5px rgba(0,0,0,0.35))" }}
       />
     </button>
   );

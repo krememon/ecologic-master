@@ -1,0 +1,71 @@
+TASK: Make Eco-AI header icon match the header’s icon system (same size, alignment, spacing, hover). It must look native.
+
+CONSTRAINTS
+- Do NOT break header layout, notifications, plus button, or routing.
+- Eco-AI icon stays immediately LEFT of notification bell.
+- Use the outline eco logo asset (transparent).
+- Must be visually the same “weight” as other header icons.
+
+GOAL (VISUAL)
+Eco-AI should look like a normal header action icon:
+- Same vertical alignment as bell
+- Same icon size as bell (NOT smaller)
+- Same hit area + hover background as bell
+- Same spacing between icons as bell/plus
+
+IMPLEMENTATION STEPS
+
+1) Find how the bell icon is rendered.
+   - If the bell uses an IconButton / HeaderActionButton component, reuse that SAME component for Eco-AI.
+   - Do NOT custom-style Eco-AI separately unless absolutely necessary.
+
+2) Create Eco-AI button using the same wrapper + classes as bell:
+   Example structure:
+   <button className="headerIconButton ...same as bell..." ...>
+     <img className="headerIconImg" ... />
+   </button>
+
+3) Match sizing to bell icon exactly:
+   - Determine the bell icon rendered size (likely 20–24px svg inside a 36–40px button).
+   - Set Eco-AI image size to match the bell’s icon size exactly:
+     width: 22–24px;
+     height: 22–24px;
+     object-fit: contain;
+
+IMPORTANT:
+Right now Eco-AI looks small because we’re trying to make the IMAGE huge. Don’t do that.
+Instead: match the bell’s icon size (usually ~22–24px), and use consistent stroke/opacity to make it read.
+
+4) Fix “too faint / thin” look:
+   - Set image style: opacity: 0.95
+   - On hover: opacity: 1
+   - If the outline is still too light, add a subtle CSS drop-shadow:
+     filter: drop-shadow(0 0 0.5px rgba(0,0,0,0.35));
+   (Only if needed; keep it subtle.)
+
+5) Spacing:
+   - Use the same gap between Eco-AI and bell as bell and plus (e.g., gap-2 or gap-3).
+   - Ensure it is not floating higher than bell (align-items center on container).
+
+6) Hover/Active behavior:
+   - Use same hover bg as bell (rounded-full, subtle bg).
+   - Focus ring same as other icons.
+
+7) Ensure the asset has enough padding removed:
+   - If the PNG itself has lots of empty transparent padding, it will always look small.
+   - Detect this:
+     - temporarily set a debug border around the img to see its real bounds.
+   - If there IS padding, crop the image file (transparent crop) so the droplet fills the canvas more.
+     Save as: client/public/assets/ecologic-outline-cropped.png
+     Then update src to that file.
+
+DELIVERABLES
+- Eco-AI uses same icon button system as bell
+- Perfect vertical alignment
+- Icon reads clearly, same size/weight as bell
+- If needed, replace with cropped asset to remove transparent padding
+
+QA
+- Looks native in header
+- No overlap on mobile
+- Notifications and plus unchanged
