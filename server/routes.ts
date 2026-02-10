@@ -13463,31 +13463,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (lower.includes('schedule') || lower.includes('appointment') || lower.includes('book')) {
       const payload: Record<string, any> = {};
       const missing: string[] = [];
+
       const jobIdMatch = message.match(/job\s*#?\s*(\d+)/i);
       if (jobIdMatch) payload.jobId = parseInt(jobIdMatch[1]);
-      const forClientMatch = message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-      if (forClientMatch) payload.jobSearchName = forClientMatch[1];
-      const atMatch = message.match(/(?:at|@)\s+(.+?)(?:\s+(?:on|for|tomorrow|today|next|at\s+\d)|$)/i);
-      if (atMatch) payload.jobSearchAddress = atMatch[1].trim();
-      if (!payload.jobId && !payload.jobSearchName && !payload.jobSearchAddress) {
-        missing.push('job (which job should I schedule?)');
-      }
-      const timeMatch = message.match(/(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+
+      const timeMatch = message.match(/(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i)
+        || message.match(/(?:at|for)\s+(\d{1,2}:\d{2})/i);
       if (timeMatch) payload.time = timeMatch[1];
+
+      const standaloneTimeMatch = !timeMatch && message.match(/\b(?:at|for)\s+(\d{1,2})\b(?!\s*(?:[A-Z]|am|pm|:\d))/i);
+      if (standaloneTimeMatch) payload.time = standaloneTimeMatch[1];
+
+      if (!payload.jobId) {
+        const namePatterns = [
+          message.match(/(?:schedule|book|appointment)\s+(?:for\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
+          message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
+          message.match(/(?:schedule|book)\s+([A-Z][a-z]+)/),
+        ];
+        for (const m of namePatterns) {
+          if (m) {
+            const candidate = m[1].trim();
+            if (!['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday','Today','Tomorrow'].includes(candidate)) {
+              payload.jobSearchName = candidate;
+              break;
+            }
+          }
+        }
+
+        const atMatch = message.match(/(?:at|@)\s+(\d+\s+[A-Z][\w\s]+?)(?:\s+(?:on|for|tomorrow|today|next)|$)/i);
+        if (atMatch) payload.jobSearchAddress = atMatch[1].trim();
+      }
+
+      if (!payload.jobId && !payload.jobSearchName && !payload.jobSearchAddress) {
+        missing.push('job');
+      }
+
       const dateMatch = message.match(/(tomorrow|today|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
       if (dateMatch) payload.date = dateMatch[1];
-      if (!payload.time && !payload.date) missing.push('date and time');
-      else {
+
+      if (payload.time || payload.date) {
         const now = new Date();
         let start = new Date(now);
-        if (payload.date?.toLowerCase() === 'tomorrow') { start.setDate(start.getDate() + 1); }
+        const dayLower = payload.date?.toLowerCase();
+        if (dayLower === 'tomorrow') { start.setDate(start.getDate() + 1); }
+        else if (dayLower === 'today') { /* keep today */ }
+        else if (dayLower && ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].includes(dayLower)) {
+          const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+          const target = dayNames.indexOf(dayLower);
+          const current = start.getDay();
+          let diff = target - current;
+          if (diff <= 0) diff += 7;
+          start.setDate(start.getDate() + diff);
+        }
         if (payload.time) {
           const tMatch = payload.time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
           if (tMatch) {
             let h = parseInt(tMatch[1]);
             const m = parseInt(tMatch[2] || '0');
             if (tMatch[3]?.toLowerCase() === 'pm' && h < 12) h += 12;
-            if (tMatch[3]?.toLowerCase() === 'am' && h === 12) h = 0;
+            else if (tMatch[3]?.toLowerCase() === 'am' && h === 12) h = 0;
+            else if (!tMatch[3] && h >= 1 && h <= 6) h += 12;
             start.setHours(h, m, 0, 0);
           }
         } else { start.setHours(9, 0, 0, 0); }
@@ -13495,6 +13530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payload.startDateTime = start.toISOString();
         payload.endDateTime = end.toISOString();
       }
+
       return { tool: 'scheduleAppointment', payload, missingFields: missing };
     }
 
@@ -13561,9 +13597,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const allJobs = await storage.getJobs(companyId);
             const activeJobs = allJobs.filter((j: any) => j.status === 'pending' || j.status === 'active');
             let matchedJobs: any[] = [];
+            const clientHint = intent.payload.jobSearchName || '';
 
-            if (intent.payload.jobSearchName) {
-              const searchName = intent.payload.jobSearchName.toLowerCase();
+            if (clientHint) {
+              const searchName = clientHint.toLowerCase();
               matchedJobs = activeJobs.filter((j: any) =>
                 (j.clientName && j.clientName.toLowerCase().includes(searchName)) ||
                 (j.title && j.title.toLowerCase().includes(searchName))
@@ -13580,28 +13617,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
               intent.payload.jobId = matchedJobs[0].id;
               intent.payload._jobLabel = `${matchedJobs[0].clientName || matchedJobs[0].title}${matchedJobs[0].location ? ' — ' + matchedJobs[0].location : ''}`;
               intent.missingFields = intent.missingFields.filter(f => !f.includes('job'));
+
+              if (!intent.payload.startDateTime) {
+                const jobName = matchedJobs[0].clientName || matchedJobs[0].title;
+                const timeNote = intent.payload.time ? ` at ${intent.payload.time}` : '';
+                assistantMessage = `Got it — I found the job for **${jobName}**${timeNote}. What day should I schedule this for?`;
+                await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
+                res.json({ conversationId, assistantMessage, proposedActions: [] });
+                return;
+              }
             } else if (matchedJobs.length > 1) {
+              const searchLabel = clientHint || intent.payload.jobSearchAddress || '';
               const list = matchedJobs.slice(0, 5).map((j: any, i: number) =>
                 `${i + 1}. ${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`
               ).join('\n');
-              assistantMessage = `I found multiple jobs that could match. Which one?\n\n${list}\n\nJust reply with the number or give me more details.`;
+              assistantMessage = `I found a few jobs for **${searchLabel}**. Which one did you mean?\n\n${list}`;
               await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
               res.json({ conversationId, assistantMessage, proposedActions: [] });
               return;
-            } else if (!intent.payload.jobSearchName && !intent.payload.jobSearchAddress) {
+            } else if (!clientHint && !intent.payload.jobSearchAddress) {
               if (activeJobs.length <= 5 && activeJobs.length > 0) {
                 const list = activeJobs.map((j: any, i: number) =>
                   `${i + 1}. ${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`
                 ).join('\n');
-                assistantMessage = `Which job would you like to schedule?\n\n${list}\n\nJust reply with the number or the client name.`;
+                assistantMessage = `Which job should I schedule? Here are your active jobs:\n\n${list}\n\nJust tell me the name or number.`;
               } else {
-                assistantMessage = "Which job would you like to schedule? You can tell me the client name or address.";
+                assistantMessage = "Which job should I schedule? Just tell me the client name or address.";
               }
               await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
               res.json({ conversationId, assistantMessage, proposedActions: [] });
               return;
             } else {
-              assistantMessage = `I couldn't find a matching job for "${intent.payload.jobSearchName || intent.payload.jobSearchAddress}". Could you double-check the name or address?`;
+              assistantMessage = `I couldn't find an active job matching "${clientHint || intent.payload.jobSearchAddress}". Could you double-check the name?`;
               await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
               res.json({ conversationId, assistantMessage, proposedActions: [] });
               return;
