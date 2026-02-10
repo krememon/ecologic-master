@@ -2936,6 +2936,10 @@ export class DatabaseStorage implements IStorage {
     if (payload.notes !== undefined) updateData.notes = payload.notes;
     if (payload.status !== undefined) updateData.status = payload.status;
     if (payload.assignedEmployeeIds !== undefined) updateData.assignedEmployeeIds = payload.assignedEmployeeIds;
+    if (payload.scheduledDate !== undefined) updateData.scheduledDate = typeof payload.scheduledDate === 'string' ? new Date(payload.scheduledDate) : payload.scheduledDate;
+    if (payload.scheduledTime !== undefined) updateData.scheduledTime = payload.scheduledTime;
+    if (payload.scheduledEndTime !== undefined) updateData.scheduledEndTime = payload.scheduledEndTime;
+    if (payload.requestedStartAt !== undefined) updateData.requestedStartAt = typeof payload.requestedStartAt === 'string' ? new Date(payload.requestedStartAt) : payload.requestedStartAt;
 
     // If items are provided, recalculate totals
     if (payload.items) {

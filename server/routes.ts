@@ -13293,30 +13293,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== Eco-Intelligence AI Routes ==========
 
-  interface EcoAiConvState {
-    pendingIntent: string | null;
-    pending: {
-      clientQuery?: string;
-      time?: string;
-      date?: string;
-      startDateTime?: string;
-      endDateTime?: string;
-      jobCandidates: Array<{ id: number; clientName: string; title: string; location: string }>;
-      selectedJobId?: number;
-      selectedJobLabel?: string;
-    };
+  interface ScheduleCandidate {
+    type: 'job' | 'estimate';
+    id: number;
+    label: string;
+    clientName: string;
+    location: string;
   }
+
+  interface ScheduleDraft {
+    targetType: 'job' | 'estimate' | null;
+    targetId: number | null;
+    targetLabel: string | null;
+    clientQuery: string | null;
+    time: string | null;
+    date: string | null;
+    startDateTime: string | null;
+    endDateTime: string | null;
+    durationMinutes: number | null;
+    notes: string | null;
+  }
+
+  interface EcoAiConvState {
+    pendingIntent: 'schedule' | null;
+    step: 'resolveType' | 'pickTarget' | 'askDate' | 'askTime' | 'confirm' | null;
+    draft: ScheduleDraft;
+    candidates: ScheduleCandidate[];
+  }
+
   const ecoAiConvStates = new Map<number, EcoAiConvState>();
+
+  function freshDraft(): ScheduleDraft {
+    return { targetType: null, targetId: null, targetLabel: null, clientQuery: null, time: null, date: null, startDateTime: null, endDateTime: null, durationMinutes: null, notes: null };
+  }
 
   function getConvState(convId: number): EcoAiConvState {
     if (!ecoAiConvStates.has(convId)) {
-      ecoAiConvStates.set(convId, { pendingIntent: null, pending: { jobCandidates: [] } });
+      ecoAiConvStates.set(convId, { pendingIntent: null, step: null, draft: freshDraft(), candidates: [] });
     }
     return ecoAiConvStates.get(convId)!;
   }
 
   function clearConvState(convId: number) {
     ecoAiConvStates.delete(convId);
+  }
+
+  function parseTimeStr(timeStr: string): { hours: number; minutes: number } | null {
+    const tMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (!tMatch) return null;
+    let h = parseInt(tMatch[1]);
+    const m = parseInt(tMatch[2] || '0');
+    if (tMatch[3]?.toLowerCase() === 'pm' && h < 12) h += 12;
+    else if (tMatch[3]?.toLowerCase() === 'am' && h === 12) h = 0;
+    else if (!tMatch[3] && h >= 1 && h <= 6) h += 12;
+    return { hours: h, minutes: m };
+  }
+
+  function resolveDate(dateStr: string): Date {
+    const now = new Date();
+    const start = new Date(now);
+    const dl = dateStr.toLowerCase();
+    if (dl === 'tomorrow') { start.setDate(start.getDate() + 1); }
+    else if (dl !== 'today') {
+      const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+      const target = dayNames.indexOf(dl);
+      if (target >= 0) {
+        let diff = target - start.getDay();
+        if (diff <= 0) diff += 7;
+        start.setDate(start.getDate() + diff);
+      } else {
+        const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+        if (slashMatch) {
+          start.setMonth(parseInt(slashMatch[1]) - 1, parseInt(slashMatch[2]));
+          if (slashMatch[3]) start.setFullYear(slashMatch[3].length === 2 ? 2000 + parseInt(slashMatch[3]) : parseInt(slashMatch[3]));
+        }
+      }
+    }
+    return start;
+  }
+
+  function buildStartEnd(draft: ScheduleDraft): { startDateTime: string; endDateTime: string } | null {
+    if (!draft.date) return null;
+    const start = resolveDate(draft.date);
+    if (draft.time) {
+      const t = parseTimeStr(draft.time);
+      if (t) start.setHours(t.hours, t.minutes, 0, 0);
+      else start.setHours(9, 0, 0, 0);
+    } else {
+      start.setHours(9, 0, 0, 0);
+    }
+    const dur = draft.durationMinutes || (draft.targetType === 'estimate' ? 60 : 120);
+    const end = new Date(start.getTime() + dur * 60 * 1000);
+    return { startDateTime: start.toISOString(), endDateTime: end.toISOString() };
+  }
+
+  function formatWhen(isoStr: string, durationMin: number): string {
+    const dt = new Date(isoStr);
+    const dateStr = dt.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+    const durLabel = durationMin >= 60 ? `${durationMin / 60}hr` : `${durationMin}min`;
+    return `${dateStr} (${durLabel})`;
   }
 
   interface EcoAiToolDef {
@@ -13365,7 +13440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     scheduleAppointment: {
       requiredPermissions: ['schedule.manage'],
-      requiredFields: ['jobId', 'startDateTime', 'endDateTime'], // jobId resolved internally by AI layer
+      requiredFields: ['jobId', 'startDateTime', 'endDateTime'],
       friendlyName: 'Schedule Appointment',
       execute: async (payload, _userId, companyId) => {
         const job = await storage.getJobSecure(payload.jobId, companyId);
@@ -13380,6 +13455,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: 'scheduled',
         });
         return { success: true, message: `Appointment scheduled for "${job.title}".`, result: { scheduleItemId: item.id } };
+      },
+    },
+    scheduleEstimate: {
+      requiredPermissions: ['schedule.manage'],
+      requiredFields: ['estimateId', 'startDateTime'],
+      friendlyName: 'Schedule Estimate',
+      execute: async (payload, _userId, companyId) => {
+        const est = await storage.getEstimateSecure(payload.estimateId, companyId);
+        if (!est) return { success: false, message: 'Estimate not found or you do not have access.' };
+        const startDt = new Date(payload.startDateTime);
+        const endDt = payload.endDateTime ? new Date(payload.endDateTime) : new Date(startDt.getTime() + 60 * 60 * 1000);
+        const timeStr = startDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const endTimeStr = endDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        await storage.updateEstimateSecure(payload.estimateId, companyId, {
+          scheduledDate: startDt,
+          scheduledTime: timeStr,
+          scheduledEndTime: endTimeStr,
+          requestedStartAt: startDt,
+        });
+        return { success: true, message: `Estimate "${est.title}" scheduled.`, result: { estimateId: est.id } };
       },
     },
     sendMessage: {
@@ -13460,6 +13555,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return "I'm here to chat or help manage your work — jobs, clients, scheduling, and more. Just let me know what you need!";
   }
 
+  function extractNameHint(message: string): string | null {
+    const namePatterns = [
+      message.match(/(?:schedule|book|appointment|estimate|quote)\s+(?:for\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
+      message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
+      message.match(/(?:schedule|book)\s+([A-Z][a-z]+)/),
+    ];
+    const skipWords = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday','Today','Tomorrow','Job','Estimate','Quote','The','An','A'];
+    for (const m of namePatterns) {
+      if (m) {
+        const candidate = m[1].trim();
+        if (!skipWords.includes(candidate)) return candidate;
+      }
+    }
+    return null;
+  }
+
+  function extractTime(message: string): string | null {
+    const timeMatch = message.match(/(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i)
+      || message.match(/(?:at|for)\s+(\d{1,2}:\d{2})/i);
+    if (timeMatch) return timeMatch[1];
+    const standaloneTime = message.match(/\b(?:at|for)\s+(\d{1,2})\b(?!\s*(?:[A-Z]|am|pm|:\d))/i);
+    if (standaloneTime) return standaloneTime[1];
+    return null;
+  }
+
+  function extractDate(message: string): string | null {
+    const dateMatch = message.match(/(tomorrow|today|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
+    return dateMatch ? dateMatch[1] : null;
+  }
+
+  function isScheduleIntent(msg: string): boolean {
+    return /\b(schedule|appointment|book|reschedule)\b/i.test(msg);
+  }
+
+  function isEstimateScheduleIntent(msg: string): boolean {
+    return /\b(estimate|quote)\b/i.test(msg) && (isScheduleIntent(msg) || extractDate(msg) !== null || extractTime(msg) !== null || extractNameHint(msg) !== null);
+  }
+
   function parseEcoAiIntent(message: string): { tool: string; payload: Record<string, any>; missingFields: string[] } | null {
     const lower = message.toLowerCase();
 
@@ -13486,80 +13619,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return { tool: 'createJob', payload, missingFields: missing };
     }
 
-    if (lower.includes('schedule') || lower.includes('appointment') || lower.includes('book')) {
-      const payload: Record<string, any> = {};
-      const missing: string[] = [];
-
-      const jobIdMatch = message.match(/job\s*#?\s*(\d+)/i);
-      if (jobIdMatch) payload.jobId = parseInt(jobIdMatch[1]);
-
-      const timeMatch = message.match(/(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i)
-        || message.match(/(?:at|for)\s+(\d{1,2}:\d{2})/i);
-      if (timeMatch) payload.time = timeMatch[1];
-
-      const standaloneTimeMatch = !timeMatch && message.match(/\b(?:at|for)\s+(\d{1,2})\b(?!\s*(?:[A-Z]|am|pm|:\d))/i);
-      if (standaloneTimeMatch) payload.time = standaloneTimeMatch[1];
-
-      if (!payload.jobId) {
-        const namePatterns = [
-          message.match(/(?:schedule|book|appointment)\s+(?:for\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
-          message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
-          message.match(/(?:schedule|book)\s+([A-Z][a-z]+)/),
-        ];
-        for (const m of namePatterns) {
-          if (m) {
-            const candidate = m[1].trim();
-            if (!['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday','Today','Tomorrow'].includes(candidate)) {
-              payload.jobSearchName = candidate;
-              break;
-            }
-          }
-        }
-
-        const atMatch = message.match(/(?:at|@)\s+(\d+\s+[A-Z][\w\s]+?)(?:\s+(?:on|for|tomorrow|today|next)|$)/i);
-        if (atMatch) payload.jobSearchAddress = atMatch[1].trim();
-      }
-
-      if (!payload.jobId && !payload.jobSearchName && !payload.jobSearchAddress) {
-        missing.push('job');
-      }
-
-      const dateMatch = message.match(/(tomorrow|today|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
-      if (dateMatch) payload.date = dateMatch[1];
-
-      if (payload.time || payload.date) {
-        const now = new Date();
-        let start = new Date(now);
-        const dayLower = payload.date?.toLowerCase();
-        if (dayLower === 'tomorrow') { start.setDate(start.getDate() + 1); }
-        else if (dayLower === 'today') { /* keep today */ }
-        else if (dayLower && ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].includes(dayLower)) {
-          const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-          const target = dayNames.indexOf(dayLower);
-          const current = start.getDay();
-          let diff = target - current;
-          if (diff <= 0) diff += 7;
-          start.setDate(start.getDate() + diff);
-        }
-        if (payload.time) {
-          const tMatch = payload.time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-          if (tMatch) {
-            let h = parseInt(tMatch[1]);
-            const m = parseInt(tMatch[2] || '0');
-            if (tMatch[3]?.toLowerCase() === 'pm' && h < 12) h += 12;
-            else if (tMatch[3]?.toLowerCase() === 'am' && h === 12) h = 0;
-            else if (!tMatch[3] && h >= 1 && h <= 6) h += 12;
-            start.setHours(h, m, 0, 0);
-          }
-        } else { start.setHours(9, 0, 0, 0); }
-        const end = new Date(start.getTime() + 60 * 60 * 1000);
-        payload.startDateTime = start.toISOString();
-        payload.endDateTime = end.toISOString();
-      }
-
-      return { tool: 'scheduleAppointment', payload, missingFields: missing };
-    }
-
     if (lower.includes('message') || lower.includes('text') || lower.includes('send') || lower.includes('dm')) {
       const payload: Record<string, any> = {};
       const missing: string[] = [];
@@ -13570,6 +13629,225 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (toMatch) payload.recipientName = toMatch[1];
       else missing.push('recipient (who should I send this to?)');
       return { tool: 'sendMessage', payload, missingFields: missing };
+    }
+
+    return null;
+  }
+
+  async function searchTargets(companyId: number, nameHint: string | null, targetType: 'job' | 'estimate' | null): Promise<ScheduleCandidate[]> {
+    const results: ScheduleCandidate[] = [];
+    const search = nameHint?.toLowerCase() || '';
+
+    if (targetType !== 'estimate') {
+      const allJobs = await storage.getJobs(companyId);
+      const activeJobs = allJobs.filter((j: any) => j.status === 'pending' || j.status === 'active');
+      for (const j of activeJobs) {
+        const label = `${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`;
+        if (!search ||
+          (j.clientName && j.clientName.toLowerCase().includes(search)) ||
+          (j.title && j.title.toLowerCase().includes(search)) ||
+          (j.location && j.location.toLowerCase().includes(search))) {
+          results.push({ type: 'job', id: j.id, label, clientName: j.clientName || '', location: j.location || '' });
+        }
+      }
+    }
+
+    if (targetType !== 'job') {
+      const allEstimates = await storage.getEstimatesByCompany(companyId);
+      const activeEstimates = allEstimates.filter((e: any) => e.status === 'draft' || e.status === 'sent');
+      for (const e of activeEstimates) {
+        const label = `${e.customerName || e.title}${e.jobCity ? ' — ' + e.jobCity : ''}`;
+        if (!search ||
+          (e.customerName && e.customerName.toLowerCase().includes(search)) ||
+          (e.title && e.title.toLowerCase().includes(search))) {
+          results.push({ type: 'estimate', id: e.id, label, clientName: e.customerName || '', location: e.jobCity || '' });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async function handleScheduleFlow(
+    state: EcoAiConvState,
+    conversationId: number,
+    _userMessage: string,
+    msgLower: string,
+    companyId: number,
+    userId: string,
+    _role: UserRole,
+    proposedActions: any[],
+    sendReply: (msg: string) => Promise<void>
+  ): Promise<string | null> {
+    const draft = state.draft;
+
+    if (state.step === 'resolveType') {
+      if (draft.clientQuery) {
+        const matches = await searchTargets(companyId, draft.clientQuery, null);
+        if (matches.length === 0) {
+          await sendReply(`I couldn't find a job or estimate matching "${draft.clientQuery}". Could you try a different name?`);
+          clearConvState(conversationId);
+          return 'replied';
+        }
+        const hasJobs = matches.some(m => m.type === 'job');
+        const hasEstimates = matches.some(m => m.type === 'estimate');
+        if (hasJobs && !hasEstimates) {
+          draft.targetType = 'job';
+          state.step = 'pickTarget';
+        } else if (hasEstimates && !hasJobs) {
+          draft.targetType = 'estimate';
+          state.step = 'pickTarget';
+        } else {
+          const jobMatches = matches.filter(m => m.type === 'job').slice(0, 4);
+          const estMatches = matches.filter(m => m.type === 'estimate').slice(0, 4);
+          const orderedCandidates = [...jobMatches, ...estMatches];
+          state.candidates = orderedCandidates;
+          const lines: string[] = [];
+          let idx = 0;
+          if (jobMatches.length > 0) {
+            lines.push('**Jobs:**');
+            jobMatches.forEach(j => { idx++; lines.push(`${idx}. ${j.label}`); });
+          }
+          if (estMatches.length > 0) {
+            lines.push('**Estimates:**');
+            estMatches.forEach(e => { idx++; lines.push(`${idx}. ${e.label}`); });
+          }
+          await sendReply(`I found both jobs and estimates for **${draft.clientQuery}**. Which one?\n\n${lines.join('\n')}`);
+          state.step = 'pickTarget';
+          return 'replied';
+        }
+      } else {
+        draft.targetType = 'job';
+        state.step = 'pickTarget';
+      }
+    }
+
+    if (state.step === 'pickTarget' && !draft.targetId) {
+      if (state.candidates.length > 0) {
+        const numMatch = msgLower.match(/^(\d+)$/);
+        let selected: ScheduleCandidate | null = null;
+        if (numMatch) {
+          const idx = parseInt(numMatch[1]) - 1;
+          if (idx >= 0 && idx < state.candidates.length) selected = state.candidates[idx];
+        }
+        if (!selected) {
+          const nameMatches = state.candidates.filter(c =>
+            c.clientName.toLowerCase().includes(msgLower) ||
+            c.label.toLowerCase().includes(msgLower)
+          );
+          if (nameMatches.length === 1) selected = nameMatches[0];
+          else if (nameMatches.length > 1) {
+            state.candidates = nameMatches;
+            const list = nameMatches.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
+            await sendReply(`Still a few matches — which one?\n\n${list}`);
+            return 'replied';
+          }
+        }
+        if (selected) {
+          draft.targetType = selected.type;
+          draft.targetId = selected.id;
+          draft.targetLabel = selected.label;
+          state.candidates = [];
+        } else {
+          await sendReply("I didn't catch which one you meant. Could you reply with the number or name?");
+          return 'replied';
+        }
+      } else {
+        const matches = await searchTargets(companyId, draft.clientQuery, draft.targetType);
+        if (matches.length === 0) {
+          const typeLabel = draft.targetType === 'estimate' ? 'estimate' : 'job';
+          if (draft.clientQuery) {
+            await sendReply(`I couldn't find an active ${typeLabel} matching "${draft.clientQuery}". Could you try a different name?`);
+          } else {
+            await sendReply(`Which ${typeLabel} should I schedule? Tell me the client name.`);
+          }
+          if (draft.clientQuery) clearConvState(conversationId);
+          return 'replied';
+        }
+        if (matches.length === 1) {
+          draft.targetId = matches[0].id;
+          draft.targetType = matches[0].type;
+          draft.targetLabel = matches[0].label;
+        } else {
+          state.candidates = matches.slice(0, 6);
+          const list = state.candidates.map((c, i) => `${i + 1}. ${c.label}${c.type === 'estimate' ? ' (estimate)' : ''}`).join('\n');
+          const typeLabel = draft.targetType === 'estimate' ? 'estimate' : 'job';
+          const intro = draft.clientQuery
+            ? `I found a few ${typeLabel}s for **${draft.clientQuery}**. Which one?`
+            : `Which ${typeLabel} should I schedule?`;
+          await sendReply(`${intro}\n\n${list}\n\nJust tell me the name or number.`);
+          return 'replied';
+        }
+      }
+    }
+
+    if (draft.targetId && !draft.date) {
+      state.step = 'askDate';
+      const dateFromMsg = extractDate(msgLower);
+      if (dateFromMsg) {
+        draft.date = dateFromMsg;
+      } else if (state.step === 'askDate') {
+        const jobName = draft.targetLabel || 'that';
+        const timeNote = draft.time ? ` at ${draft.time}` : '';
+        await sendReply(`Got it — scheduling **${jobName}**${timeNote}. What day works?`);
+        return 'replied';
+      }
+    }
+
+    if (draft.targetId && draft.date && !draft.time) {
+      state.step = 'askTime';
+      const timeFromMsg = extractTime(msgLower);
+      if (timeFromMsg) {
+        draft.time = timeFromMsg;
+      } else {
+        await sendReply(`What time on ${draft.date}?`);
+        return 'replied';
+      }
+    }
+
+    if (draft.targetId && draft.date && draft.time) {
+      state.step = 'confirm';
+      const times = buildStartEnd(draft);
+      if (!times) {
+        await sendReply("I couldn't figure out the date. Could you try again? (e.g. \"tomorrow\", \"Monday\", \"3/15\")");
+        draft.date = null;
+        state.step = 'askDate';
+        return 'replied';
+      }
+      draft.startDateTime = times.startDateTime;
+      draft.endDateTime = times.endDateTime;
+
+      const toolName = draft.targetType === 'estimate' ? 'scheduleEstimate' : 'scheduleAppointment';
+      const toolDef = ecoAiTools[toolName];
+      const dur = draft.durationMinutes || (draft.targetType === 'estimate' ? 60 : 120);
+
+      const actionPayload: any = draft.targetType === 'estimate'
+        ? { estimateId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel }
+        : { jobId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel };
+
+      const displayPayload: any = {
+        [draft.targetType === 'estimate' ? 'estimate' : 'job']: draft.targetLabel,
+        when: formatWhen(draft.startDateTime, dur),
+      };
+
+      const confirmMsg = `Got it — here's the ${draft.targetType === 'estimate' ? 'estimate appointment' : 'appointment'}:`;
+      const action = await storage.createEcoAiAction({
+        conversationId,
+        tool: toolName,
+        payload: actionPayload,
+        status: 'proposed',
+        createdById: userId,
+      });
+      proposedActions.push({
+        id: action.id,
+        tool: toolName,
+        friendlyName: toolDef.friendlyName,
+        payload: displayPayload,
+        status: 'proposed',
+      });
+      console.log(`[eco-ai] proposed scheduling action: ${toolName} id=${action.id}`);
+      clearConvState(conversationId);
+      return confirmMsg;
     }
 
     return null;
@@ -13603,15 +13881,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const WORK_INTENTS = [
         'create job', 'new job', 'add job',
         'create client', 'new client', 'add client',
-        'schedule', 'appointment',
+        'schedule', 'appointment', 'book', 'reschedule',
         'send message', 'message saying', 'text saying',
         'create invoice', 'new invoice',
         'create estimate', 'new estimate',
+        'estimate', 'quote',
       ];
       const msgLower = userMessage.toLowerCase().trim();
 
       let assistantMessage = '';
       let proposedActions: any[] = [];
+
+      const sendReply = async (msg: string) => {
+        await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: msg });
+        res.json({ conversationId, assistantMessage: msg, proposedActions: [] });
+      };
 
       if (msgLower === 'cancel' || msgLower === 'never mind' || msgLower === 'nevermind' || msgLower === 'stop') {
         clearConvState(conversationId);
@@ -13621,357 +13905,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else {
         const state = getConvState(conversationId);
 
-        if (state.pendingIntent === 'schedule' && state.pending.jobCandidates.length > 0 && !state.pending.selectedJobId) {
-          let selectedJob: typeof state.pending.jobCandidates[0] | null = null;
-          const numMatch = msgLower.match(/^(\d+)$/);
-          if (numMatch) {
-            const idx = parseInt(numMatch[1]) - 1;
-            if (idx >= 0 && idx < state.pending.jobCandidates.length) {
-              selectedJob = state.pending.jobCandidates[idx];
-            }
-          }
-          if (!selectedJob) {
-            const candidates = state.pending.jobCandidates;
-            const nameMatches = candidates.filter(c =>
-              c.clientName.toLowerCase().includes(msgLower) ||
-              c.title.toLowerCase().includes(msgLower)
-            );
-            if (nameMatches.length === 1) selectedJob = nameMatches[0];
-            else if (nameMatches.length > 1) {
-              const list = nameMatches.map((j, i) =>
-                `${i + 1}. ${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`
-              ).join('\n');
-              assistantMessage = `Still a few matches — which one?\n\n${list}`;
-              state.pending.jobCandidates = nameMatches;
-              await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-              res.json({ conversationId, assistantMessage, proposedActions: [] });
-              return;
-            }
-          }
-
-          if (selectedJob) {
-            state.pending.selectedJobId = selectedJob.id;
-            state.pending.selectedJobLabel = `${selectedJob.clientName || selectedJob.title}${selectedJob.location ? ' — ' + selectedJob.location : ''}`;
-            state.pending.jobCandidates = [];
-
-            if (state.pending.startDateTime) {
-              const actionPayload: any = {
-                jobId: state.pending.selectedJobId,
-                startDateTime: state.pending.startDateTime,
-                endDateTime: state.pending.endDateTime,
-                _jobLabel: state.pending.selectedJobLabel,
-              };
-              const toolDef = ecoAiTools.scheduleAppointment;
-              const hasPermission = toolDef.requiredPermissions.length === 0 ||
-                toolDef.requiredPermissions.some(perm => can(role, perm));
-              if (!hasPermission) {
-                assistantMessage = `Sorry, your role (${role}) doesn't have permission to schedule appointments.`;
-                clearConvState(conversationId);
-              } else {
-                const displayPayload: any = {
-                  job: state.pending.selectedJobLabel,
-                  when: new Date(state.pending.startDateTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }),
-                };
-                assistantMessage = `Got it — here's the appointment:`;
-                const action = await storage.createEcoAiAction({
-                  conversationId,
-                  tool: 'scheduleAppointment',
-                  payload: actionPayload,
-                  status: 'proposed',
-                  createdById: userId,
-                });
-                proposedActions.push({
-                  id: action.id,
-                  tool: 'scheduleAppointment',
-                  friendlyName: 'Schedule Appointment',
-                  payload: displayPayload,
-                  status: 'proposed',
-                });
-                clearConvState(conversationId);
-              }
-            } else {
-              const jobName = selectedJob.clientName || selectedJob.title;
-              const timeNote = state.pending.time ? ` at ${state.pending.time}` : '';
-              assistantMessage = `Got it — scheduling **${jobName}**${timeNote}. What day works?`;
-              await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-              res.json({ conversationId, assistantMessage, proposedActions: [] });
-              return;
-            }
-          } else {
-            assistantMessage = "I didn't catch which job you meant. Could you reply with the number from the list, or the client name?";
-            await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-            res.json({ conversationId, assistantMessage, proposedActions: [] });
-            return;
+        if (state.pendingIntent === 'schedule') {
+          const handled = await handleScheduleFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
+          if (handled === 'replied') return;
+          if (handled) {
+            assistantMessage = handled;
           }
         }
 
-        else if (state.pendingIntent === 'schedule' && state.pending.selectedJobId && !state.pending.startDateTime) {
-          const dateMatch = msgLower.match(/(tomorrow|today|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
-          if (dateMatch) {
-            state.pending.date = dateMatch[1];
-            const now = new Date();
-            let start = new Date(now);
-            const dayLower = state.pending.date?.toLowerCase();
-            if (dayLower === 'tomorrow') { start.setDate(start.getDate() + 1); }
-            else if (dayLower === 'today') { /* today */ }
-            else if (dayLower && ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].includes(dayLower)) {
-              const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-              const target = dayNames.indexOf(dayLower);
-              const current = start.getDay();
-              let diff = target - current;
-              if (diff <= 0) diff += 7;
-              start.setDate(start.getDate() + diff);
-            }
-            if (state.pending.time) {
-              const tMatch = state.pending.time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-              if (tMatch) {
-                let h = parseInt(tMatch[1]);
-                const m = parseInt(tMatch[2] || '0');
-                if (tMatch[3]?.toLowerCase() === 'pm' && h < 12) h += 12;
-                else if (tMatch[3]?.toLowerCase() === 'am' && h === 12) h = 0;
-                else if (!tMatch[3] && h >= 1 && h <= 6) h += 12;
-                start.setHours(h, m, 0, 0);
-              }
-            } else { start.setHours(9, 0, 0, 0); }
-            const end = new Date(start.getTime() + 60 * 60 * 1000);
+        if (!assistantMessage) {
+          const hasScheduleIntent = isScheduleIntent(msgLower) || isEstimateScheduleIntent(msgLower);
 
-            const actionPayload: any = {
-              jobId: state.pending.selectedJobId,
-              startDateTime: start.toISOString(),
-              endDateTime: end.toISOString(),
-              _jobLabel: state.pending.selectedJobLabel,
-            };
+          if (hasScheduleIntent) {
+            const state = getConvState(conversationId);
+            state.pendingIntent = 'schedule';
+            state.draft = freshDraft();
+            state.candidates = [];
+
+            const nameHint = extractNameHint(userMessage);
+            const time = extractTime(userMessage);
+            const date = extractDate(userMessage);
+            const wantsEstimate = isEstimateScheduleIntent(msgLower);
+
+            if (time) state.draft.time = time;
+            if (date) state.draft.date = date;
+            if (nameHint) state.draft.clientQuery = nameHint;
+
+            if (wantsEstimate) {
+              state.draft.targetType = 'estimate';
+              state.step = 'pickTarget';
+            } else {
+              state.draft.targetType = null;
+              state.step = 'resolveType';
+            }
+
             const toolDef = ecoAiTools.scheduleAppointment;
             const hasPermission = toolDef.requiredPermissions.length === 0 ||
               toolDef.requiredPermissions.some(perm => can(role, perm));
             if (!hasPermission) {
-              assistantMessage = `Sorry, your role (${role}) doesn't have permission to schedule appointments.`;
+              assistantMessage = `Sorry, your role (${role}) doesn't have permission to schedule.`;
               clearConvState(conversationId);
             } else {
-              const displayPayload: any = {
-                job: state.pending.selectedJobLabel,
-                when: start.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }),
-              };
-              assistantMessage = `Perfect — here's the appointment:`;
-              const action = await storage.createEcoAiAction({
-                conversationId,
-                tool: 'scheduleAppointment',
-                payload: actionPayload,
-                status: 'proposed',
-                createdById: userId,
-              });
-              proposedActions.push({
-                id: action.id,
-                tool: 'scheduleAppointment',
-                friendlyName: 'Schedule Appointment',
-                payload: displayPayload,
-                status: 'proposed',
-              });
-              clearConvState(conversationId);
+              const handled = await handleScheduleFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
+              if (handled === 'replied') return;
+              if (handled) assistantMessage = handled;
             }
-          } else {
-            assistantMessage = "I need a day for this appointment — like \"tomorrow\", \"Monday\", or a date like \"3/15\".";
-            await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-            res.json({ conversationId, assistantMessage, proposedActions: [] });
-            return;
           }
-        }
 
-        else {
-          const hasWorkIntent = WORK_INTENTS.some(k => msgLower.includes(k));
+          if (!assistantMessage && !proposedActions.length) {
+            const hasWorkIntent = WORK_INTENTS.some(k => msgLower.includes(k));
 
-          if (hasWorkIntent) {
-            const intent = parseEcoAiIntent(userMessage);
-            if (intent) {
-              console.log(`[eco-ai] intent detected: ${intent.tool}`, intent.payload);
+            if (hasWorkIntent) {
+              const intent = parseEcoAiIntent(userMessage);
+              if (intent) {
+                console.log(`[eco-ai] intent detected: ${intent.tool}`, intent.payload);
 
-              if (intent.tool === 'scheduleAppointment' && !intent.payload.jobId) {
-                const allJobs = await storage.getJobs(companyId);
-                const activeJobs = allJobs.filter((j: any) => j.status === 'pending' || j.status === 'active');
-                let matchedJobs: any[] = [];
-                const clientHint = intent.payload.jobSearchName || '';
-
-                if (clientHint) {
-                  const searchName = clientHint.toLowerCase();
-                  matchedJobs = activeJobs.filter((j: any) =>
-                    (j.clientName && j.clientName.toLowerCase().includes(searchName)) ||
-                    (j.title && j.title.toLowerCase().includes(searchName))
-                  );
-                }
-                if (matchedJobs.length === 0 && intent.payload.jobSearchAddress) {
-                  const searchAddr = intent.payload.jobSearchAddress.toLowerCase();
-                  matchedJobs = activeJobs.filter((j: any) =>
-                    j.location && j.location.toLowerCase().includes(searchAddr)
-                  );
-                }
-
-                const convState = getConvState(conversationId);
-                convState.pendingIntent = 'schedule';
-                convState.pending.time = intent.payload.time;
-                convState.pending.date = intent.payload.date;
-                convState.pending.clientQuery = clientHint;
-
-                if (matchedJobs.length === 1) {
-                  convState.pending.selectedJobId = matchedJobs[0].id;
-                  convState.pending.selectedJobLabel = `${matchedJobs[0].clientName || matchedJobs[0].title}${matchedJobs[0].location ? ' — ' + matchedJobs[0].location : ''}`;
-                  intent.payload.jobId = matchedJobs[0].id;
-                  intent.payload._jobLabel = convState.pending.selectedJobLabel;
-                  intent.missingFields = intent.missingFields.filter(f => !f.includes('job'));
-
-                  if (intent.payload.startDateTime) {
-                    convState.pending.startDateTime = intent.payload.startDateTime;
-                    convState.pending.endDateTime = intent.payload.endDateTime;
-                  } else {
-                    const jobName = matchedJobs[0].clientName || matchedJobs[0].title;
-                    const timeNote = intent.payload.time ? ` at ${intent.payload.time}` : '';
-                    assistantMessage = `Got it — I found the job for **${jobName}**${timeNote}. What day should I schedule this for?`;
-                    await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-                    res.json({ conversationId, assistantMessage, proposedActions: [] });
-                    return;
-                  }
-                } else if (matchedJobs.length > 1) {
-                  const candidates = matchedJobs.slice(0, 5).map((j: any) => ({
-                    id: j.id,
-                    clientName: j.clientName || '',
-                    title: j.title || '',
-                    location: j.location || '',
-                  }));
-                  convState.pending.jobCandidates = candidates;
-                  const searchLabel = clientHint || intent.payload.jobSearchAddress || '';
-                  const list = candidates.map((j, i) =>
-                    `${i + 1}. ${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`
-                  ).join('\n');
-                  assistantMessage = `I found a few jobs for **${searchLabel}**. Which one did you mean?\n\n${list}`;
-                  await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-                  res.json({ conversationId, assistantMessage, proposedActions: [] });
-                  return;
-                } else if (!clientHint && !intent.payload.jobSearchAddress) {
-                  if (activeJobs.length <= 5 && activeJobs.length > 0) {
-                    const candidates = activeJobs.map((j: any) => ({
-                      id: j.id,
-                      clientName: j.clientName || '',
-                      title: j.title || '',
-                      location: j.location || '',
-                    }));
-                    convState.pending.jobCandidates = candidates;
-                    const list = candidates.map((j, i) =>
-                      `${i + 1}. ${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`
-                    ).join('\n');
-                    assistantMessage = `Which job should I schedule?\n\n${list}\n\nJust tell me the name or number.`;
-                  } else {
-                    assistantMessage = "Which job should I schedule? Tell me the client name or address.";
-                  }
-                  await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-                  res.json({ conversationId, assistantMessage, proposedActions: [] });
-                  return;
-                } else {
-                  assistantMessage = `I couldn't find an active job matching "${clientHint || intent.payload.jobSearchAddress}". Could you try a different name?`;
-                  clearConvState(conversationId);
-                  await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-                  res.json({ conversationId, assistantMessage, proposedActions: [] });
-                  return;
-                }
-                delete intent.payload.jobSearchName;
-                delete intent.payload.jobSearchAddress;
-              }
-
-              if (intent.tool === 'sendMessage' && !intent.payload.recipientId && intent.payload.recipientName) {
-                const members = await storage.getCompanyMembers(companyId);
-                const searchName = intent.payload.recipientName.toLowerCase();
-                const matchedMembers: any[] = [];
-                for (const m of members) {
-                  if (m.userId === userId) continue;
-                  const user = await storage.getUser(m.userId);
-                  if (user) {
-                    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim().toLowerCase();
-                    if (fullName.includes(searchName) || (user.firstName && user.firstName.toLowerCase().includes(searchName))) {
-                      matchedMembers.push({ ...m, user });
+                if (intent.tool === 'sendMessage' && !intent.payload.recipientId && intent.payload.recipientName) {
+                  const members = await storage.getCompanyMembers(companyId);
+                  const searchName = intent.payload.recipientName.toLowerCase();
+                  const matchedMembers: any[] = [];
+                  for (const m of members) {
+                    if (m.userId === userId) continue;
+                    const user = await storage.getUser(m.userId);
+                    if (user) {
+                      const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim().toLowerCase();
+                      if (fullName.includes(searchName) || (user.firstName && user.firstName.toLowerCase().includes(searchName))) {
+                        matchedMembers.push({ ...m, user });
+                      }
                     }
                   }
+                  if (matchedMembers.length === 1) {
+                    intent.payload.recipientId = matchedMembers[0].userId;
+                    intent.payload._recipientLabel = `${matchedMembers[0].user.firstName || ''} ${matchedMembers[0].user.lastName || ''}`.trim();
+                    intent.missingFields = intent.missingFields.filter(f => !f.includes('recipient'));
+                  } else if (matchedMembers.length > 1) {
+                    const list = matchedMembers.slice(0, 5).map((m: any, i: number) =>
+                      `${i + 1}. ${m.user.firstName || ''} ${m.user.lastName || ''}`.trim() + ` (${m.role})`
+                    ).join('\n');
+                    return sendReply(`I found multiple people named "${intent.payload.recipientName}". Who did you mean?\n\n${list}`);
+                  } else {
+                    return sendReply(`I couldn't find a team member named "${intent.payload.recipientName}". Could you check the name?`);
+                  }
+                  delete intent.payload.recipientName;
                 }
-                if (matchedMembers.length === 1) {
-                  intent.payload.recipientId = matchedMembers[0].userId;
-                  intent.payload._recipientLabel = `${matchedMembers[0].user.firstName || ''} ${matchedMembers[0].user.lastName || ''}`.trim();
-                  intent.missingFields = intent.missingFields.filter(f => !f.includes('recipient'));
-                } else if (matchedMembers.length > 1) {
-                  const list = matchedMembers.slice(0, 5).map((m: any, i: number) =>
-                    `${i + 1}. ${m.user.firstName || ''} ${m.user.lastName || ''}`.trim() + ` (${m.role})`
-                  ).join('\n');
-                  assistantMessage = `I found multiple people named "${intent.payload.recipientName}". Who did you mean?\n\n${list}`;
-                  await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-                  res.json({ conversationId, assistantMessage, proposedActions: [] });
-                  return;
-                } else {
-                  assistantMessage = `I couldn't find a team member named "${intent.payload.recipientName}". Could you check the name?`;
-                  await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-                  res.json({ conversationId, assistantMessage, proposedActions: [] });
-                  return;
-                }
-                delete intent.payload.recipientName;
-              }
 
-              const toolDef = ecoAiTools[intent.tool];
-              if (!toolDef) {
-                assistantMessage = "I understood your request but that action isn't available yet.";
+                const toolDef = ecoAiTools[intent.tool];
+                if (!toolDef) {
+                  assistantMessage = "I understood your request but that action isn't available yet.";
+                } else {
+                  const hasPermission = toolDef.requiredPermissions.length === 0 ||
+                    toolDef.requiredPermissions.some(perm => can(role, perm));
+                  if (!hasPermission) {
+                    assistantMessage = `Sorry, your role (${role}) doesn't have permission to ${toolDef.friendlyName.toLowerCase()}. Please ask an admin or supervisor.`;
+                  } else if (intent.missingFields.length > 0) {
+                    const friendlyMissing = intent.missingFields.map(f => {
+                      if (f.includes('recipient')) return 'Who should I send this to?';
+                      if (f.includes('message')) return 'What would you like the message to say?';
+                      return f;
+                    });
+                    assistantMessage = `I'd like to help, but I need a bit more info:\n${friendlyMissing.map(f => `• ${f}`).join('\n')}`;
+                  } else {
+                    const displayPayload = { ...intent.payload };
+                    if (displayPayload._recipientLabel) {
+                      displayPayload.to = displayPayload._recipientLabel;
+                      delete displayPayload._recipientLabel;
+                      delete displayPayload.recipientId;
+                    }
+
+                    assistantMessage = `I can ${toolDef.friendlyName.toLowerCase()} with these details:`;
+                    const action = await storage.createEcoAiAction({
+                      conversationId,
+                      tool: intent.tool,
+                      payload: intent.payload,
+                      status: 'proposed',
+                      createdById: userId,
+                    });
+                    proposedActions.push({
+                      id: action.id,
+                      tool: intent.tool,
+                      friendlyName: toolDef.friendlyName,
+                      payload: displayPayload,
+                      status: 'proposed',
+                    });
+                    console.log(`[eco-ai] proposed action: ${intent.tool} id=${action.id}`);
+                    clearConvState(conversationId);
+                  }
+                }
               } else {
-                const hasPermission = toolDef.requiredPermissions.length === 0 ||
-                  toolDef.requiredPermissions.some(perm => can(role, perm));
-                if (!hasPermission) {
-                  assistantMessage = `Sorry, your role (${role}) doesn't have permission to ${toolDef.friendlyName.toLowerCase()}. Please ask an admin or supervisor.`;
-                } else if (intent.missingFields.length > 0) {
-                  const friendlyMissing = intent.missingFields.map(f => {
-                    if (f.includes('job')) return 'Which job should I schedule?';
-                    if (f.includes('recipient')) return 'Who should I send this to?';
-                    if (f.includes('date')) return 'When would you like to schedule it?';
-                    if (f.includes('message')) return 'What would you like the message to say?';
-                    return f;
-                  });
-                  assistantMessage = `I'd like to help, but I need a bit more info:\n${friendlyMissing.map(f => `• ${f}`).join('\n')}`;
-                } else {
-                  const displayPayload = { ...intent.payload };
-                  if (displayPayload._jobLabel) {
-                    displayPayload.job = displayPayload._jobLabel;
-                    delete displayPayload._jobLabel;
-                    delete displayPayload.jobId;
-                  }
-                  if (displayPayload._recipientLabel) {
-                    displayPayload.to = displayPayload._recipientLabel;
-                    delete displayPayload._recipientLabel;
-                    delete displayPayload.recipientId;
-                  }
-                  delete displayPayload.time;
-                  delete displayPayload.date;
-                  if (displayPayload.startDateTime) {
-                    const dt = new Date(displayPayload.startDateTime);
-                    displayPayload.when = dt.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-                    delete displayPayload.startDateTime;
-                    delete displayPayload.endDateTime;
-                  }
-
-                  assistantMessage = `I can ${toolDef.friendlyName.toLowerCase()} with these details:`;
-                  const action = await storage.createEcoAiAction({
-                    conversationId,
-                    tool: intent.tool,
-                    payload: intent.payload,
-                    status: 'proposed',
-                    createdById: userId,
-                  });
-                  proposedActions.push({
-                    id: action.id,
-                    tool: intent.tool,
-                    friendlyName: toolDef.friendlyName,
-                    payload: displayPayload,
-                    status: 'proposed',
-                  });
-                  console.log(`[eco-ai] proposed action: ${intent.tool} id=${action.id}`);
-                  clearConvState(conversationId);
-                }
+                assistantMessage = "I caught that you want to do something work-related, but I need a bit more detail. Could you try rephrasing? For example:\n• \"Create a job for Maria at 22 Bay Ave\"\n• \"Schedule an appointment for Maria tomorrow at 9am\"\n• \"Create client John Smith\"";
               }
             } else {
-              assistantMessage = "I caught that you want to do something work-related, but I need a bit more detail. Could you try rephrasing? For example:\n• \"Create a job for Maria at 22 Bay Ave\"\n• \"Schedule an appointment for Maria tomorrow at 9am\"\n• \"Create client John Smith\"";
+              assistantMessage = generateFriendlyReply(msgLower);
             }
-          } else {
-            assistantMessage = generateFriendlyReply(msgLower);
           }
         }
       }

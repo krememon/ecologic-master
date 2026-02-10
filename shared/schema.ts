@@ -1354,6 +1354,10 @@ export const updateEstimateSchema = z.object({
   notes: z.string().optional(),
   status: z.enum(["draft", "sent", "accepted", "rejected"]).optional(),
   assignedEmployeeIds: z.array(z.string()).optional(),
+  scheduledDate: z.union([z.date(), z.string()]).optional(),
+  scheduledTime: z.string().optional(),
+  scheduledEndTime: z.string().optional(),
+  requestedStartAt: z.union([z.date(), z.string()]).optional(),
   items: z.array(z.object({
     id: z.number().optional(), // Existing item ID for updates
     name: z.string().min(1, "Item name is required"),

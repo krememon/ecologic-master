@@ -1,0 +1,121 @@
+TASK: Focus Eco-Intelligence on scheduling ONLY (jobs + estimates). Implement a single scheduling flow with follow-up questions and strong disambiguation.
+
+GOAL
+Eco-AI can schedule Jobs or Estimates conversationally:
+“Schedule Jennifer for 5 today”
+“Book an estimate for Maria tomorrow at 9”
+“Move John’s job to Friday”
+
+SCOPE (ONLY scheduling)
+- scheduleJobAppointment
+- scheduleEstimateAppointment
+No invoicing, no line items, no job creation flows in this phase.
+
+STATE MODEL
+Add flow state per conversation:
+state = {
+  pendingIntent: null | "schedule",
+  step: null | "resolveType" | "pickTarget" | "askDate" | "askTime" | "askDuration" | "askAssignee" | "askNotes" | "confirm",
+  draft: {
+    targetType: null | "job" | "estimate",
+    jobId: null,
+    estimateId: null,
+    clientQuery: null,
+    startDateTime: null,
+    endDateTime: null,
+    durationMinutes: null,
+    assigneeIds: [],
+    notes: ""
+  },
+  candidates: [] // {type:"job"|"estimate", id, label}
+}
+
+LOGIC
+
+1) Intent detection:
+Trigger schedule flow when message contains:
+schedule, book, set up, appointment, estimate, quote, visit, move to, reschedule
+
+2) Entity extraction from message:
+- clientQuery (name)
+- date (today/tomorrow/weekday)
+- time (5, 5pm, 17:00)
+- type hint:
+  if message contains “estimate” or “quote” -> targetTypeHint="estimate"
+  if message contains “job” or “service” -> targetTypeHint="job"
+
+3) Candidate search:
+If clientQuery exists:
+- Fetch matching accessible Jobs (active) for that clientQuery
+- Fetch matching accessible Estimates (open) for that clientQuery
+- Build candidates list containing ONLY matches
+
+4) Determine targetType:
+- If targetTypeHint exists -> prefer that type
+- Else:
+  - If only jobs found -> targetType="job"
+  - If only estimates found -> targetType="estimate"
+  - If both exist -> ask:
+    “Is this for a Job or an Estimate?”
+
+5) Pick target:
+- If exactly 1 candidate for chosen type -> select automatically (set jobId/estimateId)
+- If multiple candidates -> ask:
+  “I found a few for Jennifer — which one?”
+  List only the matching candidates with numbers.
+
+6) Selection handling:
+If state.candidates exists and user replies "1"/"2" or matches label:
+- select it
+- continue without resetting
+
+7) Ask only missing scheduling slots:
+- If date missing: “What day should I schedule it for?”
+- If time missing: “What time works?”
+- Duration:
+  default durationMinutes:
+    job: 120
+    estimate: 60
+  Ask only if user requests, otherwise keep default and mention it:
+   “I’ll block 1 hour (estimate). Want a different duration?”
+
+8) Assignee step (conditional):
+Only ask if role allows AND (no current crew OR user asked “assign”):
+- “Who should I assign?”
+Options: keep current / none / list techs
+
+9) Notes:
+Ask: “Any notes to add? (or ‘skip’)”
+
+10) Confirmation card:
+Show one clean action card:
+- Type (Job/Estimate)
+- Client + address
+- Date/time + duration
+- Assignee
+- Notes
+Buttons: Confirm / Back / Cancel
+
+11) Execute:
+On Confirm -> POST /api/eco-ai/execute with action.type="scheduleAppointment"
+payload includes:
+- jobId OR estimateId
+- startDateTime/endDateTime
+- assigneeIds
+- notes
+Server enforces RBAC.
+
+UI
+- Keep chat messages normal.
+- Only show the schedule card at confirmation step.
+- Add “Back” support by stepping back one state step.
+
+QA
+- “Schedule Jennifer for 5 today” -> auto-select Jennifer target, build card, confirm works
+- If multiple Jennifers -> show list, replying “1” selects it
+- Never ask for internal IDs
+- Doesn’t reset to generic help mid-flow
+
+DELIVERABLE
+- Scheduling-only conversational flow that feels like ChatGPT
+- Clean disambiguation + slot filling + confirm
