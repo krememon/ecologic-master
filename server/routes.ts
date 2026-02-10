@@ -13291,6 +13291,359 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== Eco-Intelligence AI Routes ==========
+
+  interface EcoAiToolDef {
+    requiredPermissions: Permission[];
+    requiredFields: string[];
+    friendlyName: string;
+    execute: (payload: any, userId: string, companyId: number) => Promise<{ success: boolean; message: string; result?: any }>;
+  }
+
+  const ecoAiTools: Record<string, EcoAiToolDef> = {
+    createClient: {
+      requiredPermissions: ['clients.manage'],
+      requiredFields: ['name'],
+      friendlyName: 'Create Client',
+      execute: async (payload, _userId, companyId) => {
+        const client = await storage.createClient({
+          companyId,
+          name: payload.name,
+          email: payload.email || null,
+          phone: payload.phone || null,
+          address: payload.address || null,
+          notes: payload.notes || null,
+        });
+        return { success: true, message: `Client "${client.name}" created successfully.`, result: { clientId: client.id } };
+      },
+    },
+    createJob: {
+      requiredPermissions: ['jobs.create'],
+      requiredFields: ['title'],
+      friendlyName: 'Create Job',
+      execute: async (payload, _userId, companyId) => {
+        const job = await storage.createJob({
+          companyId,
+          title: payload.title,
+          description: payload.description || null,
+          location: payload.location || null,
+          clientName: payload.clientName || null,
+          status: 'pending',
+          priority: payload.priority || 'medium',
+          startDate: payload.startDate || null,
+          assignedTo: payload.assignedTo || null,
+          scheduledTime: payload.scheduledTime || null,
+        });
+        return { success: true, message: `Job "${job.title}" created successfully.`, result: { jobId: job.id } };
+      },
+    },
+    scheduleAppointment: {
+      requiredPermissions: ['schedule.manage'],
+      requiredFields: ['jobId', 'startDateTime', 'endDateTime'],
+      friendlyName: 'Schedule Appointment',
+      execute: async (payload, _userId, companyId) => {
+        const job = await storage.getJobSecure(payload.jobId, companyId);
+        if (!job) return { success: false, message: 'Job not found or you do not have access.' };
+        const item = await storage.createScheduleItem({
+          companyId,
+          jobId: payload.jobId,
+          startDateTime: new Date(payload.startDateTime),
+          endDateTime: new Date(payload.endDateTime),
+          location: payload.location || job.location || null,
+          notes: payload.notes || null,
+          status: 'scheduled',
+        });
+        return { success: true, message: `Appointment scheduled for "${job.title}".`, result: { scheduleItemId: item.id } };
+      },
+    },
+    sendMessage: {
+      requiredPermissions: [],
+      requiredFields: ['recipientId', 'body'],
+      friendlyName: 'Send Message',
+      execute: async (payload, userId, companyId) => {
+        const conversation = await storage.getOrCreateConversation(userId, payload.recipientId, companyId);
+        const msg = await storage.createConversationMessage({
+          conversationId: conversation.id,
+          senderId: userId,
+          body: payload.body,
+        });
+        return { success: true, message: `Message sent successfully.`, result: { messageId: msg.id, conversationId: conversation.id } };
+      },
+    },
+  };
+
+  function parseEcoAiIntent(message: string): { tool: string; payload: Record<string, any>; missingFields: string[] } | null {
+    const lower = message.toLowerCase();
+
+    if (lower.includes('create client') || lower.includes('new client') || lower.includes('add client')) {
+      const nameMatch = message.match(/(?:for|named?|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+      const payload: Record<string, any> = {};
+      const missing: string[] = [];
+      if (nameMatch) payload.name = nameMatch[1];
+      else missing.push('name');
+      return { tool: 'createClient', payload, missingFields: missing };
+    }
+
+    if (lower.includes('create job') || lower.includes('new job') || lower.includes('create a job') || lower.includes('add job')) {
+      const payload: Record<string, any> = {};
+      const missing: string[] = [];
+      const forMatch = message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+      if (forMatch) payload.clientName = forMatch[1];
+      const atMatch = message.match(/(?:at|@)\s+(.+?)(?:\s+(?:on|for|tomorrow|today|next)|$)/i);
+      if (atMatch) payload.location = atMatch[1].trim();
+      const titleMatch = message.match(/(?:titled?|called|named)\s+"([^"]+)"/i);
+      if (titleMatch) payload.title = titleMatch[1];
+      else if (payload.clientName) payload.title = `Job for ${payload.clientName}`;
+      else missing.push('title');
+      return { tool: 'createJob', payload, missingFields: missing };
+    }
+
+    if (lower.includes('schedule') || lower.includes('appointment') || lower.includes('book')) {
+      const payload: Record<string, any> = {};
+      const missing: string[] = [];
+      const jobMatch = message.match(/job\s*#?\s*(\d+)/i);
+      if (jobMatch) payload.jobId = parseInt(jobMatch[1]);
+      else missing.push('jobId');
+      const timeMatch = message.match(/(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch) payload.time = timeMatch[1];
+      const dateMatch = message.match(/(tomorrow|today|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i);
+      if (dateMatch) payload.date = dateMatch[1];
+      if (!payload.time && !payload.date) missing.push('startDateTime', 'endDateTime');
+      else {
+        const now = new Date();
+        let start = new Date(now);
+        if (payload.date?.toLowerCase() === 'tomorrow') { start.setDate(start.getDate() + 1); }
+        if (payload.time) {
+          const tMatch = payload.time.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+          if (tMatch) {
+            let h = parseInt(tMatch[1]);
+            const m = parseInt(tMatch[2] || '0');
+            if (tMatch[3]?.toLowerCase() === 'pm' && h < 12) h += 12;
+            if (tMatch[3]?.toLowerCase() === 'am' && h === 12) h = 0;
+            start.setHours(h, m, 0, 0);
+          }
+        } else { start.setHours(9, 0, 0, 0); }
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        payload.startDateTime = start.toISOString();
+        payload.endDateTime = end.toISOString();
+      }
+      return { tool: 'scheduleAppointment', payload, missingFields: missing };
+    }
+
+    if (lower.includes('message') || lower.includes('text') || lower.includes('send') || lower.includes('dm')) {
+      const payload: Record<string, any> = {};
+      const missing: string[] = [];
+      const bodyMatch = message.match(/(?:saying|message|:)\s*"?([^"]+)"?$/i);
+      if (bodyMatch) payload.body = bodyMatch[1].trim();
+      else missing.push('body');
+      missing.push('recipientId');
+      return { tool: 'sendMessage', payload, missingFields: missing };
+    }
+
+    return null;
+  }
+
+  app.post('/api/eco-ai/chat', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: 'No company membership' });
+      const companyId = member.companyId;
+      const role = member.role as UserRole;
+
+      const { conversationId: inputConvId, message: userMessage } = req.body;
+      if (!userMessage || typeof userMessage !== 'string') {
+        return res.status(400).json({ message: 'Message is required' });
+      }
+
+      let conversationId = inputConvId;
+      if (!conversationId) {
+        const conv = await storage.createEcoAiConversation({ companyId, createdById: userId, title: null });
+        conversationId = conv.id;
+        console.log(`[eco-ai] New conversation ${conversationId} for user ${userId}`);
+      } else {
+        const existing = await storage.getEcoAiConversation(conversationId, companyId);
+        if (!existing) return res.status(404).json({ message: 'Conversation not found' });
+      }
+
+      await storage.createEcoAiMessage({ conversationId, role: 'user', content: userMessage });
+
+      const intent = parseEcoAiIntent(userMessage);
+      let assistantMessage = '';
+      let proposedActions: any[] = [];
+
+      if (intent) {
+        console.log(`[eco-ai] intent detected: ${intent.tool}`, intent.payload);
+        const toolDef = ecoAiTools[intent.tool];
+        if (!toolDef) {
+          assistantMessage = "I understood your request but that action isn't available yet.";
+        } else {
+          const hasPermission = toolDef.requiredPermissions.length === 0 ||
+            toolDef.requiredPermissions.some(perm => can(role, perm));
+          if (!hasPermission) {
+            assistantMessage = `Sorry, your role (${role}) doesn't have permission to ${toolDef.friendlyName.toLowerCase()}. Please ask an admin or supervisor.`;
+          } else if (intent.missingFields.length > 0) {
+            assistantMessage = `I'd like to help you ${toolDef.friendlyName.toLowerCase()}, but I need a few more details:\n${intent.missingFields.map(f => `• ${f}`).join('\n')}\n\nCould you provide those?`;
+          } else {
+            assistantMessage = `I can ${toolDef.friendlyName.toLowerCase()} with these details:`;
+            const action = await storage.createEcoAiAction({
+              conversationId,
+              tool: intent.tool,
+              payload: intent.payload,
+              status: 'proposed',
+              createdById: userId,
+            });
+            proposedActions.push({
+              id: action.id,
+              tool: intent.tool,
+              friendlyName: toolDef.friendlyName,
+              payload: intent.payload,
+              status: 'proposed',
+            });
+            console.log(`[eco-ai] proposed action: ${intent.tool} id=${action.id}`);
+          }
+        }
+      } else {
+        const greetings = ['hi', 'hello', 'hey', 'help', 'what can you do'];
+        if (greetings.some(g => userMessage.toLowerCase().trim().startsWith(g))) {
+          assistantMessage = `Hi! I'm your Eco-Intelligence assistant. Here's what I can help you with:\n\n• **Create a client** — "Create client John Smith"\n• **Create a job** — "Create a job for Maria at 22 Bay Ave"\n• **Schedule an appointment** — "Schedule job #101 for tomorrow at 9am"\n• **Send a message** — "Message saying: on my way"\n\nJust tell me what you need!`;
+        } else {
+          assistantMessage = `I'm not sure what you'd like to do. Try something like:\n• "Create a job for [client name] at [address]"\n• "Schedule job #[number] for tomorrow at 9am"\n• "Create client [name]"`;
+        }
+      }
+
+      const assistantMsg = await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
+      if (proposedActions.length > 0) {
+        await storage.updateEcoAiActionStatus(proposedActions[0].id, 'proposed');
+        proposedActions[0].messageId = assistantMsg.id;
+      }
+
+      res.json({ conversationId, assistantMessage, proposedActions });
+    } catch (error: any) {
+      console.error('[eco-ai] chat error:', error);
+      res.status(500).json({ message: 'Failed to process message' });
+    }
+  });
+
+  app.post('/api/eco-ai/execute', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: 'No company membership' });
+      const companyId = member.companyId;
+      const role = member.role as UserRole;
+
+      const { actionId } = req.body;
+      if (!actionId) return res.status(400).json({ message: 'actionId is required' });
+
+      const action = await storage.getEcoAiAction(actionId);
+      if (!action) return res.status(404).json({ message: 'Action not found' });
+
+      const conv = await storage.getEcoAiConversation(action.conversationId, companyId);
+      if (!conv) return res.status(404).json({ message: 'Action not found' });
+
+      if (action.status !== 'proposed') {
+        return res.status(400).json({ message: `Action already ${action.status}` });
+      }
+
+      const toolDef = ecoAiTools[action.tool];
+      if (!toolDef) {
+        await storage.updateEcoAiActionStatus(actionId, 'failed', 'Unknown tool');
+        return res.status(400).json({ message: 'Unknown action type' });
+      }
+
+      const hasPermission = toolDef.requiredPermissions.length === 0 ||
+        toolDef.requiredPermissions.some(perm => can(role, perm));
+      if (!hasPermission) {
+        const msg = `Permission denied: your role (${role}) cannot ${toolDef.friendlyName.toLowerCase()}.`;
+        await storage.updateEcoAiActionStatus(actionId, 'rejected', msg);
+        await storage.createEcoAiMessage({ conversationId: action.conversationId, role: 'system', content: msg });
+        console.log(`[eco-ai] execute rejected: permission denied for ${action.tool}`);
+        return res.json({ success: false, assistantMessage: msg });
+      }
+
+      console.log(`[eco-ai] execute authorized: ${action.tool} by ${userId}`);
+      const result = await toolDef.execute(action.payload as any, userId, companyId);
+      const status = result.success ? 'executed' : 'failed';
+      await storage.updateEcoAiActionStatus(actionId, status, result.message);
+      await storage.createEcoAiMessage({ conversationId: action.conversationId, role: 'system', content: result.message });
+      console.log(`[eco-ai] execute result: ${status} — ${result.message}`);
+
+      res.json({ success: result.success, assistantMessage: result.message, result: result.result });
+    } catch (error: any) {
+      console.error('[eco-ai] execute error:', error);
+      res.status(500).json({ message: 'Failed to execute action' });
+    }
+  });
+
+  app.post('/api/eco-ai/cancel', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: 'No company membership' });
+      const companyId = member.companyId;
+
+      const { actionId } = req.body;
+      if (!actionId) return res.status(400).json({ message: 'actionId is required' });
+
+      const action = await storage.getEcoAiAction(actionId);
+      if (!action) return res.status(404).json({ message: 'Action not found' });
+
+      const conv = await storage.getEcoAiConversation(action.conversationId, companyId);
+      if (!conv) return res.status(404).json({ message: 'Action not found' });
+
+      if (action.status !== 'proposed') {
+        return res.status(400).json({ message: `Action already ${action.status}` });
+      }
+
+      await storage.updateEcoAiActionStatus(actionId, 'rejected', 'Cancelled by user');
+      await storage.createEcoAiMessage({ conversationId: action.conversationId, role: 'system', content: 'Action cancelled.' });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[eco-ai] cancel error:', error);
+      res.status(500).json({ message: 'Failed to cancel action' });
+    }
+  });
+
+  app.get('/api/eco-ai/conversations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: 'No company membership' });
+
+      const conversations = await storage.getEcoAiConversations(userId, member.companyId);
+      res.json(conversations);
+    } catch (error: any) {
+      console.error('[eco-ai] list conversations error:', error);
+      res.status(500).json({ message: 'Failed to fetch conversations' });
+    }
+  });
+
+  app.get('/api/eco-ai/conversations/:id/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: 'No company membership' });
+      const convId = parseInt(req.params.id);
+
+      const conv = await storage.getEcoAiConversation(convId, member.companyId);
+      if (!conv) return res.status(404).json({ message: 'Conversation not found' });
+
+      const [messages, actions] = await Promise.all([
+        storage.getEcoAiMessages(convId),
+        storage.getEcoAiActionsByConversation(convId),
+      ]);
+
+      res.json({ messages, actions });
+    } catch (error: any) {
+      console.error('[eco-ai] get messages error:', error);
+      res.status(500).json({ message: 'Failed to fetch messages' });
+    }
+  });
+
+  // ========== End Eco-Intelligence AI Routes ==========
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

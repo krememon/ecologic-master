@@ -1,0 +1,137 @@
+PROJECT: EcoLogic — Make Eco-Intelligence functional (Chat + Actions) with RBAC + Confirm-to-Execute.
+
+PRIMARY GOAL
+Replace the “Coming Soon” placeholder in Eco-Intelligence with a working chat that can:
+1) Chat normally (assistant replies)
+2) Propose actions (tool calls) like:
+   - Create Job
+   - Create Client
+   - Schedule Appointment
+   - Send DM message
+3) Require user confirmation before executing any DB write
+4) Enforce RBAC + job access on every action
+
+NON-NEGOTIABLES
+- Do NOT break auth/session, header, notifications, existing pages.
+- “Hidden not disabled”: AI must only see what user can see.
+- No DB writes until user taps Confirm.
+- Add targeted logs only.
+- Use existing DB patterns + helpers already in the codebase.
+
+PHASE 1 — UI: Real Chat + Action Cards
+1) Find Eco-Intelligence panel/page component (the one showing Coming Soon).
+2) Replace placeholder with:
+   - Message list (user + assistant bubbles)
+   - Input box pinned at bottom (Enter to send)
+   - Typing state
+   - “Proposed Actions” cards when assistant returns actions
+     Each action card shows:
+       - Action type title (Create Job / Schedule / Send Message)
+       - A short summary sentence
+       - Key fields in a tidy list (jobTitle, clientName, dateTime, tech, etc.)
+       - Buttons: Confirm / Cancel
+3) On Confirm:
+   - Call POST /api/eco-ai/execute with the action payload
+   - Append a “System” or assistant message with the result
+   - Trigger any needed UI refresh (e.g., refetch jobs/messages if created)
+
+PHASE 2 — Backend: Chat Endpoint (MVP brain)
+4) Add API route: POST /api/eco-ai/chat
+   Input: { conversationId?, message, context? }
+   Output: { conversationId, assistantMessage, proposedActions: [] }
+
+5) Implement a simple “MVP intent parser” (NO external AI yet):
+   - If message includes keywords:
+     a) “create job” or “new job” -> propose createJob
+     b) “schedule” -> propose scheduleAppointment
+     c) “message” or “text” -> propose sendMessage
+     d) “create client” -> propose createClient
+   - If required fields are missing, do NOT propose action yet; instead ask follow-up questions.
+   - If enough info exists, return proposedActions with a strict JSON structure.
+
+6) Conversation storage:
+   - Create tables if not exist (or reuse if you already added them):
+     - eco_ai_conversations(id, owner_user_id, created_at)
+     - eco_ai_messages(id, conversation_id, sender, text, created_at)
+     - eco_ai_actions(id, conversation_id, user_id, action_type, action_json, status, created_at)
+   - On every chat request:
+     - Persist user message
+     - Persist assistant message
+     - Persist proposedActions with status="proposed"
+
+PHASE 3 — Backend: Execute Endpoint + Tools + RBAC
+7) Add API route: POST /api/eco-ai/execute
+   Input: { conversationId, action }
+   Output: { success, assistantMessage, result }
+
+8) Tool registry pattern:
+   - Create a tools map, e.g. tools[action.type]
+   - Each tool has:
+     - validate(action)
+     - authorize(user, action)  // RBAC + job access
+     - execute(action)          // DB write
+   - ALWAYS authorize on server even if UI hides options.
+
+9) Implement these tools for MVP:
+   TOOL: createClient
+     - Creates a client record
+     - Authorize: Owner/Admin, Dispatcher, Supervisor (Estimator optional if your rules allow)
+
+   TOOL: createJob
+     - Creates a job linked to a client
+     - Authorize: Owner/Admin, Dispatcher, Supervisor, Estimator (Technician should NOT create jobs unless you explicitly allow)
+
+   TOOL: scheduleAppointment
+     - Creates a schedule entry linked to job/client
+     - Authorize: Owner/Admin, Dispatcher, Supervisor (Technician only if allowed for assigned jobs)
+
+   TOOL: sendMessage (DM)
+     - Creates a DM message to a user/crew
+     - Authorize: any authenticated user, but must validate recipients based on existing DM rules
+
+10) “Hidden not disabled” data access:
+   - If tool needs a job/client, fetch it using existing access filters:
+     - Technician only assigned jobs
+     - Estimator only allowed jobs
+     - Dispatcher broad jobs
+   - If not accessible, return success=false with assistantMessage explaining permissions.
+
+11) After execute:
+   - Update eco_ai_actions status to "executed" or "rejected"
+   - Persist an assistant message summarizing what happened
+
+PHASE 4 — UX polish
+12) Add a small “Context” strip above the input (optional but recommended):
+   - Active Job (search + select)
+   - Active Client (search + select)
+   - When set, include in /chat calls: context:{ jobId, clientId }
+   - The MVP parser can use context to fill missing fields.
+
+13) Add sensible empty states:
+   - First open: assistant greets user with examples:
+     “Try: ‘Create a job for Maria at 22 Bay Ave’”
+     “Try: ‘Schedule Job 1045 for tomorrow at 9am’”
+     “Try: ‘Message the assigned tech: on my way’”
+
+LOGGING / DEBUG
+- Add minimal logs:
+  [eco-ai] chat intent detected:
+  [eco-ai] proposed action:
+  [eco-ai] execute authorized:
+  [eco-ai] execute result:
+- Do not spam logs.
+
+ACCEPTANCE TESTS
+- User can send a message and see assistant reply.
+- If user types “Create a job for Maria Lopez at 22 Bay Ave”, assistant proposes createClient (if missing) then createJob.
+- Confirm executes and job appears in Jobs list after refresh.
+- Tech role cannot create a job if RBAC disallows; assistant explains why.
+- No DB writes occur without Confirm.
+- No breaking changes elsewhere.
+
+DELIVERABLES
+- Working Eco-Intelligence UI
+- /api/eco-ai/chat and /api/eco-ai/execute implemented
+- Tool registry + 4 tools
+- Conversation + action logging tables
+- RBAC enforced
