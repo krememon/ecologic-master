@@ -1,0 +1,144 @@
+Replit Agent Prompt — Implement Plaid (Sandbox first) in EcoLogic
+
+Goal
+- Integrate Plaid Link into EcoLogic (sandbox first) so a logged-in user can connect a bank account.
+- Must follow EcoLogic principles: “hidden not disabled”, RBAC-safe, no breaking existing auth or routes.
+- Do NOT touch unrelated onboarding pages or global sign-in UI. Only add Plaid integration files/routes/components.
+- Save Plaid tokens securely (DB field + encryption at rest if we already have an encryption helper; if not, implement a minimal encryption helper using NODE crypto with an env key).
+
+Assumptions
+- Secrets are already set in Replit:
+  PLAID_CLIENT_ID
+  PLAID_SECRET   (sandbox secret for now)
+  PLAID_ENV=sandbox
+
+Step 0 — Dependencies
+1) Install backend Plaid SDK:
+   - npm install plaid
+2) Install frontend Plaid Link:
+   - npm install react-plaid-link
+
+Step 1 — Backend: Plaid client service
+Create file: server/services/plaid.js
+
+Use Plaid v2020 style:
+- import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+- basePath = PlaidEnvironments[process.env.PLAID_ENV || "sandbox"]
+- headers include PLAID-CLIENT-ID and PLAID-SECRET from env
+Export: plaidClient
+
+Step 2 — Backend: DB fields for Plaid
+Add columns to the user table (or whichever table stores the account owner / user):
+- plaid_item_id (text, nullable)
+- plaid_access_token_encrypted (text, nullable)
+- plaid_connected_at (timestamp, nullable)
+
+If migrations exist, create a migration. If not, apply with the project’s current DB init pattern.
+
+Encryption:
+- If project already has an encryption helper, use it.
+- If not, implement server/utils/crypto.js using Node’s crypto:
+  - env key: ENCRYPTION_KEY (32 bytes base64 or hex; support either)
+  - AES-256-GCM with random iv
+  - functions: encrypt(text) => base64 payload, decrypt(payload) => text
+If ENCRYPTION_KEY is missing, log a clear startup warning and refuse to store tokens (return 500 with message). Do NOT store access tokens unencrypted.
+
+Step 3 — Backend: Plaid routes
+Create file: server/routes/plaid.js
+
+Routes (all require existing auth middleware, do not invent a new auth system):
+- Use whatever EcoLogic currently uses (examples: requireAuth, ensureAuth, authenticateUser). Find the existing middleware used on protected routes like /api/jobs, /api/documents.
+- The routes:
+
+POST /api/plaid/create-link-token
+- Uses req.user.id (or whichever user id is available in auth context)
+- Call plaidClient.linkTokenCreate with:
+  user: { client_user_id: String(userId) }
+  client_name: "EcoLogic"
+  products: ["auth", "transactions"]  (keep minimal)
+  country_codes: ["US"]
+  language: "en"
+  redirect_uri: ONLY if the app uses a redirect-based Link flow (otherwise omit)
+- Return: { link_token }
+
+POST /api/plaid/exchange-public-token
+- Body: { public_token }
+- Call plaidClient.itemPublicTokenExchange
+- Receive: access_token, item_id
+- Encrypt access_token and store:
+  plaid_access_token_encrypted
+  plaid_item_id
+  plaid_connected_at = now()
+- Return: { success: true }
+
+GET /api/plaid/status
+- Returns { connected: boolean, connected_at }
+- connected = whether user has plaid_item_id + token
+
+POST /api/plaid/disconnect
+- Clears plaid_item_id, plaid_access_token_encrypted, plaid_connected_at
+- Optional: call plaidClient.itemRemove using decrypted token before clearing, if possible (do it if decrypt/encryption key present)
+- Return { success: true }
+
+Also add basic server-side validation + error handling.
+Add minimal logs (one per route failure) but do not spam.
+
+Register routes in server entry:
+- app.use("/api/plaid", plaidRoutes)
+
+Step 4 — Frontend: UI placement (Settings → Billing)
+Add a “Bank Connection” card/section in the most appropriate existing page:
+- Prefer: Settings → Billing page (or Payments settings page)
+- Must match EcoLogic UI style (modern SaaS, tight spacing, same card components)
+- Must be hidden-not-disabled based on RBAC:
+  - Only Owner/Admin should see the bank connect section (if RBAC exists at UI level).
+  - If RBAC helper exists, use it; otherwise check role from current user context.
+
+UI requirements:
+- Show status pill: “Connected” (green) or “Not connected” (gray)
+- Button:
+  - If not connected: “Connect bank”
+  - If connected: “Disconnect”
+- When connecting: open Plaid Link modal
+- After success: call exchange endpoint, then refresh status without full page refresh.
+
+Frontend implementation:
+- Create component: src/components/plaid/ConnectBankCard.jsx
+- Use react-plaid-link:
+  - Fetch link_token from POST /api/plaid/create-link-token
+  - onSuccess(public_token): POST /api/plaid/exchange-public-token
+- Add status fetch:
+  - GET /api/plaid/status on mount and after connect/disconnect
+
+Networking:
+- Use existing API helper (axios/fetch wrapper) already used in EcoLogic.
+- Handle 401 by showing “Please sign in” or redirect to login (use existing pattern).
+
+Step 5 — Testing checklist
+After implementation, test in sandbox:
+1) Log in as Owner/Admin
+2) Go to Settings → Billing
+3) See “Bank Connection” card
+4) Click Connect bank → Plaid Link opens
+5) Use Plaid sandbox credentials; complete flow
+6) Confirm status becomes Connected without refresh
+7) Click Disconnect → status returns to Not connected
+8) Confirm DB fields updated accordingly
+
+Deliverables
+- New files:
+  - server/services/plaid.js
+  - server/routes/plaid.js
+  - server/utils/crypto.js (if needed)
+  - src/components/plaid/ConnectBankCard.jsx
+- Updated:
+  - server entry file to register /api/plaid
+  - DB schema/migration for plaid fields
+  - Settings/Billing page to render ConnectBankCard for Owner/Admin only
+- No regressions: Jobs, Documents, Messaging, RBAC visibility, onboarding pages must remain unchanged.
+
+Notes
+- Keep PLAID_ENV=sandbox for now.
+- Do NOT hardcode secrets.
+- Do NOT store access_token plaintext.
+- If the project cannot easily add encryption, stop and implement encryption first, then continue.
