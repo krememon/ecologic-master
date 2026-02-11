@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
-import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
+import { AuthHeader } from "@/components/AuthHeader";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function ResetPassword() {
@@ -141,13 +141,7 @@ export default function ResetPassword() {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6">
         <div className="w-full max-w-md mx-auto p-8 text-center">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full overflow-hidden bg-white shadow-lg">
-            <img 
-              src={logoImage} 
-              alt="EcoLogic Logo" 
-              className="w-full h-full object-cover"
-            />
-          </div>
+          <AuthHeader />
           <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
             <svg className="w-8 h-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -173,22 +167,7 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6">
       <div className="w-full max-w-md mx-auto p-8">
-        {/* Logo and Branding */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full overflow-hidden bg-white shadow-lg">
-            <img 
-              src={logoImage} 
-              alt="EcoLogic Logo" 
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2" style={{ letterSpacing: '0.1em' }}>
-            ECOLOGIC
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm">
-            Set Your New Password
-          </p>
-        </div>
+        <AuthHeader />
 
         {/* Reset Password Form */}
         <form onSubmit={handleSubmit} className="space-y-4">

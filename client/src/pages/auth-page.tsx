@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, LogIn, Zap, Shield, Users, BarChart3 } from "lucide-react";
+import { LogIn, Zap, Shield, Users, BarChart3 } from "lucide-react";
+import { AuthHeader } from "@/components/AuthHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
@@ -35,15 +36,7 @@ export default function AuthPage() {
         <div className="flex justify-center">
           <Card className="w-full max-w-md shadow-2xl border-0 bg-white/80 backdrop-blur-sm dark:bg-slate-800/80">
             <CardHeader className="text-center pb-2">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center mb-4">
-                <Building2 className="h-8 w-8 text-white" />
-              </div>
-              <CardTitle className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                Welcome to EcoLogic
-              </CardTitle>
-              <CardDescription className="text-slate-600 dark:text-slate-300">
-                Professional contractor management platform
-              </CardDescription>
+              <AuthHeader />
             </CardHeader>
             <CardContent className="space-y-6">
               <Button
