@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useCan } from "@/hooks/useCan";
 import { apiRequest } from "@/lib/queryClient";
+import { formatCompactCurrency } from "@/lib/utils";
 import { 
   Briefcase, 
   FileText, 
@@ -697,27 +698,28 @@ export default function Home() {
                       <span className="text-sm">Unable to load estimate stats</span>
                     </div>
                   ) : pulseMetrics ? (
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">
-                          Estimates · This Week
-                        </p>
-                        <div className="flex gap-8">
-                          <div>
-                            <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                              ${(pulseMetrics.estimatesCreated7dTotal / 100).toLocaleString()}
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Created</p>
-                          </div>
-                          <div>
-                            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                              ${(pulseMetrics.estimatesWon7dTotal / 100).toLocaleString()}
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Won</p>
-                          </div>
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-4">
+                        Estimates · This Week
+                      </p>
+                      <div className="grid grid-cols-3 items-start gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Created</p>
+                          <p className="font-bold text-slate-900 dark:text-white truncate" style={{ fontSize: 'clamp(20px, 3.2vw, 34px)', fontVariantNumeric: 'tabular-nums' }}>
+                            {formatCompactCurrency(pulseMetrics.estimatesCreated7dTotal / 100)}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Won</p>
+                          <p className="font-bold text-emerald-600 dark:text-emerald-400 truncate" style={{ fontSize: 'clamp(20px, 3.2vw, 34px)', fontVariantNumeric: 'tabular-nums' }}>
+                            {formatCompactCurrency(pulseMetrics.estimatesWon7dTotal / 100)}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-center justify-start">
+                          <WinRateRing percentage={pulseMetrics.estimatesWinRate7d} size={52} />
+                          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1">Win rate</p>
                         </div>
                       </div>
-                      <WinRateRing percentage={pulseMetrics.estimatesWinRate7d} />
                     </div>
                   ) : null}
                 </CardContent>
@@ -959,26 +961,28 @@ function SnapshotRow({
   );
 }
 
-function WinRateRing({ percentage }: { percentage: number | null }) {
+function WinRateRing({ percentage, size = 64 }: { percentage: number | null; size?: number }) {
   if (percentage === null) {
     return (
-      <div className="w-16 h-16 flex items-center justify-center">
+      <div className="flex items-center justify-center" style={{ width: size, height: size }}>
         <span className="text-sm text-slate-400">—</span>
       </div>
     );
   }
 
-  const radius = 28;
-  const strokeWidth = 4;
+  const half = size / 2;
+  const strokeWidth = Math.max(3, size * 0.065);
+  const radius = half - strokeWidth;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const fontSize = size < 56 ? 11 : 14;
 
   return (
-    <div className="relative w-16 h-16">
-      <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90" style={{ width: size, height: size }} viewBox={`0 0 ${size} ${size}`}>
         <circle
-          cx="32"
-          cy="32"
+          cx={half}
+          cy={half}
           r={radius}
           fill="none"
           stroke="currentColor"
@@ -986,8 +990,8 @@ function WinRateRing({ percentage }: { percentage: number | null }) {
           className="text-slate-100 dark:text-slate-800"
         />
         <circle
-          cx="32"
-          cy="32"
+          cx={half}
+          cy={half}
           r={radius}
           fill="none"
           stroke="currentColor"
@@ -999,7 +1003,7 @@ function WinRateRing({ percentage }: { percentage: number | null }) {
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+        <span className="font-semibold text-slate-700 dark:text-slate-300" style={{ fontSize, fontVariantNumeric: 'tabular-nums' }}>
           {percentage}%
         </span>
       </div>
