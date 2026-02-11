@@ -5,9 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, Building2, LogOut } from "lucide-react";
-import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+
+if (import.meta.env.DEV) {
+  console.log("[onboarding/company] loaded");
+}
 
 const EMPLOYEE_RANGES = [
   { value: "1", label: "Just me (1)" },
@@ -182,11 +185,10 @@ export default function OnboardingCompany() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src={logoImage} alt="EcoLogic" className="w-16 h-16 mx-auto mb-4 rounded-xl" />
-            <h1 className="text-2xl font-bold tracking-wide text-slate-800 dark:text-white">
-              ECOLOGIC
+            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">
+              EcoLogic
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Set up your company</p>
+            <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
           </div>
           
           <div className="mb-6">
