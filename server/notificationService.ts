@@ -10,6 +10,7 @@ type NotificationParams = {
   entityId?: number;
   linkUrl?: string;
   meta?: Record<string, any>;
+  dedupMinutes?: number;
 };
 
 const MANAGER_ROLES = ["OWNER", "SUPERVISOR"];
@@ -38,12 +39,13 @@ export async function notifyUsers(
   const uniqueRecipients = Array.from(new Set(recipientUserIds));
   const notificationsToCreate: InsertNotification[] = [];
 
+  const dedupWindow = params.dedupMinutes ?? 60;
   for (const userId of uniqueRecipients) {
     const existing = await storage.findRecentDuplicateNotification(
       userId,
       params.type,
       params.entityId ?? null,
-      60
+      dedupWindow
     );
     if (!existing) {
       notificationsToCreate.push({

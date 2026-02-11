@@ -1584,7 +1584,10 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "job_rescheduled",
   "job_cancelled",
   "dm_message",
-  "announcement"
+  "announcement",
+  "estimate_approved",
+  "invoice_overdue",
+  "document_uploaded"
 ]);
 
 // Notifications table
@@ -1626,7 +1629,11 @@ export type NotificationType =
   | "missed_clockout"
   | "job_rescheduled"
   | "job_cancelled"
-  | "dm_message";
+  | "dm_message"
+  | "announcement"
+  | "estimate_approved"
+  | "invoice_overdue"
+  | "document_uploaded";
 
 export const refundMethodEnum = pgEnum("refund_method", ["card", "bank", "cash", "check"]);
 export const refundProviderEnum = pgEnum("refund_provider", ["stripe", "plaid", "manual"]);

@@ -5075,6 +5075,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const document = await storage.createDocument(documentData);
+
+      const uploader = await storage.getUser(userId);
+      const uploaderName = uploader ? `${uploader.firstName || ''} ${uploader.lastName || ''}`.trim() || 'Someone' : 'Someone';
+      await notifyJobCrewAndManagers(jobId, company.id, {
+        type: 'document_uploaded',
+        title: 'Document Uploaded',
+        body: `${uploaderName} uploaded "${file.originalname}" to ${job.title || `Job #${jobId}`}`,
+        entityType: 'job',
+        entityId: jobId,
+        linkUrl: `/jobs/${jobId}`,
+      });
+
       res.status(201).json(document);
     } catch (error) {
       console.error("Error uploading job document:", error);
@@ -5217,6 +5229,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       const document = await storage.createDocument(documentData);
+
+      if (jobId) {
+        const uploader = await storage.getUser(userId);
+        const uploaderName = uploader ? `${uploader.firstName || ''} ${uploader.lastName || ''}`.trim() || 'Someone' : 'Someone';
+        const parsedJobId = parseInt(jobId);
+        const job = await storage.getJob(parsedJobId);
+        await notifyJobCrewAndManagers(parsedJobId, company.id, {
+          type: 'document_uploaded',
+          title: 'Document Uploaded',
+          body: `${uploaderName} uploaded "${name || req.file.originalname}" to ${job?.title || `Job #${parsedJobId}`}`,
+          entityType: 'job',
+          entityId: parsedJobId,
+          linkUrl: `/jobs/${parsedJobId}`,
+        });
+      }
+
       res.status(201).json(document);
     } catch (error) {
       console.error("Error uploading document:", error);
@@ -8077,6 +8105,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       console.log(`[Estimates] approved estimateId=${estimateId} userId=${userId} totalCents=${estimate.totalCents} createdJobId=${result.jobId}`);
+
+      const totalDollars = ((estimate.totalCents || 0) / 100).toFixed(2);
+      await notifyManagers(companyId, {
+        type: 'estimate_approved',
+        title: 'Estimate Approved',
+        body: `${estimate.title || `Estimate #${estimate.estimateNumber}`} was approved for $${totalDollars}`,
+        entityType: 'job',
+        entityId: result.jobId,
+        linkUrl: `/jobs/${result.jobId}`,
+      });
+
       res.json({ 
         ...result.approved, 
         jobId: result.jobId, 

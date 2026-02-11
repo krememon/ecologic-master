@@ -6,8 +6,9 @@ import path from "path";
 import fs from "fs";
 import Stripe from "stripe";
 import { db } from "./db";
-import { invoices, payments, customers, companies, jobs } from "../shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { invoices, payments, customers, companies, jobs, notifications } from "../shared/schema";
+import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
+import { notifyManagers } from "./notificationService";
 
 const app = express();
 
@@ -588,5 +589,57 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    startOverdueInvoiceChecker();
   });
 })();
+
+async function checkOverdueInvoices() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const overdueInvoices = await db
+      .select({
+        id: invoices.id,
+        companyId: invoices.companyId,
+        invoiceNumber: invoices.invoiceNumber,
+        amount: invoices.amount,
+        totalCents: invoices.totalCents,
+        dueDate: invoices.dueDate,
+        jobId: invoices.jobId,
+      })
+      .from(invoices)
+      .where(
+        and(
+          lt(invoices.dueDate, today),
+          ne(invoices.status, 'paid'),
+          ne(invoices.status, 'cancelled')
+        )
+      );
+
+    for (const inv of overdueInvoices) {
+      const amountStr = inv.totalCents > 0
+        ? `$${(inv.totalCents / 100).toFixed(2)}`
+        : `$${parseFloat(inv.amount || '0').toFixed(2)}`;
+
+      await notifyManagers(inv.companyId, {
+        type: 'invoice_overdue',
+        title: 'Invoice Overdue',
+        body: `Invoice ${inv.invoiceNumber || `#${inv.id}`} for ${amountStr} is past due`,
+        entityType: 'invoice',
+        entityId: inv.id,
+        linkUrl: inv.jobId ? `/jobs/${inv.jobId}` : undefined,
+        dedupMinutes: 24 * 60,
+      });
+    }
+
+    if (overdueInvoices.length > 0) {
+      console.log(`[Overdue] Checked ${overdueInvoices.length} overdue invoices for notifications`);
+    }
+  } catch (error) {
+    console.error('[Overdue] Error checking overdue invoices:', error);
+  }
+}
+
+function startOverdueInvoiceChecker() {
+  setTimeout(() => checkOverdueInvoices(), 60_000);
+  setInterval(() => checkOverdueInvoices(), 6 * 60 * 60_000);
+}
