@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Building2, Users, HelpCircle, LogOut, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AuthHeader } from "@/components/AuthHeader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -58,7 +57,14 @@ export default function OnboardingChoice() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <AuthHeader />
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold tracking-tight text-black dark:text-white">
+              EcoLogic
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
+              Professional contractor management
+            </p>
+          </div>
           
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6">
             <div className="space-y-4">
