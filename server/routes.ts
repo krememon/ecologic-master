@@ -14130,8 +14130,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let proposedActions: any[] = [];
 
       const sendReply = async (msg: string) => {
-        await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: msg });
-        res.json({ conversationId, assistantMessage: msg, proposedActions: [] });
+        let uiAction: string | undefined;
+        let displayMsg = msg;
+        if (msg === '__OPEN_PRICEBOOK_PICKER__') {
+          uiAction = 'openPricebookPicker';
+          displayMsg = '';
+        }
+        if (displayMsg) {
+          await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: displayMsg });
+        }
+        res.json({ conversationId, assistantMessage: displayMsg, proposedActions: [], uiAction });
       };
 
       if (msgLower === 'cancel' || msgLower === 'never mind' || msgLower === 'nevermind' || msgLower === 'stop') {
@@ -14292,13 +14300,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let uiAction: string | undefined;
       if (assistantMessage === '__OPEN_PRICEBOOK_PICKER__') {
         uiAction = 'openPricebookPicker';
-        assistantMessage = 'Opening Pricebook...';
+        assistantMessage = '';
       }
 
-      const assistantMsg = await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
-      if (proposedActions.length > 0) {
-        await storage.updateEcoAiActionStatus(proposedActions[0].id, 'proposed');
-        proposedActions[0].messageId = assistantMsg.id;
+      if (assistantMessage) {
+        const assistantMsg = await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
+        if (proposedActions.length > 0) {
+          await storage.updateEcoAiActionStatus(proposedActions[0].id, 'proposed');
+          proposedActions[0].messageId = assistantMsg.id;
+        }
       }
 
       res.json({ conversationId, assistantMessage, proposedActions, uiAction });

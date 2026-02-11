@@ -89,7 +89,8 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
       const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: msg });
       const data = await res.json();
       if (data.conversationId) setConversationId(data.conversationId);
-      setMessages(prev => [...prev, { role: "assistant", content: data.assistantMessage }]);
+      const msgText = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
+      if (msgText) setMessages(prev => [...prev, { role: "assistant", content: msgText }]);
       if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
       if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
     } catch {
@@ -114,7 +115,8 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
       });
       const data = await res.json();
       if (data.conversationId) setConversationId(data.conversationId);
-      setMessages(prev => [...prev, { role: "assistant", content: data.assistantMessage }]);
+      const msgText = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
+      if (msgText) setMessages(prev => [...prev, { role: "assistant", content: msgText }]);
       if (data.proposedActions?.length) {
         setActions(prev => [...prev, ...data.proposedActions]);
       }
@@ -364,7 +366,8 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
                       try {
                         const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: "done" });
                         const data = await res.json();
-                        setMessages(prev => [...prev, { role: "assistant", content: data.assistantMessage }]);
+                        const doneMsg = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
+                        if (doneMsg) setMessages(prev => [...prev, { role: "assistant", content: doneMsg }]);
                         if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
                         if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
                       } catch {
