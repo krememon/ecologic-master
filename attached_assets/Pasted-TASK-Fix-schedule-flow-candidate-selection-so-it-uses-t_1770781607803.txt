@@ -1,0 +1,63 @@
+TASK: Fix schedule flow candidate selection so it uses the provided client name (clientQuery) and NEVER falls back to listing all active jobs when a name was provided.
+
+PROBLEM
+User message contains “Schedule Jennifer Pellegrino for 5:00 tomorrow”, but assistant responds with “Which job should I schedule?” and lists unrelated active jobs (Krystal, John, Brennan).
+This means the name filter (clientQuery) is not being applied OR is getting lost before candidate building.
+
+GOAL
+If the user provides a client name:
+- Only search/match jobs/estimates for that name
+- Never list unrelated active jobs
+- If exactly 1 match, confirm it (or auto-select)
+- Only show a list when there are multiple matches for THAT name
+
+IMPLEMENTATION
+
+1) Ensure entity extraction sets:
+   extracted.clientQuery = "Jennifer Pellegrino" (or at least "Jennifer")
+
+2) In scheduleFlowHandler, BEFORE building candidates:
+   if (extracted.clientQuery) {
+     state.draft.clientQuery = extracted.clientQuery
+   }
+
+3) Candidate search must use clientQuery:
+   jobs = searchJobsAccessibleToUser({ q: state.draft.clientQuery }) // name/address match
+   estimates = searchEstimatesAccessibleToUser({ q: state.draft.clientQuery })
+
+4) HARD RULE:
+If state.draft.clientQuery is non-empty:
+- DO NOT fetch “all active jobs”
+- DO NOT show the generic “active jobs” list
+
+Only allow listing “all active jobs” when clientQuery is empty AND no job context exists.
+
+5) After search:
+- If jobs+estimates total == 0:
+   assistant: “I couldn’t find a job/estimate for ‘Jennifer Pellegrino’. Did you mean a different name?”
+   keep pendingIntent=schedule
+- If total == 1:
+   assistant: “Just to confirm — Jennifer Pellegrino (321 Astor Dr)?”
+   quickReplies: Yes/No
+- If total > 1:
+   If user said “job” -> list only job matches
+   If user said “estimate” -> list only estimate matches
+   Else ask “Job or Estimate for Jennifer?” first
+
+6) Fix the message copy:
+Replace “Here are your active jobs:” with:
+“I found these matches for Jennifer:” (only when listing matches)
+
+7) Add debug log:
+[eco-ai] clientQuery=... jobsFound=X estimatesFound=Y
+[eco-ai] usingAllJobsFallback=true/false
+
+QA
+- Input: “Schedule Jennifer Pellegrino for 5:00 tomorrow”
+  Output: confirm Jennifer Pellegrino OR list only Jennifer matches
+  MUST NOT include Krystal/John/Brennan.
+
+DELIVERABLE
+- Name-filtered candidate search
+- Remove all-active-jobs fallback when name exists
+- Proper confirm step for single match

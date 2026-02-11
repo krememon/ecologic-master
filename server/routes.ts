@@ -13593,16 +13593,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   function extractNameHint(message: string): string | null {
-    const namePatterns = [
-      message.match(/(?:schedule|book|appointment|estimate|quote)\s+(?:for\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
-      message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/),
-      message.match(/(?:schedule|book)\s+([A-Z][a-z]+)/),
+    const skipWordsLower = new Set(['monday','tuesday','wednesday','thursday','friday','saturday','sunday','today','tomorrow','job','estimate','quote','the','an','a','at','for','on','in','to','my','me','this','that','next','set','up','put','move','push','it','am','pm','morning','afternoon','evening','night','noon','oclock']);
+    const lower = message.toLowerCase();
+    const triggerRegexes = [
+      /(?:schedule|book|appointment|estimate|quote)\s+(?:for\s+)?/,
+      /(?:for|client)\s+/,
+      /(?:schedule|book|set\s+up)\s+/,
     ];
-    const skipWords = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday','Today','Tomorrow','Job','Estimate','Quote','The','An','A'];
-    for (const m of namePatterns) {
-      if (m) {
-        const candidate = m[1].trim();
-        if (!skipWords.includes(candidate)) return candidate;
+    for (const rx of triggerRegexes) {
+      const m = lower.match(rx);
+      if (m && m.index !== undefined) {
+        const afterTrigger = message.substring(m.index + m[0].length);
+        let nameMatch = afterTrigger.match(/^([A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+)*)/);
+        if (!nameMatch) {
+          nameMatch = afterTrigger.match(/^([a-zA-Z][a-zA-Z'-]+(?:\s+[a-zA-Z][a-zA-Z'-]+)*)/);
+        }
+        if (nameMatch) {
+          const words = nameMatch[1].trim().split(/\s+/);
+          const nameWords = [];
+          for (const w of words) {
+            if (skipWordsLower.has(w.toLowerCase()) || /^\d/.test(w)) break;
+            nameWords.push(w);
+          }
+          if (nameWords.length > 0) {
+            return nameWords.join(' ');
+          }
+        }
       }
     }
     return null;
@@ -13679,6 +13695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function searchTargets(companyId: number, nameHint: string | null, targetType: 'job' | 'estimate' | null): Promise<ScheduleCandidate[]> {
     const results: ScheduleCandidate[] = [];
     const search = nameHint?.toLowerCase() || '';
+    console.log(`[eco-ai] searchTargets: nameHint="${nameHint}" search="${search}" targetType=${targetType} usingAllJobsFallback=${!search}`);
 
     if (targetType !== 'estimate') {
       const allJobs = await storage.getJobs(companyId);
@@ -13774,7 +13791,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return 'replied';
         }
       } else if (draft.clientQuery) {
+        console.log(`[eco-ai] resolveType: searching clientQuery="${draft.clientQuery}" targetType=${draft.targetType}`);
         const matches = await searchTargets(companyId, draft.clientQuery, draft.targetType);
+        console.log(`[eco-ai] resolveType: jobsFound=${matches.filter(m=>m.type==='job').length} estimatesFound=${matches.filter(m=>m.type==='estimate').length}`);
         if (matches.length === 0) {
           await sendReply(`I couldn't find a job or estimate matching "${draft.clientQuery}". Could you try a different name?`);
           clearConvState(conversationId);
@@ -13822,8 +13841,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       } else {
-        draft.targetType = 'job';
-        state.step = 'pickTarget';
+        await sendReply("Which client or job should I schedule? Tell me the name.");
+        return 'replied';
       }
     }
 
@@ -13889,15 +13908,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return 'replied';
         }
       } else {
+        let searchName = draft.clientQuery;
+        if (!searchName) {
+          const rawInput = _userMessage.trim();
+          const looksLikeName = /^[a-zA-Z][a-zA-Z'-]*(\s+[a-zA-Z][a-zA-Z'-]*)*$/.test(rawInput) &&
+            !/^(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|yes|no|skip|cancel|ok|okay|job|estimate|quote|at|for|the|am|pm)$/i.test(rawInput) &&
+            rawInput.length >= 2;
+          if (looksLikeName) {
+            searchName = rawInput;
+            draft.clientQuery = rawInput;
+          }
+        }
+        if (!searchName) {
+          await sendReply("Which client or job should I schedule? Tell me the name.");
+          return 'replied';
+        }
+        console.log(`[eco-ai] pickTarget search: clientQuery="${draft.clientQuery}" targetType=${draft.targetType}`);
         const matches = await searchTargets(companyId, draft.clientQuery, draft.targetType);
+        console.log(`[eco-ai] pickTarget results: jobsFound=${matches.filter(m=>m.type==='job').length} estimatesFound=${matches.filter(m=>m.type==='estimate').length}`);
         if (matches.length === 0) {
           const typeLabel = draft.targetType === 'estimate' ? 'estimate' : 'job';
-          if (draft.clientQuery) {
-            await sendReply(`I couldn't find an active ${typeLabel} matching "${draft.clientQuery}". Could you try a different name?`);
-          } else {
-            await sendReply(`Which ${typeLabel} should I schedule? Tell me the client name.`);
-          }
-          if (draft.clientQuery) clearConvState(conversationId);
+          await sendReply(`I couldn't find an active ${typeLabel} matching "${draft.clientQuery}". Could you try a different name?`);
           return 'replied';
         }
         if (matches.length === 1) {
@@ -13910,10 +13941,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           state.candidates = matches.slice(0, 6);
           const list = state.candidates.map((c, i) => `${i + 1}. ${c.label}${c.type === 'estimate' ? ' (estimate)' : ''}`).join('\n');
           const typeLabel = draft.targetType === 'estimate' ? 'estimate' : 'job';
-          const intro = draft.clientQuery
-            ? `I found a few ${typeLabel}s for **${draft.clientQuery}**. Which one?`
-            : `Which ${typeLabel} should I schedule?`;
-          await sendReply(`${intro}\n\n${list}\n\nJust tell me the name or number.`);
+          await sendReply(`I found a few ${typeLabel}s for **${draft.clientQuery}**. Which one?\n\n${list}\n\nJust tell me the name or number.`);
           return 'replied';
         }
       }
@@ -14140,6 +14168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const time = extractTime(userMessage);
             const date = extractDate(userMessage);
             const wantsEstimate = isEstimateScheduleIntent(msgLower);
+            console.log(`[eco-ai] extractNameHint="${nameHint}" time="${time}" date="${date}" wantsEstimate=${wantsEstimate}`);
 
             if (time) state.draft.time = time;
             if (date) state.draft.date = date;
