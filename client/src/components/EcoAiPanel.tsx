@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Briefcase, UserPlus, Calendar, MessageSquare, Loader2, Search, Plus, Minus, BookOpen, SkipForward, PenLine } from "lucide-react";
+import { Sparkles, Send, Check, X, Briefcase, UserPlus, Calendar, MessageSquare, Loader2, Search, Plus, Minus, BookOpen, SkipForward, PenLine, ThumbsUp, ThumbsDown } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -184,6 +184,16 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
                   part.startsWith("**") && part.endsWith("**")
                     ? <strong key={j}>{part.slice(2, -2)}</strong>
                     : <span key={j}>{part}</span>
+                )}
+                {msg.role === 'assistant' && msg.content.includes('Just to confirm') && i === messages.length - 1 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <button onClick={() => sendQuickMessage("yes")} className="px-3 py-1 text-xs font-medium bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full hover:bg-teal-100 border border-teal-200 dark:border-teal-800 flex items-center gap-1">
+                      <ThumbsUp className="h-3 w-3" /> Yes
+                    </button>
+                    <button onClick={() => sendQuickMessage("no")} className="px-3 py-1 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                      <ThumbsDown className="h-3 w-3" /> No
+                    </button>
+                  </div>
                 )}
                 {msg.role === 'assistant' && msg.content.includes('Pick from Pricebook') && (
                   <div className="flex flex-wrap gap-1.5 mt-2">

@@ -1,0 +1,83 @@
+TASK: Improve scheduling flow to confirm a single match (“Just to confirm…?”) instead of asking “Which job…”, and wire the Pricebook button to open the existing Add Line Items modal.
+
+A) SINGLE-MATCH CONFIRMATION (CRITICAL UX FIX)
+
+PROBLEM
+User typed “Jennifer” but AI still asked “Which job should I schedule?” even though there is only one Jennifer match.
+This feels dumb and repetitive.
+
+GOAL
+If there is exactly ONE matching candidate after name search:
+- Do NOT show a list
+- Ask a confirmation question:
+  “Just to confirm — Jennifer Pellegrino (321 Astor Dr)?”
+- Provide quick replies: Yes / No
+Then proceed.
+
+IMPLEMENTATION
+1) In schedule flow handler, after resolving candidates by name:
+   if (matches.length === 1) {
+     state.step = "confirmSingleMatch"
+     state.draft.selectedTarget = matches[0] // {type, id, label, address}
+     assistantMessage = `Just to confirm — ${labelWithAddress}?`
+     quickReplies = ["Yes", "No"]
+     return
+   }
+
+2) confirmSingleMatch step:
+   - If user says "yes" -> lock selection (jobId/estimateId), move to scope step
+   - If user says "no" -> ask: “Okay — which client/job did you mean?” and show the list.
+
+3) IMPORTANT:
+If the user’s original message included “schedule a job…” treat type as JOB and do not show estimate options.
+
+B) PRICEBOOK BUTTON SHOULD OPEN THE MODAL (UI WIRING FIX)
+
+PROBLEM
+In scope question UI there is a “Pricebook” button, but clicking it does not reliably open the Add Line Items modal.
+
+GOAL
+Clicking “Pricebook” opens the existing “Add Line Items” modal (the one with search + list + Done).
+
+IMPLEMENTATION
+1) Find the scope step UI component that renders:
+   - Pricebook button
+   - New Item button
+   - Skip button
+
+2) On Pricebook click:
+   - setShowLineItemsModal(true)
+   - open the existing AddLineItems modal component
+
+3) Ensure modal uses the correct data source:
+   - Search pricebook items
+   - Selecting an item adds it to draft.lineItems
+   - Clicking Done closes modal and returns to chat
+   - After closing, assistant says:
+     “Got it — added X line item(s). Anything else?” with buttons:
+       Add more / Continue
+
+4) Make sure the modal can be opened from Eco-Intelligence without breaking other pages.
+   Prefer using a shared modal component if it already exists.
+
+C) TYPE-AWARE DISAMBIGUATION (MINOR BUT IMPORTANT)
+If user says “schedule a job for Jennifer”
+- prioritize JOB matches only
+- do not ask job vs estimate
+If user says “estimate” or “quote”
+- prioritize ESTIMATE matches only
+Only ask job vs estimate when user did not specify and both exist.
+
+QA
+- “schedule a job for Jennifer at 5” -> if single match:
+  Assistant: “Just to confirm — Jennifer Pellegrino (321 Astor Dr)?”
+  User: “Yes”
+  Assistant: “What’s the scope of work?” (Pricebook opens modal)
+- Pricebook button always opens Add Line Items modal
+- No “Which job should I schedule?” when single match exists
+- Lists only appear when multiple matches exist
+
+DELIVERABLE
+- confirmSingleMatch step + Yes/No quick replies
+- Pricebook button wired to open Add Line Items modal
+- Type-aware matching (job vs estimate)

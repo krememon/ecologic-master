@@ -13318,7 +13318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   interface EcoAiConvState {
     pendingIntent: 'schedule' | null;
-    step: 'resolveType' | 'pickTarget' | 'askScope' | 'askDate' | 'askTime' | 'confirm' | null;
+    step: 'resolveType' | 'confirmSingleMatch' | 'pickTarget' | 'askScope' | 'askDate' | 'askTime' | 'confirm' | null;
     draft: ScheduleDraft;
     candidates: ScheduleCandidate[];
     candidatesByType?: { jobs: ScheduleCandidate[]; estimates: ScheduleCandidate[] };
@@ -13736,10 +13736,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return 'replied';
           }
           if (typed.length === 1) {
-            draft.targetId = typed[0].id;
-            draft.targetLabel = typed[0].label;
-            state.candidates = [];
-            state.step = 'askDate';
+            state.step = 'confirmSingleMatch';
+            state.candidates = [typed[0]];
+            const loc = typed[0].location ? ` (${typed[0].location})` : '';
+            await sendReply(`Just to confirm — **${typed[0].clientName || typed[0].label}**${loc}?`);
+            return 'replied';
           } else {
             state.candidates = typed;
             const list = typed.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
@@ -13756,10 +13757,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return 'replied';
           }
           if (typed.length === 1) {
-            draft.targetId = typed[0].id;
-            draft.targetLabel = typed[0].label;
-            state.candidates = [];
-            state.step = 'askDate';
+            state.step = 'confirmSingleMatch';
+            state.candidates = [typed[0]];
+            const loc = typed[0].location ? ` (${typed[0].location})` : '';
+            await sendReply(`Just to confirm — **${typed[0].clientName || typed[0].label}**${loc}?`);
+            return 'replied';
           } else {
             state.candidates = typed;
             const list = typed.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
@@ -13772,31 +13774,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return 'replied';
         }
       } else if (draft.clientQuery) {
-        const matches = await searchTargets(companyId, draft.clientQuery, null);
+        const matches = await searchTargets(companyId, draft.clientQuery, draft.targetType);
         if (matches.length === 0) {
           await sendReply(`I couldn't find a job or estimate matching "${draft.clientQuery}". Could you try a different name?`);
           clearConvState(conversationId);
           return 'replied';
         }
-        const jobMatches = matches.filter(m => m.type === 'job');
-        const estMatches = matches.filter(m => m.type === 'estimate');
-        if (jobMatches.length > 0 && estMatches.length === 0) {
-          draft.targetType = 'job';
-          state.step = 'pickTarget';
-        } else if (estMatches.length > 0 && jobMatches.length === 0) {
-          draft.targetType = 'estimate';
+        if (draft.targetType) {
+          if (matches.length === 1) {
+            state.step = 'confirmSingleMatch';
+            state.candidates = [matches[0]];
+            const loc = matches[0].location ? ` (${matches[0].location})` : '';
+            await sendReply(`Just to confirm — **${matches[0].clientName || matches[0].label}**${loc}?`);
+            return 'replied';
+          }
           state.step = 'pickTarget';
         } else {
-          state.candidatesByType = {
-            jobs: jobMatches.slice(0, 4),
-            estimates: estMatches.slice(0, 4),
-          };
-          await sendReply(`Would you like to schedule a Job or an Estimate for ${draft.clientQuery}?`);
-          return 'replied';
+          const jobMatches = matches.filter(m => m.type === 'job');
+          const estMatches = matches.filter(m => m.type === 'estimate');
+          if (jobMatches.length > 0 && estMatches.length === 0) {
+            draft.targetType = 'job';
+            if (jobMatches.length === 1) {
+              state.step = 'confirmSingleMatch';
+              state.candidates = [jobMatches[0]];
+              const loc = jobMatches[0].location ? ` (${jobMatches[0].location})` : '';
+              await sendReply(`Just to confirm — **${jobMatches[0].clientName || jobMatches[0].label}**${loc}?`);
+              return 'replied';
+            }
+            state.step = 'pickTarget';
+          } else if (estMatches.length > 0 && jobMatches.length === 0) {
+            draft.targetType = 'estimate';
+            if (estMatches.length === 1) {
+              state.step = 'confirmSingleMatch';
+              state.candidates = [estMatches[0]];
+              const loc = estMatches[0].location ? ` (${estMatches[0].location})` : '';
+              await sendReply(`Just to confirm — **${estMatches[0].clientName || estMatches[0].label}**${loc}?`);
+              return 'replied';
+            }
+            state.step = 'pickTarget';
+          } else {
+            state.candidatesByType = {
+              jobs: jobMatches.slice(0, 4),
+              estimates: estMatches.slice(0, 4),
+            };
+            await sendReply(`Would you like to schedule a Job or an Estimate for ${draft.clientQuery}?`);
+            return 'replied';
+          }
         }
       } else {
         draft.targetType = 'job';
         state.step = 'pickTarget';
+      }
+    }
+
+    if (state.step === 'confirmSingleMatch') {
+      const yes = /\b(yes|yeah|yep|yup|correct|right|that's? (?:it|right|the one)|confirm|si|ok|okay|sure)\b/i.test(msgLower);
+      const no = /\b(no|nope|nah|wrong|not (?:that|right)|different)\b/i.test(msgLower);
+      if (yes && state.candidates.length === 1) {
+        const match = state.candidates[0];
+        draft.targetType = match.type;
+        draft.targetId = match.id;
+        draft.targetLabel = match.label;
+        state.candidates = [];
+        state.step = 'askScope';
+      } else if (no) {
+        state.candidates = [];
+        const preservedType = draft.targetType;
+        state.step = 'pickTarget';
+        const matches = await searchTargets(companyId, draft.clientQuery, preservedType);
+        if (matches.length > 1) {
+          state.candidates = matches.slice(0, 6);
+          const list = state.candidates.map((c, i) => `${i + 1}. ${c.label}${c.type === 'estimate' ? ' (estimate)' : ''}`).join('\n');
+          await sendReply(`Okay, which one did you mean?\n\n${list}`);
+          return 'replied';
+        } else {
+          await sendReply("Okay — which client or job should I schedule? Tell me the name.");
+          draft.clientQuery = null;
+          return 'replied';
+        }
+      } else {
+        await sendReply("Just reply **Yes** or **No** to confirm.");
+        return 'replied';
       }
     }
 
@@ -13843,9 +13901,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return 'replied';
         }
         if (matches.length === 1) {
-          draft.targetId = matches[0].id;
-          draft.targetType = matches[0].type;
-          draft.targetLabel = matches[0].label;
+          state.step = 'confirmSingleMatch';
+          state.candidates = [matches[0]];
+          const loc = matches[0].location ? ` (${matches[0].location})` : '';
+          await sendReply(`Just to confirm — **${matches[0].clientName || matches[0].label}**${loc}?`);
+          return 'replied';
         } else {
           state.candidates = matches.slice(0, 6);
           const list = state.candidates.map((c, i) => `${i + 1}. ${c.label}${c.type === 'estimate' ? ' (estimate)' : ''}`).join('\n');
@@ -14085,9 +14145,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (date) state.draft.date = date;
             if (nameHint) state.draft.clientQuery = nameHint;
 
+            const wantsJob = /\b(job|service|work order)\b/i.test(msgLower) && !wantsEstimate;
             if (wantsEstimate) {
               state.draft.targetType = 'estimate';
               state.step = 'pickTarget';
+            } else if (wantsJob) {
+              state.draft.targetType = 'job';
+              state.step = 'resolveType';
             } else {
               state.draft.targetType = null;
               state.step = 'resolveType';
