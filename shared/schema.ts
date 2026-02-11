@@ -1670,10 +1670,12 @@ export const plaidAccounts = pgTable("plaid_accounts", {
   entityType: varchar("entity_type").notNull(), // company | customer
   entityId: integer("entity_id").notNull(),
   plaidAccessToken: text("plaid_access_token"),
+  plaidItemId: varchar("plaid_item_id"),
   plaidAccountId: varchar("plaid_account_id"),
   institutionName: varchar("institution_name"),
   maskLast4: varchar("mask_last4"),
   status: varchar("status").notNull().default("active"), // active | disabled
+  connectedAt: timestamp("connected_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

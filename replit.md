@@ -81,6 +81,7 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
   - Clickable unsubscribe link in email footer with simple HTML confirmation page
   - Automatic filtering of opted-out recipients (emailOptIn/smsOptIn + unsubscribedAt checks)
   - Token verification includes company ownership check for cross-tenant security
+- **Plaid Bank Connection**: Owner-only Plaid Link integration for connecting company bank accounts. Features sandbox-first setup, encrypted token storage (AES-256-GCM via ENCRYPTION_KEY), link token creation, public token exchange, connection status, and disconnect with Plaid item removal. RBAC enforced server-side (Owner only). UI card in Settings page showing connection status with institution name and last-4 mask.
 - **Security Hardening**: Comprehensive cross-tenant data isolation to prevent IDOR vulnerabilities. Features:
   - Centralized security infrastructure (`server/security/permissions.ts`, `server/security/middleware.ts`) for consistent RBAC and UserContext handling
   - Company-scoped secure storage methods (`getJobSecure`, `getInvoiceSecure`, `getDocumentSecure`, `getCustomerSecure`, `getEstimateSecure`, `getClientSecure`) that enforce company ownership verification via AND clauses

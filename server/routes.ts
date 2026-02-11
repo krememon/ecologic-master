@@ -46,7 +46,10 @@ import {
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import Stripe from "stripe";
-import { invoices, payments } from "../shared/schema";
+import { invoices, payments, plaidAccounts } from "../shared/schema";
+import { plaidClient } from "./services/plaid";
+import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
+import { Products, CountryCode } from "plaid";
 
 // Initialize Stripe only if secret key is available and valid
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
@@ -13307,6 +13310,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // ============ PLAID BANK CONNECTION API ============
+
+  const exchangeTokenSchema = z.object({
+    public_token: z.string().min(1),
+    institution: z.object({ name: z.string().optional(), institution_id: z.string().optional() }).optional(),
+    account: z.object({ id: z.string().optional(), mask: z.string().optional() }).optional(),
+  });
+
+  async function requireOwnerRole(req: any, res: any): Promise<{ userId: string; companyId: number } | null> {
+    const userId = getUserId(req.user);
+    const company = await storage.getUserCompany(userId);
+    if (!company) {
+      res.status(403).json({ message: 'No company found' });
+      return null;
+    }
+    const role = await storage.getUserRole(userId, company.id);
+    if (role !== 'OWNER') {
+      res.status(404).json({ message: 'Not found' });
+      return null;
+    }
+    return { userId, companyId: company.id };
+  }
+
+  app.post('/api/plaid/create-link-token', isAuthenticated, async (req: any, res) => {
+    try {
+      const ctx = await requireOwnerRole(req, res);
+      if (!ctx) return;
+      if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
+        return res.status(500).json({ message: 'Plaid is not configured' });
+      }
+      const response = await plaidClient.linkTokenCreate({
+        user: { client_user_id: String(ctx.userId) },
+        client_name: 'EcoLogic',
+        products: [Products.Auth, Products.Transactions],
+        country_codes: [CountryCode.Us],
+        language: 'en',
+      });
+      res.json({ link_token: response.data.link_token });
+    } catch (error: any) {
+      console.error('[Plaid] Error creating link token:', error?.response?.data || error.message);
+      res.status(500).json({ message: 'Failed to create link token' });
+    }
+  });
+
+  app.post('/api/plaid/exchange-public-token', isAuthenticated, async (req: any, res) => {
+    try {
+      const ctx = await requireOwnerRole(req, res);
+      if (!ctx) return;
+      const parsed = exchangeTokenSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: 'Invalid request body', errors: parsed.error.flatten().fieldErrors });
+      }
+      const { public_token, institution, account } = parsed.data;
+      if (!isEncryptionAvailable()) {
+        return res.status(500).json({ message: 'Encryption is not configured. Cannot store bank tokens securely.' });
+      }
+      const exchangeResponse = await plaidClient.itemPublicTokenExchange({ public_token });
+      const accessToken = exchangeResponse.data.access_token;
+      const itemId = exchangeResponse.data.item_id;
+      const encryptedToken = encryptToken(accessToken);
+
+      const existingAccount = await storage.getPlaidAccount(ctx.companyId, 'company', ctx.companyId);
+      if (existingAccount) {
+        await db.update(plaidAccounts)
+          .set({
+            plaidAccessToken: encryptedToken,
+            plaidItemId: itemId,
+            plaidAccountId: account?.id || null,
+            institutionName: institution?.name || null,
+            maskLast4: account?.mask || null,
+            status: 'active',
+            connectedAt: new Date(),
+          })
+          .where(eq(plaidAccounts.id, existingAccount.id));
+      } else {
+        await storage.createPlaidAccount({
+          companyId: ctx.companyId,
+          entityType: 'company',
+          entityId: ctx.companyId,
+          plaidAccessToken: encryptedToken,
+          plaidItemId: itemId,
+          plaidAccountId: account?.id || null,
+          institutionName: institution?.name || null,
+          maskLast4: account?.mask || null,
+          status: 'active',
+          connectedAt: new Date(),
+        });
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[Plaid] Error exchanging token:', error?.response?.data || error.message);
+      res.status(500).json({ message: 'Failed to connect bank account' });
+    }
+  });
+
+  app.get('/api/plaid/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.json({ connected: false });
+      }
+      const role = await storage.getUserRole(userId, company.id);
+      if (role !== 'OWNER') {
+        return res.json({ connected: false });
+      }
+      const account = await storage.getPlaidAccount(company.id, 'company', company.id);
+      if (account && account.plaidItemId && account.plaidAccessToken) {
+        res.json({
+          connected: true,
+          connectedAt: account.connectedAt,
+          institutionName: account.institutionName,
+          maskLast4: account.maskLast4,
+        });
+      } else {
+        res.json({ connected: false });
+      }
+    } catch (error: any) {
+      console.error('[Plaid] Error fetching status:', error.message);
+      res.status(500).json({ message: 'Failed to fetch bank status' });
+    }
+  });
+
+  app.post('/api/plaid/disconnect', isAuthenticated, async (req: any, res) => {
+    try {
+      const ctx = await requireOwnerRole(req, res);
+      if (!ctx) return;
+      const account = await storage.getPlaidAccount(ctx.companyId, 'company', ctx.companyId);
+      if (!account) {
+        return res.json({ success: true });
+      }
+      if (account.plaidAccessToken && isEncryptionAvailable()) {
+        try {
+          const token = decryptToken(account.plaidAccessToken);
+          await plaidClient.itemRemove({ access_token: token });
+        } catch (e: any) {
+          console.error('[Plaid] Error removing item from Plaid:', e.message);
+        }
+      }
+      await storage.updatePlaidAccountStatus(account.id, 'disabled');
+      await db.update(plaidAccounts)
+        .set({
+          plaidAccessToken: null,
+          plaidItemId: null,
+          plaidAccountId: null,
+          connectedAt: null,
+        })
+        .where(eq(plaidAccounts.id, account.id));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('[Plaid] Error disconnecting:', error.message);
+      res.status(500).json({ message: 'Failed to disconnect bank account' });
+    }
+  });
 
   // WebSocket server
   const httpServer = createServer(app);
