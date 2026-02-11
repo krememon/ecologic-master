@@ -50,6 +50,7 @@ import Timesheets from "@/pages/Timesheets";
 import TimeTrackingSettings from "@/pages/TimeTrackingSettings";
 import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
+import FinancialConnections from "@/pages/FinancialConnections";
 import PaymentDetails from "@/pages/payment-details";
 import InvoicePaymentDetails from "@/pages/invoice-payment-details";
 import RefundScreen from "@/pages/refund-screen";
@@ -245,6 +246,7 @@ function AuthenticatedRouter() {
         <Route path="/customize/time-tracking" component={TimeTrackingSettings} />
         <Route path="/customize/quickbooks" component={QuickBooksSettings} />
         <Route path="/customize/email-branding" component={EmailBranding} />
+        <Route path="/customize/financial-connections" component={FinancialConnections} />
         <Route path="/estimates/:id">
           {(params) => <EstimateDetails estimateId={params.id} />}
         </Route>

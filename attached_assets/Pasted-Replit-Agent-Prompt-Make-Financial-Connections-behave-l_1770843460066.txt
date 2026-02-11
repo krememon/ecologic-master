@@ -1,0 +1,46 @@
+Replit Agent Prompt — Make “Financial Connections” behave like other Customize items
+
+Goal
+- Update Customize so “Financial Connections” looks and behaves like the other list items (Company profile, Price book, Taxes, etc.).
+- Instead of showing the Bank Connection card inline, make “Financial Connections” a clickable row that navigates into a detail screen.
+- On the detail screen, render the existing Plaid Connect UI (ConnectBankCard) with the status pill and Connect/Disconnect button.
+- Preserve RBAC: only Owner/Admin can access this page/section. Hidden-not-disabled: if user lacks permission, do not show the row at all.
+
+Implementation steps
+1) Find the Customize list page that renders items like:
+   - Company profile
+   - Price book
+   - Taxes
+   - Time Tracking
+   - QuickBooks
+   - Email Branding
+   and now Financial Connections
+
+2) Replace the current inline render of the Plaid card with a normal list row that matches existing styles:
+   - Left icon (bank/building icon is fine)
+   - Title: “Financial Connections”
+   - Subtitle: “Link your bank account for payments and refunds”
+   - Right chevron arrow
+   - Entire row clickable
+
+3) Add a new route/page that matches the existing pattern used by other Customize sub-pages, for example:
+   - /customize/financial
+   or /customize/financial-connections
+   Use the same layout, header, back button, spacing, and typography as other subpages.
+
+4) Inside that new page, render:
+   - Section header: “Bank Connection”
+   - Then the existing <ConnectBankCard /> component (or the existing bank connect UI)
+   - Keep status + connect/disconnect behavior exactly the same.
+
+5) Confirm:
+   - Customize list stays clean (no separated card under the list)
+   - Clicking “Financial Connections” navigates into the new page
+   - Bank connect still works
+   - RBAC enforced: only Owner/Admin can see/access the page and list item
+   - Do not touch Plaid backend routes or encryption logic
+
+Constraints
+- Do NOT modify onboarding or auth pages.
+- Do NOT change any Plaid API logic; only UI/route organization.
+- Keep styling consistent with the existing Customize list rows and subpages.
