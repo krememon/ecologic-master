@@ -153,7 +153,7 @@ export interface IStorage {
     pendingTotalCents: number;
     completedTotalCents: number;
   }>;
-  getPaymentsStats(companyId: number): Promise<{
+  getPaymentsStats(companyId: number, range?: 'week' | 'month' | 'year'): Promise<{
     thisMonthTotalCents: number;
     stillOwedTotalCents: number;
     paidTodayTotalCents: number;
@@ -730,14 +730,23 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getPaymentsStats(companyId: number): Promise<{
+  async getPaymentsStats(companyId: number, range: 'week' | 'month' | 'year' = 'month'): Promise<{
     thisMonthTotalCents: number;
     stillOwedTotalCents: number;
     paidTodayTotalCents: number;
     overdueCount: number;
   }> {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    let rangeStart: Date;
+    if (range === 'week') {
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+    } else if (range === 'year') {
+      rangeStart = new Date(now.getFullYear(), 0, 1);
+    } else {
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     
@@ -758,7 +767,7 @@ export class DatabaseStorage implements IStorage {
       
       const amountCents = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
       
-      if (paidDate >= startOfMonth) {
+      if (paidDate >= rangeStart) {
         thisMonthTotalCents += amountCents;
       }
       if (paidDate >= startOfDay && paidDate <= endOfDay) {

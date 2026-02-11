@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
+import { formatCompactCurrency } from "@/lib/utils";
 import {
   Receipt,
   ChevronRight,
@@ -12,6 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
+
+type TimeRange = "week" | "month" | "year";
 
 type LedgerItem = {
   invoiceId: number;
@@ -61,13 +64,19 @@ export default function PaymentsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<TimeRange>("month");
 
   const { data: ledgerItems = [], isLoading: ledgerLoading } = useQuery<LedgerItem[]>({
     queryKey: ["/api/payments/ledger"],
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery<StatsData>({
-    queryKey: ["/api/payments/stats"],
+    queryKey: ["/api/payments/stats", timeRange],
+    queryFn: async () => {
+      const res = await fetch(`/api/payments/stats?range=${timeRange}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
   });
 
   const filteredItems = useMemo(() => {
@@ -142,10 +151,17 @@ export default function PaymentsPage() {
     );
   }
 
+  const rangeLabels: Record<TimeRange, string> = { week: "This Week", month: "This Month", year: "This Year" };
+  const timeRangeOptions: { key: TimeRange; label: string }[] = [
+    { key: "week", label: "Week" },
+    { key: "month", label: "Month" },
+    { key: "year", label: "Year" },
+  ];
+
   const scoreboardItems = [
     {
-      label: "This Month",
-      value: formatCents(stats?.thisMonthTotalCents || 0),
+      label: rangeLabels[timeRange],
+      value: formatCompactCurrency((stats?.thisMonthTotalCents || 0) / 100),
       color: "text-slate-900 dark:text-slate-100",
     },
     {
@@ -179,18 +195,36 @@ export default function PaymentsPage() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+        <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">Earnings</span>
+          <div className="bg-slate-100 dark:bg-slate-800/60 rounded-lg p-[2px] flex">
+            {timeRangeOptions.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setTimeRange(opt.key)}
+                className={`text-[11px] font-medium px-3 py-[4px] rounded-md transition-all ${
+                  timeRange === opt.key
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4">
           {scoreboardItems.map((item, i) => (
             <div
               key={item.label}
-              className={`px-5 py-4 border-slate-100 dark:border-slate-800 ${
+              className={`px-5 py-3 border-slate-100 dark:border-slate-800 ${
                 i < 2 ? "border-b lg:border-b-0" : ""
               } ${i % 2 === 0 ? "border-r" : "lg:border-r"} ${i === 3 ? "lg:border-r-0" : ""}`}
             >
               <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
                 {item.label}
               </p>
-              <p className={`text-xl font-bold tracking-tight ${item.color}`}>
+              <p className={`text-xl font-bold tracking-tight ${item.color}`} style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {item.value}
               </p>
             </div>

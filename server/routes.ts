@@ -10209,7 +10209,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Company not found" });
       }
       
-      const stats = await storage.getPaymentsStats(company.id);
+      const range = (req.query.range as string) || 'month';
+      const validRanges = ['week', 'month', 'year'];
+      const safeRange = validRanges.includes(range) ? range as 'week' | 'month' | 'year' : 'month';
+      const stats = await storage.getPaymentsStats(company.id, safeRange);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching payments stats:", error);

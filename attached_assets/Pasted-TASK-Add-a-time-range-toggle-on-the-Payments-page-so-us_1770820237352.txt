@@ -1,0 +1,53 @@
+TASK: Add a time-range toggle on the Payments page so users can switch the “This Month” metric to show “This Week” earnings (and optionally Year).
+
+GOAL
+On Payments page, user can choose:
+- Week
+- Month (default)
+- Year
+and the top-left summary card updates accordingly.
+
+DEFINITION
+“Money made” = total amount PAID (successful payments received) within the selected range.
+Do NOT use invoice totals or “owed”.
+
+UI
+1) Add a segmented control near the page header or above the summary card:
+   [ Week | Month | Year ]
+   Default selected: Month
+2) When selection changes:
+   - Update label in top-left box (THIS WEEK / THIS MONTH / THIS YEAR)
+   - Update value with computed paid total for that range
+
+DATA / LOGIC
+3) Implement helper to compute date range boundaries:
+   - Week: startOfWeek (Mon or Sun—match your app’s calendar standard) to now
+   - Month: startOfMonth to now
+   - Year: startOfYear to now
+
+4) Backend (preferred):
+   Add endpoint:
+   GET /api/payments/summary?range=week|month|year
+   Response:
+   { totalPaid: number, stillOwed: number, paidToday: number, overdueCount: number }
+   - totalPaid uses payment.createdAt (or settledAt if you have it) and status=success
+   - stillOwed, overdueCount can stay same or also become range-aware (optional)
+   - paidToday stays today always
+
+OR Frontend (if you already have all payments loaded):
+   Filter payments array by createdAt within range and sum amounts where status=paid/succeeded.
+
+5) Formatting:
+   Use the same currency formatter as other dashboard stats.
+   (Optional) Use compact formatting (1.2k, 1.2M) if numbers can get big.
+
+QA
+- Switching Week/Month/Year updates only the “money made” box correctly
+- Values match payment list totals
+- No change to existing payment filtering tabs (All/Paid/Unpaid/Partial)
+- No performance issues (debounce or backend summary if dataset is large)
+
+DELIVERABLE
+- Time-range toggle in Payments page
+- Updated “money made” metric to support “this week”
+- Correct totals based on successful payments within selected range
