@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Building2, Users, HelpCircle, LogOut, Loader2 } from "lucide-react";
-import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+if (import.meta.env.DEV) {
+  console.log("[onboarding/choice] loaded");
+}
 
 export default function OnboardingChoice() {
   const [, setLocation] = useLocation();
@@ -59,11 +62,10 @@ export default function OnboardingChoice() {
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src={logoImage} alt="EcoLogic" className="w-16 h-16 mx-auto mb-4 rounded-xl" />
-            <h1 className="text-2xl font-bold tracking-wide text-slate-800 dark:text-white">
-              ECOLOGIC
+            <h1 className="text-4xl font-bold text-slate-800 dark:text-white">
+              EcoLogic
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Welcome! Let's get you set up</p>
+            <p className="text-base text-slate-500 dark:text-slate-400 mt-2">Professional contractor management</p>
           </div>
           
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6">
