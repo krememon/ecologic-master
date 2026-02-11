@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { AuthHeader } from "@/components/AuthHeader";
+import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest } from "@/lib/queryClient";
 import type { UserRole } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue, validatePhone } from "@shared/phoneUtils";
@@ -372,7 +372,25 @@ export default function Auth() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6">
       <div className="w-full max-w-md mx-auto p-8">
         
-        <AuthHeader />
+        {/* Logo and Branding */}
+        <div className="text-center mb-8">
+          <div className="w-24 h-24 mx-auto mb-4 rounded-2xl overflow-hidden shadow-lg">
+            <img 
+              src={logoImage} 
+              alt="EcoLogic Logo" 
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <img 
+              data-testid="ecologic-wordmark"
+              src="/branding/ecologic-wordmark.png" 
+              alt="EcoLogic" 
+              className="h-8 mx-auto mb-1" 
+            />
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            Professional contractor management
+          </p>
+        </div>
 
         {/* Registration Form */}
         <form onSubmit={

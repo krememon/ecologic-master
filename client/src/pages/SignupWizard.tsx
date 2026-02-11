@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { AuthHeader } from "@/components/AuthHeader";
 
 type WizardStep = 
   | "identity" 
@@ -451,7 +450,21 @@ export default function SignupWizard() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
       <div className="flex-1 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <AuthHeader />
+          <div className="text-center mb-8">
+            <h1 
+              className="text-5xl md:text-6xl mx-auto mb-2"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                color: "#0B0B0D",
+              }}
+            >
+              EcoLogic
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Professional contractor management</p>
+          </div>
           
           <div className="mb-6">
             <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">

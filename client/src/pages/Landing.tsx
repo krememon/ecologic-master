@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
-import { AuthHeader } from "@/components/AuthHeader";
+import logoImage from "@assets/IMG_6171 2_1749763982284.jpg";
 import { apiRequest } from "@/lib/queryClient";
 
 export default function Landing() {
@@ -138,7 +138,22 @@ export default function Landing() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6">
       <div className="w-full max-w-sm mx-auto p-8">
         
-        <AuthHeader />
+        {/* Logo and Branding */}
+        <div className="text-center mb-8">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full overflow-hidden bg-white shadow-lg">
+            <img 
+              src={logoImage} 
+              alt="EcoLogic Logo" 
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-2 tracking-wider uppercase">
+            EcoLogic
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 text-sm">
+            Construction Management Platform
+          </p>
+        </div>
 
         {/* Sign In Options */}
         <div className="space-y-4">

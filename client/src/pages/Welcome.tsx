@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
-import { AuthHeader } from "@/components/AuthHeader";
 
 export default function Welcome() {
   const [, setLocation] = useLocation();
@@ -56,7 +55,24 @@ export default function Welcome() {
             transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
-          <AuthHeader />
+          <div className="text-center mb-5">
+            <h1 
+              className="text-5xl md:text-6xl mx-auto"
+              style={{
+                fontFamily: "'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.05,
+                marginBottom: "-2px",
+                color: "#0B0B0D",
+              }}
+            >
+              EcoLogic
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-light mt-1">
+              Professional contractor management
+            </p>
+          </div>
           
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 space-y-4">
             <Button 
