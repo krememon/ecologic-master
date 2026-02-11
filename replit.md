@@ -1,7 +1,7 @@
 # EcoLogic Construction Management Platform
 
 ## Overview
-EcoLogic is a professional construction management platform designed for trade contractors to centralize job management, subcontractor coordination, client communication, and invoicing. It aims to modernize construction workflows, improve project oversight, and enhance stakeholder communication through a real-time, PWA-enabled web application featuring AI-powered scheduling. The project seeks to innovate construction project management using advanced technology and user-centric design.
+EcoLogic is a professional construction management platform designed for trade contractors to centralize job management, subcontractor coordination, client communication, and invoicing. It aims to modernize construction workflows, improve project oversight, and enhance stakeholder communication through a real-time, PWA-enabled web application. The project seeks to innovate construction project management using advanced technology and user-centric design.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -21,7 +21,6 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 **Technical Implementations**:
 - **Authentication**: Supports Replit Auth, email/password, and social logins (Google) with robust session management and atomic session revocation.
 - **Data Management**: PostgreSQL with Drizzle ORM for type-safe operations, implementing multi-tenancy and role-based access control (RBAC).
-- **AI Integration**: Leverages OpenAI API (GPT-4o) for project scoping, material estimation, smart scheduling, and OCR-based invoice scanning. Integrates OpenWeather API for job planning.
 - **Real-time Capabilities**: Utilizes a WebSocket server for live messaging, notifications, and instant job status updates, complemented by service worker-based push notifications.
 - **Messaging System**: A comprehensive two-pane messaging interface with 1:1 conversations, real-time delivery, read receipts, and unread counts, featuring an iOS-style inbox with message previews and guaranteed delivery.
 - **Database Initialization**: Automated constraint enforcement system using PostgreSQL triggers.
@@ -95,8 +94,6 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Database**: PostgreSQL (via Neon serverless)
 - **ORM**: Drizzle ORM
 - **Authentication**: Passport.js strategies, Replit Auth, Google OAuth
-- **AI**: OpenAI API
-- **Weather**: OpenWeather API
 - **Email**: Nodemailer, Resend
 - **SMS**: Twilio
 - **File Uploads**: Multer

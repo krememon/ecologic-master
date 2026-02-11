@@ -23,7 +23,6 @@ import {
 import EcoLogicLogo from "./EcoLogicLogo";
 import { useCan } from "@/hooks/useCan";
 import { GlobalCreateMenu } from "./GlobalCreateMenu";
-import EcoAiPanel, { EcoAiButton } from "./EcoAiPanel";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -70,7 +69,6 @@ interface MobileNavProps {
 export default function MobileNav({ user, company }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [ecoAiOpen, setEcoAiOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const { can, canAny, role } = useCan();
   
@@ -205,7 +203,6 @@ export default function MobileNav({ user, company }: MobileNavProps) {
           <EcoLogicLogo size={32} showText={false} />
           
           <div className="flex items-center gap-1.5">
-            <EcoAiButton onClick={() => setEcoAiOpen(true)} />
             <button
               onClick={() => setNotificationsOpen(true)}
               className="relative w-9 h-9 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -404,7 +401,6 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         </SheetContent>
       </Sheet>
 
-      <EcoAiPanel open={ecoAiOpen} onOpenChange={setEcoAiOpen} />
     </>
   );
 }

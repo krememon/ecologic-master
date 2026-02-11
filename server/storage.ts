@@ -30,9 +30,6 @@ import {
   leads,
   timeLogs,
   notifications,
-  ecoAiConversations,
-  ecoAiMessages,
-  ecoAiActions,
   type User,
   type UpsertUser,
   type Company,
@@ -106,12 +103,6 @@ import {
   type InsertRefund,
   type PlaidAccount,
   type InsertPlaidAccount,
-  type EcoAiConversation,
-  type InsertEcoAiConversation,
-  type EcoAiMessage,
-  type InsertEcoAiMessage,
-  type EcoAiAction,
-  type InsertEcoAiAction,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull } from "drizzle-orm";
@@ -405,16 +396,6 @@ export interface IStorage {
   createPlaidAccount(account: InsertPlaidAccount): Promise<PlaidAccount>;
   updatePlaidAccountStatus(id: number, status: string): Promise<PlaidAccount>;
 
-  // Eco-AI operations
-  createEcoAiConversation(conv: InsertEcoAiConversation): Promise<EcoAiConversation>;
-  getEcoAiConversation(id: number, companyId: number): Promise<EcoAiConversation | undefined>;
-  getEcoAiConversations(userId: string, companyId: number): Promise<EcoAiConversation[]>;
-  createEcoAiMessage(msg: InsertEcoAiMessage): Promise<EcoAiMessage>;
-  getEcoAiMessages(conversationId: number): Promise<EcoAiMessage[]>;
-  createEcoAiAction(action: InsertEcoAiAction): Promise<EcoAiAction>;
-  getEcoAiAction(id: number): Promise<EcoAiAction | undefined>;
-  updateEcoAiActionStatus(id: number, status: string, resultMessage?: string): Promise<EcoAiAction>;
-  getEcoAiActionsByConversation(conversationId: number): Promise<EcoAiAction[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3997,57 +3978,6 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async createEcoAiConversation(conv: InsertEcoAiConversation): Promise<EcoAiConversation> {
-    const [created] = await db.insert(ecoAiConversations).values(conv).returning();
-    return created;
-  }
-
-  async getEcoAiConversation(id: number, companyId: number): Promise<EcoAiConversation | undefined> {
-    const [conv] = await db.select().from(ecoAiConversations)
-      .where(and(eq(ecoAiConversations.id, id), eq(ecoAiConversations.companyId, companyId)));
-    return conv;
-  }
-
-  async getEcoAiConversations(userId: string, companyId: number): Promise<EcoAiConversation[]> {
-    return db.select().from(ecoAiConversations)
-      .where(and(eq(ecoAiConversations.createdById, userId), eq(ecoAiConversations.companyId, companyId)))
-      .orderBy(desc(ecoAiConversations.createdAt));
-  }
-
-  async createEcoAiMessage(msg: InsertEcoAiMessage): Promise<EcoAiMessage> {
-    const [created] = await db.insert(ecoAiMessages).values(msg).returning();
-    return created;
-  }
-
-  async getEcoAiMessages(conversationId: number): Promise<EcoAiMessage[]> {
-    return db.select().from(ecoAiMessages)
-      .where(eq(ecoAiMessages.conversationId, conversationId))
-      .orderBy(ecoAiMessages.createdAt);
-  }
-
-  async createEcoAiAction(action: InsertEcoAiAction): Promise<EcoAiAction> {
-    const [created] = await db.insert(ecoAiActions).values(action).returning();
-    return created;
-  }
-
-  async getEcoAiAction(id: number): Promise<EcoAiAction | undefined> {
-    const [action] = await db.select().from(ecoAiActions).where(eq(ecoAiActions.id, id));
-    return action;
-  }
-
-  async updateEcoAiActionStatus(id: number, status: string, resultMessage?: string): Promise<EcoAiAction> {
-    const updates: any = { status };
-    if (status === 'executed' || status === 'failed') updates.executedAt = new Date();
-    if (resultMessage) updates.resultMessage = resultMessage;
-    const [updated] = await db.update(ecoAiActions).set(updates).where(eq(ecoAiActions.id, id)).returning();
-    return updated;
-  }
-
-  async getEcoAiActionsByConversation(conversationId: number): Promise<EcoAiAction[]> {
-    return db.select().from(ecoAiActions)
-      .where(eq(ecoAiActions.conversationId, conversationId))
-      .orderBy(ecoAiActions.createdAt);
-  }
 }
 
 export const storage = new DatabaseStorage();
