@@ -13312,11 +13312,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     endDateTime: string | null;
     durationMinutes: number | null;
     notes: string | null;
+    scopeItems: { source: 'pricebook' | 'custom'; catalogId?: number; name: string; qty: number; unitPriceCents: number; unit: string }[];
+    scopeSkipped: boolean;
   }
 
   interface EcoAiConvState {
     pendingIntent: 'schedule' | null;
-    step: 'resolveType' | 'pickTarget' | 'askDate' | 'askTime' | 'confirm' | null;
+    step: 'resolveType' | 'pickTarget' | 'askScope' | 'askDate' | 'askTime' | 'confirm' | null;
     draft: ScheduleDraft;
     candidates: ScheduleCandidate[];
     candidatesByType?: { jobs: ScheduleCandidate[]; estimates: ScheduleCandidate[] };
@@ -13325,7 +13327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const ecoAiConvStates = new Map<number, EcoAiConvState>();
 
   function freshDraft(): ScheduleDraft {
-    return { targetType: null, targetId: null, targetLabel: null, clientQuery: null, time: null, date: null, startDateTime: null, endDateTime: null, durationMinutes: null, notes: null };
+    return { targetType: null, targetId: null, targetLabel: null, clientQuery: null, time: null, date: null, startDateTime: null, endDateTime: null, durationMinutes: null, notes: null, scopeItems: [], scopeSkipped: false };
   }
 
   function getConvState(convId: number): EcoAiConvState {
@@ -13455,6 +13457,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           notes: payload.notes || null,
           status: 'scheduled',
         });
+        if (Array.isArray(payload.scopeItems) && payload.scopeItems.length > 0) {
+          for (let i = 0; i < payload.scopeItems.length; i++) {
+            const si = payload.scopeItems[i];
+            const qty = si.qty || 1;
+            const unitPriceCents = si.unitPriceCents || 0;
+            const lineTotalCents = qty * unitPriceCents;
+            await db.insert(jobLineItems).values({
+              jobId: payload.jobId,
+              name: si.name,
+              description: null,
+              quantity: qty.toString(),
+              unitPriceCents,
+              unit: si.unit || 'each',
+              taxable: false,
+              lineTotalCents,
+              taxCents: 0,
+              totalCents: lineTotalCents,
+              sortOrder: i,
+            });
+          }
+        }
         return { success: true, message: `Appointment scheduled for "${job.title}".`, result: { scheduleItemId: item.id } };
       },
     },
@@ -13475,6 +13498,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           scheduledEndTime: endTimeStr,
           requestedStartAt: startDt,
         });
+        if (Array.isArray(payload.scopeItems) && payload.scopeItems.length > 0) {
+          const existingLineItems = (est as any).lineItems || [];
+          const newLineItems = payload.scopeItems.map((si: any) => ({
+            name: si.name,
+            description: '',
+            quantity: si.qty || 1,
+            unitPrice: (si.unitPriceCents || 0) / 100,
+            unit: si.unit || 'each',
+          }));
+          await storage.updateEstimateSecure(payload.estimateId, companyId, {
+            lineItems: [...existingLineItems, ...newLineItems],
+          });
+        }
         return { success: true, message: `Estimate "${est.title}" scheduled.`, result: { estimateId: est.id } };
       },
     },
@@ -13818,6 +13854,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
+    // askScope step - ask about scope of work after target selected
+    if (draft.targetId && !draft.scopeSkipped && state.step !== 'askDate' && state.step !== 'askTime' && state.step !== 'confirm' && (draft.scopeItems.length === 0 || state.step === 'askScope')) {
+      const canEditScope = can(_role, 'schedule.manage');
+      if (!canEditScope) {
+        draft.scopeSkipped = true;
+      } else if (state.step !== 'askScope') {
+        state.step = 'askScope';
+        const targetName = draft.targetLabel || 'this visit';
+        await sendReply(`What's the scope of work for **${targetName}**?\n\nYou can:\n• Pick from Pricebook\n• Describe it in a few words\n• Say "skip" to schedule without scope`);
+        return 'replied';
+      }
+
+      if (/\b(skip|none|no scope|nothing|n\/a)\b/i.test(msgLower)) {
+        draft.scopeSkipped = true;
+      } else if (/\b(pick|pricebook|catalog|service catalog|browse|select)\b/i.test(msgLower)) {
+        await sendReply('__OPEN_PRICEBOOK_PICKER__');
+        return 'replied';
+      } else if (/\b(custom|new item|create item|add item)\b/i.test(msgLower)) {
+        await sendReply("What should we call this line item?");
+        (state as any)._customItemStep = 'name';
+        return 'replied';
+      } else if ((state as any)._customItemStep) {
+        const cis = (state as any)._customItemStep;
+        if (cis === 'name') {
+          (state as any)._customItemName = _userMessage.trim();
+          (state as any)._customItemStep = 'price';
+          await sendReply(`Got it — "${(state as any)._customItemName}". What price? (e.g. "150" or "75.50")`);
+          return 'replied';
+        } else if (cis === 'price') {
+          const priceMatch = msgLower.match(/(\d+(?:\.\d{1,2})?)/);
+          if (!priceMatch) {
+            await sendReply("I need a number for the price (e.g. \"150\" or \"75.50\").");
+            return 'replied';
+          }
+          const priceDollars = parseFloat(priceMatch[1]);
+          const priceCents = Math.round(priceDollars * 100);
+          draft.scopeItems.push({
+            source: 'custom',
+            name: (state as any)._customItemName || 'Custom item',
+            qty: 1,
+            unitPriceCents: priceCents,
+            unit: 'each',
+          });
+          delete (state as any)._customItemStep;
+          delete (state as any)._customItemName;
+          await sendReply(`Added "${draft.scopeItems[draft.scopeItems.length - 1].name}" at $${priceDollars.toFixed(2)}.\n\nAnything else to add?\n• Pick from Pricebook\n• Create another item\n• Say "done" to continue`);
+          return 'replied';
+        }
+      } else if (/\b(done|that's it|thats it|continue|proceed|all set|no more)\b/i.test(msgLower)) {
+        draft.scopeSkipped = draft.scopeItems.length === 0;
+      } else {
+        const scopeText = _userMessage.trim();
+        if (scopeText.length > 2) {
+          draft.scopeItems.push({
+            source: 'custom',
+            name: scopeText.length > 100 ? scopeText.substring(0, 100) : scopeText,
+            qty: 1,
+            unitPriceCents: 0,
+            unit: 'each',
+          });
+          await sendReply(`Got it — noted "${draft.scopeItems[draft.scopeItems.length - 1].name}" as scope.\n\nAnything else?\n• Pick from Pricebook\n• Create another item\n• Say "done" to continue`);
+          return 'replied';
+        }
+      }
+    }
+
     if (draft.targetId && !draft.date) {
       state.step = 'askDate';
       const dateFromMsg = extractDate(msgLower);
@@ -13859,13 +13961,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dur = draft.durationMinutes || (draft.targetType === 'estimate' ? 60 : 120);
 
       const actionPayload: any = draft.targetType === 'estimate'
-        ? { estimateId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel }
-        : { jobId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel };
+        ? { estimateId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel, scopeItems: draft.scopeItems }
+        : { jobId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel, scopeItems: draft.scopeItems };
 
       const displayPayload: any = {
         [draft.targetType === 'estimate' ? 'estimate' : 'job']: draft.targetLabel,
         when: formatWhen(draft.startDateTime, dur),
       };
+      if (draft.scopeItems.length > 0) {
+        const scopeNames = draft.scopeItems.slice(0, 2).map(s => s.name).join(', ');
+        const more = draft.scopeItems.length > 2 ? ` +${draft.scopeItems.length - 2} more` : '';
+        displayPayload.scope = `${draft.scopeItems.length} item(s): ${scopeNames}${more}`;
+      }
 
       const confirmMsg = `Got it — here's the ${draft.targetType === 'estimate' ? 'estimate appointment' : 'appointment'}:`;
       const action = await storage.createEcoAiAction({
@@ -14078,13 +14185,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      let uiAction: string | undefined;
+      if (assistantMessage === '__OPEN_PRICEBOOK_PICKER__') {
+        uiAction = 'openPricebookPicker';
+        assistantMessage = 'Opening Pricebook...';
+      }
+
       const assistantMsg = await storage.createEcoAiMessage({ conversationId, role: 'assistant', content: assistantMessage });
       if (proposedActions.length > 0) {
         await storage.updateEcoAiActionStatus(proposedActions[0].id, 'proposed');
         proposedActions[0].messageId = assistantMsg.id;
       }
 
-      res.json({ conversationId, assistantMessage, proposedActions });
+      res.json({ conversationId, assistantMessage, proposedActions, uiAction });
     } catch (error: any) {
       console.error('[eco-ai] chat error:', error);
       res.status(500).json({ message: 'Failed to process message' });
@@ -14169,6 +14282,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('[eco-ai] cancel error:', error);
       res.status(500).json({ message: 'Failed to cancel action' });
+    }
+  });
+
+  app.post('/api/eco-ai/scope-items', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: 'No company membership' });
+      const companyId = member.companyId;
+      const role = member.role as UserRole;
+
+      if (!can(role, 'schedule.manage')) {
+        return res.status(403).json({ message: 'Permission denied' });
+      }
+
+      const { conversationId, items } = req.body;
+      if (!conversationId || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: 'conversationId and items are required' });
+      }
+
+      const conv = await storage.getEcoAiConversation(conversationId, companyId);
+      if (!conv) return res.status(404).json({ message: 'Conversation not found' });
+
+      const state = getConvState(conversationId);
+      if (!state || state.step !== 'askScope') {
+        return res.status(400).json({ message: 'Not in scope selection step' });
+      }
+
+      for (const item of items) {
+        if (item.catalogId) {
+          const catalogItem = await storage.getServiceCatalogItem(item.catalogId);
+          if (!catalogItem || catalogItem.companyId !== companyId) continue;
+          const qty = Math.max(1, Math.min(item.qty || 1, 999));
+          state.draft.scopeItems.push({
+            source: 'pricebook',
+            catalogId: catalogItem.id,
+            name: catalogItem.name,
+            qty,
+            unitPriceCents: catalogItem.defaultPriceCents,
+            unit: catalogItem.unit || 'each',
+          });
+        }
+      }
+
+      const count = state.draft.scopeItems.length;
+      res.json({ success: true, count });
+    } catch (error: any) {
+      console.error('[eco-ai] scope-items error:', error);
+      res.status(500).json({ message: 'Failed to add scope items' });
     }
   });
 

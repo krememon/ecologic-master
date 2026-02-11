@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Briefcase, UserPlus, Calendar, MessageSquare, Loader2 } from "lucide-react";
+import { Sparkles, Send, Check, X, Briefcase, UserPlus, Calendar, MessageSquare, Loader2, Search, Plus, Minus, BookOpen, SkipForward, PenLine } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -56,6 +56,11 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
   const [sending, setSending] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [executingAction, setExecutingAction] = useState<number | null>(null);
+  const [showPricebookPicker, setShowPricebookPicker] = useState(false);
+  const [pricebookSearch, setPricebookSearch] = useState("");
+  const [pricebookItems, setPricebookItems] = useState<any[]>([]);
+  const [selectedScopeItems, setSelectedScopeItems] = useState<Map<number, { name: string; qty: number; unitPriceCents: number; unit: string }>>(new Map());
+  const [loadingPricebook, setLoadingPricebook] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,6 +68,36 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, actions]);
+
+  const fetchPricebook = async () => {
+    setLoadingPricebook(true);
+    try {
+      const res = await fetch('/api/service-catalog', { credentials: 'include' });
+      const data = await res.json();
+      setPricebookItems(data);
+    } catch {
+    } finally {
+      setLoadingPricebook(false);
+    }
+  };
+
+  const sendQuickMessage = async (msg: string) => {
+    if (sending) return;
+    setMessages(prev => [...prev, { role: "user", content: msg }]);
+    setSending(true);
+    try {
+      const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: msg });
+      const data = await res.json();
+      if (data.conversationId) setConversationId(data.conversationId);
+      setMessages(prev => [...prev, { role: "assistant", content: data.assistantMessage }]);
+      if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
+      if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
+    } catch {
+      setMessages(prev => [...prev, { role: "system", content: "Something went wrong." }]);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -82,6 +117,10 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
       setMessages(prev => [...prev, { role: "assistant", content: data.assistantMessage }]);
       if (data.proposedActions?.length) {
         setActions(prev => [...prev, ...data.proposedActions]);
+      }
+      if (data.uiAction === 'openPricebookPicker') {
+        fetchPricebook();
+        setShowPricebookPicker(true);
       }
     } catch {
       setMessages(prev => [...prev, { role: "system", content: "Something went wrong. Please try again." }]);
@@ -146,6 +185,19 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
                     ? <strong key={j}>{part.slice(2, -2)}</strong>
                     : <span key={j}>{part}</span>
                 )}
+                {msg.role === 'assistant' && msg.content.includes('Pick from Pricebook') && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <button onClick={() => { fetchPricebook(); setShowPricebookPicker(true); }} className="px-2.5 py-1 text-xs font-medium bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full hover:bg-teal-100 border border-teal-200 dark:border-teal-800 flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" /> Pricebook
+                    </button>
+                    <button onClick={() => sendQuickMessage("create new item")} className="px-2.5 py-1 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                      <PenLine className="h-3 w-3" /> New Item
+                    </button>
+                    <button onClick={() => sendQuickMessage("skip")} className="px-2.5 py-1 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                      <SkipForward className="h-3 w-3" /> Skip
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -197,6 +249,132 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
               </div>
             );
           })}
+
+          {showPricebookPicker && (
+            <div className="mx-2 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+              <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-teal-600" />
+                <span className="font-medium text-sm">Pricebook</span>
+              </div>
+              <div className="px-3 py-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={pricebookSearch}
+                    onChange={e => setPricebookSearch(e.target.value)}
+                    placeholder="Search items..."
+                    className="w-full bg-slate-100 dark:bg-slate-800 text-sm rounded-lg pl-8 pr-3 py-2 outline-none focus:ring-2 focus:ring-teal-500/50"
+                  />
+                </div>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-1">
+                {loadingPricebook ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                  </div>
+                ) : (
+                  pricebookItems
+                    .filter(item => !pricebookSearch || item.name.toLowerCase().includes(pricebookSearch.toLowerCase()))
+                    .slice(0, 20)
+                    .map(item => {
+                      const selected = selectedScopeItems.has(item.id);
+                      const qty = selected ? selectedScopeItems.get(item.id)!.qty : 0;
+                      return (
+                        <div key={item.id} className={`flex items-center justify-between px-2.5 py-2 mx-1 rounded-lg text-sm ${selected ? 'bg-teal-50 dark:bg-teal-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
+                            <div className="text-xs text-slate-500">${(item.defaultPriceCents / 100).toFixed(2)} / {item.unit || 'each'}</div>
+                          </div>
+                          {selected ? (
+                            <div className="flex items-center gap-1.5 ml-2">
+                              <button
+                                onClick={() => {
+                                  const current = selectedScopeItems.get(item.id)!;
+                                  if (current.qty <= 1) {
+                                    const next = new Map(selectedScopeItems);
+                                    next.delete(item.id);
+                                    setSelectedScopeItems(next);
+                                  } else {
+                                    setSelectedScopeItems(new Map(selectedScopeItems).set(item.id, { ...current, qty: current.qty - 1 }));
+                                  }
+                                }}
+                                className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="text-xs font-medium w-4 text-center">{qty}</span>
+                              <button
+                                onClick={() => {
+                                  const current = selectedScopeItems.get(item.id)!;
+                                  setSelectedScopeItems(new Map(selectedScopeItems).set(item.id, { ...current, qty: current.qty + 1 }));
+                                }}
+                                className="w-6 h-6 flex items-center justify-center rounded-full bg-teal-100 dark:bg-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-200"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setSelectedScopeItems(new Map(selectedScopeItems).set(item.id, {
+                                  name: item.name,
+                                  qty: 1,
+                                  unitPriceCents: item.defaultPriceCents,
+                                  unit: item.unit || 'each',
+                                }));
+                              }}
+                              className="ml-2 w-6 h-6 flex items-center justify-center rounded-full bg-teal-600 text-white hover:bg-teal-700"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+              <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <span className="text-xs text-slate-500">{selectedScopeItems.size} item(s) selected</span>
+                <button
+                  onClick={async () => {
+                    if (selectedScopeItems.size > 0 && conversationId) {
+                      const items = Array.from(selectedScopeItems.entries()).map(([catalogId, info]) => ({
+                        catalogId,
+                        qty: info.qty,
+                      }));
+                      try {
+                        await apiRequest("POST", "/api/eco-ai/scope-items", { conversationId, items });
+                      } catch {}
+                      setShowPricebookPicker(false);
+                      setPricebookSearch("");
+                      setSelectedScopeItems(new Map());
+                      setMessages(prev => [...prev, { role: "user", content: `Added ${items.length} item(s) from Pricebook` }]);
+                      setSending(true);
+                      try {
+                        const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: "done" });
+                        const data = await res.json();
+                        setMessages(prev => [...prev, { role: "assistant", content: data.assistantMessage }]);
+                        if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
+                        if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
+                      } catch {
+                        setMessages(prev => [...prev, { role: "system", content: "Something went wrong." }]);
+                      } finally {
+                        setSending(false);
+                        setInput("");
+                      }
+                    } else {
+                      setShowPricebookPicker(false);
+                      setPricebookSearch("");
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
 
           {sending && (
             <div className="flex justify-start">

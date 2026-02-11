@@ -1,0 +1,91 @@
+TASK: Add “Scope of Work” + “Pricebook line item” selection into the scheduling AI flow for jobs/estimates.
+
+GOAL
+After the AI determines Job vs Estimate and selects the target, it should ask for scope of work and let the user:
+- pick one or more line items from the pricebook OR
+- create a new custom line item
+Then the selected items are attached to the job/estimate (as planned scope) before scheduling is confirmed.
+
+NON-NEGOTIABLES
+- Scheduling must still work if user skips scope.
+- Do NOT require perfect typed inputs.
+- Use UI picker for pricebook selection (search + click).
+- Preserve RBAC (Estimator/Owner/Admin can add pricebook items; Technician may be read-only or blocked based on rules).
+
+STATE ADDITIONS
+Extend schedule flow draft:
+draft = {
+  ...
+  scopeText: "",
+  lineItems: [] // { source:"pricebook"|"custom", id?, name, qty, unitPrice }
+}
+
+FLOW CHANGES
+Insert a new step after target is resolved (job/estimate selected) and before confirmation:
+
+Step: askScope
+Assistant: “What’s the scope of work for this visit?”
+Provide 3 quick actions/buttons:
+- “Pick from Pricebook”
+- “Create new line item”
+- “Skip”
+
+If user chooses Skip -> proceed to date/time steps.
+
+PRICEBOOK PICKER UI
+1) Create a small modal/panel component triggered from chat:
+   - Title: “Pricebook”
+   - Search input (debounced)
+   - Results list (name, description optional, price)
+   - Click result -> adds to draft.lineItems with qty=1
+   - Allow qty adjust (+ / -) inline after adding
+   - Button: “Done” closes picker and returns to chat
+
+2) Add endpoint:
+   GET /api/pricebook/search?q=
+   - Returns top matches user is allowed to see
+   - Use existing pricebook table if exists; if not, create minimal pricebook_items table:
+     id, name, default_price, category, active
+
+3) When the picker closes:
+   - If at least one line item selected:
+     Assistant: “Got it. Added X line item(s). Anything else?” (Add more / Done)
+   - Then proceed to scheduling date/time steps.
+
+CUSTOM LINE ITEM FLOW
+If user chooses “Create new line item”:
+- Ask:
+  a) “What should we call it?”
+  b) “What price?” (number)
+  c) “Quantity?” (default 1)
+- Save to draft.lineItems as source="custom"
+
+ATTACHING TO JOB/ESTIMATE
+Before final schedule confirmation:
+- If draft.lineItems not empty:
+  - For Job: save to job as planned_scope / internal_notes / scope_items (whatever structure exists)
+  - For Estimate: add as draft estimate line items OR save as scope placeholder (depending on current estimate architecture)
+If the estimate line items system already exists, reuse it; otherwise store as JSON in a safe field for now.
+
+CONFIRMATION CARD UPDATE
+Include a line:
+- “Scope: 2 line items”
+and show first 1–2 item names.
+
+RBAC
+- If user role cannot edit pricebook/estimates:
+  - still allow scheduling
+  - but scope step should say:
+    “You don’t have permission to add pricebook items, but I can still schedule the visit.”
+  - show only Skip.
+
+QA
+- “Schedule Jennifer for 5 today” -> asks Job/Estimate -> asks scope -> pricebook picker works -> confirm schedules + attaches scope
+- Skip scope still schedules successfully
+- No broken existing scheduling logic
+
+DELIVERABLES
+- New askScope step
+- Pricebook picker UI + search endpoint
+- Custom line item creation flow
+- Scope shown in confirmation card and persisted to job/estimate
