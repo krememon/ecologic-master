@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Briefcase, UserPlus, Calendar, MessageSquare, Loader2, Search, Plus, Minus, BookOpen, SkipForward, PenLine, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Sparkles, Send, Check, X, Briefcase, UserPlus, Calendar, MessageSquare, Loader2, Search, Plus, Minus, BookOpen, SkipForward, PenLine, ThumbsUp, ThumbsDown, Save, Edit, FileText, Hammer } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -42,6 +42,19 @@ const TOOL_COLORS: Record<string, string> = {
 
 const GREETING = `Hey! I'm Eco-Intelligence, your AI assistant. I can chat, answer questions, or help you manage your work — just ask!`;
 
+type QuickReplySet = 'jobOrEstimate' | 'yesNo' | 'pricebook' | 'saveEditCancel' | 'editFields' | 'pricebookMore' | null;
+
+function detectQuickReplies(content: string, isLast: boolean): QuickReplySet {
+  if (!isLast) return null;
+  if (/Is this a \*\*Job\*\* or an \*\*Estimate\*\*\?/i.test(content)) return 'jobOrEstimate';
+  if (/Looks good\?/i.test(content) || /Reply \*\*Save\*\*/i.test(content)) return 'saveEditCancel';
+  if (/Which field/i.test(content)) return 'editFields';
+  if (/Just reply \*\*Yes\*\* or \*\*No\*\*/i.test(content) || /Just to confirm/i.test(content)) return 'yesNo';
+  if (/Pick from Pricebook/i.test(content) || /Want to add line items\?/i.test(content)) return 'pricebook';
+  if (/Anything else\?/i.test(content) && /Pricebook/i.test(content)) return 'pricebookMore';
+  return null;
+}
+
 interface EcoAiPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -81,6 +94,14 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
     }
   };
 
+  const processResponse = (data: any) => {
+    if (data.conversationId) setConversationId(data.conversationId);
+    const msgText = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
+    if (msgText) setMessages(prev => [...prev, { role: "assistant", content: msgText }]);
+    if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
+    if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
+  };
+
   const sendQuickMessage = async (msg: string) => {
     if (sending) return;
     setMessages(prev => [...prev, { role: "user", content: msg }]);
@@ -88,11 +109,7 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
     try {
       const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: msg });
       const data = await res.json();
-      if (data.conversationId) setConversationId(data.conversationId);
-      const msgText = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
-      if (msgText) setMessages(prev => [...prev, { role: "assistant", content: msgText }]);
-      if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
-      if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
+      processResponse(data);
     } catch {
       setMessages(prev => [...prev, { role: "system", content: "Something went wrong." }]);
     } finally {
@@ -103,27 +120,13 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
   const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed || sending) return;
-
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: trimmed }]);
     setSending(true);
-
     try {
-      const res = await apiRequest("POST", "/api/eco-ai/chat", {
-        conversationId,
-        message: trimmed,
-      });
+      const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: trimmed });
       const data = await res.json();
-      if (data.conversationId) setConversationId(data.conversationId);
-      const msgText = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
-      if (msgText) setMessages(prev => [...prev, { role: "assistant", content: msgText }]);
-      if (data.proposedActions?.length) {
-        setActions(prev => [...prev, ...data.proposedActions]);
-      }
-      if (data.uiAction === 'openPricebookPicker') {
-        fetchPricebook();
-        setShowPricebookPicker(true);
-      }
+      processResponse(data);
     } catch {
       setMessages(prev => [...prev, { role: "system", content: "Something went wrong. Please try again." }]);
     } finally {
@@ -142,6 +145,7 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
         queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
         queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
         queryClient.invalidateQueries({ queryKey: ["/api/schedule"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/estimates"] });
       }
     } catch {
       setMessages(prev => [...prev, { role: "system", content: "Failed to execute action." }]);
@@ -156,8 +160,59 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
       setActions(prev => prev.map(a => a.id === action.id ? { ...a, status: "rejected" } : a));
       setMessages(prev => [...prev, { role: "system", content: "Action cancelled." }]);
     } catch {
-      // silently fail
     }
+  };
+
+  const chipBase = "px-2.5 py-1 text-xs font-medium rounded-full border flex items-center gap-1 transition-colors";
+  const chipPrimary = `${chipBase} bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 hover:bg-teal-100 border-teal-200 dark:border-teal-800`;
+  const chipSecondary = `${chipBase} bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 border-slate-200 dark:border-slate-700`;
+
+  const renderQuickReplies = (type: QuickReplySet) => {
+    if (!type || sending) return null;
+    return (
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {type === 'jobOrEstimate' && (
+          <>
+            <button onClick={() => sendQuickMessage("Job")} className={chipPrimary}><Hammer className="h-3 w-3" /> Job</button>
+            <button onClick={() => sendQuickMessage("Estimate")} className={chipSecondary}><FileText className="h-3 w-3" /> Estimate</button>
+          </>
+        )}
+        {type === 'yesNo' && (
+          <>
+            <button onClick={() => sendQuickMessage("yes")} className={chipPrimary}><ThumbsUp className="h-3 w-3" /> Yes</button>
+            <button onClick={() => sendQuickMessage("no")} className={chipSecondary}><ThumbsDown className="h-3 w-3" /> No</button>
+          </>
+        )}
+        {(type === 'pricebook' || type === 'pricebookMore') && (
+          <>
+            <button onClick={() => { fetchPricebook(); setShowPricebookPicker(true); }} className={chipPrimary}><BookOpen className="h-3 w-3" /> Pricebook</button>
+            <button onClick={() => sendQuickMessage("new item")} className={chipSecondary}><PenLine className="h-3 w-3" /> New Item</button>
+            {type === 'pricebook' && (
+              <button onClick={() => sendQuickMessage("skip")} className={chipSecondary}><SkipForward className="h-3 w-3" /> Skip</button>
+            )}
+            {type === 'pricebookMore' && (
+              <button onClick={() => sendQuickMessage("done")} className={chipSecondary}><Check className="h-3 w-3" /> Done</button>
+            )}
+          </>
+        )}
+        {type === 'saveEditCancel' && (
+          <>
+            <button onClick={() => sendQuickMessage("save")} className={chipPrimary}><Save className="h-3 w-3" /> Save</button>
+            <button onClick={() => sendQuickMessage("edit")} className={chipSecondary}><Edit className="h-3 w-3" /> Edit</button>
+            <button onClick={() => sendQuickMessage("cancel")} className={chipSecondary}><X className="h-3 w-3" /> Cancel</button>
+          </>
+        )}
+        {type === 'editFields' && (
+          <>
+            <button onClick={() => sendQuickMessage("customer")} className={chipSecondary}>Customer</button>
+            <button onClick={() => sendQuickMessage("schedule")} className={chipSecondary}>Schedule</button>
+            <button onClick={() => sendQuickMessage("assigned")} className={chipSecondary}>Assigned</button>
+            <button onClick={() => sendQuickMessage("notes")} className={chipSecondary}>Notes</button>
+            <button onClick={() => sendQuickMessage("line items")} className={chipSecondary}>Line Items</button>
+          </>
+        )}
+      </div>
+    );
   };
 
   const pendingActions = actions.filter(a => a.status === "proposed");
@@ -173,46 +228,28 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
         </SheetHeader>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                msg.role === "user"
-                  ? "bg-teal-600 text-white rounded-br-md"
-                  : msg.role === "system"
-                  ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-bl-md italic text-xs"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md"
-              }`}>
-                {msg.content.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
-                  part.startsWith("**") && part.endsWith("**")
-                    ? <strong key={j}>{part.slice(2, -2)}</strong>
-                    : <span key={j}>{part}</span>
-                )}
-                {msg.role === 'assistant' && msg.content.includes('Just to confirm') && i === messages.length - 1 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <button onClick={() => sendQuickMessage("yes")} className="px-3 py-1 text-xs font-medium bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full hover:bg-teal-100 border border-teal-200 dark:border-teal-800 flex items-center gap-1">
-                      <ThumbsUp className="h-3 w-3" /> Yes
-                    </button>
-                    <button onClick={() => sendQuickMessage("no")} className="px-3 py-1 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                      <ThumbsDown className="h-3 w-3" /> No
-                    </button>
-                  </div>
-                )}
-                {msg.role === 'assistant' && msg.content.includes('Pick from Pricebook') && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <button onClick={() => { fetchPricebook(); setShowPricebookPicker(true); }} className="px-2.5 py-1 text-xs font-medium bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 rounded-full hover:bg-teal-100 border border-teal-200 dark:border-teal-800 flex items-center gap-1">
-                      <BookOpen className="h-3 w-3" /> Pricebook
-                    </button>
-                    <button onClick={() => sendQuickMessage("create new item")} className="px-2.5 py-1 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                      <PenLine className="h-3 w-3" /> New Item
-                    </button>
-                    <button onClick={() => sendQuickMessage("skip")} className="px-2.5 py-1 text-xs font-medium bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1">
-                      <SkipForward className="h-3 w-3" /> Skip
-                    </button>
-                  </div>
-                )}
+          {messages.map((msg, i) => {
+            const isLast = i === messages.length - 1;
+            const quickReplyType = msg.role === 'assistant' ? detectQuickReplies(msg.content, isLast) : null;
+            return (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-teal-600 text-white rounded-br-md"
+                    : msg.role === "system"
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-bl-md italic text-xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md"
+                }`}>
+                  {msg.content.split(/(\*\*[^*]+\*\*)/).map((part, j) =>
+                    part.startsWith("**") && part.endsWith("**")
+                      ? <strong key={j}>{part.slice(2, -2)}</strong>
+                      : <span key={j}>{part}</span>
+                  )}
+                  {renderQuickReplies(quickReplyType)}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {pendingActions.map(action => {
             const Icon = TOOL_ICONS[action.tool] || Briefcase;
@@ -366,10 +403,7 @@ export default function EcoAiPanel({ open, onOpenChange }: EcoAiPanelProps) {
                       try {
                         const res = await apiRequest("POST", "/api/eco-ai/chat", { conversationId, message: "done" });
                         const data = await res.json();
-                        const doneMsg = (data.assistantMessage || '').replace(/__OPEN_PRICEBOOK_PICKER__/g, '').trim();
-                        if (doneMsg) setMessages(prev => [...prev, { role: "assistant", content: doneMsg }]);
-                        if (data.proposedActions?.length) setActions(prev => [...prev, ...data.proposedActions]);
-                        if (data.uiAction === 'openPricebookPicker') { fetchPricebook(); setShowPricebookPicker(true); }
+                        processResponse(data);
                       } catch {
                         setMessages(prev => [...prev, { role: "system", content: "Something went wrong." }]);
                       } finally {

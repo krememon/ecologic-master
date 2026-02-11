@@ -1,0 +1,137 @@
+TASK: Rework Eco-Intelligence follow-up logic into a true “form-fill” flow for creating a Job or Estimate. Follow-up questions must align to the New Job / New Estimate screens and ONLY ask for missing info.
+
+GOAL
+Eco-AI behaves like a conversational version of these forms:
+- New Job
+- New Estimate
+
+If the user provides some fields (client, type, schedule time, employees, notes, job type), Eco-AI should store them and ask ONLY for what’s missing.
+
+CORE MODEL
+Maintain a draft object that matches the form fields:
+
+draft = {
+  recordType: null | "job" | "estimate",        // required
+  customerId: null,                              // required
+  customerNameQuery: "",
+
+  locationId: null,
+  locationText: "",
+
+  jobTypeId: null,
+  jobTypeText: "",
+
+  scheduleStart: null,
+  scheduleEnd: null,
+  durationMinutes: null,
+
+  assigneeIds: [],
+  assigneeText: "",
+
+  notes: "",
+
+  lineItems: [] // {source:"pricebook"|"custom", id?, name, qty, unitPrice}
+}
+
+REQUIRED FIELDS
+- recordType (job vs estimate)
+- customerId
+Everything else is optional; ask only if relevant or user mentioned it.
+
+INTENT
+Trigger this flow on:
+- “create job”, “new job”
+- “create estimate”, “new estimate”, “quote”
+- “schedule …” (if scheduling only, still use same draft model)
+
+SLOT FILLING LOGIC
+1) Parse the user message for any fields:
+   - recordType (job/estimate)
+   - customer name
+   - time/date
+   - job type
+   - employees/crew
+   - notes (“note: …” or quoted)
+   - location/address
+   - line items (“add line items”, “pricebook”, etc.)
+
+2) After parsing, run resolve steps:
+   - Resolve customerId by fuzzy search on customer name
+     If multiple matches: ask “Which customer?” with list
+     If one match: auto-select + confirm only if ambiguous
+
+3) Follow-up question priority (ask ONE at a time):
+   A) If recordType missing:
+      “Is this a Job or an Estimate?”
+   B) If customerId missing:
+      “Who is this for?” (customer picker list if needed)
+   C) If schedule mentioned but incomplete:
+      ask missing part (date or time)
+   D) If user asked to schedule but did not mention duration:
+      default duration (job 2h, estimate 1h) and ask only if they want to change it:
+      “I’ll block 2 hours — want a different duration?”
+   E) If user says “add scope/line items” OR recordType is estimate:
+      Ask:
+      “Do you want to add line items?”
+      Buttons: Pricebook / New Item / Skip
+   F) If user mentioned “assign” or roles allow and job has no assignees:
+      Ask:
+      “Who should this be assigned to?” (list employees)
+   G) Notes:
+      Ask only if not provided and we’re about to review:
+      “Any notes? (or skip)”
+
+4) NEVER ask for fields already provided.
+   Example:
+   User: “Create estimate for Jennifer, tomorrow 5pm, assign Kevin, note: call on arrival”
+   AI should NOT ask:
+   - customer
+   - schedule
+   - assignee
+   - notes
+   It should jump straight to line items (estimate) or review.
+
+REVIEW + CONFIRM
+5) When required fields are satisfied (recordType + customerId):
+   Show a “Review” card that mirrors the form:
+   - Customer
+   - Location (if set)
+   - Line items count (if any)
+   - Job Type (if set)
+   - Schedule (if set)
+   - Assigned (if set)
+   - Notes (if set)
+   Buttons: Save / Edit / Cancel
+   “Edit” should ask which field to change (Customer, Schedule, Assigned, Notes, Job Type, Line Items).
+
+EXECUTION
+6) On Save:
+   - If recordType=job -> call createJob tool (or job creation endpoint)
+   - If recordType=estimate -> call createEstimate tool
+   - If schedule set, create schedule entry too
+   - If assignees set, assign them
+   - If line items set, attach them
+   - If notes set, save notes
+Server-side RBAC enforced.
+
+UI REQUIREMENTS
+7) Add quick reply chips/buttons for common answers:
+   - Job / Estimate
+   - Pricebook / New Item / Skip
+   - Yes / No
+These should be clickable, not just text.
+
+8) Do not display directive tokens in the chat. Handle them in UI.
+
+QA TESTS
+- If user provides 5 fields, AI only asks the 1 missing field.
+- If user provides everything needed, AI shows Review immediately.
+- Customer matching: 1 match auto-select; multiple show list.
+- Estimate flow nudges to add line items.
+- Job flow does not force line items unless user asks.
+
+DELIVERABLES
+- Unified form-fill flow for Job/Estimate
+- Slot filling with “ask only what’s missing”
+- Review card + Save/Edit/Cancel
+- Quick reply chips

@@ -13293,46 +13293,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== Eco-Intelligence AI Routes ==========
 
-  interface ScheduleCandidate {
-    type: 'job' | 'estimate';
-    id: number;
-    label: string;
-    clientName: string;
-    location: string;
-  }
-
-  interface ScheduleDraft {
-    targetType: 'job' | 'estimate' | null;
-    targetId: number | null;
-    targetLabel: string | null;
-    clientQuery: string | null;
-    time: string | null;
-    date: string | null;
-    startDateTime: string | null;
-    endDateTime: string | null;
+  interface FormFillDraft {
+    recordType: 'job' | 'estimate' | null;
+    customerId: number | null;
+    customerName: string | null;
+    customerAddress: string | null;
+    locationText: string | null;
+    jobTypeText: string | null;
+    scheduleDate: string | null;
+    scheduleTime: string | null;
     durationMinutes: number | null;
+    assigneeIds: string[];
+    assigneeNames: string[];
     notes: string | null;
-    scopeItems: { source: 'pricebook' | 'custom'; catalogId?: number; name: string; qty: number; unitPriceCents: number; unit: string }[];
-    scopeSkipped: boolean;
+    lineItems: { source: 'pricebook' | 'custom'; catalogId?: number; name: string; qty: number; unitPriceCents: number; unit: string }[];
+    lineItemsAsked: boolean;
   }
 
-  interface EcoAiConvState {
-    pendingIntent: 'schedule' | null;
-    step: 'resolveType' | 'confirmSingleMatch' | 'pickTarget' | 'askScope' | 'askDate' | 'askTime' | 'confirm' | null;
-    draft: ScheduleDraft;
-    candidates: ScheduleCandidate[];
-    candidatesByType?: { jobs: ScheduleCandidate[]; estimates: ScheduleCandidate[] };
+  type FormFillStep =
+    | 'askRecordType'
+    | 'askCustomer'
+    | 'pickCustomer'
+    | 'confirmCustomer'
+    | 'askLineItems'
+    | 'customItemName'
+    | 'customItemPrice'
+    | 'askScheduleDate'
+    | 'askScheduleTime'
+    | 'askAssignees'
+    | 'pickAssignee'
+    | 'askNotes'
+    | 'review'
+    | 'editing'
+    | null;
+
+  interface FormFillState {
+    active: boolean;
+    step: FormFillStep;
+    draft: FormFillDraft;
+    customerCandidates: { id: number; name: string; address: string | null }[];
+    assigneeCandidates: { userId: string; name: string; role: string }[];
+    customItemName?: string;
+    editingField?: string;
   }
 
-  const ecoAiConvStates = new Map<number, EcoAiConvState>();
+  const ecoAiConvStates = new Map<number, FormFillState>();
 
-  function freshDraft(): ScheduleDraft {
-    return { targetType: null, targetId: null, targetLabel: null, clientQuery: null, time: null, date: null, startDateTime: null, endDateTime: null, durationMinutes: null, notes: null, scopeItems: [], scopeSkipped: false };
+  function freshDraft(): FormFillDraft {
+    return {
+      recordType: null, customerId: null, customerName: null, customerAddress: null,
+      locationText: null, jobTypeText: null, scheduleDate: null, scheduleTime: null,
+      durationMinutes: null, assigneeIds: [], assigneeNames: [], notes: null,
+      lineItems: [], lineItemsAsked: false,
+    };
   }
 
-  function getConvState(convId: number): EcoAiConvState {
+  function getConvState(convId: number): FormFillState {
     if (!ecoAiConvStates.has(convId)) {
-      ecoAiConvStates.set(convId, { pendingIntent: null, step: null, draft: freshDraft(), candidates: [] });
+      ecoAiConvStates.set(convId, { active: false, step: null, draft: freshDraft(), customerCandidates: [], assigneeCandidates: [] });
     }
     return ecoAiConvStates.get(convId)!;
   }
@@ -13375,17 +13393,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return start;
   }
 
-  function buildStartEnd(draft: ScheduleDraft): { startDateTime: string; endDateTime: string } | null {
-    if (!draft.date) return null;
-    const start = resolveDate(draft.date);
-    if (draft.time) {
-      const t = parseTimeStr(draft.time);
+  function buildStartEnd(draft: FormFillDraft): { startDateTime: string; endDateTime: string } | null {
+    if (!draft.scheduleDate) return null;
+    const start = resolveDate(draft.scheduleDate);
+    if (draft.scheduleTime) {
+      const t = parseTimeStr(draft.scheduleTime);
       if (t) start.setHours(t.hours, t.minutes, 0, 0);
       else start.setHours(9, 0, 0, 0);
     } else {
       start.setHours(9, 0, 0, 0);
     }
-    const dur = draft.durationMinutes || (draft.targetType === 'estimate' ? 60 : 120);
+    const dur = draft.durationMinutes || (draft.recordType === 'estimate' ? 60 : 120);
     const end = new Date(start.getTime() + dur * 60 * 1000);
     return { startDateTime: start.toISOString(), endDateTime: end.toISOString() };
   }
@@ -13395,6 +13413,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const dateStr = dt.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
     const durLabel = durationMin >= 60 ? `${durationMin / 60}hr` : `${durationMin}min`;
     return `${dateStr} (${durLabel})`;
+  }
+
+  function extractAllSlots(message: string, msgLower: string): Partial<FormFillDraft> {
+    const slots: Partial<FormFillDraft> = {};
+
+    if (/\b(job|service|work order)\b/i.test(msgLower) && !/\b(estimate|quote)\b/i.test(msgLower)) {
+      slots.recordType = 'job';
+    } else if (/\b(estimate|quote)\b/i.test(msgLower)) {
+      slots.recordType = 'estimate';
+    }
+
+    const nameHint = extractNameHint(message);
+    if (nameHint) slots.customerName = nameHint;
+
+    const time = extractTime(message);
+    if (time) slots.scheduleTime = time;
+
+    const date = extractDate(message);
+    if (date) slots.scheduleDate = date;
+
+    const noteMatch = message.match(/(?:note|notes?):\s*(.+?)(?:\s*$)/i)
+      || message.match(/"([^"]+)"/);
+    if (noteMatch) slots.notes = noteMatch[1].trim();
+
+    const assignMatch = message.match(/(?:assign|crew|tech|technician)\s+(?:to\s+)?([A-Z][a-z'-]+(?:\s+[A-Z][a-z'-]+)*)/i);
+    if (assignMatch) {
+      slots.assigneeNames = [assignMatch[1].trim()];
+    }
+
+    const locationMatch = message.match(/(?:at|location)\s+(\d+\s+[A-Z].*?)(?:\s+(?:on|for|tomorrow|today|next|at\s+\d)|$)/i);
+    if (locationMatch && !nameHint?.includes(locationMatch[1].trim())) {
+      slots.locationText = locationMatch[1].trim();
+    }
+
+    const jobTypeMatch = message.match(/(?:job\s*type|type)\s*(?:is|:)?\s*([A-Za-z][A-Za-z\s]+?)(?:\s*$|\s+(?:for|at|on|tomorrow|today))/i);
+    if (jobTypeMatch) slots.jobTypeText = jobTypeMatch[1].trim();
+
+    return slots;
+  }
+
+  function applySlots(draft: FormFillDraft, slots: Partial<FormFillDraft>) {
+    if (slots.recordType && !draft.recordType) draft.recordType = slots.recordType;
+    if (slots.customerName && !draft.customerName) draft.customerName = slots.customerName;
+    if (slots.scheduleDate && !draft.scheduleDate) draft.scheduleDate = slots.scheduleDate;
+    if (slots.scheduleTime && !draft.scheduleTime) draft.scheduleTime = slots.scheduleTime;
+    if (slots.notes && !draft.notes) draft.notes = slots.notes;
+    if (slots.locationText && !draft.locationText) draft.locationText = slots.locationText;
+    if (slots.jobTypeText && !draft.jobTypeText) draft.jobTypeText = slots.jobTypeText;
+    if (slots.assigneeNames && slots.assigneeNames.length > 0 && draft.assigneeNames.length === 0) {
+      draft.assigneeNames = slots.assigneeNames;
+    }
+  }
+
+  async function fuzzyMatchClients(companyId: number, query: string): Promise<{ id: number; name: string; address: string | null }[]> {
+    const allClients = await storage.getClients(companyId);
+    const q = query.toLowerCase();
+    return allClients
+      .filter(c => c.name.toLowerCase().includes(q))
+      .map(c => ({ id: c.id, name: c.name, address: c.address }));
+  }
+
+  async function resolveAssignees(companyId: number, names: string[]): Promise<{ userId: string; name: string; role: string }[]> {
+    const members = await storage.getCompanyMembers(companyId);
+    const resolved: { userId: string; name: string; role: string }[] = [];
+    for (const searchName of names) {
+      const q = searchName.toLowerCase();
+      for (const m of members) {
+        const user = await storage.getUser(m.userId);
+        if (user) {
+          const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+          if (fullName.toLowerCase().includes(q) || (user.firstName && user.firstName.toLowerCase().includes(q))) {
+            resolved.push({ userId: m.userId, name: fullName, role: m.role });
+          }
+        }
+      }
+    }
+    return resolved;
+  }
+
+  function buildReviewText(draft: FormFillDraft): string {
+    const type = draft.recordType === 'estimate' ? 'Estimate' : 'Job';
+    let text = `Here's your ${type} summary:\n\n`;
+    text += `• **Type**: ${type}\n`;
+    text += `• **Customer**: ${draft.customerName || 'Not set'}\n`;
+    if (draft.locationText) text += `• **Location**: ${draft.locationText}\n`;
+    else if (draft.customerAddress) text += `• **Location**: ${draft.customerAddress}\n`;
+    if (draft.jobTypeText) text += `• **Job Type**: ${draft.jobTypeText}\n`;
+    if (draft.scheduleDate) {
+      const times = buildStartEnd(draft);
+      if (times) {
+        const dur = draft.durationMinutes || (draft.recordType === 'estimate' ? 60 : 120);
+        text += `• **Schedule**: ${formatWhen(times.startDateTime, dur)}\n`;
+      }
+    }
+    if (draft.assigneeNames.length > 0) text += `• **Assigned**: ${draft.assigneeNames.join(', ')}\n`;
+    if (draft.lineItems.length > 0) {
+      const names = draft.lineItems.slice(0, 3).map(i => i.name).join(', ');
+      const more = draft.lineItems.length > 3 ? ` +${draft.lineItems.length - 3} more` : '';
+      text += `• **Line Items**: ${draft.lineItems.length} (${names}${more})\n`;
+    }
+    if (draft.notes) text += `• **Notes**: ${draft.notes}\n`;
+    text += `\nLooks good?`;
+    return text;
+  }
+
+  function isFormFillIntent(msg: string): boolean {
+    return /\b(create\s+(?:a\s+)?(?:job|estimate)|new\s+(?:job|estimate)|schedule|appointment|book|quote)\b/i.test(msg);
   }
 
   interface EcoAiToolDef {
@@ -13593,10 +13718,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   function extractNameHint(message: string): string | null {
-    const skipWordsLower = new Set(['monday','tuesday','wednesday','thursday','friday','saturday','sunday','today','tomorrow','job','estimate','quote','the','an','a','at','for','on','in','to','my','me','this','that','next','set','up','put','move','push','it','am','pm','morning','afternoon','evening','night','noon','oclock']);
+    const skipWordsLower = new Set(['monday','tuesday','wednesday','thursday','friday','saturday','sunday','today','tomorrow','job','estimate','quote','the','an','a','at','for','on','in','to','my','me','this','that','next','set','up','put','move','push','it','am','pm','morning','afternoon','evening','night','noon','oclock','create','new','schedule','book','assign']);
     const lower = message.toLowerCase();
     const triggerRegexes = [
-      /(?:schedule|book|appointment|estimate|quote)\s+(?:for\s+)?/,
+      /(?:schedule|book|appointment|estimate|quote|create\s+(?:a\s+)?(?:job|estimate))\s+(?:for\s+)?/,
       /(?:for|client)\s+/,
       /(?:schedule|book|set\s+up)\s+/,
     ];
@@ -13615,9 +13740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (skipWordsLower.has(w.toLowerCase()) || /^\d/.test(w)) break;
             nameWords.push(w);
           }
-          if (nameWords.length > 0) {
-            return nameWords.join(' ');
-          }
+          if (nameWords.length > 0) return nameWords.join(' ');
         }
       }
     }
@@ -13630,8 +13753,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (timeMatch) return timeMatch[1];
     const oclockMatch = message.match(/(?:at|for)\s+(\d{1,2})\s*o'?clock/i);
     if (oclockMatch) return oclockMatch[1];
-    const standaloneTime = message.match(/\b(?:at|for)\s+(\d{1,2})\b(?!\s*(?:[A-Z]|am|pm|:\d))/i);
-    if (standaloneTime) return standaloneTime[1];
     return null;
   }
 
@@ -13640,20 +13761,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return dateMatch ? dateMatch[1] : null;
   }
 
-  function isScheduleIntent(msg: string): boolean {
-    if (/\b(schedule|appointment|book|reschedule|put\s+on\s+(?:the\s+)?calendar|set\s+up)\b/i.test(msg)) return true;
-    if (/\b(?:at|for)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|o'?clock)?\b/i.test(msg) && /[A-Z][a-z]{2,}/.test(msg)) return true;
-    if (/\b(?:move|push)\s+(?:it\s+)?(?:to|back)\b/i.test(msg) && /\d{1,2}/.test(msg)) return true;
-    return false;
-  }
-
-  function isEstimateScheduleIntent(msg: string): boolean {
-    return /\b(estimate|quote)\b/i.test(msg) && (isScheduleIntent(msg) || extractDate(msg) !== null || extractTime(msg) !== null || extractNameHint(msg) !== null);
-  }
-
   function parseEcoAiIntent(message: string): { tool: string; payload: Record<string, any>; missingFields: string[] } | null {
     const lower = message.toLowerCase();
-
     if (lower.includes('create client') || lower.includes('new client') || lower.includes('add client')) {
       const nameMatch = message.match(/(?:for|named?|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
       const payload: Record<string, any> = {};
@@ -13662,21 +13771,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else missing.push('name');
       return { tool: 'createClient', payload, missingFields: missing };
     }
-
-    if (lower.includes('create job') || lower.includes('new job') || lower.includes('create a job') || lower.includes('add job')) {
-      const payload: Record<string, any> = {};
-      const missing: string[] = [];
-      const forMatch = message.match(/(?:for|client)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-      if (forMatch) payload.clientName = forMatch[1];
-      const atMatch = message.match(/(?:at|@)\s+(.+?)(?:\s+(?:on|for|tomorrow|today|next)|$)/i);
-      if (atMatch) payload.location = atMatch[1].trim();
-      const titleMatch = message.match(/(?:titled?|called|named)\s+"([^"]+)"/i);
-      if (titleMatch) payload.title = titleMatch[1];
-      else if (payload.clientName) payload.title = `Job for ${payload.clientName}`;
-      else missing.push('title');
-      return { tool: 'createJob', payload, missingFields: missing };
-    }
-
     if (lower.includes('message') || lower.includes('text') || lower.includes('send') || lower.includes('dm')) {
       const payload: Record<string, any> = {};
       const missing: string[] = [];
@@ -13688,406 +13782,358 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else missing.push('recipient (who should I send this to?)');
       return { tool: 'sendMessage', payload, missingFields: missing };
     }
-
     return null;
   }
 
-  async function searchTargets(companyId: number, nameHint: string | null, targetType: 'job' | 'estimate' | null): Promise<ScheduleCandidate[]> {
-    const results: ScheduleCandidate[] = [];
-    const search = nameHint?.toLowerCase() || '';
-    console.log(`[eco-ai] searchTargets: nameHint="${nameHint}" search="${search}" targetType=${targetType} usingAllJobsFallback=${!search}`);
-
-    if (targetType !== 'estimate') {
-      const allJobs = await storage.getJobs(companyId);
-      const activeJobs = allJobs.filter((j: any) => j.status === 'pending' || j.status === 'active');
-      for (const j of activeJobs) {
-        const label = `${j.clientName || j.title}${j.location ? ' — ' + j.location : ''}`;
-        if (!search ||
-          (j.clientName && j.clientName.toLowerCase().includes(search)) ||
-          (j.title && j.title.toLowerCase().includes(search)) ||
-          (j.location && j.location.toLowerCase().includes(search))) {
-          results.push({ type: 'job', id: j.id, label, clientName: j.clientName || '', location: j.location || '' });
-        }
-      }
-    }
-
-    if (targetType !== 'job') {
-      const allEstimates = await storage.getEstimatesByCompany(companyId);
-      const activeEstimates = allEstimates.filter((e: any) => e.status === 'draft' || e.status === 'sent');
-      for (const e of activeEstimates) {
-        const label = `${e.customerName || e.title}${e.jobCity ? ' — ' + e.jobCity : ''}`;
-        if (!search ||
-          (e.customerName && e.customerName.toLowerCase().includes(search)) ||
-          (e.title && e.title.toLowerCase().includes(search))) {
-          results.push({ type: 'estimate', id: e.id, label, clientName: e.customerName || '', location: e.jobCity || '' });
-        }
-      }
-    }
-
-    return results;
-  }
-
-  async function handleScheduleFlow(
-    state: EcoAiConvState,
+  async function handleFormFillFlow(
+    state: FormFillState,
     conversationId: number,
-    _userMessage: string,
+    userMessage: string,
     msgLower: string,
     companyId: number,
     userId: string,
-    _role: UserRole,
+    role: UserRole,
     proposedActions: any[],
     sendReply: (msg: string) => Promise<void>
   ): Promise<string | null> {
     const draft = state.draft;
 
-    if (state.step === 'resolveType') {
-      if (state.candidatesByType) {
-        const isJob = /\b(job|service|work)\b/i.test(msgLower);
-        const isEst = /\b(estimate|quote)\b/i.test(msgLower);
-        if (isJob) {
-          draft.targetType = 'job';
-          const typed = state.candidatesByType.jobs;
-          state.candidatesByType = undefined;
-          if (typed.length === 0) {
-            await sendReply(`There are no jobs for ${draft.clientQuery}. Would you like to schedule an Estimate instead?`);
-            return 'replied';
-          }
-          if (typed.length === 1) {
-            state.step = 'confirmSingleMatch';
-            state.candidates = [typed[0]];
-            const loc = typed[0].location ? ` (${typed[0].location})` : '';
-            await sendReply(`Just to confirm — **${typed[0].clientName || typed[0].label}**${loc}?`);
-            return 'replied';
-          } else {
-            state.candidates = typed;
-            const list = typed.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
-            await sendReply(`Which Job for **${draft.clientQuery}** should I schedule?\n\n${list}`);
-            state.step = 'pickTarget';
-            return 'replied';
-          }
-        } else if (isEst) {
-          draft.targetType = 'estimate';
-          const typed = state.candidatesByType.estimates;
-          state.candidatesByType = undefined;
-          if (typed.length === 0) {
-            await sendReply(`There are no estimates for ${draft.clientQuery}. Would you like to schedule a Job instead?`);
-            return 'replied';
-          }
-          if (typed.length === 1) {
-            state.step = 'confirmSingleMatch';
-            state.candidates = [typed[0]];
-            const loc = typed[0].location ? ` (${typed[0].location})` : '';
-            await sendReply(`Just to confirm — **${typed[0].clientName || typed[0].label}**${loc}?`);
-            return 'replied';
-          } else {
-            state.candidates = typed;
-            const list = typed.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
-            await sendReply(`Which Estimate for **${draft.clientQuery}** should I schedule?\n\n${list}`);
-            state.step = 'pickTarget';
-            return 'replied';
-          }
-        } else {
-          await sendReply(`Reply 'Job' or 'Estimate'.`);
-          return 'replied';
-        }
-      } else if (draft.clientQuery) {
-        console.log(`[eco-ai] resolveType: searching clientQuery="${draft.clientQuery}" targetType=${draft.targetType}`);
-        const matches = await searchTargets(companyId, draft.clientQuery, draft.targetType);
-        console.log(`[eco-ai] resolveType: jobsFound=${matches.filter(m=>m.type==='job').length} estimatesFound=${matches.filter(m=>m.type==='estimate').length}`);
-        if (matches.length === 0) {
-          await sendReply(`I couldn't find a job or estimate matching "${draft.clientQuery}". Could you try a different name?`);
-          clearConvState(conversationId);
-          return 'replied';
-        }
-        if (draft.targetType) {
-          if (matches.length === 1) {
-            state.step = 'confirmSingleMatch';
-            state.candidates = [matches[0]];
-            const loc = matches[0].location ? ` (${matches[0].location})` : '';
-            await sendReply(`Just to confirm — **${matches[0].clientName || matches[0].label}**${loc}?`);
-            return 'replied';
-          }
-          state.step = 'pickTarget';
-        } else {
-          const jobMatches = matches.filter(m => m.type === 'job');
-          const estMatches = matches.filter(m => m.type === 'estimate');
-          if (jobMatches.length > 0 && estMatches.length === 0) {
-            draft.targetType = 'job';
-            if (jobMatches.length === 1) {
-              state.step = 'confirmSingleMatch';
-              state.candidates = [jobMatches[0]];
-              const loc = jobMatches[0].location ? ` (${jobMatches[0].location})` : '';
-              await sendReply(`Just to confirm — **${jobMatches[0].clientName || jobMatches[0].label}**${loc}?`);
-              return 'replied';
-            }
-            state.step = 'pickTarget';
-          } else if (estMatches.length > 0 && jobMatches.length === 0) {
-            draft.targetType = 'estimate';
-            if (estMatches.length === 1) {
-              state.step = 'confirmSingleMatch';
-              state.candidates = [estMatches[0]];
-              const loc = estMatches[0].location ? ` (${estMatches[0].location})` : '';
-              await sendReply(`Just to confirm — **${estMatches[0].clientName || estMatches[0].label}**${loc}?`);
-              return 'replied';
-            }
-            state.step = 'pickTarget';
-          } else {
-            state.candidatesByType = {
-              jobs: jobMatches.slice(0, 4),
-              estimates: estMatches.slice(0, 4),
-            };
-            await sendReply(`Would you like to schedule a Job or an Estimate for ${draft.clientQuery}?`);
-            return 'replied';
-          }
-        }
-      } else {
-        await sendReply("Which client or job should I schedule? Tell me the name.");
+    if (state.step === 'askRecordType') {
+      if (/\b(job|service|work)\b/i.test(msgLower)) draft.recordType = 'job';
+      else if (/\b(estimate|quote)\b/i.test(msgLower)) draft.recordType = 'estimate';
+      else { await sendReply("Is this a **Job** or an **Estimate**?"); return 'replied'; }
+    }
+
+    if (state.step === 'askCustomer') {
+      const name = userMessage.trim();
+      if (name.length < 2) { await sendReply("Who is this for? Tell me the customer name."); return 'replied'; }
+      draft.customerName = name;
+      const matches = await fuzzyMatchClients(companyId, name);
+      if (matches.length === 1) {
+        draft.customerId = matches[0].id;
+        draft.customerName = matches[0].name;
+        draft.customerAddress = matches[0].address;
+      } else if (matches.length > 1) {
+        state.customerCandidates = matches.slice(0, 6);
+        state.step = 'pickCustomer';
+        const list = state.customerCandidates.map((c, i) => `${i + 1}. ${c.name}${c.address ? ' — ' + c.address : ''}`).join('\n');
+        await sendReply(`I found a few matches for "${name}". Which one?\n\n${list}`);
         return 'replied';
       }
     }
 
-    if (state.step === 'confirmSingleMatch') {
-      const yes = /\b(yes|yeah|yep|yup|correct|right|that's? (?:it|right|the one)|confirm|si|ok|okay|sure)\b/i.test(msgLower);
+    if (state.step === 'pickCustomer') {
+      const numMatch = msgLower.match(/^(\d+)$/);
+      let selected: { id: number; name: string; address: string | null } | null = null;
+      if (numMatch) {
+        const idx = parseInt(numMatch[1]) - 1;
+        if (idx >= 0 && idx < state.customerCandidates.length) selected = state.customerCandidates[idx];
+      }
+      if (!selected) {
+        const nameMatches = state.customerCandidates.filter(c => c.name.toLowerCase().includes(msgLower));
+        if (nameMatches.length === 1) selected = nameMatches[0];
+      }
+      if (selected) {
+        draft.customerId = selected.id;
+        draft.customerName = selected.name;
+        draft.customerAddress = selected.address;
+        state.customerCandidates = [];
+      } else {
+        await sendReply("I didn't catch which one. Reply with the number or name.");
+        return 'replied';
+      }
+    }
+
+    if (state.step === 'confirmCustomer') {
+      const yes = /\b(yes|yeah|yep|yup|correct|right|confirm|ok|okay|sure|that's? (?:it|right|the one))\b/i.test(msgLower);
       const no = /\b(no|nope|nah|wrong|not (?:that|right)|different)\b/i.test(msgLower);
-      if (yes && state.candidates.length === 1) {
-        const match = state.candidates[0];
-        draft.targetType = match.type;
-        draft.targetId = match.id;
-        draft.targetLabel = match.label;
-        state.candidates = [];
-        state.step = 'askScope';
-      } else if (no) {
-        state.candidates = [];
-        const preservedType = draft.targetType;
-        state.step = 'pickTarget';
-        const matches = await searchTargets(companyId, draft.clientQuery, preservedType);
-        if (matches.length > 1) {
-          state.candidates = matches.slice(0, 6);
-          const list = state.candidates.map((c, i) => `${i + 1}. ${c.label}${c.type === 'estimate' ? ' (estimate)' : ''}`).join('\n');
-          await sendReply(`Okay, which one did you mean?\n\n${list}`);
-          return 'replied';
-        } else {
-          await sendReply("Okay — which client or job should I schedule? Tell me the name.");
-          draft.clientQuery = null;
-          return 'replied';
-        }
-      } else {
-        await sendReply("Just reply **Yes** or **No** to confirm.");
+      if (yes) { /* proceed */ }
+      else if (no) {
+        draft.customerId = null; draft.customerName = null; draft.customerAddress = null;
+        state.step = 'askCustomer';
+        await sendReply("Okay, who is this for?");
         return 'replied';
-      }
+      } else { await sendReply("Just reply **Yes** or **No** to confirm."); return 'replied'; }
     }
 
-    if (state.step === 'pickTarget' && !draft.targetId) {
-      if (state.candidates.length > 0) {
-        const numMatch = msgLower.match(/^(\d+)$/);
-        let selected: ScheduleCandidate | null = null;
-        if (numMatch) {
-          const idx = parseInt(numMatch[1]) - 1;
-          if (idx >= 0 && idx < state.candidates.length) selected = state.candidates[idx];
-        }
-        if (!selected) {
-          const nameMatches = state.candidates.filter(c =>
-            c.clientName.toLowerCase().includes(msgLower) ||
-            c.label.toLowerCase().includes(msgLower)
-          );
-          if (nameMatches.length === 1) selected = nameMatches[0];
-          else if (nameMatches.length > 1) {
-            state.candidates = nameMatches;
-            const list = nameMatches.map((c, i) => `${i + 1}. ${c.label}`).join('\n');
-            await sendReply(`Still a few matches — which one?\n\n${list}`);
-            return 'replied';
-          }
-        }
-        if (selected) {
-          draft.targetType = selected.type;
-          draft.targetId = selected.id;
-          draft.targetLabel = selected.label;
-          state.candidates = [];
-        } else {
-          await sendReply("I didn't catch which one you meant. Could you reply with the number or name?");
-          return 'replied';
-        }
-      } else {
-        let searchName = draft.clientQuery;
-        if (!searchName) {
-          const rawInput = _userMessage.trim();
-          const looksLikeName = /^[a-zA-Z][a-zA-Z'-]*(\s+[a-zA-Z][a-zA-Z'-]*)*$/.test(rawInput) &&
-            !/^(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|yes|no|skip|cancel|ok|okay|job|estimate|quote|at|for|the|am|pm)$/i.test(rawInput) &&
-            rawInput.length >= 2;
-          if (looksLikeName) {
-            searchName = rawInput;
-            draft.clientQuery = rawInput;
-          }
-        }
-        if (!searchName) {
-          await sendReply("Which client or job should I schedule? Tell me the name.");
-          return 'replied';
-        }
-        console.log(`[eco-ai] pickTarget search: clientQuery="${draft.clientQuery}" targetType=${draft.targetType}`);
-        const matches = await searchTargets(companyId, draft.clientQuery, draft.targetType);
-        console.log(`[eco-ai] pickTarget results: jobsFound=${matches.filter(m=>m.type==='job').length} estimatesFound=${matches.filter(m=>m.type==='estimate').length}`);
-        if (matches.length === 0) {
-          const typeLabel = draft.targetType === 'estimate' ? 'estimate' : 'job';
-          await sendReply(`I couldn't find an active ${typeLabel} matching "${draft.clientQuery}". Could you try a different name?`);
-          return 'replied';
-        }
-        if (matches.length === 1) {
-          state.step = 'confirmSingleMatch';
-          state.candidates = [matches[0]];
-          const loc = matches[0].location ? ` (${matches[0].location})` : '';
-          await sendReply(`Just to confirm — **${matches[0].clientName || matches[0].label}**${loc}?`);
-          return 'replied';
-        } else {
-          state.candidates = matches.slice(0, 6);
-          const list = state.candidates.map((c, i) => `${i + 1}. ${c.label}${c.type === 'estimate' ? ' (estimate)' : ''}`).join('\n');
-          const typeLabel = draft.targetType === 'estimate' ? 'estimate' : 'job';
-          await sendReply(`I found a few ${typeLabel}s for **${draft.clientQuery}**. Which one?\n\n${list}\n\nJust tell me the name or number.`);
-          return 'replied';
-        }
-      }
-    }
-
-    // askScope step - ask about scope of work after target selected
-    if (draft.targetId && !draft.scopeSkipped && state.step !== 'askDate' && state.step !== 'askTime' && state.step !== 'confirm' && (draft.scopeItems.length === 0 || state.step === 'askScope')) {
-      const canEditScope = can(_role, 'schedule.manage');
-      if (!canEditScope) {
-        draft.scopeSkipped = true;
-      } else if (state.step !== 'askScope') {
-        state.step = 'askScope';
-        const targetName = draft.targetLabel || 'this visit';
-        await sendReply(`What's the scope of work for **${targetName}**?\n\nYou can:\n• Pick from Pricebook\n• Describe it in a few words\n• Say "skip" to schedule without scope`);
-        return 'replied';
-      }
-
-      if (/\b(skip|none|no scope|nothing|n\/a)\b/i.test(msgLower)) {
-        draft.scopeSkipped = true;
-      } else if (/\b(pick|pricebook|catalog|service catalog|browse|select)\b/i.test(msgLower)) {
-        await sendReply('__OPEN_PRICEBOOK_PICKER__');
-        return 'replied';
-      } else if (/\b(custom|new item|create item|add item)\b/i.test(msgLower)) {
-        await sendReply("What should we call this line item?");
-        (state as any)._customItemStep = 'name';
-        return 'replied';
-      } else if ((state as any)._customItemStep) {
-        const cis = (state as any)._customItemStep;
-        if (cis === 'name') {
-          (state as any)._customItemName = _userMessage.trim();
-          (state as any)._customItemStep = 'price';
-          await sendReply(`Got it — "${(state as any)._customItemName}". What price? (e.g. "150" or "75.50")`);
-          return 'replied';
-        } else if (cis === 'price') {
-          const priceMatch = msgLower.match(/(\d+(?:\.\d{1,2})?)/);
-          if (!priceMatch) {
-            await sendReply("I need a number for the price (e.g. \"150\" or \"75.50\").");
-            return 'replied';
-          }
-          const priceDollars = parseFloat(priceMatch[1]);
-          const priceCents = Math.round(priceDollars * 100);
-          draft.scopeItems.push({
-            source: 'custom',
-            name: (state as any)._customItemName || 'Custom item',
-            qty: 1,
-            unitPriceCents: priceCents,
-            unit: 'each',
-          });
-          delete (state as any)._customItemStep;
-          delete (state as any)._customItemName;
-          await sendReply(`Added "${draft.scopeItems[draft.scopeItems.length - 1].name}" at $${priceDollars.toFixed(2)}.\n\nAnything else to add?\n• Pick from Pricebook\n• Create another item\n• Say "done" to continue`);
-          return 'replied';
-        }
+    if (state.step === 'askLineItems') {
+      if (/\b(skip|none|n\/a)\b/i.test(msgLower)) { draft.lineItemsAsked = true; }
+      else if (/\b(pick|pricebook|catalog|service catalog|browse|select)\b/i.test(msgLower)) {
+        await sendReply('__OPEN_PRICEBOOK_PICKER__'); return 'replied';
+      } else if (/\b(custom|new item|create item|add item|new)\b/i.test(msgLower)) {
+        state.step = 'customItemName';
+        await sendReply("What should we call this line item?"); return 'replied';
       } else if (/\b(done|that's it|thats it|continue|proceed|all set|no more)\b/i.test(msgLower)) {
-        draft.scopeSkipped = draft.scopeItems.length === 0;
+        draft.lineItemsAsked = true;
       } else {
-        const scopeText = _userMessage.trim();
-        if (scopeText.length > 2) {
-          draft.scopeItems.push({
-            source: 'custom',
-            name: scopeText.length > 100 ? scopeText.substring(0, 100) : scopeText,
-            qty: 1,
-            unitPriceCents: 0,
-            unit: 'each',
-          });
-          await sendReply(`Got it — noted "${draft.scopeItems[draft.scopeItems.length - 1].name}" as scope.\n\nAnything else?\n• Pick from Pricebook\n• Create another item\n• Say "done" to continue`);
-          return 'replied';
-        }
+        await sendReply("Want to add line items?\n\n• Pick from Pricebook\n• New Item\n• Skip");
+        return 'replied';
       }
     }
 
-    if (draft.targetId && !draft.date) {
-      state.step = 'askDate';
+    if (state.step === 'customItemName') {
+      state.customItemName = userMessage.trim();
+      state.step = 'customItemPrice';
+      await sendReply(`Got it — "${state.customItemName}". What price? (e.g. "150" or "75.50")`);
+      return 'replied';
+    }
+
+    if (state.step === 'customItemPrice') {
+      const priceMatch = msgLower.match(/(\d+(?:\.\d{1,2})?)/);
+      if (!priceMatch) { await sendReply('I need a number for the price (e.g. "150" or "75.50").'); return 'replied'; }
+      const priceDollars = parseFloat(priceMatch[1]);
+      draft.lineItems.push({ source: 'custom', name: state.customItemName || 'Item', qty: 1, unitPriceCents: Math.round(priceDollars * 100), unit: 'each' });
+      delete state.customItemName;
+      state.step = 'askLineItems';
+      await sendReply(`Added "${draft.lineItems[draft.lineItems.length - 1].name}" at $${priceDollars.toFixed(2)}.\n\nAnything else?\n• Pick from Pricebook\n• New Item\n• Done`);
+      return 'replied';
+    }
+
+    if (state.step === 'askScheduleDate') {
       const dateFromMsg = extractDate(msgLower);
-      if (dateFromMsg) {
-        draft.date = dateFromMsg;
-      } else if (state.step === 'askDate') {
-        const jobName = draft.targetLabel || 'that';
-        const timeNote = draft.time ? ` at ${draft.time}` : '';
-        await sendReply(`Got it — scheduling **${jobName}**${timeNote}. What day works?`);
-        return 'replied';
+      if (dateFromMsg) draft.scheduleDate = dateFromMsg;
+      else if (/\b(skip|none|no|n\/a|no schedule)\b/i.test(msgLower)) { /* skip */ }
+      else { await sendReply("What day? (e.g. \"tomorrow\", \"Monday\", \"3/15\")"); return 'replied'; }
+    }
+
+    if (state.step === 'askScheduleTime') {
+      const timeFromMsg = extractTime(userMessage);
+      if (timeFromMsg) draft.scheduleTime = timeFromMsg;
+      else if (/\b(skip|none|no|n\/a)\b/i.test(msgLower)) { /* skip */ }
+      else { await sendReply(`What time on ${draft.scheduleDate}?`); return 'replied'; }
+    }
+
+    if (state.step === 'askAssignees') {
+      if (/\b(skip|none|no|n\/a|no one)\b/i.test(msgLower)) { /* skip */ }
+      else {
+        const name = userMessage.trim();
+        if (name.length >= 2) {
+          const resolved = await resolveAssignees(companyId, [name]);
+          if (resolved.length === 1) { draft.assigneeIds = [resolved[0].userId]; draft.assigneeNames = [resolved[0].name]; }
+          else if (resolved.length > 1) {
+            state.assigneeCandidates = resolved.slice(0, 6);
+            state.step = 'pickAssignee';
+            const list = resolved.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
+            await sendReply(`Which team member?\n\n${list}`); return 'replied';
+          } else { await sendReply(`I couldn't find anyone named "${name}". Try another name or say "skip".`); return 'replied'; }
+        } else { await sendReply("Who should be assigned? Type a name or say \"skip\"."); return 'replied'; }
       }
     }
 
-    if (draft.targetId && draft.date && !draft.time) {
-      state.step = 'askTime';
-      const timeFromMsg = extractTime(msgLower);
-      if (timeFromMsg) {
-        draft.time = timeFromMsg;
+    if (state.step === 'pickAssignee') {
+      const numMatch = msgLower.match(/^(\d+)$/);
+      let selected: { userId: string; name: string; role: string } | null = null;
+      if (numMatch) {
+        const idx = parseInt(numMatch[1]) - 1;
+        if (idx >= 0 && idx < state.assigneeCandidates.length) selected = state.assigneeCandidates[idx];
+      }
+      if (!selected) {
+        const nameMatches = state.assigneeCandidates.filter(a => a.name.toLowerCase().includes(msgLower));
+        if (nameMatches.length === 1) selected = nameMatches[0];
+      }
+      if (selected) { draft.assigneeIds = [selected.userId]; draft.assigneeNames = [selected.name]; state.assigneeCandidates = []; }
+      else { await sendReply("Reply with the number or name."); return 'replied'; }
+    }
+
+    if (state.step === 'askNotes') {
+      if (/\b(skip|none|no|n\/a)\b/i.test(msgLower)) { /* skip */ }
+      else draft.notes = userMessage.trim();
+    }
+
+    if (state.step === 'editing') {
+      const field = state.editingField;
+      if (field === 'customer') { draft.customerId = null; draft.customerName = null; draft.customerAddress = null; state.step = 'askCustomer'; await sendReply("Who is this for?"); return 'replied'; }
+      if (field === 'schedule') { draft.scheduleDate = null; draft.scheduleTime = null; state.step = 'askScheduleDate'; await sendReply("What day?"); return 'replied'; }
+      if (field === 'assignees') { draft.assigneeIds = []; draft.assigneeNames = []; state.step = 'askAssignees'; await sendReply("Who should be assigned?"); return 'replied'; }
+      if (field === 'notes') { draft.notes = null; state.step = 'askNotes'; await sendReply("What notes should I add? (or say \"skip\")"); return 'replied'; }
+      if (field === 'type') { draft.recordType = null; state.step = 'askRecordType'; await sendReply("Is this a **Job** or an **Estimate**?"); return 'replied'; }
+      if (field === 'lineitems') { draft.lineItems = []; draft.lineItemsAsked = false; state.step = 'askLineItems'; await sendReply("Want to add line items?\n\n• Pick from Pricebook\n• New Item\n• Skip"); return 'replied'; }
+      state.editingField = undefined;
+    }
+
+    if (state.step === 'review') {
+      const yes = /\b(yes|yeah|yep|yup|save|confirm|ok|okay|sure|looks good|lgtm|go|do it)\b/i.test(msgLower);
+      const edit = /\b(edit|change|modify|update|fix)\b/i.test(msgLower);
+      const cancel = /\b(cancel|never mind|nevermind|stop)\b/i.test(msgLower);
+      if (yes) {
+        const result = await executeFormFillDraft(draft, companyId, userId, role, conversationId, proposedActions);
+        clearConvState(conversationId);
+        return result;
+      } else if (edit) {
+        state.step = 'editing';
+        await sendReply("Which field would you like to change?\n\n• Customer\n• Schedule\n• Assigned\n• Notes\n• Type\n• Line Items");
+        return 'replied';
+      } else if (cancel) {
+        clearConvState(conversationId);
+        return "No problem — cancelled. What else can I help with?";
       } else {
-        await sendReply(`What time on ${draft.date}?`);
+        if (/\b(customer|client)\b/i.test(msgLower)) { state.editingField = 'customer'; state.step = 'editing'; }
+        else if (/\b(schedule|date|time|when)\b/i.test(msgLower)) { state.editingField = 'schedule'; state.step = 'editing'; }
+        else if (/\b(assign|crew|tech)\b/i.test(msgLower)) { state.editingField = 'assignees'; state.step = 'editing'; }
+        else if (/\b(note|notes)\b/i.test(msgLower)) { state.editingField = 'notes'; state.step = 'editing'; }
+        else if (/\b(type|job|estimate)\b/i.test(msgLower)) { state.editingField = 'type'; state.step = 'editing'; }
+        else if (/\b(line|item|scope|pricebook)\b/i.test(msgLower)) { state.editingField = 'lineitems'; state.step = 'editing'; }
+        else { await sendReply("Reply **Save**, **Edit**, or **Cancel**."); return 'replied'; }
+        return await handleFormFillFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
+      }
+    }
+
+    if (draft.customerName && !draft.customerId) {
+      const matches = await fuzzyMatchClients(companyId, draft.customerName);
+      if (matches.length === 1) {
+        draft.customerId = matches[0].id;
+        draft.customerName = matches[0].name;
+        draft.customerAddress = matches[0].address;
+      } else if (matches.length > 1) {
+        state.customerCandidates = matches.slice(0, 6);
+        state.step = 'pickCustomer';
+        const list = matches.slice(0, 6).map((c, i) => `${i + 1}. ${c.name}${c.address ? ' — ' + c.address : ''}`).join('\n');
+        await sendReply(`I found a few matches for "${draft.customerName}". Which one?\n\n${list}`);
         return 'replied';
       }
     }
 
-    if (draft.targetId && draft.date && draft.time) {
-      state.step = 'confirm';
-      const times = buildStartEnd(draft);
-      if (!times) {
-        await sendReply("I couldn't figure out the date. Could you try again? (e.g. \"tomorrow\", \"Monday\", \"3/15\")");
-        draft.date = null;
-        state.step = 'askDate';
+    if (draft.assigneeNames.length > 0 && draft.assigneeIds.length === 0) {
+      const resolved = await resolveAssignees(companyId, draft.assigneeNames);
+      if (resolved.length === 1) { draft.assigneeIds = [resolved[0].userId]; draft.assigneeNames = [resolved[0].name]; }
+      else if (resolved.length > 1) {
+        state.assigneeCandidates = resolved.slice(0, 6);
+        state.step = 'pickAssignee';
+        const list = resolved.map((a, i) => `${i + 1}. ${a.name} (${a.role})`).join('\n');
+        await sendReply(`Which team member?\n\n${list}`);
         return 'replied';
       }
-      draft.startDateTime = times.startDateTime;
-      draft.endDateTime = times.endDateTime;
-
-      const toolName = draft.targetType === 'estimate' ? 'scheduleEstimate' : 'scheduleAppointment';
-      const toolDef = ecoAiTools[toolName];
-      const dur = draft.durationMinutes || (draft.targetType === 'estimate' ? 60 : 120);
-
-      const actionPayload: any = draft.targetType === 'estimate'
-        ? { estimateId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel, scopeItems: draft.scopeItems }
-        : { jobId: draft.targetId, startDateTime: draft.startDateTime, endDateTime: draft.endDateTime, _targetLabel: draft.targetLabel, scopeItems: draft.scopeItems };
-
-      const displayPayload: any = {
-        [draft.targetType === 'estimate' ? 'estimate' : 'job']: draft.targetLabel,
-        when: formatWhen(draft.startDateTime, dur),
-      };
-      if (draft.scopeItems.length > 0) {
-        const scopeNames = draft.scopeItems.slice(0, 2).map(s => s.name).join(', ');
-        const more = draft.scopeItems.length > 2 ? ` +${draft.scopeItems.length - 2} more` : '';
-        displayPayload.scope = `${draft.scopeItems.length} item(s): ${scopeNames}${more}`;
-      }
-
-      const confirmMsg = `Got it — here's the ${draft.targetType === 'estimate' ? 'estimate appointment' : 'appointment'}:`;
-      const action = await storage.createEcoAiAction({
-        conversationId,
-        tool: toolName,
-        payload: actionPayload,
-        status: 'proposed',
-        createdById: userId,
-      });
-      proposedActions.push({
-        id: action.id,
-        tool: toolName,
-        friendlyName: toolDef.friendlyName,
-        payload: displayPayload,
-        status: 'proposed',
-      });
-      console.log(`[eco-ai] proposed scheduling action: ${toolName} id=${action.id}`);
-      clearConvState(conversationId);
-      return confirmMsg;
     }
 
+    const nextStep = getNextMissingStep(draft, role);
+    if (nextStep) {
+      state.step = nextStep;
+      return await askForStep(state, draft, nextStep, companyId, sendReply);
+    }
+
+    state.step = 'review';
+    const reviewText = buildReviewText(draft);
+    await sendReply(reviewText);
+    return 'replied';
+  }
+
+  function getNextMissingStep(draft: FormFillDraft, _role: UserRole): FormFillStep | null {
+    if (!draft.recordType) return 'askRecordType';
+    if (!draft.customerId && !draft.customerName) return 'askCustomer';
+    if (draft.recordType === 'estimate' && !draft.lineItemsAsked && draft.lineItems.length === 0) return 'askLineItems';
     return null;
+  }
+
+  async function askForStep(state: FormFillState, draft: FormFillDraft, step: FormFillStep, _companyId: number, sendReply: (msg: string) => Promise<void>): Promise<string | null> {
+    state.step = step;
+    switch (step) {
+      case 'askRecordType': await sendReply("Is this a **Job** or an **Estimate**?"); return 'replied';
+      case 'askCustomer': await sendReply("Who is this for?"); return 'replied';
+      case 'askLineItems': await sendReply("Want to add line items?\n\n• Pick from Pricebook\n• New Item\n• Skip"); return 'replied';
+      case 'askScheduleDate': await sendReply("What day? (e.g. \"tomorrow\", \"Monday\", \"3/15\")"); return 'replied';
+      case 'askScheduleTime': await sendReply(`What time on ${draft.scheduleDate}?`); return 'replied';
+      case 'askAssignees': await sendReply("Who should be assigned? (name or \"skip\")"); return 'replied';
+      case 'askNotes': await sendReply("Any notes? (or say \"skip\")"); return 'replied';
+      default: return null;
+    }
+  }
+
+  async function executeFormFillDraft(
+    draft: FormFillDraft,
+    companyId: number,
+    userId: string,
+    role: UserRole,
+    conversationId: number,
+    proposedActions: any[]
+  ): Promise<string> {
+    try {
+      if (draft.recordType === 'job') {
+        if (!can(role, 'jobs.create')) return "Sorry, your role doesn't have permission to create jobs.";
+        const title = `Job for ${draft.customerName || 'Customer'}`;
+        const location = draft.locationText || draft.customerAddress || '';
+        const job = await storage.createJob({
+          companyId, title, clientName: draft.customerName || '',
+          description: draft.notes || '', location, status: 'pending',
+          priority: 'medium', assignedTo: draft.assigneeIds.length > 0 ? draft.assigneeIds[0] : null,
+          jobType: draft.jobTypeText || null,
+        } as any);
+
+        if (draft.lineItems.length > 0) {
+          for (let i = 0; i < draft.lineItems.length; i++) {
+            const si = draft.lineItems[i];
+            const qty = si.qty || 1;
+            const unitPriceCents = si.unitPriceCents || 0;
+            const lineTotalCents = qty * unitPriceCents;
+            await db.insert(jobLineItems).values({
+              jobId: job.id, name: si.name, description: null,
+              quantity: qty.toString(), unitPriceCents, unit: si.unit || 'each',
+              taxable: false, lineTotalCents, taxCents: 0, totalCents: lineTotalCents, sortOrder: i,
+            });
+          }
+        }
+
+        if (draft.scheduleDate && can(role, 'schedule.manage')) {
+          const times = buildStartEnd(draft);
+          if (times) {
+            await storage.createScheduleItem({
+              companyId, jobId: job.id,
+              startDateTime: new Date(times.startDateTime),
+              endDateTime: new Date(times.endDateTime),
+              location: location || null, notes: draft.notes || null, status: 'scheduled',
+            });
+          }
+        }
+
+        let msg = `Job "${title}" created successfully!`;
+        if (draft.scheduleDate) msg += ` Scheduled for ${draft.scheduleDate}${draft.scheduleTime ? ' at ' + draft.scheduleTime : ''}.`;
+        if (draft.assigneeNames.length > 0) msg += ` Assigned to ${draft.assigneeNames.join(', ')}.`;
+        if (draft.lineItems.length > 0) msg += ` ${draft.lineItems.length} line item(s) added.`;
+        return msg;
+      } else if (draft.recordType === 'estimate') {
+        if (!can(role, 'estimates.create')) return "Sorry, your role doesn't have permission to create estimates.";
+        const items = draft.lineItems.length > 0
+          ? draft.lineItems.map((si, i) => ({
+            name: si.name, description: null, taskCode: null,
+            quantity: String(si.qty || 1), unitPriceCents: si.unitPriceCents || 0,
+            unit: si.unit || 'each', taxable: false, taxId: null,
+            taxRatePercentSnapshot: null, taxNameSnapshot: null, taxCents: 0, sortOrder: i,
+          }))
+          : [{ name: 'Service', description: null, taskCode: null, quantity: '1', unitPriceCents: 0, unit: 'each', taxable: false, taxId: null, taxRatePercentSnapshot: null, taxNameSnapshot: null, taxCents: 0, sortOrder: 0 }];
+
+        const title = `Estimate for ${draft.customerName || 'Customer'}`;
+        let scheduledDate: Date | string | null = null;
+        let scheduledTime: string | null = null;
+        let scheduledEndTime: string | null = null;
+        if (draft.scheduleDate) {
+          const times = buildStartEnd(draft);
+          if (times) {
+            scheduledDate = times.startDateTime;
+            const startDt = new Date(times.startDateTime);
+            const endDt = new Date(times.endDateTime);
+            scheduledTime = startDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            scheduledEndTime = endDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+          }
+        }
+        const est = await storage.createEstimate({
+          title, customerName: draft.customerName || undefined,
+          customerId: draft.customerId || undefined,
+          customerAddress: draft.customerAddress || undefined,
+          notes: draft.notes || undefined, jobType: draft.jobTypeText || undefined,
+          assignedEmployeeIds: draft.assigneeIds, scheduledDate, scheduledTime, scheduledEndTime,
+          requestedStartAt: scheduledDate, items,
+        } as any, companyId, userId);
+
+        let msg = `Estimate "${title}" created successfully!`;
+        if (draft.scheduleDate) msg += ` Scheduled for ${draft.scheduleDate}${draft.scheduleTime ? ' at ' + draft.scheduleTime : ''}.`;
+        if (draft.assigneeNames.length > 0) msg += ` Assigned to ${draft.assigneeNames.join(', ')}.`;
+        if (draft.lineItems.length > 0) msg += ` ${draft.lineItems.length} line item(s) added.`;
+        return msg;
+      }
+      return "I couldn't determine the record type. Please try again.";
+    } catch (error: any) {
+      console.error('[eco-ai] executeFormFillDraft error:', error);
+      return `Something went wrong while creating the ${draft.recordType || 'record'}: ${error.message}`;
+    }
   }
 
   app.post('/api/eco-ai/chat', isAuthenticated, async (req: any, res) => {
@@ -14150,58 +14196,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else {
         const state = getConvState(conversationId);
 
-        if (state.pendingIntent === 'schedule') {
-          console.log(`[eco-ai] pendingIntent=schedule step=${state.step}`);
-          const handled = await handleScheduleFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
+        if (state.active) {
+          console.log(`[eco-ai] formFill active step=${state.step}`);
+          const slots = extractAllSlots(userMessage, msgLower);
+          applySlots(state.draft, slots);
+          const handled = await handleFormFillFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
           if (handled === 'replied') return;
-          if (handled) {
-            assistantMessage = handled;
-          }
-          if (!assistantMessage) {
-            assistantMessage = "I'm still helping you schedule. Could you reply with the info I asked for, or say \"cancel\" to start over.";
-          }
+          if (handled) assistantMessage = handled;
+          if (!assistantMessage) assistantMessage = "I'm still helping. Could you reply with the info I asked for, or say \"cancel\" to start over.";
         }
 
         if (!assistantMessage) {
-          const hasScheduleIntent = isScheduleIntent(msgLower) || isEstimateScheduleIntent(msgLower);
+          const hasFormFillIntent = isFormFillIntent(msgLower);
 
-          if (hasScheduleIntent) {
-            console.log(`[eco-ai] intent=schedule detected`);
+          if (hasFormFillIntent) {
+            console.log(`[eco-ai] formFill intent detected`);
             const state = getConvState(conversationId);
-            state.pendingIntent = 'schedule';
+            state.active = true;
             state.draft = freshDraft();
-            state.candidates = [];
+            const slots = extractAllSlots(userMessage, msgLower);
+            applySlots(state.draft, slots);
 
-            const nameHint = extractNameHint(userMessage);
-            const time = extractTime(userMessage);
-            const date = extractDate(userMessage);
-            const wantsEstimate = isEstimateScheduleIntent(msgLower);
-            console.log(`[eco-ai] extractNameHint="${nameHint}" time="${time}" date="${date}" wantsEstimate=${wantsEstimate}`);
-
-            if (time) state.draft.time = time;
-            if (date) state.draft.date = date;
-            if (nameHint) state.draft.clientQuery = nameHint;
-
-            const wantsJob = /\b(job|service|work order)\b/i.test(msgLower) && !wantsEstimate;
-            if (wantsEstimate) {
-              state.draft.targetType = 'estimate';
-              state.step = 'pickTarget';
-            } else if (wantsJob) {
-              state.draft.targetType = 'job';
-              state.step = 'resolveType';
-            } else {
-              state.draft.targetType = null;
-              state.step = 'resolveType';
+            if (state.draft.customerName) {
+              const matches = await fuzzyMatchClients(companyId, state.draft.customerName);
+              if (matches.length === 1) {
+                state.draft.customerId = matches[0].id;
+                state.draft.customerName = matches[0].name;
+                state.draft.customerAddress = matches[0].address;
+              }
             }
 
-            const toolDef = ecoAiTools.scheduleAppointment;
-            const hasPermission = toolDef.requiredPermissions.length === 0 ||
-              toolDef.requiredPermissions.some(perm => can(role, perm));
-            if (!hasPermission) {
-              assistantMessage = `Sorry, your role (${role}) doesn't have permission to schedule.`;
+            if (state.draft.assigneeNames.length > 0) {
+              const resolved = await resolveAssignees(companyId, state.draft.assigneeNames);
+              if (resolved.length === 1) {
+                state.draft.assigneeIds = [resolved[0].userId];
+                state.draft.assigneeNames = [resolved[0].name];
+              }
+            }
+
+            const permNeeded = state.draft.recordType === 'estimate' ? 'estimates.create' :
+                               state.draft.recordType === 'job' ? 'jobs.create' : null;
+            if (permNeeded && !can(role, permNeeded as Permission)) {
+              assistantMessage = `Sorry, your role (${role}) doesn't have permission to create ${state.draft.recordType}s.`;
               clearConvState(conversationId);
             } else {
-              const handled = await handleScheduleFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
+              const handled = await handleFormFillFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
               if (handled === 'replied') return;
               if (handled) assistantMessage = handled;
             }
@@ -14420,8 +14459,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!conv) return res.status(404).json({ message: 'Conversation not found' });
 
       const state = getConvState(conversationId);
-      if (!state || state.step !== 'askScope') {
-        return res.status(400).json({ message: 'Not in scope selection step' });
+      if (!state || state.step !== 'askLineItems') {
+        return res.status(400).json({ message: 'Not in line items step' });
       }
 
       for (const item of items) {
@@ -14429,7 +14468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const catalogItem = await storage.getServiceCatalogItem(item.catalogId);
           if (!catalogItem || catalogItem.companyId !== companyId) continue;
           const qty = Math.max(1, Math.min(item.qty || 1, 999));
-          state.draft.scopeItems.push({
+          state.draft.lineItems.push({
             source: 'pricebook',
             catalogId: catalogItem.id,
             name: catalogItem.name,
@@ -14440,7 +14479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const count = state.draft.scopeItems.length;
+      const count = state.draft.lineItems.length;
       res.json({ success: true, count });
     } catch (error: any) {
       console.error('[eco-ai] scope-items error:', error);
