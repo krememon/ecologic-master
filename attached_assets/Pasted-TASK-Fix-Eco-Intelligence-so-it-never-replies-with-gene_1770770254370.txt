@@ -1,0 +1,60 @@
+TASK: Fix Eco-Intelligence so it never replies with generic help text when the user is clearly trying to schedule. Make scheduling intent detection + flow state “sticky.”
+
+PROBLEM
+User says: “I would like to schedule Jennifer for 5 oclock today”
+Assistant responds with generic help (“I’m here to chat or help manage your work…”)
+This means scheduling intent detection failed OR flow state got cleared unexpectedly.
+
+GOAL
+When user asks to schedule (any phrasing), Eco-AI must ALWAYS enter/continue the scheduling flow and respond with relevant next steps.
+
+IMPLEMENTATION
+
+1) Expand scheduling intent detection to handle natural language:
+Trigger schedule intent if message contains ANY of:
+- "schedule"
+- "book"
+- "set up"
+- "appointment"
+- "reschedule"
+- "move to"
+- "put on the calendar"
+- "schedule for"
+- "at [time]" combined with a name (basic heuristic)
+
+Example regex ideas:
+- /\b(schedule|book|appointment|reschedule|calendar)\b/i
+
+2) Add a “flow lock”:
+If state.pendingIntent === "schedule", do NOT run generic chat fallback.
+Always route to scheduleFlowHandler(message, state).
+
+3) If scheduling intent detected:
+Set:
+state.pendingIntent = "schedule"
+state.step = state.step || "resolveTarget"
+Then call scheduleFlowHandler immediately.
+
+4) Remove / restrict generic fallback:
+Generic help response is ONLY allowed when:
+- no work intent detected
+- AND state.pendingIntent is null
+
+5) Add targeted logs:
+[eco-ai] intent=schedule detected
+[eco-ai] pendingIntent=schedule step=...
+[eco-ai] fallback used (only when no intent)
+
+6) Ensure state persistence:
+Verify conversation state is stored and loaded consistently by conversationId.
+If state is stored in-memory, replace with DB persistence (eco_ai_conversations.state_json) so it doesn’t reset between requests.
+
+QA TESTS
+- “I would like to schedule Jennifer for 5 oclock today” triggers schedule flow every time
+- Assistant never responds with generic help during scheduling
+- State does not reset between messages
+
+DELIVERABLE
+- Reliable scheduling intent detection
+- Sticky schedule flow routing
+- No irrelevant generic responses for schedule requests

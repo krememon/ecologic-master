@@ -13612,6 +13612,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const timeMatch = message.match(/(?:at|for)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i)
       || message.match(/(?:at|for)\s+(\d{1,2}:\d{2})/i);
     if (timeMatch) return timeMatch[1];
+    const oclockMatch = message.match(/(?:at|for)\s+(\d{1,2})\s*o'?clock/i);
+    if (oclockMatch) return oclockMatch[1];
     const standaloneTime = message.match(/\b(?:at|for)\s+(\d{1,2})\b(?!\s*(?:[A-Z]|am|pm|:\d))/i);
     if (standaloneTime) return standaloneTime[1];
     return null;
@@ -13623,7 +13625,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   function isScheduleIntent(msg: string): boolean {
-    return /\b(schedule|appointment|book|reschedule)\b/i.test(msg);
+    if (/\b(schedule|appointment|book|reschedule|put\s+on\s+(?:the\s+)?calendar|set\s+up)\b/i.test(msg)) return true;
+    if (/\b(?:at|for)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|o'?clock)?\b/i.test(msg) && /[A-Z][a-z]{2,}/.test(msg)) return true;
+    if (/\b(?:move|push)\s+(?:it\s+)?(?:to|back)\b/i.test(msg) && /\d{1,2}/.test(msg)) return true;
+    return false;
   }
 
   function isEstimateScheduleIntent(msg: string): boolean {
@@ -14050,10 +14055,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const state = getConvState(conversationId);
 
         if (state.pendingIntent === 'schedule') {
+          console.log(`[eco-ai] pendingIntent=schedule step=${state.step}`);
           const handled = await handleScheduleFlow(state, conversationId, userMessage, msgLower, companyId, userId, role, proposedActions, sendReply);
           if (handled === 'replied') return;
           if (handled) {
             assistantMessage = handled;
+          }
+          if (!assistantMessage) {
+            assistantMessage = "I'm still helping you schedule. Could you reply with the info I asked for, or say \"cancel\" to start over.";
           }
         }
 
@@ -14061,6 +14070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const hasScheduleIntent = isScheduleIntent(msgLower) || isEstimateScheduleIntent(msgLower);
 
           if (hasScheduleIntent) {
+            console.log(`[eco-ai] intent=schedule detected`);
             const state = getConvState(conversationId);
             state.pendingIntent = 'schedule';
             state.draft = freshDraft();
@@ -14179,6 +14189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 assistantMessage = "I caught that you want to do something work-related, but I need a bit more detail. Could you try rephrasing? For example:\n• \"Create a job for Maria at 22 Bay Ave\"\n• \"Schedule an appointment for Maria tomorrow at 9am\"\n• \"Create client John Smith\"";
               }
             } else {
+              console.log(`[eco-ai] fallback used (no intent detected)`);
               assistantMessage = generateFriendlyReply(msgLower);
             }
           }
