@@ -13,7 +13,7 @@ import { User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import CompanyInviteCode from "@/components/CompanyInviteCode";
 import { BillingSection } from "@/components/BillingSection";
-import { ConnectBankCard } from "@/components/ConnectBankCard";
+
 import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import DeleteAccountModal from "@/components/DeleteAccountModal";
@@ -422,13 +422,6 @@ export default function Settings() {
         {user?.role === 'OWNER' && (
           <div className="md:col-span-3">
             <BillingSection />
-          </div>
-        )}
-
-        {/* Bank Connection - Owner Only */}
-        {user?.role === 'OWNER' && (
-          <div className="md:col-span-3">
-            <ConnectBankCard />
           </div>
         )}
 

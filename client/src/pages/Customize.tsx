@@ -1,9 +1,10 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link, useSearch } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2, Mail } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2, Mail, Landmark } from "lucide-react";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { ConnectBankCard } from "@/components/ConnectBankCard";
 
 export default function Customize() {
   const { isLoading: authLoading } = useAuth();
@@ -125,6 +126,19 @@ export default function Customize() {
             </div>
           </Link>
         ))}
+      </div>
+
+      <div className="mt-8">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
+            <Landmark className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Financial Connections</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Link your bank account for payments and refunds</p>
+          </div>
+        </div>
+        <ConnectBankCard />
       </div>
     </div>
   );
