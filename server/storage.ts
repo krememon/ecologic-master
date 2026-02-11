@@ -105,7 +105,7 @@ import {
   type InsertPlaidAccount,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, gte, lte, isNotNull } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, gte, lte, isNotNull, ne } from "drizzle-orm";
 import crypto from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations
@@ -3752,7 +3752,10 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(notifications)
-      .where(eq(notifications.recipientUserId, userId))
+      .where(and(
+        eq(notifications.recipientUserId, userId),
+        ne(notifications.type, 'document_uploaded')
+      ))
       .orderBy(desc(notifications.createdAt))
       .limit(limit);
   }
@@ -3763,7 +3766,8 @@ export class DatabaseStorage implements IStorage {
       .from(notifications)
       .where(and(
         eq(notifications.recipientUserId, userId),
-        sql`${notifications.readAt} IS NULL`
+        sql`${notifications.readAt} IS NULL`,
+        ne(notifications.type, 'document_uploaded')
       ));
     return result[0]?.count || 0;
   }
