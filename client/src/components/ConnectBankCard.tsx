@@ -93,7 +93,7 @@ export function ConnectBankCard() {
               <Landmark className="h-5 w-5 text-teal-600 dark:text-teal-400" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Bank connection</h3>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Bank Connection</h3>
               {connected && status?.institutionName && (
                 <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">
                   {status.institutionName}
