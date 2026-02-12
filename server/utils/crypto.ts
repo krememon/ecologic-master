@@ -18,8 +18,11 @@ function getEncryptionKey(): Buffer {
   } else {
     decoded = Buffer.from(key, "base64");
   }
-  if (decoded.length !== 32) {
-    throw new Error(`ENCRYPTION_KEY must decode to 32 bytes (AES-256). Got ${decoded.length} bytes.`);
+  if (decoded.length < 32) {
+    throw new Error(`ENCRYPTION_KEY must decode to at least 32 bytes (AES-256). Got ${decoded.length} bytes.`);
+  }
+  if (decoded.length > 32) {
+    decoded = decoded.subarray(0, 32);
   }
   _cachedKey = decoded;
   return decoded;
@@ -37,8 +40,10 @@ try {
       bytes = Buffer.from(raw, "base64");
     }
     console.log("[crypto] ENCRYPTION_KEY decoded bytes:", bytes.length);
-    if (bytes.length !== 32) {
-      console.error("[crypto] WARNING: Key is not 32 bytes! Encryption will fail.");
+    if (bytes.length < 32) {
+      console.error("[crypto] WARNING: Key is less than 32 bytes! Encryption will fail.");
+    } else if (bytes.length > 32) {
+      console.log("[crypto] Key is", bytes.length, "bytes, will use first 32.");
     }
   }
 } catch (e: any) {
