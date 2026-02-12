@@ -4,8 +4,11 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
+let _cachedKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY;
+  if (_cachedKey) return _cachedKey;
+  const key = process.env.ENCRYPTION_KEY?.trim();
   if (!key) {
     throw new Error("ENCRYPTION_KEY environment variable is required for storing sensitive tokens");
   }
@@ -16,9 +19,30 @@ function getEncryptionKey(): Buffer {
     decoded = Buffer.from(key, "base64");
   }
   if (decoded.length !== 32) {
-    throw new Error("ENCRYPTION_KEY must be 32 bytes (base64 or 64-char hex)");
+    throw new Error(`ENCRYPTION_KEY must decode to 32 bytes (AES-256). Got ${decoded.length} bytes.`);
   }
+  _cachedKey = decoded;
   return decoded;
+}
+
+try {
+  const present = !!process.env.ENCRYPTION_KEY;
+  console.log("[crypto] ENCRYPTION_KEY present:", present);
+  if (present) {
+    const raw = process.env.ENCRYPTION_KEY!.trim();
+    let bytes: Buffer;
+    if (/^[0-9a-fA-F]{64}$/.test(raw)) {
+      bytes = Buffer.from(raw, "hex");
+    } else {
+      bytes = Buffer.from(raw, "base64");
+    }
+    console.log("[crypto] ENCRYPTION_KEY decoded bytes:", bytes.length);
+    if (bytes.length !== 32) {
+      console.error("[crypto] WARNING: Key is not 32 bytes! Encryption will fail.");
+    }
+  }
+} catch (e: any) {
+  console.error("[crypto] Startup key check error:", e.message);
 }
 
 export function encryptToken(plaintext: string): string {
