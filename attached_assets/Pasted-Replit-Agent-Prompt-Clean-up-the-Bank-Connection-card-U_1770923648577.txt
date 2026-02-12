@@ -1,0 +1,65 @@
+Replit Agent Prompt — Clean up the “Bank Connection” card UI (no logic changes)
+
+Goal
+- Make the Bank Connection card cleaner, tighter, and more modern.
+- Keep ALL existing Plaid behavior exactly the same (status, connect/disconnect, loading, errors).
+- Only change styling/layout inside the Bank Connection card component.
+
+Where
+- Locate the component that renders the card on /customize/financial-connections
+  (likely src/components/plaid/ConnectBankCard.jsx or similar).
+- Only modify this component’s UI.
+
+Design requirements (match EcoLogic style)
+1) Card container
+- Use a clean white card with:
+  - rounded-xl or rounded-2xl
+  - subtle border (border-slate-200) and soft shadow (shadow-sm)
+  - padding p-4
+- Remove extra “Bank Connection” duplication if it appears both as section header and card title.
+  Preferred: section header says “Bank Connection” and card title becomes “Account status” OR remove card title entirely.
+
+2) Layout
+- Use a 2-column layout:
+  Left: label + status pill
+  Right: primary button
+- Align everything vertically centered.
+- Reduce wasted space.
+
+3) Typography
+- Use:
+  - Title: text-base font-semibold (not huge)
+  - Supporting text: text-sm text-slate-500
+- Make it feel compact like the other Customize pages.
+
+4) Status pill
+- Keep existing logic but style:
+  - Connected: green (bg-emerald-50 text-emerald-700 border-emerald-200)
+  - Not connected: gray (bg-slate-100 text-slate-700 border-slate-200)
+  - pill: px-2.5 py-1 rounded-full text-xs font-medium border
+
+5) Button
+- Primary button on right
+- If not connected: “Connect bank”
+- If connected: “Disconnect” (danger style: subtle red, not huge)
+- Add loading state text: “Connecting…” / “Disconnecting…”
+- Button height ~40px, rounded-lg, consistent icon sizing.
+- Do not add a second button.
+
+6) Optional polish (do it if easy)
+- Add a tiny helper line under the status:
+  “Used for payments and refunds.”
+- If connected, optionally show:
+  “Connected on Feb 12, 2026” (use existing connected_at if already returned; if not available, skip)
+
+Constraints
+- Do NOT change any API routes or Plaid logic.
+- Do NOT change page routing.
+- Do NOT break mobile layout.
+
+Deliverable
+- Updated Bank Connection card UI that looks cleaner and matches EcoLogic.
+- Confirm it renders properly on mobile and desktop widths.
+
+After
+- Show me before/after screenshots and confirm connect/disconnect still works.

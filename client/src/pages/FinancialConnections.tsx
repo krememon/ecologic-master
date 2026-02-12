@@ -47,10 +47,7 @@ export default function FinancialConnections() {
         </p>
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Bank Connection</h2>
-        <ConnectBankCard />
-      </div>
+      <ConnectBankCard />
     </div>
   );
 }
