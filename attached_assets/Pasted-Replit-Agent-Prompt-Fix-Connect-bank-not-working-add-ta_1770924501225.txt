@@ -1,0 +1,60 @@
+Replit Agent Prompt — Fix “Connect bank” not working + add targeted diagnostics
+
+Goal
+- Make the “Connect bank” button successfully open Plaid Link and complete token exchange.
+- Add minimal, targeted logs to pinpoint failures.
+- Do not change unrelated UI, onboarding, or auth flows.
+
+Checklist to implement/fix
+
+A) Confirm API routes exist and match frontend paths
+- Backend must have:
+  POST /api/plaid/create-link-token
+  POST /api/plaid/exchange-public-token
+  GET  /api/plaid/status
+  POST /api/plaid/disconnect
+- Ensure server registers:
+  app.use("/api/plaid", plaidRoutes)
+
+B) Frontend: ensure link token is fetched BEFORE calling open()
+- In ConnectBankCard:
+  - On mount (or on button click), call POST /api/plaid/create-link-token
+  - Store res.data.link_token in state
+  - Only initialize usePlaidLink when token exists
+  - Button should be disabled until ready === true
+  - If user clicks while token is loading, show “Preparing…” and then open automatically once ready (optional)
+
+C) Fix common “token never loads” issues
+- If create-link-token returns 401:
+  - Confirm request includes credentials if your app uses cookie sessions:
+    - axios.defaults.withCredentials = true OR use existing API helper
+  - Ensure Plaid routes use the same auth middleware used by other working protected routes
+  - Confirm req.user is populated (log it)
+
+D) Add targeted logging (no spam)
+In create-link-token route:
+- Log: "PLAID create-link-token called", userId, env
+- On error: log err.response?.data or err.message
+
+In exchange-public-token route:
+- Log: "PLAID exchange called", userId
+- On success: log item_id saved
+- On error: log err.response?.data or err.message
+
+E) Return useful error payloads to frontend
+- res.status(500).json({ error: "...", details: ... }) (safe details only)
+
+F) Frontend error UI (small)
+- If create-link-token fails, show a small inline error message under the button
+- If exchange fails, show inline error message
+
+G) After changes, test
+- Click Connect bank:
+  ✅ Network shows POST /api/plaid/create-link-token 200 and returns link_token
+  ✅ Plaid modal opens
+  ✅ On success, POST /api/plaid/exchange-public-token 200
+  ✅ GET /api/plaid/status shows connected true
+
+Deliverable
+- Connect bank works in sandbox end-to-end.
+- Provide the exact console logs and any failing network response if still broken.

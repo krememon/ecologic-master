@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Landmark, Loader2, Unplug } from "lucide-react";
+import { Landmark, Loader2, Unplug, AlertCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,15 +16,29 @@ interface PlaidStatus {
 export function ConnectBankCard() {
   const { toast } = useToast();
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [isCreatingToken, setIsCreatingToken] = useState(false);
 
   const { data: status, isLoading: statusLoading } = useQuery<PlaidStatus>({
     queryKey: ["/api/plaid/status"],
   });
 
   const createLinkToken = async () => {
-    const res = await apiRequest("POST", "/api/plaid/create-link-token");
-    const data = await res.json();
-    setLinkToken(data.link_token);
+    setLinkError(null);
+    setIsCreatingToken(true);
+    try {
+      const res = await apiRequest("POST", "/api/plaid/create-link-token");
+      const data = await res.json();
+      if (data.link_token) {
+        setLinkToken(data.link_token);
+      } else {
+        setLinkError(data.message || "Failed to initialize bank connection.");
+      }
+    } catch (err: any) {
+      setLinkError(err.message || "Could not connect to the server.");
+    } finally {
+      setIsCreatingToken(false);
+    }
   };
 
   const exchangeMutation = useMutation({
@@ -36,8 +50,10 @@ export function ConnectBankCard() {
       toast({ title: "Bank Connected", description: "Your bank account has been linked successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/plaid/status"] });
       setLinkToken(null);
+      setLinkError(null);
     },
     onError: (err: Error) => {
+      setLinkError(err.message || "Failed to complete bank connection.");
       toast({ title: "Connection Failed", description: err.message, variant: "destructive" });
     },
   });
@@ -80,13 +96,12 @@ export function ConnectBankCard() {
   }, [linkToken, ready, open]);
 
   const connected = status?.connected === true;
-  const isConnecting = !!linkToken || exchangeMutation.isPending;
+  const isConnecting = isCreatingToken || (!!linkToken && !ready) || exchangeMutation.isPending;
   const isDisconnecting = disconnectMutation.isPending;
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 sm:p-6">
       <div className="flex flex-col gap-4">
-        {/* Row 1: Icon + title on left, status pill on right */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
@@ -117,7 +132,6 @@ export function ConnectBankCard() {
           </div>
         </div>
 
-        {/* Row 2: Helper text on left, action button on right */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-6">
           <div className="flex-1">
             <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
@@ -158,6 +172,13 @@ export function ConnectBankCard() {
             )}
           </div>
         </div>
+
+        {linkError && (
+          <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>{linkError}</span>
+          </div>
+        )}
       </div>
     </div>
   );

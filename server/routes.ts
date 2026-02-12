@@ -13326,8 +13326,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(403).json({ message: 'No company found' });
       return null;
     }
-    const role = await storage.getUserRole(userId, company.id);
-    if (role !== 'OWNER') {
+    const roleResult = await storage.getUserRole(userId, company.id);
+    if (!roleResult || roleResult.role !== 'OWNER') {
       res.status(404).json({ message: 'Not found' });
       return null;
     }
@@ -13338,8 +13338,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const ctx = await requireOwnerRole(req, res);
       if (!ctx) return;
+      console.log('[PLAID] create-link-token called', { userId: ctx.userId, env: process.env.PLAID_ENV || 'sandbox' });
       if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
-        return res.status(500).json({ message: 'Plaid is not configured' });
+        return res.status(500).json({ message: 'Plaid is not configured. Set PLAID_CLIENT_ID and PLAID_SECRET.' });
       }
       const response = await plaidClient.linkTokenCreate({
         user: { client_user_id: String(ctx.userId) },
@@ -13348,10 +13349,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         country_codes: [CountryCode.Us],
         language: 'en',
       });
+      console.log('[PLAID] link token created successfully');
       res.json({ link_token: response.data.link_token });
     } catch (error: any) {
-      console.error('[Plaid] Error creating link token:', error?.response?.data || error.message);
-      res.status(500).json({ message: 'Failed to create link token' });
+      const details = error?.response?.data || error.message;
+      console.error('[PLAID] Error creating link token:', details);
+      res.status(500).json({ message: 'Failed to create link token', error: typeof details === 'string' ? details : 'Internal error' });
     }
   });
 
@@ -13359,6 +13362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const ctx = await requireOwnerRole(req, res);
       if (!ctx) return;
+      console.log('[PLAID] exchange-public-token called', { userId: ctx.userId });
       const parsed = exchangeTokenSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: 'Invalid request body', errors: parsed.error.flatten().fieldErrors });
@@ -13399,10 +13403,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           connectedAt: new Date(),
         });
       }
+      console.log('[PLAID] exchange successful, item saved');
       res.json({ success: true });
     } catch (error: any) {
-      console.error('[Plaid] Error exchanging token:', error?.response?.data || error.message);
-      res.status(500).json({ message: 'Failed to connect bank account' });
+      const details = error?.response?.data || error.message;
+      console.error('[PLAID] Error exchanging token:', details);
+      res.status(500).json({ message: 'Failed to connect bank account', error: typeof details === 'string' ? details : 'Internal error' });
     }
   });
 
