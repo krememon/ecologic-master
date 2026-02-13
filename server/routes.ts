@@ -13545,43 +13545,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyName = companyRecord?.name || 'Your contractor';
 
       const { Resend } = await import('resend');
-      const resend = new Resend(process.env.RESEND_API_KEY);
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) {
+        console.error('[BankRefund] RESEND_API_KEY not configured');
+        return res.status(500).json({ message: "Email service not configured", debugUrl: process.env.NODE_ENV !== 'production' ? setupUrl : undefined });
+      }
+      const resend = new Resend(resendApiKey);
 
-      const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+      const rawFrom = process.env.EMAIL_FROM;
+      const fromEmail = rawFrom || 'onboarding@resend.dev';
+      console.log(`[BankRefund] Sending email from="${fromEmail}" (EMAIL_FROM raw="${rawFrom || '(not set)'}") to="${customer.email}"`);
 
-      await resend.emails.send({
-        from: fromEmail,
-        to: [customer.email],
-        subject: `${companyName} - Add your bank details for a refund`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #2563eb 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">ECOLOGIC</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">${companyName}</p>
-            </div>
-            <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
-              <h2 style="margin: 0 0 20px 0; color: #1f2937;">Bank Details Needed for Refund</h2>
-              <p>Hello ${customer.firstName || 'there'},</p>
-              <p>${companyName} would like to send you a refund to your bank account. Please add your bank details securely using the link below.</p>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${setupUrl}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Add Bank Details</a>
+      let emailSent = false;
+      let emailError: string | null = null;
+
+      try {
+        const { data, error } = await resend.emails.send({
+          from: fromEmail,
+          to: [customer.email],
+          subject: `${companyName} - Add your bank details for a refund`,
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: linear-gradient(135deg, #2563eb 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">ECOLOGIC</h1>
+                <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">${companyName}</p>
               </div>
-              <p style="font-size: 14px; color: #6b7280;">This link expires in 72 hours. Your bank information is stored securely and never shared.</p>
-              <p style="margin: 16px 0 0 0; font-size: 12px; word-break: break-all; color: #9ca3af;">${setupUrl}</p>
-            </div>
-            <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
-              <p style="margin: 0;">Sent by ${companyName} via EcoLogic</p>
-            </div>
-          </body>
-          </html>
-        `,
-      });
+              <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <h2 style="margin: 0 0 20px 0; color: #1f2937;">Bank Details Needed for Refund</h2>
+                <p>Hello ${customer.firstName || 'there'},</p>
+                <p>${companyName} would like to send you a refund to your bank account. Please add your bank details securely using the link below.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${setupUrl}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Add Bank Details</a>
+                </div>
+                <p style="font-size: 14px; color: #6b7280;">This link expires in 72 hours. Your bank information is stored securely and never shared.</p>
+                <p style="margin: 16px 0 0 0; font-size: 12px; word-break: break-all; color: #9ca3af;">${setupUrl}</p>
+              </div>
+              <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+                <p style="margin: 0;">Sent by ${companyName} via EcoLogic</p>
+              </div>
+            </body>
+            </html>
+          `,
+        });
 
-      console.log(`[BankRefund] Setup link sent to ${customer.email} for customer ${customer.id}`);
-      res.json({ success: true, message: "Bank setup link sent to customer" });
+        if (error) {
+          console.error(`[BankRefund] Resend API error:`, JSON.stringify(error));
+          emailError = error.message || JSON.stringify(error);
+        } else {
+          emailSent = true;
+          console.log(`[BankRefund] Email sent successfully. Resend ID: ${data?.id || '(no id)'} to=${customer.email}`);
+        }
+      } catch (sendErr: any) {
+        console.error(`[BankRefund] Email send threw:`, sendErr.message, sendErr.stack);
+        emailError = sendErr.message;
+      }
+
+      const isDev = process.env.NODE_ENV !== 'production';
+      const responsePayload: any = {
+        success: true,
+        message: emailSent
+          ? "Bank setup link sent to customer"
+          : "Email delivery may have failed — use the link below to complete setup manually",
+        emailSent,
+      };
+      if (isDev) {
+        responsePayload.debugUrl = setupUrl;
+      }
+      if (emailError) {
+        responsePayload.emailError = emailError;
+      }
+
+      console.log(`[BankRefund] Setup link generated for customer ${customer.id} (emailSent=${emailSent})`);
+      res.json(responsePayload);
     } catch (error: any) {
       console.error("[BankRefund] Error sending setup link:", error.message);
       res.status(500).json({ message: "Failed to send setup link" });

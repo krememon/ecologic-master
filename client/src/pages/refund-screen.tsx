@@ -17,6 +17,8 @@ import {
   ChevronDown,
   Check,
   Send,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -106,6 +108,7 @@ export default function RefundScreen() {
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
+  const [bankSetupUrl, setBankSetupUrl] = useState<string | null>(null);
 
   const { data: plaidStatus } = useQuery<PlaidStatus>({
     queryKey: ["/api/plaid/status"],
@@ -196,8 +199,17 @@ export default function RefundScreen() {
     if (!ctx?.customerId) return;
     setSendingLink(true);
     try {
-      await apiRequest("POST", "/api/refunds/bank/send-link", { customerId: ctx.customerId });
-      toast({ title: "Link sent", description: `Bank setup link sent to ${ctx.customerName}` });
+      const res = await apiRequest("POST", "/api/refunds/bank/send-link", { customerId: ctx.customerId });
+      const data = await res.json();
+      if (data.debugUrl) {
+        setBankSetupUrl(data.debugUrl);
+      }
+      toast({
+        title: data.emailSent ? "Link sent" : "Link generated",
+        description: data.emailSent
+          ? `Bank setup link sent to ${ctx.customerName}`
+          : "Email may not have delivered — use the link below to complete setup",
+      });
     } catch (err: any) {
       toast({ title: "Failed to send link", description: err.message || "Something went wrong", variant: "destructive" });
     } finally {
@@ -604,6 +616,36 @@ export default function RefundScreen() {
                   </>
                 )}
               </Button>
+              {bankSetupUrl && (
+                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800">
+                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-2">
+                    Setup link (for manual use):
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-lg text-xs gap-1.5"
+                      onClick={() => {
+                        navigator.clipboard.writeText(bankSetupUrl);
+                        toast({ title: "Copied", description: "Link copied to clipboard" });
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy link
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-lg text-xs gap-1.5"
+                      onClick={() => window.open(bankSetupUrl, '_blank')}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open link
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
