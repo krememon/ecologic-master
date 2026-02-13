@@ -1,0 +1,59 @@
+Replit Agent Prompt — Enable “Bank” refund method based on Plaid connection (no payout logic yet)
+
+Goal
+- In the Refund Method selector screen, remove “Coming soon” and make the “Bank” tile behave like a real option.
+- If the company/user HAS a bank connected (Plaid status connected:true), the Bank tile should be selectable like Cash/Check.
+- If NOT connected, tapping Bank should navigate to Customize → Financial Connections (the bank connect page).
+- Do NOT implement actual bank payouts/refunds yet. This is only UI behavior + gating.
+
+Requirements
+1) Determine bank connection status
+- Use the existing endpoint GET /api/plaid/status (already implemented).
+- It returns { connected: boolean, ... }.
+- Fetch this status when the refund screen mounts (and cache in state).
+- Handle loading state gracefully (don’t flicker).
+
+2) Bank tile UI states
+A) Connected = true
+- Bank tile is enabled and selectable.
+- Remove “Coming soon” text entirely.
+- When selected, it behaves like other refund methods (sets refundMethod="bank").
+- The card should show selected styling (blue border/active) consistent with other tiles.
+
+B) Connected = false
+- Bank tile should look “available but locked” (NOT disabled gray).
+- Subtitle text under Bank should say: “Connect bank to use”
+- On tap/click:
+  - Navigate to the Financial Connections page route (the page that shows Bank Connection status + connect/disconnect).
+  - If route is /customize/financial-connections (or similar), use the correct existing route.
+- Also show a small toast: “Connect your bank to enable bank refunds.”
+
+3) Hidden-not-disabled principle
+- Do NOT fully disable the tile with pointer-events:none.
+- Make it clickable and route the user to connect.
+
+4) No breaking changes
+- Do not touch Plaid backend logic.
+- Do not change existing Card/Cash/Check behaviors.
+- Keep the rest of the refund flow the same.
+
+Implementation notes
+- Find the refund UI component that renders the 2x2 refund method tiles (“Card”, “Bank”, “Cash”, “Check”).
+- Add a state variable: bankConnected (boolean) and bankStatusLoading.
+- On mount, call GET /api/plaid/status and set bankConnected.
+- For routing, use the app’s existing navigation method (react-router navigate, next/router, etc.).
+- Ensure mobile layout remains clean.
+
+Acceptance tests
+1) With no bank connected:
+- Bank tile shows “Connect bank to use”
+- Clicking Bank navigates to Financial Connections
+2) After connecting bank:
+- Return to refund screen
+- Bank tile is selectable and shows no “Coming soon”
+- Selecting Bank highlights it and sets refundMethod="bank"
+
+Deliverables
+- Updated refund method selector UI logic + copy
+- Correct routing to Financial Connections page when not connected
+- No regressions in other refund methods

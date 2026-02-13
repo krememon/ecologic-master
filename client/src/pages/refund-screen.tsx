@@ -21,6 +21,10 @@ import { format, parseISO } from "date-fns";
 
 type RefundMethod = "card" | "bank" | "cash" | "check";
 
+interface PlaidStatus {
+  connected: boolean;
+}
+
 interface ExistingRefund {
   id: number;
   amountCents: number;
@@ -101,6 +105,10 @@ export default function RefundScreen() {
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { data: plaidStatus } = useQuery<PlaidStatus>({
+    queryKey: ["/api/plaid/status"],
+  });
+
   const invoiceQuery = useQuery<{
     invoiceId: number;
     customerName: string;
@@ -159,11 +167,11 @@ export default function RefundScreen() {
   const effectiveAmountValid = effectiveAmount > 0 && effectiveAmountCents <= (ctx?.maxRefundable ?? 0);
 
   const isCardDisabled = !ctx?.hasStripeRef;
-  const isBankDisabled = false;
+  const bankConnected = plaidStatus?.connected === true;
 
   const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting &&
     !(selectedMethod === "card" && isCardDisabled) &&
-    !(selectedMethod === "bank" && isBankDisabled);
+    !(selectedMethod === "bank" && !bankConnected);
 
   const handleConfirm = async () => {
     if (!canSubmit || !ctx || !activePaymentId) return;
@@ -292,8 +300,8 @@ export default function RefundScreen() {
     },
     {
       key: "bank",
-      disabled: isBankDisabled,
-      helperText: "Coming soon",
+      disabled: false,
+      helperText: bankConnected ? undefined : "Connect bank to use",
     },
     { key: "cash", disabled: false },
     { key: "check", disabled: false },
@@ -413,17 +421,30 @@ export default function RefundScreen() {
             const config = methodConfig[key];
             const Icon = config.icon;
             const isSelected = selectedMethod === key;
+            const isBankNotConnected = key === "bank" && !bankConnected;
+
+            const handleTileClick = () => {
+              if (disabled) return;
+              if (isBankNotConnected) {
+                toast({ title: "Bank not connected", description: "Connect your bank to enable bank refunds." });
+                navigate("/customize/financial-connections");
+                return;
+              }
+              setSelectedMethod(key);
+            };
 
             return (
               <button
                 key={key}
                 disabled={disabled}
-                onClick={() => !disabled && setSelectedMethod(key)}
+                onClick={handleTileClick}
                 className={`relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
                   disabled
                     ? "opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
                     : isSelected
                     ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-400"
+                    : isBankNotConnected
+                    ? "border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 bg-white dark:bg-slate-900 cursor-pointer"
                     : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900"
                 }`}
               >
@@ -446,7 +467,7 @@ export default function RefundScreen() {
                   {config.label}
                 </span>
                 {helperText && (
-                  <span className="text-[10px] leading-tight text-slate-400 dark:text-slate-500">
+                  <span className={`text-[10px] leading-tight ${isBankNotConnected ? "text-teal-500 dark:text-teal-400" : "text-slate-400 dark:text-slate-500"}`}>
                     {helperText}
                   </span>
                 )}
