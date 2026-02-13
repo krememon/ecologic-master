@@ -1687,3 +1687,67 @@ export const insertPlaidAccountSchema = createInsertSchema(plaidAccounts).omit({
 export type PlaidAccount = typeof plaidAccounts.$inferSelect;
 export type InsertPlaidAccount = z.infer<typeof insertPlaidAccountSchema>;
 
+export const bankRefundStatusEnum = pgEnum("bank_refund_status", ["pending", "processing", "paid", "failed"]);
+
+export const customerPayoutDestinations = pgTable("customer_payout_destinations", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  stripeCustomerId: varchar("stripe_customer_id"),
+  stripeBankAccountId: varchar("stripe_bank_account_id"),
+  last4: varchar("last4"),
+  bankName: varchar("bank_name"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCustomerPayoutDestinationSchema = createInsertSchema(customerPayoutDestinations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CustomerPayoutDestination = typeof customerPayoutDestinations.$inferSelect;
+export type InsertCustomerPayoutDestination = z.infer<typeof insertCustomerPayoutDestinationSchema>;
+
+export const bankRefunds = pgTable("bank_refunds", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  refundId: integer("refund_id").references(() => refunds.id),
+  relatedInvoiceId: integer("related_invoice_id").references(() => invoices.id),
+  relatedJobId: integer("related_job_id").references(() => jobs.id),
+  amountCents: integer("amount_cents").notNull(),
+  status: bankRefundStatusEnum("status").notNull().default("pending"),
+  stripePayoutId: varchar("stripe_payout_id"),
+  stripeTransferId: varchar("stripe_transfer_id"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertBankRefundSchema = createInsertSchema(bankRefunds).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BankRefund = typeof bankRefunds.$inferSelect;
+export type InsertBankRefund = z.infer<typeof insertBankRefundSchema>;
+
+export const payoutSetupTokens = pgTable("payout_setup_tokens", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  token: varchar("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPayoutSetupTokenSchema = createInsertSchema(payoutSetupTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PayoutSetupToken = typeof payoutSetupTokens.$inferSelect;
+export type InsertPayoutSetupToken = z.infer<typeof insertPayoutSetupTokenSchema>;
+

@@ -93,6 +93,9 @@ import {
   companyEmailBranding,
   refunds,
   plaidAccounts,
+  customerPayoutDestinations,
+  bankRefunds,
+  payoutSetupTokens,
   type Campaign,
   type InsertCampaign,
   type CampaignRecipient,
@@ -103,6 +106,12 @@ import {
   type InsertRefund,
   type PlaidAccount,
   type InsertPlaidAccount,
+  type CustomerPayoutDestination,
+  type InsertCustomerPayoutDestination,
+  type BankRefund,
+  type InsertBankRefund,
+  type PayoutSetupToken,
+  type InsertPayoutSetupToken,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, ne } from "drizzle-orm";
@@ -395,6 +404,22 @@ export interface IStorage {
   getPlaidAccount(companyId: number, entityType: string, entityId: number): Promise<PlaidAccount | undefined>;
   createPlaidAccount(account: InsertPlaidAccount): Promise<PlaidAccount>;
   updatePlaidAccountStatus(id: number, status: string): Promise<PlaidAccount>;
+
+  // Customer payout destination operations
+  getCustomerPayoutDestination(companyId: number, customerId: number): Promise<CustomerPayoutDestination | undefined>;
+  createCustomerPayoutDestination(dest: InsertCustomerPayoutDestination): Promise<CustomerPayoutDestination>;
+  deleteCustomerPayoutDestination(id: number): Promise<void>;
+
+  // Bank refund operations
+  createBankRefund(bankRefund: InsertBankRefund): Promise<BankRefund>;
+  getBankRefundById(id: number): Promise<BankRefund | undefined>;
+  getBankRefundByStripePayoutId(stripePayoutId: string): Promise<BankRefund | undefined>;
+  updateBankRefund(id: number, updates: Partial<BankRefund>): Promise<BankRefund>;
+
+  // Payout setup token operations
+  createPayoutSetupToken(token: InsertPayoutSetupToken): Promise<PayoutSetupToken>;
+  getPayoutSetupTokenByToken(token: string): Promise<PayoutSetupToken | undefined>;
+  markPayoutSetupTokenUsed(id: number): Promise<void>;
 
 }
 
@@ -3989,6 +4014,55 @@ export class DatabaseStorage implements IStorage {
   async updatePlaidAccountStatus(id: number, status: string): Promise<PlaidAccount> {
     const [updated] = await db.update(plaidAccounts).set({ status }).where(eq(plaidAccounts.id, id)).returning();
     return updated;
+  }
+
+  async getCustomerPayoutDestination(companyId: number, customerId: number): Promise<CustomerPayoutDestination | undefined> {
+    const [dest] = await db.select().from(customerPayoutDestinations)
+      .where(and(eq(customerPayoutDestinations.companyId, companyId), eq(customerPayoutDestinations.customerId, customerId)));
+    return dest;
+  }
+
+  async createCustomerPayoutDestination(dest: InsertCustomerPayoutDestination): Promise<CustomerPayoutDestination> {
+    const [created] = await db.insert(customerPayoutDestinations).values(dest).returning();
+    return created;
+  }
+
+  async deleteCustomerPayoutDestination(id: number): Promise<void> {
+    await db.delete(customerPayoutDestinations).where(eq(customerPayoutDestinations.id, id));
+  }
+
+  async createBankRefund(bankRefund: InsertBankRefund): Promise<BankRefund> {
+    const [created] = await db.insert(bankRefunds).values(bankRefund).returning();
+    return created;
+  }
+
+  async getBankRefundById(id: number): Promise<BankRefund | undefined> {
+    const [found] = await db.select().from(bankRefunds).where(eq(bankRefunds.id, id));
+    return found;
+  }
+
+  async getBankRefundByStripePayoutId(stripePayoutId: string): Promise<BankRefund | undefined> {
+    const [found] = await db.select().from(bankRefunds).where(eq(bankRefunds.stripePayoutId, stripePayoutId));
+    return found;
+  }
+
+  async updateBankRefund(id: number, updates: Partial<BankRefund>): Promise<BankRefund> {
+    const [updated] = await db.update(bankRefunds).set({ ...updates, updatedAt: new Date() }).where(eq(bankRefunds.id, id)).returning();
+    return updated;
+  }
+
+  async createPayoutSetupToken(token: InsertPayoutSetupToken): Promise<PayoutSetupToken> {
+    const [created] = await db.insert(payoutSetupTokens).values(token).returning();
+    return created;
+  }
+
+  async getPayoutSetupTokenByToken(token: string): Promise<PayoutSetupToken | undefined> {
+    const [found] = await db.select().from(payoutSetupTokens).where(eq(payoutSetupTokens.token, token));
+    return found;
+  }
+
+  async markPayoutSetupTokenUsed(id: number): Promise<void> {
+    await db.update(payoutSetupTokens).set({ usedAt: new Date() }).where(eq(payoutSetupTokens.id, id));
   }
 
 }

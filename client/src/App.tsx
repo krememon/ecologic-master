@@ -61,6 +61,7 @@ import SignInWizard from "@/pages/SignInWizard";
 import OnboardingChoice from "@/pages/OnboardingChoice";
 import OnboardingCompany from "@/pages/OnboardingCompany";
 import DemoCreateJob from "@/pages/DemoCreateJob";
+import PayoutSetup from "@/pages/PayoutSetup";
 
 // Centralized onboarding route logic
 function getNextOnboardingRoute(params: {
@@ -288,6 +289,11 @@ function Router() {
   
   if (path.startsWith('/unsubscribe')) {
     return <UnsubscribeRouter />;
+  }
+
+  if (path.startsWith('/payout-setup/')) {
+    const setupToken = path.split('/payout-setup/')[1]?.split('?')[0] || '';
+    return <PayoutSetup token={setupToken} />;
   }
 
   if (localStorage.getItem('ecologic_demo_mode')) {

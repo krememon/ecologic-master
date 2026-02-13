@@ -1,0 +1,86 @@
+Replit Agent Prompt — Make “Bank refund” send real ACH using Stripe (from Stripe balance)
+
+Goal
+- Implement real “Bank refund” for cash/check situations by sending an ACH transfer from the platform’s Stripe balance to the customer’s bank.
+- Plaid is NOT used for sending the money. Stripe sends the money.
+- Must be safe: do not store raw bank account numbers; store only Stripe object IDs.
+- Add a customer-facing “Add bank details” link flow.
+
+PHASE 1 — Data model
+1) Create DB table: customer_payout_destinations
+- id (pk)
+- companyId
+- customerId
+- stripeBankAccountId (text) OR stripePaymentMethodId (text)
+- last4 (text, nullable)
+- createdAt
+
+2) Create DB table: bank_refunds
+- id (pk)
+- companyId
+- customerId
+- relatedInvoiceId (nullable)
+- relatedJobId (nullable)
+- amountCents (int)
+- status (enum: pending, processing, paid, failed)
+- stripePayoutId (text, nullable)
+- failureReason (text, nullable)
+- createdAt, updatedAt
+
+PHASE 2 — Customer “Add bank details” link
+3) Create endpoint: POST /api/refunds/bank/send-link
+- Auth: Owner/Admin only
+- Input: { customerId }
+- Generates a one-time token and saves it (db table: payout_setup_tokens with expiresAt)
+- Sends email to customer with link:
+  /payout-setup/:token
+
+4) Create PUBLIC page: /payout-setup/:token
+- No login required
+- Lets customer securely add their bank details using Stripe’s official method
+- IMPORTANT: Do NOT build a plain HTML form asking for routing/account numbers.
+- Use Stripe’s supported flow (Stripe Financial Connections or Stripe bank account tokenization) so we only receive a Stripe token/payment_method id.
+
+5) Create endpoint: POST /api/payout-setup/:token/complete
+- Validates token
+- Stores returned stripePaymentMethodId (or stripeBankAccountId) into customer_payout_destinations for that customer
+- Returns success page “Bank connected”
+
+PHASE 3 — Send the bank refund (ACH payout)
+6) Update refund modal logic for Bank method
+- If user selects “Bank”
+- Check if customer has payout destination:
+  - If NO: show message “Customer needs bank details” + button “Send link”
+  - If YES: show “Send bank refund” button
+
+7) Create endpoint: POST /api/refunds/bank/send
+- Auth: Owner/Admin only
+- Input: { customerId, amountCents, relatedInvoiceId?, relatedJobId? }
+- Validations:
+  - amountCents > 0
+  - customer has payout destination
+- Create bank_refunds row status=processing
+- Call Stripe to create an ACH payout/transfer to that destination
+- Save stripePayoutId
+- Return { refundId, status }
+
+PHASE 4 — Webhooks (required for real status)
+8) Ensure Stripe webhook endpoint exists and is verified
+- POST /api/webhooks/stripe with STRIPE_WEBHOOK_SECRET
+- Handle payout events (or transfer events depending on implementation) and update bank_refunds:
+  - processing -> paid
+  - processing -> failed (store failureReason)
+
+UI/UX requirements
+- Show clear statuses: Pending/Processing/Paid/Failed
+- Show a small note: “Bank transfers take 1–3 business days”
+- Keep Card refunds (Stripe refund API) unchanged.
+
+Constraints
+- Never store raw bank routing/account numbers.
+- Only store Stripe IDs for payout destination.
+- Keep RBAC: Owner/Admin only can trigger refunds.
+
+Deliverables
+- Customer can receive a link and connect their bank securely.
+- Owner/Admin can send an ACH bank refund and EcoLogic shows real status updates.

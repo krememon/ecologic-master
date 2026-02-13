@@ -16,6 +16,7 @@ import {
   AlertCircle,
   ChevronDown,
   Check,
+  Send,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -104,6 +105,7 @@ export default function RefundScreen() {
   const [amountStr, setAmountStr] = useState("");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
 
   const { data: plaidStatus } = useQuery<PlaidStatus>({
     queryKey: ["/api/plaid/status"],
@@ -169,29 +171,67 @@ export default function RefundScreen() {
   const isCardDisabled = !ctx?.hasStripeRef;
   const bankConnected = plaidStatus?.connected === true;
 
+  const customerId = ctx?.customerId;
+  const { data: customerDest } = useQuery<{
+    hasDestination: boolean;
+    last4: string | null;
+    bankName: string | null;
+  }>({
+    queryKey: ["/api/refunds/bank/customer-destination", customerId],
+    queryFn: async () => {
+      const res = await fetch(`/api/refunds/bank/customer-destination/${customerId}`, { credentials: "include" });
+      if (!res.ok) return { hasDestination: false, last4: null, bankName: null };
+      return res.json();
+    },
+    enabled: !!customerId && selectedMethod === "bank" && bankConnected,
+  });
+
+  const customerHasBank = customerDest?.hasDestination === true;
+
   const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting &&
     !(selectedMethod === "card" && isCardDisabled) &&
-    !(selectedMethod === "bank" && !bankConnected);
+    !(selectedMethod === "bank" && (!bankConnected || !customerHasBank));
+
+  const handleSendBankLink = async () => {
+    if (!ctx?.customerId) return;
+    setSendingLink(true);
+    try {
+      await apiRequest("POST", "/api/refunds/bank/send-link", { customerId: ctx.customerId });
+      toast({ title: "Link sent", description: `Bank setup link sent to ${ctx.customerName}` });
+    } catch (err: any) {
+      toast({ title: "Failed to send link", description: err.message || "Something went wrong", variant: "destructive" });
+    } finally {
+      setSendingLink(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!canSubmit || !ctx || !activePaymentId) return;
 
     setIsSubmitting(true);
     try {
-      await apiRequest("POST", "/api/refunds", {
-        paymentId: activePaymentId,
-        method: selectedMethod,
-        amountCents: effectiveAmountCents,
-        reason: reason.trim() || undefined,
-      });
-
-      const isPending = selectedMethod === "bank";
-      toast({
-        title: isPending ? "Refund initiated" : "Refund recorded",
-        description: isPending
-          ? `${formatCents(effectiveAmountCents)} bank refund pending settlement`
-          : `${formatCents(effectiveAmountCents)} refunded via ${methodConfig[selectedMethod!].label}`,
-      });
+      if (selectedMethod === "bank") {
+        await apiRequest("POST", "/api/refunds/bank/send", {
+          paymentId: activePaymentId,
+          amountCents: effectiveAmountCents,
+          reason: reason.trim() || undefined,
+        });
+        toast({
+          title: "Bank refund initiated",
+          description: `${formatCents(effectiveAmountCents)} will be sent to ${ctx.customerName}'s bank. Transfers take 1-3 business days.`,
+        });
+      } else {
+        await apiRequest("POST", "/api/refunds", {
+          paymentId: activePaymentId,
+          method: selectedMethod,
+          amountCents: effectiveAmountCents,
+          reason: reason.trim() || undefined,
+        });
+        toast({
+          title: "Refund recorded",
+          description: `${formatCents(effectiveAmountCents)} refunded via ${methodConfig[selectedMethod!].label}`,
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
@@ -521,6 +561,54 @@ export default function RefundScreen() {
         </div>
       </div>
 
+      {selectedMethod === "bank" && bankConnected && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 p-4">
+          {customerHasBank ? (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-50 dark:bg-green-950/30 rounded-full flex items-center justify-center shrink-0">
+                <Building2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {customerDest?.bankName || "Bank account"} ••••{customerDest?.last4}
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  Refund will be sent via ACH. Transfers take 1-3 business days.
+                </p>
+              </div>
+              <Check className="w-5 h-5 text-green-500 shrink-0" />
+            </div>
+          ) : (
+            <div className="text-center py-2">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Customer needs to add bank details
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+                Send {ctx.customerName} a secure link to connect their bank account
+              </p>
+              <Button
+                onClick={handleSendBankLink}
+                disabled={sendingLink}
+                variant="outline"
+                className="h-10 rounded-xl text-sm font-medium gap-2"
+              >
+                {sendingLink ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Send Bank Setup Link
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2.5">
         <Button
           onClick={handleConfirm}
@@ -532,6 +620,8 @@ export default function RefundScreen() {
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Processing…
             </>
+          ) : selectedMethod === "bank" && bankConnected && !customerHasBank ? (
+            "Waiting for customer's bank details"
           ) : selectedMethod ? (
             methodConfig[selectedMethod].confirmLabel
           ) : (

@@ -13473,6 +13473,318 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ BANK REFUND (ACH) API ============
+
+  app.get('/api/refunds/bank/customer-destination/:customerId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) return res.status(403).json({ message: "Access denied" });
+      const role = member.role.toUpperCase();
+      if (role === 'TECHNICIAN' || role === 'ESTIMATOR') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const customerId = parseInt(req.params.customerId);
+      if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
+
+      const customer = await storage.getCustomerSecure(customerId, company.id);
+      if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+      const dest = await storage.getCustomerPayoutDestination(company.id, customerId);
+      res.json({
+        hasDestination: !!dest,
+        last4: dest?.last4 || null,
+        bankName: dest?.bankName || null,
+      });
+    } catch (error: any) {
+      console.error("[BankRefund] Error checking destination:", error.message);
+      res.status(500).json({ message: "Failed to check bank destination" });
+    }
+  });
+
+  app.post('/api/refunds/bank/send-link', isAuthenticated, async (req: any, res) => {
+    try {
+      const ctx = await requireOwnerRole(req, res);
+      if (!ctx) return;
+
+      const schema = z.object({ customerId: z.number().int().positive() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request" });
+
+      const customer = await storage.getCustomerSecure(parsed.data.customerId, ctx.companyId);
+      if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+      if (!customer.email) {
+        return res.status(400).json({ message: "Customer has no email address on file" });
+      }
+
+      const token = randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+
+      await storage.createPayoutSetupToken({
+        companyId: ctx.companyId,
+        customerId: customer.id,
+        token,
+        expiresAt,
+        usedAt: null,
+      });
+
+      const { getAppBaseUrl } = await import('./email');
+      const baseUrl = getAppBaseUrl();
+      if (!baseUrl) {
+        return res.status(500).json({ message: "APP_BASE_URL is not configured" });
+      }
+
+      const setupUrl = `${baseUrl}/payout-setup/${token}`;
+
+      const companyRecord = await storage.getCompany(ctx.companyId);
+      const companyName = companyRecord?.name || 'Your contractor';
+
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+
+      await resend.emails.send({
+        from: fromEmail,
+        to: [customer.email],
+        subject: `${companyName} - Add your bank details for a refund`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #2563eb 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">ECOLOGIC</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">${companyName}</p>
+            </div>
+            <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+              <h2 style="margin: 0 0 20px 0; color: #1f2937;">Bank Details Needed for Refund</h2>
+              <p>Hello ${customer.firstName || 'there'},</p>
+              <p>${companyName} would like to send you a refund to your bank account. Please add your bank details securely using the link below.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${setupUrl}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Add Bank Details</a>
+              </div>
+              <p style="font-size: 14px; color: #6b7280;">This link expires in 72 hours. Your bank information is stored securely and never shared.</p>
+              <p style="margin: 16px 0 0 0; font-size: 12px; word-break: break-all; color: #9ca3af;">${setupUrl}</p>
+            </div>
+            <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+              <p style="margin: 0;">Sent by ${companyName} via EcoLogic</p>
+            </div>
+          </body>
+          </html>
+        `,
+      });
+
+      console.log(`[BankRefund] Setup link sent to ${customer.email} for customer ${customer.id}`);
+      res.json({ success: true, message: "Bank setup link sent to customer" });
+    } catch (error: any) {
+      console.error("[BankRefund] Error sending setup link:", error.message);
+      res.status(500).json({ message: "Failed to send setup link" });
+    }
+  });
+
+  app.get('/api/stripe/publishable-key', async (_req: any, res) => {
+    const key = process.env.STRIPE_PUBLISHABLE_KEY || '';
+    if (!key) return res.status(500).json({ message: "Stripe publishable key not configured" });
+    res.json({ publishableKey: key });
+  });
+
+  app.get('/api/payout-setup/:token/info', async (req: any, res) => {
+    try {
+      const tokenRecord = await storage.getPayoutSetupTokenByToken(req.params.token);
+      if (!tokenRecord) return res.status(404).json({ message: "Invalid or expired link" });
+      if (tokenRecord.usedAt) return res.status(400).json({ message: "This link has already been used" });
+      if (new Date() > tokenRecord.expiresAt) return res.status(400).json({ message: "This link has expired" });
+
+      const customer = await storage.getCustomer(tokenRecord.customerId);
+      const company = await storage.getCompany(tokenRecord.companyId);
+
+      res.json({
+        customerName: customer ? `${customer.firstName || ''} ${customer.lastName || ''}`.trim() : 'Customer',
+        companyName: company?.name || 'Company',
+      });
+    } catch (error: any) {
+      console.error("[PayoutSetup] Error getting info:", error.message);
+      res.status(500).json({ message: "Failed to load setup information" });
+    }
+  });
+
+  app.post('/api/payout-setup/:token/complete', async (req: any, res) => {
+    try {
+      const tokenRecord = await storage.getPayoutSetupTokenByToken(req.params.token);
+      if (!tokenRecord) return res.status(404).json({ message: "Invalid or expired link" });
+      if (tokenRecord.usedAt) return res.status(400).json({ message: "This link has already been used" });
+      if (new Date() > tokenRecord.expiresAt) return res.status(400).json({ message: "This link has expired" });
+
+      const schema = z.object({
+        bankToken: z.string().min(1),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request" });
+
+      if (!stripe) return res.status(500).json({ message: "Payment processing is not configured" });
+
+      const existing = await storage.getCustomerPayoutDestination(tokenRecord.companyId, tokenRecord.customerId);
+
+      let stripeCustomerId: string;
+      if (existing?.stripeCustomerId) {
+        stripeCustomerId = existing.stripeCustomerId;
+      } else {
+        const customer = await storage.getCustomer(tokenRecord.customerId);
+        const stripeCustomer = await stripe.customers.create({
+          name: customer ? `${customer.firstName || ''} ${customer.lastName || ''}`.trim() : undefined,
+          email: customer?.email || undefined,
+          metadata: { ecologic_customer_id: String(tokenRecord.customerId), ecologic_company_id: String(tokenRecord.companyId) },
+        });
+        stripeCustomerId = stripeCustomer.id;
+      }
+
+      const bankAccount = await stripe.customers.createSource(stripeCustomerId, {
+        source: parsed.data.bankToken,
+      }) as any;
+
+      if (existing) {
+        await storage.deleteCustomerPayoutDestination(existing.id);
+      }
+
+      await storage.createCustomerPayoutDestination({
+        companyId: tokenRecord.companyId,
+        customerId: tokenRecord.customerId,
+        stripeCustomerId,
+        stripeBankAccountId: bankAccount.id,
+        last4: bankAccount.last4 || null,
+        bankName: bankAccount.bank_name || null,
+      });
+
+      await storage.markPayoutSetupTokenUsed(tokenRecord.id);
+
+      console.log(`[PayoutSetup] Bank account saved for customer ${tokenRecord.customerId}, bank=${bankAccount.id}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[PayoutSetup] Error completing setup:", error.message);
+      res.status(500).json({ message: error.message || "Failed to save bank details" });
+    }
+  });
+
+  app.post('/api/refunds/bank/send', isAuthenticated, async (req: any, res) => {
+    try {
+      const ctx = await requireOwnerRole(req, res);
+      if (!ctx) return;
+
+      const schema = z.object({
+        paymentId: z.number().int().positive(),
+        amountCents: z.number().int().positive(),
+        reason: z.string().optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request", errors: parsed.error.flatten().fieldErrors });
+
+      const { paymentId, amountCents, reason } = parsed.data;
+
+      if (!stripe) return res.status(500).json({ message: "Stripe is not configured" });
+
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment || payment.companyId !== ctx.companyId) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const customerId = payment.customerId;
+      if (!customerId) return res.status(400).json({ message: "No customer associated with this payment" });
+
+      const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
+      const alreadyRefunded = payment.refundedAmountCents || 0;
+      const maxRefundable = paymentAmountCents - alreadyRefunded;
+      if (amountCents > maxRefundable) {
+        return res.status(400).json({ message: `Refund amount exceeds maximum refundable ($${(maxRefundable / 100).toFixed(2)})` });
+      }
+
+      const dest = await storage.getCustomerPayoutDestination(ctx.companyId, customerId);
+      if (!dest || !dest.stripeCustomerId || !dest.stripeBankAccountId) {
+        return res.status(400).json({ message: "Customer has no bank account on file. Send them a setup link first." });
+      }
+
+      const refund = await storage.createRefund({
+        companyId: ctx.companyId,
+        invoiceId: payment.invoiceId,
+        paymentId: payment.id,
+        customerId,
+        amountCents,
+        method: 'bank' as any,
+        provider: 'stripe' as any,
+        status: 'pending' as any,
+        stripeRefundId: null,
+        plaidTransferId: null,
+        reason: reason || null,
+        createdByUserId: ctx.userId,
+      });
+
+      let stripePayoutId: string | null = null;
+      let bankRefundStatus: 'processing' | 'failed' = 'processing';
+      let failureReason: string | null = null;
+
+      try {
+        const payout = await stripe.payouts.create({
+          amount: amountCents,
+          currency: 'usd',
+          destination: dest.stripeBankAccountId,
+          metadata: {
+            ecologic_refund_id: String(refund.id),
+            ecologic_customer_id: String(customerId),
+            ecologic_company_id: String(ctx.companyId),
+          },
+        });
+        stripePayoutId = payout.id;
+      } catch (stripeErr: any) {
+        console.error("[BankRefund] Stripe payout failed:", stripeErr.message);
+        bankRefundStatus = 'failed';
+        failureReason = stripeErr.message;
+      }
+
+      const bankRefund = await storage.createBankRefund({
+        companyId: ctx.companyId,
+        customerId,
+        refundId: refund.id,
+        relatedInvoiceId: payment.invoiceId,
+        relatedJobId: null,
+        amountCents,
+        status: bankRefundStatus,
+        stripePayoutId,
+        stripeTransferId: null,
+        failureReason,
+      });
+
+      if (bankRefundStatus === 'failed') {
+        await storage.updateRefundStatus(refund.id, 'failed');
+        return res.status(400).json({
+          message: `Bank refund failed: ${failureReason}`,
+          refundId: refund.id,
+          bankRefundId: bankRefund.id,
+          status: 'failed',
+        });
+      }
+
+      await storage.updateRefundStatus(refund.id, 'pending', {
+        stripeRefundId: stripePayoutId,
+      } as any);
+
+      console.log(`[BankRefund] Payout created: ${stripePayoutId} for refund ${refund.id}`);
+      res.json({
+        refundId: refund.id,
+        bankRefundId: bankRefund.id,
+        status: 'processing',
+        message: 'Bank refund initiated. Transfers typically take 1-3 business days.',
+      });
+    } catch (error: any) {
+      console.error("[BankRefund] Error sending refund:", error.message);
+      res.status(500).json({ message: "Failed to send bank refund" });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

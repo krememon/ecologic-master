@@ -6,7 +6,7 @@ import path from "path";
 import fs from "fs";
 import Stripe from "stripe";
 import { db } from "./db";
-import { invoices, payments, customers, companies, jobs, notifications } from "../shared/schema";
+import { invoices, payments, customers, companies, jobs, notifications, bankRefunds, refunds } from "../shared/schema";
 import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
 import { notifyManagers } from "./notificationService";
 
@@ -489,6 +489,78 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment:', error);
       return res.status(500).send('Error processing payment');
+    }
+  }
+
+  if (event.type === 'payout.paid' || event.type === 'payout.failed') {
+    const payout = event.data.object as Stripe.Payout;
+    const payoutId = payout.id;
+    console.log(`[Stripe Webhook] Payout event: ${event.type} payoutId=${payoutId}`);
+
+    try {
+      const [bankRefund] = await db
+        .select()
+        .from(bankRefunds)
+        .where(eq(bankRefunds.stripePayoutId, payoutId));
+
+      if (bankRefund) {
+        const newStatus = event.type === 'payout.paid' ? 'paid' : 'failed';
+
+        if (bankRefund.status === newStatus) {
+          console.log(`[Stripe Webhook] Bank refund ${bankRefund.id} already ${newStatus}, skipping`);
+          return res.json({ received: true });
+        }
+
+        const failureReason = event.type === 'payout.failed' ? (payout.failure_message || 'Payout failed') : null;
+
+        await db
+          .update(bankRefunds)
+          .set({ status: newStatus, failureReason, updatedAt: new Date() })
+          .where(eq(bankRefunds.id, bankRefund.id));
+
+        if (bankRefund.refundId) {
+          const refundStatus = newStatus === 'paid' ? 'succeeded' : 'failed';
+          await db
+            .update(refunds)
+            .set({ status: refundStatus })
+            .where(eq(refunds.id, bankRefund.refundId));
+
+          if (newStatus === 'paid') {
+            const [refund] = await db
+              .select()
+              .from(refunds)
+              .where(eq(refunds.id, bankRefund.refundId));
+
+            if (refund) {
+              const [payment] = await db
+                .select()
+                .from(payments)
+                .where(eq(payments.id, refund.paymentId));
+
+              if (payment) {
+                const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
+                const newRefundedTotal = (payment.refundedAmountCents || 0) + refund.amountCents;
+                let paymentStatus = 'paid';
+                if (newRefundedTotal >= paymentAmountCents) paymentStatus = 'refunded';
+                else if (newRefundedTotal > 0) paymentStatus = 'partially_refunded';
+
+                await db
+                  .update(payments)
+                  .set({ refundedAmountCents: newRefundedTotal, status: paymentStatus })
+                  .where(eq(payments.id, payment.id));
+
+                console.log(`[Stripe Webhook] Payment ${payment.id} updated: refunded=${newRefundedTotal}, status=${paymentStatus}`);
+              }
+            }
+          }
+        }
+
+        console.log(`[Stripe Webhook] Bank refund ${bankRefund.id} updated to ${newStatus}`);
+      } else {
+        console.log(`[Stripe Webhook] No bank refund found for payout ${payoutId}`);
+      }
+    } catch (error: any) {
+      console.error('[Stripe Webhook] Error processing payout event:', error.message);
     }
   }
 
