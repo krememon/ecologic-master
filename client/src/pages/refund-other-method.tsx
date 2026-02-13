@@ -45,22 +45,26 @@ export default function RefundOtherMethod() {
   };
 
   const handleSelect = (methodId: string) => {
-    navigate(buildReturnUrl(methodId));
+    navigate(buildReturnUrl(methodId), { replace: true });
   };
 
   const handleCustomSubmit = () => {
     const val = customValue.trim();
     if (val) {
-      navigate(buildReturnUrl(val));
+      navigate(buildReturnUrl(val), { replace: true });
     }
   };
 
   const handleBack = () => {
-    const params = new URLSearchParams();
-    if (paymentId) params.set("paymentId", paymentId);
-    if (invoiceId) params.set("invoiceId", invoiceId);
-    if (currentSelection) params.set("otherMethod", currentSelection);
-    navigate(`/refunds/new?${params.toString()}`);
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      const params = new URLSearchParams();
+      if (paymentId) params.set("paymentId", paymentId);
+      if (invoiceId) params.set("invoiceId", invoiceId);
+      if (currentSelection) params.set("otherMethod", currentSelection);
+      navigate(`/refunds/new?${params.toString()}`);
+    }
   };
 
   return (
