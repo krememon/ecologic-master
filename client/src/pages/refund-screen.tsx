@@ -8,25 +8,19 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   ArrowLeft,
-  CreditCard,
-  Building2,
   Banknote,
   FileCheck,
   Loader2,
   AlertCircle,
   ChevronDown,
   Check,
-  Send,
-  Copy,
-  ExternalLink,
+  Smartphone,
+  CircleDollarSign,
+  MoreHorizontal,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
-type RefundMethod = "card" | "bank" | "cash" | "check";
-
-interface PlaidStatus {
-  connected: boolean;
-}
+type RefundMethod = "cash" | "check" | "zelle" | "venmo" | "other";
 
 interface ExistingRefund {
   id: number;
@@ -79,17 +73,21 @@ function safeFormatDate(dateStr: string | null | undefined, fmt = "MMM d, yyyy")
 const methodLabels: Record<string, string> = {
   cash: "Cash",
   check: "Check",
+  zelle: "Zelle",
+  venmo: "Venmo",
+  other: "Other",
   card: "Card",
   credit_card: "Credit Card",
   stripe: "Card (Stripe)",
-  other: "Other",
+  bank: "Bank",
 };
 
-const methodConfig: Record<RefundMethod, { icon: typeof CreditCard; label: string; confirmLabel: string }> = {
-  card: { icon: CreditCard, label: "Card", confirmLabel: "Issue Card Refund" },
-  bank: { icon: Building2, label: "Bank", confirmLabel: "Send Direct Deposit" },
-  cash: { icon: Banknote, label: "Cash", confirmLabel: "Record Refund" },
-  check: { icon: FileCheck, label: "Check", confirmLabel: "Record Refund" },
+const methodConfig: Record<RefundMethod, { icon: typeof Banknote; label: string }> = {
+  cash: { icon: Banknote, label: "Cash" },
+  check: { icon: FileCheck, label: "Check" },
+  zelle: { icon: CircleDollarSign, label: "Zelle" },
+  venmo: { icon: Smartphone, label: "Venmo" },
+  other: { icon: MoreHorizontal, label: "Other" },
 };
 
 export default function RefundScreen() {
@@ -107,12 +105,6 @@ export default function RefundScreen() {
   const [amountStr, setAmountStr] = useState("");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sendingLink, setSendingLink] = useState(false);
-  const [bankSetupUrl, setBankSetupUrl] = useState<string | null>(null);
-
-  const { data: plaidStatus } = useQuery<PlaidStatus>({
-    queryKey: ["/api/plaid/status"],
-  });
 
   const invoiceQuery = useQuery<{
     invoiceId: number;
@@ -171,79 +163,23 @@ export default function RefundScreen() {
   const effectiveAmountCents = Math.round(effectiveAmount * 100);
   const effectiveAmountValid = effectiveAmount > 0 && effectiveAmountCents <= (ctx?.maxRefundable ?? 0);
 
-  const isCardDisabled = !ctx?.hasStripeRef;
-  const bankConnected = plaidStatus?.connected === true;
-
-  const customerId = ctx?.customerId;
-  const { data: customerDest } = useQuery<{
-    hasDestination: boolean;
-    last4: string | null;
-    bankName: string | null;
-  }>({
-    queryKey: ["/api/refunds/bank/customer-destination", customerId],
-    queryFn: async () => {
-      const res = await fetch(`/api/refunds/bank/customer-destination/${customerId}`, { credentials: "include" });
-      if (!res.ok) return { hasDestination: false, last4: null, bankName: null };
-      return res.json();
-    },
-    enabled: !!customerId && selectedMethod === "bank" && bankConnected,
-  });
-
-  const customerHasBank = customerDest?.hasDestination === true;
-
-  const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting &&
-    !(selectedMethod === "card" && isCardDisabled) &&
-    !(selectedMethod === "bank" && (!bankConnected || !customerHasBank));
-
-  const handleSendBankLink = async () => {
-    if (!ctx?.customerId) return;
-    setSendingLink(true);
-    try {
-      const res = await apiRequest("POST", "/api/refunds/bank/send-link", { customerId: ctx.customerId });
-      const data = await res.json();
-      if (data.debugUrl) {
-        setBankSetupUrl(data.debugUrl);
-      }
-      toast({
-        title: data.emailSent ? "Link sent" : "Link generated",
-        description: data.emailSent
-          ? `Bank setup link sent to ${ctx.customerName}`
-          : "Email may not have delivered — use the link below to complete setup",
-      });
-    } catch (err: any) {
-      toast({ title: "Failed to send link", description: err.message || "Something went wrong", variant: "destructive" });
-    } finally {
-      setSendingLink(false);
-    }
-  };
+  const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting;
 
   const handleConfirm = async () => {
     if (!canSubmit || !ctx || !activePaymentId) return;
 
     setIsSubmitting(true);
     try {
-      if (selectedMethod === "bank") {
-        await apiRequest("POST", "/api/refunds/bank/send", {
-          paymentId: activePaymentId,
-          amountCents: effectiveAmountCents,
-          reason: reason.trim() || undefined,
-        });
-        toast({
-          title: "Bank refund initiated",
-          description: `${formatCents(effectiveAmountCents)} will be sent to ${ctx.customerName}'s bank. Transfers take 1-3 business days.`,
-        });
-      } else {
-        await apiRequest("POST", "/api/refunds", {
-          paymentId: activePaymentId,
-          method: selectedMethod,
-          amountCents: effectiveAmountCents,
-          reason: reason.trim() || undefined,
-        });
-        toast({
-          title: "Refund recorded",
-          description: `${formatCents(effectiveAmountCents)} refunded via ${methodConfig[selectedMethod!].label}`,
-        });
-      }
+      await apiRequest("POST", "/api/refunds", {
+        paymentId: activePaymentId,
+        method: selectedMethod,
+        amountCents: effectiveAmountCents,
+        reason: reason.trim() || undefined,
+      });
+      toast({
+        title: "Refund recorded",
+        description: `${formatCents(effectiveAmountCents)} refund via ${methodConfig[selectedMethod!].label} has been recorded`,
+      });
 
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
@@ -344,20 +280,7 @@ export default function RefundScreen() {
   const showPaymentSelector = paramInvoiceId && !paramPaymentId && refundablePayments.length > 1;
   const selectedPaymentInfo = refundablePayments.find((p) => p.id === activePaymentId);
 
-  const methods: { key: RefundMethod; disabled: boolean; helperText?: string }[] = [
-    {
-      key: "card",
-      disabled: isCardDisabled,
-      helperText: isCardDisabled ? "No original card charge exists for this payment" : undefined,
-    },
-    {
-      key: "bank",
-      disabled: false,
-      helperText: bankConnected ? undefined : "Connect bank to use",
-    },
-    { key: "cash", disabled: false },
-    { key: "check", disabled: false },
-  ];
+  const methods: RefundMethod[] = ["cash", "check", "zelle", "venmo", "other"];
 
   return (
     <div className="p-4 sm:p-5 max-w-2xl mx-auto space-y-5">
@@ -366,9 +289,14 @@ export default function RefundScreen() {
         Back
       </button>
 
-      <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-        How would you like to refund {ctx.customerName}?
-      </h1>
+      <div>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+          Record Refund for {ctx.customerName}
+        </h1>
+        <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-1">
+          Refunds are issued outside EcoLogic and recorded here for tracking.
+        </p>
+      </div>
 
       {showPaymentSelector && selectedPaymentInfo && (
         <div className="relative">
@@ -468,61 +396,40 @@ export default function RefundScreen() {
         <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
           Refund Method
         </p>
-        <div className="grid grid-cols-2 gap-3">
-          {methods.map(({ key, disabled, helperText }) => {
+        <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+          {methods.map((key) => {
             const config = methodConfig[key];
             const Icon = config.icon;
             const isSelected = selectedMethod === key;
-            const isBankNotConnected = key === "bank" && !bankConnected;
-
-            const handleTileClick = () => {
-              if (disabled) return;
-              if (isBankNotConnected) {
-                toast({ title: "Bank not connected", description: "Connect your bank to enable bank refunds." });
-                navigate("/customize/financial-connections");
-                return;
-              }
-              setSelectedMethod(key);
-            };
 
             return (
               <button
                 key={key}
-                disabled={disabled}
-                onClick={handleTileClick}
-                className={`relative flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
-                  disabled
-                    ? "opacity-50 cursor-not-allowed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
-                    : isSelected
+                onClick={() => setSelectedMethod(key)}
+                className={`relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border-2 transition-all text-center ${
+                  isSelected
                     ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-400"
-                    : isBankNotConnected
-                    ? "border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 bg-white dark:bg-slate-900 cursor-pointer"
                     : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900"
                 }`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
                   isSelected
                     ? "bg-blue-100 dark:bg-blue-900/40"
                     : "bg-slate-100 dark:bg-slate-800"
                 }`}>
-                  <Icon className={`w-5 h-5 ${
+                  <Icon className={`w-4.5 h-4.5 ${
                     isSelected
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-slate-400 dark:text-slate-500"
                   }`} />
                 </div>
-                <span className={`text-sm font-medium ${
+                <span className={`text-xs font-medium ${
                   isSelected
                     ? "text-blue-600 dark:text-blue-400"
                     : "text-slate-700 dark:text-slate-300"
                 }`}>
                   {config.label}
                 </span>
-                {helperText && (
-                  <span className={`text-[10px] leading-tight ${isBankNotConnected ? "text-teal-500 dark:text-teal-400" : "text-slate-400 dark:text-slate-500"}`}>
-                    {helperText}
-                  </span>
-                )}
               </button>
             );
           })}
@@ -573,84 +480,6 @@ export default function RefundScreen() {
         </div>
       </div>
 
-      {selectedMethod === "bank" && bankConnected && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 p-4">
-          {customerHasBank ? (
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-50 dark:bg-green-950/30 rounded-full flex items-center justify-center shrink-0">
-                <Building2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                  {customerDest?.bankName || "Bank account"} ••••{customerDest?.last4}
-                </p>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                  Refund will be sent via ACH. Transfers take 1-3 business days.
-                </p>
-              </div>
-              <Check className="w-5 h-5 text-green-500 shrink-0" />
-            </div>
-          ) : (
-            <div className="text-center py-2">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Customer needs to add bank details
-              </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
-                Send {ctx.customerName} a secure link to connect their bank account
-              </p>
-              <Button
-                onClick={handleSendBankLink}
-                disabled={sendingLink}
-                variant="outline"
-                className="h-10 rounded-xl text-sm font-medium gap-2"
-              >
-                {sendingLink ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending…
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    Send Bank Setup Link
-                  </>
-                )}
-              </Button>
-              {bankSetupUrl && (
-                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800">
-                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-2">
-                    Setup link (for manual use):
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-lg text-xs gap-1.5"
-                      onClick={() => {
-                        navigator.clipboard.writeText(bankSetupUrl);
-                        toast({ title: "Copied", description: "Link copied to clipboard" });
-                      }}
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      Copy link
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-lg text-xs gap-1.5"
-                      onClick={() => window.open(bankSetupUrl, '_blank')}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Open link
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="space-y-2.5">
         <Button
           onClick={handleConfirm}
@@ -660,12 +489,10 @@ export default function RefundScreen() {
           {isSubmitting ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Processing…
+              Recording…
             </>
-          ) : selectedMethod === "bank" && bankConnected && !customerHasBank ? (
-            "Waiting for customer's bank details"
           ) : selectedMethod ? (
-            methodConfig[selectedMethod].confirmLabel
+            "Mark Refund as Sent"
           ) : (
             "Select a refund method"
           )}
