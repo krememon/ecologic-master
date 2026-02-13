@@ -4,24 +4,26 @@ import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   ChevronRight,
-  DollarSign,
-  Landmark,
-  Smartphone,
-  Apple,
-  CreditCard,
-  Wallet,
   PenLine,
   Check,
 } from "lucide-react";
 
+import cashappLogo from "@assets/cashapp_1771019226190.png";
+import zelleLogo from "@assets/zelle_1771019233453.png";
+import paypalLogo from "@assets/paypal_1771019235274.png";
+import appleLogo from "@assets/apple_1771019223810.png";
+import googleLogo from "@assets/google_1771019227458.png";
+import metaLogo from "@assets/meta_1771019231718.png";
+import venmoLogo from "@assets/venmo_1771019229614.png";
+
 const otherMethods = [
-  { id: "Cash App", icon: DollarSign, color: "bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400" },
-  { id: "Zelle", icon: Landmark, color: "bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400" },
-  { id: "PayPal", icon: CreditCard, color: "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" },
-  { id: "Apple Cash", icon: Apple, color: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300" },
-  { id: "Google Pay", icon: Wallet, color: "bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400" },
-  { id: "Meta Pay", icon: Smartphone, color: "bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400" },
-  { id: "Venmo", icon: DollarSign, color: "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400" },
+  { id: "Cash App", logo: cashappLogo, bg: "#00D632" },
+  { id: "Zelle", logo: zelleLogo, bg: "#6C1CD3" },
+  { id: "PayPal", logo: paypalLogo, bg: "#003087" },
+  { id: "Apple Cash", logo: appleLogo, bg: "#000000" },
+  { id: "Google Pay", logo: googleLogo, bg: "#FFFFFF" },
+  { id: "Meta Pay", logo: metaLogo, bg: "#0082FB" },
+  { id: "Venmo", logo: venmoLogo, bg: "#008CFF" },
 ];
 
 export default function RefundOtherMethod() {
@@ -78,15 +80,30 @@ export default function RefundOtherMethod() {
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {otherMethods.map((method) => {
-            const Icon = method.icon;
+            const isGooglePay = method.id === "Google Pay";
             return (
               <button
                 key={method.id}
                 onClick={() => handleSelect(method.id)}
                 className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
               >
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${method.color}`}>
-                  <Icon className="w-4.5 h-4.5" />
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                  style={{
+                    backgroundColor: method.bg,
+                    border: isGooglePay ? "1px solid #e2e8f0" : "none",
+                  }}
+                >
+                  <img
+                    src={method.logo}
+                    alt={method.id}
+                    className="object-contain"
+                    style={{
+                      width: 20,
+                      height: 20,
+                      filter: isGooglePay ? "none" : "brightness(0) invert(1)",
+                    }}
+                  />
                 </div>
                 <span className="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">{method.id}</span>
                 {currentSelection === method.id ? (
@@ -104,7 +121,7 @@ export default function RefundOtherMethod() {
               className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             >
               <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
-                <PenLine className="w-4.5 h-4.5" />
+                <PenLine className="w-[18px] h-[18px]" />
               </div>
               <span className="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">Custom</span>
               <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
@@ -112,7 +129,7 @@ export default function RefundOtherMethod() {
           ) : (
             <div className="px-4 py-3.5 flex items-center gap-3">
               <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
-                <PenLine className="w-4.5 h-4.5" />
+                <PenLine className="w-[18px] h-[18px]" />
               </div>
               <Input
                 autoFocus
