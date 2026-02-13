@@ -13552,9 +13552,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const resend = new Resend(resendApiKey);
 
-      const rawFrom = process.env.EMAIL_FROM;
-      const fromEmail = rawFrom || 'onboarding@resend.dev';
-      console.log(`[BankRefund] Sending email from="${fromEmail}" (EMAIL_FROM raw="${rawFrom || '(not set)'}") to="${customer.email}"`);
+      const rawFrom = process.env.RESEND_FROM;
+      const fromEmail = rawFrom || 'EcoLogic <onboarding@resend.dev>';
+      console.log(`[BankRefund] Sending email from="${fromEmail}" (RESEND_FROM raw="${rawFrom || '(not set)'}") to="${customer.email}"`);
 
       let emailSent = false;
       let emailError: string | null = null;
