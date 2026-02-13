@@ -10,17 +10,16 @@ import {
   ArrowLeft,
   Banknote,
   FileCheck,
+  CreditCard,
   Loader2,
   AlertCircle,
   ChevronDown,
   Check,
-  Smartphone,
-  CircleDollarSign,
   MoreHorizontal,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
-type RefundMethod = "cash" | "check" | "zelle" | "venmo" | "other";
+type RefundMethod = "cash" | "check" | "card" | "other";
 
 interface ExistingRefund {
   id: number;
@@ -73,20 +72,19 @@ function safeFormatDate(dateStr: string | null | undefined, fmt = "MMM d, yyyy")
 const methodLabels: Record<string, string> = {
   cash: "Cash",
   check: "Check",
-  zelle: "Zelle",
-  venmo: "Venmo",
-  other: "Other",
   card: "Card",
+  other: "Other",
   credit_card: "Credit Card",
   stripe: "Card (Stripe)",
+  zelle: "Zelle",
+  venmo: "Venmo",
   bank: "Bank",
 };
 
 const methodConfig: Record<RefundMethod, { icon: typeof Banknote; label: string }> = {
   cash: { icon: Banknote, label: "Cash" },
   check: { icon: FileCheck, label: "Check" },
-  zelle: { icon: CircleDollarSign, label: "Zelle" },
-  venmo: { icon: Smartphone, label: "Venmo" },
+  card: { icon: CreditCard, label: "Card" },
   other: { icon: MoreHorizontal, label: "Other" },
 };
 
@@ -105,6 +103,7 @@ export default function RefundScreen() {
   const [amountStr, setAmountStr] = useState("");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [otherMethodDetail, setOtherMethodDetail] = useState("");
 
   const invoiceQuery = useQuery<{
     invoiceId: number;
@@ -151,6 +150,7 @@ export default function RefundScreen() {
   useEffect(() => {
     setAmountStr("");
     setSelectedMethod(null);
+    setOtherMethodDetail("");
   }, [activePaymentId]);
 
   const isLoading = paramInvoiceId && !paramPaymentId ? invoiceQuery.isLoading || ctxLoading : ctxLoading;
@@ -163,16 +163,23 @@ export default function RefundScreen() {
   const effectiveAmountCents = Math.round(effectiveAmount * 100);
   const effectiveAmountValid = effectiveAmount > 0 && effectiveAmountCents <= (ctx?.maxRefundable ?? 0);
 
-  const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting;
+  const isCardDisabled = !ctx?.hasStripeRef;
+
+  const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting &&
+    !(selectedMethod === "card" && isCardDisabled);
 
   const handleConfirm = async () => {
     if (!canSubmit || !ctx || !activePaymentId) return;
 
     setIsSubmitting(true);
     try {
+      const methodToSend = selectedMethod === "other" && otherMethodDetail.trim()
+        ? otherMethodDetail.trim()
+        : selectedMethod;
+
       await apiRequest("POST", "/api/refunds", {
         paymentId: activePaymentId,
-        method: selectedMethod,
+        method: methodToSend,
         amountCents: effectiveAmountCents,
         reason: reason.trim() || undefined,
       });
@@ -280,7 +287,16 @@ export default function RefundScreen() {
   const showPaymentSelector = paramInvoiceId && !paramPaymentId && refundablePayments.length > 1;
   const selectedPaymentInfo = refundablePayments.find((p) => p.id === activePaymentId);
 
-  const methods: RefundMethod[] = ["cash", "check", "zelle", "venmo", "other"];
+  const methods: { key: RefundMethod; disabled: boolean; helperText?: string }[] = [
+    { key: "cash", disabled: false },
+    { key: "check", disabled: false },
+    {
+      key: "card",
+      disabled: isCardDisabled,
+      helperText: isCardDisabled ? "No original card charge exists for this payment" : undefined,
+    },
+    { key: "other", disabled: false },
+  ];
 
   return (
     <div className="p-4 sm:p-5 max-w-2xl mx-auto space-y-5">
@@ -396,8 +412,8 @@ export default function RefundScreen() {
         <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
           Refund Method
         </p>
-        <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
-          {methods.map((key) => {
+        <div className="grid grid-cols-2 gap-2.5">
+          {methods.map(({ key, disabled, helperText }) => {
             const config = methodConfig[key];
             const Icon = config.icon;
             const isSelected = selectedMethod === key;
@@ -405,35 +421,67 @@ export default function RefundScreen() {
             return (
               <button
                 key={key}
-                onClick={() => setSelectedMethod(key)}
+                disabled={disabled}
+                onClick={() => {
+                  if (!disabled) {
+                    setSelectedMethod(key);
+                    if (key !== "other") setOtherMethodDetail("");
+                  }
+                }}
                 className={`relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border-2 transition-all text-center ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-400"
-                    : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900"
+                  disabled
+                    ? "border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 opacity-50 cursor-not-allowed"
+                    : isSelected
+                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-400"
+                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900"
                 }`}
               >
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                  isSelected
-                    ? "bg-blue-100 dark:bg-blue-900/40"
-                    : "bg-slate-100 dark:bg-slate-800"
+                  disabled
+                    ? "bg-slate-100 dark:bg-slate-800"
+                    : isSelected
+                      ? "bg-blue-100 dark:bg-blue-900/40"
+                      : "bg-slate-100 dark:bg-slate-800"
                 }`}>
                   <Icon className={`w-4.5 h-4.5 ${
-                    isSelected
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-slate-400 dark:text-slate-500"
+                    disabled
+                      ? "text-slate-300 dark:text-slate-600"
+                      : isSelected
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-slate-400 dark:text-slate-500"
                   }`} />
                 </div>
                 <span className={`text-xs font-medium ${
-                  isSelected
-                    ? "text-blue-600 dark:text-blue-400"
-                    : "text-slate-700 dark:text-slate-300"
+                  disabled
+                    ? "text-slate-300 dark:text-slate-500"
+                    : isSelected
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-slate-700 dark:text-slate-300"
                 }`}>
                   {config.label}
                 </span>
+                {helperText && (
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                    {helperText}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
+        {selectedMethod === "other" && (
+          <div className="mt-3">
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
+              Refund method details (optional)
+            </label>
+            <Input
+              placeholder="e.g. Zelle, wire transfer, etc."
+              value={otherMethodDetail}
+              onChange={(e) => setOtherMethodDetail(e.target.value)}
+              className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-700 text-sm"
+            />
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 p-4 space-y-4">
