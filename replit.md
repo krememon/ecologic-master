@@ -40,9 +40,13 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Tax Management**: Owner-only feature for creating custom tax rates (name, percentage) to apply to invoices, with inline validation and duplicate name prevention.
 - **Line Item Tax Selection**: Job line items support per-item tax selection. When "Taxable" is ON, a tax selector appears, allowing users to pick from saved company taxes. Tax data is stored per line item to preserve the rate at selection time.
 - **Payment Collection**: Multi-method payment collection (Cash, Check, Card via Stripe) on the Payment Review screen. Includes idempotent manual payment processing and RBAC enforcement.
-- **Refund System**: Multi-method refund support (Card via Stripe, Bank via Plaid, Cash, Check) with RBAC enforcement. Features:
+- **Refund System**: Multi-method refund support (Card via Stripe, Bank/ACH via Stripe Payouts, Cash, Check) with RBAC enforcement. Features:
   - Card refunds process immediately via Stripe API
   - Bank (Plaid) refunds use pending-until-settled accounting: refund created with status 'pending', totals NOT updated until Plaid webhook confirms 'settled'
+  - ACH Bank Refunds via Stripe Payouts: Owner sends setup link to customer, customer adds bank via tokenized public page (`/payout-setup/:token`), owner initiates payout, webhook updates status
+  - Three new tables: `customer_payout_destinations` (stores Stripe-tokenized bank details), `bank_refunds` (tracks payout lifecycle), `payout_setup_tokens` (one-time 72hr tokens)
+  - Stripe webhook handles `payout.paid`/`payout.failed` events with idempotency checks to prevent double-processing
+  - Refund screen dynamically shows customer bank status, "Send Setup Link" button, or bank info with ACH submission
   - Cash/Check refunds apply immediately as 'succeeded'
   - Aggregation separates settled refunds (succeeded/settled) from pending refunds (pending/posted) for accurate Net Collected calculations
   - Plaid webhook endpoint (`/api/webhooks/plaid/refund`) with secret verification handles status transitions and applies totals atomically on settlement
