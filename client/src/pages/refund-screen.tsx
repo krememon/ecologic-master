@@ -28,6 +28,8 @@ interface ExistingRefund {
   methodDetail: string | null;
   status: string;
   reason: string | null;
+  stripeRefundId: string | null;
+  stripePaymentIntentId: string | null;
   createdAt: string;
 }
 
@@ -44,6 +46,7 @@ interface RefundContext {
   customerBankLinked: boolean;
   paymentMethod: string;
   existingRefunds: ExistingRefund[];
+  pendingRefundsCents: number;
 }
 
 interface InvoicePayment {
@@ -198,6 +201,10 @@ export default function RefundScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/refunds"] });
+      if (activePaymentId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/payments/${activePaymentId}/refund-context`] });
+      }
 
       const invoiceId = ctx.invoiceId || (paramInvoiceId ? parseInt(paramInvoiceId) : null);
       if (invoiceId) {

@@ -499,7 +499,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
     try {
       for (const stripeRefund of chargeRefunds) {
-        const existingRefund = await storage.getRefundByStripeRefundId(stripeRefund.id);
+        const [existingRefund] = await db.select().from(refunds).where(eq(refunds.stripeRefundId, stripeRefund.id));
         if (!existingRefund) {
           console.log(`[Stripe Webhook] No local refund found for stripeRefundId=${stripeRefund.id}, skipping`);
           continue;
@@ -528,7 +528,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         console.log(`[Stripe Webhook] Refund ${existingRefund.id} status updated: ${existingRefund.status} -> ${newStatus}`);
 
         if (newStatus === 'succeeded' && existingRefund.status === 'pending') {
-          const payment = await storage.getPaymentById(existingRefund.paymentId);
+          const [payment] = await db.select().from(payments).where(eq(payments.id, existingRefund.paymentId));
           if (payment) {
             const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
             const newRefundedTotal = (payment.refundedAmountCents || 0) + existingRefund.amountCents;
@@ -561,12 +561,16 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
                 const balanceDueCents = Math.max(0, invoiceTotalCents - netPaid);
 
                 let invoiceStatus: string;
-                if (netPaid <= 0) {
-                  invoiceStatus = totalRefundedOnPayments > 0 ? 'refunded' : 'pending';
-                } else if (netPaid >= invoiceTotalCents) {
-                  invoiceStatus = totalRefundedOnPayments > 0 ? 'partially_refunded' : 'paid';
-                } else {
+                if (totalPaymentsCents === 0) {
+                  invoiceStatus = 'pending';
+                } else if (totalRefundedOnPayments > 0 && netPaid <= 0) {
+                  invoiceStatus = 'refunded';
+                } else if (totalPaymentsCents < invoiceTotalCents) {
                   invoiceStatus = 'partial';
+                } else if (totalRefundedOnPayments > 0) {
+                  invoiceStatus = 'partially_refunded';
+                } else {
+                  invoiceStatus = 'paid';
                 }
 
                 await db.update(invoices).set({

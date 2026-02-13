@@ -1651,6 +1651,7 @@ export const refunds = pgTable("refunds", {
   provider: refundProviderEnum("provider").notNull(),
   status: refundStatusEnum("status").notNull().default("pending"),
   stripeRefundId: varchar("stripe_refund_id"),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
   plaidTransferId: varchar("plaid_transfer_id"),
   reason: text("reason"),
   createdByUserId: varchar("created_by_user_id").references(() => users.id),

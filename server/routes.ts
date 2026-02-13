@@ -13054,6 +13054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         provider,
         status: status as any,
         stripeRefundId,
+        stripePaymentIntentId: method === 'card' ? (payment.stripePaymentIntentId || null) : null,
         plaidTransferId,
         reason: reason || null,
         createdByUserId: userId,
@@ -13089,31 +13090,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
               totalRefundedOnPayments += (p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0));
             }
 
-            const balanceDueCents = Math.max(0, invoiceTotalCents - totalPaymentsCents);
+            const netCollected = totalPaymentsCents - totalRefundedOnPayments;
+            const balanceDueCents = Math.max(0, invoiceTotalCents - netCollected);
 
             let invoiceStatus: string;
             if (totalPaymentsCents === 0) {
               invoiceStatus = 'pending';
+            } else if (totalRefundedOnPayments > 0 && netCollected <= 0) {
+              invoiceStatus = 'refunded';
             } else if (totalPaymentsCents < invoiceTotalCents) {
               invoiceStatus = 'partial';
+            } else if (totalRefundedOnPayments > 0) {
+              invoiceStatus = 'partially_refunded';
             } else {
-              if (totalRefundedOnPayments === 0) {
-                invoiceStatus = 'paid';
-              } else if (totalRefundedOnPayments >= totalPaymentsCents) {
-                invoiceStatus = 'refunded';
-              } else {
-                invoiceStatus = 'partially_refunded';
-              }
+              invoiceStatus = 'paid';
             }
 
             await storage.updateInvoice(payment.invoiceId, {
-              paidAmountCents: totalPaymentsCents,
+              paidAmountCents: Math.max(0, netCollected),
               balanceDueCents,
               status: invoiceStatus,
             } as any);
 
             if (invoice.jobId) {
-              const jobPaymentStatus = balanceDueCents === 0 && totalPaymentsCents > 0 ? 'paid' : totalPaymentsCents > 0 ? 'partial' : 'unpaid';
+              const jobPaymentStatus = balanceDueCents === 0 && netCollected > 0 ? 'paid' : netCollected > 0 ? 'partial' : 'unpaid';
               await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
             }
           }
@@ -13147,6 +13147,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching refunds:", error);
       res.status(500).json({ message: "Failed to fetch refunds" });
+    }
+  });
+
+  app.get('/api/refunds/debug/:invoiceId', isAuthenticated, async (req: any, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
+
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) return res.status(404).json({ message: "Company not found" });
+
+      const invoiceId = parseInt(req.params.invoiceId);
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice || invoice.companyId !== company.id) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
+      const invoiceTotalCents = invoice.totalCents || Math.round(parseFloat(invoice.amount || '0') * 100);
+
+      let totalPaidCents = 0;
+      let totalRefundedCents = 0;
+      const paymentDetails: any[] = [];
+
+      for (const p of allPayments) {
+        const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+        totalPaidCents += pAmt;
+
+        const paymentRefunds = await storage.getRefundsByPaymentId(p.id);
+        const succeededRefunds = paymentRefunds.filter(r => r.status === 'succeeded');
+        const pendingRefunds = paymentRefunds.filter(r => r.status === 'pending');
+        const succeededTotal = succeededRefunds.reduce((sum, r) => sum + r.amountCents, 0);
+        const pendingTotal = pendingRefunds.reduce((sum, r) => sum + r.amountCents, 0);
+        totalRefundedCents += succeededTotal;
+
+        paymentDetails.push({
+          paymentId: p.id,
+          amountCents: pAmt,
+          paymentMethod: p.paymentMethod,
+          status: p.status,
+          stripePaymentIntentId: p.stripePaymentIntentId || null,
+          refundedAmountCents: p.refundedAmountCents || 0,
+          refunds: paymentRefunds.map(r => ({
+            id: r.id,
+            amountCents: r.amountCents,
+            method: r.method,
+            status: r.status,
+            stripeRefundId: r.stripeRefundId,
+            stripePaymentIntentId: r.stripePaymentIntentId,
+            createdAt: r.createdAt,
+          })),
+          refundSummary: {
+            succeededCount: succeededRefunds.length,
+            succeededTotal,
+            pendingCount: pendingRefunds.length,
+            pendingTotal,
+          },
+        });
+      }
+
+      const netCollected = totalPaidCents - totalRefundedCents;
+
+      res.json({
+        invoiceId,
+        invoiceTotalCents,
+        invoiceStatus: invoice.status,
+        invoicePaidAmountCents: invoice.paidAmountCents,
+        invoiceBalanceDueCents: invoice.balanceDueCents,
+        computed: {
+          totalPaidCents,
+          totalRefundedCents,
+          netCollected,
+          balanceDue: Math.max(0, invoiceTotalCents - netCollected),
+        },
+        payments: paymentDetails,
+      });
+    } catch (error) {
+      console.error("Error in refund debug:", error);
+      res.status(500).json({ message: "Failed to generate debug info" });
     }
   });
 
