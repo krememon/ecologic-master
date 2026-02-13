@@ -55,11 +55,13 @@ const isPasswordResetRoute = window.location.pathname.startsWith('/reset-passwor
 // Check if this is a two-factor verification route - render standalone component
 const isTwoFactorRoute = window.location.pathname === '/two-factor';
 // Check if this is a Stripe return route or public route - skip cache-busting to avoid reload loops
+const isPayoutSetupRoute = window.location.pathname.startsWith('/payout-setup/');
 const isPublicRoute = window.location.pathname.startsWith('/stripe/') || 
                       window.location.pathname.startsWith('/pay/') ||
                       window.location.pathname.startsWith('/unsubscribe') ||
                       window.location.pathname.startsWith('/email-preferences') ||
                       window.location.pathname.startsWith('/reset-password') ||
+                      window.location.pathname.startsWith('/payout-setup/') ||
                       window.location.pathname === '/two-factor';
 
 // Initialize app with cache check
@@ -101,6 +103,11 @@ const initApp = async () => {
     console.log("[main.tsx] Two-factor route detected, rendering TwoFactor directly");
     const TwoFactor = (await import("./pages/TwoFactor")).default;
     root.render(<ErrorBoundary><TwoFactor /></ErrorBoundary>);
+  } else if (isPayoutSetupRoute) {
+    console.log("[main.tsx] Payout setup route detected, rendering PayoutSetup directly");
+    const PayoutSetup = (await import("./pages/PayoutSetup")).default;
+    const setupToken = window.location.pathname.split('/payout-setup/')[1]?.split('?')[0] || '';
+    root.render(<ErrorBoundary><PayoutSetup token={setupToken} /></ErrorBoundary>);
   } else {
     console.log("[main.tsx] Rendering main App");
     root.render(<ErrorBoundary><App /></ErrorBoundary>);

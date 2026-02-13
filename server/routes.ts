@@ -13632,7 +13632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ publishableKey: key });
   });
 
-  app.get('/api/payout-setup/:token/info', async (req: any, res) => {
+  app.get('/api/public/payout-setup/:token/info', async (req: any, res) => {
     try {
       const tokenRecord = await storage.getPayoutSetupTokenByToken(req.params.token);
       if (!tokenRecord) return res.status(404).json({ message: "Invalid or expired link" });
@@ -13652,7 +13652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/payout-setup/:token/complete', async (req: any, res) => {
+  app.post('/api/public/payout-setup/:token/complete', async (req: any, res) => {
     try {
       const tokenRecord = await storage.getPayoutSetupTokenByToken(req.params.token);
       if (!tokenRecord) return res.status(404).json({ message: "Invalid or expired link" });

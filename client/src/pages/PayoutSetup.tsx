@@ -27,7 +27,7 @@ export default function PayoutSetup({ token }: { token: string }) {
     async function init() {
       try {
         const [infoRes, keyRes] = await Promise.all([
-          fetch(`/api/payout-setup/${token}/info`),
+          fetch(`/api/public/payout-setup/${token}/info`),
           fetch(`/api/stripe/publishable-key`),
         ]);
 
@@ -86,7 +86,7 @@ export default function PayoutSetup({ token }: { token: string }) {
         return;
       }
 
-      const completeRes = await fetch(`/api/payout-setup/${token}/complete`, {
+      const completeRes = await fetch(`/api/public/payout-setup/${token}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bankToken: result.token!.id }),

@@ -1,0 +1,49 @@
+Replit Agent Prompt — Make payout setup link a PUBLIC page (no login)
+
+Problem:
+The bank setup email link opens /payout-setup/:token but it redirects to EcoLogic sign-in.
+This must be a public page for the client (no account required).
+
+Goal:
+Anyone with a valid token can open the payout setup page and submit bank info.
+No auth required, no RBAC required.
+
+Backend changes:
+1) Ensure GET /payout-setup/:token (or whatever route serves that page) is public.
+   - Do NOT apply requireAuth middleware to this route.
+   - Do NOT run requireOwnerRole / membership checks.
+   - If there is a global auth middleware, add an explicit allowlist for paths starting with:
+     /payout-setup
+     /api/public/*
+2) Add a public API to validate token + get basic display info:
+   - GET /api/public/payout-setup/:token
+     returns { ok:true, customerName, expiresAt } or { ok:false, message }
+3) Add a public API to submit bank details (Stripe Financial Connections / external account / etc):
+   - POST /api/public/payout-setup/:token
+     body includes bank details or whatever the flow requires
+   - Server validates token, checks not expired/used, then stores destination + marks token used.
+
+Frontend changes:
+4) Create a public React route for /payout-setup/:token that does NOT require auth.
+   - It should not wrap in AuthGuard.
+   - It should not call /api/auth/user.
+   - It fetches /api/public/payout-setup/:token to render "Add bank details for refund"
+5) Ensure global axios/fetch interceptor that redirects to /signin on 401 does NOT trigger for this page.
+   - If interceptor exists, bypass it for /api/public/* endpoints OR handle 401 locally.
+
+Routing/Guards:
+6) In any route protection logic, explicitly allow /payout-setup/:token.
+   - Add it to the publicRoutes list.
+   - Make sure the server does not redirect unknown users away from it.
+
+Testing:
+7) Test in an incognito window:
+   - Open the emailed link
+   - It should show the payout setup page (NOT login)
+   - Complete bank setup
+   - Confirm destination is saved and refund flow can proceed
+
+Deliverable:
+- Link opens public page in incognito successfully.
+- Token validation + expiry works.
+- No redirect to login.
