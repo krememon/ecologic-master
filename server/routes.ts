@@ -13419,11 +13419,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!company) {
         return res.json({ connected: false });
       }
-      const role = await storage.getUserRole(userId, company.id);
-      if (role !== 'OWNER') {
+      const roleResult = await storage.getUserRole(userId, company.id);
+      if (!roleResult || roleResult.role !== 'OWNER') {
         return res.json({ connected: false });
       }
       const account = await storage.getPlaidAccount(company.id, 'company', company.id);
+      console.log('[PLAID][status]', { userId, companyId: company.id, hasAccount: !!account, hasItemId: !!account?.plaidItemId, hasToken: !!account?.plaidAccessToken });
       if (account && account.plaidItemId && account.plaidAccessToken) {
         res.json({
           connected: true,
