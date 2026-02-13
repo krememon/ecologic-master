@@ -25,6 +25,7 @@ interface ExistingRefund {
   id: number;
   amountCents: number;
   method: string;
+  methodDetail: string | null;
   status: string;
   reason: string | null;
   createdAt: string;
@@ -96,14 +97,15 @@ export default function RefundScreen() {
   const searchParams = new URLSearchParams(window.location.search);
   const paramPaymentId = searchParams.get("paymentId");
   const paramInvoiceId = searchParams.get("invoiceId");
+  const paramOtherMethod = searchParams.get("otherMethod");
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(paramPaymentId ? parseInt(paramPaymentId) : null);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<RefundMethod | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<RefundMethod | null>(paramOtherMethod ? "other" : null);
   const [amountStr, setAmountStr] = useState("");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [otherMethodDetail, setOtherMethodDetail] = useState("");
+  const [otherMethodDetail, setOtherMethodDetail] = useState(paramOtherMethod || "");
 
   const invoiceQuery = useQuery<{
     invoiceId: number;
@@ -149,8 +151,10 @@ export default function RefundScreen() {
 
   useEffect(() => {
     setAmountStr("");
-    setSelectedMethod(null);
-    setOtherMethodDetail("");
+    if (!paramOtherMethod) {
+      setSelectedMethod(null);
+      setOtherMethodDetail("");
+    }
   }, [activePaymentId]);
 
   const isLoading = paramInvoiceId && !paramPaymentId ? invoiceQuery.isLoading || ctxLoading : ctxLoading;
@@ -166,22 +170,20 @@ export default function RefundScreen() {
   const isCardDisabled = !ctx?.hasStripeRef;
 
   const canSubmit = selectedMethod && effectiveAmountValid && !isSubmitting &&
-    !(selectedMethod === "card" && isCardDisabled);
+    !(selectedMethod === "card" && isCardDisabled) &&
+    !(selectedMethod === "other" && !otherMethodDetail);
 
   const handleConfirm = async () => {
     if (!canSubmit || !ctx || !activePaymentId) return;
 
     setIsSubmitting(true);
     try {
-      const methodToSend = selectedMethod === "other" && otherMethodDetail.trim()
-        ? otherMethodDetail.trim()
-        : selectedMethod;
-
       await apiRequest("POST", "/api/refunds", {
         paymentId: activePaymentId,
-        method: methodToSend,
+        method: selectedMethod,
         amountCents: effectiveAmountCents,
         reason: reason.trim() || undefined,
+        methodDetail: selectedMethod === "other" ? otherMethodDetail.trim() : undefined,
       });
       toast({
         title: "Refund recorded",
@@ -391,7 +393,9 @@ export default function RefundScreen() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-900 dark:text-slate-100 capitalize">
-                    {refund.method} refund
+                    {refund.method === "other" && refund.methodDetail
+                      ? `${refund.methodDetail} refund`
+                      : `${refund.method} refund`}
                   </p>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500">
                     {safeFormatDate(refund.createdAt)}
@@ -424,8 +428,16 @@ export default function RefundScreen() {
                 disabled={disabled}
                 onClick={() => {
                   if (!disabled) {
+                    if (key === "other") {
+                      const params = new URLSearchParams();
+                      if (paramPaymentId) params.set("paymentId", paramPaymentId);
+                      if (paramInvoiceId) params.set("invoiceId", paramInvoiceId);
+                      if (otherMethodDetail) params.set("current", otherMethodDetail);
+                      navigate(`/refunds/other?${params.toString()}`);
+                      return;
+                    }
                     setSelectedMethod(key);
-                    if (key !== "other") setOtherMethodDetail("");
+                    setOtherMethodDetail("");
                   }
                 }}
                 className={`relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border-2 transition-all text-center ${
@@ -458,7 +470,9 @@ export default function RefundScreen() {
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-slate-700 dark:text-slate-300"
                 }`}>
-                  {config.label}
+                  {key === "other" && isSelected && otherMethodDetail
+                    ? `Other · ${otherMethodDetail}`
+                    : config.label}
                 </span>
                 {helperText && (
                   <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
@@ -469,17 +483,23 @@ export default function RefundScreen() {
             );
           })}
         </div>
-        {selectedMethod === "other" && (
-          <div className="mt-3">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">
-              Refund method details (optional)
-            </label>
-            <Input
-              placeholder="e.g. Zelle, wire transfer, etc."
-              value={otherMethodDetail}
-              onChange={(e) => setOtherMethodDetail(e.target.value)}
-              className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-700 text-sm"
-            />
+        {selectedMethod === "other" && otherMethodDetail && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm font-medium text-blue-700 dark:text-blue-300">
+              Other &bull; {otherMethodDetail}
+            </span>
+            <button
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (paramPaymentId) params.set("paymentId", paramPaymentId);
+                if (paramInvoiceId) params.set("invoiceId", paramInvoiceId);
+                if (otherMethodDetail) params.set("current", otherMethodDetail);
+                navigate(`/refunds/other?${params.toString()}`);
+              }}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Change
+            </button>
           </div>
         )}
       </div>

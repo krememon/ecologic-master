@@ -1635,7 +1635,7 @@ export type NotificationType =
   | "invoice_overdue"
   | "document_uploaded";
 
-export const refundMethodEnum = pgEnum("refund_method", ["card", "bank", "cash", "check"]);
+export const refundMethodEnum = pgEnum("refund_method", ["card", "bank", "cash", "check", "other"]);
 export const refundProviderEnum = pgEnum("refund_provider", ["stripe", "plaid", "manual"]);
 export const refundStatusEnum = pgEnum("refund_status", ["pending", "succeeded", "posted", "settled", "failed", "returned", "cancelled"]);
 
@@ -1647,6 +1647,7 @@ export const refunds = pgTable("refunds", {
   customerId: integer("customer_id").references(() => customers.id),
   amountCents: integer("amount_cents").notNull(),
   method: refundMethodEnum("method").notNull(),
+  methodDetail: varchar("method_detail"),
   provider: refundProviderEnum("provider").notNull(),
   status: refundStatusEnum("status").notNull().default("pending"),
   stripeRefundId: varchar("stripe_refund_id"),

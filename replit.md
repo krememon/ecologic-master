@@ -41,7 +41,9 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Line Item Tax Selection**: Job line items support per-item tax selection. When "Taxable" is ON, a tax selector appears, allowing users to pick from saved company taxes. Tax data is stored per line item to preserve the rate at selection time.
 - **Payment Collection**: Multi-method payment collection (Cash, Check, Card via Stripe) on the Payment Review screen. Includes idempotent manual payment processing and RBAC enforcement.
 - **Refund System**: Manual refund recording (Cash, Check, Card, Other) with RBAC enforcement. Refunds are issued outside EcoLogic and recorded for tracking. Features:
-  - Four refund methods: Cash, Check, Card (conditional on original Stripe payment), Other (with optional detail input)
+  - Four refund methods: Cash, Check, Card (conditional on original Stripe payment), Other (navigates to dedicated app picker)
+  - Other method screen: 7 preset apps (Cash App, Zelle, PayPal, Apple Cash, Google Pay, Meta Pay, Venmo) + Custom option
+  - Refund records store method="other" + methodDetail=<selected app> separately
   - All refunds are manual records — no automated ACH/bank/card processing
   - "Mark Refund as Sent" confirmation button
   - Updates invoice totals, payment ledger, and job payment status

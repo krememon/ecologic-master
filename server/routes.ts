@@ -12974,16 +12974,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const refundSchema = z.object({
         paymentId: z.number().int().positive(),
-        method: z.enum(['card', 'bank', 'cash', 'check']),
+        method: z.enum(['card', 'bank', 'cash', 'check', 'other']),
         amountCents: z.number().int().positive(),
         reason: z.string().optional(),
+        methodDetail: z.string().optional(),
       });
 
       const parsed = refundSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid refund request", errors: parsed.error.flatten().fieldErrors });
       }
-      const { paymentId, method, amountCents, reason } = parsed.data;
+      const { paymentId, method, amountCents, reason, methodDetail } = parsed.data;
 
       const payment = await storage.getPaymentById(paymentId);
       if (!payment || payment.companyId !== company.id) {
@@ -13035,6 +13036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerId: payment.customerId,
         amountCents,
         method: method as any,
+        methodDetail: method === 'other' ? (methodDetail || null) : null,
         provider,
         status: status as any,
         stripeRefundId,

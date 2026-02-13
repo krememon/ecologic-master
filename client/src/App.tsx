@@ -54,6 +54,7 @@ import FinancialConnections from "@/pages/FinancialConnections";
 import PaymentDetails from "@/pages/payment-details";
 import InvoicePaymentDetails from "@/pages/invoice-payment-details";
 import RefundScreen from "@/pages/refund-screen";
+import RefundOtherMethod from "@/pages/refund-other-method";
 import PublicUnsubscribe from "@/pages/PublicUnsubscribe";
 import SignupWizard from "@/pages/SignupWizard";
 import Welcome from "@/pages/Welcome";
@@ -219,6 +220,7 @@ function AuthenticatedRouter() {
         </Route>
         <Route path="/payments" component={PaymentsPage} />
         <Route path="/refunds/new" component={RefundScreen} />
+        <Route path="/refunds/other" component={RefundOtherMethod} />
         <Route path="/payments/invoice/:invoiceId">
           {(params) => <InvoicePaymentDetails invoiceId={params.invoiceId} />}
         </Route>
