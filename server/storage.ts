@@ -397,6 +397,7 @@ export interface IStorage {
   getRefundsByInvoiceId(invoiceId: number): Promise<Refund[]>;
   getRefundsByCompanyId(companyId: number): Promise<Refund[]>;
   getRefundByPlaidTransferId(plaidTransferId: string): Promise<Refund | undefined>;
+  getRefundByStripeRefundId(stripeRefundId: string): Promise<Refund | undefined>;
   createRefund(refund: InsertRefund): Promise<Refund>;
   updateRefundStatus(id: number, status: string, updates?: Partial<InsertRefund>): Promise<Refund>;
 
@@ -3987,6 +3988,11 @@ export class DatabaseStorage implements IStorage {
 
   async getRefundByPlaidTransferId(plaidTransferId: string): Promise<Refund | undefined> {
     const [found] = await db.select().from(refunds).where(eq(refunds.plaidTransferId, plaidTransferId));
+    return found;
+  }
+
+  async getRefundByStripeRefundId(stripeRefundId: string): Promise<Refund | undefined> {
+    const [found] = await db.select().from(refunds).where(eq(refunds.stripeRefundId, stripeRefundId));
     return found;
   }
 

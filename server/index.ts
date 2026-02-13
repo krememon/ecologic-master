@@ -492,6 +492,106 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     }
   }
 
+  if (event.type === 'charge.refunded' || event.type === 'charge.refund.updated') {
+    const charge = event.data.object as Stripe.Charge;
+    const chargeRefunds = charge.refunds?.data || [];
+    console.log(`[Stripe Webhook] Refund event: ${event.type} chargeId=${charge.id} refundsCount=${chargeRefunds.length}`);
+
+    try {
+      for (const stripeRefund of chargeRefunds) {
+        const existingRefund = await storage.getRefundByStripeRefundId(stripeRefund.id);
+        if (!existingRefund) {
+          console.log(`[Stripe Webhook] No local refund found for stripeRefundId=${stripeRefund.id}, skipping`);
+          continue;
+        }
+
+        const newStatus = stripeRefund.status === 'succeeded' ? 'succeeded'
+          : stripeRefund.status === 'failed' ? 'failed'
+          : stripeRefund.status === 'canceled' ? 'cancelled'
+          : 'pending';
+
+        if (existingRefund.status === newStatus) {
+          console.log(`[Stripe Webhook] Refund ${existingRefund.id} already ${newStatus}, skipping`);
+          continue;
+        }
+
+        const [updatedRow] = await db.update(refunds)
+          .set({ status: newStatus as any })
+          .where(and(eq(refunds.id, existingRefund.id), eq(refunds.status, existingRefund.status as any)))
+          .returning();
+
+        if (!updatedRow) {
+          console.log(`[Stripe Webhook] Refund ${existingRefund.id} already transitioned from ${existingRefund.status}, skipping (concurrent)`);
+          continue;
+        }
+
+        console.log(`[Stripe Webhook] Refund ${existingRefund.id} status updated: ${existingRefund.status} -> ${newStatus}`);
+
+        if (newStatus === 'succeeded' && existingRefund.status === 'pending') {
+          const payment = await storage.getPaymentById(existingRefund.paymentId);
+          if (payment) {
+            const paymentAmountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
+            const newRefundedTotal = (payment.refundedAmountCents || 0) + existingRefund.amountCents;
+            let paymentStatus = 'paid';
+            if (newRefundedTotal >= paymentAmountCents) paymentStatus = 'refunded';
+            else if (newRefundedTotal > 0) paymentStatus = 'partially_refunded';
+
+            await db
+              .update(payments)
+              .set({ refundedAmountCents: newRefundedTotal, status: paymentStatus })
+              .where(eq(payments.id, payment.id));
+
+            console.log(`[Stripe Webhook] Payment ${payment.id} updated: refunded=${newRefundedTotal}, status=${paymentStatus}`);
+
+            if (payment.invoiceId) {
+              const [invoice] = await db.select().from(invoices).where(eq(invoices.id, payment.invoiceId));
+              if (invoice) {
+                const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount || '0') * 100);
+                const allPayments = await db.select().from(payments).where(eq(payments.invoiceId, payment.invoiceId));
+
+                let totalPaymentsCents = 0;
+                let totalRefundedOnPayments = 0;
+                for (const p of allPayments) {
+                  const pAmt = p.amountCents || Math.round(parseFloat(p.amount || '0') * 100);
+                  totalPaymentsCents += pAmt;
+                  totalRefundedOnPayments += (p.id === payment.id ? newRefundedTotal : (p.refundedAmountCents || 0));
+                }
+
+                const netPaid = totalPaymentsCents - totalRefundedOnPayments;
+                const balanceDueCents = Math.max(0, invoiceTotalCents - netPaid);
+
+                let invoiceStatus: string;
+                if (netPaid <= 0) {
+                  invoiceStatus = totalRefundedOnPayments > 0 ? 'refunded' : 'pending';
+                } else if (netPaid >= invoiceTotalCents) {
+                  invoiceStatus = totalRefundedOnPayments > 0 ? 'partially_refunded' : 'paid';
+                } else {
+                  invoiceStatus = 'partial';
+                }
+
+                await db.update(invoices).set({
+                  paidAmountCents: Math.max(0, netPaid),
+                  balanceDueCents,
+                  status: invoiceStatus,
+                  updatedAt: new Date(),
+                } as any).where(eq(invoices.id, payment.invoiceId));
+
+                if (invoice.jobId) {
+                  const jobPaymentStatus = balanceDueCents === 0 && netPaid > 0 ? 'paid' : netPaid > 0 ? 'partial' : 'unpaid';
+                  await db.update(jobs).set({ paymentStatus: jobPaymentStatus }).where(eq(jobs.id, invoice.jobId));
+                }
+
+                console.log(`[Stripe Webhook] Invoice ${payment.invoiceId} updated: status=${invoiceStatus}, balance=${balanceDueCents}`);
+              }
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('[Stripe Webhook] Error processing refund event:', error.message);
+    }
+  }
+
   if (event.type === 'payout.paid' || event.type === 'payout.failed') {
     const payout = event.data.object as Stripe.Payout;
     const payoutId = payout.id;

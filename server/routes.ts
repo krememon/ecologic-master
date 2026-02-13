@@ -12913,7 +12913,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100);
       const refundedAmountCents = payment.refundedAmountCents || 0;
-      const maxRefundable = amountCents - refundedAmountCents;
+
+      const existingRefundsList = await storage.getRefundsByPaymentId(paymentId);
+      let pendingRefundsCents = 0;
+      for (const r of existingRefundsList) {
+        if (r.status === 'pending' || r.status === 'posted') {
+          pendingRefundsCents += r.amountCents;
+        }
+      }
+
+      const maxRefundable = amountCents - refundedAmountCents - pendingRefundsCents;
 
       let customerName = 'Unknown Customer';
       if (payment.customerId) {
@@ -12936,8 +12945,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch (e) {}
 
-      const existingRefunds = await storage.getRefundsByPaymentId(paymentId);
-
       res.json({
         paymentId: payment.id,
         invoiceId: payment.invoiceId,
@@ -12951,7 +12958,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyBankLinked,
         customerBankLinked,
         paymentMethod: payment.paymentMethod,
-        existingRefunds,
+        existingRefunds: existingRefundsList,
+        pendingRefundsCents,
       });
     } catch (error) {
       console.error("Error fetching refund context:", error);
@@ -13017,6 +13025,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             payment_intent: payment.stripePaymentIntentId,
             amount: amountCents,
             reason: 'requested_by_customer',
+            metadata: {
+              invoiceId: String(payment.invoiceId || ''),
+              paymentId: String(payment.id),
+              companyId: String(company.id),
+              userId: userId,
+            },
           });
           stripeRefundId = stripeRefund.id;
           status = stripeRefund.status === 'succeeded' ? 'succeeded' : 'pending';

@@ -178,16 +178,20 @@ export default function RefundScreen() {
 
     setIsSubmitting(true);
     try {
-      await apiRequest("POST", "/api/refunds", {
+      const response = await apiRequest("POST", "/api/refunds", {
         paymentId: activePaymentId,
         method: selectedMethod,
         amountCents: effectiveAmountCents,
         reason: reason.trim() || undefined,
         methodDetail: selectedMethod === "other" ? otherMethodDetail.trim() : undefined,
       });
+      const result = await response.json();
+      const isPending = result.isPending;
       toast({
-        title: "Refund recorded",
-        description: `${formatCents(effectiveAmountCents)} refund via ${methodConfig[selectedMethod!].label} has been recorded`,
+        title: isPending ? "Refund processing" : "Refund recorded",
+        description: isPending
+          ? `${formatCents(effectiveAmountCents)} card refund is being processed by Stripe`
+          : `${formatCents(effectiveAmountCents)} refund via ${methodConfig[selectedMethod!].label} has been recorded`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });

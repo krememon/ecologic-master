@@ -1,0 +1,78 @@
+Implement REAL Stripe card refunds in EcoLogic.
+
+Context:
+- Refund screen has methods: Cash, Check, Card, Other.
+- Cash/Check/Other remain “record only” (no money moved).
+- Card refund should trigger a real Stripe refund ONLY if original payment was a Stripe card payment.
+
+Backend requirements:
+1) Data model / linkage
+   - Ensure each Stripe payment stored in DB includes at least:
+     - stripePaymentIntentId OR stripeChargeId
+     - amountCents
+     - currency
+     - invoiceId and/or paymentId linkage
+   - If we only have a Checkout Session ID, derive PaymentIntent/Charge from it.
+
+2) Create refund endpoint
+   - POST /api/refunds/stripe
+   - Body: { paymentId, invoiceId, amountCents, reason?: string }
+   - Auth: OWNER/ADMIN only (or whatever matches current refund permission logic)
+   - Validate:
+     - amountCents > 0
+     - amountCents <= remainingRefundableCents for that Stripe payment
+     - payment is Stripe-based and has payment_intent or charge
+   - Call Stripe:
+     - stripe.refunds.create({
+         payment_intent: <id>  (preferred)
+         OR charge: <id>,
+         amount: amountCents,
+         metadata: { invoiceId, paymentId, companyId, userId }
+       })
+   - Save a refund record in DB with:
+     - method = 'CARD'
+     - amountCents
+     - reason
+     - status = 'pending' initially
+     - stripeRefundId
+     - invoiceId/paymentId
+     - createdByUserId
+
+3) Webhook to finalize refund status
+   - Add webhook handler for:
+     - charge.refunded
+     - refund.updated (or refund.succeeded / refund.failed if available)
+   - Update refund record status to: succeeded/failed
+   - Ensure idempotency:
+     - if stripeRefundId already processed, do nothing
+   - Also update any payment ledger UI fields:
+     - “Pending refund” until succeeded
+     - “Refunded” when succeeded
+
+4) “Max refundable” calculation
+   - On refund-context endpoint (GET /api/payments/:id/refund-context):
+     - If Stripe payment: maxRefundableCents = amountPaidCents - sum(successfulRefundsCents) - sum(pendingRefundsCents)
+     - If non-Stripe: maxRefundableCents = amountPaidCents (still record-only)
+
+Frontend requirements:
+5) Refund modal behavior
+   - If method = Card:
+     - Call POST /api/refunds/stripe with amount + reason
+     - Show toast:
+       - “Refund initiated — pending settlement” on success
+       - Show server error message on failure
+   - If method = Cash/Check/Other:
+     - Keep existing record-only behavior (no Stripe calls)
+
+6) UI states
+   - Card tile enabled ONLY if payment has stripePaymentIntentId/chargeId.
+     - If disabled, show helper text: “No original card charge exists for this payment.”
+   - Refund history should show:
+     - Card refund: pending/succeeded/failed pill
+     - Cash/Check/Other: recorded pill (no Stripe status)
+
+Deliverables:
+- Real Stripe refund works in sandbox.
+- Prevent over-refunding (can’t refund more than paid minus prior refunds).
+- Webhook updates status and avoids double-processing.
+- Add targeted logs around refund creation + webhook processing, then keep minimal logs.
