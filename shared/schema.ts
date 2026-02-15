@@ -311,8 +311,12 @@ export const jobs = pgTable("jobs", {
   notes: text("notes"),
   jobType: varchar("job_type", { length: 100 }), // Same job types as estimates
   assignedTo: varchar("assigned_to").references(() => users.id), // Assigned user/technician
-  scheduledTime: varchar("scheduled_time", { length: 10 }), // HH:mm format, stored separately to avoid timezone issues
-  scheduledEndTime: varchar("scheduled_end_time", { length: 10 }), // HH:mm format for end time
+  scheduledTime: varchar("scheduled_time", { length: 10 }),
+  scheduledEndTime: varchar("scheduled_end_time", { length: 10 }),
+  completedAt: timestamp("completed_at"),
+  paidAt: timestamp("paid_at"),
+  archivedAt: timestamp("archived_at"),
+  archivedReason: text("archived_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

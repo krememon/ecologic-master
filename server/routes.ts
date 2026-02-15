@@ -74,6 +74,27 @@ if (stripe) {
 
 const scryptAsync = promisify(scrypt);
 
+async function tryArchiveCompletedPaidJob(jobId: number) {
+  try {
+    const job = await storage.getJob(jobId);
+    if (!job) return;
+    if (job.status === 'archived' || job.archivedAt) return;
+    const isCompleted = job.status === 'completed';
+    const isPaid = job.paymentStatus === 'paid';
+    if (isCompleted && isPaid) {
+      const now = new Date();
+      await storage.updateJob(jobId, {
+        status: 'archived',
+        archivedAt: now,
+        archivedReason: 'completed_and_paid',
+      } as any);
+      console.log(`[JobArchive] Job ${jobId} auto-archived (completed + paid)`);
+    }
+  } catch (err) {
+    console.error(`[JobArchive] Error archiving job ${jobId}:`, err);
+  }
+}
+
 // Format 24-hour time (HH:mm) to 12-hour format (h:mm AM/PM)
 function formatTime12Hour(time24: string | null): string {
   if (!time24) return '9:00 AM';
@@ -3539,6 +3560,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userRole = member?.role?.toUpperCase() || '';
       
       let jobs = await storage.getJobs(company.id);
+
+      // Filter out archived jobs unless explicitly requested
+      const includeArchived = req.query.includeArchived === 'true';
+      if (!includeArchived) {
+        jobs = jobs.filter((job: any) => job.status !== 'archived' && !job.archivedAt);
+      }
       
       // For technicians, only return jobs they are assigned to (for Home page Today list)
       if (userRole === 'TECHNICIAN') {
@@ -4200,6 +4227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const {
         title,
         description,
+        status,
         location,
         city,
         postalCode,
@@ -4233,8 +4261,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (customerName !== undefined) jobUpdateData.clientName = customerName;
       if (notes !== undefined) jobUpdateData.notes = notes;
       if (jobType !== undefined) jobUpdateData.jobType = jobType;
+      if (status !== undefined) {
+        jobUpdateData.status = status;
+        if (status === 'completed' && existingJob.status !== 'completed') {
+          jobUpdateData.completedAt = new Date();
+        }
+      }
       
       const updatedJob = await storage.updateJob(jobId, jobUpdateData);
+
+      if (status === 'completed' && existingJob.status !== 'completed') {
+        await tryArchiveCompletedPaidJob(jobId);
+      }
       
       // Update schedule if provided
       if (scheduleDate !== undefined) {
@@ -4508,6 +4546,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      if (status === 'completed') {
+        await tryArchiveCompletedPaidJob(jobId);
+      }
+
       res.json(updatedJob);
     } catch (error) {
       console.error("Error updating job:", error);
@@ -4565,8 +4607,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden" });
       }
       
-      // Archive by setting status to 'archived'
-      const archivedJob = await storage.updateJob(jobId, { status: 'archived' } as any);
+      const archivedJob = await storage.updateJob(jobId, {
+        status: 'archived',
+        archivedAt: new Date(),
+        archivedReason: 'manual',
+      } as any);
       
       res.json(archivedJob);
     } catch (error) {
@@ -7328,7 +7373,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               if (invoice.jobId) {
                 const jobPaymentStatus = balanceDueCents === 0 && totalPaymentsCents > 0 ? 'paid' : totalPaymentsCents > 0 ? 'partial' : 'unpaid';
-                await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+                await storage.updateJob(invoice.jobId, {
+                  paymentStatus: jobPaymentStatus,
+                  ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
+                } as any);
+                if (jobPaymentStatus === 'paid') {
+                  await tryArchiveCompletedPaidJob(invoice.jobId);
+                }
               }
             }
           }
@@ -10742,8 +10793,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (invoice.jobId) {
-          await storage.updateJob(invoice.jobId, { paymentStatus: 'paid' } as any);
+          await storage.updateJob(invoice.jobId, { paymentStatus: 'paid', paidAt: new Date() } as any);
           console.log(`[Invoice] Job ${invoice.jobId} paymentStatus updated to paid`);
+          await tryArchiveCompletedPaidJob(invoice.jobId);
         }
       }
       
@@ -12500,8 +12552,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update job paymentStatus if invoice is associated with a job
       if (invoice.jobId) {
         const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+        await storage.updateJob(invoice.jobId, {
+          paymentStatus: jobPaymentStatus,
+          ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
+        } as any);
         console.log(`[Payment] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
+        if (jobPaymentStatus === 'paid') {
+          await tryArchiveCompletedPaidJob(invoice.jobId);
+        }
       }
 
       console.log(`[Payment] Manual ${paymentMethodValue} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
@@ -12661,7 +12719,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (invoice.jobId) {
         const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+        await storage.updateJob(invoice.jobId, {
+          paymentStatus: jobPaymentStatus,
+          ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
+        } as any);
+        if (jobPaymentStatus === 'paid') {
+          await tryArchiveCompletedPaidJob(invoice.jobId);
+        }
       }
 
       console.log(`[Payment] Customer ${customerId} payment recorded: $${amountDollars} via ${paymentMethodValue} → invoice ${invoice.id} (${newStatus})`);
@@ -12913,8 +12977,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update job paymentStatus
           if (invoice.jobId) {
             const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-            await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+            await storage.updateJob(invoice.jobId, {
+              paymentStatus: jobPaymentStatus,
+              ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
+            } as any);
             console.log(`[Stripe] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
+            if (jobPaymentStatus === 'paid') {
+              await tryArchiveCompletedPaidJob(invoice.jobId);
+            }
           }
 
           // Send notification to managers
@@ -13165,7 +13235,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             if (invoice.jobId) {
               const jobPaymentStatus = balanceDueCents === 0 && netCollected > 0 ? 'paid' : netCollected > 0 ? 'partial' : 'unpaid';
-              await storage.updateJob(invoice.jobId, { paymentStatus: jobPaymentStatus } as any);
+              await storage.updateJob(invoice.jobId, {
+                paymentStatus: jobPaymentStatus,
+                ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
+              } as any);
+              if (jobPaymentStatus === 'paid') {
+                await tryArchiveCompletedPaidJob(invoice.jobId);
+              }
             }
           }
         }

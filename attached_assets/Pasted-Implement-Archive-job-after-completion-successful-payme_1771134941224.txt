@@ -1,0 +1,84 @@
+Implement: “Archive job after completion + successful payment” in EcoLogic (job disappears from active list but stays in history).
+
+GOAL (exact behavior):
+When BOTH are true:
+1) Job is marked Completed
+2) Payment for that job is Successful
+→ The job card should be removed from the main Jobs list (Active view), BUT the job must still exist and be viewable in:
+- Client History
+- Job details (read-only ok)
+- Payments page (payment record remains)
+
+IMPORTANT:
+- Do NOT hard delete the job from the database.
+- This is an archive/status change only.
+
+WHY THIS MATTERS:
+We need the app to keep historical records for audits, reporting, and customer history, while keeping the Jobs list clean.
+
+DATA MODEL (DB + types):
+Add these fields to the jobs table/model:
+- status: 'open' | 'in_progress' | 'completed' | 'archived' (default 'open' for existing jobs)
+- completedAt: timestamp nullable
+- paidAt: timestamp nullable
+- archivedAt: timestamp nullable
+- archivedReason: text nullable (set to 'completed_and_paid')
+
+BACKEND LOGIC (source of truth):
+A) When user marks a job as completed:
+- Set status = 'completed'
+- Set completedAt = now()
+
+B) When a payment succeeds:
+We are not sure if EcoLogic currently confirms payment via Stripe webhook OR via server confirmation after checkout.
+Implement BOTH safely:
+
+1) If Stripe webhook exists:
+- On successful payment event (e.g., checkout.session.completed / payment_intent.succeeded depending on current setup):
+  - Create/update the payment record as SUCCESSFUL
+  - If payment is linked to a jobId:
+      - Update job.paidAt = now()
+      - If job.status === 'completed' then:
+          - job.status = 'archived'
+          - job.archivedAt = now()
+          - job.archivedReason = 'completed_and_paid'
+
+2) If webhook is NOT reliable or not set up:
+- In the server endpoint that confirms payment success after checkout (or in the page that finalizes payment), also run the same logic:
+  - Mark payment SUCCESSFUL
+  - Update job.paidAt
+  - If job.status === 'completed' => archive it
+
+KEY REQUIREMENT:
+Even if both webhook + confirm endpoint run, it must be idempotent (no duplicates, no double updates).
+
+FRONTEND:
+C) Jobs list behavior:
+- Default view should show only “active” jobs:
+  - Exclude jobs where status === 'archived'
+- Optionally add a simple filter/toggle or tab later (Active / Archived). Not required now unless easy.
+
+D) Client History:
+- Client history must include archived jobs.
+- Make sure the job is still accessible from the client profile/history.
+
+RBAC / UX RULES:
+- Keep role-based visibility exactly as-is (“hidden not disabled”).
+- Archived jobs should still follow the same visibility rules; they just won’t appear in Active Jobs.
+- Ensure UI refresh after completion/payment:
+  - If using React Query / SWR: invalidate queries for jobs + client history + payments
+  - Otherwise refetch or update local state.
+
+DELIVERABLES:
+1) DB migration to add the new job fields (with safe defaults for existing jobs)
+2) Updated backend routes/services:
+   - Complete job endpoint sets status/completedAt
+   - Payment success handling (webhook + fallback confirm endpoint) updates payment + job paidAt and archives if completed
+3) Update Jobs list query/filter to hide archived by default
+4) Confirm:
+   - After job completed + paid: job disappears from Jobs list
+   - Job is still visible in Client History
+   - Payment remains recorded in Payments
+
+FILES:
+List exact file paths changed and paste the final code snippets for the key parts (migration + payment success handler + jobs query).
