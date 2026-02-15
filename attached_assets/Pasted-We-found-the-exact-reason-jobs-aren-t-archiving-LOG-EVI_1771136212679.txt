@@ -1,0 +1,41 @@
+We found the exact reason jobs aren’t archiving.
+
+LOG EVIDENCE:
+Stripe webhook runs and finds jobId correctly.
+Payment status updates to paid.
+But job does NOT archive because job.status remains 'pending':
+[Stripe Webhook] Job 513 BEFORE update: status=pending, paymentStatus=unpaid
+[Stripe Webhook] Job 513 NOT archived: status=pending (need 'completed')
+
+GOAL:
+Make jobs archive automatically when they are both:
+- paid (paymentStatus='paid')
+- completed (whatever the app’s “completed” state is)
+
+TASKS:
+1) Identify the job lifecycle status values currently used in the DB and UI.
+   - It looks like status includes 'pending' at minimum.
+   - Find where the “Mark Completed” action is implemented and what it sets.
+2) Ensure the “Mark Completed” action sets status='completed' (or the canonical completed status we choose).
+   - If the app currently uses a different value (ex: 'done', 'closed'), standardize to 'completed' OR treat those values as completed.
+3) Update the archive condition in the Stripe webhook handler:
+   - Instead of ONLY checking status==='completed', check if the job is in ANY completed-like state.
+   Example:
+     const COMPLETED_STATUSES = new Set(['completed','done','closed','finished']);
+     if (job.paymentStatus==='paid' && COMPLETED_STATUSES.has(job.status)) archive it.
+   - If we decide to standardize, then just ensure “Mark Completed” always sets status='completed'.
+4) ALSO add a safeguard: when a job is marked completed (via API endpoint), if paymentStatus is already 'paid', archive immediately.
+   - This handles the reverse order (paid first, completed later).
+5) Frontend:
+   - Jobs list must exclude archived jobs by default (status !== 'archived')
+   - Ensure UI refetch/invalidate after completing job and after payment return.
+
+DELIVERABLES:
+- File paths + final code for:
+  a) Job completion endpoint/action (sets status)
+  b) Stripe webhook archive condition update
+  c) Job completion handler also archives if already paid
+  d) Jobs list filter/hide archived
+- Confirm both flows work:
+  Flow A: complete -> pay -> archives
+  Flow B: pay -> complete -> archives

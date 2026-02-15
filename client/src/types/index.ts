@@ -53,7 +53,7 @@ export interface Job {
   clientId: number;
   title: string;
   description?: string;
-  status: "planning" | "in_progress" | "completed" | "cancelled" | "urgent";
+  status: "pending" | "active" | "planning" | "in_progress" | "completed" | "cancelled" | "archived" | "urgent";
   priority: "low" | "medium" | "high" | "urgent";
   startDate?: string;
   endDate?: string;

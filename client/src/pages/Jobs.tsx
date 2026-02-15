@@ -611,6 +611,29 @@ export default function Jobs() {
     },
   });
 
+  const markCompletedMutation = useMutation({
+    mutationFn: async (jobId: number) => {
+      const res = await apiRequest("PATCH", `/api/jobs/${jobId}`, { status: "completed" });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/schedule-items')
+      });
+      toast({ title: "Job marked as completed" });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to mark job as completed",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Photo upload mutation
   const uploadPhotoMutation = useMutation({
@@ -1035,6 +1058,22 @@ export default function Jobs() {
                   <Edit className="h-4 w-4 mr-1.5" />
                   Edit
                 </Button>
+                {selectedJob && selectedJob.status !== 'completed' && selectedJob.status !== 'cancelled' && selectedJob.status !== 'archived' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 border-green-200 hover:bg-green-50 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-900/30"
+                    onClick={() => {
+                      if (selectedJob) {
+                        markCompletedMutation.mutate(selectedJob.id);
+                      }
+                    }}
+                    disabled={markCompletedMutation.isPending}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                    {markCompletedMutation.isPending ? 'Completing...' : 'Complete'}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -1052,6 +1091,10 @@ export default function Jobs() {
                   selectedJob.status === 'cancelled' ? (
                     <Badge className="text-sm bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                       Cancelled
+                    </Badge>
+                  ) : selectedJob.status === 'completed' ? (
+                    <Badge className="text-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-100">
+                      Completed
                     </Badge>
                   ) : selectedJob.isPaid ? (
                     <Badge 
@@ -1906,6 +1949,11 @@ export default function Jobs() {
                 <Badge className="absolute top-3 right-3 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
                   <X className="h-3 w-3" />
                   Cancelled
+                </Badge>
+              ) : job.status === 'completed' ? (
+                <Badge className="absolute top-3 right-3 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Completed
                 </Badge>
               ) : job.isPaid ? (
                 <Badge className="absolute top-3 right-3 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
