@@ -1,0 +1,76 @@
+You are working in the EcoLogic app. Implement a production-safe, customizable behavior for when an Estimate converts into a Job: the estimate should disappear from the active Estimates list (like it was deleted), BUT it must remain available for customer/job history and for Dashboard metrics like “Estimates This Week”.
+
+GOALS
+1) Add a customizable setting:
+   - Customize → Estimates:
+     Toggle: “Hide converted estimates from active list” (default ON)
+     Helper text: “Converted estimates stay in history + reporting.”
+
+2) When an estimate is converted to a job:
+   - The estimate is NOT hard-deleted.
+   - It is marked as converted/archived so it no longer shows in the Estimates list (if setting ON).
+   - It is linked to the created job so the customer’s history shows it.
+   - Dashboard “Estimates This Week” still counts it (Created/Won/Win rate).
+
+BACKEND
+A) DB changes (preferred minimal approach):
+   - Add columns to estimates table:
+     - convertedJobId (nullable)
+     - convertedAt (nullable)
+     - archivedAt (nullable) OR isArchived boolean
+   - If you already have status fields, use them too:
+     - status = 'approved' (or 'won') can remain
+     - add a “converted” flag via convertedAt/convertedJobId
+
+B) Conversion logic:
+   - In the existing “convert estimate to job” endpoint:
+     - Create job as normal
+     - Update estimate:
+        convertedJobId = new job id
+        convertedAt = now
+        if the setting is ON: archivedAt = now (or isArchived=true)
+   - Ensure this never breaks existing RBAC: Owner/Admin/Supervisor/Dispatcher/Estimator rules stay intact.
+
+C) Estimates list endpoint:
+   - Update GET /api/estimates (or equivalent) to exclude archived/converted items by default.
+   - Add query param includeArchived=true to return everything when needed for history/admin.
+
+D) Dashboard metrics:
+   - Update “Estimates This Week” query so it counts estimates created this week regardless of archivedAt.
+   - “Won” should still count approved/accepted estimates even if archived because they converted.
+
+E) Customer history:
+   - Wherever customer/job history is generated:
+     - Include converted estimates as a timeline item:
+       “Estimate #EST-000092 approved → converted to Job”
+     - If you have a unified “history feed”, UNION jobs + converted estimates.
+     - If you only have job history, attach the estimate snapshot to the job record display.
+
+FRONTEND
+1) Customize screen:
+   - Add the toggle inside Customize (NOT Settings), consistent with other tiles.
+   - Store this setting per-company in DB (company_settings table or existing config storage).
+2) Estimates list:
+   - When a conversion occurs:
+     - instantly remove the estimate card from the list if setting ON
+     - show the new job or a “Converted to Job” state in history, not as a normal estimate card
+3) Dashboard:
+   - No UI changes needed, but verify the numbers remain correct after conversion.
+
+DELIVERABLES
+- DB migration
+- Updated conversion endpoint
+- Updated estimates list query + includeArchived
+- Updated dashboard “Estimates This Week” query
+- Customer history shows the converted estimate
+- Add targeted logs only around conversion:
+  [EstimateConvert] estimateId, jobId, archived, settingValue
+- Add at least 3 tests (or manual test checklist if tests aren’t set up):
+  1) Setting ON: estimate disappears from list after conversion, dashboard still counts it
+  2) Setting OFF: estimate remains visible, still linked to job
+  3) History shows converted estimate item and links to the job
+
+IMPORTANT
+- Do NOT hard-delete estimates.
+- Do NOT break existing flows.
+- Keep UI “hidden not disabled” philosophy.

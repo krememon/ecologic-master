@@ -104,7 +104,12 @@ export default function Home() {
   });
 
   const { data: estimates = [], isLoading: estimatesLoading, isError: estimatesError } = useQuery<Estimate[]>({
-    queryKey: ["/api/estimates"],
+    queryKey: ["/api/estimates", { includeArchived: "true" }],
+    queryFn: async () => {
+      const res = await fetch("/api/estimates?includeArchived=true", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch estimates");
+      return res.json();
+    },
     enabled: isAuthenticated && role !== 'TECHNICIAN',
   });
 

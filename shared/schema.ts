@@ -133,6 +133,7 @@ export const companies = pgTable("companies", {
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),
   autoClockOutTime: varchar("auto_clock_out_time", { length: 5 }).default("18:00"),
+  hideConvertedEstimates: boolean("hide_converted_estimates").default(true),
   ownerId: varchar("owner_id").notNull().references(() => users.id),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: varchar("subscription_status").default("inactive"), // active, past_due, canceled, incomplete, trialing, inactive
@@ -928,6 +929,8 @@ export const estimates = pgTable("estimates", {
   requestedStartAt: timestamp("requested_start_at"),
   // Job conversion (idempotency - one estimate can only create one job)
   convertedJobId: integer("converted_job_id").references(() => jobs.id, { onDelete: "set null" }),
+  convertedAt: timestamp("converted_at"),
+  archivedAt: timestamp("archived_at"),
 }, (table) => ({
   companyEstimateNumberIdx: uniqueIndex("estimates_company_number_uniq").on(table.companyId, table.estimateNumber),
   jobIdx: index("estimates_job_idx").on(table.jobId),

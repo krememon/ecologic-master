@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link, useSearch } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2, Mail, Landmark } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2, Mail, Landmark, FileText } from "lucide-react";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -70,6 +70,12 @@ export default function Customize() {
       title: "Taxes",
       description: "Create custom tax rates for invoices",
       href: "/customize/taxes",
+    },
+    {
+      icon: FileText,
+      title: "Estimates",
+      description: "Configure estimate conversion and archival settings",
+      href: "/customize/estimates",
     },
     {
       icon: Clock,

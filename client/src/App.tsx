@@ -48,6 +48,7 @@ import Leads from "@/pages/Leads";
 import LeadDetails from "@/pages/LeadDetails";
 import Timesheets from "@/pages/Timesheets";
 import TimeTrackingSettings from "@/pages/TimeTrackingSettings";
+import EstimateSettings from "@/pages/EstimateSettings";
 import EmailBranding from "@/pages/EmailBranding";
 import QuickBooksSettings from "@/pages/QuickBooksSettings";
 import FinancialConnections from "@/pages/FinancialConnections";
@@ -247,6 +248,7 @@ function AuthenticatedRouter() {
         <Route path="/customize/price-book" component={PriceBook} />
         <Route path="/customize/taxes" component={Taxes} />
         <Route path="/customize/time-tracking" component={TimeTrackingSettings} />
+        <Route path="/customize/estimates" component={EstimateSettings} />
         <Route path="/customize/quickbooks" component={QuickBooksSettings} />
         <Route path="/customize/email-branding" component={EmailBranding} />
         <Route path="/customize/financial-connections" component={FinancialConnections} />

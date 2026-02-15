@@ -46,7 +46,7 @@ import {
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import Stripe from "stripe";
-import { invoices, payments, plaidAccounts } from "../shared/schema";
+import { invoices, payments, plaidAccounts, companies } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
@@ -812,6 +812,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error updating time settings:', error);
       res.status(500).json({ error: 'Failed to update time settings' });
+    }
+  });
+
+  // =====================
+  // Estimate Settings Routes
+  // =====================
+  app.get('/api/settings/estimates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const company = await storage.getCompany(member.companyId);
+      res.json({
+        hideConvertedEstimates: company?.hideConvertedEstimates !== false,
+      });
+    } catch (error: any) {
+      console.error('Error getting estimate settings:', error);
+      res.status(500).json({ error: 'Failed to get estimate settings' });
+    }
+  });
+
+  app.put('/api/settings/estimates', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const { hideConvertedEstimates } = req.body;
+      if (typeof hideConvertedEstimates !== 'boolean') {
+        return res.status(400).json({ error: 'hideConvertedEstimates must be a boolean' });
+      }
+
+      await storage.updateCompany(member.companyId, { hideConvertedEstimates });
+      res.json({ hideConvertedEstimates });
+    } catch (error: any) {
+      console.error('Error updating estimate settings:', error);
+      res.status(500).json({ error: 'Failed to update estimate settings' });
     }
   });
 
@@ -7324,20 +7370,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to view estimates" });
       }
 
+      const includeArchived = req.query.includeArchived === 'true';
       const allEstimates = await storage.getEstimatesByCompany(company.id);
-      console.log(`[Estimates] listAll userId=${userId} companyId=${company.id} count=${allEstimates.length}`);
-      // Debug: log schedule fields for first estimate
-      if (allEstimates.length > 0) {
-        const first = allEstimates[0];
-        console.log(`[Estimates] first estimate schedule:`, {
-          id: first.id,
-          status: first.status,
-          convertedJobId: first.convertedJobId,
-          scheduledDate: first.scheduledDate,
-          scheduledTime: first.scheduledTime,
-        });
+
+      let filtered = allEstimates;
+      if (!includeArchived && company.hideConvertedEstimates !== false) {
+        filtered = allEstimates.filter(est => !est.archivedAt);
       }
-      res.json(allEstimates);
+
+      res.json(filtered);
     } catch (error) {
       console.error("Error fetching all estimates:", error);
       res.status(500).json({ message: "Failed to fetch estimates" });
@@ -8072,11 +8113,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // 4. Update estimate with convertedJobId
+        // 4. Update estimate with convertedJobId, convertedAt, and conditionally archivedAt
+        const now = new Date();
+        const companyData = await tx.select().from(companies).where(eq(companies.id, companyId));
+        const hideConverted = companyData[0]?.hideConvertedEstimates !== false;
+
         await tx
           .update(estimates)
-          .set({ convertedJobId: newJob.id })
+          .set({
+            convertedJobId: newJob.id,
+            convertedAt: now,
+            ...(hideConverted ? { archivedAt: now } : {}),
+          })
           .where(eq(estimates.id, estimateId));
+
+        console.log(`[EstimateConvert] estimateId=${estimateId} jobId=${newJob.id} archived=${hideConverted} settingValue=${hideConverted}`);
 
         return { approved, jobId: newJob.id };
       });
