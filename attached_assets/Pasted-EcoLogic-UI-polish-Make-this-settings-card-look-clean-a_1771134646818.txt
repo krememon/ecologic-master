@@ -1,0 +1,55 @@
+EcoLogic UI polish: Make this settings card look clean and consistent. Stop forcing “no-wrap” rules that make it ugly.
+
+CURRENT STATE:
+- Layout shift issues are mostly solved, but the card looks awkward:
+  - Title + switch spacing feels tight
+  - Description wraps in a weird narrow column
+  - Switch must stay normal sized and aligned
+
+GOAL:
+Make it look like a polished settings card:
+- Switch stays top-right, normal size
+- Text has comfortable width and spacing
+- Title can wrap naturally if needed (but should NOT break awkwardly)
+- Description should wrap normally and look balanced
+- No ellipsis on the title
+
+REQUIREMENTS:
+1) Use a RELATIVE card container and ABSOLUTE switch so switch doesn’t steal width.
+2) Reserve space for the switch using padding on the text column (pr-20/pr-24).
+3) Remove any `whitespace-nowrap`, `truncate`, or overflow rules from the title.
+4) Improve typography:
+   - Title: text-sm font-semibold leading-snug
+   - Description: text-xs text-muted-foreground leading-relaxed mt-1 max-w-[42ch] (or similar) so it doesn’t look too wide or too narrow.
+5) Keep icon + text aligned nicely:
+   - Main row: flex items-start gap-3
+   - Icon: shrink-0
+   - Text: flex-1 min-w-0
+6) Do NOT modify Switch component styling. No custom w/h/scale on Switch.
+7) Only update this specific card.
+
+REFERENCE IMPLEMENTATION (adapt exactly to the real component):
+<Card className="relative p-4">
+  <div className="flex items-start gap-3">
+    <div className="shrink-0 w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+      <FileText className="w-5 h-5 text-emerald-700" />
+    </div>
+
+    <div className="flex-1 min-w-0 pr-24">
+      <div className="text-sm font-semibold leading-snug">
+        Hide converted estimates
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed mt-1 max-w-[42ch]">
+        When enabled, estimates that have been converted to jobs will be hidden from the main estimates list
+      </p>
+    </div>
+  </div>
+
+  <div className="absolute top-4 right-4">
+    <Switch checked={...} onCheckedChange={...} />
+  </div>
+</Card>
+
+DELIVERABLE:
+- Provide file path + updated JSX/TSX.
+- Confirm the card looks clean: no cramped wrapping, switch normal, text flows nicely.
