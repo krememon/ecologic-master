@@ -87,12 +87,12 @@ export default function EstimateSettings() {
         <Card className="border-slate-200 dark:border-slate-700">
           <CardContent className="p-0">
             <div className="relative p-4">
-              <div className="flex gap-3 pr-16">
+              <div className="flex items-start gap-3 pr-24">
                 <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
                   <FileText className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                 </div>
                 <div className="min-w-0">
-                  <div className="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap truncate">
+                  <div className="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
                     Hide converted estimates
                   </div>
                   <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
