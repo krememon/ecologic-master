@@ -4,7 +4,7 @@ import { useLocation, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { ChevronLeft, FileText, Loader2, Check } from "lucide-react";
+import { ChevronLeft, FileText, Loader2 } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +18,6 @@ export default function EstimateSettings() {
   const { can } = useCan();
   const { toast } = useToast();
   const [hideConverted, setHideConverted] = useState(true);
-  const [saved, setSaved] = useState(false);
 
   const { data, isLoading } = useQuery<EstimateSettingsData>({
     queryKey: ["/api/settings/estimates"],
@@ -37,8 +36,6 @@ export default function EstimateSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/estimates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/estimates"] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     },
     onError: () => {
       setHideConverted(!hideConverted);
@@ -103,16 +100,11 @@ export default function EstimateSettings() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 flex items-center justify-center">
-                  <Check className={`h-4 w-4 text-green-500 transition-opacity duration-300 ${saved ? "opacity-100" : "opacity-0"}`} />
-                </div>
-                <Switch
-                  checked={hideConverted}
-                  onCheckedChange={handleToggle}
-                  disabled={updateMutation.isPending}
-                />
-              </div>
+              <Switch
+                checked={hideConverted}
+                onCheckedChange={handleToggle}
+                disabled={updateMutation.isPending}
+              />
             </div>
           </CardContent>
         </Card>
