@@ -104,9 +104,9 @@ export default function EstimateSettings() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {saved && (
-                  <Check className="h-4 w-4 text-green-500 animate-in fade-in" />
-                )}
+                <div className="w-5 h-5 flex items-center justify-center">
+                  <Check className={`h-4 w-4 text-green-500 transition-opacity duration-300 ${saved ? "opacity-100" : "opacity-0"}`} />
+                </div>
                 <Switch
                   checked={hideConverted}
                   onCheckedChange={handleToggle}
