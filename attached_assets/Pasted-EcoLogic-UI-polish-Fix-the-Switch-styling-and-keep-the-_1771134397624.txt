@@ -1,0 +1,45 @@
+EcoLogic UI polish: Fix the Switch styling and keep the title on ONE line exactly like before.
+
+CURRENT ISSUE:
+- The text no longer shifts (good), but now the Switch looks distorted/incorrect (thumb looks off).
+- The title “Hide converted estimates” is breaking into two lines, but it should stay on one line like the original design (2nd screenshot).
+
+GOAL:
+Match the 2nd screenshot:
+- Normal Switch appearance (default shadcn/ui Switch sizing + thumb alignment)
+- “Hide converted estimates” ALWAYS stays on one line
+
+REQUIREMENTS:
+1) DO NOT force custom width/height classes onto the Switch component that break its internal thumb alignment.
+   - Remove any custom classes like w-[52px], w-11/h-6, scale transforms, etc. that were added to the Switch itself.
+   - The Switch should use its default styling (shadcn/ui Switch).
+2) Keep the title on one line without changing layout.
+   - Make the card container `relative`
+   - Position the Switch with `absolute top-4 right-4` (or equivalent) so it doesn’t steal width from the title.
+   - Add `pr-16` (or enough right padding) to the text column so it never overlaps the Switch.
+   - Apply `whitespace-nowrap` + `truncate` to the title so it never wraps (it should ellipsis if needed, not drop a word to the next line).
+3) Only adjust this specific settings card. Do not refactor other components or screens.
+4) Keep toggle logic exactly the same (state + persistence unchanged).
+
+EXAMPLE LAYOUT (adapt to our component):
+<Card className="relative">
+  <div className="flex gap-3">
+    <Icon />
+    <div className="min-w-0 pr-16">
+      <div className="text-sm font-medium whitespace-nowrap truncate">
+        Hide converted estimates
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        When enabled, estimates that have been converted to jobs will be hidden from the main estimates list
+      </p>
+    </div>
+  </div>
+
+  <div className="absolute top-4 right-4">
+    <Switch checked={...} onCheckedChange={...} />
+  </div>
+</Card>
+
+DELIVERABLE:
+- Provide exact file(s) changed and final JSX/TSX for this card.
+- Confirm Switch looks normal in BOTH states and the title never wraps.
