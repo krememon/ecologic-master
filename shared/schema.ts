@@ -317,6 +317,8 @@ export const jobs = pgTable("jobs", {
   paidAt: timestamp("paid_at"),
   archivedAt: timestamp("archived_at"),
   archivedReason: text("archived_reason"),
+  deletedAt: timestamp("deleted_at"),
+  deletedReason: text("deleted_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,0 +1,57 @@
+Fix: Jobs can’t be deleted due to foreign key constraint refunds -> invoices.
+
+ERROR:
+Postgres 23503: update or delete on table "invoices" violates foreign key constraint "refunds_invoice_id_fkey" on table "refunds"
+Meaning refunds.invoice_id references invoices.id, so deleting invoice fails.
+
+CURRENT BEHAVIOR:
+DELETE /api/jobs/:id tries to delete the job’s invoice (and possibly invoice children).
+This fails when refunds exist, so job delete fails.
+
+GOAL:
+“Delete job” should work in a safe accounting-friendly way:
+- If the job is financially referenced (invoice/payments/refunds), do NOT hard delete.
+- Instead, soft-delete (mark as deleted) so it disappears from Jobs list but remains in history/audit.
+- If there are NO financial references, allow hard delete as before.
+
+IMPLEMENTATION (recommended):
+1) Add fields to jobs:
+- deletedAt timestamp nullable
+- deletedReason text nullable
+(Optional: deletedByUserId)
+
+2) Update DELETE /api/jobs/:id:
+- Load job + invoiceId (if any)
+- Check for financial references:
+   a) refunds where invoiceId = job.invoiceId  (exists?)
+   b) payments where invoiceId = job.invoiceId (exists?)
+   c) invoices exists? (job.invoiceId not null)
+- If ANY exist:
+   - Do NOT delete invoices/refunds/payments
+   - Update job: set deletedAt=now(), deletedReason='has_financial_records'
+   - Return 200 with { softDeleted: true }
+- Else (no references):
+   - Proceed with hard delete of job + related safe children
+   - Return 204
+
+3) Update Jobs list query:
+- Exclude deleted jobs by default:
+  WHERE deletedAt IS NULL
+- Keep archived filtering too if applicable (status != 'archived' OR however active list works)
+
+4) UI:
+- When user clicks Delete:
+   - If API returns softDeleted=true, show a friendly toast:
+     “Job removed from active list. Financial history was preserved.”
+   - Remove it from the UI list immediately (refetch/invalidate jobs).
+
+IMPORTANT:
+- Do NOT change the refunds foreign key to cascade delete.
+- Do NOT delete invoices if they have refunds/payments attached.
+- Client history can still show deleted jobs if needed (optional), but Jobs list should hide them.
+
+DELIVERABLES:
+- Migration adding deletedAt/deletedReason
+- Updated delete route logic + file paths
+- Updated jobs list query to exclude deletedAt
+- Confirm: previously undeletable jobs now “delete” successfully via soft-delete and disappear from Jobs tab
