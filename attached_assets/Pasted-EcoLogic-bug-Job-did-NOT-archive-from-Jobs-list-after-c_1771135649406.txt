@@ -1,0 +1,60 @@
+EcoLogic bug: Job did NOT archive from Jobs list after “completed + successful payment”.
+
+We already attempted the feature, but it’s not working. Fix it with targeted debugging.
+
+NON-NEGOTIABLE BEHAVIOR:
+When payment is successful AND job.status === 'completed' -> set job.status='archived', set archivedAt, set archivedReason='completed_and_paid'.
+Active Jobs list must NOT show archived jobs.
+
+STEP 1 — Add targeted logs (temporary, remove after fix):
+In payment success handling code (webhook and/or confirm endpoint), log:
+- payment id / session id
+- amount
+- jobId (and where it comes from)
+- job.status before update
+- update result (rows affected)
+Also log when the handler is NOT able to find a jobId.
+
+STEP 2 — Ensure payments are linked to a jobId (MOST LIKELY ROOT CAUSE):
+Right now the success handler probably doesn’t know which job was paid.
+
+Fix by guaranteeing jobId is attached at checkout creation and is retrievable at success time:
+Option A (recommended): Stripe Checkout Session metadata
+- When creating checkout session for a job, include:
+  metadata: { jobId: <job.id>, clientId: <client.id> }
+- On success (webhook or confirm endpoint), read session.metadata.jobId
+
+Option B: Store a local “pending payment” record in DB with:
+- jobId, sessionId/paymentIntentId
+Then on success, lookup jobId by sessionId/paymentIntentId.
+
+Implement whichever matches current code fastest.
+
+STEP 3 — Make archiving idempotent:
+If handler runs twice, it should not create duplicate payment rows or fail.
+- Upsert payment by providerPaymentId/sessionId
+- Job update should be safe if already archived.
+
+STEP 4 — Confirm frontend actually hides archived jobs:
+- Jobs list query must filter: status != 'archived'
+- After payment success + job update, UI must refresh:
+  - If React Query/SWR: invalidate jobs query
+  - Else refetch jobs or update local state
+
+STEP 5 — Verify in one test run:
+1) Mark job completed
+2) Pay successfully
+Expected:
+- job row shows status='archived'
+- job disappears from Jobs list
+- job remains in client history
+- payment remains in Payments page
+
+DELIVERABLES:
+- Identify which failure happened (no handler / no jobId link / UI not filtering / no refetch)
+- Provide file paths changed
+- Paste final code for:
+  (a) checkout session creation (where jobId is attached)
+  (b) payment success handler (where it reads jobId and archives)
+  (c) jobs list query/filter + refetch/invalidate
+- Remove temporary logs after confirming fix (or gate them behind a DEBUG flag).

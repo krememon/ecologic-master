@@ -77,10 +77,17 @@ const scryptAsync = promisify(scrypt);
 async function tryArchiveCompletedPaidJob(jobId: number) {
   try {
     const job = await storage.getJob(jobId);
-    if (!job) return;
-    if (job.status === 'archived' || job.archivedAt) return;
+    if (!job) {
+      console.log(`[JobArchive] Job ${jobId} not found, skipping archival`);
+      return;
+    }
+    if (job.status === 'archived' || job.archivedAt) {
+      console.log(`[JobArchive] Job ${jobId} already archived, skipping`);
+      return;
+    }
     const isCompleted = job.status === 'completed';
     const isPaid = job.paymentStatus === 'paid';
+    console.log(`[JobArchive] Job ${jobId} check: status=${job.status}, paymentStatus=${job.paymentStatus}, completed=${isCompleted}, paid=${isPaid}`);
     if (isCompleted && isPaid) {
       const now = new Date();
       await storage.updateJob(jobId, {
@@ -89,6 +96,8 @@ async function tryArchiveCompletedPaidJob(jobId: number) {
         archivedReason: 'completed_and_paid',
       } as any);
       console.log(`[JobArchive] Job ${jobId} auto-archived (completed + paid)`);
+    } else {
+      console.log(`[JobArchive] Job ${jobId} NOT archived - needs both completed AND paid`);
     }
   } catch (err) {
     console.error(`[JobArchive] Error archiving job ${jobId}:`, err);
@@ -9487,6 +9496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           invoiceId: invoice.id.toString(),
           invoiceNumber: invoice.invoiceNumber,
           companyId: invoice.companyId.toString(),
+          jobId: invoice.jobId ? invoice.jobId.toString() : '',
         },
         success_url: `${appBaseUrl}/stripe/return`,
         cancel_url: `${appBaseUrl}/invoice/${invoice.id}/pay`,
@@ -12915,6 +12925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
 
       // If payment is successful, update invoice and job status
+      console.log(`[StripeSession] Session ${sessionId}: payment_status=${session.payment_status}, metadata=${JSON.stringify(session.metadata)}`);
       if (session.payment_status === 'paid' && session.metadata?.invoiceId) {
         const invoiceId = parseInt(session.metadata.invoiceId);
         const invoice = await storage.getInvoice(invoiceId);

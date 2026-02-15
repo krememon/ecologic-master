@@ -365,13 +365,16 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     const session = event.data.object as Stripe.Checkout.Session;
     const { invoiceId, companyId, jobId } = session.metadata || {};
 
+    console.log(`[Stripe Webhook] checkout.session.completed: sessionId=${session.id}, paymentIntent=${session.payment_intent}, amount=${session.amount_total}, metadata=${JSON.stringify(session.metadata)}`);
+
     if (!invoiceId) {
       console.error('[Stripe Webhook] No invoiceId in metadata');
       return res.status(400).send('Missing invoiceId in metadata');
     }
 
+    const resolvedJobId = jobId ? parseInt(jobId) : null;
+
     try {
-      // Check if invoice is already paid (idempotency)
       const [existingInvoice] = await db
         .select()
         .from(invoices)
@@ -382,10 +385,16 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         return res.status(404).send('Invoice not found');
       }
 
+      const effectiveJobId = resolvedJobId || existingInvoice.jobId;
+      console.log(`[Stripe Webhook] Resolved jobId: metadata=${resolvedJobId}, invoice.jobId=${existingInvoice.jobId}, effective=${effectiveJobId}`);
+
+      if (!effectiveJobId) {
+        console.log(`[Stripe Webhook] WARNING: No jobId found for invoice ${invoiceId} — archival cannot be triggered`);
+      }
+
       if (existingInvoice.status?.toLowerCase() === 'paid') {
         console.log(`[Stripe Webhook] Invoice ${invoiceId} already paid, checking for QBO sync`);
         
-        // Even if invoice is already paid, check if QBO payment sync was missed
         const [existingPayment] = await db
           .select()
           .from(payments)
@@ -404,10 +413,22 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
             .catch(err => console.error('[QB-PAY] Retry sync error:', err));
         }
         
+        if (effectiveJobId) {
+          const [jobCheck] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+          if (jobCheck && jobCheck.status === 'completed' && jobCheck.paymentStatus === 'paid' && !jobCheck.archivedAt) {
+            const now = new Date();
+            await db.update(jobs).set({
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'completed_and_paid',
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} retroactively archived on idempotent webhook`);
+          }
+        }
+        
         return res.json({ received: true, message: 'Already processed' });
       }
 
-      // Calculate partial payment amounts
       const now = new Date();
       const amountCents = session.amount_total || 0;
       const invoiceTotalCents = existingInvoice.totalCents > 0 ? existingInvoice.totalCents : Math.round(parseFloat(existingInvoice.amount) * 100);
@@ -416,7 +437,8 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
       const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
 
-      // Update invoice with payment amounts and status
+      console.log(`[Stripe Webhook] Invoice ${invoiceId}: amount=${amountCents}, total=${invoiceTotalCents}, prevPaid=${prevPaidCents}, newPaid=${newPaidAmountCents}, balance=${newBalanceDueCents}, newStatus=${newStatus}`);
+
       await db
         .update(invoices)
         .set({
@@ -433,15 +455,39 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         })
         .where(eq(invoices.id, parseInt(invoiceId)));
 
-      // Update job paymentStatus
-      if (existingInvoice.jobId) {
+      if (effectiveJobId) {
+        const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+        console.log(`[Stripe Webhook] Job ${effectiveJobId} BEFORE update: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
+
         const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        await db
+        const updateResult = await db
           .update(jobs)
-          .set({ paymentStatus: jobPaymentStatus })
-          .where(eq(jobs.id, existingInvoice.jobId));
-        console.log(`[Stripe Webhook] Job ${existingInvoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
+          .set({
+            paymentStatus: jobPaymentStatus,
+            ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
+          })
+          .where(eq(jobs.id, effectiveJobId))
+          .returning({ id: jobs.id });
+        console.log(`[Stripe Webhook] Job ${effectiveJobId} paymentStatus updated to '${jobPaymentStatus}', rows=${updateResult.length}`);
+
+        if (jobPaymentStatus === 'paid') {
+          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+          console.log(`[Stripe Webhook] Job ${effectiveJobId} AFTER update: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
+          if (jobAfter && jobAfter.status === 'completed' && !jobAfter.archivedAt) {
+            await db.update(jobs).set({
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'completed_and_paid',
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} auto-archived (completed + paid)`);
+          } else if (jobAfter) {
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} NOT archived: status=${jobAfter.status} (need 'completed'), archivedAt=${jobAfter.archivedAt}`);
+          }
+        }
+      } else {
+        console.log(`[Stripe Webhook] No jobId for invoice ${invoiceId} — skipping job update and archival`);
       }
+
       const [existingPayment] = await db
         .select()
         .from(payments)
@@ -452,7 +498,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         const [newPayment] = await db.insert(payments).values({
           companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
           invoiceId: parseInt(invoiceId),
-          jobId: jobId ? parseInt(jobId) : existingInvoice.jobId,
+          jobId: effectiveJobId || null,
           customerId: existingInvoice.customerId || null,
           amount: (amountCents / 100).toFixed(2),
           amountCents: amountCents,
