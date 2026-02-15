@@ -86,25 +86,26 @@ export default function EstimateSettings() {
 
         <Card className="border-slate-200 dark:border-slate-700">
           <CardContent className="p-0">
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+            <div className="flex items-start gap-3 p-4">
+              <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-slate-900 dark:text-slate-100">
+                  Hide converted estimates
                 </div>
-                <div>
-                  <div className="font-medium text-slate-900 dark:text-slate-100">
-                    Hide converted estimates
-                  </div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-                    When enabled, estimates that have been converted to jobs will be hidden from the main estimates list
-                  </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  When enabled, estimates that have been converted to jobs will be hidden from the main estimates list
                 </div>
               </div>
-              <Switch
-                checked={hideConverted}
-                onCheckedChange={handleToggle}
-                disabled={updateMutation.isPending}
-              />
+              <div className="w-[52px] flex justify-end shrink-0 pt-0.5">
+                <Switch
+                  className="w-11 h-6 shrink-0"
+                  checked={hideConverted}
+                  onCheckedChange={handleToggle}
+                  disabled={updateMutation.isPending}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
