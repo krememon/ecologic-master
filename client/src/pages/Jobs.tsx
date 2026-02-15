@@ -542,8 +542,11 @@ export default function Jobs() {
         method: 'DELETE',
         credentials: 'include',
       });
-      if (res.status === 204 || res.status === 200) {
-        return { success: true };
+      if (res.status === 204) {
+        return { success: true, softDeleted: false };
+      } else if (res.status === 200) {
+        const data = await res.json();
+        return { success: true, softDeleted: !!data.softDeleted };
       } else if (res.status === 409) {
         const data = await res.json();
         throw new Error(data.code === 'JOB_HAS_REFERENCES' ? 'HAS_REFERENCES' : data.message);
@@ -552,7 +555,7 @@ export default function Jobs() {
       }
       throw new Error('Failed to delete job');
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       queryClient.invalidateQueries({ 
@@ -561,6 +564,12 @@ export default function Jobs() {
           query.queryKey[0].startsWith('/api/schedule-items')
       });
       setJobToDelete(null);
+      if (data.softDeleted) {
+        toast({
+          title: "Job removed",
+          description: "Job removed from active list. Financial history was preserved.",
+        });
+      }
     },
     onError: (error: Error) => {
       if (error.message === 'Unauthorized') {

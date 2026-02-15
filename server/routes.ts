@@ -46,7 +46,7 @@ import {
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import Stripe from "stripe";
-import { invoices, payments, plaidAccounts, companies } from "../shared/schema";
+import { invoices, payments, refunds, plaidAccounts, companies } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
@@ -3572,7 +3572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter out archived jobs unless explicitly requested
       const includeArchived = req.query.includeArchived === 'true';
       if (!includeArchived) {
-        jobs = jobs.filter((job: any) => job.status !== 'archived' && !job.archivedAt);
+        jobs = jobs.filter((job: any) => job.status !== 'archived' && !job.archivedAt && !job.deletedAt);
       }
       
       // For technicians, only return jobs they are assigned to (for Home page Today list)
@@ -4569,9 +4569,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/jobs/:id', isAuthenticated, requirePerm("jobs.delete"), async (req: any, res) => {
     try {
       const jobId = parseInt(req.params.id);
-      const companyId = req.companyId; // Set by requirePerm middleware
+      const companyId = req.companyId;
       
-      // Verify job exists and belongs to company
       const job = await storage.getJob(jobId);
       
       if (!job) {
@@ -4587,12 +4586,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
           code: "FORBIDDEN" 
         });
       }
-      
-      // Delete job - related time_logs and leads will have jobId set to NULL
-      // Other related records (schedule items, photos, etc.) will CASCADE delete
+
+      const jobInvoices = await db.select({ id: invoices.id }).from(invoices).where(eq(invoices.jobId, jobId));
+      let hasFinancialRecords = false;
+
+      if (jobInvoices.length > 0) {
+        const invoiceIds = jobInvoices.map(inv => inv.id);
+        for (const invId of invoiceIds) {
+          const [refundRow] = await db.select({ id: refunds.id }).from(refunds).where(eq(refunds.invoiceId, invId)).limit(1);
+          if (refundRow) { hasFinancialRecords = true; break; }
+          const [paymentRow] = await db.select({ id: payments.id }).from(payments).where(eq(payments.invoiceId, invId)).limit(1);
+          if (paymentRow) { hasFinancialRecords = true; break; }
+        }
+      }
+
+      if (hasFinancialRecords) {
+        await storage.updateJob(jobId, {
+          deletedAt: new Date(),
+          deletedReason: 'has_financial_records',
+          status: 'archived',
+        } as any);
+        console.log(`[JobDelete] Job ${jobId} soft-deleted (has financial records)`);
+        return res.status(200).json({ softDeleted: true });
+      }
+
       await storage.deleteJob(jobId);
-      
-      res.status(204).send(); // No content response
+      console.log(`[JobDelete] Job ${jobId} hard-deleted`);
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting job:", error);
       res.status(500).json({ message: "Failed to delete job" });
