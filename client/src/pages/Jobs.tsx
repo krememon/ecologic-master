@@ -564,12 +564,6 @@ export default function Jobs() {
           query.queryKey[0].startsWith('/api/schedule-items')
       });
       setJobToDelete(null);
-      if (data.softDeleted) {
-        toast({
-          title: "Job removed",
-          description: "Job removed from active list. Financial history was preserved.",
-        });
-      }
     },
     onError: (error: Error) => {
       if (error.message === 'Unauthorized') {
