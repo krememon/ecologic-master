@@ -85,19 +85,18 @@ async function tryArchiveCompletedPaidJob(jobId: number) {
       console.log(`[JobArchive] Job ${jobId} already archived, skipping`);
       return;
     }
-    const isCompleted = job.status === 'completed';
     const isPaid = job.paymentStatus === 'paid';
-    console.log(`[JobArchive] Job ${jobId} check: status=${job.status}, paymentStatus=${job.paymentStatus}, completed=${isCompleted}, paid=${isPaid}`);
-    if (isCompleted && isPaid) {
+    console.log(`[JobArchive] Job ${jobId} check: status=${job.status}, paymentStatus=${job.paymentStatus}, paid=${isPaid}`);
+    if (isPaid) {
       const now = new Date();
       await storage.updateJob(jobId, {
         status: 'archived',
         archivedAt: now,
-        archivedReason: 'completed_and_paid',
+        archivedReason: 'paid',
       } as any);
-      console.log(`[JobArchive] Job ${jobId} auto-archived (completed + paid)`);
+      console.log(`[JobArchive] Job ${jobId} auto-archived (paid)`);
     } else {
-      console.log(`[JobArchive] Job ${jobId} NOT archived - needs both completed AND paid`);
+      console.log(`[JobArchive] Job ${jobId} NOT archived - not yet paid`);
     }
   } catch (err) {
     console.error(`[JobArchive] Error archiving job ${jobId}:`, err);

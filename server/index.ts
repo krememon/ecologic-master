@@ -473,15 +473,15 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         if (jobPaymentStatus === 'paid') {
           const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
           console.log(`[Stripe Webhook] Job ${effectiveJobId} AFTER update: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
-          if (jobAfter && jobAfter.status === 'completed' && !jobAfter.archivedAt) {
+          if (jobAfter && !jobAfter.archivedAt) {
             await db.update(jobs).set({
               status: 'archived',
               archivedAt: now,
-              archivedReason: 'completed_and_paid',
+              archivedReason: 'paid',
             }).where(eq(jobs.id, effectiveJobId));
-            console.log(`[Stripe Webhook] Job ${effectiveJobId} auto-archived (completed + paid)`);
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} auto-archived (paid)`);
           } else if (jobAfter) {
-            console.log(`[Stripe Webhook] Job ${effectiveJobId} NOT archived: status=${jobAfter.status} (need 'completed'), archivedAt=${jobAfter.archivedAt}`);
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} already archived, skipping`);
           }
         }
       } else {
