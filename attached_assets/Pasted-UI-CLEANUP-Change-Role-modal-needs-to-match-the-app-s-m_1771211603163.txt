@@ -1,0 +1,52 @@
+UI CLEANUP: “Change Role” modal needs to match the app’s modern “Select Customer” sheet style.
+
+CURRENT:
+Change Role modal looks like a basic dialog with big buttons and spacing that doesn’t match the rest of EcoLogic.
+
+TARGET STYLE:
+Match “Select Customer”:
+- Rounded card/sheet container
+- Clean header with centered title + subtle subtitle
+- Top-right X close button
+- Consistent padding, light section dividers, modern input/select styling
+- Primary action button at bottom (full width), secondary as subtle/ghost
+
+GOAL:
+Redesign Change Role UI to look/feel like Select Customer, while keeping all existing functionality.
+
+REQUIREMENTS:
+1) Container / Layout
+- Use the same component pattern as Select Customer (Sheet/Modal style you already use).
+- Same border radius, shadow, background, and padding.
+- Ensure it is centered and responsive like other modals.
+
+2) Header
+- Title: “Change Role”
+- Subtitle: “Select a new role for {Employee Name}”
+- Add top-right close “X” icon button (same style as Select Customer)
+- Remove any awkward spacing above/below header; use the same header height as Select Customer.
+
+3) Role selector
+- Use the same Select/Dropdown styling used elsewhere in the app (like the customer selector / filters).
+- Full-width, rounded input, consistent height.
+- No extra weird outlines or mismatched borders.
+
+4) Buttons
+- Bottom sticky footer like other sheets:
+  - Primary: “Change Role” (blue, full-width)
+  - Secondary: “Cancel” should NOT look like a second primary button.
+    Make it subtle (ghost/outline) or a simple text button, consistent with app style.
+- Equal left/right spacing like we fixed on invoice sheets (single shared wrapper / px-4).
+
+5) Remove roles (Estimator/Dispatcher)
+- Ensure the role dropdown only shows: Owner (if allowed), Supervisor, Technician.
+- No Estimator/Dispatcher anywhere.
+
+6) No layout shift
+- The modal should not cause the page to shift on open/close (respect the global scroll shift fix).
+
+DELIVERABLES:
+- File paths changed
+- Before/after description of structural changes
+- Confirm it matches Select Customer styling and spacing visually
+- Confirm functionality: selecting role + saving updates user role + closes modal.

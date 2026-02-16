@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, ChevronDown, ChevronRight, Briefcase, Trash2 } from "lucide-react";
+import { Mail, Phone, MapPin, MoreVertical, Edit, UserX, UserCheck, ChevronDown, ChevronRight, Briefcase, Trash2, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -172,39 +173,18 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {canModify && (
-                  <AlertDialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-                    <AlertDialogTrigger asChild>
-                      <DropdownMenuItem onSelect={(e) => e.preventDefault()} data-testid={`menu-change-role-${employee.id}`}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Change Role
-                      </DropdownMenuItem>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Change Role</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Select a new role for {fullName}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <div className="py-4">
-                        <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
-                          <SelectTrigger data-testid={`select-new-role-${employee.id}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
-                            <SelectItem value="TECHNICIAN">Technician</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleRoleChangeSubmit} disabled={isUpdating}>
-                          {isUpdating ? 'Updating...' : 'Change Role'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        setSelectedRole(employee.role);
+                        setIsRoleDialogOpen(true);
+                      }}
+                      data-testid={`menu-change-role-${employee.id}`}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Change Role
+                    </DropdownMenuItem>
+                  </>
                 )}
                 
                 {canModify && (
@@ -329,6 +309,59 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
           </p>
         </div>
       </CardContent>
+
+      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton preventAutoFocus>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <div className="text-center">
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Change Role
+              </DialogTitle>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Select a new role for {fullName}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsRoleDialogOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="px-4 py-5 bg-white dark:bg-slate-900">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">Role</label>
+            <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
+              <SelectTrigger className="w-full h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" data-testid={`select-new-role-${employee.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
+                <SelectItem value="TECHNICIAN">Technician</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-2">
+            <Button
+              onClick={handleRoleChangeSubmit}
+              disabled={isUpdating || selectedRole === employee.role}
+              className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              data-testid={`button-confirm-role-${employee.id}`}
+            >
+              {isUpdating ? 'Updating...' : 'Change Role'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setIsRoleDialogOpen(false)}
+              className="w-full h-10 rounded-xl text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
