@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, ArrowLeft, CheckCircle2, XCircle, Zap } from "lucide-react";
-import quickbooksLogo from "@assets/quickbooks_1771259795992.png";
+import quickbooksLogo from "@assets/quickbooks_png_1771260020945.png";
 import { Link, useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -171,7 +171,7 @@ export default function QuickBooksSettings() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-lg flex items-center justify-center">
-              <img src={quickbooksLogo} alt="QuickBooks" className="h-8 w-8 object-contain" />
+              <img src={quickbooksLogo} alt="QuickBooks" className="w-7 h-7 object-contain" />
             </div>
             <div>
               <CardTitle className="text-lg">QuickBooks Online</CardTitle>
@@ -255,7 +255,7 @@ export default function QuickBooksSettings() {
               </p>
               
               <Button onClick={handleConnect} className="bg-green-600 hover:bg-green-700">
-                <img src={quickbooksLogo} alt="" className="h-4 w-4 mr-2 object-contain" />
+                <img src={quickbooksLogo} alt="QuickBooks" className="w-5 h-5 mr-2 object-contain" />
                 Connect QuickBooks
               </Button>
             </div>

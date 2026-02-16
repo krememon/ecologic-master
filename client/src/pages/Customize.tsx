@@ -2,7 +2,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link, useSearch } from "wouter";
 import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Mail, Landmark, FileText } from "lucide-react";
-import quickbooksLogo from "@assets/quickbooks_1771259795992.png";
+import quickbooksLogo from "@assets/quickbooks_png_1771260020945.png";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
