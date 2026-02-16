@@ -746,7 +746,7 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "Company code is required" });
       }
 
-      if (!role || !["SUPERVISOR", "TECHNICIAN", "DISPATCHER", "ESTIMATOR"].includes(role)) {
+      if (!role || !["SUPERVISOR", "TECHNICIAN"].includes(role)) {
         return res.status(400).json({ message: "Valid role is required" });
       }
 

@@ -227,7 +227,6 @@ export default function Home() {
   const canSeeLeads = role !== 'TECHNICIAN';
   const canSeeEstimates = role !== 'TECHNICIAN';
   const isTechnician = role === 'TECHNICIAN';
-  const isEstimator = role === 'ESTIMATOR';
   const userId = user?.id;
 
   const today = startOfDay(new Date());
@@ -381,7 +380,7 @@ export default function Home() {
 
   const statusStripItems: Array<{ icon: React.ElementType; value: number; label: string; route: string }> = [];
   
-  if (!isEstimator && !isTechnician) {
+  if (!isTechnician) {
     statusStripItems.push({ icon: Calendar, value: jobsToday.length, label: 'Jobs Today', route: '/jobs' });
     statusStripItems.push({ icon: Briefcase, value: openJobs.length, label: 'Open Jobs', route: '/jobs' });
   }

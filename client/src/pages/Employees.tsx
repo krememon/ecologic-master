@@ -17,7 +17,7 @@ import { Link } from "wouter";
 import EmployeeCard from "@/components/employees/EmployeeCard";
 import InviteTeamButton from "@/components/employees/InviteTeamButton";
 
-type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
+type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN";
 
 interface Employee {
   id: string;
@@ -41,8 +41,6 @@ const roleOptions = [
   { value: "OWNER", label: "Owner" },
   { value: "SUPERVISOR", label: "Supervisor" },
   { value: "TECHNICIAN", label: "Technician" },
-  { value: "DISPATCHER", label: "Dispatcher" },
-  { value: "ESTIMATOR", label: "Estimator" },
 ];
 
 const sortOptions = [
@@ -158,9 +156,7 @@ export default function Employees() {
         const roleWeight: Record<UserRole, number> = {
           OWNER: 1,
           SUPERVISOR: 2,
-          DISPATCHER: 3,
-          ESTIMATOR: 4,
-          TECHNICIAN: 5,
+          TECHNICIAN: 3,
         };
         return sorted.sort((a, b) => roleWeight[a.role] - roleWeight[b.role]);
       case "joined":

@@ -273,7 +273,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
-    const ASSIGNABLE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'PROJECT_MANAGER', 'ADMIN_ASSISTANT', 'DISPATCHER', 'ESTIMATOR'];
+    const ASSIGNABLE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'PROJECT_MANAGER', 'ADMIN_ASSISTANT'];
     const assignable = allEmployees.filter(e => ASSIGNABLE_ROLES.includes(e.role?.toUpperCase()));
     if (!employeeSearch.trim()) return assignable;
     const search = employeeSearch.toLowerCase();

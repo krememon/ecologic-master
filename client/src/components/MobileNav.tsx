@@ -48,7 +48,7 @@ interface Notification {
 const getNavigation = (role: string | undefined) => [
   { href: "/", icon: LayoutDashboard, label: "Home", permission: null },
   { href: "/schedule", icon: Brain, label: "Schedule", permission: "schedule.view" as Permission },
-  { href: "/timesheets", icon: Clock, label: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
+  { href: "/timesheets", icon: Clock, label: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", permission: null, excludeRoles: [] as string[] },
   { href: "/jobs", icon: Building2, label: "Jobs", permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
   { href: "/leads", icon: Target, label: "Leads", permission: "leads.view" as Permission },
   { href: "/subcontractors", icon: UserCheck, label: "Subcontractors", permission: "clients.manage" as Permission },

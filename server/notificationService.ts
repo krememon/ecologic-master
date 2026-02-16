@@ -14,7 +14,7 @@ type NotificationParams = {
 };
 
 const MANAGER_ROLES = ["OWNER", "SUPERVISOR"];
-const OFFICE_ROLES = ["OWNER", "SUPERVISOR", "DISPATCHER"];
+const OFFICE_ROLES = ["OWNER", "SUPERVISOR"];
 const TECHNICIAN_ROLE = "TECHNICIAN";
 
 // Filter user IDs to only include technicians

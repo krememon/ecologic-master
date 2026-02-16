@@ -81,11 +81,11 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
   const [editedNotes, setEditedNotes] = useState('');
   const [isNotesExpanded, setIsNotesExpanded] = useState(false);
   
-  // RBAC: Owner, Supervisor, Estimator can share estimates
-  const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
+  // RBAC: Owner, Supervisor can share estimates
+  const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR';
   
-  // RBAC: Owner, Supervisor, Dispatcher, Estimator can edit estimates
-  const canEditEstimate = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
+  // RBAC: Owner, Supervisor can edit estimates
+  const canEditEstimate = role === 'OWNER' || role === 'SUPERVISOR';
 
   const { data: estimate, isLoading, error } = useQuery<EstimateWithItems>({
     queryKey: [`/api/estimates/${estimateId}`],

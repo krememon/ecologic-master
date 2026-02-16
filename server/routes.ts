@@ -800,8 +800,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const role = member.role as UserRole;
-      // Block Dispatchers and Estimators from viewing time settings
-      if (role === 'DISPATCHER' || role === 'ESTIMATOR') {
+      if (role === 'TECHNICIAN') {
         return res.status(403).json({ error: 'Access denied' });
       }
       
@@ -2743,8 +2742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const role = member.role as UserRole;
 
-      // Estimators and Dispatchers cannot access timesheets
-      if (role === 'ESTIMATOR' || role === 'DISPATCHER') {
+      if (role === 'TECHNICIAN') {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -2787,7 +2785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const role = member.role as UserRole;
       
       // Only managers can edit time entries (Owner, Supervisor)
-      if (role === 'TECHNICIAN' || role === 'ESTIMATOR' || role === 'DISPATCHER') {
+      if (role === 'TECHNICIAN') {
         return res.status(403).json({ error: 'Only managers can edit time entries' });
       }
       
@@ -4695,7 +4693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!member) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      const allowedRoles = ['OWNER', 'SUPERVISOR', 'DISPATCHER'];
+      const allowedRoles = ['OWNER', 'SUPERVISOR'];
       if (!allowedRoles.includes(member.role.toUpperCase())) {
         return res.status(403).json({ message: "You don't have permission to cancel jobs" });
       }
@@ -5604,7 +5602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // RBAC: Owner, Supervisor, Dispatcher, Estimator can create approvals (Technician cannot)
   const canCreateApproval = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
 
   // GET /api/approvals - List approval workflows for company
@@ -5863,13 +5861,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to check if user can create invoices (without assignment check)
   const canCreateInvoicesBase = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
   
   // Helper to check if user can create invoices (includes TECHNICIAN with assignment check done separately)
   const canCreateInvoices = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR', 'TECHNICIAN'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR', 'TECHNICIAN'].includes(upperRole);
   };
 
   // GET /api/jobs/:jobId/invoice - Get invoice for a job
@@ -6649,7 +6647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to check if user can create customers (Technician cannot)
   const canCreateCustomers = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
 
   // GET /api/customers - List all customers for the company
@@ -6724,8 +6722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Only Owner, Supervisor, Dispatcher, Estimator can edit customers
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to edit customers" });
       }
       
@@ -6912,7 +6909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to check if user can send campaigns (Owner, Supervisor, Dispatcher only)
   const canSendCampaigns = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
 
   // POST /api/campaigns/preview - Get counts of eligible recipients
@@ -7460,7 +7457,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper to check if user can access estimates (Technician cannot)
   const canAccessEstimates = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
 
   // GET /api/estimates - List all estimates for the company (main page view)
@@ -8339,7 +8336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // RBAC: Owner, Supervisor, Estimator can share estimates (Technician, Dispatcher cannot)
   const canShareEstimateRole = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'ESTIMATOR', 'ADMIN'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
 
   // Helper to check if user can share estimates (includes owner fallback)
@@ -9091,7 +9088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // RBAC: Owner, Supervisor, Dispatcher, Estimator can create signature requests (Technician cannot)
   const canCreateSignatureRequest = (role: string): boolean => {
     const upperRole = role.toUpperCase();
-    return ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(upperRole);
+    return ['OWNER', 'SUPERVISOR'].includes(upperRole);
   };
 
   // GET /api/signature-requests - List signature requests (filtered by document visibility)
@@ -10915,8 +10912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Owner/Supervisor/Dispatcher/Estimator can send invoices
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to send invoices" });
       }
       
@@ -11060,8 +11056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Owner/Supervisor/Dispatcher/Estimator can send invoices
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to send invoices" });
       }
       
@@ -12555,8 +12550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Owner, Supervisor, Dispatcher, Estimator can record payments
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to record payments" });
       }
 
@@ -12725,7 +12719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole)) {
+      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to record payments" });
       }
 
@@ -12912,7 +12906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // RBAC: Owner, Supervisor, Dispatcher, Estimator, Technician can create payment links
       // Technician requires assignment check done after loading invoice
-      if (!['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR', 'TECHNICIAN'].includes(userRole)) {
+      if (!['OWNER', 'SUPERVISOR', 'TECHNICIAN'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to create payment links" });
       }
 
@@ -13155,7 +13149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       if (!member) return res.status(403).json({ message: "Access denied" });
       const role = member.role.toUpperCase();
-      if (role === 'TECHNICIAN' || role === 'ESTIMATOR') {
+      if (role === 'TECHNICIAN') {
         return res.status(403).json({ message: "You don't have permission to issue refunds" });
       }
 
@@ -13230,7 +13224,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       if (!member) return res.status(403).json({ message: "Access denied" });
       const role = member.role.toUpperCase();
-      if (role === 'TECHNICIAN' || role === 'ESTIMATOR') {
+      if (role === 'TECHNICIAN') {
         return res.status(403).json({ message: "You don't have permission to issue refunds" });
       }
 
@@ -13856,7 +13850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       if (!member) return res.status(403).json({ message: "Access denied" });
       const role = member.role.toUpperCase();
-      if (role === 'TECHNICIAN' || role === 'ESTIMATOR') {
+      if (role === 'TECHNICIAN') {
         return res.status(403).json({ message: "Access denied" });
       }
 

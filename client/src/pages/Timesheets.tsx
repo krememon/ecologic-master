@@ -361,11 +361,6 @@ export default function Timesheets() {
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [editEmployeeName, setEditEmployeeName] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    if (role === "ESTIMATOR" || role === "DISPATCHER") {
-      navigate("/");
-    }
-  }, [role, navigate]);
 
   const currentDate = useMemo(() => {
     const now = new Date();

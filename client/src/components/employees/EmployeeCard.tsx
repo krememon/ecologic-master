@@ -11,7 +11,7 @@ import { useCan } from "@/hooks/useCan";
 import JobsHistory from "./JobsHistory.tsx";
 import { formatPhone } from "@shared/phoneUtils";
 
-type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
+type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN";
 
 interface EmployeeCardProps {
   employee: {
@@ -69,10 +69,6 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
         return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
       case 'SUPERVISOR':
         return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200';
-      case 'DISPATCHER':
-        return 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200';
-      case 'ESTIMATOR':
-        return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
       case 'TECHNICIAN':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
       default:
@@ -197,8 +193,6 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
-                            <SelectItem value="DISPATCHER">Dispatcher</SelectItem>
-                            <SelectItem value="ESTIMATOR">Estimator</SelectItem>
                             <SelectItem value="TECHNICIAN">Technician</SelectItem>
                           </SelectContent>
                         </Select>

@@ -133,11 +133,11 @@ export default function Jobs() {
   // Check if user is admin (Owner or Supervisor)
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
   
-  // RBAC: Owner, Supervisor, Estimator can share estimates
-  const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR' || role === 'ESTIMATOR';
+  // RBAC: Owner, Supervisor can share estimates
+  const canShareEstimates = role === 'OWNER' || role === 'SUPERVISOR';
   
-  // RBAC: Owner, Supervisor, Dispatcher, Estimator can generate invoices
-  const canGenerateInvoices = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
+  // RBAC: Owner, Supervisor can generate invoices
+  const canGenerateInvoices = role === 'OWNER' || role === 'SUPERVISOR';
 
   // Reset description expansion and tab when job changes
   useEffect(() => {
@@ -421,7 +421,7 @@ export default function Jobs() {
   
   // Assignable roles: all field workers (exclude Owner from assignment list)
   // Roles are stored as UPPERCASE in database
-  const ASSIGNABLE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'PROJECT_MANAGER', 'ADMIN_ASSISTANT', 'DISPATCHER', 'ESTIMATOR'];
+  const ASSIGNABLE_ROLES = ['TECHNICIAN', 'SUPERVISOR', 'PROJECT_MANAGER', 'ADMIN_ASSISTANT'];
   const assignableMembers = (crewMembersData?.users || []).filter(
     member => ASSIGNABLE_ROLES.includes(member.role?.toUpperCase())
   );

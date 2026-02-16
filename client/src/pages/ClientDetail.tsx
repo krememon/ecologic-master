@@ -64,7 +64,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState('');
 
-  const canEditCustomers = ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(role || '');
+  const canEditCustomers = ['OWNER', 'SUPERVISOR'].includes(role || '');
 
   const { data: customer, isLoading, error } = useQuery<Customer>({
     queryKey: [`/api/customers/${customerId}`],

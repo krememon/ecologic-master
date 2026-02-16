@@ -3,7 +3,7 @@ import { getQueryFn } from "@/lib/queryClient";
 import { User } from "@shared/schema";
 
 interface AuthUser extends User {
-  role?: 'OWNER' | 'SUPERVISOR' | 'DISPATCHER' | 'ESTIMATOR' | 'TECHNICIAN' | null;
+  role?: 'OWNER' | 'SUPERVISOR' | 'TECHNICIAN' | null;
   company?: {
     id: number;
     name: string;

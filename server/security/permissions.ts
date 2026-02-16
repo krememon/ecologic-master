@@ -106,7 +106,7 @@ export function canAccessDocument(
       return { allowed: false, reason: "Document is owner-only" };
     
     case "office_only":
-      if (["supervisor", "dispatcher"].includes(ctx.role)) {
+      if (ctx.role === "supervisor") {
         return { allowed: true };
       }
       return { allowed: false, reason: "Document is office-only" };
@@ -117,7 +117,7 @@ export function canAccessDocument(
         return { allowed: true };
       }
       // Office staff can also access
-      if (["supervisor", "dispatcher"].includes(ctx.role)) {
+      if (ctx.role === "supervisor") {
         return { allowed: true };
       }
       return { allowed: false, reason: "Not assigned to job" };

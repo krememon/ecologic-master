@@ -97,7 +97,7 @@ export default function Clients() {
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [campaignAudienceMode, setCampaignAudienceMode] = useState<"selected" | "all">("selected");
 
-  const canSendCampaigns = user?.role === 'OWNER' || user?.role === 'SUPERVISOR' || user?.role === 'DISPATCHER';
+  const canSendCampaigns = user?.role === 'OWNER' || user?.role === 'SUPERVISOR';
 
   const handleLaunchCampaign = () => {
     if (isSelectMode && selectedCustomerIds.size > 0) {

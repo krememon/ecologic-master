@@ -163,7 +163,7 @@ export default function SignatureRequests({
 
   // RBAC: Check if user can create signature requests (not Technician)
   const userRole = userInfo?.role?.toUpperCase() || 'TECHNICIAN';
-  const canCreate = ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole);
+  const canCreate = ['OWNER', 'SUPERVISOR'].includes(userRole);
 
   // Create signature request mutation
   const createMutation = useMutation({

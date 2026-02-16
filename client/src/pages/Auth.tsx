@@ -497,8 +497,6 @@ export default function Auth() {
                 <SelectItem value="OWNER" data-testid="option-owner">Owner</SelectItem>
                 <SelectItem value="SUPERVISOR" data-testid="option-supervisor">Supervisor</SelectItem>
                 <SelectItem value="TECHNICIAN" data-testid="option-technician">Technician</SelectItem>
-                <SelectItem value="DISPATCHER" data-testid="option-dispatcher">Dispatcher</SelectItem>
-                <SelectItem value="ESTIMATOR" data-testid="option-estimator">Estimator</SelectItem>
               </SelectContent>
             </Select>
             {errors.role && (

@@ -55,7 +55,7 @@ export default function Invoicing() {
 
   // RBAC: Check user permissions
   const userRole = user?.role?.toLowerCase() || '';
-  const canCreateInvoice = ['owner', 'supervisor', 'dispatcher', 'estimator'].includes(userRole);
+  const canCreateInvoice = ['owner', 'supervisor'].includes(userRole);
   const canManageInvoices = ['owner', 'supervisor'].includes(userRole);
 
   // Filter invoices by search query

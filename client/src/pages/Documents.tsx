@@ -1252,7 +1252,7 @@ export default function Documents() {
             </div>
             <div className="flex gap-2">
               {/* Send for Signature - RBAC: Only shown to Owner, Supervisor, Dispatcher, Estimator */}
-              {['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR'].includes(userRole.toUpperCase()) && selectedDoc && (
+              {['OWNER', 'SUPERVISOR'].includes(userRole.toUpperCase()) && selectedDoc && (
                 <Button
                   variant="outline"
                   className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30"

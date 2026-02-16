@@ -10,7 +10,7 @@ import type { Permission } from "@shared/permissions";
 const getNavigation = (role: string | undefined) => [
   { name: "Home", href: "/", icon: LayoutDashboard, permission: null },
   { name: "Schedule", href: "/schedule", icon: Brain, permission: "schedule.view" as Permission },
-  { name: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", href: "/timesheets", icon: Clock, permission: null, excludeRoles: ["ESTIMATOR", "DISPATCHER"] as string[] },
+  { name: role === "TECHNICIAN" ? "My Timesheet" : "Timesheets", href: "/timesheets", icon: Clock, permission: null, excludeRoles: [] as string[] },
   { name: "Jobs", href: "/jobs", icon: Building2, permission: "jobs.view.all" as Permission, excludeRoles: ["TECHNICIAN"] as string[] },
   { name: "Leads", href: "/leads", icon: Target, permission: "leads.view" as Permission },
   { name: "Subcontractors", href: "/subcontractors", icon: Users, permission: "clients.manage" as Permission },

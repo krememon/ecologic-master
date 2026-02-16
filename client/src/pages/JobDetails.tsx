@@ -141,9 +141,9 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [isSavingCrew, setIsSavingCrew] = useState(false);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
-  const canEditJob = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR';
-  const canCreatePaymentLink = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER' || role === 'ESTIMATOR' || role === 'TECHNICIAN';
-  const canCancelJob = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER';
+  const canEditJob = role === 'OWNER' || role === 'SUPERVISOR';
+  const canCreatePaymentLink = role === 'OWNER' || role === 'SUPERVISOR' || role === 'TECHNICIAN';
+  const canCancelJob = role === 'OWNER' || role === 'SUPERVISOR';
 
   const { data: job, isLoading, error } = useQuery<JobWithClient>({
     queryKey: [`/api/jobs/${jobId}`],
