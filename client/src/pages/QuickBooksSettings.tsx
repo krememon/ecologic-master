@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, ArrowLeft, CheckCircle2, XCircle, Zap } from "lucide-react";
-import quickbooksLogo from "@assets/quickbooks_png_1771260020945.png";
+import quickbooksLogo from "@/assets/logos/quickbooks-transparent.png";
 import { Link, useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
