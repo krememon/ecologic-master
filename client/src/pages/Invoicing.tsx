@@ -96,11 +96,6 @@ export default function Invoicing() {
       await queryClient.refetchQueries({ queryKey: ["/api/invoices"] });
       exitSelectMode();
       setDeleteConfirmOpen(false);
-      const count = data?.deletedCount || 0;
-      toast({
-        title: "Invoices removed",
-        description: `${count} invoice${count !== 1 ? 's' : ''} removed`,
-      });
     },
     onError: (error: Error) => {
       toast({
