@@ -48,6 +48,8 @@ export function RecordPaymentModal({
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       resetAndClose();
     },
     onError: (err: Error) => {

@@ -1,0 +1,51 @@
+Cash/Check payments still do NOT archive jobs. Fix it by tracing the real payment flow.
+
+IMPORTANT:
+Do NOT assume the endpoint. The UI may not be using POST /api/payments/manual.
+
+STEP 1 — Identify the actual endpoint being called
+- Add a temporary log in the server for all payment-related routes that prints:
+  method + path + body keys (invoiceId/jobId/paymentMethod/amount)
+- Also, in the frontend cash/check submit handler, log the fetch URL and payload.
+- Use DevTools Network to confirm which endpoint is actually hit when paying cash/check.
+
+STEP 2 — Ensure the cash/check endpoint links to invoiceId + jobId
+Whichever endpoint the UI uses must either:
+- receive invoiceId and/or jobId in the payload, OR
+- be able to look up jobId via invoiceId (invoice.jobId)
+
+If invoiceId/jobId is missing, fix the frontend to send invoiceId (minimum) and/or jobId.
+
+STEP 3 — Apply the SAME “payment success => archive job” logic used by Stripe
+In the cash/check payment success code path (the endpoint found in Step 1), after saving payment + updating invoice totals/status:
+
+- Resolve jobId:
+   jobId = payload.jobId ?? invoice.jobId
+- Update job:
+   paymentStatus='paid' (or whatever you use)
+   status='archived'
+   archivedAt=now()
+   archivedReason='paid_manual' (or 'paid')
+
+Make it idempotent:
+- If already archived, do nothing.
+- If payment is recorded twice, prevent duplicates (upsert by invoiceId+method+createdAt or add providerRef).
+
+STEP 4 — Frontend refresh
+After cash/check payment succeeds, invalidate/refetch:
+- jobs list (so job disappears immediately)
+- payments list (so payment shows)
+- client history (should still show archived job)
+
+STEP 5 — Verification (must pass)
+Create a job -> pay CASH -> expected:
+- payment appears in Payments
+- job disappears from Jobs tab
+- job still appears in client past jobs/history
+
+DELIVERABLES:
+- Name the exact endpoint used for cash/check
+- File paths changed
+- Code snippet showing where archiving is executed in the manual payment flow
+- Confirm with logs that job.status becomes 'archived' after cash/check success
+- Remove temporary logs after confirmed working

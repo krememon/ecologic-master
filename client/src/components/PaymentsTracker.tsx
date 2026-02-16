@@ -144,6 +144,8 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/payments/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       setIsRecordPaymentOpen(false);
       form.reset();
       toast({
