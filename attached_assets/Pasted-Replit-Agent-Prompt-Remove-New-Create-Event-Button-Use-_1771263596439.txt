@@ -1,0 +1,106 @@
+Replit Agent Prompt — Remove New Create-Event “+” Button + Use Existing + Dropdown Only
+
+Context: Schedule page currently shows a NEW separate floating “+” button (create-event button). This is NOT wanted. We already have an existing “+” dropdown menu (Job/Estimate/Invoice/Lead/Event/Announcement). Event creation must happen ONLY through that existing dropdown.
+
+✅ Requirements
+
+Remove the new floating create-event + circle from the Schedule UI entirely.
+
+Keep the existing top-right + dropdown as the ONLY way to create an Event.
+
+When user selects Event from the dropdown:
+
+Open the Create Event modal
+
+Save → event appears on calendar immediately
+
+Do not remove or break any other create actions from the dropdown (Job/Estimate/Invoice/Lead/Announcement).
+
+“Hidden not disabled”:
+
+If user lacks permission to create events, do not show the “Event” option in the dropdown.
+
+1) Frontend: Remove the New Button
+
+Search for any Schedule UI element that looks like:
+
+FloatingActionButton
+
+Fab
+
+IconButton with a plus icon positioned bottom-right
+
+Anything like className="fixed bottom-..." or position: fixed or z-50 + plus icon
+
+Any component added specifically for events (ex: CreateEventFab, EventFloatingButton, etc.)
+
+Delete it, and also remove any related handlers it triggers if unused.
+
+2) Wire “Event” Item Inside Existing Dropdown
+
+Find the existing dropdown menu code (the one currently showing: Job, Estimate, Invoice, Lead, Event, Announcement).
+
+Ensure the Event item calls something like:
+
+openCreateEventModal()
+or sets state:
+
+setCreateModalType("event")
+
+Example pattern (adapt to your code):
+
+On click “Event”:
+
+setIsEventModalOpen(true)
+
+optionally set default date/time based on current view
+
+3) Default Date/Time Behavior (Important UX)
+
+When user clicks Event from dropdown, prefill:
+
+start_at = currently selected day on the calendar
+
+time default:
+
+If day view: nearest next 30-min slot based on current time
+
+If not available: default to 9:00 AM
+
+end_at default = start + 1 hour
+
+4) Verify No Duplicate + Buttons
+
+After removing the new floating +:
+
+Only ONE plus should exist:
+
+the existing dropdown trigger (top right)
+
+No event-only plus button should remain.
+
+5) Testing Checklist
+
+Create Event from dropdown → Save → appears instantly on calendar
+
+Event shows on correct date/time
+
+No extra floating + button is visible on Schedule
+
+Other dropdown create options still work
+
+Role check:
+
+Allowed roles see “Event”
+
+Disallowed roles do not see “Event”
+
+Edit/Delete event still works if you already implemented that
+
+Deliverables
+
+Commit removing floating create-event + button
+
+Event creation works only from dropdown
+
+No UI regressions in Schedule page

@@ -38,7 +38,6 @@ import {
   SlidersHorizontal,
   List,
   Map,
-  Plus,
   Pencil,
   Trash2,
   Clock,
@@ -695,12 +694,33 @@ export default function AIScheduling() {
   };
 
   const openCreateEvent = useCallback(() => {
+    const now = new Date();
+    let startMinutes = now.getHours() * 60 + now.getMinutes();
+    startMinutes = Math.ceil(startMinutes / 30) * 30;
+    if (startMinutes >= 24 * 60) startMinutes = 9 * 60;
+    const endMinutes = startMinutes + 60;
+    const startHH = Math.floor(startMinutes / 60).toString().padStart(2, '0');
+    const startMM = (startMinutes % 60).toString().padStart(2, '0');
+    const endHH = Math.floor(endMinutes / 60).toString().padStart(2, '0');
+    const endMM = (endMinutes % 60).toString().padStart(2, '0');
     setEventForm({
       ...defaultEventForm,
       date: dateToYmdLocal(selectedDate),
+      startTime: `${startHH}:${startMM}`,
+      endTime: `${endHH}:${endMM}`,
     });
     setIsCreateEventOpen(true);
   }, [selectedDate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('createEvent') === 'true' && canManageEvents) {
+      openCreateEvent();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('createEvent');
+      window.history.replaceState({}, '', url.pathname + (url.search || ''));
+    }
+  }, [canManageEvents, openCreateEvent]);
 
   const openViewEvent = useCallback((evt: ScheduleEvent) => {
     setSelectedEvent(evt);
@@ -1342,8 +1362,11 @@ export default function AIScheduling() {
         {viewMode === 'map' && (
           <div className="flex-1 h-full min-h-[500px]">
             {(() => {
-              const mapItems = scheduleItems.map(item => ({
+              const mapItems = scheduleItems
+                .filter(item => item.type === 'job' || item.type === 'estimate')
+                .map(item => ({
                 ...item,
+                type: item.type as 'job' | 'estimate',
                 customerId: item.customerId,
                 latitude: item.latitude,
                 longitude: item.longitude
@@ -1374,15 +1397,6 @@ export default function AIScheduling() {
         isTechnician={role === 'TECHNICIAN'}
         currentUserId={user?.id}
       />
-
-      {canManageEvents && (
-        <button
-          onClick={openCreateEvent}
-          className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-      )}
 
       <Dialog open={isCreateEventOpen} onOpenChange={setIsCreateEventOpen}>
         <DialogContent className="rounded-2xl max-w-md">
