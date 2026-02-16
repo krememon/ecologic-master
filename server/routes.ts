@@ -14315,8 +14315,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMemberByUserId(userId);
       if (!member) return res.status(404).json({ error: 'Company not found' });
       const company = await storage.getCompany(member.companyId);
+      const dbValue = company?.requireSignatureAfterPayment ?? false;
+      const forceOverride = process.env.NODE_ENV !== 'production' && process.env.FORCE_SIGNATURE_AFTER_PAYMENT === 'true';
       res.json({
-        requireSignatureAfterPayment: company?.requireSignatureAfterPayment ?? false,
+        requireSignatureAfterPayment: dbValue || forceOverride,
       });
     } catch (error: any) {
       res.status(500).json({ error: 'Failed to get payment settings' });

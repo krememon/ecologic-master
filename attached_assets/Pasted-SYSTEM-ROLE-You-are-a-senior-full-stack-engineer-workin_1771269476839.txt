@@ -1,0 +1,70 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Follow existing settings patterns.
+Do not break payments/manual cash flow.
+Implement a reliable signature popup trigger after payment success.
+
+TASK:
+Make signature capture popup appear after a successful payment (manual cash for now), and fix why it never triggers.
+
+CONTEXT:
+Server logs show: GET /api/settings/payments returns {"requireSignatureAfterPayment": false}.
+So the app correctly does NOT open the signature popup.
+We need:
+1) A UI toggle to turn it ON
+2) A temporary developer override so we can test immediately
+3) Ensure the trigger runs after POST /api/payments/manual success using paymentId from the response.
+
+REQUIREMENTS:
+- Add a toggle in Payment Settings: “Require signature after payment” that persists to backend.
+- When ON: after payment success (manual cash), open SignatureCaptureModal immediately.
+- For testing: add a temporary override that forces it ON in dev when `FORCE_SIGNATURE_AFTER_PAYMENT=true`.
+- No toast popups on success (errors only).
+- Must not trigger twice for the same paymentId.
+
+BACKEND CHANGES:
+1) Ensure settings endpoint supports update:
+- If GET exists at /api/settings/payments, add:
+  - PUT /api/settings/payments
+    Body: { requireSignatureAfterPayment: boolean }
+    Saves to company settings table/record.
+
+2) Add env override support (dev-only):
+- If process.env.FORCE_SIGNATURE_AFTER_PAYMENT === "true", treat requireSignatureAfterPayment as true in GET response.
+
+FRONTEND CHANGES:
+1) Add/confirm there is a Payments Settings UI screen:
+- Add a toggle switch:
+  - label: “Require signature after payment”
+  - description: “Prompt for an in-app signature immediately after a payment is successful.”
+- On toggle change → PUT /api/settings/payments
+
+2) Trigger signature popup immediately after manual payment success:
+- In the UI where you call POST /api/payments/manual:
+  - the response includes paymentId (example logs show paymentId=84 in backend sync)
+  - After success:
+    - refetch /api/settings/payments (or use cached setting)
+    - if requireSignatureAfterPayment true:
+        open SignatureCaptureModal with paymentId + invoiceId + jobId
+
+3) Add debug logs (temporary):
+- console.log("[SIG] settings", requireSignatureAfterPayment)
+- console.log("[SIG] payment success", { paymentId, invoiceId, jobId })
+- console.log("[SIG] opening modal")
+
+4) Duplicate prevention:
+- Keep a Set/ref of prompted paymentIds in the page component.
+- Do not re-open if already prompted.
+
+TESTING STEPS:
+1) Turn toggle ON in Payments Settings.
+2) Create job/invoice, record manual cash payment.
+3) Confirm signature modal opens immediately after POST /api/payments/manual 200.
+4) Toggle OFF and repeat → confirm it does NOT open.
+5) Set FORCE_SIGNATURE_AFTER_PAYMENT=true in dev env and confirm it opens even if toggle off.
+
+DELIVERABLES:
+- Payment setting toggle works and persists.
+- Signature modal opens after successful payment when setting ON.
+- Dev override available for rapid testing.
+- Temporary logs removed after confirmation.
