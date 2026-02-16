@@ -1,0 +1,75 @@
+SYSTEM / ROLE:
+You are a senior front-end engineer working inside the EcoLogic codebase.
+Update the Job → E-signature Approvals UI so the payment completion signature is ALWAYS visible inline.
+Keep the same vibe/style. Do not add extra clicks. Do not break existing signature request flow.
+No new popups/toasts.
+
+GOAL:
+In “Payment Completion Signatures”, show the actual signature image INLINE by default (no “View” required).
+We can still keep an optional expand/fullscreen, but the signature must always be visible.
+
+UI REQUIREMENTS:
+- Each Payment Completion Signature card should display:
+  1) Header row: “Payment Completion Signature” + meta (invoice #, method, amount, signed time)
+  2) Signature preview block ALWAYS visible (image)
+- Remove the “View” button entirely.
+- If there are multiple signatures, show them as stacked cards with each signature preview visible.
+
+LAYOUT SPEC (match app vibe):
+Inside each signature card:
+- Top row:
+  - Left: icon + Title
+  - Right: Amount pill or text (ex: $650.00)
+- Second row (small muted):
+  - “Invoice #INV-xxxx • Card • Feb 16, 2:53 PM”
+- Signature block:
+  - A rounded container with subtle border
+  - Height ~110–140px on mobile (responsive)
+  - The signature image centered and scaled to fit (contain)
+  - White background (signature readable) with soft border
+
+DATA / RENDERING:
+- The API already returns signatureImageUrl (or data).
+- Render it directly:
+  - <img src={signatureImageUrl} alt="Payment signature" />
+- Use CSS:
+  - object-fit: contain;
+  - width: 100%;
+  - height: 120px (mobile), 140px (desktop)
+  - background: #fff;
+  - border radius consistent with cards
+  - padding: 12px
+
+PERFORMANCE:
+- Lazy load images:
+  - loading="lazy"
+- If you have base64 blobs, consider converting to stored file URL (if not already) to reduce payload.
+
+ERROR / EMPTY:
+- If signatureImageUrl missing:
+  - show inline text: “Signature unavailable”
+- Keep section empty state if no signatures.
+
+OPTIONAL (allowed but not required):
+- Tap on the signature image can open the existing modal (for zoom),
+  BUT the signature must still be visible without tapping.
+  If implemented:
+    - Clicking image opens modal
+    - Remove “View” button
+
+FILES TO CHANGE:
+- JobDetails → E-signature Approvals tab component
+- PaymentCompletionSignaturesList component (if exists)
+- Remove PaymentSignatureModal trigger from View button
+- Keep modal component only if used for zoom-on-tap (optional)
+
+TESTING:
+1) Create a payment signature (cash/check/stripe) then open Job → E-signature Approvals
+2) Confirm the signature image is visible immediately, no clicks needed
+3) Confirm multiple signatures display properly stacked
+4) Confirm no layout overflow on small screens
+
+DELIVERABLES:
+- “Payment Completion Signatures” always shows the signature inline.
+- “View” removed.
+- UI matches EcoLogic card style.

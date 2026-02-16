@@ -1126,29 +1126,47 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               ) : paymentSignatures.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">No payment signatures yet.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {paymentSignatures.map((sig) => {
                     const methodLabel = sig.paymentMethod === 'stripe' ? 'Card' : sig.paymentMethod === 'cash' ? 'Cash' : sig.paymentMethod === 'check' ? 'Check' : sig.paymentMethod || 'Unknown';
                     const amountStr = sig.amountCents != null ? `$${(sig.amountCents / 100).toFixed(2)}` : '';
+                    const sigSrc = sig.signaturePngBase64
+                      ? (sig.signaturePngBase64.startsWith('data:') ? sig.signaturePngBase64 : `data:image/png;base64,${sig.signaturePngBase64}`)
+                      : null;
                     return (
-                      <div key={sig.id} className="flex items-center gap-3 p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
-                        <div className="flex-shrink-0 h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-                          <FileText className="h-4 w-4 text-primary" />
+                      <div key={sig.id} className="border rounded-lg bg-background overflow-hidden">
+                        <div className="flex items-center justify-between p-3 pb-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <FileText className="h-4 w-4 text-primary" />
+                            </div>
+                            <span className="text-sm font-medium truncate">Payment Completion Signature</span>
+                          </div>
+                          {amountStr && (
+                            <span className="text-sm font-semibold text-primary flex-shrink-0 ml-2">{amountStr}</span>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">Payment Completion Signature</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {sig.invoiceNumber ? `Invoice #${sig.invoiceNumber}` : ''}
-                            {sig.invoiceNumber && amountStr ? ' \u2022 ' : ''}{amountStr}
-                            {(sig.invoiceNumber || amountStr) && methodLabel ? ' \u2022 ' : ''}{methodLabel}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Signed {format(new Date(sig.signedAt), 'MMM d, yyyy h:mm a')}
-                          </p>
+                        <p className="text-xs text-muted-foreground px-3 pb-2 truncate">
+                          {sig.invoiceNumber ? `Invoice #${sig.invoiceNumber}` : ''}
+                          {sig.invoiceNumber && methodLabel ? ' \u2022 ' : ''}{methodLabel}
+                          {' \u2022 '}{format(new Date(sig.signedAt), 'MMM d, h:mm a')}
+                        </p>
+                        <div
+                          className="mx-3 mb-3 rounded-md border bg-white flex items-center justify-center cursor-pointer hover:shadow-sm transition-shadow"
+                          style={{ height: '120px', padding: '12px' }}
+                          onClick={() => setViewingSig(sig)}
+                        >
+                          {sigSrc ? (
+                            <img
+                              src={sigSrc}
+                              alt="Payment signature"
+                              loading="lazy"
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Signature unavailable</span>
+                          )}
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setViewingSig(sig)}>
-                          View
-                        </Button>
                       </div>
                     );
                   })}
