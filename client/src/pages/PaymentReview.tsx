@@ -395,7 +395,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
                 <CloudOff className="h-3 w-3" />
                 QuickBooks not connected
-                <a href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline font-medium ml-0.5">Connect</a>
+                <a href="/customize/quickbooks" className="text-blue-600 dark:text-blue-400 hover:underline font-medium ml-0.5">Connect</a>
               </span>
             )
           )}
