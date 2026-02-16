@@ -57,7 +57,7 @@ interface NewInvoiceSheetProps {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
+    <div className="py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 -mx-4 px-4">
       <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
         {title}
       </span>
@@ -82,7 +82,7 @@ function InfoRow({
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left"
+      className="w-full flex items-center gap-3 min-h-[52px] bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800 transition-colors text-left -mx-4 px-4"
     >
       <Icon className="h-5 w-5 text-slate-400 flex-shrink-0" />
       <span className={`flex-1 text-sm ${value ? 'text-slate-900 dark:text-slate-100 font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
@@ -421,6 +421,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
           </div>
 
           <div className="flex-1 overflow-y-auto">
+            <div className="w-full px-4">
               <SectionHeader title="Customer" />
               <InfoRow
                 icon={User}
@@ -439,13 +440,12 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 required
               />
 
-              {/* Inline Line Items Editor */}
               {validLineItems.length > 0 && (
-                <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 -mx-4 px-4">
                   {lineItems.map((item, index) => {
                     if (!item.name.trim() && item.unitPriceCents === 0) return null;
                     return (
-                      <div key={index} className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                      <div key={index} className="py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
@@ -563,7 +563,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
               {totalCents > 0 && (
                 <>
                   <SectionHeader title="Summary" />
-                  <div className="bg-white dark:bg-slate-900 px-4 py-3 space-y-2 border-b border-slate-200 dark:border-slate-700">
+                  <div className="bg-white dark:bg-slate-900 py-3 space-y-2 border-b border-slate-200 dark:border-slate-700 -mx-4 px-4">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-500">Subtotal</span>
                       <span className="text-slate-900 dark:text-slate-100">{formatCurrency(subtotalCents)}</span>
@@ -582,8 +582,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                 </>
               )}
 
-              {/* Footer Button */}
-              <div className="sticky bottom-0 px-4 pb-4 pt-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+              <div className="pb-4 pt-3">
                 <Button
                   type="button"
                   onClick={() => {
@@ -603,6 +602,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                   {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
                 </Button>
               </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
