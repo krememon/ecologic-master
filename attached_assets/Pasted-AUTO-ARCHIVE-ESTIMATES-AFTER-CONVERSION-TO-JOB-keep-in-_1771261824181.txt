@@ -1,0 +1,87 @@
+AUTO-ARCHIVE ESTIMATES AFTER CONVERSION TO JOB (keep in Client Estimate History)
+
+GOAL:
+When an estimate is converted into a job (only after Approved → Create Job action),
+the estimate should automatically archive so it disappears from the main Estimates list,
+BUT it must remain visible in the client’s Estimate History.
+
+IMPORTANT:
+- Do NOT delete the estimate record (we need it for history/audit)
+- This is a soft-archive / hidden-from-main-list behavior.
+
+------------------------------------------------------------
+STEP 1) Add/Use archive fields on estimates
+
+If not already present, add fields to estimates table:
+- archivedAt TIMESTAMP NULL
+- archivedReason TEXT NULL  (ex: 'converted_to_job')
+
+Migration required if fields don’t exist.
+
+------------------------------------------------------------
+STEP 2) Backend: Archive estimate immediately after conversion
+
+Find the endpoint/function that converts an estimate into a job (example patterns):
+- POST /api/estimates/:id/convert
+- POST /api/jobs/from-estimate
+- createJobFromEstimate()
+
+After the job is successfully created:
+- Update the estimate:
+  archivedAt = now()
+  archivedReason = 'converted_to_job'
+
+Ensure this only happens when conversion succeeds (job created).
+
+Return response including:
+- created jobId
+- estimate archived status
+
+------------------------------------------------------------
+STEP 3) Frontend: remove from Estimates list immediately
+
+After successful conversion:
+- Refresh estimates list OR locally remove the converted estimate from state.
+- Also refresh dashboard stats if you show “Estimates this week” etc.
+
+No toast/popups unless you already have one standard success pattern.
+
+------------------------------------------------------------
+STEP 4) Filtering logic
+
+Main Estimates list endpoint and query must exclude archived estimates:
+- WHERE archivedAt IS NULL
+(or status != 'archived' depending on your schema)
+
+Client Estimate History must INCLUDE archived estimates:
+- Show all estimates for that client, including archived
+- If you want, add a small pill like “Converted” or “Archived” in history only (optional)
+
+------------------------------------------------------------
+STEP 5) UI behavior rules
+
+- Estimates Tab:
+  Converted estimates should NOT appear anywhere in the main list.
+- Client → Estimate History:
+  Converted estimates should still appear (viewable).
+  Clicking it should open the estimate details like normal (read-only is fine).
+
+------------------------------------------------------------
+ACCEPTANCE TESTS
+
+1) Create estimate → approve it → convert to job
+   ✅ Job is created
+   ✅ Estimate disappears from /estimates list immediately
+   ✅ Client Estimate History still shows the estimate
+   ✅ No broken links or missing record errors
+
+2) Refresh the app
+   ✅ Estimate still hidden from Estimates list
+   ✅ Still visible in client history
+
+------------------------------------------------------------
+DELIVERABLES
+- DB migration (if needed)
+- Backend endpoint change (file path + what function)
+- Frontend list refresh/removal logic (file paths)
+- Confirmed tests above passing
