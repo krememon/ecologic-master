@@ -1,0 +1,73 @@
+BUG FIX: Converted/archived estimates are still showing in Estimates list
+
+SYMPTOM:
+After converting an approved estimate into a job and archiving the estimate, the estimate still appears in the main Estimates tab.
+
+GOAL:
+Archived estimates (archivedAt != null OR status='archived') must NEVER appear in the main Estimates list.
+
+------------------------------------------------------------
+STEP 1) Confirm archive is actually happening
+After conversion, log/verify the estimate record:
+- archivedAt is set (not null)
+- archivedReason = 'converted_to_job' (or whatever you use)
+
+Add a temporary server log right after the update:
+console.log("[EstimateArchive] id=", estimateId, "archivedAt=", updated.archivedAt)
+
+------------------------------------------------------------
+STEP 2) Fix the Estimates LIST API filtering (most likely cause)
+Find the API used by the Estimates tab (ex: GET /api/estimates)
+
+Update the SQL query to exclude archived:
+WHERE company_id = $1
+  AND (archivedAt IS NULL)   -- or archived_at IS NULL
+  AND (deletedAt IS NULL)    -- if you have soft delete too
+
+If your schema uses `status='archived'` instead:
+AND status != 'archived'
+
+Make sure this filter exists in ALL list endpoints used by the Estimates tab:
+- GET /api/estimates
+- any “search estimates”
+- any “estimates dashboard/weekly” endpoint
+- any “counts” endpoint that powers the tab badge
+
+------------------------------------------------------------
+STEP 3) Frontend: ensure the Estimates tab re-fetches after conversion
+After conversion succeeds:
+- Invalidate/refetch the estimates query key
+  ex: queryClient.invalidateQueries(["estimates"])
+- OR call fetchEstimates() again
+- OR remove the estimate from local state immediately:
+  setEstimates(prev => prev.filter(e => e.id !== convertedEstimateId))
+
+Do BOTH:
+A) optimistic remove from UI
+B) invalidate/refetch to guarantee truth
+
+------------------------------------------------------------
+STEP 4) Make sure the conversion call returns enough info
+Ensure the conversion endpoint response includes:
+- estimateId
+- jobId
+- archivedAt (or archived=true)
+
+So frontend can remove the exact estimate that was converted.
+
+------------------------------------------------------------
+STEP 5) Prevent accidental “local filtering” mistakes
+If the frontend is filtering estimates locally, ensure it filters archived too:
+estimates.filter(e => !e.archivedAt && e.status !== "archived")
+
+But backend filtering is mandatory regardless.
+
+------------------------------------------------------------
+DEBUGGING DELIVERABLE (must provide):
+- Which API endpoint feeds the Estimates tab (exact route)
+- The exact SQL/DB filter line added (archivedAt/status)
+- Frontend file path where conversion happens + the invalidate/remove logic
+- Confirm by test:
+   Convert estimate -> it disappears immediately
+   Refresh page -> still gone from Estimates list
+   Client Estimate History -> still shows it

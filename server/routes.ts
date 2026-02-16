@@ -7486,7 +7486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allEstimates = await storage.getEstimatesByCompany(company.id);
 
       let filtered = allEstimates;
-      if (!includeArchived && company.hideConvertedEstimates !== false) {
+      if (!includeArchived) {
         filtered = allEstimates.filter(est => !est.archivedAt);
       }
 
@@ -8248,21 +8248,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        // 4. Update estimate with convertedJobId, convertedAt, and conditionally archivedAt
+        // 4. Update estimate with convertedJobId, convertedAt, and archivedAt
         const now = new Date();
-        const companyData = await tx.select().from(companies).where(eq(companies.id, companyId));
-        const hideConverted = companyData[0]?.hideConvertedEstimates !== false;
 
         await tx
           .update(estimates)
           .set({
             convertedJobId: newJob.id,
             convertedAt: now,
-            ...(hideConverted ? { archivedAt: now } : {}),
+            archivedAt: now,
           })
           .where(eq(estimates.id, estimateId));
 
-        console.log(`[EstimateConvert] estimateId=${estimateId} jobId=${newJob.id} archived=${hideConverted} settingValue=${hideConverted}`);
+        console.log(`[EstimateConvert] estimateId=${estimateId} jobId=${newJob.id} archived=true`);
 
         return { approved, jobId: newJob.id };
       });
