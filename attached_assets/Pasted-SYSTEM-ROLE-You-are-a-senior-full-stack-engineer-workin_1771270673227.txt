@@ -1,0 +1,103 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Fix the missing post-payment signature capture trigger for STRIPE card payments.
+Signature must be mandatory (always-on). No settings gating.
+Do not break existing Stripe payment flow, partials, refunds, or webhooks.
+Preserve RBAC and “hidden not disabled”.
+No success toasts; errors only.
+
+TASK:
+After a successful STRIPE card payment, automatically open the in-app signature capture modal (same behavior as cash/check).
+
+CONTEXT:
+Signature modal opens correctly after manual payments (cash/check) because the UI runs immediately after POST /api/payments/manual returns.
+Stripe payments succeed but the signature modal never opens. This means the Stripe “success” path does not call the shared signature trigger, OR the UI navigates/refreshes before the trigger runs, OR the paymentId isn’t available at the moment of success.
+
+REQUIREMENTS:
+- When a Stripe payment is confirmed successful and recorded in our DB as “paid”, open SignatureCaptureModal automatically.
+- Must work even if Stripe success is finalized via backend webhook (async).
+- Must not trigger on failed/canceled/processing payments.
+- Must not trigger for partial payments unless status becomes fully paid.
+- Must not double-trigger (one signature per paymentId).
+- If user navigates away/refreshes before signing, recovery banner must appear and allow reopening.
+
+IMPLEMENTATION PLAN (DO BOTH A + B FOR RELIABILITY):
+
+A) Trigger immediately on Stripe “client success” (when we have paymentId)
+1) Locate Stripe pay flow in frontend:
+   - Search for:
+     - `stripe.confirmPayment`
+     - `confirmCardPayment`
+     - `PaymentIntent`
+     - `/api/payments/stripe`
+     - `/api/stripe`
+2) Identify the moment you get a successful result:
+   - `paymentIntent.status === "succeeded"` (or equivalent)
+3) Ensure the app creates/records a Payment in EcoLogic DB at that moment.
+   - If you already call a backend endpoint like:
+     - `POST /api/payments/stripe/confirm` or similar
+   - Update that endpoint to return the created `paymentId`, `invoiceId`, `jobId`, and `status`.
+4) After that backend call returns success:
+   - Call the SAME function used by cash/check:
+     - `openSignatureCapture({ paymentId, invoiceId, jobId })`
+   - Also set `localStorage.pendingSignaturePaymentId = paymentId`
+
+B) Trigger from “source of truth” after Stripe webhook updates payment status (fallback)
+Even if the client doesn’t have the paymentId or the webhook finalizes later, we still must open it.
+1) Find where the UI loads invoice/job payments after Stripe payment:
+   - likely `GET /api/payments/invoice/:invoiceId` or `GET /api/payments/ledger`
+2) After a Stripe payment completes, the UI should refetch those endpoints.
+3) Add a detector:
+   - If a payment record in the response has:
+     - `method === "card"` (or `provider === "stripe"`)
+     - `status === "paid"`
+     - `signatureCaptured === false` (or no signature exists)
+   - Then open SignatureCaptureModal for that `paymentId`.
+4) Prevent double triggers using:
+   - a `promptedPaymentIds` Set (React ref)
+   - and localStorage `ecologic.promptedSignatures` list
+
+BACKEND CHANGES (IF NEEDED TO SUPPORT PAYMENTID):
+1) Ensure Stripe payment creation/confirmation endpoint returns EcoLogic paymentId:
+   - Response must include:
+     - `paymentId`
+     - `invoiceId`
+     - `jobId`
+     - `status`
+     - `method: "card"`
+2) Ensure payments fetch endpoints include:
+   - `paymentId`
+   - `status`
+   - `method/provider`
+   - `signatureCaptured` boolean OR allow quick check via GET /api/payments/:id/signature
+
+EDGE CASE: NAVIGATION/RERENDER KILLS MODAL
+If the app navigates to another page immediately after Stripe success:
+- Before navigating, set localStorage:
+  - `pendingSignaturePaymentId`
+- On the destination screen (invoice/job details), detect it on mount and open the modal.
+
+DEBUGGING (TEMP LOGS, REMOVE AFTER):
+- In Stripe success handler:
+  - console.log("[STRIPE] succeeded", { invoiceId, jobId, stripePaymentIntentId })
+- After backend confirms/creates payment:
+  - console.log("[STRIPE] created payment", { paymentId, status })
+- Right before opening modal:
+  - console.log("[SIG] opening after STRIPE", { paymentId })
+
+TESTING STEPS:
+1) Make a card payment (Stripe test).
+2) Confirm:
+   - EcoLogic records a payment with method=card and status=paid.
+   - Signature modal opens immediately OR within 1 refetch cycle.
+3) Refresh the page right after payment:
+   - Banner appears “Signature required” if not signed.
+4) Save signature:
+   - modal closes
+   - payment shows signatureCaptured true
+   - no re-prompts.
+
+DELIVERABLES:
+- Stripe card payments now trigger the signature modal just like cash/check.
+- Works whether payment is confirmed immediately or finalized via webhook.
+- No duplicates, no toasts, recovery works.
