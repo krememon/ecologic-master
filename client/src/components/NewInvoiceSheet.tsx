@@ -581,28 +581,28 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
                   </div>
                 </>
               )}
-          </div>
 
-          {/* Footer Button */}
-          <div className="flex-shrink-0 px-4 pb-4 pt-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
-            <Button
-              type="button"
-              onClick={() => {
-                if (!selectedCustomer) {
-                  toast({ title: "Select a customer", variant: "destructive" });
-                  return;
-                }
-                if (!hasValidLineItems) {
-                  toast({ title: "Add at least one line item with a price", variant: "destructive" });
-                  return;
-                }
-                handleSubmit();
-              }}
-              disabled={createInvoiceMutation.isPending}
-              className="w-full h-11 text-center"
-            >
-              {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
-            </Button>
+              {/* Footer Button */}
+              <div className="sticky bottom-0 px-4 pb-4 pt-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedCustomer) {
+                      toast({ title: "Select a customer", variant: "destructive" });
+                      return;
+                    }
+                    if (!hasValidLineItems) {
+                      toast({ title: "Add at least one line item with a price", variant: "destructive" });
+                      return;
+                    }
+                    handleSubmit();
+                  }}
+                  disabled={createInvoiceMutation.isPending}
+                  className="w-full h-11"
+                >
+                  {createInvoiceMutation.isPending ? 'Saving...' : 'Save Invoice'}
+                </Button>
+              </div>
           </div>
         </DialogContent>
       </Dialog>
