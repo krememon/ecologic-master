@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
 import { User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import CompanyInviteCode from "@/components/CompanyInviteCode";
 import { BillingSection } from "@/components/BillingSection";
 
 import { useCan } from "@/hooks/useCan";
@@ -414,9 +413,6 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Company Management - Owner/Supervisor Only */}
-        {canManageCompany && <CompanyInviteCode />}
 
         {/* Billing & Subscription - Owner Only */}
         {user?.role === 'OWNER' && (
