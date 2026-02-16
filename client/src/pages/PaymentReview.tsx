@@ -82,6 +82,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const numericInvoiceId = parseInt(invoiceId, 10);
   const canSyncQbo = can('customize.manage');
 
+  const { data: qboStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ['/api/integrations/quickbooks/status'],
+    enabled: canSyncQbo,
+  });
+  const qboConnected = canSyncQbo && qboStatus?.connected === true;
+
   const { data: invoiceData, isLoading: invoiceLoading, error: invoiceError } = useQuery<{ invoice: Invoice | null }>({
     queryKey: ['/api/jobs', numericJobId, 'invoice'],
     queryFn: async () => {
@@ -380,10 +386,18 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         <div className="space-y-1.5 mb-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Checkout</h1>
           {canSyncQbo && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
-              <Cloud className="h-3 w-3" />
-              Automatically synced to QuickBooks
-            </span>
+            qboConnected ? (
+              <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                <Cloud className="h-3 w-3" />
+                Automatically synced to QuickBooks
+              </span>
+            ) : (
+              <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                <CloudOff className="h-3 w-3" />
+                QuickBooks not connected
+                <a href="/settings" className="text-blue-600 dark:text-blue-400 hover:underline font-medium ml-0.5">Connect</a>
+              </span>
+            )
           )}
         </div>
 

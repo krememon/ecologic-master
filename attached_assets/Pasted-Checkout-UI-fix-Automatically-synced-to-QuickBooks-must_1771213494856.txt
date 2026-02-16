@@ -1,0 +1,45 @@
+Checkout UI fix: “Automatically synced to QuickBooks” must only show when QuickBooks is actually connected.
+
+CURRENT BUG:
+On Checkout screen it shows “Automatically synced to QuickBooks” even for a brand new company/account that has never connected QuickBooks.
+
+GOAL:
+- If QuickBooks is connected: show the small helper text “Automatically synced to QuickBooks”
+- If NOT connected: replace that helper text with a CTA button/link that brings the user to the QuickBooks connect flow/settings.
+
+BACKEND:
+1) Add/verify a reliable “quickbooksConnected” boolean for the current company.
+Definition (use what exists in the DB):
+- True if company has valid QuickBooks connection credentials saved (ex: qboRealmId + access token/refresh token + not revoked)
+- False otherwise
+
+Implement/confirm an endpoint that returns this flag with company profile data:
+- GET /api/company or GET /api/company/profile should include quickbooksConnected: boolean
+(or create GET /api/integrations/status that returns { quickbooksConnected })
+
+FRONTEND (Checkout screen):
+1) Find the Checkout screen header/subtext where the QuickBooks line appears.
+2) Load company integration status (from existing company/profile query).
+3) Conditional render:
+
+IF quickbooksConnected:
+  show text: “Automatically synced to QuickBooks”
+ELSE:
+  show small inline row:
+   “QuickBooks not connected” + a button/link “Connect QuickBooks”
+  - The button should route to the QuickBooks connect page/flow you already have
+    (ex: /settings/integrations or /settings/quickbooks or wherever the connect UI lives)
+  - Use subtle styling (outline/ghost) so it doesn’t overpower Checkout.
+  - Keep it on one line and aligned like the current helper text.
+
+IMPORTANT:
+- Do not break checkout flow.
+- If user clicks Connect QuickBooks, they should go to the integration screen and be able to come back (normal browser back ok).
+- Ensure Owner/Supervisor only if that’s your RBAC rule (Technicians likely shouldn’t see/trigger connect).
+
+DELIVERABLES:
+- File path(s) changed for Checkout UI
+- Where the quickbooksConnected flag comes from (DB fields used)
+- Confirm:
+   New company w/o QBO -> shows Connect QuickBooks CTA (no “auto synced” claim)
+   Company with QBO connected -> shows “Automatically synced to QuickBooks”
