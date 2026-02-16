@@ -193,35 +193,38 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader className="flex flex-row items-center justify-between pb-4 border-b">
-            <SheetTitle>Notifications</SheetTitle>
-            <div className="flex items-center gap-1">
-              {unreadCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => markAllReadMutation.mutate()}
-                  disabled={markAllReadMutation.isPending}
-                  className="text-xs"
-                >
-                  <Check className="h-3 w-3 mr-1" />
-                  Mark all read
-                </Button>
-              )}
-              {notifications.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => clearAllMutation.mutate()}
-                  disabled={clearAllMutation.isPending}
-                  className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" />
-                  Clear
-                </Button>
-              )}
+          <SheetHeader className="space-y-0 pb-0">
+            <div className="flex items-center justify-between px-0 py-1">
+              <SheetTitle className="text-base font-semibold">Notifications</SheetTitle>
+              <div className="flex items-center gap-1">
+                {unreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => markAllReadMutation.mutate()}
+                    disabled={markAllReadMutation.isPending}
+                    className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Check className="h-3.5 w-3.5 mr-1" />
+                    Mark all read
+                  </Button>
+                )}
+                {notifications.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => clearAllMutation.mutate()}
+                    disabled={clearAllMutation.isPending}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear all"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           </SheetHeader>
+          <div className="border-b -mx-6 mt-2" />
           
           {clearError && (
             <div className="mt-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded">
