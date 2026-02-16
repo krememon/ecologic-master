@@ -618,7 +618,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            Documents
+            Info
           </button>
           <button
             onClick={() => setActiveTab('approvals')}
