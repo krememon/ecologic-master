@@ -841,20 +841,24 @@ async function checkOverdueInvoices() {
       );
 
     for (const inv of overdueInvoices) {
-      const balanceDollars = (inv.balanceDueCents / 100).toFixed(2);
+      try {
+        const balanceDollars = (inv.balanceDueCents / 100).toFixed(2);
 
-      await notifyManagers(inv.companyId, {
-        type: 'invoice_overdue',
-        title: 'Invoice Overdue',
-        body: `${inv.invoiceNumber || `INV-${inv.id}`} • $${balanceDollars} past due`,
-        entityType: 'invoice',
-        entityId: inv.id,
-        linkUrl: inv.jobId ? `/jobs/${inv.jobId}` : undefined,
-      });
+        await notifyManagers(inv.companyId, {
+          type: 'invoice_overdue',
+          title: 'Invoice Overdue',
+          body: `${inv.invoiceNumber || `INV-${inv.id}`} • $${balanceDollars} past due`,
+          entityType: 'invoice',
+          entityId: inv.id,
+          linkUrl: inv.jobId ? `/jobs/${inv.jobId}` : undefined,
+        });
 
-      await db.update(invoices)
-        .set({ overdueNotifiedAt: new Date() })
-        .where(eq(invoices.id, inv.id));
+        await db.update(invoices)
+          .set({ overdueNotifiedAt: new Date() })
+          .where(eq(invoices.id, inv.id));
+      } catch (err) {
+        console.error(`[Overdue] Failed to notify for invoice ${inv.id}:`, err);
+      }
     }
 
     if (overdueInvoices.length > 0) {
