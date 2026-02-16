@@ -1556,6 +1556,8 @@ export default function Jobs() {
         {/* ESTIMATES TAB CONTENT - RBAC guarded */}
         {canAccessEstimates && (
         <TabsContent value="estimates" className="mt-6">
+          <div className="w-full flex justify-center">
+          <div className="w-full max-w-[640px] px-4">
           {/* Filter Row: Customer Picker + Status Dropdown + Select Button */}
           <div className="flex flex-col gap-4 mb-6">
             <div className="flex items-center gap-2 w-full">
@@ -1672,7 +1674,7 @@ export default function Jobs() {
             </Card>
           ) : (
             <>
-            <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
+            <div className={`grid gap-4 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
               {filteredEstimates.map((estimate) => {
                 const job = jobs.find(j => j.id === estimate.jobId);
                 const isSelected = selectedEstimateIds.has(estimate.id);
@@ -1882,6 +1884,8 @@ export default function Jobs() {
             )}
             </>
           )}
+          </div>
+          </div>
         </TabsContent>
         )}
 
