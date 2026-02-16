@@ -36,7 +36,6 @@ html, body {
   -ms-text-size-adjust: 100%;
   min-height: 100vh;
   overflow-x: hidden;
-  scrollbar-gutter: stable;
 }
 
 /* Smooth dialog animations with hardware acceleration */
