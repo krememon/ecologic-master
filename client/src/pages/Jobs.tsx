@@ -1947,8 +1947,7 @@ export default function Jobs() {
                 if (isInPacContainer(e.nativeEvent)) {
                   return;
                 }
-                // Navigate to job detail page
-                setLocation(`/jobs/${job.id}`);
+                setLocation(`/jobs/${job.id}?from=jobs`);
               }}
             >
               {/* Status Badge - Top Right */}

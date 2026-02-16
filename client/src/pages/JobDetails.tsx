@@ -32,6 +32,10 @@ function getReturnUrl(): string {
     const date = params.get('date') || '';
     return `/schedule?view=${view}&date=${date}`;
   }
+  if (params.get('from') === 'client') {
+    const clientId = params.get('clientId');
+    if (clientId) return `/clients/${clientId}`;
+  }
   return '/jobs';
 }
 

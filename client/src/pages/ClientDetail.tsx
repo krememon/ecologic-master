@@ -325,7 +325,7 @@ export default function ClientDetail({ customerId }: ClientDetailProps) {
               <Card
                 key={job.id}
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/jobs/${job.id}`)}
+                onClick={() => navigate(`/jobs/${job.id}?from=client&clientId=${customerId}`)}
               >
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between">
