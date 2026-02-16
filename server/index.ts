@@ -823,38 +823,42 @@ async function checkOverdueInvoices() {
         id: invoices.id,
         companyId: invoices.companyId,
         invoiceNumber: invoices.invoiceNumber,
-        amount: invoices.amount,
         totalCents: invoices.totalCents,
+        balanceDueCents: invoices.balanceDueCents,
+        amount: invoices.amount,
         dueDate: invoices.dueDate,
         jobId: invoices.jobId,
       })
       .from(invoices)
       .where(
         and(
+          isNull(invoices.overdueNotifiedAt),
           lt(invoices.dueDate, today),
           ne(invoices.status, 'paid'),
-          ne(invoices.status, 'cancelled')
+          ne(invoices.status, 'cancelled'),
+          sql`${invoices.balanceDueCents} > 0`
         )
       );
 
     for (const inv of overdueInvoices) {
-      const amountStr = inv.totalCents > 0
-        ? `$${(inv.totalCents / 100).toFixed(2)}`
-        : `$${parseFloat(inv.amount || '0').toFixed(2)}`;
+      const balanceDollars = (inv.balanceDueCents / 100).toFixed(2);
 
       await notifyManagers(inv.companyId, {
         type: 'invoice_overdue',
         title: 'Invoice Overdue',
-        body: `Invoice ${inv.invoiceNumber || `#${inv.id}`} for ${amountStr} is past due`,
+        body: `${inv.invoiceNumber || `INV-${inv.id}`} • $${balanceDollars} past due`,
         entityType: 'invoice',
         entityId: inv.id,
         linkUrl: inv.jobId ? `/jobs/${inv.jobId}` : undefined,
-        dedupMinutes: 24 * 60,
       });
+
+      await db.update(invoices)
+        .set({ overdueNotifiedAt: new Date() })
+        .where(eq(invoices.id, inv.id));
     }
 
     if (overdueInvoices.length > 0) {
-      console.log(`[Overdue] Checked ${overdueInvoices.length} overdue invoices for notifications`);
+      console.log(`[Overdue] Sent ${overdueInvoices.length} overdue invoice notification(s)`);
     }
   } catch (error) {
     console.error('[Overdue] Error checking overdue invoices:', error);
@@ -862,6 +866,6 @@ async function checkOverdueInvoices() {
 }
 
 function startOverdueInvoiceChecker() {
-  setTimeout(() => checkOverdueInvoices(), 60_000);
-  setInterval(() => checkOverdueInvoices(), 6 * 60 * 60_000);
+  checkOverdueInvoices();
+  setInterval(() => checkOverdueInvoices(), 24 * 60 * 60_000);
 }
