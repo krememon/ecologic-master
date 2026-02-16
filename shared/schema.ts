@@ -1596,7 +1596,11 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "announcement",
   "estimate_approved",
   "invoice_overdue",
-  "document_uploaded"
+  "document_uploaded",
+  "payment_succeeded",
+  "payment_failed",
+  "refund_issued",
+  "manual_payment_recorded"
 ]);
 
 // Notifications table
@@ -1642,7 +1646,11 @@ export type NotificationType =
   | "announcement"
   | "estimate_approved"
   | "invoice_overdue"
-  | "document_uploaded";
+  | "document_uploaded"
+  | "payment_succeeded"
+  | "payment_failed"
+  | "refund_issued"
+  | "manual_payment_recorded";
 
 export const refundMethodEnum = pgEnum("refund_method", ["card", "bank", "cash", "check", "other"]);
 export const refundProviderEnum = pgEnum("refund_provider", ["stripe", "plaid", "manual"]);

@@ -33,8 +33,14 @@ const getNotificationIcon = (type: string) => {
     case 'dm_message':
       return <MessageSquare className="h-4 w-4 text-blue-500" />;
     case 'payment_collected':
+    case 'payment_succeeded':
     case 'invoice_paid':
+    case 'manual_payment_recorded':
       return <DollarSign className="h-4 w-4 text-green-500" />;
+    case 'refund_issued':
+      return <DollarSign className="h-4 w-4 text-red-500" />;
+    case 'payment_failed':
+      return <AlertTriangle className="h-4 w-4 text-red-500" />;
     case 'estimate_approved':
       return <ClipboardCheck className="h-4 w-4 text-emerald-500" />;
     case 'invoice_overdue':

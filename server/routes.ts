@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice } from "./notificationService";
+import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
@@ -12615,16 +12615,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }).catch(err => console.error('[QB] Payment sync error:', err));
 
-      // Send payment_collected notification to managers
       const payer = await storage.getUser(userId);
       const payerName = payer ? `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || 'Someone' : 'Someone';
-      await notifyManagers(company.id, {
-        type: 'payment_collected',
+      await createPaymentNotifications({
+        companyId: company.id,
+        type: 'manual_payment_recorded',
         title: 'Payment Collected',
         body: `${payerName} collected a $${amountDollars} ${paymentMethodValue.toLowerCase()} payment`,
         entityType: 'invoice',
         entityId: invoiceId,
         linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
+        jobId: invoice.jobId || null,
+        collectedByUserId: userId,
       });
 
       res.json({
@@ -12796,13 +12798,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const payer = await storage.getUser(userId);
       const payerName = payer ? `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || 'Someone' : 'Someone';
-      await notifyManagers(company.id, {
-        type: 'payment_collected',
+      await createPaymentNotifications({
+        companyId: company.id,
+        type: 'manual_payment_recorded',
         title: 'Payment Collected',
         body: `${payerName} collected a $${amountDollars} ${paymentMethodValue} payment`,
         entityType: 'invoice',
         entityId: invoice.id,
         linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
+        jobId: invoice.jobId || null,
+        collectedByUserId: userId,
       });
 
       res.json({
@@ -13044,15 +13049,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          // Send notification to managers
           const amountDollars = (amountCents / 100).toFixed(2);
-          await notifyManagers(invoice.companyId, {
-            type: 'invoice_paid',
+          const stripeCollectorId = session.metadata?.collectedByUserId || null;
+          await createPaymentNotifications({
+            companyId: invoice.companyId,
+            type: 'payment_collected',
             title: 'Invoice Paid',
             body: `A $${amountDollars} card payment was received`,
             entityType: 'invoice',
             entityId: invoiceId,
             linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
+            jobId: invoice.jobId || null,
+            collectedByUserId: stripeCollectorId,
           });
         }
       }
@@ -13303,6 +13311,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
+
+      const refundAmountDollars = (amountCents / 100).toFixed(2);
+      const refunder = await storage.getUser(userId);
+      const refunderName = refunder ? `${refunder.firstName || ''} ${refunder.lastName || ''}`.trim() || 'Someone' : 'Someone';
+      await createPaymentNotifications({
+        companyId: company.id,
+        type: 'refund_issued',
+        title: 'Refund Issued',
+        body: `${refunderName} issued a $${refundAmountDollars} ${method} refund`,
+        entityType: 'invoice',
+        entityId: payment.invoiceId || undefined,
+        linkUrl: payment.jobId ? `/jobs/${payment.jobId}` : undefined,
+        jobId: payment.jobId || null,
+        collectedByUserId: null,
+      });
 
       res.json({
         refund,

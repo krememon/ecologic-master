@@ -162,3 +162,53 @@ export async function notifyTechniciansOnly(
     await notifyUsers(techIds, { ...params, companyId });
   }
 }
+
+type PaymentNotificationEvent = {
+  companyId: number;
+  type: "payment_collected" | "payment_succeeded" | "invoice_paid" | "payment_failed" | "refund_issued" | "manual_payment_recorded";
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+  linkUrl?: string;
+  jobId?: number | null;
+  collectedByUserId?: string | null;
+};
+
+export async function createPaymentNotifications(event: PaymentNotificationEvent): Promise<void> {
+  const { companyId, type, title, body, entityType, entityId, linkUrl, jobId, collectedByUserId } = event;
+
+  const members = await storage.getCompanyMembers(companyId);
+  const recipientIds: Set<string> = new Set();
+
+  for (const m of members) {
+    const role = m.role.toUpperCase();
+    if (role === "OWNER" || role === "SUPERVISOR") {
+      recipientIds.add(m.userId);
+    }
+  }
+
+  if (collectedByUserId && jobId) {
+    const collectorMember = await storage.getCompanyMember(companyId, collectedByUserId);
+    if (collectorMember && collectorMember.role.toUpperCase() === TECHNICIAN_ROLE) {
+      const crewAssignments = await storage.getJobCrewAssignments(jobId);
+      const isAssigned = crewAssignments.some((c) => c.userId === collectedByUserId);
+      if (isAssigned) {
+        recipientIds.add(collectedByUserId);
+      }
+    }
+  }
+
+  const allRecipients = Array.from(recipientIds);
+  if (allRecipients.length > 0) {
+    await notifyUsers(allRecipients, {
+      companyId,
+      type,
+      title,
+      body,
+      entityType: entityType || undefined,
+      entityId: entityId || undefined,
+      linkUrl: linkUrl || undefined,
+    });
+  }
+}

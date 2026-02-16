@@ -1,0 +1,55 @@
+Update EcoLogic payment notifications rules: Supervisor should receive ALL payment notifications.
+
+GOAL:
+Supervisor gets every payment notification (success/fail/refund/manual), regardless of who collected it.
+Owner/Admin also gets all payment notifications.
+Technicians ONLY get payment notifications for payments THEY collected, and only for jobs assigned to them.
+
+RULES:
+1) Supervisor recipients:
+- Notify ALL users with role 'Supervisor' for every payment event (payment succeeded/failed/refund/manual recorded).
+- No job-assignment restriction for supervisor on payment notifications (they are the payment manager).
+- They still should only see payment details that exist in the company (companyId guard).
+
+2) Owner/Admin recipients:
+- Notify ALL Owner/Admin for every payment event.
+
+3) Technician recipients:
+- Notify ONLY if:
+   a) payment.collectedByUserId === technician.id
+   b) technician is assigned to the job tied to the payment (jobId via invoice.jobId or payment.jobId)
+- Do NOT notify any other technicians.
+
+PAYMENT MODEL REQUIREMENT:
+Ensure payments include collectedByUserId (nullable).
+- Manual cash/check: collectedByUserId = req.user.id
+- Stripe: collectedByUserId from session metadata when staff initiated; otherwise null (customer paid online)
+- If collectedByUserId is null, no technician notification is created.
+
+EVENTS TO COVER:
+- payment_succeeded
+- payment_failed
+- refund_issued
+- manual_payment_recorded
+
+IMPLEMENTATION:
+- Centralize into a helper: createPaymentNotifications(event)
+- Determine companyId + jobId/invoiceId
+- Fetch recipients by role:
+   - supervisors = all supervisors in org/company
+   - owners/admins = all owners/admins
+   - technicianRecipient = only if conditions met
+- Create notifications (dedupe so the same user doesn’t get duplicates)
+
+UI:
+- Notification click opens the Payment detail or Job Payments section.
+- Bell count updates normally.
+
+DELIVERABLES:
+- File paths changed
+- Code snippet showing recipient selection logic
+- Verify scenarios:
+  1) Tech collects cash on job assigned to Tech -> Supervisor + Owner/Admin + that Tech notified
+  2) Owner records payment -> Supervisor + Owner/Admin notified; no tech notified
+  3) Customer pays online (collectedBy null) -> Supervisor + Owner/Admin notified; no tech notified
+  4) Refund issued -> Supervisor + Owner/Admin notified (+ tech only if they were collector and assigned, if you decide to include; default NO tech on refunds unless collectedBy matches)
