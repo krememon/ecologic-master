@@ -1785,3 +1785,27 @@ export const insertPayoutSetupTokenSchema = createInsertSchema(payoutSetupTokens
 export type PayoutSetupToken = typeof payoutSetupTokens.$inferSelect;
 export type InsertPayoutSetupToken = z.infer<typeof insertPayoutSetupTokenSchema>;
 
+export const scheduleEvents = pgTable("schedule_events", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  title: varchar("title", { length: 80 }).notNull(),
+  description: text("description"),
+  startAt: timestamp("start_at").notNull(),
+  endAt: timestamp("end_at"),
+  allDay: boolean("all_day").notNull().default(false),
+  visibility: varchar("visibility", { length: 20 }).notNull().default("everyone"),
+  color: varchar("color", { length: 20 }).default("#2563EB"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertScheduleEventSchema = createInsertSchema(scheduleEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ScheduleEvent = typeof scheduleEvents.$inferSelect;
+export type InsertScheduleEvent = z.infer<typeof insertScheduleEventSchema>;
+

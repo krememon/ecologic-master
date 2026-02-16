@@ -97,6 +97,7 @@ import {
   customerPayoutDestinations,
   bankRefunds,
   payoutSetupTokens,
+  scheduleEvents,
   type Campaign,
   type InsertCampaign,
   type CampaignRecipient,
@@ -113,6 +114,8 @@ import {
   type InsertBankRefund,
   type PayoutSetupToken,
   type InsertPayoutSetupToken,
+  type ScheduleEvent,
+  type InsertScheduleEvent,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -4098,6 +4101,32 @@ export class DatabaseStorage implements IStorage {
 
   async markPayoutSetupTokenUsed(id: number): Promise<void> {
     await db.update(payoutSetupTokens).set({ usedAt: new Date() }).where(eq(payoutSetupTokens.id, id));
+  }
+
+  async getScheduleEventsByCompany(companyId: number, start?: Date, end?: Date): Promise<ScheduleEvent[]> {
+    const conditions = [eq(scheduleEvents.companyId, companyId)];
+    if (start) conditions.push(gte(scheduleEvents.startAt, start));
+    if (end) conditions.push(lte(scheduleEvents.startAt, end));
+    return db.select().from(scheduleEvents).where(and(...conditions)).orderBy(scheduleEvents.startAt);
+  }
+
+  async getScheduleEvent(id: number): Promise<ScheduleEvent | undefined> {
+    const [found] = await db.select().from(scheduleEvents).where(eq(scheduleEvents.id, id));
+    return found;
+  }
+
+  async createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent> {
+    const [created] = await db.insert(scheduleEvents).values(event).returning();
+    return created;
+  }
+
+  async updateScheduleEvent(id: number, updates: Partial<ScheduleEvent>): Promise<ScheduleEvent> {
+    const [updated] = await db.update(scheduleEvents).set({ ...updates, updatedAt: new Date() }).where(eq(scheduleEvents.id, id)).returning();
+    return updated;
+  }
+
+  async deleteScheduleEvent(id: number): Promise<void> {
+    await db.delete(scheduleEvents).where(eq(scheduleEvents.id, id));
   }
 
 }

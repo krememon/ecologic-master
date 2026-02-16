@@ -62,6 +62,14 @@ EcoLogic is a multi-tenant web application utilizing React 18 (TypeScript, Vite,
 - **Time Tracking (Clock In/Out)**: A "Time Today" section on the homepage for job-aware time tracking. Technicians can clock in/out to specific jobs or non-job categories, view their logged hours, and switch jobs. Owners/Supervisors/Dispatchers see aggregate "Labor Today" data.
 - **Estimates Archival**: Configurable company setting to automatically hide converted estimates from the main list. Features a toggle in Customize > Estimates settings (Owner-only), archivedAt/convertedAt tracking on estimates, and includeArchived query param support. Dashboard metrics always include archived estimates for accurate stats.
 - **Job Archival**: Automatic job archival when both status='completed' AND paymentStatus='paid'. Features completedAt/paidAt/archivedAt/archivedReason tracking, tryArchiveCompletedPaidJob() helper integrated into all 6 payment success paths and job status update, GET /api/jobs excludes archived by default (includeArchived=true query param available), client history retains all jobs.
+- **Schedule Events (Company Calendar)**: Manager-created calendar events (holidays, meetings, reminders) displayed alongside jobs and estimates on the Schedule page. Features:
+  - Create/Edit/Delete events with title, description, date, time range, all-day toggle, visibility (Everyone/Office Only/Owner Only), and color picker (6 presets)
+  - FAB "+" button for event creation (visible to Owner/Supervisor/Dispatcher only)
+  - Events rendered on Day view timeline with selected color, and as cards in List view with "Event" badge
+  - All-day events displayed in a horizontal strip above the timeline
+  - View Event dialog with Edit/Delete actions (RBAC enforced)
+  - Backend visibility filtering ensures technicians only see "everyone" events
+  - Date range fetching scoped to current week for performance
 - **Auto Clock-Out**: Configurable company setting to automatically close forgotten time entries at a set time, showing an "Auto-closed" tag on Timesheets.
 - **Timesheet Editing (Manager-Only)**: Managers (Owner, Supervisor) can edit time entries to correct mistakes, with audit trail and RBAC enforcement. Edited entries display a blue "Edited" tag.
 - **Notifications System**: In-app notification system with 13 types (job_assigned, job_rescheduled, payment_collected, invoice_paid, estimate_approved, invoice_overdue, dm_message, announcement, etc.), featuring a bell icon with unread badge, slide-over inbox, mark-as-read functionality, click-to-navigate deep linking, and per-type icons. Notifications are role-targeted with configurable deduplication windows (60min default, 24h for overdue). Periodic overdue invoice checker runs every 6 hours. Document-related notifications are excluded.

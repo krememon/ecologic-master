@@ -1,0 +1,158 @@
+Goal: Add “Events” (announcements) directly into the Schedule calendar. User clicks Event → enters Title, Description, Date/Time → hits Save → event appears on that date/time on the Schedule.
+
+1) Database
+
+Create a new table (or collection) for schedule events.
+
+Table: schedule_events
+
+id (uuid or serial)
+
+company_id (required)
+
+created_by_user_id
+
+title (string, required, max ~80)
+
+description (text, optional)
+
+start_at (datetime, required)
+
+end_at (datetime, optional) — if empty, default to +30 mins (or 1 hour)
+
+all_day (boolean, default false)
+
+visibility (string, default "company")
+
+For now: only "company" (everyone in the company can see)
+
+created_at, updated_at
+
+2) RBAC Rules (Hidden, Not Disabled)
+
+Who can create/edit/delete events: Owner/Admin, Dispatcher, Supervisor
+
+Who can view events: everyone in the company (including Technician + Estimator)
+
+If user lacks permission, do not show the Event button.
+
+3) Backend API Routes
+
+Add routes with strict company_id scoping:
+
+GET /api/schedule/events?start=ISO&end=ISO
+
+Returns events within the range (calendar view range).
+
+POST /api/schedule/events
+
+Body: { title, description, start_at, end_at, all_day }
+
+PUT /api/schedule/events/:id
+
+DELETE /api/schedule/events/:id
+
+Important:
+
+Validate title required
+
+Validate start_at required
+
+Force company_id from session/auth (never from client)
+
+Ensure only permitted roles can write/delete
+
+4) Frontend UI (Schedule Page)
+A) Event Button Behavior
+
+You already have the “Event” button (like the screenshot).
+
+Clicking it opens a modal: “Create Event”
+
+B) Create Event Modal Fields
+
+Title (required)
+
+Description (optional)
+
+Date + Time picker for Start
+
+Date + Time picker for End (optional)
+
+Checkbox: “All day”
+
+If checked: hide time pickers, store start at 00:00 and end at 23:59 (or next day 00:00 depending on your calendar library)
+
+Buttons:
+
+Save Event (primary)
+
+Cancel
+
+On Save
+
+Call POST /api/schedule/events
+
+Close modal
+
+Immediately refresh events in calendar (no manual reload)
+
+C) Display on the Calendar
+
+Events should render as blocks on the calendar like normal calendar items.
+
+Keep style consistent with EcoLogic dark UI:
+
+Use a clean pill/card block with:
+
+Title (bold)
+
+Small “Event” label or icon
+
+Clicking an event opens a View Event modal:
+
+Title, description, start/end
+
+If user has permission: Edit + Delete
+
+If not: view-only
+
+5) Calendar Data Loading Strategy
+
+On Schedule page load (and whenever date range changes):
+
+Fetch jobs/crews schedule like you already do
+
+Also fetch events:
+
+GET /api/schedule/events?start=<rangeStart>&end=<rangeEnd>
+
+Merge into the calendar display (events are separate from jobs)
+
+6) Edge Cases / Quality
+
+Timezone: use the same timezone handling you already use in Schedule. Store ISO datetimes.
+
+Prevent double-submit: disable Save while saving.
+
+Validation UI: Title required message.
+
+If event has no description, don’t show empty space.
+
+✅ Deliverables Checklist
+
+DB table + migration for schedule_events
+
+API routes: GET range, POST, PUT, DELETE (company-scoped)
+
+RBAC enforced (button hidden; backend protected)
+
+Schedule UI:
+
+Create Event modal
+
+Calendar displays events on correct date/time
+
+Click event → view modal (edit/delete if allowed)
+
+Confirm refresh works instantly after create/edit/delete

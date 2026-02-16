@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -10,20 +10,47 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { 
-  Calendar, 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { 
+  Calendar as CalendarIcon, 
   ChevronDown, 
   ChevronLeft, 
   ChevronRight, 
   MapPin, 
   SlidersHorizontal,
   List,
-  Map
+  Map,
+  Plus,
+  Pencil,
+  Trash2,
+  Clock,
+  Eye,
 } from "lucide-react";
 import { startOfWeekLocal, addDaysLocal, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
 import { useLocation } from "wouter";
 import { useCan } from "@/hooks/useCan";
 import { ViewOptionsModal, ExtendedViewMode } from "@/components/ViewOptionsModal";
 import { ScheduleMapView } from "@/components/ScheduleMapView";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { ScheduleEvent } from "@shared/schema";
 
 interface JobWithSchedule {
   id: number;
@@ -84,7 +111,7 @@ interface EstimateWithSchedule {
 }
 
 interface ScheduleItem {
-  type: 'job' | 'estimate';
+  type: 'job' | 'estimate' | 'event';
   id: number;
   title: string;
   customerName: string | null;
@@ -96,6 +123,36 @@ interface ScheduleItem {
   customerId?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  eventColor?: string | null;
+  eventDescription?: string | null;
+  eventAllDay?: boolean;
+  eventVisibility?: string;
+}
+
+const EVENT_COLORS = [
+  { value: '#2563EB', label: 'Blue' },
+  { value: '#16A34A', label: 'Green' },
+  { value: '#DC2626', label: 'Red' },
+  { value: '#9333EA', label: 'Purple' },
+  { value: '#EA580C', label: 'Orange' },
+  { value: '#0D9488', label: 'Teal' },
+];
+
+const VISIBILITY_OPTIONS = [
+  { value: 'everyone', label: 'Everyone' },
+  { value: 'office_only', label: 'Office Only' },
+  { value: 'owner_only', label: 'Owner Only' },
+];
+
+interface EventFormState {
+  title: string;
+  description: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  allDay: boolean;
+  visibility: string;
+  color: string;
 }
 
 interface Employee {
@@ -150,13 +207,92 @@ export default function AIScheduling() {
   
   const timelineRef = useRef<HTMLDivElement>(null);
 
+  const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
+  const [isViewEventOpen, setIsViewEventOpen] = useState(false);
+  const [isEditEventOpen, setIsEditEventOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
+  const defaultEventForm: EventFormState = {
+    title: '',
+    description: '',
+    date: dateToYmdLocal(selectedDate),
+    startTime: '09:00',
+    endTime: '10:00',
+    allDay: false,
+    visibility: 'everyone',
+    color: '#2563EB',
+  };
+  const [eventForm, setEventForm] = useState<EventFormState>(defaultEventForm);
+
+  const canManageEvents = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER';
+
   const selectedWeek = useMemo(() => startOfWeekLocal(selectedDate, 0), [selectedDate]);
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
   const selectedDayStr = dateToYmdLocal(selectedDate);
 
+  const weekStart = useMemo(() => `${dateToYmdLocal(weekDates[0])}T00:00:00`, [weekDates]);
+  const weekEnd = useMemo(() => `${dateToYmdLocal(weekDates[6])}T23:59:59`, [weekDates]);
+
   const { data: rawJobs = [] } = useQuery<JobWithSchedule[]>({
     queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
+  });
+
+  const { data: scheduleEventsRaw = [] } = useQuery<ScheduleEvent[]>({
+    queryKey: ["/api/schedule-events", weekStart, weekEnd],
+    queryFn: async () => {
+      const res = await fetch(`/api/schedule-events?start=${weekStart}&end=${weekEnd}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error("Failed to fetch schedule events");
+      return res.json();
+    },
+    enabled: isAuthenticated,
+  });
+
+  const createEventMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest("POST", "/api/schedule-events", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+      setIsCreateEventOpen(false);
+      toast({ title: "Event created" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateEventMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, unknown> }) => {
+      const res = await apiRequest("PUT", `/api/schedule-events/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+      setIsEditEventOpen(false);
+      setIsViewEventOpen(false);
+      toast({ title: "Event updated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/schedule-events/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+      setIsViewEventOpen(false);
+      toast({ title: "Event deleted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
   });
 
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -336,6 +472,18 @@ export default function AIScheduling() {
     });
   }, [estimates, selectedDayStr, selectedMemberIds, memberFilterInitialized]);
 
+  const dailyEvents = useMemo(() => {
+    return scheduleEventsRaw.filter((evt) => {
+      if (!evt.startAt) return false;
+      const evtDate = new Date(evt.startAt);
+      const evtDateStr = dateToYmdLocal(evtDate);
+      return evtDateStr === selectedDayStr;
+    });
+  }, [scheduleEventsRaw, selectedDayStr]);
+
+  const allDayEvents = useMemo(() => dailyEvents.filter(e => e.allDay), [dailyEvents]);
+  const timedEvents = useMemo(() => dailyEvents.filter(e => !e.allDay), [dailyEvents]);
+
   const scheduleItems = useMemo((): ScheduleItem[] => {
     const items: ScheduleItem[] = [];
     
@@ -405,13 +553,41 @@ export default function AIScheduling() {
         longitude: estimate.customerLongitude || null
       });
     });
+
+    timedEvents.forEach(evt => {
+      const startDate = new Date(evt.startAt);
+      const startHH = startDate.getHours().toString().padStart(2, '0');
+      const startMM = startDate.getMinutes().toString().padStart(2, '0');
+      let endHH: string | null = null;
+      let endMM: string | null = null;
+      if (evt.endAt) {
+        const endDate = new Date(evt.endAt);
+        endHH = endDate.getHours().toString().padStart(2, '0');
+        endMM = endDate.getMinutes().toString().padStart(2, '0');
+      }
+
+      items.push({
+        type: 'event',
+        id: evt.id,
+        title: evt.title,
+        customerName: null,
+        scheduledTime: `${startHH}:${startMM}`,
+        scheduledEndTime: endHH && endMM ? `${endHH}:${endMM}` : null,
+        address: null,
+        status: 'event',
+        eventColor: evt.color,
+        eventDescription: evt.description,
+        eventAllDay: evt.allDay,
+        eventVisibility: evt.visibility,
+      });
+    });
     
     return items.sort((a, b) => {
       const timeA = a.scheduledTime || '99:99';
       const timeB = b.scheduledTime || '99:99';
       return timeA.localeCompare(timeB);
     });
-  }, [dailyJobs, dailyEstimates]);
+  }, [dailyJobs, dailyEstimates, timedEvents]);
 
   const jobsByEmployee = useMemo(() => {
     const grouped: Record<string, { employee: { id: string; name: string; profileImageUrl: string | null } | null; jobs: JobWithSchedule[] }> = {};
@@ -517,6 +693,99 @@ export default function AIScheduling() {
     setShowUnscheduledOnMap(options.showUnscheduledOnMap);
     setShowWeekendsOnWeek(options.showWeekendsOnWeek);
   };
+
+  const openCreateEvent = useCallback(() => {
+    setEventForm({
+      ...defaultEventForm,
+      date: dateToYmdLocal(selectedDate),
+    });
+    setIsCreateEventOpen(true);
+  }, [selectedDate]);
+
+  const openViewEvent = useCallback((evt: ScheduleEvent) => {
+    setSelectedEvent(evt);
+    setIsViewEventOpen(true);
+  }, []);
+
+  const openEditEvent = useCallback((evt: ScheduleEvent) => {
+    const start = new Date(evt.startAt);
+    const dateStr = dateToYmdLocal(start);
+    const startTime = `${start.getHours().toString().padStart(2, '0')}:${start.getMinutes().toString().padStart(2, '0')}`;
+    let endTime = '';
+    if (evt.endAt) {
+      const end = new Date(evt.endAt);
+      endTime = `${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`;
+    }
+    setEventForm({
+      title: evt.title,
+      description: evt.description || '',
+      date: dateStr,
+      startTime,
+      endTime,
+      allDay: evt.allDay,
+      visibility: evt.visibility,
+      color: evt.color || '#2563EB',
+    });
+    setSelectedEvent(evt);
+    setIsViewEventOpen(false);
+    setIsEditEventOpen(true);
+  }, []);
+
+  const handleSaveEvent = useCallback(() => {
+    if (!eventForm.title.trim()) return;
+    const startAtStr = eventForm.allDay
+      ? `${eventForm.date}T00:00:00`
+      : `${eventForm.date}T${eventForm.startTime}:00`;
+    let endAtStr: string | null = null;
+    if (!eventForm.allDay && eventForm.endTime) {
+      endAtStr = `${eventForm.date}T${eventForm.endTime}:00`;
+    } else if (eventForm.allDay) {
+      endAtStr = `${eventForm.date}T23:59:59`;
+    }
+    const payload: Record<string, unknown> = {
+      title: eventForm.title.trim().slice(0, 80),
+      description: eventForm.description.trim() || null,
+      startAt: startAtStr,
+      endAt: endAtStr,
+      allDay: eventForm.allDay,
+      visibility: eventForm.visibility,
+      color: eventForm.color,
+    };
+    createEventMutation.mutate(payload);
+  }, [eventForm, createEventMutation]);
+
+  const handleUpdateEvent = useCallback(() => {
+    if (!selectedEvent || !eventForm.title.trim()) return;
+    const startAtStr = eventForm.allDay
+      ? `${eventForm.date}T00:00:00`
+      : `${eventForm.date}T${eventForm.startTime}:00`;
+    let endAtStr: string | null = null;
+    if (!eventForm.allDay && eventForm.endTime) {
+      endAtStr = `${eventForm.date}T${eventForm.endTime}:00`;
+    } else if (eventForm.allDay) {
+      endAtStr = `${eventForm.date}T23:59:59`;
+    }
+    const payload: Record<string, unknown> = {
+      title: eventForm.title.trim().slice(0, 80),
+      description: eventForm.description.trim() || null,
+      startAt: startAtStr,
+      endAt: endAtStr,
+      allDay: eventForm.allDay,
+      visibility: eventForm.visibility,
+      color: eventForm.color,
+    };
+    updateEventMutation.mutate({ id: selectedEvent.id, data: payload });
+  }, [selectedEvent, eventForm, updateEventMutation]);
+
+  const handleDeleteEvent = useCallback(() => {
+    if (!selectedEvent) return;
+    deleteEventMutation.mutate(selectedEvent.id);
+  }, [selectedEvent, deleteEventMutation]);
+
+  const handleEventClick = useCallback((item: ScheduleItem) => {
+    const evt = scheduleEventsRaw.find(e => e.id === item.id);
+    if (evt) openViewEvent(evt);
+  }, [scheduleEventsRaw, openViewEvent]);
 
   const formatTime = (time: string | null) => {
     if (!time) return null;
@@ -826,6 +1095,21 @@ export default function AIScheduling() {
             ref={timelineRef}
             className="h-full overflow-y-auto"
           >
+            {allDayEvents.length > 0 && (
+              <div className="flex gap-2 px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 overflow-x-auto">
+                {allDayEvents.map(evt => (
+                  <button
+                    key={`allday-${evt.id}`}
+                    onClick={() => openViewEvent(evt)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-white whitespace-nowrap cursor-pointer hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: evt.color || '#2563EB' }}
+                  >
+                    <span className="truncate max-w-[140px]">{evt.title}</span>
+                    <span className="text-[10px] opacity-80">All Day</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="relative" style={{ height: `${(END_HOUR - START_HOUR) * HOUR_HEIGHT}px` }}>
               {hours.map((hour, idx) => (
                 <div
@@ -849,9 +1133,22 @@ export default function AIScheduling() {
                   
                   const blockHeight = getBlockHeight(item.scheduledTime, item.scheduledEndTime);
                   const isEstimate = item.type === 'estimate';
-                  const bgClass = isEstimate 
-                    ? 'bg-purple-100 dark:bg-purple-900/30 border-l-4 border-purple-500' 
-                    : `${getStatusColor(item.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(item.status).replace('bg-', 'border-')}`;
+                  const isEvent = item.type === 'event';
+
+                  let bgClass: string;
+                  let blockStyle: Record<string, string> = {};
+                  if (isEvent) {
+                    const c = item.eventColor || '#2563EB';
+                    bgClass = 'border-l-4';
+                    blockStyle = {
+                      backgroundColor: `${c}20`,
+                      borderLeftColor: c,
+                    };
+                  } else if (isEstimate) {
+                    bgClass = 'bg-purple-100 dark:bg-purple-900/30 border-l-4 border-purple-500';
+                  } else {
+                    bgClass = `${getStatusColor(item.status)} bg-opacity-20 dark:bg-opacity-30 border-l-4 ${getStatusColor(item.status).replace('bg-', 'border-')}`;
+                  }
                   
                   const timeDisplay = item.scheduledTime && item.scheduledEndTime
                     ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
@@ -864,34 +1161,49 @@ export default function AIScheduling() {
                   const leftPercent = columnIndex * (widthPercent + gap / 3);
                   
                   const isNarrow = columnCount >= 3;
+
+                  const typeLabel = isEvent ? 'Event' : isEstimate ? 'Estimate' : 'Job';
                   
                   return (
                     <div
                       key={`${item.type}-${item.id}`}
-                      onClick={() => setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`)}
+                      onClick={() => {
+                        if (isEvent) {
+                          handleEventClick(item);
+                        } else {
+                          setLocation(isEstimate ? `/estimates/${item.id}` : `/jobs/${item.id}`);
+                        }
+                      }}
                       className={`absolute rounded-lg cursor-pointer transition-all hover:shadow-md overflow-hidden ${bgClass} ${isNarrow ? 'px-2 py-1' : 'px-3 py-1.5'}`}
                       style={{ 
                         top: `${position}px`,
                         height: `${blockHeight}px`,
                         left: `calc(${leftPercent}% + 8px)`,
                         width: `calc(${widthPercent}% - 8px)`,
+                        ...blockStyle,
                       }}
                     >
                       <div className="flex items-start justify-between gap-1 h-full">
                         <div className="min-w-0 flex-1 overflow-hidden">
                           <div className="flex items-center gap-1">
                             <p className={`font-medium text-slate-900 dark:text-slate-100 truncate ${isNarrow ? 'text-xs' : 'text-sm'}`}>
-                              {item.customerName || item.title}
+                              {isEvent ? item.title : (item.customerName || item.title)}
                             </p>
-                            {isEstimate && !isNarrow && (
-                              <span className="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-200 rounded">
-                                Estimate
+                            {(isEstimate || isEvent) && !isNarrow && (
+                              <span className={`flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                                isEvent
+                                  ? 'text-white'
+                                  : 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-200'
+                              }`}
+                              style={isEvent ? { backgroundColor: item.eventColor || '#2563EB' } : undefined}
+                              >
+                                {typeLabel}
                               </span>
                             )}
                           </div>
                           {item.scheduledTime && (
                             <p className={`text-slate-600 dark:text-slate-400 mt-0.5 ${isNarrow ? 'text-[10px]' : 'text-xs'}`}>
-                              {isNarrow ? timeDisplay : `${isEstimate ? 'Estimate' : 'Job'} • ${timeDisplay}`}
+                              {isNarrow ? timeDisplay : `${typeLabel} • ${timeDisplay}`}
                             </p>
                           )}
                           {blockHeight >= 80 && item.address && !isNarrow && (
@@ -912,71 +1224,116 @@ export default function AIScheduling() {
 
         {viewMode === 'list' && (
           <div className="p-4 space-y-3 min-h-full overflow-y-auto">
-            {layoutItems.length === 0 ? (
+            {layoutItems.length === 0 && allDayEvents.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-slate-500 dark:text-slate-400">
                 <List className="h-16 w-16 mb-4 opacity-30" />
-                <p className="text-lg font-medium">No jobs scheduled</p>
+                <p className="text-lg font-medium">No items scheduled</p>
                 <p className="text-sm">for {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
               </div>
             ) : (
-              [...layoutItems]
-                .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes || (a.title || '').localeCompare(b.title || ''))
-                .map((item) => {
-                  const isEstimate = item.type === 'estimate';
-                  const timeDisplay = item.scheduledTime && item.scheduledEndTime
-                    ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
-                    : formatTime(item.scheduledTime) || 'No time';
-                  
-                  const accentColor = isEstimate ? 'bg-purple-500' : 'bg-green-500';
-                  
-                  return (
-                    <div
-                      key={`${item.type}-${item.id}`}
-                      onClick={() => {
-                        const returnParams = `?from=schedule&view=list&date=${selectedDayStr}`;
-                        setLocation(isEstimate ? `/estimates/${item.id}${returnParams}` : `/jobs/${item.id}${returnParams}`);
-                      }}
-                      className="flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all overflow-hidden"
-                    >
-                      <div className={`w-1.5 flex-shrink-0 ${accentColor}`} />
-                      <div className="flex-1 p-4 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
-                              {item.jobType || item.title || 'Untitled'}
-                            </p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate mt-0.5">
-                              {item.customerName || 'No customer'}
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                              {timeDisplay}
-                            </p>
-                            {item.address && (
-                              <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                                <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                                {item.address}
-                              </p>
-                            )}
-                          </div>
-                          <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded ${
-                            isEstimate 
-                              ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200'
-                              : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
-                          }`}>
-                            {isEstimate ? 'Estimate' : 'Job'}
-                          </span>
+              <>
+                {allDayEvents.map(evt => (
+                  <div
+                    key={`allday-list-${evt.id}`}
+                    onClick={() => openViewEvent(evt)}
+                    className="flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all overflow-hidden"
+                  >
+                    <div className="w-1.5 flex-shrink-0" style={{ backgroundColor: evt.color || '#2563EB' }} />
+                    <div className="flex-1 p-4 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{evt.title}</p>
+                          {evt.description && (
+                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate mt-0.5">{evt.description}</p>
+                          )}
+                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">All Day</p>
                         </div>
+                        <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded text-white" style={{ backgroundColor: evt.color || '#2563EB' }}>
+                          Event
+                        </span>
                       </div>
                     </div>
-                  );
-                })
+                  </div>
+                ))}
+                {[...layoutItems]
+                  .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes || (a.title || '').localeCompare(b.title || ''))
+                  .map((item) => {
+                    const isEstimate = item.type === 'estimate';
+                    const isEvent = item.type === 'event';
+                    const timeDisplay = item.scheduledTime && item.scheduledEndTime
+                      ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
+                      : formatTime(item.scheduledTime) || 'No time';
+
+                    let accentColor: string;
+                    if (isEvent) {
+                      accentColor = '';
+                    } else if (isEstimate) {
+                      accentColor = 'bg-purple-500';
+                    } else {
+                      accentColor = 'bg-green-500';
+                    }
+                    
+                    return (
+                      <div
+                        key={`${item.type}-${item.id}`}
+                        onClick={() => {
+                          if (isEvent) {
+                            handleEventClick(item);
+                          } else {
+                            const returnParams = `?from=schedule&view=list&date=${selectedDayStr}`;
+                            setLocation(isEstimate ? `/estimates/${item.id}${returnParams}` : `/jobs/${item.id}${returnParams}`);
+                          }
+                        }}
+                        className="flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-750 transition-all overflow-hidden"
+                      >
+                        <div
+                          className={`w-1.5 flex-shrink-0 ${accentColor}`}
+                          style={isEvent ? { backgroundColor: item.eventColor || '#2563EB' } : undefined}
+                        />
+                        <div className="flex-1 p-4 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                                {isEvent ? item.title : (item.jobType || item.title || 'Untitled')}
+                              </p>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                                {isEvent ? (item.eventDescription || '') : (item.customerName || 'No customer')}
+                              </p>
+                              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                {timeDisplay}
+                              </p>
+                              {item.address && (
+                                <p className="text-sm text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                                  {item.address}
+                                </p>
+                              )}
+                            </div>
+                            <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded ${
+                              isEvent 
+                                ? 'text-white'
+                                : isEstimate 
+                                  ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200'
+                                  : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
+                            }`}
+                            style={isEvent ? { backgroundColor: item.eventColor || '#2563EB' } : undefined}
+                            >
+                              {isEvent ? 'Event' : isEstimate ? 'Estimate' : 'Job'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+              </>
             )}
           </div>
         )}
 
         {viewMode === 'week' && (
           <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">
-            <Calendar className="h-16 w-16 mb-4 opacity-30" />
+            <CalendarIcon className="h-16 w-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">Week View</p>
             <p className="text-sm">Coming soon</p>
           </div>
@@ -1017,6 +1374,286 @@ export default function AIScheduling() {
         isTechnician={role === 'TECHNICIAN'}
         currentUserId={user?.id}
       />
+
+      {canManageEvents && (
+        <button
+          onClick={openCreateEvent}
+          className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
+
+      <Dialog open={isCreateEventOpen} onOpenChange={setIsCreateEventOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Event</DialogTitle>
+            <DialogDescription>Add a new event to the company calendar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="event-title">Title *</Label>
+              <Input
+                id="event-title"
+                maxLength={80}
+                value={eventForm.title}
+                onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="Event title"
+              />
+            </div>
+            <div>
+              <Label htmlFor="event-desc">Description</Label>
+              <Textarea
+                id="event-desc"
+                value={eventForm.description}
+                onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Optional description"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label htmlFor="event-date">Date</Label>
+              <Input
+                id="event-date"
+                type="date"
+                value={eventForm.date}
+                onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="event-allday">All Day</Label>
+              <Switch
+                id="event-allday"
+                checked={eventForm.allDay}
+                onCheckedChange={v => setEventForm(f => ({ ...f, allDay: v }))}
+              />
+            </div>
+            {!eventForm.allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="event-start">Start Time</Label>
+                  <Input
+                    id="event-start"
+                    type="time"
+                    value={eventForm.startTime}
+                    onChange={e => setEventForm(f => ({ ...f, startTime: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="event-end">End Time</Label>
+                  <Input
+                    id="event-end"
+                    type="time"
+                    value={eventForm.endTime}
+                    onChange={e => setEventForm(f => ({ ...f, endTime: e.target.value }))}
+                  />
+                </div>
+              </div>
+            )}
+            <div>
+              <Label>Visibility</Label>
+              <Select value={eventForm.visibility} onValueChange={v => setEventForm(f => ({ ...f, visibility: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VISIBILITY_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Color</Label>
+              <div className="flex gap-2 mt-1.5">
+                {EVENT_COLORS.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setEventForm(f => ({ ...f, color: c.value }))}
+                    className={`w-8 h-8 rounded-full transition-all ${eventForm.color === c.value ? 'ring-2 ring-offset-2 ring-blue-600' : 'hover:scale-110'}`}
+                    style={{ backgroundColor: c.value }}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleSaveEvent}
+              disabled={!eventForm.title.trim() || createEventMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {createEventMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditEventOpen} onOpenChange={setIsEditEventOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Event</DialogTitle>
+            <DialogDescription>Update event details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="edit-event-title">Title *</Label>
+              <Input
+                id="edit-event-title"
+                maxLength={80}
+                value={eventForm.title}
+                onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="Event title"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-event-desc">Description</Label>
+              <Textarea
+                id="edit-event-desc"
+                value={eventForm.description}
+                onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Optional description"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-event-date">Date</Label>
+              <Input
+                id="edit-event-date"
+                type="date"
+                value={eventForm.date}
+                onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="edit-event-allday">All Day</Label>
+              <Switch
+                id="edit-event-allday"
+                checked={eventForm.allDay}
+                onCheckedChange={v => setEventForm(f => ({ ...f, allDay: v }))}
+              />
+            </div>
+            {!eventForm.allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="edit-event-start">Start Time</Label>
+                  <Input
+                    id="edit-event-start"
+                    type="time"
+                    value={eventForm.startTime}
+                    onChange={e => setEventForm(f => ({ ...f, startTime: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-event-end">End Time</Label>
+                  <Input
+                    id="edit-event-end"
+                    type="time"
+                    value={eventForm.endTime}
+                    onChange={e => setEventForm(f => ({ ...f, endTime: e.target.value }))}
+                  />
+                </div>
+              </div>
+            )}
+            <div>
+              <Label>Visibility</Label>
+              <Select value={eventForm.visibility} onValueChange={v => setEventForm(f => ({ ...f, visibility: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VISIBILITY_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Color</Label>
+              <div className="flex gap-2 mt-1.5">
+                {EVENT_COLORS.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setEventForm(f => ({ ...f, color: c.value }))}
+                    className={`w-8 h-8 rounded-full transition-all ${eventForm.color === c.value ? 'ring-2 ring-offset-2 ring-blue-600' : 'hover:scale-110'}`}
+                    style={{ backgroundColor: c.value }}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleUpdateEvent}
+              disabled={!eventForm.title.trim() || updateEventMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {updateEventMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isViewEventOpen} onOpenChange={setIsViewEventOpen}>
+        <DialogContent className="rounded-2xl max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedEvent?.color || '#2563EB' }} />
+              {selectedEvent?.title}
+            </DialogTitle>
+            <DialogDescription>Event details</DialogDescription>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-3 py-2">
+              {selectedEvent.description && (
+                <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEvent.description}</p>
+              )}
+              <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <Clock className="h-4 w-4" />
+                {selectedEvent.allDay ? (
+                  <span>All Day – {new Date(selectedEvent.startAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                ) : (
+                  <span>
+                    {new Date(selectedEvent.startAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    {selectedEvent.endAt && ` – ${new Date(selectedEvent.endAt).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <Eye className="h-4 w-4" />
+                <span>{VISIBILITY_OPTIONS.find(v => v.value === selectedEvent.visibility)?.label || selectedEvent.visibility}</span>
+              </div>
+              {canManageEvents && (
+                <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditEvent(selectedEvent)}
+                    className="flex items-center gap-1"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDeleteEvent}
+                    disabled={deleteEventMutation.isPending}
+                    className="flex items-center gap-1"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deleteEventMutation.isPending ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

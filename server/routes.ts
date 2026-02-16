@@ -26,7 +26,7 @@ import { Resend } from "resend";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createCanvas } from "canvas";
 import { aiScheduler } from "./ai-scheduler";
-import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates, crewAssignments } from "../shared/schema";
+import { insertJobSchema, finalizeJobSchema, insertCustomerSchema, insertScheduleEventSchema, type UserRole, companyMembers, jobs, scheduleItems, clients, customers, subcontractors, users, sessions, conversations, conversationParticipants, messages, signatureRequests, jobLineItems, companyCounters, estimates, crewAssignments } from "../shared/schema";
 import { z } from "zod";
 import { can, type Permission } from "../shared/permissions";
 import { 
@@ -14188,6 +14188,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[BankRefund] Error sending refund:", error.message);
       res.status(500).json({ message: "Failed to send bank refund" });
+    }
+  });
+
+  // ========== Schedule Events ==========
+
+  app.get("/api/schedule-events", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company" });
+
+      const start = req.query.start ? new Date(req.query.start as string) : undefined;
+      const end = req.query.end ? new Date(req.query.end as string) : undefined;
+
+      const events = await storage.getScheduleEventsByCompany(user.companyId, start, end);
+
+      const filtered = events.filter(e => {
+        if (e.visibility === "everyone") return true;
+        if (e.visibility === "office_only") return ["owner", "supervisor", "dispatcher"].includes(user.role);
+        if (e.visibility === "owner_only") return user.role === "owner";
+        return true;
+      });
+
+      res.json(filtered);
+    } catch (error: any) {
+      console.error("[ScheduleEvents] Error fetching:", error.message);
+      res.status(500).json({ message: "Failed to fetch schedule events" });
+    }
+  });
+
+  app.post("/api/schedule-events", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company" });
+      if (!["owner", "supervisor", "dispatcher"].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const parsed = insertScheduleEventSchema.parse({
+        ...req.body,
+        companyId: user.companyId,
+        createdByUserId: user.id,
+      });
+
+      const event = await storage.createScheduleEvent(parsed);
+      res.status(201).json(event);
+    } catch (error: any) {
+      console.error("[ScheduleEvents] Error creating:", error.message);
+      res.status(400).json({ message: error.message || "Failed to create event" });
+    }
+  });
+
+  app.put("/api/schedule-events/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company" });
+      if (!["owner", "supervisor", "dispatcher"].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const eventId = parseInt(req.params.id);
+      const existing = await storage.getScheduleEvent(eventId);
+      if (!existing || existing.companyId !== user.companyId) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+
+      const updated = await storage.updateScheduleEvent(eventId, req.body);
+      res.json(updated);
+    } catch (error: any) {
+      console.error("[ScheduleEvents] Error updating:", error.message);
+      res.status(500).json({ message: "Failed to update event" });
+    }
+  });
+
+  app.delete("/api/schedule-events/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = req.user;
+      if (!user.companyId) return res.status(400).json({ message: "No company" });
+      if (!["owner", "supervisor", "dispatcher"].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const eventId = parseInt(req.params.id);
+      const existing = await storage.getScheduleEvent(eventId);
+      if (!existing || existing.companyId !== user.companyId) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+
+      await storage.deleteScheduleEvent(eventId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("[ScheduleEvents] Error deleting:", error.message);
+      res.status(500).json({ message: "Failed to delete event" });
     }
   });
 
