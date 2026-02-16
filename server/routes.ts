@@ -11163,7 +11163,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
       
-      // RBAC: Only Owner/Supervisor can delete invoices
       if (userRole !== 'OWNER' && userRole !== 'SUPERVISOR') {
         return res.status(403).json({ message: "You do not have permission to delete invoices" });
       }
@@ -11174,24 +11173,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "invoiceIds array is required" });
       }
       
-      let deletedCount = 0;
-      const deletedIds: number[] = [];
+      let hardDeletedCount = 0;
+      let softDeletedCount = 0;
+      let skippedCount = 0;
+      const errors: string[] = [];
       
       for (const invoiceId of invoiceIds) {
-        const invoice = await storage.getInvoice(invoiceId);
-        
-        // Skip if invoice doesn't exist or belongs to different company
-        if (!invoice || invoice.companyId !== company.id) {
-          continue;
+        try {
+          const invoice = await storage.getInvoice(invoiceId);
+          
+          if (!invoice || invoice.companyId !== company.id) {
+            skippedCount++;
+            continue;
+          }
+          
+          const hasRefs = await storage.invoiceHasFinancialRefs(invoiceId);
+          const isPaidOrPartial = invoice.status === 'paid' || invoice.status === 'partial';
+          
+          if (hasRefs || isPaidOrPartial) {
+            await storage.softDeleteInvoice(invoiceId, 'has_financial_records');
+            softDeletedCount++;
+          } else {
+            await storage.deleteInvoice(invoiceId);
+            hardDeletedCount++;
+          }
+        } catch (err: any) {
+          errors.push(`Invoice ${invoiceId}: ${err.message || 'unknown error'}`);
         }
-        
-        await storage.deleteInvoice(invoiceId);
-        deletedCount++;
-        deletedIds.push(invoiceId);
       }
       
-      console.log(`[Invoice] Bulk deleted ${deletedCount} invoices`, { userId, deletedIds });
-      res.json({ success: true, deletedCount, deletedIds });
+      const totalRemoved = hardDeletedCount + softDeletedCount;
+      console.log(`[Invoice] Bulk delete: hard=${hardDeletedCount} soft=${softDeletedCount} skipped=${skippedCount}`, { userId });
+      res.json({ success: true, hardDeletedCount, softDeletedCount, skippedCount, deletedCount: totalRemoved, errors });
     } catch (error) {
       console.error("Error bulk deleting invoices:", error);
       res.status(500).json({ message: "Failed to delete invoices" });

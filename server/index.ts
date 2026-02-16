@@ -836,7 +836,8 @@ async function checkOverdueInvoices() {
           lt(invoices.dueDate, today),
           ne(invoices.status, 'paid'),
           ne(invoices.status, 'cancelled'),
-          sql`${invoices.balanceDueCents} > 0`
+          sql`${invoices.balanceDueCents} > 0`,
+          isNull(invoices.deletedAt)
         )
       );
 

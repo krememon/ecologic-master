@@ -30,6 +30,7 @@ import {
   leads,
   timeLogs,
   notifications,
+  refunds,
   type User,
   type UpsertUser,
   type Company,
@@ -114,7 +115,7 @@ import {
   type InsertPayoutSetupToken,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, inArray, gte, lte, isNotNull, ne } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
 import crypto from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations
@@ -226,6 +227,8 @@ export interface IStorage {
   updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice>;
   updateInvoiceSecure(id: number, companyId: number, invoice: Partial<InsertInvoice>): Promise<Invoice | null>;
   deleteInvoice(id: number): Promise<void>;
+  softDeleteInvoice(id: number, reason: string): Promise<void>;
+  invoiceHasFinancialRefs(invoiceId: number): Promise<boolean>;
   
   // Document operations
   getDocuments(companyId: number): Promise<any[]>;
@@ -726,7 +729,7 @@ export class DatabaseStorage implements IStorage {
     const allInvoices = await db
       .select()
       .from(invoices)
-      .where(eq(invoices.companyId, companyId));
+      .where(and(eq(invoices.companyId, companyId), isNull(invoices.deletedAt)));
     
     let pendingTotalCents = 0;
     for (const inv of allInvoices) {
@@ -804,7 +807,7 @@ export class DatabaseStorage implements IStorage {
     const allInvoices = await db
       .select()
       .from(invoices)
-      .where(eq(invoices.companyId, companyId));
+      .where(and(eq(invoices.companyId, companyId), isNull(invoices.deletedAt)));
     
     let stillOwedTotalCents = 0;
     let overdueCount = 0;
@@ -1364,7 +1367,7 @@ export class DatabaseStorage implements IStorage {
         status: invoices.status,
       })
       .from(invoices)
-      .where(inArray(invoices.jobId, jobIds));
+      .where(and(inArray(invoices.jobId, jobIds), isNull(invoices.deletedAt)));
     
     // Build map of job -> isPaid and invoicePaymentStatus
     const paidStatusByJob: Record<number, boolean> = {};
@@ -1689,7 +1692,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(clients, eq(invoices.clientId, clients.id))
       .leftJoin(jobs, eq(invoices.jobId, jobs.id))
       .leftJoin(customers, eq(invoices.customerId, customers.id))
-      .where(eq(invoices.companyId, companyId))
+      .where(and(eq(invoices.companyId, companyId), isNull(invoices.deletedAt)))
       .orderBy(desc(invoices.createdAt));
   }
 
@@ -1843,7 +1846,7 @@ export class DatabaseStorage implements IStorage {
         updatedAt: invoices.updatedAt,
       })
       .from(invoices)
-      .where(and(eq(invoices.jobId, jobId), eq(invoices.companyId, companyId)));
+      .where(and(eq(invoices.jobId, jobId), eq(invoices.companyId, companyId), isNull(invoices.deletedAt)));
     return invoice || null;
   }
 
@@ -1872,6 +1875,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvoice(id: number): Promise<void> {
     await db.delete(invoices).where(eq(invoices.id, id));
+  }
+
+  async softDeleteInvoice(id: number, reason: string): Promise<void> {
+    await db.update(invoices).set({
+      deletedAt: new Date(),
+      deletedReason: reason,
+    }).where(eq(invoices.id, id));
+  }
+
+  async invoiceHasFinancialRefs(invoiceId: number): Promise<boolean> {
+    const [paymentRef] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(eq(payments.invoiceId, invoiceId))
+      .limit(1);
+    if (paymentRef) return true;
+
+    const [refundRef] = await db
+      .select({ id: refunds.id })
+      .from(refunds)
+      .where(eq(refunds.invoiceId, invoiceId))
+      .limit(1);
+    if (refundRef) return true;
+
+    return false;
   }
 
   async getDocuments(companyId: number): Promise<any[]> {
@@ -2248,7 +2276,7 @@ export class DatabaseStorage implements IStorage {
     const outstandingInvoicesCount = await db
       .select({ count: sql`count(*)` })
       .from(invoices)
-      .where(and(eq(invoices.companyId, companyId), eq(invoices.status, "pending")));
+      .where(and(eq(invoices.companyId, companyId), eq(invoices.status, "pending"), isNull(invoices.deletedAt)));
 
     const availableSubcontractorsCount = await db
       .select({ count: sql`count(*)` })
@@ -2262,6 +2290,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(invoices.companyId, companyId),
           eq(invoices.status, "paid"),
+          isNull(invoices.deletedAt),
           sql`DATE_TRUNC('month', issue_date) = DATE_TRUNC('month', CURRENT_DATE)`
         )
       );
