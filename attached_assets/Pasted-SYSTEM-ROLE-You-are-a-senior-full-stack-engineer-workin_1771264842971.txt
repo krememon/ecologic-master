@@ -1,0 +1,80 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Do not refactor unrelated areas.
+Fix the root cause for “400: No company” when saving an Event.
+Preserve RBAC + “company-scoped source of truth” rules.
+
+TASK:
+Fix Create Event save failing with: 400 {"message":"No company"}.
+
+CONTEXT:
+When saving an event from the Create Event modal, the API returns 400 “No company”. This indicates the backend cannot resolve `company_id` from the authenticated session/context, or the frontend request is not including credentials so the server sees no session.
+
+REQUIREMENTS:
+- Saving an event must work for logged-in users with a valid company.
+- Event must always be created under the user’s current company (company_id must come from auth/session, not user input).
+- If the user truly has no company, show a friendly UI message and block save.
+- No security regression: do NOT allow client to pass arbitrary company_id.
+
+BACKEND CHANGES:
+1) Identify the events create route handler:
+   - `POST /api/schedule/events` (or your actual path)
+2) Fix company resolution:
+   - Use the SAME company lookup method used by Jobs/Estimates/Invoices creation routes.
+   - Examples of correct patterns (use whatever exists in codebase):
+     - `req.user.companyId`
+     - `req.session.companyId`
+     - `getCompanyIdFromRequest(req)`
+     - `requireCompany(req)` middleware
+3) Ensure the route includes the same auth + company middleware as other company-scoped routes:
+   - Add `requireAuth`
+   - Add `requireCompany` (or equivalent)
+4) Improve the error response (keep status 400 or 401/403 consistent with your API):
+   - If no company in session/user context, return:
+     - `{ message: "No company selected" }` or `{ message: "No company" }`
+   - BUT also log enough debug info on server to identify why:
+     - user id, session presence, companyId values (do not log secrets)
+
+FRONTEND CHANGES:
+1) Ensure the POST request includes credentials/session:
+   - Compare how Jobs/Estimates/Invoices POST requests are made.
+   - If you use `fetch`, ensure:
+     - `credentials: "include"`
+   - If you use axios, ensure:
+     - `withCredentials: true`
+   - Many times this exact “No company” happens because the request is missing cookies.
+2) Ensure the Create Event modal uses the same API client wrapper as the rest of the app:
+   - If Jobs use `apiClient.post(...)`, Events must use that too (not raw fetch without credentials).
+3) Add a client-side guard:
+   - If the user context has no company selected (e.g. `currentCompany` is null), disable Save and show:
+     - “You need to select a company before creating an event.”
+   - This is just UX; backend still must enforce company scoping.
+
+RBAC / PERMISSIONS:
+- Keep existing rules:
+  - Only permitted roles can create events
+- If a non-permitted role attempts save, return 403 and show a clean toast.
+
+EDGE CASES:
+- Multi-company users (if supported):
+  - Ensure the “active company” selection is what drives creation (same as Jobs).
+- Token/session expiration:
+  - If not logged in, return 401 and prompt login.
+
+DEBUG / VERIFICATION:
+1) Add temporary logs (remove after fix):
+   - Server: log `req.user?.id`, `req.user?.companyId`, `req.session?.companyId`
+   - Client: log request path + whether api client is used
+2) Re-test:
+   - Open Create Event → fill fields → Save
+   - Confirm status 200/201
+   - Confirm event appears on calendar immediately
+3) Regression check:
+   - Jobs/Estimates/Invoices create still work
+   - Events GET still works with company scoping
+
+DELIVERABLES:
+- “Save Event” successfully creates an event (no 400 No company).
+- Requests use the standard authenticated API client (cookies included).
+- Friendly UI message if user truly has no company.
+- Remove temporary logs after confirmation.

@@ -14195,18 +14195,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/schedule-events", isAuthenticated, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) return res.status(400).json({ message: "No company" });
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: "Not a company member" });
 
       const start = req.query.start ? new Date(req.query.start as string) : undefined;
       const end = req.query.end ? new Date(req.query.end as string) : undefined;
 
-      const events = await storage.getScheduleEventsByCompany(user.companyId, start, end);
+      const events = await storage.getScheduleEventsByCompany(member.companyId, start, end);
 
+      const memberRole = member.role.toLowerCase();
       const filtered = events.filter(e => {
         if (e.visibility === "everyone") return true;
-        if (e.visibility === "office_only") return ["owner", "supervisor", "dispatcher"].includes(user.role);
-        if (e.visibility === "owner_only") return user.role === "owner";
+        if (e.visibility === "office_only") return ["owner", "supervisor", "dispatcher"].includes(memberRole);
+        if (e.visibility === "owner_only") return memberRole === "owner";
         return true;
       });
 
@@ -14219,16 +14221,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/schedule-events", isAuthenticated, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) return res.status(400).json({ message: "No company" });
-      if (!["owner", "supervisor", "dispatcher"].includes(user.role)) {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: "Not a company member" });
+      const memberRole = member.role.toLowerCase();
+      if (!["owner", "supervisor", "dispatcher"].includes(memberRole)) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
       const parsed = insertScheduleEventSchema.parse({
         ...req.body,
-        companyId: user.companyId,
-        createdByUserId: user.id,
+        companyId: member.companyId,
+        createdByUserId: userId,
       });
 
       const event = await storage.createScheduleEvent(parsed);
@@ -14241,15 +14245,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/schedule-events/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) return res.status(400).json({ message: "No company" });
-      if (!["owner", "supervisor", "dispatcher"].includes(user.role)) {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: "Not a company member" });
+      const memberRole = member.role.toLowerCase();
+      if (!["owner", "supervisor", "dispatcher"].includes(memberRole)) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
       const eventId = parseInt(req.params.id);
       const existing = await storage.getScheduleEvent(eventId);
-      if (!existing || existing.companyId !== user.companyId) {
+      if (!existing || existing.companyId !== member.companyId) {
         return res.status(404).json({ message: "Event not found" });
       }
 
@@ -14263,15 +14269,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/schedule-events/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const user = req.user;
-      if (!user.companyId) return res.status(400).json({ message: "No company" });
-      if (!["owner", "supervisor", "dispatcher"].includes(user.role)) {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(403).json({ message: "Not a company member" });
+      const memberRole = member.role.toLowerCase();
+      if (!["owner", "supervisor", "dispatcher"].includes(memberRole)) {
         return res.status(403).json({ message: "Not authorized" });
       }
 
       const eventId = parseInt(req.params.id);
       const existing = await storage.getScheduleEvent(eventId);
-      if (!existing || existing.companyId !== user.companyId) {
+      if (!existing || existing.companyId !== member.companyId) {
         return res.status(404).json({ message: "Event not found" });
       }
 
