@@ -171,7 +171,7 @@ export default function QuickBooksSettings() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-lg flex items-center justify-center">
-              <img src={quickbooksLogo} alt="QuickBooks" className="w-10 h-10 object-contain" />
+              <img src={quickbooksLogo} alt="QuickBooks" className="w-12 h-12 object-contain" />
             </div>
             <div>
               <CardTitle className="text-lg">QuickBooks Online</CardTitle>
