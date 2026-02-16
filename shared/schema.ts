@@ -1819,7 +1819,7 @@ export const paymentSignatures = pgTable("payment_signatures", {
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "set null" }),
   invoiceId: integer("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
   paymentId: integer("payment_id").notNull().references(() => payments.id, { onDelete: "cascade" }).unique(),
-  signedByName: varchar("signed_by_name", { length: 255 }).notNull(),
+  signedByName: varchar("signed_by_name", { length: 255 }).default(""),
   signaturePngBase64: text("signature_png_base64").notNull(),
   signedAt: timestamp("signed_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow(),

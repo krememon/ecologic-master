@@ -1,0 +1,112 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Implement a mandatory, always-on post-payment signature capture flow.
+Do not rely on any toggle in Customize/Settings.
+Do not break any payment flow (manual cash, Stripe, partial/refunds).
+Keep RBAC and “hidden not disabled” patterns.
+No success toasts; errors only.
+
+TASK:
+Make signature capture ALWAYS required after a successful payment, and remove the “Printed Name” field from the signature modal.
+
+CONTEXT:
+Signature capture is currently controlled by a company setting (Customize > Payment Settings). The user does not want a toggle. They want signature capture to be mandatory for every successful payment. Also, they want to remove the Printed Name input completely.
+
+REQUIREMENTS:
+- Signature modal must ALWAYS appear immediately after a payment is successful:
+  - Manual cash payment success (POST /api/payments/manual)
+  - Stripe payment success (whatever flow marks payment as Paid)
+  - Only trigger when payment status becomes fully “paid” (NOT unpaid/failed/partial unless explicitly marked fully paid)
+- No settings toggle required:
+  - Remove dependency on /api/settings/payments.requireSignatureAfterPayment
+  - Optionally remove the toggle UI entirely (or hide it) so it doesn’t confuse.
+- Remove “Printed Name” field:
+  - No printed name input
+  - Save button should be enabled once there is ink on the signature pad
+- Must prevent duplicates:
+  - If a signature already exists for that paymentId, do not prompt again.
+- Must not be skippable:
+  - Remove any “Skip/Close” behavior that bypasses signature if payment just succeeded.
+  - Close “X” should be disabled until signature is saved (for the immediate post-success modal).
+- Keep a recovery path:
+  - If user refreshes/navigates away before signing:
+    - Show a persistent banner on the Payment/Job screen: “Signature required” with a button to reopen capture.
+    - But do not let the payment be considered fully “complete” in UI without signature indicator.
+
+FRONTEND CHANGES:
+1) Remove settings gating:
+   - Find all checks like:
+     - `if (!requireSignatureAfterPayment) return;`
+   - Delete them.
+   - Ensure the post-payment trigger always runs when a payment becomes “paid”.
+
+2) Trigger points (must cover both):
+   A) Manual cash payment:
+   - Immediately after POST /api/payments/manual returns success and paymentId is known:
+     - Call `openSignatureCapture({ paymentId, jobId, invoiceId })`
+
+   B) Stripe payment:
+   - Wherever the UI transitions a payment to “paid” (after success confirmation/refetch):
+     - Call the same `openSignatureCapture(...)`
+
+3) Update Signature modal UI:
+   - Remove Printed Name label + input entirely.
+   - Validation:
+     - Save button disabled until signature pad has ink.
+   - Disable close X until saved when opened as “required-after-payment”.
+
+4) Recovery persistence:
+   - Store pending signature requirement in localStorage:
+     - `pendingSignaturePaymentId=<id>`
+   - On page load of Payments/Job payment view:
+     - If pendingSignaturePaymentId exists and signature not saved:
+       - Show banner + allow reopening modal
+   - Clear localStorage on successful save.
+
+BACKEND CHANGES:
+1) Signature save endpoint:
+   - Ensure the signature record no longer requires `signedByName`.
+   - If DB column is non-null:
+     - Make it nullable OR store empty string.
+   - Update validation schema accordingly.
+
+2) Signature uniqueness:
+   - Ensure one signature per paymentId (unique constraint or check).
+   - If signature already exists, return it (so UI won’t re-prompt).
+
+3) (Optional but recommended) Payment “signature required” indicator:
+   - Add a boolean in payment response payload:
+     - `signatureCaptured: true/false`
+   - Use it to render UI indicators and to prevent re-opening.
+
+EDGE CASES:
+- Partial payments:
+  - Do NOT force signature after partial unless you explicitly treat partial as “paid”.
+  - Only trigger when status becomes fully paid.
+- If save fails:
+  - Show error toast/message
+  - Keep modal open (do not allow closing)
+- Mobile:
+  - Prevent scrolling while signing
+  - Ensure canvas size fits the modal
+
+TESTING STEPS:
+1) Make a manual cash payment on an invoice:
+   - Signature modal must open automatically with NO settings changes.
+2) Try closing via X:
+   - Should be disabled until signature is saved.
+3) Draw signature → Save:
+   - Modal closes
+   - No success toast
+   - Payment shows “Signature captured”
+4) Refresh before saving:
+   - Banner appears “Signature required” and opens modal again.
+5) Repeat payment where signature already exists:
+   - Modal should NOT open.
+
+DELIVERABLES:
+- Signature capture is mandatory and always triggers after successful payment (no toggle).
+- Printed Name field removed completely.
+- Close X disabled until signature saved in required flow.
+- Recovery banner + localStorage persistence implemented.
+- No regressions in payment flows.

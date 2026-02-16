@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 const PENDING_SIG_KEY = "pendingSignaturePaymentId";
 const PENDING_SIG_META_KEY = "pendingSignatureMeta";
@@ -52,37 +51,24 @@ export function useSignatureAfterPayment() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingSignatureMeta | null>(null);
   const triggeredRef = useRef<number | null>(null);
-  const queuedRef = useRef<PendingSignatureMeta | null>(null);
-
-  const { data: paymentSettings, isLoading: settingsLoading } = useQuery<{ requireSignatureAfterPayment: boolean }>({
-    queryKey: ['/api/settings/payments'],
-  });
-
-  const isEnabled = paymentSettings?.requireSignatureAfterPayment === true;
-  const settingsResolved = !settingsLoading && paymentSettings !== undefined;
 
   const openModal = useCallback(async (meta: PendingSignatureMeta) => {
     if (triggeredRef.current === meta.paymentId) {
-      console.log("[SignatureAfterPay] already triggered for paymentId", meta.paymentId);
       return;
     }
 
     const { isPaid, hasSignature } = await verifyPaymentAndSignature(meta.paymentId);
-    console.log("[SignatureAfterPay] shouldPrompt?", { requireSigSetting: true, isPaid, hasSignature, paymentId: meta.paymentId });
 
     if (!isPaid) {
-      console.log("[SignatureAfterPay] payment not found/not paid, skipping");
       clearPendingFromStorage();
       return;
     }
 
     if (hasSignature) {
-      console.log("[SignatureAfterPay] signature already exists, skipping");
       clearPendingFromStorage();
       return;
     }
 
-    console.log("[SignatureAfterPay] opening signature modal");
     triggeredRef.current = meta.paymentId;
     setPendingPayment(meta);
     setPendingInStorage(meta);
@@ -90,46 +76,11 @@ export function useSignatureAfterPayment() {
   }, []);
 
   const triggerSignature = useCallback(async (meta: PendingSignatureMeta) => {
-    console.log("[SignatureAfterPay] triggerSignature called", meta);
-
     setPendingInStorage(meta);
-
-    if (!settingsResolved) {
-      console.log("[SignatureAfterPay] settings not yet loaded, queuing for later");
-      queuedRef.current = meta;
-      setPendingPayment(meta);
-      return;
-    }
-
-    if (!isEnabled) {
-      console.log("[SignatureAfterPay] setting is OFF, skipping");
-      clearPendingFromStorage();
-      return;
-    }
-
     await openModal(meta);
-  }, [settingsResolved, isEnabled, openModal]);
-
-  useEffect(() => {
-    if (!settingsResolved) return;
-
-    if (queuedRef.current) {
-      const queued = queuedRef.current;
-      queuedRef.current = null;
-
-      if (isEnabled) {
-        console.log("[SignatureAfterPay] settings loaded, processing queued trigger", queued);
-        openModal(queued);
-      } else {
-        console.log("[SignatureAfterPay] settings loaded but feature OFF, clearing queue");
-        clearPendingFromStorage();
-        setPendingPayment(null);
-      }
-    }
-  }, [settingsResolved, isEnabled, openModal]);
+  }, [openModal]);
 
   const onSignatureComplete = useCallback(() => {
-    console.log("[SignatureAfterPay] signature completed, cleaning up");
     setIsModalOpen(false);
     setPendingPayment(null);
     clearPendingFromStorage();
@@ -140,24 +91,19 @@ export function useSignatureAfterPayment() {
   }, []);
 
   useEffect(() => {
-    if (!settingsResolved || !isEnabled) return;
-
     const stored = getPendingFromStorage();
     if (!stored) return;
     if (triggeredRef.current === stored.paymentId) return;
 
-    console.log("[SignatureAfterPay] found pending signature in storage on mount", stored);
-
     (async () => {
-      const { hasSignature } = await verifyPaymentAndSignature(stored.paymentId);
-      if (hasSignature) {
-        console.log("[SignatureAfterPay] signature already captured, clearing pending");
+      const { isPaid, hasSignature } = await verifyPaymentAndSignature(stored.paymentId);
+      if (!isPaid || hasSignature) {
         clearPendingFromStorage();
         return;
       }
       setPendingPayment(stored);
     })();
-  }, [settingsResolved, isEnabled]);
+  }, []);
 
   const hasPendingSignature = pendingPayment !== null && !isModalOpen;
 
@@ -172,8 +118,6 @@ export function useSignatureAfterPayment() {
     isModalOpen,
     pendingPayment,
     hasPendingSignature,
-    settingsLoading,
-    isEnabled,
     triggerSignature,
     onSignatureComplete,
     onModalDismiss,

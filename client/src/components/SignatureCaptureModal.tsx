@@ -3,7 +3,6 @@ import { useMutation } from "@tanstack/react-query";
 import SignatureCanvas from "react-signature-canvas";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { X, Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +28,6 @@ export function SignatureCaptureModal({
 }: SignatureCaptureModalProps) {
   const { toast } = useToast();
   const sigRef = useRef<SignatureCanvas>(null);
-  const [printedName, setPrintedName] = useState("");
   const [hasDrawn, setHasDrawn] = useState(false);
 
   const saveMutation = useMutation({
@@ -37,12 +35,8 @@ export function SignatureCaptureModal({
       if (!sigRef.current || sigRef.current.isEmpty()) {
         throw new Error("Please draw your signature");
       }
-      if (!printedName.trim()) {
-        throw new Error("Please enter your printed name");
-      }
       const signaturePngBase64 = sigRef.current.toDataURL("image/png");
       await apiRequest("POST", `/api/payments/${paymentId}/signature`, {
-        signedByName: printedName.trim(),
         signaturePngBase64,
         jobId,
         invoiceId,
@@ -59,7 +53,6 @@ export function SignatureCaptureModal({
   });
 
   const resetState = useCallback(() => {
-    setPrintedName("");
     setHasDrawn(false);
     sigRef.current?.clear();
   }, []);
@@ -69,7 +62,7 @@ export function SignatureCaptureModal({
     setHasDrawn(false);
   };
 
-  const canSave = hasDrawn && printedName.trim().length > 0 && !saveMutation.isPending;
+  const canSave = hasDrawn && !saveMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !required) { resetState(); onOpenChange(false); } }}>
@@ -94,7 +87,7 @@ export function SignatureCaptureModal({
         <div className="bg-white dark:bg-slate-900">
           <div className="px-4 pt-4 pb-2">
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center">
-              Please sign to confirm payment and completion.
+              Please sign below to confirm payment.
             </p>
           </div>
 
@@ -119,18 +112,6 @@ export function SignatureCaptureModal({
                 Clear
               </button>
             </div>
-          </div>
-
-          <div className="px-4 pb-4">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
-              Printed Name
-            </label>
-            <Input
-              value={printedName}
-              onChange={(e) => setPrintedName(e.target.value)}
-              placeholder="Enter full name"
-              className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-            />
           </div>
 
           <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">

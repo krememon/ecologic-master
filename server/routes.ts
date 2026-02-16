@@ -14373,14 +14373,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!payment || payment.companyId !== member.companyId) {
         return res.status(404).json({ error: 'Payment not found' });
       }
+      if (payment.status !== 'paid') {
+        return res.status(400).json({ error: 'Signature can only be captured for paid payments' });
+      }
       const existing = await storage.getPaymentSignature(paymentId);
       if (existing) {
         return res.json({ signature: existing });
       }
       const { signedByName, signaturePngBase64, jobId, invoiceId } = req.body;
-      if (!signedByName || typeof signedByName !== 'string' || !signedByName.trim()) {
-        return res.status(400).json({ error: 'Printed name is required' });
-      }
       if (!signaturePngBase64 || typeof signaturePngBase64 !== 'string') {
         return res.status(400).json({ error: 'Signature image is required' });
       }
@@ -14389,7 +14389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentId,
         jobId: jobId || payment.jobId || null,
         invoiceId: invoiceId || payment.invoiceId || null,
-        signedByName: signedByName.trim(),
+        signedByName: (signedByName && typeof signedByName === 'string') ? signedByName.trim() : '',
         signaturePngBase64,
       });
       res.json({ signature: { id: sig.id, signedAt: sig.signedAt } });

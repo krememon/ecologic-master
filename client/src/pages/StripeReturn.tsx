@@ -4,11 +4,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 
-console.log("[StripeReturn] Module loaded at", new Date().toISOString());
-
 export default function StripeReturn() {
-  console.log("[StripeReturn] Component rendering, href:", window.location.href);
-  
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState("Verifying payment...");
   const [hasRedirected, setHasRedirected] = useState(false);
@@ -19,8 +15,6 @@ export default function StripeReturn() {
     pendingPayment: sigPendingPayment,
     triggerSignature,
     onSignatureComplete,
-    settingsLoading,
-    isEnabled: sigEnabled,
   } = useSignatureAfterPayment();
 
   const waitingForSignature = sigModalOpen || (sigPendingPayment !== null && !hasRedirected);
@@ -38,7 +32,7 @@ export default function StripeReturn() {
   };
 
   useEffect(() => {
-    if (hasRedirected || waitingForSignature || settingsLoading || processedRef.current) {
+    if (hasRedirected || waitingForSignature || processedRef.current) {
       return;
     }
 
@@ -46,14 +40,11 @@ export default function StripeReturn() {
     
     const processReturn = async () => {
       try {
-        console.log("[StripeReturn] Processing return, location.href", window.location.href);
-        
         if (window.location.search) {
           window.history.replaceState({}, '', window.location.pathname);
         }
         
         const sessionId = localStorage.getItem("stripe_session");
-        console.log("[StripeReturn] Session ID from localStorage:", sessionId);
         
         let paymentId: number | null = null;
         let jobId: number | undefined = undefined;
@@ -66,14 +57,12 @@ export default function StripeReturn() {
               credentials: 'include'
             });
             const data = await response.json();
-            console.log("[StripeReturn] Session status:", data);
             
             if (data.paymentStatus === 'paid') {
               setStatus("Payment confirmed!");
               paymentId = data.paymentId || null;
               jobId = data.jobId ? parseInt(data.jobId) : undefined;
               invoiceId = data.invoiceId ? parseInt(data.invoiceId) : undefined;
-              console.log("[Payments] success handler fired", { paymentId, jobId, invoiceId, status: 'paid' });
             }
           } catch (e) {
             console.error("[StripeReturn] Session check error:", e);
@@ -100,12 +89,9 @@ export default function StripeReturn() {
         
         if (paymentId) {
           await triggerSignature({ paymentId, jobId, invoiceId });
-          if (sigEnabled) {
-            return;
-          }
+          return;
         }
         
-        console.log("[StripeReturn] State cleaned, navigating to /jobs");
         setStatus("Redirecting to Jobs...");
         doRedirect();
         
@@ -117,12 +103,11 @@ export default function StripeReturn() {
     };
 
     processReturn();
-  }, [setLocation, hasRedirected, waitingForSignature, settingsLoading, triggerSignature, sigEnabled]);
+  }, [setLocation, hasRedirected, waitingForSignature, triggerSignature]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (!hasRedirected && !waitingForSignature) {
-        console.log("[StripeReturn] Safety timeout triggered, forcing redirect");
         doRedirect();
       }
     }, 10000);

@@ -87,8 +87,6 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     triggerSignature,
     onSignatureComplete: handleSignatureComplete,
     onModalDismiss: handleSignatureDismiss,
-    isEnabled: sigEnabled,
-    settingsLoading: sigSettingsLoading,
   } = useSignatureAfterPayment();
 
   const numericJobId = parseInt(jobId, 10);
