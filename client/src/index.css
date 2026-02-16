@@ -7,10 +7,24 @@ html {
   scrollbar-gutter: stable;
 }
 
-body[data-scroll-locked] {
+html body.with-scroll-bars-hidden {
+  padding-right: 0 !important;
+  overflow: hidden !important;
+}
+
+html body[data-scroll-locked] {
   padding-right: 0 !important;
   margin-right: 0 !important;
-  overflow: hidden !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+html .right-scroll-bar-position {
+  right: 0 !important;
+}
+
+html .width-before-scroll-bar {
+  margin-right: 0 !important;
 }
 
 /* Hide scrollbar while keeping scroll functionality */

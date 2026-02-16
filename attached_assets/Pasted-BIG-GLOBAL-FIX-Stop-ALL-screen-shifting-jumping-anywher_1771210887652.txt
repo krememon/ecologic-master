@@ -1,0 +1,119 @@
+BIG GLOBAL FIX — Stop ALL screen shifting/jumping anywhere in EcoLogic (Employees page + entire app)
+
+PROBLEM:
+Across the app (Employees page, dropdowns, modals/sheets, menus), clicking buttons causes the whole screen to shift (usually the right side jumps inward) and then returns. This must NEVER happen.
+
+ROOT CAUSE (most likely):
+Body scroll locking + scrollbar width compensation.
+When overlays open, something temporarily:
+- sets body overflow: hidden
+- injects padding-right to compensate for scrollbar
+This changes viewport width and causes the “jump”.
+
+GOAL:
+Zero layout shift on any interaction:
+- Dropdown open/close
+- Popover open/close
+- Dialog / Sheet open/close
+- Clicking action menus
+- Any button click
+
+------------------------------------------------------------
+STEP 1) GLOBAL CSS FIX (required)
+Add this to the global CSS file where Tailwind base styles live:
+- client/src/index.css OR client/src/globals.css (whichever exists)
+
+ADD:
+
+html {
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
+WHY:
+This permanently reserves scrollbar space so width never changes.
+
+------------------------------------------------------------
+STEP 2) REMOVE ALL MANUAL SCROLL-LOCK / PADDING-RIGHT CODE (required)
+Search the entire codebase and REMOVE any logic that toggles body/html overflow or adds padding-right.
+
+Search for and delete/disable patterns like:
+- document.body.style.overflow = 'hidden'
+- document.documentElement.style.overflow = 'hidden'
+- document.body.style.paddingRight = ...
+- any “lockScroll”, “disableScroll”, “preventScroll”, “scrollLock” helpers
+
+REASON:
+These cause the jump by changing layout width.
+
+------------------------------------------------------------
+STEP 3) RADIX/SHADCN OVERLAY SCROLL LOCK (required)
+EcoLogic uses shadcn/Radix components (Dialog/Sheet/Popover/DropdownMenu).
+Some Radix “modal” overlays lock scroll or modify body styles.
+
+3A) For Dialog and Sheet components (wherever used in the app):
+- Ensure they do NOT cause body scroll-lock side effects.
+
+Implement these on the content components:
+- onOpenAutoFocus={(e) => e.preventDefault()}
+- onCloseAutoFocus={(e) => e.preventDefault()}
+
+Example:
+<DialogContent
+  onOpenAutoFocus={(e) => e.preventDefault()}
+  onCloseAutoFocus={(e) => e.preventDefault()}
+/>
+
+Same for SheetContent if applicable.
+
+3B) If any Sheet/Dialog is configured as modal and still causes scroll locking,
+set modal={false} where supported (Radix):
+<Dialog modal={false}>...</Dialog>
+<Sheet modal={false}>...</Sheet>
+
+IMPORTANT:
+- Do NOT break usability: overlay still opens normally.
+- Use portal-based overlays (DropdownMenu/Popover) so they don’t affect layout flow.
+
+------------------------------------------------------------
+STEP 4) ENSURE NO BORDER/FOCUS STYLE CHANGES AFFECT LAYOUT (backup check)
+Sometimes buttons/inputs shift if border width changes on focus/active.
+Check the app for any patterns like:
+- border-2 on focus
+- adding/removing borders on active
+Replace with ring styles instead (ring does not affect layout).
+
+Example fix:
+- Use focus:ring-* not changing border widths.
+
+------------------------------------------------------------
+STEP 5) VERIFY WITH A STRICT TEST LIST (must pass)
+After changes, verify NO shift happens for each:
+1) Employees page:
+- open “All Roles” dropdown
+- open “All Status” dropdown
+- click the 3-dot menu on an employee card
+- click Invite Team button
+2) Notifications:
+- open notifications panel
+- click Mark all read / Clear
+3) Jobs/Invoices:
+- open any modal/sheet
+- open any dropdown select
+4) Across the app:
+- no right-edge inward jump
+- no “snap back” after click
+- layout width remains constant
+
+------------------------------------------------------------
+DELIVERABLES REQUIRED:
+- File path(s) where global CSS was updated
+- Confirmation that all manual body/html overflow/paddingRight code was removed
+- File path(s) where DialogContent/SheetContent autoFocus handlers were added
+- Confirmation with testing that there is ZERO layout shift anywhere
+
+DO NOT:
+- Introduce new success popups/toasts
+- Change business logic
+- Change layout spacing besides the shift fix
+Only address the global shifting issue.

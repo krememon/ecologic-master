@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -331,7 +332,25 @@ function Router() {
   return <AuthenticatedRouter />;
 }
 
+function usePreventScrollbarShift() {
+  React.useEffect(() => {
+    const body = document.body;
+    const observer = new MutationObserver(() => {
+      if (body.style.paddingRight) {
+        body.style.paddingRight = '';
+      }
+      if (body.style.marginRight) {
+        body.style.marginRight = '';
+      }
+    });
+    observer.observe(body, { attributes: true, attributeFilter: ['style'] });
+    return () => observer.disconnect();
+  }, []);
+}
+
 function App() {
+  usePreventScrollbarShift();
+
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
