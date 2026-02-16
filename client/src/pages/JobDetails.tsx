@@ -756,7 +756,14 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                   )}
                 </div>
               ) : (
-                <p className="text-muted-foreground">Not scheduled</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Not scheduled</span>
+                  {canEditJob && (
+                    <Button variant="default" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
+                      + Add Schedule
+                    </Button>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
