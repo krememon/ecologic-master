@@ -29,6 +29,7 @@ interface EmployeeCardProps {
     role: UserRole;
     status: string;
     createdAt: string;
+    isClockedIn?: boolean;
   };
   onRoleChange: (userId: string, newRole: UserRole) => void;
   onStatusToggle: (userId: string, newStatus: 'active' | 'inactive') => void;
@@ -114,6 +115,15 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                 data-testid={`badge-status-${employee.id}`}
               >
                 {employee.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+              </Badge>
+              <Badge
+                className={employee.isClockedIn
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                }
+                data-testid={`badge-clockedin-${employee.id}`}
+              >
+                {employee.isClockedIn ? 'Clocked In' : 'Clocked Out'}
               </Badge>
             </div>
             <CardTitle className="text-xl" data-testid={`text-employee-name-${employee.id}`}>

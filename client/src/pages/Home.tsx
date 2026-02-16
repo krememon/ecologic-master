@@ -140,6 +140,7 @@ export default function Home() {
       apiRequest('POST', '/api/time/clock-in', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setShowJobPicker(false);
       setJobSearchQuery('');
     },
@@ -157,6 +158,7 @@ export default function Home() {
       apiRequest('POST', '/api/time/switch', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setShowJobPicker(false);
       setJobSearchQuery('');
     },
@@ -173,6 +175,7 @@ export default function Home() {
     mutationFn: () => apiRequest('POST', '/api/time/clock-out'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
     },
     onError: () => {
       toast({

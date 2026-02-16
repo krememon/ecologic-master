@@ -2959,8 +2959,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit: limit ? parseInt(limit) : undefined,
         offset: offset ? parseInt(offset) : undefined,
       });
-      
-      res.json(result);
+
+      const activeRows = await db.execute(
+        sql`SELECT DISTINCT user_id FROM time_logs WHERE company_id = ${req.companyId} AND clock_in_at IS NOT NULL AND clock_out_at IS NULL`
+      );
+      const activeClockedInIds = new Set(activeRows.rows.map((r: any) => r.user_id));
+
+      const usersWithClockStatus = result.users.map((u: any) => ({
+        ...u,
+        isClockedIn: activeClockedInIds.has(u.id),
+      }));
+
+      res.json({ ...result, users: usersWithClockStatus });
     } catch (error) {
       console.error("Error fetching employees:", error);
       res.status(500).json({ message: "Failed to fetch employees" });
