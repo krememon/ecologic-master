@@ -417,6 +417,7 @@ export const invoices = pgTable("invoices", {
   qboSyncStatus: varchar("qbo_sync_status", { length: 20 }), // pending, synced, failed
   qboLastSyncError: text("qbo_last_sync_error"),
   qboLastSyncedAt: timestamp("qbo_last_synced_at"),
+  overdueNotifiedAt: timestamp("overdue_notified_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
