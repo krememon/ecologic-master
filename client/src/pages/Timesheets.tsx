@@ -497,16 +497,6 @@ export default function Timesheets() {
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
-                {weekOffset !== 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setWeekOffset(0)}
-                    className="text-sm"
-                  >
-                    This Week
-                  </Button>
-                )}
               </div>
 
               {!isTechnician && employees.length > 0 && (
