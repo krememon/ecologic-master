@@ -14441,6 +14441,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/jobs/:jobId/payment-signatures - Get all payment signatures for a job
+  app.get('/api/jobs/:jobId/payment-signatures', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+
+      const jobId = parseInt(req.params.jobId, 10);
+      if (isNaN(jobId)) return res.status(400).json({ error: 'Invalid job ID' });
+
+      const job = await storage.getJob(jobId);
+      if (!job || job.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+
+      const sigs = await storage.getPaymentSignaturesByJobId(jobId);
+
+      const enriched = await Promise.all(sigs.map(async (sig) => {
+        let invoiceNumber: string | null = null;
+        let paymentMethod: string | null = null;
+        let amountCents: number | null = null;
+
+        if (sig.paymentId) {
+          const payment = await storage.getPaymentById(sig.paymentId);
+          if (payment) {
+            paymentMethod = payment.paymentMethod || null;
+            amountCents = payment.amountCents || null;
+          }
+        }
+        if (sig.invoiceId) {
+          const invoice = await storage.getInvoice(sig.invoiceId);
+          if (invoice) {
+            invoiceNumber = invoice.invoiceNumber;
+          }
+        }
+
+        return {
+          id: sig.id,
+          paymentId: sig.paymentId,
+          invoiceId: sig.invoiceId,
+          jobId: sig.jobId,
+          signedAt: sig.signedAt,
+          signedByName: sig.signedByName,
+          signaturePngBase64: sig.signaturePngBase64,
+          paymentMethod,
+          amountCents,
+          invoiceNumber,
+        };
+      }));
+
+      res.json(enriched);
+    } catch (error: any) {
+      console.error('Error fetching job payment signatures:', error);
+      res.status(500).json({ error: 'Failed to fetch payment signatures' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });

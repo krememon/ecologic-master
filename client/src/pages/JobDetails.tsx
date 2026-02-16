@@ -116,6 +116,19 @@ interface Employee {
   profileImageUrl?: string | null;
 }
 
+interface PaymentSignatureItem {
+  id: number;
+  paymentId: number;
+  invoiceId: number | null;
+  jobId: number | null;
+  signedAt: string;
+  signedByName: string | null;
+  signaturePngBase64: string;
+  paymentMethod: string | null;
+  amountCents: number | null;
+  invoiceNumber: string | null;
+}
+
 export default function JobDetails({ jobId }: JobDetailsProps) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -139,6 +152,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [isSavingCrew, setIsSavingCrew] = useState(false);
+  const [viewingSig, setViewingSig] = useState<PaymentSignatureItem | null>(null);
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
   const canEditJob = role === 'OWNER' || role === 'SUPERVISOR';
@@ -178,6 +192,16 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const { data: jobDocuments = [] } = useQuery<JobDocument[]>({
     queryKey: [`/api/jobs/${jobId}/documents`],
     enabled: !!jobId && isAuthenticated,
+  });
+
+  const { data: paymentSignatures = [], isLoading: signaturesLoading, isError: signaturesError } = useQuery<PaymentSignatureItem[]>({
+    queryKey: ['/api/jobs', jobId, 'payment-signatures'],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/payment-signatures`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load signatures');
+      return res.json();
+    },
+    enabled: !!jobId && isAuthenticated && activeTab === 'approvals',
   });
 
   // Fetch invoice for this job (if exists)
@@ -1087,15 +1111,112 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
 
       {/* E-signature Approvals Tab */}
       {activeTab === 'approvals' && (
-        <Card>
-          <CardContent className="flex flex-col items-center py-12">
-            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg font-medium mb-2">E-signature Approvals</p>
-            <p className="text-sm text-muted-foreground text-center">
-              Signature requests for this job will appear here.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Payment Completion Signatures</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {signaturesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : signaturesError ? (
+                <p className="text-sm text-destructive py-2">Failed to load payment signatures.</p>
+              ) : paymentSignatures.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No payment signatures yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {paymentSignatures.map((sig) => {
+                    const methodLabel = sig.paymentMethod === 'stripe' ? 'Card' : sig.paymentMethod === 'cash' ? 'Cash' : sig.paymentMethod === 'check' ? 'Check' : sig.paymentMethod || 'Unknown';
+                    const amountStr = sig.amountCents != null ? `$${(sig.amountCents / 100).toFixed(2)}` : '';
+                    return (
+                      <div key={sig.id} className="flex items-center gap-3 p-3 border rounded-lg bg-background hover:bg-muted/50 transition-colors">
+                        <div className="flex-shrink-0 h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                          <FileText className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">Payment Completion Signature</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {sig.invoiceNumber ? `Invoice #${sig.invoiceNumber}` : ''}
+                            {sig.invoiceNumber && amountStr ? ' \u2022 ' : ''}{amountStr}
+                            {(sig.invoiceNumber || amountStr) && methodLabel ? ' \u2022 ' : ''}{methodLabel}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Signed {format(new Date(sig.signedAt), 'MMM d, yyyy h:mm a')}
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setViewingSig(sig)}>
+                          View
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex flex-col items-center py-12">
+              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium mb-2">Signature Requests</p>
+              <p className="text-sm text-muted-foreground text-center">
+                Signature requests for this job will appear here.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {viewingSig && (
+        <Dialog open={!!viewingSig} onOpenChange={() => setViewingSig(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Payment Signature</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="border rounded-lg p-4 bg-muted/30 flex items-center justify-center">
+                <img
+                  src={viewingSig.signaturePngBase64.startsWith('data:') ? viewingSig.signaturePngBase64 : `data:image/png;base64,${viewingSig.signaturePngBase64}`}
+                  alt="Signature"
+                  className="max-w-full max-h-48 object-contain"
+                />
+              </div>
+              <div className="space-y-2 text-sm">
+                {viewingSig.amountCents != null && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="font-medium">${(viewingSig.amountCents / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Method</span>
+                  <span className="font-medium">
+                    {viewingSig.paymentMethod === 'stripe' ? 'Card' : viewingSig.paymentMethod === 'cash' ? 'Cash' : viewingSig.paymentMethod === 'check' ? 'Check' : viewingSig.paymentMethod || 'Unknown'}
+                  </span>
+                </div>
+                {viewingSig.invoiceNumber && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Invoice</span>
+                    <span className="font-medium">#{viewingSig.invoiceNumber}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Signed at</span>
+                  <span className="font-medium">{format(new Date(viewingSig.signedAt), 'MMM d, yyyy h:mm a')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Payment ID</span>
+                  <span className="text-xs text-muted-foreground">#{viewingSig.paymentId}</span>
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button variant="outline" onClick={() => setViewingSig(null)}>Close</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Hidden file input */}

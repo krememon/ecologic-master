@@ -1,0 +1,100 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Implement showing “Payment Completion Signature” inside the Job’s “E-signature Approvals” tab.
+Do not break existing e-signature request flow (public signing links, token routes, etc).
+Keep RBAC (“hidden not disabled”) and job access rules.
+No new popups/toasts.
+
+GOAL:
+After a payment is successful and the user signs the in-app “Confirm & Sign” modal, that saved signature must appear inside:
+Job Details → E-signature Approvals tab (inside the Job card).
+
+CLARITY:
+This is NOT a “signature request” workflow. It’s a completed “Payment Completion Signature” record tied to a paymentId (and thus invoiceId/jobId).
+We will display it alongside other signature approvals (requests), in a separate section at the top.
+
+BACKEND CHANGES:
+1) Create an API to fetch completion signatures for a job:
+- Add: GET /api/jobs/:jobId/payment-signatures
+  Returns a list of signatures captured after payment for that job.
+  Each item includes:
+    {
+      id,
+      paymentId,
+      invoiceId,
+      jobId,
+      signedAt,
+      method,              // "cash" | "check" | "card"
+      amountCents,
+      signatureImageUrl OR signatureData,  // whatever you store today
+    }
+
+Implementation notes:
+- Join from payments -> signatures (your existing table that stores signatures per payment)
+- Also join invoice to get invoiceNumber if needed
+- Order newest first
+
+2) Ensure the existing signature save endpoint stores enough to render:
+- If you store a blob/base64: return it (or store it as a file and return URL)
+- If you store a file path: return public URL like /uploads/...
+- Make sure RBAC is enforced: only users who can view the job can access the signatures.
+
+FRONTEND CHANGES (Job Details):
+1) In Job Details page, under the “E-signature Approvals” tab:
+- Add a new section ABOVE “Signature requests for this job will appear here.”
+- Section title: “Payment Completion Signatures”
+- If none:
+  show a small empty state line:
+  “No payment signatures yet.”
+
+2) Render each payment signature as a card row (match app vibe):
+Card content:
+- Left: small document/sign icon
+- Main:
+  - Title: “Payment Completion Signature”
+  - Subtext line 1: Invoice #{invoiceNumber} • $XXX.XX • Method (Card/Cash/Check)
+  - Subtext line 2: Signed {date/time}
+- Right:
+  - “View” button
+
+3) View modal (same style as Select Customer modal vibe):
+- Title: “Payment Signature”
+- Body:
+  - Large signature preview (image)
+  - Meta rows:
+    - Amount
+    - Method
+    - Signed at
+    - Payment ID (optional, small)
+- Buttons:
+  - Close (only)
+NO delete here unless you want admin-only later.
+
+4) Data fetching:
+- When user switches to E-signature Approvals tab:
+  - call GET /api/jobs/:jobId/payment-signatures
+- Loading state: skeleton rows or spinner
+- Error state: small inline message
+
+5) Make it update immediately after signing:
+- After successful POST /api/payments/:paymentId/signature:
+  - If currently on that job’s page and on E-signature tab:
+    - refetch payment signatures
+  - Otherwise: it will show next time user visits
+
+RBAC / VISIBILITY:
+- Owner/Admin: see all on job
+- Others: only if they have job access (same as job details access)
+- Do not show if job is not accessible
+
+TESTING:
+1) Take a cash/check payment → sign
+2) Open Job → E-signature Approvals tab
+3) Confirm “Payment Completion Signature” appears with correct amount/method/time
+4) Click View → signature preview modal shows correct image
+5) Stripe card payment → sign → verify it also appears
+
+DELIVERABLES:
+- Payment completion signatures are visible inside Job → E-signature Approvals.
+- Looks consistent with EcoLogic UI.
+- No regressions to signature requests flow.

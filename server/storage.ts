@@ -433,6 +433,7 @@ export interface IStorage {
 
   // Payment signature operations
   getPaymentSignature(paymentId: number): Promise<PaymentSignature | undefined>;
+  getPaymentSignaturesByJobId(jobId: number): Promise<PaymentSignature[]>;
   createPaymentSignature(sig: InsertPaymentSignature): Promise<PaymentSignature>;
 
 }
@@ -4148,6 +4149,12 @@ export class DatabaseStorage implements IStorage {
   async getPaymentSignature(paymentId: number): Promise<PaymentSignature | undefined> {
     const [sig] = await db.select().from(paymentSignatures).where(eq(paymentSignatures.paymentId, paymentId));
     return sig || undefined;
+  }
+
+  async getPaymentSignaturesByJobId(jobId: number): Promise<PaymentSignature[]> {
+    return await db.select().from(paymentSignatures)
+      .where(eq(paymentSignatures.jobId, jobId))
+      .orderBy(desc(paymentSignatures.signedAt));
   }
 
   async createPaymentSignature(sig: InsertPaymentSignature): Promise<PaymentSignature> {

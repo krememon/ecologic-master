@@ -4,7 +4,7 @@ import SignatureCanvas from "react-signature-canvas";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { X, Loader2 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface SignatureCaptureModalProps {
@@ -45,6 +45,12 @@ export function SignatureCaptureModal({
     onSuccess: () => {
       resetState();
       onOpenChange(false);
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', String(jobId), 'payment-signatures'] });
+      }
+      queryClient.invalidateQueries({ predicate: (q) =>
+        Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('payment-signatures')
+      });
       onComplete?.();
     },
     onError: (err: Error) => {
