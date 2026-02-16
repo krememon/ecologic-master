@@ -107,23 +107,13 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
                 {getRoleLabel(employee.role)}
               </Badge>
               <Badge 
-                variant={employee.status === 'ACTIVE' ? 'default' : 'secondary'}
-                className={employee.status === 'ACTIVE' 
+                className={employee.isClockedIn
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
                 }
                 data-testid={`badge-status-${employee.id}`}
               >
-                {employee.status === 'ACTIVE' ? 'Active' : 'Inactive'}
-              </Badge>
-              <Badge
-                className={employee.isClockedIn
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200'
-                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                }
-                data-testid={`badge-clockedin-${employee.id}`}
-              >
-                {employee.isClockedIn ? 'Clocked In' : 'Clocked Out'}
+                {employee.isClockedIn ? 'Active' : 'Inactive'}
               </Badge>
             </div>
             <CardTitle className="text-xl" data-testid={`text-employee-name-${employee.id}`}>
