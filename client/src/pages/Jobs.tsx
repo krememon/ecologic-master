@@ -101,7 +101,6 @@ export default function Jobs() {
   
   // Estimates tab filters
   const [estimatesCustomerFilter, setEstimatesCustomerFilter] = useState<'all' | number>('all');
-  const [estimatesStatusFilter, setEstimatesStatusFilter] = useState<'all' | string>('all');
   const [estimatesCustomerPickerOpen, setEstimatesCustomerPickerOpen] = useState(false);
   const [estimatesCustomerSearchQuery, setEstimatesCustomerSearchQuery] = useState('');
   
@@ -260,13 +259,8 @@ export default function Jobs() {
       result = result.filter(est => est.customerId === estimatesCustomerFilter);
     }
     
-    // Filter by status
-    if (estimatesStatusFilter !== 'all') {
-      result = result.filter(est => est.status === estimatesStatusFilter);
-    }
-    
     return result;
-  }, [allEstimates, estimatesCustomerFilter, estimatesStatusFilter]);
+  }, [allEstimates, estimatesCustomerFilter]);
 
   // Filter customers for estimates customer picker (case-insensitive search by name or email)
   const estimatesFilteredCustomers = useMemo(() => {
@@ -1572,24 +1566,6 @@ export default function Jobs() {
                 <span className="truncate">{selectedCustomerForFilterLabel}</span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
               </Button>
-              <Select 
-                value={estimatesStatusFilter === 'all' ? 'all' : estimatesStatusFilter} 
-                onValueChange={(v) => setEstimatesStatusFilter(v)}
-                disabled={isEstimateSelectionMode}
-              >
-                <SelectTrigger className="flex-[1.5] min-w-[110px]" data-testid="filter-estimates-status">
-                  <span className="truncate text-left">
-                    {estimatesStatusFilter === 'all' ? 'All statuses' : estimatesStatusFilter.charAt(0).toUpperCase() + estimatesStatusFilter.slice(1)}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="sent">Sent</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="declined">Declined</SelectItem>
-                </SelectContent>
-              </Select>
               <Button
                 variant="ghost"
                 size="sm"
