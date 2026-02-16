@@ -1674,14 +1674,14 @@ export default function Jobs() {
             </Card>
           ) : (
             <>
-            <div className={`grid gap-4 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
+            <div className={`w-full space-y-3 ${isEstimateSelectionMode && selectedEstimateIds.size > 0 ? 'pb-20' : ''}`}>
               {filteredEstimates.map((estimate) => {
                 const job = jobs.find(j => j.id === estimate.jobId);
                 const isSelected = selectedEstimateIds.has(estimate.id);
                 return (
                   <Card 
                     key={estimate.id} 
-                    className={`hover:shadow-md transition-all cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-950 ring-2 ring-blue-400' : ''}`}
+                    className={`w-full hover:shadow-md transition-all cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-950 ring-2 ring-blue-400' : ''}`}
                     onClick={() => {
                       if (isEstimateSelectionMode) {
                         toggleEstimateSelection(estimate.id);
