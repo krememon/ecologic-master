@@ -229,7 +229,9 @@ function AuthenticatedRouter() {
         <Route path="/payments/:id">
           {(params) => <PaymentDetails paymentId={params.id} />}
         </Route>
-        <Route path="/documents" component={Documents} />
+        <Route path="/documents">
+          {() => user?.role === 'TECHNICIAN' ? <Redirect to="/jobs" /> : <Documents />}
+        </Route>
         <Route path="/messages" component={MessagesDirectory} />
         <Route path="/messages/u/:userId">
           {(params) => <MessageThread conversationId={params.userId} />}

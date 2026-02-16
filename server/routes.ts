@@ -5249,6 +5249,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = member?.role || 'TECHNICIAN';
       const normalizedRole = userRole.toUpperCase();
+
+      if (normalizedRole === 'TECHNICIAN') {
+        return res.status(403).json({ message: "Technicians cannot access the documents page" });
+      }
       
       let docs = await storage.getDocuments(company.id);
       

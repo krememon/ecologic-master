@@ -84,7 +84,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "jobs.photos.upload",
     "jobs.tasks.complete",
     "schedule.view",
-    "documents.view",
   ],
 };
 
