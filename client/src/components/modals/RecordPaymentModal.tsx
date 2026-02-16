@@ -20,9 +20,11 @@ import {
 export function RecordPaymentModal({
   open,
   onOpenChange,
+  onPaymentRecorded,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onPaymentRecorded?: (paymentId: number, jobId?: number, invoiceId?: number) => void;
 }) {
   const { toast } = useToast();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -42,14 +44,17 @@ export function RecordPaymentModal({
       });
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Payment recorded" });
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      if (data?.paymentId && onPaymentRecorded) {
+        console.log("[Payments] record payment success", { paymentId: data.paymentId, invoiceId: data.invoiceId });
+        onPaymentRecorded(data.paymentId, undefined, data.invoiceId);
+      }
       resetAndClose();
     },
     onError: (err: Error) => {

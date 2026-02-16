@@ -1,0 +1,113 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Debug and fix the missing post-payment signature popup/navigation.
+Do not add email links or public signing.
+Ensure the signature capture flow reliably triggers after payment success.
+
+TASK:
+Fix: After a payment succeeds, EcoLogic does NOT open the signature capture flow. It should immediately show the signature modal/page.
+
+CONTEXT:
+We implemented (or attempted) “signature after successful payment,” but it isn’t triggering. We need to identify the actual “payment success” point in the current app, then fire the signature flow there, and also add a fallback so it still triggers if the user refreshes/navigates.
+
+REQUIREMENTS:
+- After payment success is confirmed (status becomes Paid / PaymentIntent succeeded), immediately open signature capture UI.
+- Must work for the main payment path you use (Stripe checkout flow).
+- Must not trigger on failed/canceled payments.
+- Must not trigger twice.
+- Must still be capturable if user navigates away (fallback banner/button).
+- No success toasts; errors only.
+
+INVESTIGATION (DO FIRST, THEN FIX):
+1) Identify which payment success path EcoLogic uses:
+- Stripe PaymentIntent confirmation in frontend?
+- Stripe webhook updates backend then frontend polls?
+- Manual “Mark Paid” flow?
+
+2) Add targeted logs (temporary):
+- In the exact payment success handler:
+  - `console.log("[Payments] success handler fired", { paymentId, jobId, invoiceId, status })`
+- In the signature trigger function:
+  - `console.log("[SignatureAfterPay] shouldPrompt?", { requireSigSetting, status, hasSignature, paymentId })`
+- In the signature modal open:
+  - `console.log("[SignatureAfterPay] opening signature modal")`
+
+If the success handler log never fires, we’re listening in the wrong place.
+
+FIX STRATEGY (MAKE IT RELIABLE):
+A) Trigger from the TRUE source of truth
+Option 1 (Recommended): Trigger when the UI receives a “Paid” payment record from backend.
+- Wherever the Payments page or Job Payments panel fetches payment data and sets state,
+  add: if any payment transitioned to “Paid” AND lacks signature AND setting enabled → open signature.
+
+Option 2: Trigger directly after Stripe returns success in the client.
+- Only if you are 100% sure that’s when you mark it paid.
+
+B) Add a “pendingSignaturePaymentId” state so it doesn’t double-fire
+- Store in memory (React state) and also in localStorage as fallback:
+  - `localStorage.setItem("pendingSignaturePaymentId", paymentId)`
+- When signature is completed, clear it.
+
+C) Add fallback banner on the Job/Payment screen
+If user refreshes or closes modal:
+- If payment is Paid and signature missing and setting ON:
+  - show a non-toast banner card:
+    - “Signature required for this payment”
+    - Button: “Capture Signature”
+  - Clicking button opens signature capture UI
+
+FRONTEND CHANGES (IMPLEMENT):
+1) Add a single function used everywhere:
+- `triggerSignatureAfterPayment({ paymentId, jobId, invoiceId })`
+  Steps:
+  - fetch company setting `requireSignatureAfterPayment`
+  - fetch signature status for paymentId (or check included field)
+  - if setting OFF → return
+  - if payment not Paid → return
+  - if signature exists → return
+  - open SignatureCaptureModal
+  - set localStorage pendingSignaturePaymentId
+
+2) Wire this function into the correct spot:
+- Find where payment becomes “Paid” in UI:
+  - After you call your backend “confirm payment” endpoint OR
+  - After you refetch payments and see status updated
+- Call `triggerSignatureAfterPayment(...)` there.
+
+3) On page load of Payments/Job payments view:
+- Check localStorage:
+  - if `pendingSignaturePaymentId` exists:
+    - verify payment is Paid + signature missing
+    - open modal automatically
+
+4) Ensure the SignatureCaptureModal is actually mounted:
+- Confirm modal component is rendered in the page/component tree, controlled by state:
+  - `isSignatureModalOpen`
+- If it’s defined but never rendered, add it at the bottom of the page JSX.
+
+BACKEND CHANGES (ONLY IF NEEDED):
+- Add/confirm an endpoint exists:
+  - `GET /api/payments/:paymentId/signature` returning signature or null
+- Or include `signatureCaptured: boolean` on payment object from your existing payments fetch.
+
+TESTING STEPS:
+1) Turn ON requireSignatureAfterPayment.
+2) Complete a Stripe payment.
+3) Confirm console logs show:
+   - payment success handler fired
+   - shouldPrompt true
+   - opening signature modal
+4) Confirm modal opens immediately.
+5) Refresh the page right after payment:
+   - banner appears OR modal auto-opens via pendingSignaturePaymentId
+6) Complete signature:
+   - pendingSignaturePaymentId cleared
+   - banner disappears
+   - modal no longer opens again for same payment
+
+DELIVERABLES:
+- Signature capture reliably opens after successful payment.
+- Doesn’t trigger on failed/canceled.
+- Doesn’t double-trigger.
+- Fallback banner/button ensures signature can always be captured.
+- Temporary logs removed after verification.

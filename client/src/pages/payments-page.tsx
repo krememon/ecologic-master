@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RecordPaymentModal } from "@/components/modals/RecordPaymentModal";
 import { formatCompactCurrency } from "@/lib/utils";
+import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
+import { PendingSignatureBanner } from "@/components/PendingSignatureBanner";
+import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import {
   Receipt,
   ChevronRight,
@@ -65,6 +68,16 @@ export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>("month");
+
+  const {
+    isModalOpen: sigModalOpen,
+    pendingPayment: sigPendingPayment,
+    hasPendingSignature,
+    triggerSignature,
+    onSignatureComplete: handleSigComplete,
+    onModalDismiss: handleSigDismiss,
+    openPendingModal: openSigModal,
+  } = useSignatureAfterPayment();
 
   const { data: ledgerItems = [], isLoading: ledgerLoading } = useQuery<LedgerItem[]>({
     queryKey: ["/api/payments/ledger"],
@@ -183,6 +196,9 @@ export default function PaymentsPage() {
 
   return (
     <div className="p-4 sm:p-5 space-y-4 max-w-5xl mx-auto">
+      {hasPendingSignature && (
+        <PendingSignatureBanner onCapture={openSigModal} />
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Payments</h1>
         <Button
@@ -347,7 +363,21 @@ export default function PaymentsPage() {
       <RecordPaymentModal
         open={recordModalOpen}
         onOpenChange={setRecordModalOpen}
+        onPaymentRecorded={(paymentId, jobId, invoiceId) => {
+          triggerSignature({ paymentId, jobId, invoiceId });
+        }}
       />
+      {sigPendingPayment && (
+        <SignatureCaptureModal
+          open={sigModalOpen}
+          onOpenChange={handleSigDismiss}
+          paymentId={sigPendingPayment.paymentId}
+          jobId={sigPendingPayment.jobId}
+          invoiceId={sigPendingPayment.invoiceId}
+          required
+          onComplete={handleSigComplete}
+        />
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCa
 import { apiRequest } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
+import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 
 interface Invoice {
   id: number;
@@ -79,11 +80,16 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [partialEnabled, setPartialEnabled] = useState(false);
   const [partialAmountStr, setPartialAmountStr] = useState("");
   const [resultPaymentId, setResultPaymentId] = useState<number | null>(null);
-  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
 
-  const { data: paymentSettings } = useQuery<{ requireSignatureAfterPayment: boolean }>({
-    queryKey: ['/api/settings/payments'],
-  });
+  const {
+    isModalOpen: signatureModalOpen,
+    pendingPayment: sigPendingPayment,
+    triggerSignature,
+    onSignatureComplete: handleSignatureComplete,
+    onModalDismiss: handleSignatureDismiss,
+    isEnabled: sigEnabled,
+    settingsLoading: sigSettingsLoading,
+  } = useSignatureAfterPayment();
 
   const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
@@ -227,8 +233,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         setResultBalanceRemaining(data.balanceRemaining || 0);
         setResultPaymentId(data.paymentId || null);
         invalidateAll();
-        if (data.paymentId && paymentSettings?.requireSignatureAfterPayment) {
-          setSignatureModalOpen(true);
+        console.log("[Payments] success handler fired", { paymentId: data.paymentId, jobId: numericJobId, invoiceId: numericInvoiceId, status: data.newStatus });
+        if (data.paymentId) {
+          triggerSignature({ paymentId: data.paymentId, jobId: numericJobId, invoiceId: numericInvoiceId });
         }
         setViewState('success');
       } else {
@@ -344,15 +351,15 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
             Done
           </Button>
         </div>
-        {resultPaymentId && (
+        {sigPendingPayment && (
           <SignatureCaptureModal
             open={signatureModalOpen}
-            onOpenChange={setSignatureModalOpen}
-            paymentId={resultPaymentId}
-            jobId={numericJobId}
-            invoiceId={numericInvoiceId}
+            onOpenChange={handleSignatureDismiss}
+            paymentId={sigPendingPayment.paymentId}
+            jobId={sigPendingPayment.jobId}
+            invoiceId={sigPendingPayment.invoiceId}
             required
-            onComplete={() => setSignatureModalOpen(false)}
+            onComplete={handleSignatureComplete}
           />
         )}
       </div>

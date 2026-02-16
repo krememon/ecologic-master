@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 
 console.log("[StripeReturn] Module loaded at", new Date().toISOString());
@@ -12,15 +12,18 @@ export default function StripeReturn() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState("Verifying payment...");
   const [hasRedirected, setHasRedirected] = useState(false);
-  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
-  const [stripePaymentId, setStripePaymentId] = useState<number | null>(null);
-  const [stripeJobId, setStripeJobId] = useState<number | undefined>(undefined);
-  const [stripeInvoiceId, setStripeInvoiceId] = useState<number | undefined>(undefined);
-  const [waitingForSignature, setWaitingForSignature] = useState(false);
+  const processedRef = useRef(false);
 
-  const { data: paymentSettings, isLoading: settingsLoading } = useQuery<{ requireSignatureAfterPayment: boolean }>({
-    queryKey: ['/api/settings/payments'],
-  });
+  const {
+    isModalOpen: sigModalOpen,
+    pendingPayment: sigPendingPayment,
+    triggerSignature,
+    onSignatureComplete,
+    settingsLoading,
+    isEnabled: sigEnabled,
+  } = useSignatureAfterPayment();
+
+  const waitingForSignature = sigModalOpen || (sigPendingPayment !== null && !hasRedirected);
 
   const doRedirect = () => {
     try {
@@ -35,15 +38,15 @@ export default function StripeReturn() {
   };
 
   useEffect(() => {
-    console.log("[StripeReturn] useEffect running");
-    
-    if (hasRedirected || waitingForSignature || settingsLoading) {
+    if (hasRedirected || waitingForSignature || settingsLoading || processedRef.current) {
       return;
     }
+
+    processedRef.current = true;
     
     const processReturn = async () => {
       try {
-        console.log("[StripeReturn] location.href", window.location.href);
+        console.log("[StripeReturn] Processing return, location.href", window.location.href);
         
         if (window.location.search) {
           window.history.replaceState({}, '', window.location.pathname);
@@ -70,6 +73,7 @@ export default function StripeReturn() {
               paymentId = data.paymentId || null;
               jobId = data.jobId ? parseInt(data.jobId) : undefined;
               invoiceId = data.invoiceId ? parseInt(data.invoiceId) : undefined;
+              console.log("[Payments] success handler fired", { paymentId, jobId, invoiceId, status: 'paid' });
             }
           } catch (e) {
             console.error("[StripeReturn] Session check error:", e);
@@ -94,13 +98,11 @@ export default function StripeReturn() {
           console.error("[StripeReturn] Query invalidation error:", e);
         }
         
-        if (paymentId && paymentSettings?.requireSignatureAfterPayment) {
-          setStripePaymentId(paymentId);
-          setStripeJobId(jobId);
-          setStripeInvoiceId(invoiceId);
-          setWaitingForSignature(true);
-          setSignatureModalOpen(true);
-          return;
+        if (paymentId) {
+          await triggerSignature({ paymentId, jobId, invoiceId });
+          if (sigEnabled) {
+            return;
+          }
         }
         
         console.log("[StripeReturn] State cleaned, navigating to /jobs");
@@ -115,7 +117,7 @@ export default function StripeReturn() {
     };
 
     processReturn();
-  }, [setLocation, hasRedirected, waitingForSignature, settingsLoading, paymentSettings]);
+  }, [setLocation, hasRedirected, waitingForSignature, settingsLoading, triggerSignature, sigEnabled]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -123,18 +125,14 @@ export default function StripeReturn() {
         console.log("[StripeReturn] Safety timeout triggered, forcing redirect");
         doRedirect();
       }
-    }, 8000);
+    }, 10000);
     
     return () => clearTimeout(timeout);
   }, [setLocation, hasRedirected, waitingForSignature]);
 
-  const handleSignatureComplete = () => {
-    setSignatureModalOpen(false);
-    setWaitingForSignature(false);
+  const handleSigDone = () => {
+    onSignatureComplete();
     doRedirect();
-  };
-
-  const handleSignatureClose = () => {
   };
 
   return (
@@ -159,14 +157,14 @@ export default function StripeReturn() {
         <p style={{ color: '#6b7280', fontSize: '16px' }}>{status}</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
-      {stripePaymentId && (
+      {sigPendingPayment && (
         <SignatureCaptureModal
-          open={signatureModalOpen}
-          onOpenChange={handleSignatureClose}
-          paymentId={stripePaymentId}
-          jobId={stripeJobId}
-          invoiceId={stripeInvoiceId}
-          onComplete={handleSignatureComplete}
+          open={sigModalOpen}
+          onOpenChange={() => {}}
+          paymentId={sigPendingPayment.paymentId}
+          jobId={sigPendingPayment.jobId}
+          invoiceId={sigPendingPayment.invoiceId}
+          onComplete={handleSigDone}
           required
         />
       )}

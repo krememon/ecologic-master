@@ -27,6 +27,9 @@ import { ShareEstimateModal } from "@/components/ShareEstimateModal";
 import { JobInvoiceModal } from "@/components/JobInvoiceModal";
 import { Share2, Receipt } from "lucide-react";
 import { formatEstimateRequestedSchedule } from "@/utils/scheduleDate";
+import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
+import { PendingSignatureBanner } from "@/components/PendingSignatureBanner";
+import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 
 interface JobWithClient extends Job {
   client?: {
@@ -63,6 +66,15 @@ export default function Jobs() {
   const { role } = useCan();
   const [, setLocation] = useLocation();
   const searchString = useSearch();
+  
+  const {
+    isModalOpen: sigModalOpen,
+    pendingPayment: sigPendingPayment,
+    hasPendingSignature,
+    onSignatureComplete: handleSigComplete,
+    onModalDismiss: handleSigDismiss,
+    openPendingModal: openSigModal,
+  } = useSignatureAfterPayment();
   
   // Redirect technicians away from Jobs page - they use Home/Schedule instead
   useEffect(() => {
@@ -999,6 +1011,20 @@ export default function Jobs() {
 
   return (
     <div className="w-full pb-24">
+      {hasPendingSignature && (
+        <PendingSignatureBanner onCapture={openSigModal} />
+      )}
+      {sigPendingPayment && (
+        <SignatureCaptureModal
+          open={sigModalOpen}
+          onOpenChange={handleSigDismiss}
+          paymentId={sigPendingPayment.paymentId}
+          jobId={sigPendingPayment.jobId}
+          invoiceId={sigPendingPayment.invoiceId}
+          required
+          onComplete={handleSigComplete}
+        />
+      )}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Jobs & Estimates</h1>
         <p className="text-slate-600 dark:text-slate-400">Manage projects and create estimates for your clients</p>
