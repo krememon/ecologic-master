@@ -4,7 +4,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ArrowLeft, Link2, CheckCircle2, XCircle, Zap } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle2, XCircle, Zap } from "lucide-react";
+import quickbooksLogo from "@assets/quickbooks_1771259795992.png";
 import { Link, useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -169,16 +170,8 @@ export default function QuickBooksSettings() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-              status?.connected 
-                ? 'bg-green-100 dark:bg-green-900/30' 
-                : 'bg-slate-100 dark:bg-slate-700'
-            }`}>
-              <Link2 className={`h-6 w-6 ${
-                status?.connected 
-                  ? 'text-green-600 dark:text-green-400' 
-                  : 'text-slate-500 dark:text-slate-400'
-              }`} />
+            <div className="w-12 h-12 rounded-lg flex items-center justify-center">
+              <img src={quickbooksLogo} alt="QuickBooks" className="h-8 w-8 object-contain" />
             </div>
             <div>
               <CardTitle className="text-lg">QuickBooks Online</CardTitle>
@@ -262,7 +255,7 @@ export default function QuickBooksSettings() {
               </p>
               
               <Button onClick={handleConnect} className="bg-green-600 hover:bg-green-700">
-                <Link2 className="h-4 w-4 mr-2" />
+                <img src={quickbooksLogo} alt="" className="h-4 w-4 mr-2 object-contain" />
                 Connect QuickBooks
               </Button>
             </div>

@@ -1,7 +1,8 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link, useSearch } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Link2, Mail, Landmark, FileText } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Mail, Landmark, FileText } from "lucide-react";
+import quickbooksLogo from "@assets/quickbooks_1771259795992.png";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -84,7 +85,8 @@ export default function Customize() {
       href: "/customize/time-tracking",
     },
     {
-      icon: Link2,
+      icon: null,
+      image: quickbooksLogo,
       title: "QuickBooks",
       description: "Connect to QuickBooks Online for accounting",
       href: "/customize/quickbooks",
@@ -122,7 +124,11 @@ export default function Customize() {
             }`}>
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-lg bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center">
-                  <item.icon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  {item.image ? (
+                    <img src={item.image} alt={item.title} className="h-6 w-6 object-contain" />
+                  ) : item.icon ? (
+                    <item.icon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  ) : null}
                 </div>
                 <div>
                   <div className="font-medium text-slate-900 dark:text-slate-100">
