@@ -1,0 +1,55 @@
+The Save Invoice button still appears misaligned. Stop guessing. We need to MEASURE the actual left/right insets and fix the offset at the correct container.
+
+STEP 1 — Add temporary debug guides (do not skip)
+In NewInvoiceSheet.tsx add these temporary classes:
+
+- On SheetContent root: outline outline-2 outline-red-500
+- On the scroll/content wrapper that contains the form rows: outline outline-2 outline-green-500
+- On the footer wrapper around the Save Invoice button: outline outline-2 outline-blue-500
+- On the button: outline outline-2 outline-purple-500
+
+Also add a temporary vertical centerline to visually check centering:
+<div className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-red-300 opacity-60" />
+
+(Place it inside SheetContent with position relative.)
+
+STEP 2 — Measure (must provide numbers)
+In the browser console, measure:
+- footer wrapper bounding rect
+- button bounding rect
+- SheetContent bounding rect
+
+Example:
+const footer = document.querySelector('[data-testid="invoice-footer"]');
+footer.getBoundingClientRect()
+
+Add data-testid to footer wrapper and content wrapper so we can select them reliably.
+
+STEP 3 — Fix the exact offset based on measurements
+Common outcomes and fixes:
+
+A) If SheetContent rect is not centered on the screen:
+- ensure the Sheet/Modal container uses:
+  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+  (or correct shadcn SheetContent classes)
+- remove any left padding/margin causing drift
+
+B) If content wrapper rect is narrower than footer rect:
+- footer must be inside the same wrapper OR both must share the same max-w and padding
+- set both wrappers to:
+  className="w-full"
+  and apply identical max-w + px to the SAME parent
+
+C) If footer wrapper has equal padding but still “looks off” because of scrollbar:
+- ensure the scroll container uses scrollbar-gutter stable:
+  add in global CSS:
+  html { scrollbar-gutter: stable; }
+- OR ensure footer is inside the scroll container
+
+STEP 4 — Remove debug guides after fixed
+Remove outlines + centerline once confirmed visually aligned.
+
+DELIVERABLE:
+- Provide the measured rect values (left/right widths) before and after
+- Provide the final JSX structure
+- Confirm visually the button matches the “Done” footer alignment exactly
