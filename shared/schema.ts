@@ -20,7 +20,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Role enum for RBAC
-export const roleEnum = pgEnum("role", ["OWNER", "SUPERVISOR", "TECHNICIAN", "DISPATCHER", "ESTIMATOR"]);
+export const roleEnum = pgEnum("role", ["OWNER", "SUPERVISOR", "TECHNICIAN"]);
 
 // Document visibility enum
 export const documentVisibilityEnum = pgEnum("document_visibility", [
@@ -1168,7 +1168,7 @@ export const insertCompanyMemberSchema = createInsertSchema(companyMembers).omit
 });
 
 // Type definitions for role-based system
-export type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN" | "DISPATCHER" | "ESTIMATOR";
+export type UserRole = "OWNER" | "SUPERVISOR" | "TECHNICIAN";
 
 export interface UserPermissions {
   canCreateJobs: boolean;
