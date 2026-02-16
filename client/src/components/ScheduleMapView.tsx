@@ -659,7 +659,7 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
 
       {geoStatus === 'iframe' && (
         <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
-          <MapPin className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <MapPin className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
               Location isn't available in embedded preview. Open EcoLogic in a new tab to enable GPS.
@@ -677,7 +677,7 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
 
       {geoStatus === 'prompt' && !userLocation && (
         <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
-          <LocateFixed className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <LocateFixed className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
               Enable location to show your position on the map.
@@ -763,9 +763,9 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         title="My location"
       >
         {isLocating ? (
-          <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+          <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
         ) : (
-          <LocateFixed className={`h-5 w-5 ${userLocation ? 'text-blue-500' : 'text-slate-500'}`} />
+          <LocateFixed className={`h-5 w-5 ${userLocation ? 'text-blue-600' : 'text-slate-500'}`} />
         )}
       </button>
     </div>

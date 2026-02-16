@@ -916,8 +916,8 @@ export default function Clients() {
               key={`customer-${customer.id}`} 
               className={`hover:shadow-md transition-shadow border-l-4 cursor-pointer ${
                 isSelectMode && selectedCustomerIds.has(customer.id) 
-                  ? 'border-l-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500' 
-                  : 'border-l-blue-500'
+                  ? 'border-l-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-600' 
+                  : 'border-l-blue-600'
               }`}
               onClick={() => {
                 if (isSelectMode) {

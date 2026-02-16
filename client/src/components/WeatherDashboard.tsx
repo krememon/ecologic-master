@@ -89,7 +89,7 @@ const getWeatherIcon = (condition: string) => {
       return <Cloud className="h-6 w-6 text-gray-500" />;
     case 'rain':
     case 'drizzle':
-      return <CloudRain className="h-6 w-6 text-blue-500" />;
+      return <CloudRain className="h-6 w-6 text-blue-600" />;
     case 'snow':
       return <CloudSnow className="h-6 w-6 text-blue-200" />;
     case 'thunderstorm':

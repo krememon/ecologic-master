@@ -31,7 +31,7 @@ export default function ThreadRow({
       <div className="w-3 flex justify-center shrink-0">
         {unreadCount > 0 && (
           <span 
-            className="inline-block h-2 w-2 rounded-full bg-blue-500"
+            className="inline-block h-2 w-2 rounded-full bg-blue-600"
             data-testid="indicator-unread-dot"
           />
         )}

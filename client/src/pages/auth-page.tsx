@@ -23,7 +23,7 @@ export default function AuthPage() {
   if (isLoading || isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -35,7 +35,7 @@ export default function AuthPage() {
         <div className="flex justify-center">
           <Card className="w-full max-w-md shadow-2xl border-0 bg-white/80 backdrop-blur-sm dark:bg-slate-800/80">
             <CardHeader className="text-center pb-2">
-              <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-2xl flex items-center justify-center mb-4">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mb-4">
                 <Building2 className="h-8 w-8 text-white" />
               </div>
               <CardTitle className="text-2xl font-bold text-slate-800 dark:text-slate-100">

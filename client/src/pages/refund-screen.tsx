@@ -446,7 +446,7 @@ export default function RefundScreen() {
                   disabled
                     ? "border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 opacity-50 cursor-not-allowed"
                     : isSelected
-                      ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-400"
+                      ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-400"
                       : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-900"
                 }`}
               >

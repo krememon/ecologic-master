@@ -243,7 +243,7 @@ export default function OnboardingCompany() {
                         onClick={() => setEmployeeRange(range.value)}
                         className={`p-3 border-2 rounded-lg text-sm font-medium transition-all ${
                           employeeRange === range.value
-                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                            ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
                             : "hover:border-slate-300"
                         }`}
                       >

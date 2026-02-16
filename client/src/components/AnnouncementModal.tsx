@@ -149,7 +149,7 @@ export function AnnouncementModal({ open, onOpenChange }: AnnouncementModalProps
               placeholder="Type your announcement..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              className="min-h-[80px] bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0 resize-none"
+              className="min-h-[80px] bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 resize-none"
               maxLength={1000}
             />
             <p className="text-xs text-slate-400 mt-1.5 text-right">
@@ -185,7 +185,7 @@ export function AnnouncementModal({ open, onOpenChange }: AnnouncementModalProps
                 placeholder="Search employees..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
               />
             </div>
 

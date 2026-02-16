@@ -214,7 +214,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
           }) && (
             <button
               onClick={handleRefundClick}
-              className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 inline-flex items-center gap-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-1"
+              className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 inline-flex items-center gap-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 focus-visible:ring-offset-1"
             >
               <Plus className="w-4 h-4" />
               Refund

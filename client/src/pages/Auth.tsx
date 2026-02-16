@@ -403,7 +403,7 @@ export default function Auth() {
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -418,7 +418,7 @@ export default function Auth() {
                     <button
                       type="button"
                       onClick={() => window.location.href = "/"}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 transition-colors"
                     >
                       Go to Sign In Page
                     </button>
@@ -614,7 +614,7 @@ export default function Auth() {
 
           <Button 
             type="submit" 
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             disabled={isLoading || emailAvailability === 'checking' || emailAvailability === 'taken'}
             data-testid="button-continue"
           >
@@ -660,7 +660,7 @@ export default function Auth() {
 
               <div className="flex gap-4">
                 <Button type="button" variant="outline" onClick={() => setStep('user-info')}>Back</Button>
-                <Button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" disabled={isLoading}>
+                <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                   {isLoading ? "Creating Company..." : "Create Company"}
                 </Button>
               </div>
@@ -687,7 +687,7 @@ export default function Auth() {
 
               <div className="flex gap-4">
                 <Button type="button" variant="outline" onClick={() => setStep('user-info')}>Back</Button>
-                <Button type="submit" className="flex-1 bg-blue-500 hover:bg-blue-600 text-white" disabled={isLoading}>
+                <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                   {isLoading ? "Joining Company..." : "Join Company"}
                 </Button>
               </div>
@@ -700,7 +700,7 @@ export default function Auth() {
           <button
             type="button"
             onClick={() => window.location.href = "/"}
-            className="text-sm text-blue-500 hover:text-blue-600"
+            className="text-sm text-blue-600 hover:text-blue-600"
           >
             Already have an account? Sign in
           </button>
@@ -720,7 +720,7 @@ export default function Auth() {
           <Button 
             type="button"
             onClick={() => window.location.href = "/login"}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
             Back to Sign In
           </Button>

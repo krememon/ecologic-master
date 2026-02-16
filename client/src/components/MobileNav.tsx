@@ -379,7 +379,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                   >
                     <div className="flex items-start gap-3">
                       {!notification.readAt && (
-                        <span className="mt-2 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                        <span className="mt-2 w-2 h-2 rounded-full bg-blue-600 flex-shrink-0" />
                       )}
                       <div className={cn("flex-1 min-w-0", notification.readAt && "ml-5")}>
                         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">

@@ -107,7 +107,7 @@ export function SelectCustomerModal({
               placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+              className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
               data-testid="input-search-customer"
             />
           </div>
@@ -123,7 +123,7 @@ export function SelectCustomerModal({
                 onClick={() => setShowAddCustomer(true)}
                 data-testid="button-add-customer"
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-600 flex items-center justify-center shadow-sm">
                   <Plus className="h-5 w-5 text-white" />
                 </div>
                 <span className="font-semibold text-blue-600 dark:text-blue-400">Add Customer</span>

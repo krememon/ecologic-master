@@ -1226,7 +1226,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               value={editedNotes}
               onChange={(e) => setEditedNotes(e.target.value)}
               rows={5}
-              className="resize-none rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+              className="resize-none rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600 focus:ring-offset-0"
             />
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setIsNotesModalOpen(false)} className="h-10 px-4 rounded-xl">
@@ -1279,7 +1279,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                 placeholder="Search by name"
                 value={employeeSearch}
                 onChange={(e) => setEmployeeSearch(e.target.value)}
-                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
               />
             </div>
           </div>
@@ -1321,7 +1321,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
                           <p className="text-sm text-slate-500 dark:text-slate-400 capitalize">{employee.role?.toLowerCase()}</p>
                         </div>
                         {selectedEmployees.includes(employee.id) && (
-                          <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
+                          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
                             <CheckCircle2 className="h-3.5 w-3.5 text-white" />
                           </div>
                         )}

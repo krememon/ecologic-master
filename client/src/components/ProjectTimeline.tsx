@@ -45,7 +45,7 @@ export function ProjectTimeline({ jobs, subcontractors }: ProjectTimelineProps) 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'bg-green-500';
-      case 'active': return 'bg-blue-500';
+      case 'active': return 'bg-blue-600';
       case 'on_hold': return 'bg-yellow-500';
       case 'planning': return 'bg-gray-500';
       default: return 'bg-gray-400';
@@ -209,7 +209,7 @@ export function ProjectTimeline({ jobs, subcontractors }: ProjectTimelineProps) 
                     <div 
                       className={`h-full transition-all duration-500 ${
                         job.isOverdue ? 'bg-red-500' : 
-                        job.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'
+                        job.status === 'completed' ? 'bg-green-500' : 'bg-blue-600'
                       }`}
                       style={{ width: `${job.progress}%` }}
                     ></div>
@@ -244,7 +244,7 @@ export function ProjectTimeline({ jobs, subcontractors }: ProjectTimelineProps) 
               return (
                 <div key={subcontractor.id} className="p-4 border rounded-lg">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
                       {subcontractor.name.split(' ').map((n: string) => n[0]).join('')}
                     </div>
                     <div>

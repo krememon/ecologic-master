@@ -110,7 +110,7 @@ export default function ResetPassword() {
     if (password.length === 0) return { strength: 0, label: "", color: "" };
     if (password.length < 6) return { strength: 1, label: "Weak", color: "bg-red-500" };
     if (password.length < 8) return { strength: 2, label: "Fair", color: "bg-yellow-500" };
-    if (password.length < 12) return { strength: 3, label: "Good", color: "bg-blue-500" };
+    if (password.length < 12) return { strength: 3, label: "Good", color: "bg-blue-600" };
     return { strength: 4, label: "Strong", color: "bg-green-500" };
   };
 
@@ -128,7 +128,7 @@ export default function ResetPassword() {
           </p>
           <Button
             onClick={() => window.location.href = "/forgot-password"}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Request New Reset Link
           </Button>
@@ -161,7 +161,7 @@ export default function ResetPassword() {
           </p>
           <Button
             onClick={() => window.location.href = "/login"}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Sign In Now
           </Button>
@@ -294,7 +294,7 @@ export default function ResetPassword() {
 
           <Button 
             type="submit" 
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
             disabled={isLoading}
           >
             {isLoading ? "Updating Password..." : "Update Password"}

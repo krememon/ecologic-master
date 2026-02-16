@@ -238,7 +238,7 @@ export function AdvancedAnalytics({ jobs, invoices, subcontractors, stats }: Ana
             {teamPerformance.map((member, index) => (
               <div key={index} className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
                     {member.name.split(' ').map((n: string) => n[0]).join('')}
                   </div>
                   <div>
@@ -268,7 +268,7 @@ export function AdvancedAnalytics({ jobs, invoices, subcontractors, stats }: Ana
       </Card>
 
       {/* AI Insights Panel */}
-      <Card className="border-l-4 border-l-blue-500">
+      <Card className="border-l-4 border-l-blue-600">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-blue-600" />

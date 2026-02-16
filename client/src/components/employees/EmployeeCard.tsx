@@ -333,7 +333,7 @@ export default function EmployeeCard({ employee, onRoleChange, onStatusToggle, o
           <div className="px-4 py-5 bg-white dark:bg-slate-900">
             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">Role</label>
             <Select value={selectedRole} onValueChange={(value) => setSelectedRole(value as UserRole)}>
-              <SelectTrigger className="w-full h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-0" data-testid={`select-new-role-${employee.id}`}>
+              <SelectTrigger className="w-full h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:ring-offset-0" data-testid={`select-new-role-${employee.id}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

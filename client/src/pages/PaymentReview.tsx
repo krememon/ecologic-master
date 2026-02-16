@@ -603,7 +603,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
             
             <Button
               variant="outline"
-              className="flex flex-col items-center gap-2 h-24 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+              className="flex flex-col items-center gap-2 h-24 hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
               onClick={() => handleMethodSelect('check')}
               disabled={paymentDisabled}
             >

@@ -438,7 +438,7 @@ export default function SignInWizard() {
                         value={verificationCode[index] || ""}
                         onChange={(e) => handleCodeInput(index, e.target.value)}
                         onKeyDown={(e) => handleCodeKeyDown(index, e)}
-                        className="w-11 h-12 text-center text-xl font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:border-slate-600"
+                        className="w-11 h-12 text-center text-xl font-mono border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 dark:bg-slate-700 dark:border-slate-600"
                       />
                     ))}
                   </div>

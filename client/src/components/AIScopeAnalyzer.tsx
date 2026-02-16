@@ -209,7 +209,7 @@ export default function AIScopeAnalyzer({
 
               <div className="space-y-4">
                 {analysis.scopeOfWork.phases.map((phase, index) => (
-                  <Card key={index} className="border-l-4 border-l-blue-500">
+                  <Card key={index} className="border-l-4 border-l-blue-600">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base">{phase.name}</CardTitle>
@@ -423,7 +423,7 @@ export default function AIScopeAnalyzer({
                       <ul className="space-y-2">
                         {analysis.considerations.safetyConsiderations.map((safety, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm">
-                            <Shield className="h-3 w-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                            <Shield className="h-3 w-3 text-blue-600 mt-0.5 flex-shrink-0" />
                             {safety}
                           </li>
                         ))}
@@ -514,7 +514,7 @@ export default function AIScopeAnalyzer({
                       <ul className="space-y-2">
                         {analysis.recommendations.costSavingTips.map((tip, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm">
-                            <DollarSign className="h-3 w-3 text-blue-500 mt-0.5 flex-shrink-0" />
+                            <DollarSign className="h-3 w-3 text-blue-600 mt-0.5 flex-shrink-0" />
                             {tip}
                           </li>
                         ))}

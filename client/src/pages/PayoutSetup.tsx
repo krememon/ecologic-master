@@ -197,7 +197,7 @@ export default function PayoutSetup({ token }: { token: string }) {
                   onClick={() => setAccountType("individual")}
                   className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                     accountType === "individual"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
                       : "border-slate-200 text-slate-600 hover:border-slate-300"
                   }`}
                 >
@@ -208,7 +208,7 @@ export default function PayoutSetup({ token }: { token: string }) {
                   onClick={() => setAccountType("company")}
                   className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                     accountType === "company"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
                       : "border-slate-200 text-slate-600 hover:border-slate-300"
                   }`}
                 >

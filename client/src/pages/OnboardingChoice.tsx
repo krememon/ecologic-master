@@ -78,7 +78,7 @@ export default function OnboardingChoice() {
                 type="button"
                 onClick={() => handleChoice("owner")}
                 disabled={isSubmitting}
-                className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full p-4 border-2 rounded-xl hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
                   {isSubmitting ? (
@@ -97,7 +97,7 @@ export default function OnboardingChoice() {
                 type="button"
                 onClick={() => handleChoice("employee")}
                 disabled={isSubmitting}
-                className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full p-4 border-2 rounded-xl hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
                   {isSubmitting ? (

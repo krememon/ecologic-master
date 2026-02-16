@@ -748,7 +748,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
             <button 
               onClick={() => { setIsNewEstimateOpen(false); resetForm(); }}
-              className="text-sm text-blue-500 font-medium"
+              className="text-sm text-blue-600 font-medium"
               data-testid="button-cancel-create"
             >
               Cancel
@@ -1154,7 +1154,7 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
                 >
                   <span className="text-slate-900 dark:text-slate-100">{type}</span>
                   {jobType === type && (
-                    <Check className="h-5 w-5 text-blue-500" />
+                    <Check className="h-5 w-5 text-blue-600" />
                   )}
                 </button>
               ))}

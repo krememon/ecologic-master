@@ -989,7 +989,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                 type="date"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full h-10 px-3 border rounded-xl bg-slate-100 dark:bg-slate-800 border-0 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+                className="w-full h-10 px-3 border rounded-xl bg-slate-100 dark:bg-slate-800 border-0 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-0"
               />
             </div>
             <div className="space-y-1.5">
@@ -998,7 +998,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                 value={scheduledTime}
                 onChange={setScheduledTime}
                 label="Select Start Time"
-                className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
             <div className="space-y-1.5">
@@ -1007,7 +1007,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
                 value={scheduledEndTime}
                 onChange={setScheduledEndTime}
                 label="Select End Time"
-                className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
             
@@ -1106,7 +1106,7 @@ export default function EstimateDetails({ estimateId }: EstimateDetailsProps) {
               value={editedNotes}
               onChange={(e) => setEditedNotes(e.target.value)}
               rows={5}
-              className="resize-none rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-0"
+              className="resize-none rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600 focus:ring-offset-0"
             />
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setIsNotesModalOpen(false)} className="h-10 px-4 rounded-xl">

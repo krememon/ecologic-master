@@ -159,7 +159,7 @@ export default function Landing() {
         <div className="space-y-4">
           <Button 
             onClick={() => window.location.href = "/register"}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
             Create Account
           </Button>
@@ -220,7 +220,7 @@ export default function Landing() {
 
                 <Button 
                   type="submit" 
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={isLoading}
                 >
                   {isLoading ? "Signing In..." : "Sign In"}

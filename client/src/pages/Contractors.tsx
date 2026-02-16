@@ -376,7 +376,7 @@ export default function Contractors() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 w-8 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
                       onClick={() => setEditingSubcontractor(subcontractor)}
                     >
                       <Edit className="h-4 w-4" />

@@ -344,7 +344,7 @@ export default function Invoicing() {
               key={invoice.id} 
               className={`hover:shadow-md transition-shadow cursor-pointer ${
                 isSelectMode && selectedInvoiceIds.has(invoice.id) 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500' 
+                  ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-600' 
                   : ''
               }`}
               onClick={() => {

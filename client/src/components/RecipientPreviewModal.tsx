@@ -196,7 +196,7 @@ export default function RecipientPreviewModal({
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {(channel === "email" || channel === "both") && r.emailEligible && (
-                          <Mail className="h-4 w-4 text-blue-500" />
+                          <Mail className="h-4 w-4 text-blue-600" />
                         )}
                         {(channel === "sms" || channel === "both") && r.smsEligible && (
                           <MessageSquare className="h-4 w-4 text-green-500" />

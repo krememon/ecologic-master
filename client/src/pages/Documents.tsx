@@ -1308,7 +1308,7 @@ export default function Documents() {
                   onClick={() => setSelectedVisibility(option.value)}
                   className={`w-full flex items-start gap-3 px-4 py-3 rounded-lg text-left transition-colors border ${
                     selectedVisibility === option.value
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30'
                       : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                   data-testid={`visibility-option-${option.value}`}
@@ -1322,7 +1322,7 @@ export default function Documents() {
                     </div>
                   </div>
                   {selectedVisibility === option.value && (
-                    <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                       </svg>

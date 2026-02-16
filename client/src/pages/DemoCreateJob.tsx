@@ -346,15 +346,15 @@ export default function DemoCreateJob() {
             <h3 className="text-sm font-semibold text-slate-800 dark:text-white mb-3">Next steps in the full app:</h3>
             <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
               <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0" />
                 Assign crew members to the job
               </li>
               <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0" />
                 Create and send invoices to your client
               </li>
               <li className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0" />
                 Track time and schedule with AI-powered tools
               </li>
             </ul>

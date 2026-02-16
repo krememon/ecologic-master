@@ -84,7 +84,7 @@ export default function IndustryOnboarding() {
                   className={`
                     flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all
                     ${isSelected 
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500/20" 
+                      ? "border-blue-600 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-600/20" 
                       : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600"
                     }
                   `}

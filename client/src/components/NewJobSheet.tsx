@@ -842,7 +842,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
           <div className="flex-shrink-0 flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <button 
               onClick={() => { resetForm(); onOpenChange(false); }}
-              className="text-sm text-blue-500 font-medium min-w-[60px] text-left"
+              className="text-sm text-blue-600 font-medium min-w-[60px] text-left"
               data-testid="button-cancel-job"
             >
               Cancel
@@ -1190,7 +1190,7 @@ export function NewJobSheet({ open, onOpenChange, onJobCreated, initialJob, isEd
                   >
                     <span className="font-medium text-slate-900 dark:text-slate-100">{type}</span>
                     {jobType === type && (
-                      <Check className="h-5 w-5 text-blue-500" />
+                      <Check className="h-5 w-5 text-blue-600" />
                     )}
                   </button>
                   {index < JOB_TYPES.length - 1 && (

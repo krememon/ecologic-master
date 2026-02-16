@@ -2047,7 +2047,7 @@ export default function Jobs() {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 w-8 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
                       onClick={(e) => {
                         e.stopPropagation();
                         setLocation(`/jobs/${job.id}/edit`);
@@ -2334,7 +2334,7 @@ export default function Jobs() {
                         {/* Checkbox */}
                         <div className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 ${
                           isChecked 
-                            ? 'bg-blue-500 border-blue-500' 
+                            ? 'bg-blue-600 border-blue-600' 
                             : 'border-slate-300 dark:border-slate-600'
                         }`}>
                           {isChecked && (

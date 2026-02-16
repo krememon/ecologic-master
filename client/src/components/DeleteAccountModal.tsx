@@ -90,7 +90,7 @@ export default function DeleteAccountModal({ open, onOpenChange }: DeleteAccount
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder="Type DELETE"
-            className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-0"
+            className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
             autoComplete="off"
             disabled={deleteAccountMutation.isPending}
           />

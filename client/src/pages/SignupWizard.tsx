@@ -559,7 +559,7 @@ export default function SignupWizard() {
                         value={verificationCode[index] || ""}
                         onChange={(e) => handleCodeInput(index, e.target.value)}
                         onKeyDown={(e) => handleCodeKeyDown(index, e)}
-                        className="w-11 h-12 text-center text-xl font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:border-slate-600"
+                        className="w-11 h-12 text-center text-xl font-mono border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 dark:bg-slate-700 dark:border-slate-600"
                       />
                     ))}
                   </div>
@@ -659,7 +659,7 @@ export default function SignupWizard() {
                   <button
                     type="button"
                     onClick={() => handleRoleSelect("owner")}
-                    className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4"
+                    className="w-full p-4 border-2 rounded-xl hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4"
                   >
                     <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                       <Building2 className="w-6 h-6 text-blue-600" />
@@ -673,7 +673,7 @@ export default function SignupWizard() {
                   <button
                     type="button"
                     onClick={() => handleRoleSelect("employee")}
-                    className="w-full p-4 border-2 rounded-xl hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4"
+                    className="w-full p-4 border-2 rounded-xl hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left flex items-center gap-4"
                   >
                     <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                       <Users className="w-6 h-6 text-green-600" />
@@ -729,7 +729,7 @@ export default function SignupWizard() {
                         onClick={() => setFormData({ ...formData, industry: industry.value })}
                         className={`w-full p-3 border-2 rounded-lg text-left transition-all flex items-center justify-between ${
                           formData.industry === industry.value
-                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                            ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
                             : "hover:border-slate-300"
                         }`}
                       >
@@ -775,7 +775,7 @@ export default function SignupWizard() {
                           onClick={() => setFormData({ ...formData, employeeRange: range.value })}
                           className={`p-3 border-2 rounded-lg text-sm font-medium transition-all ${
                             formData.employeeRange === range.value
-                              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                              ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
                               : "hover:border-slate-300"
                           }`}
                         >

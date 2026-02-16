@@ -123,7 +123,7 @@ export default function TwoFactor() {
 
         <p className="text-center text-xs text-slate-400 mt-4">
           Lost access to your authenticator?{" "}
-          <a href="mailto:support@ecologic.app" className="text-blue-500 hover:underline">
+          <a href="mailto:support@ecologic.app" className="text-blue-600 hover:underline">
             Contact support
           </a>
         </p>

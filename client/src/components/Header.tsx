@@ -31,7 +31,7 @@ const getNotificationIcon = (type: string) => {
     case 'announcement':
       return <Megaphone className="h-4 w-4 text-amber-500" />;
     case 'dm_message':
-      return <MessageSquare className="h-4 w-4 text-blue-500" />;
+      return <MessageSquare className="h-4 w-4 text-blue-600" />;
     case 'payment_collected':
     case 'payment_succeeded':
     case 'invoice_paid':
@@ -46,7 +46,7 @@ const getNotificationIcon = (type: string) => {
     case 'invoice_overdue':
       return <AlertTriangle className="h-4 w-4 text-red-500" />;
     case 'job_assigned':
-      return <Briefcase className="h-4 w-4 text-blue-500" />;
+      return <Briefcase className="h-4 w-4 text-blue-600" />;
     case 'job_unassigned':
       return <UserMinus className="h-4 w-4 text-orange-500" />;
     case 'job_rescheduled':
@@ -56,7 +56,7 @@ const getNotificationIcon = (type: string) => {
     case 'estimate_created':
     case 'estimate_updated':
     case 'estimate_status_changed':
-      return <FileText className="h-4 w-4 text-blue-500" />;
+      return <FileText className="h-4 w-4 text-blue-600" />;
     case 'estimate_converted':
       return <ClipboardCheck className="h-4 w-4 text-green-500" />;
     default:
@@ -262,7 +262,7 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
                     <div className="flex items-start gap-3">
                       <div className="mt-1 flex-shrink-0 flex items-center gap-2">
                         {!notification.readAt && (
-                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                          <span className="w-2 h-2 rounded-full bg-blue-600" />
                         )}
                         {getNotificationIcon(notification.type)}
                       </div>
