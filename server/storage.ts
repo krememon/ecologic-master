@@ -116,6 +116,9 @@ import {
   type InsertPayoutSetupToken,
   type ScheduleEvent,
   type InsertScheduleEvent,
+  paymentSignatures,
+  type PaymentSignature,
+  type InsertPaymentSignature,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -427,6 +430,10 @@ export interface IStorage {
   createPayoutSetupToken(token: InsertPayoutSetupToken): Promise<PayoutSetupToken>;
   getPayoutSetupTokenByToken(token: string): Promise<PayoutSetupToken | undefined>;
   markPayoutSetupTokenUsed(id: number): Promise<void>;
+
+  // Payment signature operations
+  getPaymentSignature(paymentId: number): Promise<PaymentSignature | undefined>;
+  createPaymentSignature(sig: InsertPaymentSignature): Promise<PaymentSignature>;
 
 }
 
@@ -4136,6 +4143,16 @@ export class DatabaseStorage implements IStorage {
 
   async deleteScheduleEvent(id: number): Promise<void> {
     await db.delete(scheduleEvents).where(eq(scheduleEvents.id, id));
+  }
+
+  async getPaymentSignature(paymentId: number): Promise<PaymentSignature | undefined> {
+    const [sig] = await db.select().from(paymentSignatures).where(eq(paymentSignatures.paymentId, paymentId));
+    return sig || undefined;
+  }
+
+  async createPaymentSignature(sig: InsertPaymentSignature): Promise<PaymentSignature> {
+    const [created] = await db.insert(paymentSignatures).values(sig).returning();
+    return created;
   }
 
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 
 console.log("[StripeReturn] Module loaded at", new Date().toISOString());
 
@@ -10,12 +12,32 @@ export default function StripeReturn() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState("Verifying payment...");
   const [hasRedirected, setHasRedirected] = useState(false);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [stripePaymentId, setStripePaymentId] = useState<number | null>(null);
+  const [stripeJobId, setStripeJobId] = useState<number | undefined>(undefined);
+  const [stripeInvoiceId, setStripeInvoiceId] = useState<number | undefined>(undefined);
+  const [waitingForSignature, setWaitingForSignature] = useState(false);
+
+  const { data: paymentSettings, isLoading: settingsLoading } = useQuery<{ requireSignatureAfterPayment: boolean }>({
+    queryKey: ['/api/settings/payments'],
+  });
+
+  const doRedirect = () => {
+    try {
+      localStorage.removeItem("selectedJobId");
+      localStorage.removeItem("activeJobId");
+      localStorage.removeItem("stripe_session");
+    } catch (e) {
+      console.error("[StripeReturn] localStorage clear error:", e);
+    }
+    setHasRedirected(true);
+    setLocation("/jobs", { replace: true });
+  };
 
   useEffect(() => {
     console.log("[StripeReturn] useEffect running");
     
-    if (hasRedirected) {
-      console.log("[StripeReturn] Already redirected, skipping");
+    if (hasRedirected || waitingForSignature || settingsLoading) {
       return;
     }
     
@@ -30,6 +52,10 @@ export default function StripeReturn() {
         const sessionId = localStorage.getItem("stripe_session");
         console.log("[StripeReturn] Session ID from localStorage:", sessionId);
         
+        let paymentId: number | null = null;
+        let jobId: number | undefined = undefined;
+        let invoiceId: number | undefined = undefined;
+        
         if (sessionId) {
           setStatus("Confirming payment...");
           try {
@@ -40,7 +66,10 @@ export default function StripeReturn() {
             console.log("[StripeReturn] Session status:", data);
             
             if (data.paymentStatus === 'paid') {
-              setStatus("Payment confirmed! Redirecting...");
+              setStatus("Payment confirmed!");
+              paymentId = data.paymentId || null;
+              jobId = data.jobId ? parseInt(data.jobId) : undefined;
+              invoiceId = data.invoiceId ? parseInt(data.invoiceId) : undefined;
             }
           } catch (e) {
             console.error("[StripeReturn] Session check error:", e);
@@ -53,7 +82,6 @@ export default function StripeReturn() {
           queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
           queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
           queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-          // Invalidate payments queries for live UI update
           queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
           queryClient.invalidateQueries({ queryKey: ["/api/payments/breakdown"] });
           queryClient.invalidateQueries({ predicate: (query) => 
@@ -66,42 +94,48 @@ export default function StripeReturn() {
           console.error("[StripeReturn] Query invalidation error:", e);
         }
         
-        try {
-          localStorage.removeItem("selectedJobId");
-          localStorage.removeItem("activeJobId");
-          localStorage.removeItem("stripe_session");
-        } catch (e) {
-          console.error("[StripeReturn] localStorage clear error:", e);
+        if (paymentId && paymentSettings?.requireSignatureAfterPayment) {
+          setStripePaymentId(paymentId);
+          setStripeJobId(jobId);
+          setStripeInvoiceId(invoiceId);
+          setWaitingForSignature(true);
+          setSignatureModalOpen(true);
+          return;
         }
         
         console.log("[StripeReturn] State cleaned, navigating to /jobs");
         setStatus("Redirecting to Jobs...");
-        setHasRedirected(true);
-        
-        setLocation("/jobs", { replace: true });
+        doRedirect();
         
       } catch (error) {
         console.error("[StripeReturn] Error during cleanup:", error);
         setStatus("Error occurred, redirecting...");
-        setHasRedirected(true);
-        setLocation("/jobs", { replace: true });
+        doRedirect();
       }
     };
 
     processReturn();
-  }, [setLocation, hasRedirected]);
+  }, [setLocation, hasRedirected, waitingForSignature, settingsLoading, paymentSettings]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (!hasRedirected) {
+      if (!hasRedirected && !waitingForSignature) {
         console.log("[StripeReturn] Safety timeout triggered, forcing redirect");
-        setHasRedirected(true);
-        setLocation("/jobs", { replace: true });
+        doRedirect();
       }
-    }, 5000);
+    }, 8000);
     
     return () => clearTimeout(timeout);
-  }, [setLocation, hasRedirected]);
+  }, [setLocation, hasRedirected, waitingForSignature]);
+
+  const handleSignatureComplete = () => {
+    setSignatureModalOpen(false);
+    setWaitingForSignature(false);
+    doRedirect();
+  };
+
+  const handleSignatureClose = () => {
+  };
 
   return (
     <div style={{ 
@@ -125,6 +159,17 @@ export default function StripeReturn() {
         <p style={{ color: '#6b7280', fontSize: '16px' }}>{status}</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
+      {stripePaymentId && (
+        <SignatureCaptureModal
+          open={signatureModalOpen}
+          onOpenChange={handleSignatureClose}
+          paymentId={stripePaymentId}
+          jobId={stripeJobId}
+          invoiceId={stripeInvoiceId}
+          onComplete={handleSignatureComplete}
+          required
+        />
+      )}
     </div>
   );
 }

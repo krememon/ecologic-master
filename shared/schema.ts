@@ -134,6 +134,7 @@ export const companies = pgTable("companies", {
   secondaryColor: varchar("secondary_color").default("#059669"),
   autoClockOutTime: varchar("auto_clock_out_time", { length: 5 }).default("18:00"),
   hideConvertedEstimates: boolean("hide_converted_estimates").default(true),
+  requireSignatureAfterPayment: boolean("require_signature_after_payment").default(false),
   ownerId: varchar("owner_id").notNull().references(() => users.id),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: varchar("subscription_status").default("inactive"), // active, past_due, canceled, incomplete, trialing, inactive
@@ -1811,4 +1812,25 @@ export const insertScheduleEventSchema = createInsertSchema(scheduleEvents, {
 
 export type ScheduleEvent = typeof scheduleEvents.$inferSelect;
 export type InsertScheduleEvent = z.infer<typeof insertScheduleEventSchema>;
+
+export const paymentSignatures = pgTable("payment_signatures", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  invoiceId: integer("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  paymentId: integer("payment_id").notNull().references(() => payments.id, { onDelete: "cascade" }).unique(),
+  signedByName: varchar("signed_by_name", { length: 255 }).notNull(),
+  signaturePngBase64: text("signature_png_base64").notNull(),
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPaymentSignatureSchema = createInsertSchema(paymentSignatures).omit({
+  id: true,
+  signedAt: true,
+  createdAt: true,
+});
+
+export type PaymentSignature = typeof paymentSignatures.$inferSelect;
+export type InsertPaymentSignature = z.infer<typeof insertPaymentSignatureSchema>;
 

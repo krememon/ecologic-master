@@ -13,6 +13,7 @@ import {
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
+import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 
 interface Invoice {
   id: number;
@@ -77,6 +78,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   const [partialEnabled, setPartialEnabled] = useState(false);
   const [partialAmountStr, setPartialAmountStr] = useState("");
+  const [resultPaymentId, setResultPaymentId] = useState<number | null>(null);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+
+  const { data: paymentSettings } = useQuery<{ requireSignatureAfterPayment: boolean }>({
+    queryKey: ['/api/settings/payments'],
+  });
 
   const numericJobId = parseInt(jobId, 10);
   const numericInvoiceId = parseInt(invoiceId, 10);
@@ -218,7 +225,11 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         setPaidAmount(data.amountCents);
         setResultNewStatus(data.newStatus || 'paid');
         setResultBalanceRemaining(data.balanceRemaining || 0);
+        setResultPaymentId(data.paymentId || null);
         invalidateAll();
+        if (data.paymentId && paymentSettings?.requireSignatureAfterPayment) {
+          setSignatureModalOpen(true);
+        }
         setViewState('success');
       } else {
         throw new Error(data.message || "Payment failed");
@@ -333,6 +344,17 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
             Done
           </Button>
         </div>
+        {resultPaymentId && (
+          <SignatureCaptureModal
+            open={signatureModalOpen}
+            onOpenChange={setSignatureModalOpen}
+            paymentId={resultPaymentId}
+            jobId={numericJobId}
+            invoiceId={numericInvoiceId}
+            required
+            onComplete={() => setSignatureModalOpen(false)}
+          />
+        )}
       </div>
     );
   }

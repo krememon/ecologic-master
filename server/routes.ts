@@ -13129,10 +13129,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      let paymentId = null;
+      if (session.payment_status === 'paid' && session.metadata?.invoiceId) {
+        const invId = parseInt(session.metadata.invoiceId);
+        const allPmts = await storage.getPaymentsByInvoiceId(invId);
+        const piId = session.payment_intent as string;
+        const match = piId ? allPmts?.find((p: any) => p.stripePaymentIntentId === piId) : allPmts?.[allPmts.length - 1];
+        if (match) paymentId = match.id;
+      }
+
       res.json({
         status: session.status,
         paymentStatus: session.payment_status,
         invoiceId: session.metadata?.invoiceId,
+        jobId: session.metadata?.jobId || null,
+        paymentId,
       });
     } catch (error: any) {
       console.error('Error retrieving session:', error);
@@ -14291,6 +14302,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[ScheduleEvents] Error deleting:", error.message);
       res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  // =====================
+  // Payment Signature Routes
+  // =====================
+
+  app.get('/api/settings/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+      const company = await storage.getCompany(member.companyId);
+      res.json({
+        requireSignatureAfterPayment: company?.requireSignatureAfterPayment ?? false,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to get payment settings' });
+    }
+  });
+
+  app.put('/api/settings/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+      if (!can(member.role as UserRole, 'customize.manage')) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      const { requireSignatureAfterPayment } = req.body;
+      if (typeof requireSignatureAfterPayment !== 'boolean') {
+        return res.status(400).json({ error: 'requireSignatureAfterPayment must be a boolean' });
+      }
+      await storage.updateCompany(member.companyId, { requireSignatureAfterPayment });
+      res.json({ requireSignatureAfterPayment });
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to update payment settings' });
+    }
+  });
+
+  app.get('/api/payments/:paymentId/signature', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+      const paymentId = parseInt(req.params.paymentId, 10);
+      if (isNaN(paymentId)) return res.status(400).json({ error: 'Invalid payment ID' });
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment || payment.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Payment not found' });
+      }
+      const sig = await storage.getPaymentSignature(paymentId);
+      res.json({ signature: sig || null });
+    } catch (error: any) {
+      res.status(500).json({ error: 'Failed to get signature' });
+    }
+  });
+
+  app.post('/api/payments/:paymentId/signature', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) return res.status(404).json({ error: 'Company not found' });
+      const paymentId = parseInt(req.params.paymentId, 10);
+      if (isNaN(paymentId)) return res.status(400).json({ error: 'Invalid payment ID' });
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment || payment.companyId !== member.companyId) {
+        return res.status(404).json({ error: 'Payment not found' });
+      }
+      const existing = await storage.getPaymentSignature(paymentId);
+      if (existing) {
+        return res.json({ signature: existing });
+      }
+      const { signedByName, signaturePngBase64, jobId, invoiceId } = req.body;
+      if (!signedByName || typeof signedByName !== 'string' || !signedByName.trim()) {
+        return res.status(400).json({ error: 'Printed name is required' });
+      }
+      if (!signaturePngBase64 || typeof signaturePngBase64 !== 'string') {
+        return res.status(400).json({ error: 'Signature image is required' });
+      }
+      const sig = await storage.createPaymentSignature({
+        companyId: member.companyId,
+        paymentId,
+        jobId: jobId || payment.jobId || null,
+        invoiceId: invoiceId || payment.invoiceId || null,
+        signedByName: signedByName.trim(),
+        signaturePngBase64,
+      });
+      res.json({ signature: { id: sig.id, signedAt: sig.signedAt } });
+    } catch (error: any) {
+      console.error('Error saving payment signature:', error);
+      res.status(500).json({ error: 'Failed to save signature' });
     }
   });
 
