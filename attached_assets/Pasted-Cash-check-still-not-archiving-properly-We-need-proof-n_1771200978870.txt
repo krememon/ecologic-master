@@ -1,0 +1,46 @@
+Cash/check still not archiving properly. We need proof, not assumptions.
+
+GOAL:
+After recording a cash/check payment, the job must become status='archived' immediately and disappear from Jobs list without manual refresh.
+
+STEP 1 — Add hard proof logs (TEMP):
+In POST /api/payments/record (RecordPaymentModal flow) and POST /api/payments/manual (PaymentReview flow):
+After the code calls tryArchiveCompletedPaidJob (or whatever helper), log:
+- endpoint name (/record or /manual)
+- invoiceId, jobId resolved
+- job.status BEFORE
+- job.status AFTER (re-query the job from DB after update)
+- rows affected by the archive update
+
+This will confirm whether the DB is actually updated.
+
+STEP 2 — Confirm which field the Jobs list filters by:
+Find the Jobs list endpoint or query (GET /api/jobs) and confirm it filters out archived jobs using the SAME field we update.
+- If Jobs list filters on `archivedAt IS NULL` but we only set `status='archived'`, it won’t hide.
+- If Jobs list filters on `status != 'archived'` but manual flow only sets `archivedAt`, it won’t hide.
+Make this consistent:
+RECOMMENDATION: Use BOTH for safety:
+- set status='archived'
+- set archivedAt=now()
+and filter with: WHERE deletedAt IS NULL AND status != 'archived' (or archivedAt IS NULL, but pick ONE consistent rule and apply everywhere).
+
+STEP 3 — Fix frontend refetch correctly:
+If backend is archiving but UI doesn’t update, your invalidation is wrong.
+Find how Jobs page fetches jobs:
+- If using React Query: identify the exact query key and call queryClient.invalidateQueries({ queryKey: <same key> })
+- If using SWR: mutate(<same key>)
+- If using custom fetch in component: call the refetch function or update state.
+
+Do NOT invalidate raw strings like '/api/jobs' unless that is exactly the query key used.
+
+STEP 4 — Verification
+Run cash payment once and confirm logs show:
+- Job AFTER has status='archived' and archivedAt not null
+- GET /api/jobs response does NOT include that job
+- UI removes it immediately
+
+DELIVERABLES:
+- Paste the new logs from one cash payment attempt showing BEFORE/AFTER job status
+- Show the jobs list filter logic and ensure it matches the archive update
+- Show the exact query key invalidated/refetched in the frontend
+- Remove temp logs after passing

@@ -12581,13 +12581,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update job paymentStatus if invoice is associated with a job
       if (invoice.jobId) {
         const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        await storage.updateJob(invoice.jobId, {
-          paymentStatus: jobPaymentStatus,
-          ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
-        } as any);
-        console.log(`[Payment] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
+        const now = new Date();
         if (jobPaymentStatus === 'paid') {
-          await tryArchiveCompletedPaidJob(invoice.jobId);
+          const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
+          console.log(`[Payment-Manual] Job ${invoice.jobId} BEFORE: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
+          const archiveFields = jobBefore && jobBefore.status !== 'archived' && !jobBefore.archivedAt
+            ? { status: 'archived', archivedAt: now, archivedReason: 'paid' }
+            : {};
+          await db.update(jobs).set({
+            paymentStatus: 'paid',
+            paidAt: now,
+            ...archiveFields,
+            updatedAt: now,
+          }).where(eq(jobs.id, invoice.jobId));
+          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
+          console.log(`[Payment-Manual] Job ${invoice.jobId} AFTER: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
+        } else {
+          await storage.updateJob(invoice.jobId, {
+            paymentStatus: jobPaymentStatus,
+          } as any);
+          console.log(`[Payment-Manual] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
         }
       }
 
@@ -12748,12 +12761,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (invoice.jobId) {
         const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        await storage.updateJob(invoice.jobId, {
-          paymentStatus: jobPaymentStatus,
-          ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
-        } as any);
+        const now = new Date();
         if (jobPaymentStatus === 'paid') {
-          await tryArchiveCompletedPaidJob(invoice.jobId);
+          const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
+          console.log(`[Payment-Record] Job ${invoice.jobId} BEFORE: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
+          const archiveFields = jobBefore && jobBefore.status !== 'archived' && !jobBefore.archivedAt
+            ? { status: 'archived', archivedAt: now, archivedReason: 'paid' }
+            : {};
+          await db.update(jobs).set({
+            paymentStatus: 'paid',
+            paidAt: now,
+            ...archiveFields,
+            updatedAt: now,
+          }).where(eq(jobs.id, invoice.jobId));
+          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
+          console.log(`[Payment-Record] Job ${invoice.jobId} AFTER: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
+        } else {
+          await storage.updateJob(invoice.jobId, {
+            paymentStatus: jobPaymentStatus,
+          } as any);
+          console.log(`[Payment-Record] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
         }
       }
 
