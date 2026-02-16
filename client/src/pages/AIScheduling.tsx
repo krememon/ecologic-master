@@ -322,7 +322,6 @@ export default function AIScheduling() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       setIsViewEventOpen(false);
-      toast({ title: "Event deleted" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
