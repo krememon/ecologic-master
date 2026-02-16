@@ -293,7 +293,6 @@ export default function AIScheduling() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       setIsCreateEventOpen(false);
-      toast({ title: "Event created" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
