@@ -4378,20 +4378,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Update crew assignments if provided
+      let crewToAdd: string[] = [];
+      let crewToRemove: string[] = [];
       if (assignedEmployeeIds !== undefined) {
         const existingCrew = await storage.getJobCrewAssignments(jobId);
         const existingIds = existingCrew.map(c => c.userId);
         
-        // Remove crew members not in the new list
-        const toRemove = existingIds.filter(id => !assignedEmployeeIds.includes(id));
-        if (toRemove.length > 0) {
-          await storage.removeJobCrewAssignments(jobId, toRemove);
+        crewToRemove = existingIds.filter(id => !assignedEmployeeIds.includes(id));
+        if (crewToRemove.length > 0) {
+          await storage.removeJobCrewAssignments(jobId, crewToRemove);
         }
         
-        // Add new crew members
-        const toAdd = assignedEmployeeIds.filter((id: string) => !existingIds.includes(id));
-        if (toAdd.length > 0) {
-          await storage.addJobCrewAssignments(jobId, toAdd, company.id, userId);
+        crewToAdd = assignedEmployeeIds.filter((id: string) => !existingIds.includes(id));
+        if (crewToAdd.length > 0) {
+          await storage.addJobCrewAssignments(jobId, crewToAdd, company.id, userId);
         }
       }
       
@@ -4534,24 +4534,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Notify crew of new assignments via PATCH
-      if (assignedEmployeeIds !== undefined && Array.isArray(assignedEmployeeIds)) {
-        // Fetch actual existing crew from database
-        const existingCrewAssignments = await storage.getJobCrewAssignments(jobId);
-        const existingCrewIds = existingCrewAssignments.map((c: any) => c.userId);
-        const newlyAdded = assignedEmployeeIds.filter((id: string) => !existingCrewIds.includes(id));
-        if (newlyAdded.length > 0) {
-          const assigner = await storage.getUser(userId);
-          const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
-          await notifyTechniciansOnly(newlyAdded, company.id, {
-            type: 'job_assigned',
-            title: 'New Job Assignment',
-            body: `${assignerName} assigned you to job: ${jobTitle}`,
-            entityType: 'job',
-            entityId: jobId,
-            linkUrl: `/jobs/${jobId}`,
-          });
-        }
+      // Notify on key status changes
+      const KEY_STATUSES = ['in_progress', 'on_hold', 'canceled', 'completed'];
+      if (status && status !== existingJob.status && KEY_STATUSES.includes(status)) {
+        const statusLabel = status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+        const clientName = (existingJob as any).clientName || (existingJob as any).customerName || '';
+        const statusBody = clientName ? `${clientName} – ${jobTitle}: ${statusLabel}` : `${jobTitle}: ${statusLabel}`;
+
+        await notifyJobCrewAndManagers(jobId, company.id, {
+          type: 'job_status_changed',
+          title: 'Job Status Updated',
+          body: statusBody,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs/${jobId}`,
+        });
+      }
+
+      // Notify crew of assignment changes via PATCH
+      if (crewToAdd.length > 0) {
+        const assigner = await storage.getUser(userId);
+        const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
+        await notifyTechniciansOnly(crewToAdd, company.id, {
+          type: 'job_assigned',
+          title: 'Assigned to Job',
+          body: `${assignerName} assigned you to: ${jobTitle}`,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs/${jobId}`,
+        });
+      }
+
+      if (crewToRemove.length > 0) {
+        await notifyTechniciansOnly(crewToRemove, company.id, {
+          type: 'job_unassigned',
+          title: 'Removed from Job',
+          body: `You have been removed from: ${jobTitle}`,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs/${jobId}`,
+        });
       }
 
       if (status === 'completed') {
@@ -7608,6 +7630,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       console.log(`[Estimates] CREATED estimateId=${estimate.id} requestedStartAt=${estimate.requestedStartAt}`);
+
+      const estTotalDollars = ((estimate.totalCents || 0) / 100).toFixed(2);
+      const estClientName = (estimate as any).customerName || '';
+      await notifyManagers(companyId, {
+        type: 'estimate_created',
+        title: 'Estimate Created',
+        body: estClientName ? `${estClientName} – $${estTotalDollars}` : `${estimate.title || estimate.estimateNumber} – $${estTotalDollars}`,
+        entityType: 'estimate',
+        entityId: estimate.id,
+        linkUrl: `/estimates/${estimate.id}`,
+      });
+
       res.status(201).json(estimate);
     } catch (error) {
       console.error("Error creating estimate:", error);
@@ -7715,6 +7749,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyId,
         userId
       );
+
+      const estTotalDollars2 = ((estimate.totalCents || 0) / 100).toFixed(2);
+      const estClientName2 = (estimate as any).customerName || '';
+      await notifyManagers(companyId, {
+        type: 'estimate_created',
+        title: 'Estimate Created',
+        body: estClientName2 ? `${estClientName2} – $${estTotalDollars2}` : `${estimate.title || estimate.estimateNumber} – $${estTotalDollars2}`,
+        entityType: 'estimate',
+        entityId: estimate.id,
+        linkUrl: `/estimates/${estimate.id}`,
+      });
 
       res.status(201).json(estimate);
     } catch (error) {
@@ -14357,7 +14402,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[WS:SEND] Warning: Room ${roomKey} has no sockets`);
             }
 
-            // 5. Send ACK to sender
+            // 5. Create DM bell notification for recipients
+            try {
+              const sender = await storage.getUser(ws.userId);
+              const senderCompany = await storage.getUserCompany(ws.userId);
+              if (sender && senderCompany) {
+                const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Someone';
+                const messagePreview = body.trim().length > 50 ? body.trim().substring(0, 50) + '...' : body.trim();
+                const otherParticipants = await db
+                  .select({ userId: conversationParticipants.userId })
+                  .from(conversationParticipants)
+                  .where(and(
+                    eq(conversationParticipants.conversationId, conversationId),
+                    sql`${conversationParticipants.userId} != ${ws.userId}`
+                  ));
+                for (const { userId: recipientId } of otherParticipants) {
+                  await storage.createNotification({
+                    companyId: senderCompany.id,
+                    recipientUserId: recipientId,
+                    type: 'dm_message',
+                    title: senderName,
+                    body: messagePreview,
+                    entityType: 'conversation',
+                    entityId: conversationId,
+                    linkUrl: `/messages?conversation=${conversationId}`,
+                    meta: { conversationId, senderId: ws.userId, messageId: newMessage.id },
+                  });
+                }
+              }
+            } catch (notifErr) {
+              console.error('[WS:SEND] DM notification error:', notifErr);
+            }
+
+            // 6. Send ACK to sender
             const dt = Date.now() - t0;
             console.log(`[WS:SEND] Message ${newMessage.id} sent successfully in ${dt}ms`);
             ws.send(JSON.stringify({ 

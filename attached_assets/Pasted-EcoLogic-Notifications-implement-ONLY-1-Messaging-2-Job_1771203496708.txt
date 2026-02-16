@@ -1,0 +1,110 @@
+EcoLogic Notifications — implement ONLY: 1) Messaging, 2) Jobs, 5) Estimates.
+(We are removing Dispatcher/Estimator roles, so ignore those roles completely.)
+
+GLOBAL RULES:
+- “Actionable, not noisy”
+- Follow RBAC + job-access rules (“hidden not disabled”): never notify a user about an entity they can’t access.
+- Notifications are in-app only (bell + feed). No email/SMS.
+- Each notification must include: companyId, recipientUserId, type, entityType, entityId, title, body, createdAt, readAt=null, and a deep-link URL.
+- Prevent duplicates (idempotent insert or unique key on [recipientUserId,type,entityType,entityId,createdAt rounded]).
+
+------------------------------------------------------------
+1) MESSAGING NOTIFICATIONS (DM)
+TRIGGERS:
+- New message in a DM thread
+
+RECIPIENTS:
+- All participants in that thread EXCEPT the sender
+
+BEHAVIOR:
+- Create notification type: "message_new"
+- entityType: "thread"
+- entityId: threadId
+- Title: "New message"
+- Body: "<SenderName>: <short snippet>"
+- URL: /messages?thread=<threadId> (or your actual route)
+
+DELIVERABLES:
+- Hook notification creation into the message send endpoint (backend) after message save.
+- Ensure recipients only include thread participants.
+- Confirm unread badge increments and clicking opens the correct thread.
+
+------------------------------------------------------------
+2) JOB NOTIFICATIONS
+TRIGGERS (ONLY these — keep it tight):
+A) Job assigned to a technician (crew assignment add)
+B) Job unassigned from a technician (crew assignment remove)
+C) Job schedule time/date changed (if scheduling exists)
+D) Job status changed to key statuses only (ex: "in_progress", "on_hold", "canceled", "completed") — do NOT notify on minor edits
+
+RECIPIENTS:
+- Technicians affected (added/removed tech) for A/B
+- All assigned crew for C/D (only those assigned to that job)
+- Owner/Admin and Supervisor may also receive C/D if they have job access OR are global-access roles in your RBAC.
+
+IMPORTANT:
+- Do NOT notify other technicians not assigned to the job.
+- Do NOT notify about jobs a user cannot access.
+
+NOTIFICATION DETAILS:
+- type examples: "job_assigned", "job_unassigned", "job_schedule_changed", "job_status_changed"
+- entityType: "job"
+- entityId: jobId
+- Title examples:
+  - "Assigned to job"
+  - "Removed from job"
+  - "Schedule updated"
+  - "Job status updated"
+- Body should include: Client name (if available) + job title
+- URL: /jobs/<jobId> (or open Job Details modal route)
+
+DELIVERABLES:
+- Implement backend hooks where these events occur:
+  - Crew assignment endpoint(s)
+  - Schedule update endpoint (if exists)
+  - Status update endpoint
+- Ensure notifications are created after DB update succeeds.
+- Ensure Jobs UI bell deep-links to the job correctly.
+
+------------------------------------------------------------
+5) ESTIMATE NOTIFICATIONS
+TRIGGERS (ONLY these):
+A) Estimate created
+B) Estimate updated in a meaningful way (total changed OR status changed)
+C) Estimate approved/declined (if client approval exists)
+D) Estimate converted to job
+
+RECIPIENTS:
+- Owner/Admin and Supervisor ONLY (since estimator role is being removed)
+- Never notify technicians unless they are explicitly assigned after conversion (that’s handled by job_assigned notifications).
+
+NOTIFICATION DETAILS:
+- type examples: "estimate_created", "estimate_updated", "estimate_status_changed", "estimate_converted"
+- entityType: "estimate"
+- entityId: estimateId
+- Title examples:
+  - "Estimate created"
+  - "Estimate updated"
+  - "Estimate approved"
+  - "Estimate converted to job"
+- Body should include: Client name + estimate total
+- URL: /estimates/<estimateId> (or your actual estimate detail route)
+
+DELIVERABLES:
+- Add notification creation into the estimate create/update/convert endpoints.
+- Ensure only Owner/Admin + Supervisor receive them.
+- Confirm bell count increments and links open the correct estimate.
+
+------------------------------------------------------------
+TEST CHECKLIST (must pass):
+1) Send DM from User A to User B -> B gets notification, A does not.
+2) Assign Job to Tech -> that Tech gets "Assigned to job" notification.
+3) Change job schedule -> assigned crew (and Owner/Supervisor per RBAC) get notified.
+4) Create estimate -> Owner + Supervisor notified.
+5) Convert estimate -> Owner + Supervisor notified + then when job assignment happens, assigned tech gets job_assigned notification.
+
+OUTPUT REQUIRED:
+- List exact file paths changed
+- Show key code snippets for notification creation in each trigger
+- Confirm RBAC checks are applied before inserting notifications
+- No changes to Payments notifications in this task
