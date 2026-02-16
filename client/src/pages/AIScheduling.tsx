@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ import {
   Trash2,
   Clock,
   Eye,
+  X,
 } from "lucide-react";
 import { startOfWeekLocal, addDaysLocal, dateToYmdLocal, parseYmdLocal } from "@/utils/scheduleDate";
 import { useLocation } from "wouter";
@@ -1441,212 +1443,268 @@ export default function AIScheduling() {
       />
 
       <Dialog open={isCreateEventOpen} onOpenChange={setIsCreateEventOpen}>
-        <DialogContent className="rounded-2xl max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Event</DialogTitle>
-            <DialogDescription>Add a new event to the company calendar.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label htmlFor="event-title">Title *</Label>
-              <Input
-                id="event-title"
-                maxLength={80}
-                value={eventForm.title}
-                onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Event title"
-              />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <div className="text-center">
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Create Event
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Add to company calendar
+              </DialogDescription>
             </div>
-            <div>
-              <Label htmlFor="event-desc">Description</Label>
-              <Textarea
-                id="event-desc"
-                value={eventForm.description}
-                onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Optional description"
-                rows={2}
-              />
-            </div>
-            <div>
-              <Label htmlFor="event-date">Date</Label>
-              <Input
-                id="event-date"
-                type="date"
-                value={eventForm.date}
-                onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="event-allday">All Day</Label>
-              <Switch
-                id="event-allday"
-                checked={eventForm.allDay}
-                onCheckedChange={v => setEventForm(f => ({ ...f, allDay: v }))}
-              />
-            </div>
-            {!eventForm.allDay && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Start Time</Label>
-                  <TimeWheelPicker
-                    value={eventForm.startTime}
-                    onChange={handleEventStartTimeChange}
-                    label="Start Time"
-                  />
-                </div>
-                <div>
-                  <Label>End Time</Label>
-                  <TimeWheelPicker
-                    value={eventForm.endTime}
-                    onChange={handleEventEndTimeChange}
-                    label="End Time"
-                  />
-                </div>
-              </div>
-            )}
-            <div>
-              <Label>Visibility</Label>
-              <Select value={eventForm.visibility} onValueChange={v => setEventForm(f => ({ ...f, visibility: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {VISIBILITY_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Color</Label>
-              <div className="flex gap-2 mt-1.5">
-                {EVENT_COLORS.map(c => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setEventForm(f => ({ ...f, color: c.value }))}
-                    className={`w-8 h-8 rounded-full transition-all ${eventForm.color === c.value ? 'ring-2 ring-offset-2 ring-blue-600' : 'hover:scale-110'}`}
-                    style={{ backgroundColor: c.value }}
-                    title={c.label}
-                  />
-                ))}
-              </div>
-            </div>
+            <button
+              onClick={() => setIsCreateEventOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <DialogFooter>
+
+          <ScrollArea className="max-h-[70vh]">
+            <div className="px-4 py-4 space-y-4 bg-white dark:bg-slate-900">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Title *</Label>
+                <Input
+                  maxLength={80}
+                  value={eventForm.title}
+                  onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Event title"
+                  className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</Label>
+                <Textarea
+                  value={eventForm.description}
+                  onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Optional description"
+                  rows={2}
+                  className="bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 resize-none"
+                />
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</Label>
+                <Input
+                  type="date"
+                  value={eventForm.date}
+                  onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
+                  className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">All Day</Label>
+                <Switch
+                  checked={eventForm.allDay}
+                  onCheckedChange={v => setEventForm(f => ({ ...f, allDay: v }))}
+                />
+              </div>
+
+              {!eventForm.allDay && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Start Time</Label>
+                    <TimeWheelPicker
+                      value={eventForm.startTime}
+                      onChange={handleEventStartTimeChange}
+                      label="Start Time"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">End Time</Label>
+                    <TimeWheelPicker
+                      value={eventForm.endTime}
+                      onChange={handleEventEndTimeChange}
+                      label="End Time"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Visibility</Label>
+                <Select value={eventForm.visibility} onValueChange={v => setEventForm(f => ({ ...f, visibility: v }))}>
+                  <SelectTrigger className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:ring-offset-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISIBILITY_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Color</Label>
+                <div className="flex gap-2.5">
+                  {EVENT_COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setEventForm(f => ({ ...f, color: c.value }))}
+                      className={`w-7 h-7 rounded-full transition-all ${eventForm.color === c.value ? 'ring-2 ring-offset-2 ring-blue-600 dark:ring-offset-slate-900' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c.value }}
+                      title={c.label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="pb-2" />
+            </div>
+          </ScrollArea>
+
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
             <Button
               onClick={handleSaveEvent}
               disabled={!eventForm.title.trim() || createEventMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full h-11 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white"
             >
               {createEventMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditEventOpen} onOpenChange={setIsEditEventOpen}>
-        <DialogContent className="rounded-2xl max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Event</DialogTitle>
-            <DialogDescription>Update event details.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label htmlFor="edit-event-title">Title *</Label>
-              <Input
-                id="edit-event-title"
-                maxLength={80}
-                value={eventForm.title}
-                onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Event title"
-              />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <div className="text-center">
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Edit Event
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Update event details
+              </DialogDescription>
             </div>
-            <div>
-              <Label htmlFor="edit-event-desc">Description</Label>
-              <Textarea
-                id="edit-event-desc"
-                value={eventForm.description}
-                onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Optional description"
-                rows={2}
-              />
-            </div>
-            <div>
-              <Label htmlFor="edit-event-date">Date</Label>
-              <Input
-                id="edit-event-date"
-                type="date"
-                value={eventForm.date}
-                onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="edit-event-allday">All Day</Label>
-              <Switch
-                id="edit-event-allday"
-                checked={eventForm.allDay}
-                onCheckedChange={v => setEventForm(f => ({ ...f, allDay: v }))}
-              />
-            </div>
-            {!eventForm.allDay && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Start Time</Label>
-                  <TimeWheelPicker
-                    value={eventForm.startTime}
-                    onChange={handleEventStartTimeChange}
-                    label="Start Time"
-                  />
-                </div>
-                <div>
-                  <Label>End Time</Label>
-                  <TimeWheelPicker
-                    value={eventForm.endTime}
-                    onChange={handleEventEndTimeChange}
-                    label="End Time"
-                  />
-                </div>
-              </div>
-            )}
-            <div>
-              <Label>Visibility</Label>
-              <Select value={eventForm.visibility} onValueChange={v => setEventForm(f => ({ ...f, visibility: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {VISIBILITY_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Color</Label>
-              <div className="flex gap-2 mt-1.5">
-                {EVENT_COLORS.map(c => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => setEventForm(f => ({ ...f, color: c.value }))}
-                    className={`w-8 h-8 rounded-full transition-all ${eventForm.color === c.value ? 'ring-2 ring-offset-2 ring-blue-600' : 'hover:scale-110'}`}
-                    style={{ backgroundColor: c.value }}
-                    title={c.label}
-                  />
-                ))}
-              </div>
-            </div>
+            <button
+              onClick={() => setIsEditEventOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <DialogFooter>
+
+          <ScrollArea className="max-h-[70vh]">
+            <div className="px-4 py-4 space-y-4 bg-white dark:bg-slate-900">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Title *</Label>
+                <Input
+                  maxLength={80}
+                  value={eventForm.title}
+                  onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="Event title"
+                  className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</Label>
+                <Textarea
+                  value={eventForm.description}
+                  onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Optional description"
+                  rows={2}
+                  className="bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 resize-none"
+                />
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date</Label>
+                <Input
+                  type="date"
+                  value={eventForm.date}
+                  onChange={e => setEventForm(f => ({ ...f, date: e.target.value }))}
+                  className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">All Day</Label>
+                <Switch
+                  checked={eventForm.allDay}
+                  onCheckedChange={v => setEventForm(f => ({ ...f, allDay: v }))}
+                />
+              </div>
+
+              {!eventForm.allDay && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Start Time</Label>
+                    <TimeWheelPicker
+                      value={eventForm.startTime}
+                      onChange={handleEventStartTimeChange}
+                      label="Start Time"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">End Time</Label>
+                    <TimeWheelPicker
+                      value={eventForm.endTime}
+                      onChange={handleEventEndTimeChange}
+                      label="End Time"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Visibility</Label>
+                <Select value={eventForm.visibility} onValueChange={v => setEventForm(f => ({ ...f, visibility: v }))}>
+                  <SelectTrigger className="h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 focus:ring-offset-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISIBILITY_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Color</Label>
+                <div className="flex gap-2.5">
+                  {EVENT_COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setEventForm(f => ({ ...f, color: c.value }))}
+                      className={`w-7 h-7 rounded-full transition-all ${eventForm.color === c.value ? 'ring-2 ring-offset-2 ring-blue-600 dark:ring-offset-slate-900' : 'hover:scale-110'}`}
+                      style={{ backgroundColor: c.value }}
+                      title={c.label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="pb-2" />
+            </div>
+          </ScrollArea>
+
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
             <Button
               onClick={handleUpdateEvent}
               disabled={!eventForm.title.trim() || updateEventMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full h-11 rounded-xl font-medium bg-blue-600 hover:bg-blue-700 text-white"
             >
               {updateEventMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

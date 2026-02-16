@@ -1,0 +1,120 @@
+SYSTEM / ROLE:
+You are a senior product-minded full-stack engineer working inside the EcoLogic codebase.
+Match EcoLogic’s existing modal design language (use Select Customer modal as the reference).
+Do not change backend behavior or event logic.
+Do not remove any existing fields or features (visibility, color, all-day, date/time).
+No unrelated refactors. Keep changes scoped to Create Event modal UI/UX.
+
+TASK:
+Clean up and modernize the “Create Event” modal to match the same vibe/layout as the “Select Customer” modal.
+
+CONTEXT:
+The Select Customer modal has the preferred EcoLogic look (spacing, header, search-like layout, soft sections, consistent padding, clean controls). The Create Event modal currently feels more form-heavy and inconsistent. We want it to feel like the same product.
+
+REQUIREMENTS:
+- Create Event modal must visually match Select Customer modal styling:
+  - Same header layout (title centered/left consistent, close “X” in same style/position)
+  - Same container padding, rounded corners, soft shadow
+  - Same section spacing and typography hierarchy
+- Keep all existing fields and behaviors:
+  - Title (required), Description, Date, All Day toggle, Start/End Time, Visibility dropdown, Color selector, Save button
+- Improve spacing + alignment:
+  - Reduce clutter, group fields into sections
+  - Ensure labels, inputs, and icons align perfectly
+- Inputs should match Select Customer input styling:
+  - Consistent border radius, background, focus ring, placeholder style
+- Save button should match primary CTA style used elsewhere:
+  - Full width, sticky to bottom of modal if possible
+  - Disabled state when Title empty (and show subtle required indicator)
+- “All Day” ON should hide Start/End time row with a smooth layout transition (no jumping weirdness).
+- No functionality regressions.
+
+FRONTEND CHANGES:
+1) Identify the Select Customer modal component and reuse its layout primitives:
+   - Same Modal/Sheet component
+   - Same header component (title + close)
+   - Same internal padding wrapper and section spacing classes
+   - Same input component used for the search bar (styling reference)
+
+2) Restructure Create Event modal into consistent sections (same vibe as Select Customer):
+   SECTION A: Header
+   - Title: “Create Event”
+   - Subtitle: “Add a new event to the company calendar.”
+   - Close icon aligned exactly like Select Customer
+
+   SECTION B: Core details (card-like block)
+   - Title* input (full width, same height and radius as search input)
+   - Description textarea (same radius + padding; slightly taller but not huge)
+
+   SECTION C: Date + All Day (row)
+   - Date picker input (full width)
+   - All Day toggle aligned in the same row style used elsewhere (label left, toggle right)
+   - When All Day = true, hide Start/End row
+
+   SECTION D: Time (two-column row)
+   - Start Time input (left)
+   - End Time input (right)
+   - Match the same input height and icon alignment used in scheduling/job/estimate time fields
+   - Ensure the time icon is vertically centered and clickable
+
+   SECTION E: Visibility (dropdown)
+   - Use the same dropdown styling as other modals
+   - Keep it simple (e.g. “Everyone”)
+
+   SECTION F: Color (selector row)
+   - Reduce vertical space:
+     - Label “Color”
+     - Row of circular swatches (consistent size)
+   - Selected swatch should have a clean ring/border (like current, but refined)
+   - Swatches should be evenly spaced, not oversized
+
+   SECTION G: Sticky footer CTA
+   - Sticky footer area like Select Customer modal bottom padding
+   - Primary button “Save”
+   - Button disabled if Title empty
+   - Keep modal scroll area above footer so the button is always reachable
+
+3) Visual polish rules:
+- Use consistent label style:
+  - Small/medium label, muted gray
+- Tighten vertical spacing between label and field
+- Remove any unnecessary heavy outlines; match Select Customer’s softer borders
+- Ensure modal width and max-height behave like Select Customer:
+  - Scroll inside content, not the whole page
+- Keep “required” Title indicator subtle:
+  - “Title *” as it is now is fine; don’t add loud error until submit
+
+BACKEND CHANGES:
+- None.
+
+RBAC / PERMISSIONS:
+- None.
+
+EDGE CASES:
+- Small mobile screens:
+  - Ensure time row remains 2 columns but collapses to 1 column if needed (match existing responsive breakpoints used in other modals).
+- When keyboard opens on mobile:
+  - Ensure sticky Save button doesn’t cover focused field (use bottom padding in scroll area).
+- All Day toggle:
+  - Toggling on/off should not clear chosen times unless required by your current logic.
+
+TESTING STEPS:
+1) Open Schedule → + dropdown → Event.
+2) Compare styling to Select Customer modal:
+   - Header, padding, rounded corners, shadow, close icon match.
+3) Title required:
+   - Save disabled when empty
+   - Enter title → Save enabled
+4) Date picker works.
+5) All Day toggle:
+   - ON hides time row
+   - OFF shows time row with previously selected times preserved
+6) Start/End time pickers still open the same wheel picker and save correctly.
+7) Visibility dropdown works.
+8) Color selection works and persists.
+9) Save creates event and calendar updates.
+
+DELIVERABLES:
+- Updated Create Event modal UI matching Select Customer modal vibe.
+- Sticky Save footer + improved spacing/typography.
+- No removed fields; no functionality regressions.
