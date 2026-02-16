@@ -1,0 +1,66 @@
+UI CLEANUP: “Filter by Customer” screen should match the “Select Customer” picker style (same theme + layout).
+
+REFERENCE:
+Use the “Select Customer” modal as the exact design reference (spacing, header, list rows, search bar, dividers, rounded container).
+
+CURRENT PROBLEMS (Filter by Customer):
+- Looks different from app theme
+- Has a weird inset/scrollbar area
+- List row styling doesn’t match
+- Overall doesn’t feel like the same component family as Select Customer
+
+GOAL:
+Make “Filter by Customer” look and behave like “Select Customer”:
+- Same header style (center title + top-right X)
+- Same search bar style
+- Same list row layout (avatar circle + name + email)
+- Same divider lines and padding
+- Same rounded corners/shadow
+- Smooth scroll area without awkward inset
+
+REQUIREMENTS:
+
+1) Modal/Sheet container
+- Match Select Customer container classes (rounded, shadow, background, padding).
+- No layout shift when opening.
+- Make sure content is fully in frame with equal left/right spacing.
+
+2) Header
+- Title: “Filter by Customer”
+- Top-right close X (same icon/button style as Select Customer)
+- Remove any extra header clutter.
+- Keep header height/padding identical to Select Customer.
+
+3) Search input
+- Use the same Search input component/styles as Select Customer:
+  - rounded
+  - consistent height
+  - subtle border
+  - search icon placement
+- Placeholder: “Search by name or email…”
+
+4) List styling
+- Convert list to match Select Customer rows:
+  - Left: avatar circle (initials) OR same person icon style used in Select Customer
+  - Middle: Name (bold)
+  - Sub: email (muted)
+  - Full-width row with consistent padding
+  - Hover/active background subtle
+- Add “All customers” row styled like a normal row (not a weird grey block).
+  - It should match the list row pattern and show a subtle “All customers” label.
+
+5) Selection state
+- When a customer is selected, highlight the row similar to Select Customer:
+  - light background
+  - optional checkmark on right (only if Select Customer uses it)
+- Do not introduce new UI patterns.
+
+6) Scroll area
+- Make the list scroll smoothly.
+- Remove the weird inner scrollbar gutter/inset look.
+- Ensure scroll does not change modal width (use existing global scrollbar stability fix).
+
+DELIVERABLES:
+- File path(s) changed
+- Confirm “Filter by Customer” now visually matches “Select Customer”
+- Confirm functionality: selecting a customer applies filter; selecting “All customers” clears filter; close works.

@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -2079,25 +2080,47 @@ export default function Jobs() {
       </Tabs>
 
       {/* Estimates Customer Picker Dialog (for filtering) */}
-      <Dialog open={estimatesCustomerPickerOpen} onOpenChange={setEstimatesCustomerPickerOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Filter by Customer</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
+      <Dialog open={estimatesCustomerPickerOpen} onOpenChange={(open) => {
+        setEstimatesCustomerPickerOpen(open);
+        if (!open) setEstimatesCustomerSearchQuery('');
+      }}>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" preventAutoFocus hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Filter by Customer
+            </DialogTitle>
+            <button
+              onClick={() => { setEstimatesCustomerPickerOpen(false); setEstimatesCustomerSearchQuery(''); }}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="px-4 py-3 bg-white dark:bg-slate-900">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search customers..."
+                placeholder="Search by name or email..."
                 value={estimatesCustomerSearchQuery}
                 onChange={(e) => setEstimatesCustomerSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-10 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
                 data-testid="input-search-estimates-filter-customers"
               />
             </div>
-            <div className="max-h-64 overflow-y-auto space-y-1">
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-slate-800" />
+
+          <ScrollArea className="max-h-80">
+            <div className="bg-white dark:bg-slate-900 py-1">
               <button
-                className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                className={`w-full flex items-center gap-3 px-4 min-h-[60px] text-left transition-colors ${
+                  estimatesCustomerFilter === 'all'
+                    ? 'bg-blue-50 dark:bg-blue-950/30'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                }`}
                 onClick={() => {
                   setEstimatesCustomerFilter('all');
                   setEstimatesCustomerPickerOpen(false);
@@ -2105,34 +2128,57 @@ export default function Jobs() {
                 }}
                 data-testid="button-filter-all-customers"
               >
-                <User className="h-4 w-4 text-slate-500" />
-                <span className="font-medium">All customers</span>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-slate-500 dark:text-slate-300" />
+                </div>
+                <span className="font-semibold text-slate-900 dark:text-slate-100">All Customers</span>
+                {estimatesCustomerFilter === 'all' && (
+                  <Check className="h-5 w-5 text-blue-600 dark:text-blue-400 ml-auto" />
+                )}
               </button>
-              {estimatesFilteredCustomers.map((customer) => {
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
+
+              {estimatesFilteredCustomers.map((customer, index) => {
                 const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+                const initials = (customer.firstName?.charAt(0)?.toUpperCase() || '') + (customer.lastName?.charAt(0)?.toUpperCase() || '') || '?';
+                const isSelected = estimatesCustomerFilter === customer.id;
                 return (
-                  <button
-                    key={customer.id}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                    onClick={() => {
-                      setEstimatesCustomerFilter(customer.id);
-                      setEstimatesCustomerPickerOpen(false);
-                      setEstimatesCustomerSearchQuery('');
-                    }}
-                    data-testid={`button-filter-customer-${customer.id}`}
-                  >
-                    <User className="h-4 w-4 text-slate-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{fullName || 'No name'}</p>
-                      {customer.email && (
-                        <p className="text-sm text-slate-500 truncate">{customer.email}</p>
+                  <div key={customer.id}>
+                    <button
+                      className={`w-full flex items-center gap-3 px-4 min-h-[60px] text-left transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50 dark:bg-blue-950/30'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                      }`}
+                      onClick={() => {
+                        setEstimatesCustomerFilter(customer.id);
+                        setEstimatesCustomerPickerOpen(false);
+                        setEstimatesCustomerSearchQuery('');
+                      }}
+                      data-testid={`button-filter-customer-${customer.id}`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center text-sm font-semibold text-slate-600 dark:text-slate-300">
+                        {initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">{fullName || 'Unnamed'}</p>
+                        {customer.email && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{customer.email}</p>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                       )}
-                    </div>
-                  </button>
+                    </button>
+                    {index < estimatesFilteredCustomers.length - 1 && (
+                      <div className="h-px bg-slate-100 dark:bg-slate-800 ml-[68px] mr-4" />
+                    )}
+                  </div>
                 );
               })}
             </div>
-          </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
