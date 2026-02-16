@@ -14238,7 +14238,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const event = await storage.createScheduleEvent(parsed);
       res.status(201).json(event);
     } catch (error: any) {
-      console.error("[ScheduleEvents] Error creating:", error.message);
+      console.error("[ScheduleEvents] Error creating:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid event data. Please check your dates and try again." });
+      }
       res.status(400).json({ message: error.message || "Failed to create event" });
     }
   });

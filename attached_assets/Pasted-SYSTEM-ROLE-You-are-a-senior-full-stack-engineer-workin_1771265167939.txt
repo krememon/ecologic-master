@@ -1,0 +1,77 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Fix the Schedule Events create payload/type mismatch causing Zod “Expected date, received string”.
+Do not change unrelated APIs.
+Preserve current UI fields and behavior.
+Prefer aligning with existing Jobs/Estimates date/time serialization patterns.
+
+TASK:
+Fix POST /api/schedule-events failing with Zod errors:
+- startAt: Expected date, received string
+- endAt: Expected date, received string
+
+CONTEXT:
+Frontend is sending startAt/endAt as strings. Backend Zod schema expects Date objects (or is using z.date()).
+In JSON over HTTP, Dates become strings anyway, so the backend should accept ISO strings and coerce to Date,
+or the frontend must send ISO strings consistently and backend must parse them.
+
+REQUIREMENTS:
+- Creating an event must succeed from the UI.
+- API must accept startAt/endAt coming from the client as ISO strings (recommended) and store proper timestamps.
+- Keep validation: endAt must be after startAt.
+- Avoid breaking any existing consumers of /api/schedule-events (GET already works).
+- Error toasts should be user-friendly (don’t dump raw Zod array).
+
+BACKEND CHANGES (Preferred Fix: Zod Coercion):
+1) Find the Zod schema used in POST /api/schedule-events (likely in route/controller file).
+2) Change schema fields from `z.date()` to coercing date parsing:
+   - Use `z.coerce.date()` for startAt and endAt
+   - OR use `z.string().datetime()` and then `new Date(...)` after parse
+   Recommended:
+   - `startAt: z.coerce.date()`
+   - `endAt: z.coerce.date()`
+3) Keep/implement validation:
+   - If `endAt <= startAt`, return 400 with `{ message: "End time must be after start time." }`
+4) Ensure DB insert uses the parsed Date values or ISO strings consistently:
+   - Store as timestamp/timestamptz columns (whatever is already used)
+5) Update server error handling:
+   - If Zod error, return a clean message:
+     - `{ message: "Invalid event date/time. Please try again." }`
+   - Still log the full Zod error server-side for debugging.
+
+FRONTEND CHANGES (Align Payload to ISO):
+1) Ensure the Create Event modal builds payload like:
+   - `startAt` and `endAt` must be ISO strings:
+     - `new Date(combinedDateTime).toISOString()`
+2) Confirm you are NOT sending display strings like “1:30 PM”.
+   - Combine selected Date + selected Start Time into a real Date object first.
+3) Use the same helper used by Job/Estimate scheduling for combining date + time.
+   - If none exists, create a small utility:
+     - `combineDateAndTime(selectedDate, timeObj) => Date`
+4) After successful create:
+   - Refresh events list and render on calendar.
+
+EDGE CASES:
+- All Day:
+  - startAt should be at local day start, endAt at local day end (or next day start), then ISO.
+- Timezone:
+  - Keep consistent with Jobs/Estimates scheduling.
+  - If the app is local-time based, ensure combine logic uses local components before converting to ISO.
+
+TESTING STEPS:
+1) Open Schedule → + → Event.
+2) Pick Date = 02/16/2026, Start=1:30 PM, End=2:30 PM.
+3) Save:
+   - POST /api/schedule-events should return 200/201 (no Zod error).
+4) Verify in server logs:
+   - startAt/endAt are parsed as valid Dates.
+5) Verify event appears on calendar at correct time.
+6) Regression:
+   - GET /api/schedule-events still returns events correctly.
+   - Other modules unaffected.
+
+DELIVERABLES:
+- POST /api/schedule-events accepts ISO strings and successfully creates events.
+- Backend schema updated to parse/validate dates correctly (z.coerce.date recommended).
+- Frontend sends ISO strings (not display strings).
+- User-facing error messages are clean and not raw Zod dumps.

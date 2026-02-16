@@ -1800,7 +1800,10 @@ export const scheduleEvents = pgTable("schedule_events", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertScheduleEventSchema = createInsertSchema(scheduleEvents).omit({
+export const insertScheduleEventSchema = createInsertSchema(scheduleEvents, {
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date().nullable().optional(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
