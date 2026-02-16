@@ -692,9 +692,9 @@ export default function AIScheduling() {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 text-lg font-semibold text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1 rounded-lg transition-colors">
+              <button className="flex items-center gap-1 text-lg font-semibold text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 h-9 px-3 rounded-lg transition-colors whitespace-nowrap">
                 {monthName} {year}
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-4 w-4 shrink-0" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
