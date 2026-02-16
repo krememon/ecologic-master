@@ -1,0 +1,77 @@
+Implement the QuickBooks logo on the QuickBooks Integration page using my provided image.
+
+ASSET TO USE:
+Use the uploaded file:
+ChatGPT Image Feb 16, 2026, 11_45_07 AM.png
+
+IMPORTANT NOTE:
+This asset currently has a black background. We need it to render cleanly in EcoLogic’s light UI.
+So do BOTH:
+1) Use this logo
+2) Convert it to a transparent PNG (remove black background) so it looks premium inside the card.
+
+------------------------------------------------------------
+STEP 1) Add/convert the asset (make it transparent)
+
+A) Create folder (if not exists):
+client/src/assets/logos/
+
+B) Create output file:
+client/src/assets/logos/quickbooks-transparent.png
+
+C) Convert the uploaded PNG into a transparent PNG by removing the black background.
+Use ONE of these methods:
+
+OPTION 1 (preferred if available): Use a small Node script with “sharp”
+- Add sharp (if not already installed)
+- Write a one-time script (scripts/make-qb-transparent.js) that:
+  - loads the source PNG
+  - makes near-black pixels transparent (threshold-based)
+  - writes quickbooks-transparent.png
+
+Threshold guidance:
+- Any pixel where R,G,B < ~35 becomes alpha=0
+- Keep edges clean (no harsh halo)
+
+OPTION 2 (if sharp isn’t available): manually replace the file by editing it quickly inside the project assets (or use any existing image tooling in the repo) — but the end result must be a real transparent PNG.
+
+End result must be:
+- Transparent background
+- Crisp logo
+- No black box/rectangle behind it
+
+------------------------------------------------------------
+STEP 2) Swap the icon on the QuickBooks Integration card
+
+WHERE:
+QuickBooks Integration page card header icon (currently a placeholder/link icon).
+
+Replace it with:
+
+<img
+  src={quickbooksLogo}
+  alt="QuickBooks"
+  className="h-7 w-7 object-contain"
+/>
+
+- Use h-7 w-7 (28px)
+- No extra background container
+- No borders
+- No color overlays
+- Keep spacing and alignment identical
+
+------------------------------------------------------------
+STEP 3) Verify visually
+
+- Open /customize/quickbooks
+- Confirm the logo looks clean on the white card:
+  ✅ No black background
+  ✅ Centered vertically
+  ✅ Matches the rest of EcoLogic UI
+
+------------------------------------------------------------
+DELIVERABLES:
+- File paths changed
+- Confirm quickbooks-transparent.png exists and is actually transparent
+- Screenshot of the integration card showing the clean logo
+- Delete/remove any old ugly QB assets so we don’t accidentally revert later
