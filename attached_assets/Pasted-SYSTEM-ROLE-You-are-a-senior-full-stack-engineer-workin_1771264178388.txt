@@ -1,0 +1,79 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Follow existing UI patterns/components used for Job/Estimate scheduling.
+Do not refactor unrelated files.
+Do not introduce duplicate time picker components.
+Preserve all existing functionality and styling.
+
+TASK:
+Make Event Start Time / End Time pickers work exactly like the Job/Estimate scheduling time pickers.
+
+CONTEXT:
+Events have Start/End time fields, but their time selection UX/behavior does not match the existing Job/Estimate scheduler (the wheel/popup picker with Done/Cancel, and the same formatting + validation).
+
+REQUIREMENTS:
+- Event Start Time and End Time must use the SAME time picker component + UX as Job/Estimate scheduling.
+- Must match:
+  - Visual style (wheel selector, Done/Cancel, same typography)
+  - Time format (e.g., "01:00 PM")
+  - Interaction behavior (tap field → modal picker → Done applies, Cancel reverts)
+  - Validation behavior (end time cannot be before start time)
+- End Time default behavior:
+  - When Start Time is set, default End Time = Start + 1 hour (unless user already set end time manually).
+- If Start Time is changed and End Time would become invalid (end <= start), automatically bump End Time to Start + 1 hour.
+- Do not break Job/Estimate scheduling time pickers.
+
+FRONTEND CHANGES:
+1) Locate the time picker component used by Job/Estimate scheduling:
+   - Find where Job/Estimate schedule modal renders Start Time / End Time.
+   - Identify the shared component/helper (ex: TimePickerModal, MobileTimePicker, PickerSheet, etc.).
+2) Reuse that SAME component in the Create/Edit Event modal:
+   - Replace any Event-specific time inputs/pickers with the shared scheduling picker.
+   - Ensure the Event modal passes/receives time values in the same format/type as Job/Estimate (Date object vs string vs minutes).
+3) Ensure the Event modal fields display exactly like scheduling:
+   - Two fields side-by-side: Start Time, End Time
+   - The displayed value formatting matches Job/Estimate.
+4) Ensure state wiring matches the Job/Estimate pattern:
+   - StartTimeField onClick → open time picker with current start time
+   - EndTimeField onClick → open time picker with current end time
+   - Done → commits selected time
+   - Cancel → closes without changing
+
+BACKEND CHANGES:
+- None (unless Event start/end time parsing currently differs).
+- Confirm the API accepts the same ISO datetime format used elsewhere.
+- If necessary, normalize before POST/PUT to events:
+  - Combine selected date + selected time into start_at/end_at ISO strings.
+
+RBAC / PERMISSIONS:
+- No changes. Just UI behavior.
+
+EDGE CASES:
+- If “All Day” is enabled for an Event:
+  - Hide time pickers (or disable them) exactly how Job/Estimate handles “all day” if such a pattern exists.
+  - Ensure start/end set to full-day bounds consistently.
+- Timezone:
+  - Use the same timezone logic already used by Job/Estimate scheduling.
+  - Do not introduce new timezone libs.
+- Mobile responsiveness:
+  - Must look and behave the same on mobile (wheel picker modal).
+
+TESTING STEPS:
+1) Open Schedule → + dropdown → Event.
+2) Tap Start Time:
+   - Confirm the SAME wheel picker UI appears (Done/Cancel).
+   - Cancel makes no changes.
+   - Done applies the time and updates the field.
+3) Tap End Time:
+   - Same behavior.
+4) Set Start Time to 1:00 PM:
+   - End Time should auto default to 2:00 PM (if not previously set).
+5) Set End Time earlier than Start:
+   - App should prevent it or auto-correct to Start + 1 hour.
+6) Confirm Job and Estimate scheduling time pickers still work unchanged.
+
+DELIVERABLES:
+- Event Start/End time selection uses the exact same picker component/UX as Job/Estimate scheduling.
+- Correct formatting + Done/Cancel behavior.
+- End-time validation + default logic implemented.
+- No UI duplicates; no regressions in Job/Estimate scheduling.

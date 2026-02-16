@@ -49,6 +49,7 @@ import { useCan } from "@/hooks/useCan";
 import { ViewOptionsModal, ExtendedViewMode } from "@/components/ViewOptionsModal";
 import { ScheduleMapView } from "@/components/ScheduleMapView";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { TimeWheelPicker } from "@/components/TimeWheelPicker";
 import type { ScheduleEvent } from "@shared/schema";
 
 interface JobWithSchedule {
@@ -221,6 +222,39 @@ export default function AIScheduling() {
     color: '#2563EB',
   };
   const [eventForm, setEventForm] = useState<EventFormState>(defaultEventForm);
+  const [endTimeManuallySet, setEndTimeManuallySet] = useState(false);
+
+  const bumpEndTime = (startTime: string): string => {
+    const [h, m] = startTime.split(':').map(Number);
+    const startMins = h * 60 + m;
+    let endMins = startMins + 60;
+    if (endMins >= 24 * 60) endMins = 23 * 60 + 45;
+    if (endMins <= startMins) endMins = startMins + 15;
+    if (endMins >= 24 * 60) endMins = 23 * 60 + 45;
+    const eH = Math.floor(endMins / 60);
+    const eM = endMins % 60;
+    return `${eH.toString().padStart(2, '0')}:${eM.toString().padStart(2, '0')}`;
+  };
+
+  const handleEventStartTimeChange = (newStart: string) => {
+    setEventForm(f => {
+      const updated: EventFormState = { ...f, startTime: newStart };
+      if (!endTimeManuallySet || f.endTime <= newStart) {
+        updated.endTime = bumpEndTime(newStart);
+      }
+      return updated;
+    });
+  };
+
+  const handleEventEndTimeChange = (newEnd: string) => {
+    setEndTimeManuallySet(true);
+    setEventForm(f => {
+      if (newEnd <= f.startTime) {
+        return { ...f, endTime: bumpEndTime(f.startTime) };
+      }
+      return { ...f, endTime: newEnd };
+    });
+  };
 
   const canManageEvents = role === 'OWNER' || role === 'SUPERVISOR' || role === 'DISPATCHER';
 
@@ -709,6 +743,7 @@ export default function AIScheduling() {
       startTime: `${startHH}:${startMM}`,
       endTime: `${endHH}:${endMM}`,
     });
+    setEndTimeManuallySet(false);
     setIsCreateEventOpen(true);
   }, [selectedDate]);
 
@@ -754,6 +789,7 @@ export default function AIScheduling() {
     });
     setSelectedEvent(evt);
     setIsViewEventOpen(false);
+    setEndTimeManuallySet(true);
     setIsEditEventOpen(true);
   }, []);
 
@@ -1451,21 +1487,19 @@ export default function AIScheduling() {
             {!eventForm.allDay && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="event-start">Start Time</Label>
-                  <Input
-                    id="event-start"
-                    type="time"
+                  <Label>Start Time</Label>
+                  <TimeWheelPicker
                     value={eventForm.startTime}
-                    onChange={e => setEventForm(f => ({ ...f, startTime: e.target.value }))}
+                    onChange={handleEventStartTimeChange}
+                    label="Start Time"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="event-end">End Time</Label>
-                  <Input
-                    id="event-end"
-                    type="time"
+                  <Label>End Time</Label>
+                  <TimeWheelPicker
                     value={eventForm.endTime}
-                    onChange={e => setEventForm(f => ({ ...f, endTime: e.target.value }))}
+                    onChange={handleEventEndTimeChange}
+                    label="End Time"
                   />
                 </div>
               </div>
@@ -1558,21 +1592,19 @@ export default function AIScheduling() {
             {!eventForm.allDay && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="edit-event-start">Start Time</Label>
-                  <Input
-                    id="edit-event-start"
-                    type="time"
+                  <Label>Start Time</Label>
+                  <TimeWheelPicker
                     value={eventForm.startTime}
-                    onChange={e => setEventForm(f => ({ ...f, startTime: e.target.value }))}
+                    onChange={handleEventStartTimeChange}
+                    label="Start Time"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="edit-event-end">End Time</Label>
-                  <Input
-                    id="edit-event-end"
-                    type="time"
+                  <Label>End Time</Label>
+                  <TimeWheelPicker
                     value={eventForm.endTime}
-                    onChange={e => setEventForm(f => ({ ...f, endTime: e.target.value }))}
+                    onChange={handleEventEndTimeChange}
+                    label="End Time"
                   />
                 </div>
               </div>
