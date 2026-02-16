@@ -720,6 +720,12 @@ export default function AIScheduling() {
       url.searchParams.delete('createEvent');
       window.history.replaceState({}, '', url.pathname + (url.search || ''));
     }
+
+    const handleOpenCreateEvent = () => {
+      if (canManageEvents) openCreateEvent();
+    };
+    window.addEventListener('openCreateEvent', handleOpenCreateEvent);
+    return () => window.removeEventListener('openCreateEvent', handleOpenCreateEvent);
   }, [canManageEvents, openCreateEvent]);
 
   const openViewEvent = useCallback((evt: ScheduleEvent) => {

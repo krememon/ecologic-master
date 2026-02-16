@@ -52,10 +52,19 @@ export function GlobalCreateMenu() {
     setIsOpen(false);
   }, []);
 
-  const handleItemClick = useCallback((route: string) => {
+  const handleItemClick = useCallback((item: MenuItem) => {
     setIsOpen(false);
     setTimeout(() => {
-      setLocation(route);
+      if (item.id === 'event') {
+        const currentPath = window.location.pathname;
+        if (currentPath === '/schedule') {
+          window.dispatchEvent(new CustomEvent('openCreateEvent'));
+        } else {
+          setLocation(item.route);
+        }
+      } else {
+        setLocation(item.route);
+      }
     }, 100);
   }, [setLocation]);
 
@@ -147,7 +156,8 @@ export function GlobalCreateMenu() {
                   }}
                 >
                   <motion.span 
-                    className="text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg shadow-sm"
+                    className="text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg shadow-sm cursor-pointer"
+                    onClick={() => handleItemClick(item)}
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 10 }}
@@ -159,7 +169,7 @@ export function GlobalCreateMenu() {
                     {item.label}
                   </motion.span>
                   <motion.button
-                    onClick={() => handleItemClick(item.route)}
+                    onClick={() => handleItemClick(item)}
                     className={cn(
                       "w-11 h-11 flex items-center justify-center rounded-full bg-blue-600 text-white shadow-lg"
                     )}

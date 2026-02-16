@@ -1,0 +1,92 @@
+Replit Agent Prompt — “Event” dropdown item does nothing (wire it to Create Event modal)
+
+Bug: On Schedule page, clicking the Event option in the existing + dropdown does nothing.
+
+Goal: Clicking Event must open the Create Event modal (same as other create actions). After saving, event appears immediately on the calendar.
+
+1) Find the + dropdown menu code
+
+Locate the component for the Schedule page “+” menu (the one that contains: Job / Estimate / Invoice / Lead / Event / Announcement).
+
+✅ Confirm each menu item has an onClick like:
+
+onClick={() => ... }
+
+Fix: Ensure the Event item has a real handler.
+
+2) Add proper state + handler for Event modal
+
+In the Schedule page component, add state:
+
+const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
+
+const [eventDraft, setEventDraft] = useState({ title:"", description:"", startAt: ..., endAt: ... })
+
+Create a handler:
+
+function handleCreateEventClick() {
+
+close dropdown menu
+
+set defaults (start/end based on selected day/time)
+
+open modal
+
+}
+
+Important: Close the dropdown FIRST, then open modal:
+
+Some dropdown libs prevent clicks unless you call close first.
+
+3) Wire the Event menu item
+
+Update the Event option:
+
+onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCreateEventClick(); }}
+
+Why: sometimes the dropdown is inside a parent that steals the click, so we stop propagation.
+
+4) Render the modal in the Schedule page
+
+Ensure <CreateEventModal ... /> (or whatever it’s called) is actually mounted in the Schedule page JSX and controlled by isCreateEventOpen.
+
+Example behavior:
+
+open={isCreateEventOpen}
+
+onClose={() => setIsCreateEventOpen(false)}
+
+If the modal component exists but isn’t imported/used, import it and render it.
+
+5) After Save: refresh calendar immediately
+
+When event is created successfully:
+
+close modal
+
+refetch events for the visible range OR update local events state by appending the new event
+
+calendar updates instantly
+
+6) Debug logging (targeted)
+
+Add 3 temporary logs (remove after fix):
+
+Inside Event onClick: console.log("Event clicked")
+
+Inside handleCreateEventClick: console.log("Opening create event modal")
+
+When modal opens: console.log("CreateEventModal open:", isCreateEventOpen)
+
+If “Event clicked” never prints → click is being swallowed by dropdown structure/z-index.
+If it prints but modal doesn’t open → state not set / modal not rendered.
+
+Deliverables
+
+Clicking Event reliably opens Create Event modal
+
+No extra floating + button exists
+
+Save event → appears on calendar immediately
+
+Remove temporary logs after confirming fix
