@@ -300,13 +300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.redirect(302, '/login');
   });
 
-  // SERVER-SIDE STRIPE RETURN HANDLER - Bulletproof redirect to /jobs
-  // This ensures Stripe always lands on Jobs even if SPA routing fails
-  app.get('/stripe/return', (req, res) => {
-    console.log('[StripeReturn] Server-side hit:', req.originalUrl);
-    console.log('[StripeReturn] Redirecting to /jobs');
-    res.redirect(302, '/jobs');
-  });
+  // STRIPE RETURN - Let SPA handle it (no server redirect)
+  // The React StripeReturn page reads session_id from query params and polls for payment
 
   // Also handle /pay/* routes server-side for safety
   app.get('/pay/success', (req, res) => {
@@ -9571,11 +9566,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           companyId: invoice.companyId.toString(),
           jobId: invoice.jobId ? invoice.jobId.toString() : '',
         },
-        success_url: `${appBaseUrl}/stripe/return`,
+        success_url: `${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appBaseUrl}/invoice/${invoice.id}/pay`,
       });
       
-      // Store session ID on invoice
       await storage.updateInvoice(invoiceId, {
         stripeCheckoutSessionId: session.id,
       });
@@ -12988,10 +12982,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
       console.log(`[Stripe] Charging amount: ${amountInCents} cents (balance: ${currentBalanceDueCents}, total: ${invoiceTotalCents})`);
-      console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return`);
-      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return`);
+      console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`);
+      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`);
 
-      // Create Stripe Checkout Session
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         line_items: [
@@ -13013,8 +13006,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobId: invoice.jobId ? String(invoice.jobId) : '',
           isPartialPayment: isPartialPayment ? 'true' : 'false',
         },
-        success_url: `${appBaseUrl}/stripe/return`,
-        cancel_url: `${appBaseUrl}/stripe/return`,
+        success_url: `${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
       });
 
       console.log(`[Stripe] Created checkout session ${session.id} for invoice ${invoice.id}`);
@@ -13026,6 +13019,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error creating Stripe checkout session:', error);
       res.status(500).json({ message: error.message || "Failed to create payment session" });
+    }
+  });
+
+  // GET /api/stripe/checkout-session/:sessionId - Resolve Stripe session metadata
+  app.get('/api/stripe/checkout-session/:sessionId', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe is not configured" });
+      }
+      const { sessionId } = req.params;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log(`[StripeCheckoutSession] Retrieved session ${sessionId}: status=${session.status}, payment_status=${session.payment_status}`);
+      res.json({
+        invoiceId: session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null,
+        jobId: session.metadata?.jobId ? parseInt(session.metadata.jobId) : null,
+        companyId: session.metadata?.companyId ? parseInt(session.metadata.companyId) : null,
+        isPartialPayment: session.metadata?.isPartialPayment === 'true',
+        paymentStatus: session.payment_status,
+        sessionStatus: session.status,
+      });
+    } catch (error: any) {
+      console.error('[StripeCheckoutSession] Error:', error.message);
+      res.status(500).json({ message: "Failed to retrieve checkout session" });
+    }
+  });
+
+  // GET /api/payments/latest-for-invoice/:invoiceId - Get latest payment for an invoice
+  app.get('/api/payments/latest-for-invoice/:invoiceId', async (req, res) => {
+    try {
+      const invoiceId = parseInt(req.params.invoiceId);
+      if (isNaN(invoiceId)) {
+        return res.status(400).json({ message: "Invalid invoice ID" });
+      }
+      const payments = await storage.getPaymentsByInvoiceId(invoiceId);
+      if (!payments || payments.length === 0) {
+        return res.json({ payment: null });
+      }
+      const latest = payments[payments.length - 1];
+      res.json({
+        payment: {
+          id: latest.id,
+          status: latest.status,
+          amountCents: latest.amountCents,
+          paymentMethod: latest.paymentMethod,
+        },
+      });
+    } catch (error: any) {
+      console.error('[LatestPayment] Error:', error.message);
+      res.status(500).json({ message: "Failed to fetch latest payment" });
     }
   });
 

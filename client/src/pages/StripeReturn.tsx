@@ -4,15 +4,14 @@ import { queryClient } from "@/lib/queryClient";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 
-const MAX_POLL_ATTEMPTS = 8;
-const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 15;
+const POLL_INTERVAL_MS = 700;
 
 export default function StripeReturn() {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState("Verifying payment...");
   const [hasRedirected, setHasRedirected] = useState(false);
   const processedRef = useRef(false);
-  const pollCountRef = useRef(0);
 
   const {
     isModalOpen: sigModalOpen,
@@ -43,38 +42,12 @@ export default function StripeReturn() {
     queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
     queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
     queryClient.invalidateQueries({ queryKey: ["/api/payments/breakdown"] });
-    queryClient.invalidateQueries({ predicate: (query) => 
-      Array.isArray(query.queryKey) && 
-      typeof query.queryKey[0] === 'string' && 
-      query.queryKey[0].includes('/api/customers/') && 
+    queryClient.invalidateQueries({ predicate: (query) =>
+      Array.isArray(query.queryKey) &&
+      typeof query.queryKey[0] === 'string' &&
+      query.queryKey[0].includes('/api/customers/') &&
       query.queryKey[0].includes('/jobs')
     });
-  }, []);
-
-  const checkSession = useCallback(async (sessionId: string): Promise<{ paymentId: number | null; jobId?: number; invoiceId?: number; isPaid: boolean }> => {
-    try {
-      const response = await fetch(`/api/payments/session/${sessionId}`, { credentials: 'include' });
-      const data = await response.json();
-      console.log("[StripeReturn] Session poll response:", data);
-      
-      if (data.paymentStatus === 'paid' && data.paymentId) {
-        return {
-          paymentId: data.paymentId,
-          jobId: data.jobId ? parseInt(data.jobId) : undefined,
-          invoiceId: data.invoiceId ? parseInt(data.invoiceId) : undefined,
-          isPaid: true,
-        };
-      }
-      
-      if (data.paymentStatus === 'paid' && !data.paymentId) {
-        return { paymentId: null, isPaid: true };
-      }
-      
-      return { paymentId: null, isPaid: false };
-    } catch (e) {
-      console.error("[StripeReturn] Session check error:", e);
-      return { paymentId: null, isPaid: false };
-    }
   }, []);
 
   useEffect(() => {
@@ -83,66 +56,94 @@ export default function StripeReturn() {
     }
 
     processedRef.current = true;
-    
+
     const processReturn = async () => {
       try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get("session_id") || localStorage.getItem("stripe_session");
+
+        console.log("[StripeReturn] session_id", sessionId);
+
         if (window.location.search) {
           window.history.replaceState({}, '', window.location.pathname);
         }
-        
-        const sessionId = localStorage.getItem("stripe_session");
-        
+
         if (!sessionId) {
-          setStatus("Redirecting to Jobs...");
+          console.log("[StripeReturn] No session_id found, redirecting to /jobs");
+          setStatus("Redirecting...");
           doRedirect();
           return;
         }
 
         setStatus("Confirming payment...");
-        
-        let result = await checkSession(sessionId);
-        
-        if (result.isPaid && result.paymentId) {
-          setStatus("Payment confirmed!");
+
+        let invoiceId: number | null = null;
+        let jobId: number | null = null;
+
+        try {
+          const sessionRes = await fetch(`/api/stripe/checkout-session/${sessionId}`, { credentials: 'include' });
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+            invoiceId = sessionData.invoiceId;
+            jobId = sessionData.jobId || null;
+            console.log("[StripeReturn] invoice", invoiceId, "job", jobId);
+
+            if (sessionData.paymentStatus !== 'paid') {
+              console.log("[StripeReturn] Session not yet paid, will poll for payment record");
+            }
+          }
+        } catch (e) {
+          console.error("[StripeReturn] Error fetching checkout session:", e);
+        }
+
+        if (!invoiceId) {
+          console.log("[StripeReturn] No invoiceId from session, redirecting");
           invalidateAll();
-          await triggerSignature({ paymentId: result.paymentId, jobId: result.jobId, invoiceId: result.invoiceId });
+          setStatus("Redirecting...");
+          doRedirect();
           return;
         }
-        
-        if (!result.isPaid || !result.paymentId) {
-          setStatus("Waiting for payment confirmation...");
-          
-          const pollForPayment = async (): Promise<void> => {
-            while (pollCountRef.current < MAX_POLL_ATTEMPTS) {
-              pollCountRef.current++;
-              console.log(`[StripeReturn] Polling attempt ${pollCountRef.current}/${MAX_POLL_ATTEMPTS}`);
-              
-              await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-              
-              result = await checkSession(sessionId);
-              
-              if (result.isPaid && result.paymentId) {
-                setStatus("Payment confirmed!");
-                invalidateAll();
-                await triggerSignature({ paymentId: result.paymentId, jobId: result.jobId, invoiceId: result.invoiceId });
-                return;
+
+        setStatus("Waiting for payment confirmation...");
+        console.log("[StripeReturn] waiting for payment...");
+
+        let paymentId: number | null = null;
+        let paymentStatus: string | null = null;
+
+        for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+          console.log(`[StripeReturn] Poll attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS}`);
+
+          try {
+            const payRes = await fetch(`/api/payments/latest-for-invoice/${invoiceId}`, { credentials: 'include' });
+            if (payRes.ok) {
+              const payData = await payRes.json();
+              if (payData.payment && payData.payment.status === 'paid') {
+                paymentId = payData.payment.id;
+                paymentStatus = payData.payment.status;
+                console.log("[StripeReturn] payment found", paymentId, paymentStatus);
+                break;
               }
             }
-            
-            console.log("[StripeReturn] Max poll attempts reached, redirecting");
-            invalidateAll();
-            setStatus("Redirecting to Jobs...");
-            doRedirect();
-          };
-          
-          await pollForPayment();
+          } catch (e) {
+            console.error("[StripeReturn] Poll error:", e);
+          }
+
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+
+        invalidateAll();
+
+        if (paymentId) {
+          setStatus("Payment confirmed!");
+          console.log("[StripeReturn] opening signature", paymentId);
+          await triggerSignature({ paymentId, jobId: jobId || undefined, invoiceId: invoiceId || undefined });
           return;
         }
-        
-        invalidateAll();
-        setStatus("Redirecting to Jobs...");
+
+        console.log("[StripeReturn] Max poll attempts reached, redirecting to /jobs (recovery will handle signature)");
+        setStatus("Redirecting...");
         doRedirect();
-        
+
       } catch (error) {
         console.error("[StripeReturn] Error during processing:", error);
         setStatus("Error occurred, redirecting...");
@@ -151,7 +152,7 @@ export default function StripeReturn() {
     };
 
     processReturn();
-  }, [hasRedirected, waitingForSignature, triggerSignature, doRedirect, invalidateAll, checkSession]);
+  }, [hasRedirected, waitingForSignature, triggerSignature, doRedirect, invalidateAll]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -159,8 +160,8 @@ export default function StripeReturn() {
         console.log("[StripeReturn] Safety timeout triggered, forcing redirect");
         doRedirect();
       }
-    }, 25000);
-    
+    }, 30000);
+
     return () => clearTimeout(timeout);
   }, [hasRedirected, waitingForSignature, doRedirect]);
 
@@ -170,10 +171,10 @@ export default function StripeReturn() {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#f9fafb',
       padding: '16px'

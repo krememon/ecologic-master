@@ -1,0 +1,90 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Fix Stripe post-payment signature prompting.
+Signature is mandatory (always-on). No settings toggle.
+Do not break Stripe checkout, webhooks, manual payments, refunds, or partials.
+No success toasts.
+
+PROBLEM:
+Stripe creates the EcoLogic payment record inside the webhook (paymentId=92), then /stripe/return redirects to /jobs.
+The /jobs page does NOT fetch payments for that invoice/payment, so the UI never knows which paymentId to open signature for.
+
+GOAL:
+After Stripe payment completes, redirect back into the app with enough context to open signature capture automatically.
+
+REQUIREMENTS:
+- After Stripe checkout completes and webhook creates a payment record, app must open SignatureCaptureModal automatically.
+- Must work reliably even if webhook finishes slightly after the return page loads.
+- Must not double-open.
+- Must only open for fully-paid (not partial unless balance is 0 / status paid).
+- Recovery: if user refreshes, must still be able to sign via pending localStorage or banner.
+
+IMPLEMENTATION (DO THIS):
+
+1) BACKEND: Update Stripe return flow to include invoiceId (and/or sessionId)
+File: route handler for GET /stripe/return (logs show “[StripeReturn] Server-side hit: /stripe/return”)
+- Parse query params sent by Stripe (Stripe will send `session_id` if we include it in success_url).
+- Change checkout session creation success_url to include `?session_id={CHECKOUT_SESSION_ID}`.
+
+In /api/payments/checkout where you create the session:
+- success_url = `${baseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`
+- cancel_url stays similar (or also include session_id)
+
+2) BACKEND: Add an endpoint to resolve paymentId from session_id
+Add: GET /api/stripe/checkout-session/:sessionId
+- Look up Stripe session via Stripe API (server-side)
+- Read metadata invoiceId/jobId/isPartialPayment
+- Return { invoiceId, jobId, isPartialPayment }
+
+Then add: GET /api/payments/latest-for-invoice/:invoiceId
+- Return the most recent payment for that invoice: { paymentId, status, amountCents, method }
+(Or reuse existing /api/payments/invoice/:id if it returns payments with ids.)
+
+3) FRONTEND: Create a dedicated return page that triggers signature before navigating away
+Create route/page: /stripe/return (client-side React route)
+- On mount:
+  a) read session_id from URL
+  b) call GET /api/stripe/checkout-session/:sessionId -> get invoiceId/jobId/isPartialPayment
+  c) poll up to ~10 seconds (every 700ms) for payment record:
+     - call GET /api/payments/latest-for-invoice/:invoiceId
+     - wait until status === "paid"
+  d) once paid:
+     - set localStorage.pendingSignaturePaymentId = paymentId
+     - openSignatureCapture({ paymentId, invoiceId, jobId, required: true })
+     - after signature saved (or after modal opens), navigate to /jobs (or job detail)
+- If polling times out:
+  - navigate to /jobs but keep localStorage pendingSignaturePaymentId set to invoiceId (or sessionId) for recovery.
+
+IMPORTANT:
+- Do NOT immediately redirect server-side to /jobs anymore.
+- Instead, server should serve the SPA route /stripe/return so React can run the logic.
+  - If you must keep server route, have it redirect to `/stripe/return?session_id=...` (same path) and let React handle it.
+
+4) FRONTEND: Recovery on app load
+Wherever your signature recovery runs (works for cash/check):
+- If localStorage.pendingSignaturePaymentId exists:
+  - call GET /api/payments/:id/signature
+  - if signature null -> show banner + allow open modal
+
+5) DUPLICATE PROTECTION:
+- Use a prompted Set + localStorage `signaturePromptedPaymentIds`
+- Never reopen for same paymentId if signature exists.
+
+TEMP DEBUG LOGS (REMOVE AFTER):
+- console.log("[StripeReturn] session_id", sessionId)
+- console.log("[StripeReturn] invoice", invoiceId, "job", jobId)
+- console.log("[StripeReturn] waiting for payment...")
+- console.log("[StripeReturn] payment found", paymentId, status)
+- console.log("[StripeReturn] opening signature", paymentId)
+
+TEST:
+1) Stripe checkout -> pay.
+2) App lands on /stripe/return and waits until webhook creates paymentId.
+3) Signature modal opens automatically.
+4) Save signature -> modal closes -> navigate to /jobs (or job detail).
+5) Refresh right after payment -> banner appears if not signed.
+
+DELIVERABLES:
+- Stripe post-payment signature prompt works every time.
+- No settings toggle required.
+- No regressions to cash/check.
