@@ -408,7 +408,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent hideCloseButton className="w-[95vw] max-w-md max-h-[90vh] !p-0 !gap-0 flex flex-col rounded-2xl overflow-hidden">
+        <DialogContent hideCloseButton className="w-[95vw] max-w-md max-h-[90vh] !p-0 !gap-0 !flex !flex-col rounded-2xl overflow-hidden">
           <div className="flex items-center justify-center h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 relative flex-shrink-0">
             <button 
               type="button"
@@ -584,7 +584,7 @@ export function NewInvoiceSheet({ open, onOpenChange, onInvoiceCreated }: NewInv
           </div>
 
           {/* Footer Button */}
-          <div className="flex-shrink-0 w-full px-5 pb-5 pt-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+          <div className="flex-shrink-0 px-4 pb-4 pt-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
             <Button
               type="button"
               onClick={() => {
