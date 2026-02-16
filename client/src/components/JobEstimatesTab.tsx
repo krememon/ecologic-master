@@ -211,6 +211,10 @@ export default function JobEstimatesTab({ jobId, canCreate, selectedCustomer: ex
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'estimates'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      queryClient.invalidateQueries({ predicate: (q) =>
+        Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('/api/customers/') && q.queryKey[0].includes('/estimates')
+      });
       setIsNewEstimateOpen(false);
       resetForm();
       toast({

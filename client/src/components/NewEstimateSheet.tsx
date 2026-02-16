@@ -305,6 +305,10 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/estimates'] });
+      queryClient.invalidateQueries({ predicate: (q) =>
+        Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('/api/customers/') && q.queryKey[0].includes('/estimates')
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       resetForm();
       onOpenChange(false);
       onEstimateCreated?.();

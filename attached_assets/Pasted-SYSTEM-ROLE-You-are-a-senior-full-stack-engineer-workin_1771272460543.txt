@@ -1,0 +1,65 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Fix Estimates so they always appear in a client’s “Estimate History” immediately after creation.
+Do not break existing estimate creation, conversion to job, dashboards, or RBAC.
+UI must refresh without requiring a manual page reload.
+
+GOAL:
+After creating an estimate, it should be recorded and visible in the client’s estimate history (Client profile → Estimates, and anywhere else “client estimate history” is shown).
+
+LIKELY ROOT CAUSE:
+- Estimate is being created without a clientId/customerId properly set, OR
+- The client history query is filtering by status/companyId incorrectly, OR
+- The UI isn’t refetching after create.
+
+BACKEND CHECKS / FIXES:
+1) Confirm the estimate create endpoint stores the correct foreign keys:
+- On POST /api/estimates (or similar):
+  - REQUIRE estimate.companyId = user’s companyId
+  - REQUIRE estimate.customerId/clientId = the selected customer
+- Add targeted log on create (TEMP):
+  console.log("[EstimateCreate] created", { estimateId, companyId, customerId, status })
+
+2) Ensure “client estimate history” endpoint pulls estimates by customerId:
+- Find endpoint:
+  - GET /api/customers/:id/estimates  (shown in logs previously)
+- Confirm it queries:
+  WHERE companyId = :companyId AND customerId = :customerId
+- Do NOT accidentally filter out “draft” unless intended.
+- Sort newest first.
+
+3) If you have “archived” or “converted” logic:
+- Ensure converted estimates still remain in client history (as a historical record).
+- If you currently delete the estimate on conversion, STOP deleting; instead:
+  - mark as converted and link jobId
+  - keep it queryable in history
+
+FRONTEND FIXES:
+1) After successful “Create Estimate”:
+- Immediately update state OR refetch the relevant lists:
+  - If you’re on client page: refetch /api/customers/:id/estimates
+  - If you’re on estimates list page: refetch /api/estimates
+- Also update dashboards that show estimate counts (if applicable).
+
+2) Ensure the create estimate form actually sends customerId:
+- Inspect payload being sent.
+- If missing, wire it from the selected customer in the modal.
+
+3) TEMP logging (REMOVE AFTER):
+- console.log("[EstimateCreate] payload", payload)
+- console.log("[EstimateCreate] response", createdEstimate)
+
+TEST PLAN:
+1) Open a client profile → Estimates tab (history).
+2) Create a new estimate for that client.
+3) Confirm:
+- It shows up immediately in that client’s Estimates history (no refresh).
+- It also shows in global Estimates list.
+4) Convert estimate to job (if flow exists).
+5) Confirm estimate STILL remains in client estimate history (marked “Converted” or linked to jobId).
+
+DELIVERABLES:
+- New estimates always appear in the correct client’s estimate history.
+- No missing customerId issues.
+- UI refreshes automatically.
+- Converted estimates remain in history (not deleted).
