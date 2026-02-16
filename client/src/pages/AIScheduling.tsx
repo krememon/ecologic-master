@@ -1708,55 +1708,79 @@ export default function AIScheduling() {
       </Dialog>
 
       <Dialog open={isViewEventOpen} onOpenChange={setIsViewEventOpen}>
-        <DialogContent className="rounded-2xl max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: selectedEvent?.color || '#2563EB' }} />
-              {selectedEvent?.title}
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Event Details
             </DialogTitle>
-            <DialogDescription>Event details</DialogDescription>
-          </DialogHeader>
+            <button
+              onClick={() => setIsViewEventOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
           {selectedEvent && (
-            <div className="space-y-3 py-2">
-              {selectedEvent.description && (
-                <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEvent.description}</p>
-              )}
-              <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <Clock className="h-4 w-4" />
-                {selectedEvent.allDay ? (
-                  <span>All Day – {new Date(selectedEvent.startAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-                ) : (
-                  <span>
-                    {new Date(selectedEvent.startAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                    {selectedEvent.endAt && ` – ${new Date(selectedEvent.endAt).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+            <div className="bg-white dark:bg-slate-900">
+              <div className="px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: selectedEvent.color || '#2563EB' }}>
+                    <CalendarIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">{selectedEvent.title}</h3>
+                    {selectedEvent.description && (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{selectedEvent.description}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+
+              <div className="px-4 py-3 space-y-3">
+                <div className="flex items-center gap-3 text-sm">
+                  <Clock className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-slate-700 dark:text-slate-300">
+                    {selectedEvent.allDay ? (
+                      <>All Day &ndash; {new Date(selectedEvent.startAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</>
+                    ) : (
+                      <>
+                        {new Date(selectedEvent.startAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        {selectedEvent.endAt && ` \u2013 ${new Date(selectedEvent.endAt).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
+                      </>
+                    )}
                   </span>
-                )}
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <Eye className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-slate-700 dark:text-slate-300">{VISIBILITY_OPTIONS.find(v => v.value === selectedEvent.visibility)?.label || selectedEvent.visibility}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <Eye className="h-4 w-4" />
-                <span>{VISIBILITY_OPTIONS.find(v => v.value === selectedEvent.visibility)?.label || selectedEvent.visibility}</span>
-              </div>
+
               {canManageEvents && (
-                <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEditEvent(selectedEvent)}
-                    className="flex items-center gap-1"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDeleteEvent}
-                    disabled={deleteEventMutation.isPending}
-                    className="flex items-center gap-1"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {deleteEventMutation.isPending ? 'Deleting...' : 'Delete'}
-                  </Button>
+                <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => openEditEvent(selectedEvent)}
+                      className="flex-1 h-10 rounded-xl font-medium flex items-center justify-center gap-1.5"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteEvent}
+                      disabled={deleteEventMutation.isPending}
+                      className="flex-1 h-10 rounded-xl font-medium flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {deleteEventMutation.isPending ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

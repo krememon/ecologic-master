@@ -1,0 +1,107 @@
+SYSTEM / ROLE:
+You are a senior product-minded full-stack engineer working inside the EcoLogic codebase.
+Match EcoLogic’s existing modal design language using “Select Customer” modal as the reference.
+Do not change event logic, API calls, RBAC, or what data is shown—ONLY UI/UX + layout polish.
+No unrelated refactors.
+
+TASK:
+Redesign/clean up the “Event details” modal to match the exact same style/vibe as the “Select Customer” modal.
+
+CONTEXT:
+The current Event details modal looks inconsistent (spacing, header, typography, button styles). We want it to feel like it belongs in EcoLogic—same layout, padding, header bar, and action button styling as Select Customer.
+
+REQUIREMENTS:
+- Event Details modal must match Select Customer modal styling:
+  - Same header row style (title centered, close X same position/style)
+  - Same modal container padding, radius, shadow, and background
+  - Same typography hierarchy (title, subtitle, body)
+  - Same divider lines and spacing
+- Keep the same information displayed:
+  - Event title (ex: “Mcdonalds”)
+  - Description (ex: “mcdonalds lunch”)
+  - Date/time range line
+  - Visibility line
+  - Color indicator
+  - Edit + Delete actions (only for permitted roles)
+- Improve layout:
+  - Make it clean, aligned, and modern (no awkward floating text)
+  - Replace the tiny “Event details” label layout with a proper header/subheader structure
+- Buttons must match app buttons:
+  - Edit = secondary/outline style like the app uses
+  - Delete = destructive style but consistent (not oversized or off-brand)
+  - Buttons aligned like other modals (same spacing + height)
+- No success popups; keep error feedback.
+- Preserve “hidden not disabled”:
+  - If user can’t edit/delete, don’t show the buttons.
+
+FRONTEND CHANGES:
+1) Locate the Event Details modal component (the modal that opens when clicking a calendar event).
+
+2) Rebuild the modal shell to match Select Customer modal:
+   HEADER (match Select Customer):
+   - Centered title: “Event Details” (or if your app prefers, show the event name as the title and “Event details” as subtitle)
+   - Close “X” in the same top-right position/style
+   - Use the same padding and header height as Select Customer
+
+3) Content layout (match EcoLogic spacing):
+   SECTION A: Event identity row (clean)
+   - Left: small color dot (same size as Select Customer avatar dot style OR a subtle dot)
+   - Right: Event name as a bold row title (ex: “Mcdonalds”)
+   - Under it: description in muted text (if empty, hide the row)
+
+   SECTION B: Detail rows (like Select Customer rows)
+   Create two rows with icons and aligned text:
+   - Row 1 (clock icon): “Feb 16, 2:00 PM – 3:00 PM”
+   - Row 2 (eye icon): “Everyone”
+   Make sure:
+   - Icons are same size, same color tone (muted gray)
+   - Text aligns to the same left edge
+   - Use consistent vertical spacing and a subtle divider above this section if needed
+
+4) Actions footer (match Select Customer bottom spacing)
+   - Add a subtle top border divider above actions (like sections in other modals)
+   - Buttons:
+     - Left: “Edit” (secondary/outline)
+     - Right: “Delete” (destructive)
+   - Same height, same radius, same font
+   - Keep spacing consistent (e.g., 8–12px gap)
+   - On mobile, buttons should be full width stacked if needed OR keep side-by-side if space allows—match app patterns
+
+5) Remove any odd/extra labels:
+   - Remove the floating “Event details” text if it doesn’t match the header style.
+   - Don’t show duplicate title text (avoid having “Mcdonalds” AND “Event Details” both as large headers unless styled intentionally).
+
+6) Keep behavior intact:
+   - Close X closes modal
+   - Edit opens edit modal
+   - Delete triggers confirmation (if you already have one) and deletes then refreshes calendar
+   - No toast on success
+
+RBAC / PERMISSIONS:
+- Preserve current rules:
+  - If user has edit/delete permission: show buttons
+  - If not: hide the entire action row
+
+EDGE CASES:
+- Long event titles:
+  - Wrap or truncate gracefully (same approach as customer names in Select Customer list)
+- Empty description:
+  - Hide description block completely (no empty space)
+- All-day event:
+  - Display “All day” instead of times if applicable
+- Visibility variations:
+  - Ensure label is readable (“Everyone”, “Office only”, etc.)
+
+TESTING STEPS:
+1) Click an event on the schedule.
+2) Confirm modal matches Select Customer style (header, padding, radius, typography).
+3) Confirm details show correctly:
+   - Title, description, time range, visibility, color dot
+4) Confirm Edit works.
+5) Confirm Delete works and calendar refreshes.
+6) Confirm user without permissions does NOT see Edit/Delete.
+
+DELIVERABLES:
+- Event Details modal visually matches Select Customer modal.
+- Clean layout, consistent typography, consistent buttons.
+- No changes to logic/API/RBAC aside from hiding actions for unauthorized users.
