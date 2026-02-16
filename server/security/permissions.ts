@@ -96,7 +96,7 @@ export function canAccessDocument(
   const visibility = document.visibility || "internal";
 
   // Owner can access everything
-  if (ctx.role === "owner") {
+  if (ctx.role === "OWNER") {
     return { allowed: true };
   }
 
@@ -106,18 +106,16 @@ export function canAccessDocument(
       return { allowed: false, reason: "Document is owner-only" };
     
     case "office_only":
-      if (ctx.role === "supervisor") {
+      if (ctx.role === "SUPERVISOR") {
         return { allowed: true };
       }
       return { allowed: false, reason: "Document is office-only" };
     
     case "assigned_crew_only":
-      // Must be assigned to the related job
       if (document.jobId && userAssignedJobIds?.includes(document.jobId)) {
         return { allowed: true };
       }
-      // Office staff can also access
-      if (ctx.role === "supervisor") {
+      if (ctx.role === "SUPERVISOR") {
         return { allowed: true };
       }
       return { allowed: false, reason: "Not assigned to job" };

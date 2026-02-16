@@ -1,5 +1,5 @@
 export const ADMIN_ROLES = ['OWNER', 'SUPERVISOR'] as const;
-export const ALL_ROLES = ['OWNER', 'SUPERVISOR', 'DISPATCHER', 'ESTIMATOR', 'TECHNICIAN'] as const;
+export const ALL_ROLES = ['OWNER', 'SUPERVISOR', 'TECHNICIAN'] as const;
 
 export const WORKFLOW_CATEGORIES = ['Contracts', 'Estimates', 'Invoices', 'Permits'] as const;
 export const REFERENCE_CATEGORIES = ['Photos', 'Manuals', 'Other'] as const;
@@ -26,11 +26,9 @@ export type DocumentStatus = 'Draft' | 'Pending Approval' | 'Approved' | 'Reject
 // Visibility permissions per role
 // Each role can see documents with these visibility levels
 const VISIBILITY_BY_ROLE: Record<Role, DocumentVisibility[]> = {
-  OWNER: ['customer_internal', 'assigned_crew_only', 'office_only', 'internal', 'owner_only'], // Owner sees ALL
-  SUPERVISOR: ['customer_internal', 'assigned_crew_only', 'internal', 'office_only'], // Not owner_only
-  DISPATCHER: ['customer_internal', 'office_only', 'internal'], // Not assigned_crew_only, owner_only
-  ESTIMATOR: ['customer_internal', 'office_only'], // Not assigned_crew_only, internal, owner_only
-  TECHNICIAN: ['customer_internal', 'assigned_crew_only'], // Not office_only, internal, owner_only
+  OWNER: ['customer_internal', 'assigned_crew_only', 'office_only', 'internal', 'owner_only'],
+  SUPERVISOR: ['customer_internal', 'assigned_crew_only', 'internal', 'office_only'],
+  TECHNICIAN: ['customer_internal', 'assigned_crew_only'],
 };
 
 // Get allowed visibilities for a role
@@ -81,8 +79,6 @@ export function canViewDocument(role: string | null | undefined, category: strin
   switch (normalized) {
     case 'OWNER':
     case 'SUPERVISOR':
-    case 'DISPATCHER':
-    case 'ESTIMATOR':
       return true;
     case 'TECHNICIAN':
       return hasJobAccess;
@@ -99,10 +95,6 @@ export function canUploadCategory(role: string | null | undefined, category: str
     case 'OWNER':
     case 'SUPERVISOR':
       return true;
-    case 'ESTIMATOR':
-      return category === 'Estimates';
-    case 'DISPATCHER':
-      return category === 'Permits' || category === 'Photos';
     case 'TECHNICIAN':
       return category === 'Photos';
     default:
@@ -148,8 +140,6 @@ export function canChangeStatus(role: string | null | undefined, category: strin
     case 'OWNER':
     case 'SUPERVISOR':
       return true;
-    case 'ESTIMATOR':
-      return category === 'Estimates';
     default:
       return false;
   }
@@ -186,12 +176,6 @@ export function getAllowedStatusTransitions(
     }
   }
   
-  if (normalized === 'ESTIMATOR' && category === 'Estimates') {
-    if (currentStatus === 'Draft') {
-      return ['Pending Approval'];
-    }
-  }
-  
   return [];
 }
 
@@ -213,10 +197,6 @@ export function getUploadableCategories(role: string | null | undefined): Catego
     case 'OWNER':
     case 'SUPERVISOR':
       return [...ALL_CATEGORIES];
-    case 'ESTIMATOR':
-      return ['Estimates'];
-    case 'DISPATCHER':
-      return ['Permits', 'Photos'];
     case 'TECHNICIAN':
       return ['Photos'];
     default:
@@ -231,8 +211,6 @@ export function canViewCompanyWideDocuments(role: string | null | undefined): bo
   switch (normalized) {
     case 'OWNER':
     case 'SUPERVISOR':
-    case 'DISPATCHER':
-    case 'ESTIMATOR':
       return true;
     case 'TECHNICIAN':
       return false;

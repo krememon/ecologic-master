@@ -86,30 +86,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "schedule.view",
     "documents.view",
   ],
-  DISPATCHER: [
-    "schedule.view",
-    "schedule.manage",
-    "routes.manage",
-    "jobs.view.all",
-    "jobs.edit",
-    "jobs.delete",
-    "jobs.create",
-    "leads.view",
-    "leads.manage",
-    "leads.convert",
-    "documents.view",
-  ],
-  ESTIMATOR: [
-    "estimates.create",
-    "estimates.send",
-    "leads.view",
-    "leads.manage",
-    "leads.convert",
-    "clients.manage",
-    "jobs.view.all",
-    "schedule.view",
-    "documents.view",
-  ],
 };
 
 export function can(userRole: UserRole, permission: Permission): boolean {
