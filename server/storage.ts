@@ -4105,8 +4105,17 @@ export class DatabaseStorage implements IStorage {
 
   async getScheduleEventsByCompany(companyId: number, start?: Date, end?: Date): Promise<ScheduleEvent[]> {
     const conditions = [eq(scheduleEvents.companyId, companyId)];
-    if (start) conditions.push(gte(scheduleEvents.startAt, start));
-    if (end) conditions.push(lte(scheduleEvents.startAt, end));
+    const formatTimestamp = (d: Date) => {
+      const y = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      const s = String(d.getSeconds()).padStart(2, '0');
+      return `${y}-${mo}-${da} ${h}:${mi}:${s}`;
+    };
+    if (start) conditions.push(gte(scheduleEvents.startAt, formatTimestamp(start)));
+    if (end) conditions.push(lte(scheduleEvents.startAt, formatTimestamp(end)));
     return db.select().from(scheduleEvents).where(and(...conditions)).orderBy(scheduleEvents.startAt);
   }
 

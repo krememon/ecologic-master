@@ -1791,8 +1791,8 @@ export const scheduleEvents = pgTable("schedule_events", {
   createdByUserId: varchar("created_by_user_id").references(() => users.id),
   title: varchar("title", { length: 80 }).notNull(),
   description: text("description"),
-  startAt: timestamp("start_at").notNull(),
-  endAt: timestamp("end_at"),
+  startAt: timestamp("start_at", { mode: 'string' }).notNull(),
+  endAt: timestamp("end_at", { mode: 'string' }),
   allDay: boolean("all_day").notNull().default(false),
   visibility: varchar("visibility", { length: 20 }).notNull().default("everyone"),
   color: varchar("color", { length: 20 }).default("#2563EB"),
@@ -1801,8 +1801,8 @@ export const scheduleEvents = pgTable("schedule_events", {
 });
 
 export const insertScheduleEventSchema = createInsertSchema(scheduleEvents, {
-  startAt: z.coerce.date(),
-  endAt: z.coerce.date().nullable().optional(),
+  startAt: z.string(),
+  endAt: z.string().nullable().optional(),
 }).omit({
   id: true,
   createdAt: true,

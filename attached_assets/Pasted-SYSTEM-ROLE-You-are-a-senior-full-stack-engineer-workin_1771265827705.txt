@@ -1,0 +1,107 @@
+SYSTEM / ROLE:
+You are a senior full-stack engineer working inside the EcoLogic codebase.
+Fix the root cause of Schedule Event times rendering at the wrong hour.
+Preserve existing scheduling time picker UX and event creation flow.
+Do not refactor unrelated modules.
+
+TASK:
+Fix Schedule Events showing the wrong time on the calendar (e.g., set 2:00–3:00 but renders 9:00–10:00).
+
+CONTEXT:
+Create Event modal shows correct selected times, but once saved and displayed on the Schedule, the event appears at a different time. This is almost always caused by one of these:
+1) UI is sending only the DATE (defaulting time to 9:00 AM) instead of combining Date + Time correctly
+2) Incorrect timezone conversion (local vs UTC) when building ISO strings or when rendering
+3) Backend stores timestamps incorrectly (string parsing / timezone)
+We need to align Events with the exact same date/time handling as Jobs/Estimates scheduling.
+
+REQUIREMENTS:
+- If user selects Start=2:00 PM and End=3:00 PM on 02/16/2026, it must render on the schedule at 2:00–3:00 PM (local time).
+- No default 9:00 AM behavior unless the user never chose a time.
+- Must use the SAME date+time combine logic used by Job/Estimate scheduling.
+- Must be consistent across create → store → fetch → render.
+- Keep all-day events correct.
+
+INVESTIGATION (DO THIS FIRST):
+1) Confirm what the frontend is sending in POST /api/schedule-events:
+   - Temporarily log the outgoing payload in the Create Event save handler:
+     - `console.log("Creating event payload:", payload)`
+   - Specifically inspect:
+     - `startAt` and `endAt` (are they ISO strings? do they include the correct hour?)
+2) Confirm what the backend receives and stores:
+   - Add a temporary server log in POST handler:
+     - `console.log("[ScheduleEvents] create parsed startAt/endAt:", startAt, endAt)`
+   - Verify the parsed Date objects contain the correct local hour (or correct UTC equivalent).
+3) Confirm what GET /api/schedule-events returns:
+   - Log the returned event object(s) on the client:
+     - `console.log("Fetched schedule events:", events)`
+   - Inspect startAt/endAt values.
+
+FIX (MOST LIKELY ROOT CAUSE: DATE+TIME NOT COMBINED):
+A) Ensure the Create Event modal stores selected times as actual time values (not just display strings),
+and combines them with the selected date into a real Date object.
+
+Implement/Reuse a helper (prefer reuse from Jobs/Estimates):
+- Look for existing helper used by job/estimate scheduling such as:
+  - `combineDateAndTime(date, time)`
+  - `setTimeOnDate(date, hours, minutes)`
+If it exists, use it for events too.
+
+If none exists, implement a small utility:
+- Inputs:
+  - `selectedDate` (Date)
+  - `timeString` like "2:00 PM" OR a {hours, minutes} object from the picker
+- Output:
+  - `Date` that represents selectedDate at that local time
+
+Critical rule:
+- Use LOCAL setters:
+  - `new Date(y, m, d, hours, minutes, 0, 0)`
+  - NOT UTC setters unless the rest of the app uses UTC everywhere.
+
+Then send:
+- `startAt: combinedStart.toISOString()`
+- `endAt: combinedEnd.toISOString()`
+
+B) If the payload ISO already has correct hour but UI still renders wrong:
+This is likely a timezone/rendering bug in the calendar component.
+
+CALENDAR RENDER FIX (TIMEZONE):
+1) Identify calendar library configuration (FullCalendar/react-big-calendar/custom):
+- Ensure events are provided as Date objects OR ISO strings in the expected format.
+2) If library expects Date objects, convert on fetch:
+- `start: new Date(event.startAt)`
+- `end: new Date(event.endAt)`
+3) Ensure you are NOT stripping time somewhere:
+- Look for code doing:
+  - `startAt.split("T")[0]` or `new Date(dateOnlyString)`
+  - Or “defaultStartHour = 9” logic being applied to ALL events
+4) Ensure a consistent timezone setting:
+- If FullCalendar: set `timeZone: 'local'` (if that’s how Jobs display)
+- Do NOT force UTC unless your whole schedule uses UTC.
+
+BACKEND CHECK (LESS LIKELY BUT VERIFY):
+- Ensure DB column types are correct:
+  - Prefer `timestamptz` if you store ISO with timezone
+- Ensure you’re not truncating time on insert:
+  - No `DATE(startAt)` or casting to date-only
+- Ensure you return the stored timestamp unchanged.
+
+EDGE CASES:
+- All Day ON:
+  - Render as all-day block, ignore time slots
+- When Start time changes:
+  - End time auto adjusts to Start+1 hour (keep this)
+
+TESTING STEPS:
+1) Create event: 02/16/2026 2:00 PM → 3:00 PM
+   - Confirm outgoing POST payload startAt includes correct hour.
+2) Refresh schedule:
+   - Confirm event renders at 2–3 PM.
+3) Create another event: 11:30 AM → 12:15 PM
+   - Confirm exact minutes render.
+4) Verify Jobs/Estimates times still render correctly (no regressions).
+
+DELIVERABLES:
+- Event times on schedule exactly match what user selected.
+- Verified by logging payload + stored + fetched values (remove logs after fix).
+- No 9:00 AM defaulting unless user never set a time.
