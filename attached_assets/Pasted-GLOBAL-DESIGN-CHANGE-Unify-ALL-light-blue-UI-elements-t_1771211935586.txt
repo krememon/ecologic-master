@@ -1,0 +1,106 @@
+GLOBAL DESIGN CHANGE — Unify ALL light-blue UI elements to the darker primary blue across EcoLogic.
+
+GOAL:
+EcoLogic should use ONE primary blue color everywhere.
+Any lighter blue shades currently used for buttons, icons, pills, or action elements should be replaced with the darker blue already used for primary actions (ex: the + floating button, main action buttons, etc).
+
+No more multiple blues.
+
+--------------------------------
+STEP 1) Identify Primary Blue
+
+Find the darker blue already used in the app (ex: floating + button, primary action buttons).
+
+Confirm its hex value or Tailwind token (ex: blue-600, blue-500, or custom CSS var).
+
+This becomes the SINGLE SOURCE OF TRUTH.
+
+--------------------------------
+STEP 2) Create/Update Global Theme Token
+
+If using Tailwind theme:
+
+In tailwind.config.js:
+
+- Define:
+  colors.primary = <primary-blue>
+
+Example:
+
+theme: {
+  extend: {
+    colors: {
+      primary: "#2563EB"
+    }
+  }
+}
+
+--------------------------------
+STEP 3) Replace Light Blue Usages
+
+Search for and replace:
+
+- bg-blue-300
+- bg-blue-400
+- text-blue-300
+- text-blue-400
+- border-blue-300
+- ring-blue-300
+- any light-blue custom hex values
+
+Replace with:
+
+- bg-primary
+- text-primary
+- border-primary
+- ring-primary
+
+OR with the darker blue utility class if not using tokens.
+
+--------------------------------
+STEP 4) Components That Must Update
+
+Ensure the darker blue is used for:
+
+- Create New Job button
+- Floating + button
+- Primary action buttons
+- Icons inside blue circles
+- Selected pills / badges
+- Links
+- Toggles / active states
+- Checkboxes (checked state)
+- Any CTA that was previously light blue
+
+--------------------------------
+STEP 5) DO NOT CHANGE
+
+- Success green
+- Warning yellow
+- Error red
+- Neutral greys
+
+Only normalize BLUE.
+
+--------------------------------
+STEP 6) Visual Verification
+
+Open these pages and confirm consistent darker blue:
+
+- Jobs
+- Estimates
+- Invoices
+- Employees
+- Clients
+- Scheduling
+- Modals / Sheets
+- Dropdowns
+
+No element should appear lighter than the main primary blue.
+
+--------------------------------
+DELIVERABLES
+
+- Primary blue hex value or token name
+- File(s) changed (tailwind config or theme)
+- Confirmation that no light-blue remains anywhere
