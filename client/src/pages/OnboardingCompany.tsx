@@ -16,8 +16,7 @@ const EMPLOYEE_RANGES = [
   { value: "1", label: "Just me (1)" },
   { value: "2-5", label: "2–5" },
   { value: "6-10", label: "6–10" },
-  { value: "11-20", label: "11–20" },
-  { value: "20+", label: "20+" },
+  { value: "11-15", label: "11–15" },
 ];
 
 type Step = "company" | "subscription";
