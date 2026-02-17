@@ -58,8 +58,8 @@ function buildAddress(parts: (string | null | undefined)[]): string {
   return parts.filter(Boolean).join(', ');
 }
 
-const MAX_POLL_ATTEMPTS = 20;
-const POLL_INTERVAL_MS = 1500;
+const MAX_POLL_ATTEMPTS = 15;
+const POLL_INTERVAL_MS = 1000;
 
 export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [invoice, setInvoice] = useState<PublicInvoiceData | null>(null);
@@ -72,6 +72,9 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [stripeSessionId, setStripeSessionId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [paymentId, setPaymentId] = useState<number | null>(null);
+  const [confirmedAmountCents, setConfirmedAmountCents] = useState<number | null>(null);
+  const [isPartialPayment, setIsPartialPayment] = useState(false);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
   const [showSignature, setShowSignature] = useState(false);
   const [signatureSaved, setSignatureSaved] = useState(false);
   const [signatureSaving, setSignatureSaving] = useState(false);
@@ -115,31 +118,36 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     fetchInvoice();
   }, [invoiceId]);
 
+  const runConfirmPoll = useCallback(async () => {
+    if (!stripeSessionId) return;
+    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(`/api/payments/stripe/confirm?invoiceId=${invoiceId}&session_id=${stripeSessionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'recorded' && data.paymentId) {
+            setPaymentId(data.paymentId);
+            setConfirmedAmountCents(data.amountCents || null);
+            setIsPartialPayment(!!data.isPartial);
+            setPaymentConfirmed(true);
+            setPollTimedOut(false);
+            return;
+          }
+        }
+      } catch (e) {
+        // silent retry
+      }
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+    pollingRef.current = false;
+    setPollTimedOut(true);
+  }, [stripeSessionId, invoiceId]);
+
   useEffect(() => {
     if (!stripeSuccess || !stripeSessionId || pollingRef.current || paymentConfirmed) return;
     pollingRef.current = true;
-
-    const pollForPayment = async () => {
-      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-        try {
-          const res = await fetch(`/api/public/stripe/session/${stripeSessionId}/payment`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === 'paid' && data.paymentId) {
-              setPaymentId(data.paymentId);
-              setPaymentConfirmed(true);
-              return;
-            }
-          }
-        } catch (e) {
-          console.error("[PublicInvoicePay] Poll error:", e);
-        }
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-      }
-      setPaymentConfirmed(true);
-    };
-    pollForPayment();
-  }, [stripeSuccess, stripeSessionId, paymentConfirmed, invoiceId]);
+    runConfirmPoll();
+  }, [stripeSuccess, stripeSessionId, paymentConfirmed, runConfirmPoll]);
 
   useEffect(() => {
     if (paymentConfirmed && paymentId && !signatureTriggeredRef.current) {
@@ -232,7 +240,12 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full overflow-hidden">
           <div className="px-6 pt-6 pb-4 text-center">
             <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Payment Successful</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">
+              {isPartialPayment ? 'Partial Payment Received' : 'Payment Successful'}
+            </h2>
+            {confirmedAmountCents && (
+              <p className="text-sm font-semibold text-green-600 mb-1">{formatCurrency(confirmedAmountCents)}</p>
+            )}
             <p className="text-sm text-gray-500 mb-4">Please sign below to confirm your payment.</p>
           </div>
           <div className="px-6 pb-4">
@@ -272,12 +285,56 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   }
 
   if (stripeSuccess) {
+    if (pollTimedOut && !paymentConfirmed) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
+            <Loader2 className="h-12 w-12 text-blue-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              We're still finalizing your payment
+            </h2>
+            <p className="text-gray-500 mb-6 text-sm">
+              This can take a few seconds. Your payment has been received by Stripe and is being processed.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStripeSuccess(false);
+                  setStripeCanceled(false);
+                  setPollTimedOut(false);
+                  setStripeSessionId(null);
+                  pollingRef.current = false;
+                }}
+              >
+                Back to Invoice
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => {
+                  setPollTimedOut(false);
+                  pollingRef.current = true;
+                  runConfirmPoll();
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
           <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            {signatureSaved ? 'Thank You!' : (paymentConfirmed ? 'Payment Successful' : 'Confirming Payment...')}
+            {signatureSaved
+              ? 'Thank You!'
+              : paymentConfirmed
+                ? (isPartialPayment ? 'Partial Payment Received' : 'Payment Successful')
+                : 'Confirming Payment...'}
           </h2>
           {!paymentConfirmed && (
             <div className="flex items-center justify-center gap-2 text-gray-500 mt-2">
@@ -295,7 +352,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
           {invoice && (
             <div className="mt-6 pt-4 border-t border-gray-100 text-sm text-gray-600 space-y-1">
               <p><span className="font-medium">Invoice:</span> {invoice.invoiceNumber}</p>
-              <p><span className="font-medium">Amount:</span> {formatCurrency(invoice.balanceDueCents || invoice.totalCents)}</p>
+              <p><span className="font-medium">Amount Paid:</span> {formatCurrency(confirmedAmountCents || invoice.balanceDueCents || invoice.totalCents)}</p>
               {invoice.company.name && (
                 <p><span className="font-medium">Paid to:</span> {invoice.company.name}</p>
               )}

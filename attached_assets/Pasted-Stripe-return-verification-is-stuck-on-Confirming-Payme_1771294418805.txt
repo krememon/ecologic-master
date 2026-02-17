@@ -1,0 +1,45 @@
+Stripe return verification is stuck on "Confirming Payment..." especially for partial payments.
+Root cause: the client verifier waits for the invoice to become fully paid. Partial payments never reach paid, so it spins forever.
+
+Fix requirements:
+
+A) Add a server endpoint to confirm the Stripe session and return recorded payment status
+- Create GET /api/payments/stripe/confirm?invoiceId=XXX&session_id=YYY
+- In this endpoint:
+  1) Retrieve the Stripe Checkout Session via Stripe API using session_id
+     - expand ['payment_intent']
+  2) Validate session.payment_status === 'paid'
+  3) Extract payment_intent id (pi_...)
+  4) Look up our DB payment record for this invoice where stripePaymentIntentId == pi_... (or stripeId field you stored)
+     - If not found yet, return { status: "pending" }
+     - If found, return { status: "recorded", paymentId, amountCents, isPartial, newBalanceCents, invoicePaymentStatus }
+- IMPORTANT: This must treat partial payments as success once the payment record exists.
+
+B) Update the Stripe "Confirming Payment..." client screen logic
+- Replace any logic that waits for invoice.status === 'paid'
+- Poll /api/payments/stripe/confirm every 1s for up to 15 seconds max.
+- If status becomes "recorded":
+  - Transition immediately off the spinner screen
+  - Trigger signature modal for that paymentId (same flow as cash/check)
+  - After signature is saved, send receipt email with attached invoice PDF (existing behavior)
+- If after 15s still pending:
+  - Stop infinite spinner.
+  - Show a friendly message: "We’re still finalizing your payment. This can take a few seconds."
+  - Show a "Retry" button that reruns confirm, and a "Back to invoice" button.
+
+C) Ensure partial payments behave correctly
+- If payment is partial:
+  - Show success UI but label it clearly (e.g. "Partial payment received")
+  - Then still require signature
+  - Then email receipt AFTER signature is captured
+  - Do not require invoice to be fully paid.
+
+D) Logging
+- Add one concise log line on server confirm route:
+  [StripeConfirm] invoiceId=... sessionId=... pi=... status=recorded|pending
+- Remove any spammy logs.
+
+Deliverables:
+- Stripe return no longer gets stuck.
+- Partial Stripe payments complete the flow (success -> signature -> email) without waiting for invoice to be fully paid.
+- Full payments also complete quickly.

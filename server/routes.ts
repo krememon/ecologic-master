@@ -9585,6 +9585,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/payments/stripe/confirm - Confirm Stripe payment by session, supports partial payments
+  app.get('/api/payments/stripe/confirm', async (req, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
+
+      const invoiceIdParam = req.query.invoiceId as string;
+      const sessionId = req.query.session_id as string;
+
+      if (!invoiceIdParam || !sessionId) {
+        return res.status(400).json({ error: 'invoiceId and session_id are required' });
+      }
+
+      const invoiceId = parseInt(invoiceIdParam, 10);
+      if (isNaN(invoiceId)) return res.status(400).json({ error: 'Invalid invoiceId' });
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['payment_intent'],
+      });
+
+      if (!session || session.payment_status !== 'paid') {
+        console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=none status=pending`);
+        return res.json({ status: 'pending' });
+      }
+
+      const pi = typeof session.payment_intent === 'object'
+        ? session.payment_intent?.id
+        : session.payment_intent;
+
+      if (!pi) {
+        console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=missing status=pending`);
+        return res.json({ status: 'pending' });
+      }
+
+      const sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
+      if (!sessionInvoiceId) {
+        return res.status(400).json({ error: 'Session missing invoice metadata' });
+      }
+      if (sessionInvoiceId !== invoiceId) {
+        return res.status(400).json({ error: 'Session does not match this invoice' });
+      }
+
+      const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
+      const matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === pi);
+
+      if (!matchedPayment) {
+        console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=${pi} status=pending`);
+        return res.json({ status: 'pending' });
+      }
+
+      const invoice = await storage.getInvoice(invoiceId);
+      const invoiceTotalCents = invoice ? (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100)) : 0;
+      const newBalanceCents = invoice?.balanceDueCents ?? (invoiceTotalCents - (invoice?.paidAmountCents || 0));
+      const isPartial = newBalanceCents > 0;
+
+      console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=${pi} status=recorded`);
+      return res.json({
+        status: 'recorded',
+        paymentId: matchedPayment.id,
+        amountCents: matchedPayment.amountCents,
+        isPartial,
+        newBalanceCents: Math.max(0, newBalanceCents),
+        invoicePaymentStatus: invoice?.status || 'unknown',
+      });
+    } catch (error: any) {
+      console.error('[StripeConfirm] Error:', error.message);
+      res.status(500).json({ error: 'Failed to confirm payment' });
+    }
+  });
+
   // POST /api/public/payments/:paymentId/signature - Save signature for a public payment (validated by Stripe session)
   app.post('/api/public/payments/:paymentId/signature', async (req, res) => {
     try {
@@ -13080,12 +13149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amountInCents = currentBalanceDueCents;
       }
 
-      // Log request headers for debugging origin issues
-      console.log(`[Checkout] req origin: ${req.headers.origin}`);
-      console.log(`[Checkout] host: ${req.headers.host}`);
-      console.log(`[Checkout] x-forwarded-host: ${req.headers["x-forwarded-host"]}`);
-      console.log(`[Checkout] x-forwarded-proto: ${req.headers["x-forwarded-proto"]}`);
-      console.log(`[Checkout] returnBaseUrl from frontend: ${returnBaseUrl}`);
+      // Determine base URL for return redirects
 
       // Use the frontend-provided returnBaseUrl if valid, otherwise fall back to env/header
       let appBaseUrl: string;
@@ -13107,10 +13171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `Partial payment for invoice ${invoice.invoiceNumber}`
         : (invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`);
 
-      console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
-      console.log(`[Stripe] Charging amount: ${amountInCents} cents (balance: ${currentBalanceDueCents}, total: ${invoiceTotalCents})`);
-      console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`);
-      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`);
+      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c`);
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -13209,7 +13270,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
 
       // If payment is successful, update invoice and job status
-      console.log(`[StripeSession] Session ${sessionId}: payment_status=${session.payment_status}, metadata=${JSON.stringify(session.metadata)}`);
       if (session.payment_status === 'paid' && session.metadata?.invoiceId) {
         const invoiceId = parseInt(session.metadata.invoiceId);
         const invoice = await storage.getInvoice(invoiceId);
