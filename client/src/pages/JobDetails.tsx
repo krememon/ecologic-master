@@ -156,7 +156,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [viewingSig, setViewingSig] = useState<PaymentSignatureItem | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleStartTime, setScheduleStartTime] = useState("09:00");
+  const [scheduleStartTime, setScheduleStartTime] = useState("");
   const [scheduleEndTime, setScheduleEndTime] = useState("");
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
@@ -521,7 +521,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     } else {
       setScheduleDate("");
     }
-    setScheduleStartTime(job?.scheduledTime || "09:00");
+    setScheduleStartTime(job?.scheduledTime || "");
     setScheduleEndTime((job as any)?.scheduledEndTime || "");
     setShowScheduleModal(true);
   };
@@ -1529,55 +1529,84 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
       </Dialog>
 
       <Dialog open={showScheduleModal} onOpenChange={setShowScheduleModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 overflow-hidden rounded-2xl" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
               {job?.startDate ? 'Edit Schedule' : 'Add Schedule'}
             </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label htmlFor="schedule-date">Date</Label>
-              <Input
-                id="schedule-date"
-                type="date"
-                value={scheduleDate}
-                onChange={(e) => setScheduleDate(e.target.value)}
-              />
+            <button
+              onClick={() => setShowScheduleModal(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4 bg-white dark:bg-slate-900">
+            <div className="space-y-1.5">
+              <Label htmlFor="schedule-date" className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Date
+              </Label>
+              <div className="relative">
+                <Input
+                  id="schedule-date"
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="schedule-start">Start Time</Label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="schedule-start" className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Start Time
+                </Label>
                 <Input
                   id="schedule-start"
                   type="time"
                   step="900"
                   value={scheduleStartTime}
                   onChange={(e) => setScheduleStartTime(e.target.value)}
+                  placeholder="Select time"
+                  className={`h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 ${!scheduleStartTime ? 'text-slate-400' : ''}`}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="schedule-end">End Time</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="schedule-end" className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  End Time
+                </Label>
                 <Input
                   id="schedule-end"
                   type="time"
                   step="900"
                   value={scheduleEndTime}
                   onChange={(e) => setScheduleEndTime(e.target.value)}
+                  placeholder="Select time"
+                  className={`h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 ${!scheduleEndTime ? 'text-slate-400' : ''}`}
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setShowScheduleModal(false)}>
+          </div>
+
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 h-12 rounded-xl font-semibold"
+                onClick={() => setShowScheduleModal(false)}
+              >
                 Cancel
               </Button>
               <Button
-                disabled={!scheduleDate || saveScheduleMutation.isPending}
+                className="flex-1 h-12 rounded-xl font-semibold"
+                disabled={!scheduleDate || !scheduleStartTime || !scheduleEndTime || saveScheduleMutation.isPending}
                 onClick={() => {
                   saveScheduleMutation.mutate({
                     scheduledDate: scheduleDate,
-                    scheduledTime: scheduleStartTime || '09:00',
+                    scheduledTime: scheduleStartTime,
                     scheduledEndTime: scheduleEndTime || null,
                   });
                 }}

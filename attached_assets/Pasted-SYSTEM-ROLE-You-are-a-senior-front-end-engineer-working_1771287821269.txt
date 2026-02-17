@@ -1,0 +1,81 @@
+SYSTEM / ROLE:
+You are a senior front-end engineer working in the EcoLogic codebase.
+Polish the “Add Schedule” modal to match the exact design vibe of the “Select Customer” modal.
+Do NOT break any scheduling logic, time pickers, date inputs, or save/cancel behavior.
+
+GOAL:
+Make the Add Schedule modal look consistent with Select Customer:
+- clean header spacing
+- consistent typography
+- consistent input styling
+- consistent button layout
+- same modal padding + rounded corners + subtle dividers
+
+REFERENCE:
+Use the “Select Customer” modal as the styling reference for:
+- Header: centered title, small top padding, close (X) top-right
+- Body padding: consistent left/right spacing
+- Inputs: soft grey background, rounded, subtle border
+- Buttons: bottom aligned, primary button on right, secondary on left
+
+WHAT TO CHANGE (UI ONLY):
+
+1) MODAL SHELL
+- Ensure same modal container classes as Select Customer:
+  - rounded-2xl
+  - consistent padding (ex: p-4 / p-5)
+  - subtle shadow
+- Add a subtle divider line under the header (like Select Customer)
+
+2) HEADER
+- Title centered: “Add Schedule”
+- Subtle close X top-right (same size and spacing as Select Customer)
+- Remove excess top padding or cramped title spacing
+
+3) FORM LAYOUT
+- Use same label styling as Select Customer (small, muted, uppercase or light-weight):
+  - “Date”
+  - “Start Time”
+  - “End Time”
+- Space sections evenly:
+  - label -> input (6–8px)
+  - between sections (14–18px)
+
+4) INPUT STYLING (MATCH SELECT CUSTOMER FEEL)
+- Date input:
+  - same input container style (light grey background, rounded)
+  - calendar icon aligned right, vertically centered
+- Time inputs:
+  - match the same height as date input
+  - remove the weird “--:-- --” look:
+    - if no end time selected, show placeholder “Select time”
+  - clock icon right aligned like date icon
+- Ensure all inputs have consistent border radius and focus ring
+
+5) BUTTON ROW (MATCH APP)
+- Replace current random placement with a bottom button row like Select Customer:
+  - full width row with spacing
+  - Left: “Cancel” (secondary)
+  - Right: “Save Schedule” (primary blue)
+- Buttons should be same height and radius as other modals
+- Remove the extra white space under buttons
+- Disable Save until:
+  - date is selected
+  - start time is selected
+  - end time is selected
+
+6) MICRO POLISH
+- If start time defaults to 09:00 AM, remove that default.
+  - Both start and end should initially be empty with “Select time”
+- Keep any existing pickers — only change display defaults.
+
+DO NOT BREAK:
+- Saving schedule must still call the same backend route
+- Cancel must close modal without saving
+- Date/time pickers must still open and set values
+
+DELIVERABLES:
+- Add Schedule modal visually matches Select Customer modal styling
+- Inputs and buttons aligned, modern, consistent
+- Start/end time placeholders show “Select time” until chosen
+- No functionality regressions
