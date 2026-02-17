@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
-import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail } from "./email";
+import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
@@ -6526,17 +6526,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pdfBuffer = fs.readFileSync(resolvedPath);
       const pdfFileName = path.basename(resolvedPath);
 
-      // Must use proper email format like "Name <email@domain.com>"
-      const fromEmail = process.env.RESEND_FROM_EMAIL;
-      if (!fromEmail) {
-        console.error("[InvoiceEmail] RESEND_FROM_EMAIL not configured");
-        return res.status(503).json({ 
-          success: false, 
-          message: "Email sender not configured. Please set RESEND_FROM_EMAIL.",
-          code: "EMAIL_NOT_CONFIGURED"
-        });
-      }
-      
+      const fromEmail = getResendFrom();
+      console.log('[email] FROM used:', fromEmail);
+
       const emailSubject = subject || `Invoice from ${company.name}`;
       const emailBody = message || `Please find attached the invoice for your review.`;
 
@@ -6547,11 +6539,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pdfSize: pdfBuffer.length 
       });
 
-      // Send email using Resend
       const resend = new Resend(process.env.RESEND_API_KEY);
       
       const { data, error } = await resend.emails.send({
         from: fromEmail,
+        reply_to: 'no-reply@ecologicc.com',
         to: toEmail,
         subject: emailSubject,
         html: `
@@ -8890,7 +8882,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     console.log("[ShareEmail] ENV", {
       hasResendKey: !!process.env.RESEND_API_KEY,
-      fromEmail: process.env.RESEND_FROM_EMAIL,
     });
     
     try {
@@ -8965,20 +8956,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get company for branding
       const company = await storage.getCompany(companyId);
 
-      // Send email using Resend
       const resend = new Resend(process.env.RESEND_API_KEY);
-      
-      // Must use proper email format like "Name <email@domain.com>"
-      const fromEmail = process.env.RESEND_FROM_EMAIL;
-      if (!fromEmail) {
-        console.error("[ShareEmail] RESEND_FROM_EMAIL not configured");
-        return res.status(503).json({ 
-          success: false, 
-          message: "Email sender not configured. Please set RESEND_FROM_EMAIL.",
-          code: "EMAIL_NOT_CONFIGURED"
-        });
-      }
-      
+      const fromEmail = getResendFrom();
+      console.log('[email] FROM used:', fromEmail);
+
       const emailSubject = subject || `Estimate ${estimate.estimateNumber} from ${company?.name || 'Our Company'}`;
       const emailBody = message || `Please find attached the estimate for your review.`;
 
@@ -8991,6 +8972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await resend.emails.send({
         from: fromEmail,
+        reply_to: 'no-reply@ecologicc.com',
         to: toEmail,
         subject: emailSubject,
         html: `
@@ -10883,7 +10865,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceId, 
         to: email,
         hasResendKey: !!process.env.RESEND_API_KEY,
-        hasEmailFrom: !!process.env.EMAIL_FROM,
         hasAppBaseUrl: !!process.env.APP_BASE_URL
       });
       
@@ -10923,16 +10904,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Email service not configured: missing RESEND_API_KEY" });
       }
       
-      // Validate EMAIL_FROM is an email, not a URL - fallback to Resend test sender
-      const emailFromEnv = process.env.EMAIL_FROM || "";
-      const isValidEmailFrom = emailFromEnv.includes('@') && !emailFromEnv.startsWith('http');
-      const fromEmail = isValidEmailFrom ? emailFromEnv : "EcoLogic <onboarding@resend.dev>";
-      
-      // Build payment link using APP_BASE_URL (this is the public URL for links, not for email "from")
+      const fromEmail = getResendFrom();
+      console.log('[email] FROM used:', fromEmail);
+
       const appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const paymentLink = `${appBaseUrl}/invoice/${invoice.id}/pay`;
       
-      console.log("[EmailSend] building email", { from: fromEmail, paymentLink, emailFromEnvValid: isValidEmailFrom });
+      console.log("[EmailSend] building email", { from: fromEmail, paymentLink });
       
       // Format amount
       const amountFormatted = new Intl.NumberFormat('en-US', {
@@ -10987,6 +10965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { data, error } = await resend.emails.send({
           from: fromEmail,
+          reply_to: 'no-reply@ecologicc.com',
           to: email,
           subject: `Invoice ${invoice.invoiceNumber} from ${company.name} - ${amountFormatted}`,
           html: emailHtml,
@@ -13962,9 +13941,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const resend = new Resend(resendApiKey);
 
-      const rawFrom = process.env.RESEND_FROM;
-      const fromEmail = rawFrom || 'EcoLogic <onboarding@resend.dev>';
-      console.log(`[BankRefund] Sending email from="${fromEmail}" (RESEND_FROM raw="${rawFrom || '(not set)'}") to="${customer.email}"`);
+      const fromEmail = getResendFrom();
+      console.log('[email] FROM used:', fromEmail);
+      console.log(`[BankRefund] Sending email to="${customer.email}"`);
 
       let emailSent = false;
       let emailError: string | null = null;
@@ -13972,6 +13951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { data, error } = await resend.emails.send({
           from: fromEmail,
+          reply_to: 'no-reply@ecologicc.com',
           to: [customer.email],
           subject: `${companyName} - Add your bank details for a refund`,
           html: `

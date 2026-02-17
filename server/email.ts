@@ -2,7 +2,14 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const DEFAULT_FROM = 'onboarding@resend.dev';
+export function getResendFrom(): string {
+  const from = process.env.RESEND_FROM;
+  if (!from) {
+    console.warn('[email] RESEND_FROM not set');
+    return 'EcoLogic <no-reply@ecologicc.com>';
+  }
+  return from;
+}
 
 export function getAppBaseUrl(): string | null {
   const raw = process.env.APP_BASE_URL;
@@ -27,28 +34,6 @@ export function getAppBaseUrl(): string | null {
   }
 }
 
-function normalizeFromAddress(rawFrom?: string): string {
-  if (!rawFrom) {
-    console.warn('[Email] EMAIL_FROM not set, using fallback:', DEFAULT_FROM);
-    return DEFAULT_FROM;
-  }
-
-  const trimmed = rawFrom.trim();
-
-  const emailOnlyRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const nameEmailRegex = /^[^<>]+<[^\s@]+@[^\s@]+\.[^\s@]+>$/;
-
-  if (emailOnlyRegex.test(trimmed)) {
-    return trimmed;
-  }
-  
-  if (nameEmailRegex.test(trimmed)) {
-    return trimmed;
-  }
-
-  console.warn('[Email] Invalid EMAIL_FROM format, using fallback:', DEFAULT_FROM, '(was:', trimmed, ')');
-  return DEFAULT_FROM;
-}
 
 interface SignatureRequestEmailParams {
   to: string;
@@ -73,9 +58,8 @@ export async function sendSignatureRequestEmail({
     throw new Error('RESEND_API_KEY is not configured. Please add it to your secrets.');
   }
   
-  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
-
-  console.log('[Email] From:', resolvedFrom);
+  const resolvedFrom = getResendFrom();
+  console.log('[email] FROM used:', resolvedFrom);
   console.log('[Email] To:', to);
 
   const messageBlock = message 
@@ -128,6 +112,7 @@ export async function sendSignatureRequestEmail({
   try {
     const { data, error } = await resend.emails.send({
       from: resolvedFrom,
+      reply_to: 'no-reply@ecologicc.com',
       to: [to],
       subject: `Signature requested: ${documentName}`,
       html,
@@ -156,13 +141,13 @@ export async function sendTestEmail({ to }: TestEmailParams): Promise<void> {
     throw new Error('RESEND_API_KEY is not configured');
   }
   
-  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
-
-  console.log('[Email] Test email from:', resolvedFrom);
+  const resolvedFrom = getResendFrom();
+  console.log('[email] FROM used:', resolvedFrom);
   console.log('[Email] Test email to:', to);
 
   const { data, error } = await resend.emails.send({
     from: resolvedFrom,
+    reply_to: 'no-reply@ecologicc.com',
     to: [to],
     subject: 'EcoLogic - Test Email',
     html: `
@@ -210,7 +195,8 @@ export async function sendPaymentReceiptEmail({
     return;
   }
 
-  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
+  const resolvedFrom = getResendFrom();
+  console.log('[email] FROM used:', resolvedFrom);
 
   const methodLabel: Record<string, string> = {
     cash: 'Cash',
@@ -275,6 +261,7 @@ export async function sendPaymentReceiptEmail({
   try {
     const emailPayload: any = {
       from: resolvedFrom,
+      reply_to: 'no-reply@ecologicc.com',
       to: [to],
       subject: `Receipt: ${invoiceNumber} (Paid)`,
       html,

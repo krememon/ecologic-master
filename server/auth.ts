@@ -1,13 +1,11 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-// Facebook and Microsoft strategies disabled - not configured
-// import { Strategy as FacebookStrategy } from "passport-facebook";
-// import { Strategy as MicrosoftStrategy } from "passport-microsoft";
 import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { getResendFrom } from "./email";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
@@ -56,13 +54,6 @@ if (process.env.RESEND_FROM) {
   console.warn("[email] WARNING: RESEND_FROM is not set - email sending will fail");
 }
 
-function getResendFrom(): string {
-  const from = process.env.RESEND_FROM;
-  if (!from) {
-    throw new Error("RESEND_FROM environment variable is not configured");
-  }
-  return from;
-}
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -126,6 +117,7 @@ async function sendPasswordResetEmail(email: string, token: string) {
   
   const { error } = await resend.emails.send({
     from: getResendFrom(),
+    reply_to: 'no-reply@ecologicc.com',
     to: email,
     subject: "Reset your EcoLogic password",
     html: `
@@ -457,6 +449,7 @@ export function setupAuth(app: Express) {
         
         const { error } = await resend.emails.send({
           from: getResendFrom(),
+          reply_to: 'no-reply@ecologicc.com',
           to: normalizedEmail,
           subject: "Your EcoLogic Verification Code",
           html: `
@@ -676,6 +669,7 @@ export function setupAuth(app: Express) {
         
         const { error } = await resend.emails.send({
           from: getResendFrom(),
+          reply_to: 'no-reply@ecologicc.com',
           to: normalizedEmail,
           subject: "Your New EcoLogic Verification Code",
           html: `
@@ -800,6 +794,7 @@ export function setupAuth(app: Express) {
         
         const { error } = await resend.emails.send({
           from: getResendFrom(),
+          reply_to: 'no-reply@ecologicc.com',
           to: normalizedEmail,
           subject: "Your EcoLogic Sign-In Code",
           html: `
@@ -998,6 +993,7 @@ export function setupAuth(app: Express) {
         
         const { error } = await resend.emails.send({
           from: getResendFrom(),
+          reply_to: 'no-reply@ecologicc.com',
           to: normalizedEmail,
           subject: "Your New EcoLogic Sign-In Code",
           html: `

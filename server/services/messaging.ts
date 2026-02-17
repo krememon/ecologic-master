@@ -1,8 +1,7 @@
 import { Resend } from 'resend';
 import * as fs from 'fs';
 import * as path from 'path';
-
-const DEFAULT_FROM = 'onboarding@resend.dev';
+import { getResendFrom } from '../email';
 
 function toAbsoluteUrl(relativeUrl: string | null | undefined): string {
   if (!relativeUrl) return '';
@@ -131,21 +130,6 @@ interface SmsResult {
   error?: string;
 }
 
-function normalizeFromAddress(rawFrom?: string): string {
-  if (!rawFrom) {
-    return DEFAULT_FROM;
-  }
-
-  const trimmed = rawFrom.trim();
-  const emailOnlyRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const nameEmailRegex = /^[^<>]+<[^\s@]+@[^\s@]+\.[^\s@]+>$/;
-
-  if (emailOnlyRegex.test(trimmed) || nameEmailRegex.test(trimmed)) {
-    return trimmed;
-  }
-
-  return DEFAULT_FROM;
-}
 
 function normalizePhoneToE164(phone: string): string {
   const digitsOnly = phone.replace(/\D/g, '');
@@ -181,7 +165,8 @@ export async function sendCampaignEmail({
   }
 
   const resend = new Resend(resendApiKey);
-  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
+  const resolvedFrom = getResendFrom();
+  console.log('[email] FROM used:', resolvedFrom);
 
   const html = `
     <!DOCTYPE html>
@@ -332,7 +317,8 @@ export async function sendBrandedCampaignEmail({
   }
 
   const resend = new Resend(resendApiKey);
-  const resolvedFrom = normalizeFromAddress(process.env.EMAIL_FROM);
+  const resolvedFrom = getResendFrom();
+  console.log('[email] FROM used:', resolvedFrom);
   
   const footerText = branding?.footerText || '';
   const fromName = branding?.fromName || companyName;
@@ -498,7 +484,8 @@ export const messagingService = {
     }
 
     const resend = new Resend(resendApiKey);
-    const baseFrom = normalizeFromAddress(process.env.EMAIL_FROM);
+    const baseFrom = getResendFrom();
+    console.log('[email] FROM used:', baseFrom);
     
     try {
       const { data, error } = await resend.emails.send({
