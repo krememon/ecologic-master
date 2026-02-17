@@ -11,9 +11,10 @@ import nodemailer from "nodemailer";
 import { storage } from "./storage";
 import { db } from "./db";
 import { companies, companyMembers } from "@shared/schema";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHmac } from "crypto";
 import { promisify } from "util";
 import { generateUniqueInviteCode, normalizeCode } from "@shared/inviteCode";
+import * as appleSignin from "apple-signin-auth";
 
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -510,18 +511,14 @@ export async function setupAuth(app: Express) {
 
   // Apple Sign-In routes
   if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY) {
-    const appleSignin = require('apple-signin-auth');
-    
     const appleRedirectUri = process.env.APPLE_REDIRECT_URI || 
       (process.env.REPLIT_DOMAINS 
         ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}/api/auth/apple/callback`
         : `http://localhost:5000/api/auth/apple/callback`);
 
-    const crypto = require('crypto');
-    
     function signAppleState(data: string): string {
       const secret = process.env.SESSION_SECRET || 'fallback';
-      return crypto.createHmac('sha256', secret).update(data).digest('hex');
+      return createHmac('sha256', secret).update(data).digest('hex');
     }
 
     app.get("/api/auth/apple/start", (req, res) => {
