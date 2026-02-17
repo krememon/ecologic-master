@@ -516,6 +516,20 @@ export async function setupAuth(app: Express) {
         ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}/api/auth/apple/callback`
         : `http://localhost:5000/api/auth/apple/callback`);
 
+    function getApplePrivateKey(): string {
+      let key = (process.env.APPLE_PRIVATE_KEY || '').trim();
+      key = key.replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+      const hasBegin = key.includes('-----BEGIN PRIVATE KEY-----');
+      const hasEnd = key.includes('-----END PRIVATE KEY-----');
+      console.log(`[AppleAuth] Private key: ${key.length} chars, BEGIN=${hasBegin}, END=${hasEnd}`);
+      if (!hasBegin || !hasEnd) {
+        throw new Error('APPLE_PRIVATE_KEY is missing PEM headers');
+      }
+      return key;
+    }
+
+    const applePrivateKey = getApplePrivateKey();
+
     function signAppleState(data: string): string {
       const secret = process.env.SESSION_SECRET || 'fallback';
       return createHmac('sha256', secret).update(data).digest('hex');
@@ -591,11 +605,10 @@ export async function setupAuth(app: Express) {
 
         res.clearCookie('apple_auth', { path: '/api/auth/apple/callback' });
 
-        const privateKey = (process.env.APPLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
         const clientSecret = appleSignin.getClientSecret({
           clientID: process.env.APPLE_CLIENT_ID,
           teamID: process.env.APPLE_TEAM_ID,
-          privateKey,
+          privateKey: applePrivateKey,
           keyIdentifier: process.env.APPLE_KEY_ID,
         });
 
