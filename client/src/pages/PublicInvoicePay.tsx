@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import SignatureCanvas from "react-signature-canvas";
+import { useToast } from "@/hooks/use-toast";
 
 interface PublicInvoicePayProps {
   invoiceId: string;
@@ -62,6 +63,7 @@ const MAX_POLL_ATTEMPTS = 15;
 const POLL_INTERVAL_MS = 1000;
 
 export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
+  const { toast } = useToast();
   const [invoice, setInvoice] = useState<PublicInvoiceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [hasDrawn, setHasDrawn] = useState(false);
   const pollingRef = useRef(false);
   const signatureTriggeredRef = useRef(false);
+  const hasRedirectedRef = useRef(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -175,8 +178,14 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
       }
       setSignatureSaved(true);
       setShowSignature(false);
+      if (!hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        setTimeout(() => {
+          window.location.href = '/jobs';
+        }, 1200);
+      }
     } catch (err: any) {
-      console.error("[PublicInvoicePay] Signature save error:", err);
+      toast({ title: "Error", description: err.message || "Failed to save signature", variant: "destructive" });
     } finally {
       setSignatureSaving(false);
     }
@@ -356,6 +365,17 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
               {invoice.company.name && (
                 <p><span className="font-medium">Paid to:</span> {invoice.company.name}</p>
               )}
+            </div>
+          )}
+          {signatureSaved && (
+            <div className="mt-6">
+              <Button
+                variant="outline"
+                onClick={() => { window.location.href = '/jobs'; }}
+                className="text-sm"
+              >
+                Back to Jobs
+              </Button>
             </div>
           )}
         </div>

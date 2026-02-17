@@ -51,6 +51,7 @@ export function useSignatureAfterPayment() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingSignatureMeta | null>(null);
   const triggeredRef = useRef<number | null>(null);
+  const redirectedRef = useRef(false);
 
   const openModal = useCallback(async (meta: PendingSignatureMeta) => {
     if (triggeredRef.current === meta.paymentId) {
@@ -70,6 +71,7 @@ export function useSignatureAfterPayment() {
     }
 
     triggeredRef.current = meta.paymentId;
+    redirectedRef.current = false;
     setPendingPayment(meta);
     setPendingInStorage(meta);
     setIsModalOpen(true);
@@ -85,6 +87,12 @@ export function useSignatureAfterPayment() {
     setPendingPayment(null);
     clearPendingFromStorage();
     triggeredRef.current = null;
+    if (!redirectedRef.current) {
+      redirectedRef.current = true;
+      setTimeout(() => {
+        window.location.href = '/jobs';
+      }, 1200);
+    }
   }, []);
 
   const onModalDismiss = useCallback(() => {
