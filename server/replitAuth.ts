@@ -15,6 +15,7 @@ import { scrypt, randomBytes, timingSafeEqual, createHmac } from "crypto";
 import { promisify } from "util";
 import { generateUniqueInviteCode, normalizeCode } from "@shared/inviteCode";
 import * as appleSignin from "apple-signin-auth";
+import jwt from "jsonwebtoken";
 
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -540,6 +541,23 @@ export async function setupAuth(app: Express) {
 
     const applePrivateKey = getApplePrivateKey();
 
+    function buildAppleClientSecret(): string {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        iss: process.env.APPLE_TEAM_ID,
+        iat: now,
+        exp: now + 300,
+        aud: "https://appleid.apple.com",
+        sub: process.env.APPLE_CLIENT_ID,
+      };
+      const token = jwt.sign(payload, applePrivateKey, {
+        algorithm: "ES256",
+        header: { kid: process.env.APPLE_KEY_ID!, alg: "ES256" },
+      });
+      console.log(`[AppleAuth] client_secret generated, length=${token.length}`);
+      return token;
+    }
+
     function signAppleState(data: string): string {
       const secret = process.env.SESSION_SECRET || 'fallback';
       return createHmac('sha256', secret).update(data).digest('hex');
@@ -615,19 +633,29 @@ export async function setupAuth(app: Express) {
 
         res.clearCookie('apple_auth', { path: '/api/auth/apple/callback' });
 
-        const clientSecret = appleSignin.getClientSecret({
-          clientID: process.env.APPLE_CLIENT_ID,
-          teamID: process.env.APPLE_TEAM_ID,
-          privateKey: applePrivateKey,
-          keyIdentifier: process.env.APPLE_KEY_ID,
+        const clientSecret = buildAppleClientSecret();
+
+        const tokenParams = new URLSearchParams({
+          client_id: process.env.APPLE_CLIENT_ID!,
+          client_secret: clientSecret,
+          code,
+          grant_type: "authorization_code",
+          redirect_uri: appleRedirectUri,
         });
 
-        const tokenResponse = await appleSignin.getAuthorizationToken(code, {
-          clientID: process.env.APPLE_CLIENT_ID,
-          redirectUri: appleRedirectUri,
-          clientSecret,
+        const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: tokenParams.toString(),
         });
 
+        if (!tokenRes.ok) {
+          const errBody = await tokenRes.text();
+          console.error(`[AppleAuth] Token exchange failed: status=${tokenRes.status}, body=${errBody}`);
+          return res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("Apple token exchange failed"));
+        }
+
+        const tokenResponse = await tokenRes.json();
         console.log("[AppleAuth] Token exchange success");
 
         const claims = await appleSignin.verifyIdToken(tokenResponse.id_token, {
