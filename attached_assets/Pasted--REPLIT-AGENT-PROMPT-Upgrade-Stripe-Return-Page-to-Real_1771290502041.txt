@@ -1,0 +1,186 @@
+✅ REPLIT AGENT PROMPT – Upgrade Stripe Return Page to Real Invoice View
+🎯 Objective
+
+Redesign /invoice/:id/pay (Stripe return page) so that:
+
+It uses the clean text-only EcoLogic header
+
+It removes the droplet logo
+
+It renders the full invoice layout (like internal invoice view / PDF)
+
+It keeps the green “Paid” status pill
+
+It looks polished and professional
+
+🔥 1️⃣ HEADER REDESIGN (Remove Droplet)
+
+In the Stripe return page component:
+
+REMOVE:
+
+Droplet logo image
+
+Blue square icon
+
+Centered icon layout
+
+REPLACE WITH:
+<div className="text-center mb-10">
+  <h1 className="text-4xl font-extrabold tracking-tight text-black">
+    EcoLogic
+  </h1>
+  <p className="text-sm text-gray-500 mt-1">
+    Professional contractor management
+  </p>
+</div>
+
+
+No icon.
+No color background.
+Clean. Bold. Professional.
+
+🔥 2️⃣ Replace Confirmation Card With Real Invoice Layout
+
+Instead of this minimal confirmation:
+
+Invoice #
+
+Subtotal
+
+Amount Paid
+
+“This invoice has been paid”
+
+We will render:
+
+Proper Invoice Structure
+
+Layout must include:
+
+🧾 Invoice Header
+
+Left side:
+
+EcoLogic name
+
+Company address
+
+Company email
+
+Company phone
+
+Right side:
+
+INVOICE
+
+Invoice number
+
+Invoice date
+
+Due date
+
+Green “Paid” pill
+
+👤 Bill To Section
+
+Customer name
+
+Customer address
+
+Customer email
+
+📋 Job Info
+
+Job title
+
+🧱 Line Items Table
+
+Columns:
+
+Service
+
+Qty
+
+Price
+
+Amount
+
+Pull from /api/jobs/:jobId/line-items
+
+💰 Totals Section
+
+Subtotal
+
+Tax (if exists)
+
+Total
+
+Amount Paid (green)
+
+Balance (should show $0.00 when paid)
+
+🔥 3️⃣ Remove “Secure payment powered by Stripe”
+
+Delete this line:
+
+Secure payment powered by Stripe
+
+
+This is a paid invoice.
+Not a checkout page anymore.
+
+🔥 4️⃣ Keep Paid Confirmation Message
+
+At bottom:
+
+<div className="mt-8 text-center text-green-600 font-medium">
+  ✓ This invoice has been paid. Thank you!
+</div>
+
+🔥 5️⃣ Important: Data Source
+
+Ensure this page:
+
+Fetches invoice via /api/invoices/:id
+
+Fetches job
+
+Fetches line items
+
+Fetches company profile
+
+Fetches customer
+
+Do NOT rely only on Stripe session state.
+
+🎨 Design Guidelines
+
+White background
+
+Max width 900px centered
+
+Rounded container
+
+Soft shadow
+
+Proper spacing between sections
+
+Clean typography (no cartoon styles)
+
+Match internal invoice design
+
+🧠 Result
+
+After Stripe payment:
+
+Customer sees:
+
+✔ EcoLogic professional header
+✔ Full real invoice
+✔ Green Paid badge
+✔ All services listed
+✔ Proper invoice formatting
+✔ Looks like an actual business document
+
+Not a Stripe confirmation page.

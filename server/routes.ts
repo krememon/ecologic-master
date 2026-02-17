@@ -9478,22 +9478,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Invoice not found" });
       }
       
-      // Get company info for branding
       const company = await storage.getCompany(invoice.companyId);
-      
-      // Return only the data needed for public payment page (no sensitive info)
+
+      let customer = null;
+      if (invoice.customerId) {
+        const c = await storage.getCustomer(invoice.customerId);
+        if (c) {
+          customer = {
+            name: [c.firstName, c.lastName].filter(Boolean).join(' '),
+            email: c.email || null,
+            address: c.address || null,
+            city: c.city || null,
+            state: c.state || null,
+            zip: c.zip || null,
+          };
+        }
+      }
+
+      let jobTitle = null;
+      if (invoice.jobId) {
+        const job = await storage.getJob(invoice.jobId);
+        if (job) {
+          jobTitle = job.title;
+        }
+      }
+
       res.json({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         totalCents: invoice.totalCents,
         subtotalCents: invoice.subtotalCents,
         taxCents: invoice.taxCents,
+        paidAmountCents: invoice.paidAmountCents || 0,
+        balanceDueCents: invoice.balanceDueCents || 0,
         status: invoice.status,
         dueDate: invoice.dueDate,
         issueDate: invoice.issueDate,
-        companyName: company?.name || 'Unknown Company',
-        companyLogo: company?.logo || null,
         lineItems: invoice.lineItems,
+        company: {
+          name: company?.name || 'Unknown Company',
+          email: company?.email || null,
+          phone: company?.phone || null,
+          addressLine1: company?.addressLine1 || null,
+          addressLine2: company?.addressLine2 || null,
+          city: company?.city || null,
+          state: company?.state || null,
+          postalCode: company?.postalCode || null,
+        },
+        customer,
+        jobTitle,
       });
     } catch (error) {
       console.error("Error fetching public invoice:", error);
