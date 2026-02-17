@@ -519,12 +519,22 @@ export async function setupAuth(app: Express) {
     function getApplePrivateKey(): string {
       let key = (process.env.APPLE_PRIVATE_KEY || '').trim();
       key = key.replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
-      const hasBegin = key.includes('-----BEGIN PRIVATE KEY-----');
-      const hasEnd = key.includes('-----END PRIVATE KEY-----');
-      console.log(`[AppleAuth] Private key: ${key.length} chars, BEGIN=${hasBegin}, END=${hasEnd}`);
-      if (!hasBegin || !hasEnd) {
-        throw new Error('APPLE_PRIVATE_KEY is missing PEM headers');
+
+      if (!key.includes('-----BEGIN PRIVATE KEY-----') || !key.includes('-----END PRIVATE KEY-----')) {
+        throw new Error('[AppleAuth] APPLE_PRIVATE_KEY is missing BEGIN/END markers');
       }
+
+      const lines = key.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length <= 3) {
+        const header = '-----BEGIN PRIVATE KEY-----';
+        const footer = '-----END PRIVATE KEY-----';
+        const body = key.replace(header, '').replace(footer, '').replace(/\s+/g, '');
+        const wrapped = body.match(/.{1,64}/g)?.join('\n') || body;
+        key = `${header}\n${wrapped}\n${footer}`;
+      }
+
+      const lineCount = key.split('\n').length;
+      console.log(`[AppleAuth] Private key: ${key.length} chars, ${lineCount} lines, valid PEM=true`);
       return key;
     }
 
@@ -722,6 +732,7 @@ export async function setupAuth(app: Express) {
         });
       } catch (error: any) {
         console.error("[AppleAuth] Callback error:", error.message);
+        console.error("[AppleAuth] Stack:", error.stack);
         res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("Apple Sign-In failed. Please try again."));
       }
     });
