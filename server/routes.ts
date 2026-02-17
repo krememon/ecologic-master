@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
-import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl } from "./email";
+import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
@@ -14434,6 +14434,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signedByName: (signedByName && typeof signedByName === 'string') ? signedByName.trim() : '',
         signaturePngBase64,
       });
+
+      // Send receipt email after signature (fire-and-forget, don't block response)
+      (async () => {
+        try {
+          if (payment.receiptEmailSentAt) {
+            console.log('[ReceiptEmail] skipped', { reason: 'already sent', paymentId });
+            return;
+          }
+
+          const effectiveInvoiceId = invoiceId || payment.invoiceId;
+          if (!effectiveInvoiceId) {
+            console.log('[ReceiptEmail] skipped', { reason: 'no invoice', paymentId });
+            return;
+          }
+
+          const invoice = await storage.getInvoice(effectiveInvoiceId);
+          if (!invoice) {
+            console.log('[ReceiptEmail] skipped', { reason: 'invoice not found', paymentId });
+            return;
+          }
+
+          const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
+          const customerEmail = customer?.email;
+          if (!customerEmail) {
+            console.log('[ReceiptEmail] skipped', { reason: 'no customer email', paymentId });
+            return;
+          }
+
+          const company = await storage.getCompany(member.companyId);
+          const companyName = company?.name || 'Your contractor';
+          const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Valued Customer';
+
+          const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount) * 100);
+          const amountFormatted = `$${(amountCents / 100).toFixed(2)}`;
+
+          const paidDate = payment.paidDate
+            ? new Date(payment.paidDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+          const baseUrl = getAppBaseUrl();
+          const viewInvoiceUrl = baseUrl ? `${baseUrl}/invoice/${effectiveInvoiceId}/pay` : undefined;
+
+          await sendPaymentReceiptEmail({
+            to: customerEmail,
+            customerName,
+            companyName,
+            invoiceNumber: invoice.invoiceNumber,
+            amountFormatted,
+            paymentMethod: payment.paymentMethod || 'other',
+            paidDate,
+            viewInvoiceUrl,
+          });
+
+          // Mark as sent AFTER successful send (idempotent race-safe)
+          await db
+            .update(payments)
+            .set({ receiptEmailSentAt: new Date() })
+            .where(and(eq(payments.id, paymentId), sql`receipt_email_sent_at IS NULL`));
+
+          console.log('[ReceiptEmail] sent', { paymentId, invoiceId: effectiveInvoiceId, to: customerEmail });
+        } catch (emailErr: any) {
+          console.error('[ReceiptEmail] error (non-blocking):', emailErr?.message || emailErr);
+        }
+      })();
+
       res.json({ signature: { id: sig.id, signedAt: sig.signedAt } });
     } catch (error: any) {
       console.error('Error saving payment signature:', error);

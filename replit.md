@@ -36,6 +36,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - **Company Profile**: Owner-only feature for managing company identity and branding.
 - **Tax Management**: Owner-only feature for creating custom tax rates applied to invoices, with per-item tax selection.
 - **Payment Collection**: Multi-method payment collection (Cash, Check, Card via Stripe) with idempotent processing and RBAC.
+- **Payment Receipt Emails**: Automatic receipt email sent to customer after payment signature is saved (all methods: cash, check, card). Idempotent via `receiptEmailSentAt` column. Uses Resend with branded HTML template.
 - **Refund System**: Manual refund recording (Cash, Check, Card, Other) with RBAC, updating invoice totals and payment ledger.
 - **Payments Tracker**: Contractor-first dashboard with real-time financial overview, filterable invoices, receipt-style feed, and partial payment support.
 - **Payment Signature Capture**: Configurable post-payment signature collection with `react-signature-canvas` and server-side de-duplication.

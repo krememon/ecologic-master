@@ -1,0 +1,111 @@
+GOAL:
+Automatically email a receipt (paid invoice) to the client after ANY successful payment method (cash / check / card).
+For cash/check: send ONLY after the payment completion signature is saved.
+For Stripe card: send ONLY after Stripe payment is confirmed AND the payment completion signature is saved.
+Email should include the paid invoice PDF (or a clean hosted “Paid Invoice” link if PDF attachment isn’t ready yet).
+
+IMPORTANT RULES:
+- Do NOT send the email if the client email is missing.
+- Do NOT send the email until signature exists for that payment.
+- Do NOT send duplicate emails (idempotent).
+- Keep RBAC and existing payment flows intact.
+
+WHAT TO BUILD (BACKEND-FIRST):
+
+A) DATABASE (idempotency)
+1) Add a column to payments table OR create a small table:
+Option 1 (simple): payments.receiptEmailSentAt TIMESTAMP NULL
+Option 2: payment_receipts table:
+- id
+- paymentId (unique)
+- sentAt
+- toEmail
+- providerMessageId (optional)
+
+Use this to prevent sending twice.
+
+B) RECEIPT TRIGGER LOGIC
+We should trigger the receipt email when signature is created:
+- Endpoint already exists: POST /api/payments/:paymentId/signature
+This is the perfect single “source of truth” for when to send.
+
+So:
+1) In POST /api/payments/:paymentId/signature handler, AFTER saving signature:
+   - Load payment + invoice + job + customer
+   - Verify invoice is paid (or payment recorded)
+   - Verify customer has email
+   - Verify receipt not already sent (receiptEmailSentAt is null)
+   - Generate receipt payload
+   - Send email
+   - Mark receiptEmailSentAt = now
+
+This automatically works for cash/check AND stripe because both flows end with signature save.
+
+C) INVOICE PDF OR LINK
+Preferred: attach a PDF of the paid invoice.
+If you already have invoice PDF generation anywhere, reuse it.
+If not, implement a “paid invoice” HTML and generate PDF server-side.
+
+Minimal safe approach (fastest):
+- Create a public “paid invoice” page (requires a token):
+  GET /invoice/receipt/:token
+- Generate token tied to invoiceId + companyId, store hashed token.
+- Email includes a “View Paid Invoice” button.
+(We can add PDF attachment after.)
+
+If you already have upload/storage utilities:
+- Generate PDF -> upload to storage -> email attachment or link.
+
+D) EMAIL CONTENT
+Use Resend (already configured):
+- From: EcoLogic <no-reply@ecologicc.com>
+- To: customer.email
+- Subject: “Payment receipt — {InvoiceNumber}”
+- Body:
+  - Thank you message
+  - Amount paid
+  - Payment method
+  - Date/time
+  - Invoice number
+  - Button: View Paid Invoice
+  - If attachment exists: “Your paid invoice is attached.”
+
+E) FRONTEND
+No UI required, but optional:
+- Show small “Receipt emailed” indicator inside invoice/payment details.
+- Do NOT use popups/toasts.
+
+IMPLEMENTATION DETAILS (STEP BY STEP):
+1) Add receiptEmailSentAt to payments table and migrate.
+2) Update POST /api/payments/:paymentId/signature:
+   - after signature save, call sendPaymentReceiptIfNeeded(paymentId)
+3) Implement helper:
+   async function sendPaymentReceiptIfNeeded(paymentId) {
+     - load payment
+     - if payment.receiptEmailSentAt return
+     - load invoice + customer
+     - if no customer.email return
+     - if !signatureExists(paymentId) return (should exist here, but keep guard)
+     - create receipt link or pdf
+     - send via Resend
+     - update payment.receiptEmailSentAt = now
+   }
+4) Ensure idempotency:
+   - Use DB update with WHERE receiptEmailSentAt IS NULL to avoid races.
+5) Logging (temporary):
+   console.log("[ReceiptEmail] sent", { paymentId, invoiceId, to })
+   console.log("[ReceiptEmail] skipped", { reason })
+
+TEST PLAN:
+1) Cash payment -> signature saved -> email sends once.
+2) Check payment -> signature saved -> email sends once.
+3) Stripe payment -> complete checkout -> signature saved -> email sends once.
+4) Repeat signature save / refresh -> email does NOT send again.
+5) Client has no email -> no crash, just skip.
+6) Confirm email shows correct invoice number + amount.
+
+DELIVERABLES:
+- Automatic receipt email after signature saved for any payment type.
+- Idempotent (no duplicates).
+- Includes paid invoice link or PDF.
+- No changes that break payments, signatures, or QB sync.

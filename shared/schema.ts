@@ -536,6 +536,7 @@ export const payments = pgTable("payments", {
   qboPaymentSyncStatus: varchar("qbo_payment_sync_status", { length: 20 }), // pending, synced, failed, waiting
   qboPaymentLastSyncError: text("qbo_payment_last_sync_error"),
   qboPaymentLastSyncedAt: timestamp("qbo_payment_last_synced_at"),
+  receiptEmailSentAt: timestamp("receipt_email_sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
