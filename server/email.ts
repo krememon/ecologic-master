@@ -191,6 +191,7 @@ interface PaymentReceiptEmailParams {
   paymentMethod: string;
   paidDate: string;
   viewInvoiceUrl?: string;
+  pdfAttachment?: { filename: string; content: Buffer } | null;
 }
 
 export async function sendPaymentReceiptEmail({
@@ -202,6 +203,7 @@ export async function sendPaymentReceiptEmail({
   paymentMethod,
   paidDate,
   viewInvoiceUrl,
+  pdfAttachment,
 }: PaymentReceiptEmailParams): Promise<void> {
   const resendApiKey = process.env.RESEND_API_KEY;
 
@@ -246,7 +248,7 @@ export async function sendPaymentReceiptEmail({
 
         <p style="margin: 0 0 16px 0;">Hello ${customerName},</p>
 
-        <p style="margin: 0 0 20px 0;">Thank you for your payment. Here is your receipt:</p>
+        <p style="margin: 0 0 20px 0;">Thank you for your payment — your paid invoice is attached.</p>
 
         <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <table style="width: 100%; border-collapse: collapse;">
@@ -280,19 +282,28 @@ export async function sendPaymentReceiptEmail({
   `;
 
   try {
-    const { data, error } = await resend.emails.send({
+    const emailPayload: any = {
       from: resolvedFrom,
       to: [to],
-      subject: `Payment receipt — ${invoiceNumber}`,
+      subject: `Receipt: ${invoiceNumber} (Paid)`,
       html,
-    });
+    };
+
+    if (pdfAttachment) {
+      emailPayload.attachments = [{
+        filename: pdfAttachment.filename,
+        content: pdfAttachment.content,
+      }];
+    }
+
+    const { data, error } = await resend.emails.send(emailPayload);
 
     if (error) {
       console.error('[ReceiptEmail] Resend API error:', error);
       throw new Error(error.message || 'Failed to send receipt email');
     }
 
-    console.log('[ReceiptEmail] sent', { to, invoiceNumber, id: data?.id });
+    console.log('[ReceiptEmail] sent', { to, invoiceNumber, id: data?.id, hasPdf: !!pdfAttachment });
   } catch (err: any) {
     console.error('[ReceiptEmail] failed:', err?.message || err);
     throw err;

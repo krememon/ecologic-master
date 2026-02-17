@@ -14386,36 +14386,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/settings/payments', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getUserId(req.user);
-      const member = await storage.getCompanyMemberByUserId(userId);
-      if (!member) return res.status(404).json({ error: 'Company not found' });
-      const company = await storage.getCompany(member.companyId);
-      const dbValue = company?.requireSignatureAfterPayment ?? false;
-      const forceOverride = process.env.NODE_ENV !== 'production' && process.env.FORCE_SIGNATURE_AFTER_PAYMENT === 'true';
-      res.json({
-        requireSignatureAfterPayment: dbValue || forceOverride,
-      });
+      res.json({ requireSignatureAfterPayment: true });
     } catch (error: any) {
       res.status(500).json({ error: 'Failed to get payment settings' });
-    }
-  });
-
-  app.put('/api/settings/payments', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req.user);
-      const member = await storage.getCompanyMemberByUserId(userId);
-      if (!member) return res.status(404).json({ error: 'Company not found' });
-      if (!can(member.role as UserRole, 'customize.manage')) {
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-      const { requireSignatureAfterPayment } = req.body;
-      if (typeof requireSignatureAfterPayment !== 'boolean') {
-        return res.status(400).json({ error: 'requireSignatureAfterPayment must be a boolean' });
-      }
-      await storage.updateCompany(member.companyId, { requireSignatureAfterPayment });
-      res.json({ requireSignatureAfterPayment });
-    } catch (error: any) {
-      res.status(500).json({ error: 'Failed to update payment settings' });
     }
   });
 
@@ -14455,7 +14428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existing) {
         return res.json({ signature: existing });
       }
-      const { signedByName, signaturePngBase64, jobId, invoiceId } = req.body;
+      const { signaturePngBase64, jobId, invoiceId } = req.body;
       if (!signaturePngBase64 || typeof signaturePngBase64 !== 'string') {
         return res.status(400).json({ error: 'Signature image is required' });
       }
@@ -14464,7 +14437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentId,
         jobId: jobId || payment.jobId || null,
         invoiceId: invoiceId || payment.invoiceId || null,
-        signedByName: (signedByName && typeof signedByName === 'string') ? signedByName.trim() : '',
+        signedByName: '',
         signaturePngBase64,
       });
 
@@ -14472,26 +14445,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (async () => {
         try {
           if (payment.receiptEmailSentAt) {
-            console.log('[ReceiptEmail] skipped', { reason: 'already sent', paymentId });
+            console.log('[ReceiptEmail] already sent - skipping paymentId=' + paymentId);
             return;
           }
 
           const effectiveInvoiceId = invoiceId || payment.invoiceId;
           if (!effectiveInvoiceId) {
-            console.log('[ReceiptEmail] skipped', { reason: 'no invoice', paymentId });
+            console.log('[ReceiptEmail] skipped - no invoice paymentId=' + paymentId);
             return;
           }
 
           const invoice = await storage.getInvoice(effectiveInvoiceId);
           if (!invoice) {
-            console.log('[ReceiptEmail] skipped', { reason: 'invoice not found', paymentId });
+            console.log('[ReceiptEmail] skipped - invoice not found invoiceId=' + effectiveInvoiceId);
             return;
           }
 
           const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
           const customerEmail = customer?.email;
           if (!customerEmail) {
-            console.log('[ReceiptEmail] skipped', { reason: 'no customer email', paymentId });
+            console.log('[ReceiptEmail] missing customer email - skipping invoiceId=' + effectiveInvoiceId);
             return;
           }
 
@@ -14509,6 +14482,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const baseUrl = getAppBaseUrl();
           const viewInvoiceUrl = baseUrl ? `${baseUrl}/invoice/${effectiveInvoiceId}/pay` : undefined;
 
+          let pdfAttachment: { filename: string; content: Buffer } | null = null;
+          if (invoice.pdfUrl) {
+            try {
+              const pdfPath = invoice.pdfUrl.startsWith('/') ? invoice.pdfUrl.substring(1) : invoice.pdfUrl;
+              if (fs.existsSync(pdfPath)) {
+                const pdfBuffer = fs.readFileSync(pdfPath);
+                pdfAttachment = {
+                  filename: `Invoice_${invoice.invoiceNumber.replace(/-/g, '_')}.pdf`,
+                  content: pdfBuffer,
+                };
+                console.log('[ReceiptEmail] PDF attached', { path: pdfPath, size: pdfBuffer.length });
+              } else {
+                console.log('[ReceiptEmail] PDF file not found, sending without attachment', { pdfUrl: invoice.pdfUrl });
+              }
+            } catch (pdfErr: any) {
+              console.error('[ReceiptEmail] PDF read error (sending without attachment):', pdfErr?.message);
+            }
+          }
+
           await sendPaymentReceiptEmail({
             to: customerEmail,
             customerName,
@@ -14518,6 +14510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             paymentMethod: payment.paymentMethod || 'other',
             paidDate,
             viewInvoiceUrl,
+            pdfAttachment,
           });
 
           // Mark as sent AFTER successful send (idempotent race-safe)
@@ -14526,7 +14519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .set({ receiptEmailSentAt: new Date() })
             .where(and(eq(payments.id, paymentId), sql`receipt_email_sent_at IS NULL`));
 
-          console.log('[ReceiptEmail] sent', { paymentId, invoiceId: effectiveInvoiceId, to: customerEmail });
+          console.log(`[ReceiptEmail] sending invoiceId=${effectiveInvoiceId} paymentId=${paymentId} to=${customerEmail}`);
         } catch (emailErr: any) {
           console.error('[ReceiptEmail] error (non-blocking):', emailErr?.message || emailErr);
         }

@@ -1,0 +1,160 @@
+Goal: After ANY successful payment (cash/check/card), once the payment completion signature is saved, EcoLogic should automatically email the customer a receipt email with the exact same invoice PDF we already generate manually for that job (the one shown in the “Generate Invoice PDF” modal). Do NOT generate a different “confirmation invoice” layout. Attach the real PDF.
+
+Requirements (must follow)
+
+Always require signature after payment (remove the Customize toggle / settings dependency).
+
+Remove “Printed Name” field from the signature modal + API (signature is just drawing).
+
+Email triggers only after signature is successfully saved (not immediately after payment).
+
+Email must include the exact existing generated invoice PDF (reuse the same PDF generator/function/route used by “Generate Invoice PDF” for that job/invoice).
+
+Do not send duplicate emails if the signature endpoint is retried (idempotent).
+
+Backend Changes
+1) Persist “receipt sent” state (idempotency)
+
+Add a column (choose one):
+
+payments.receiptEmailSentAt TIMESTAMP NULL
+
+OR payment_signatures.receiptEmailSentAt TIMESTAMP NULL
+
+Use it to prevent double sends.
+
+2) Hook into signature save endpoint
+
+Find the route that saves signature (example):
+
+POST /api/payments/:paymentId/signature
+
+After signature is saved successfully:
+
+Load:
+
+payment
+
+invoice
+
+job
+
+customer email (the invoice/job customer email)
+
+If no customer email exists → return success but skip sending (log a warning).
+
+3) Attach the REAL invoice PDF (reuse existing generator)
+
+Locate the existing PDF generation logic used by the manual “Generate Invoice PDF” modal.
+
+This might be something like:
+
+generateInvoicePdf(invoiceId) or
+
+GET /api/invoices/:invoiceId/pdf or
+
+POST /api/invoices/:invoiceId/pdf
+
+Do not create a new PDF layout.
+
+Generate a Buffer (or fetch the existing Buffer) and attach it to Resend:
+
+filename example: Invoice_${invoice.invoiceNumber}.pdf
+
+4) Send the email via Resend
+
+Subject example: Receipt: ${invoice.invoiceNumber} (Paid)
+
+Body:
+
+“Thanks for your payment — your paid invoice is attached.”
+
+Include: amount paid, payment method, paid date, invoice number, company name.
+
+From: keep using RESEND_FROM = EcoLogic <no-reply@ecologicc.com>
+
+5) Mark sent
+
+If email send succeeds:
+
+set receiptEmailSentAt = now()
+
+If it fails:
+
+do not set sentAt
+
+log the error
+
+6) Logging (minimal + useful)
+
+Add logs:
+
+[ReceiptEmail] sending invoiceId=... paymentId=... to=...
+
+[ReceiptEmail] already sent - skipping paymentId=...
+
+[ReceiptEmail] missing customer email - skipping invoiceId=...
+
+Frontend Changes
+1) Make signature required always
+
+Remove/ignore requireSignatureAfterPayment setting.
+
+Signature modal should always show after successful payment flow.
+
+2) Remove Printed Name field
+
+Delete the input from the modal UI.
+
+Update payload to only send { signatureData } (whatever you store now).
+
+3) Ensure Stripe payments trigger signature modal too
+
+Right now: cash/check triggers signature; Stripe returns to /jobs after webhook.
+Implement: after Stripe returns, open signature modal for the latest payment.
+
+Approach (recommended):
+
+On /stripe/return (or on Jobs page after return), call an endpoint to fetch the most recent payment for that invoice/job:
+
+Example endpoint to add if missing:
+
+GET /api/invoices/:invoiceId/latest-payment
+
+returns { paymentId, status, method }
+
+When it confirms payment is paid/recorded, open the signature modal with that paymentId.
+
+Important: Webhook can arrive slightly after redirect, so retry a few times (short polling, max ~5–8 seconds) before giving up.
+
+Deliverables
+
+Receipt email automatically sends only after signature save for:
+
+cash
+
+check
+
+stripe card
+
+Email attachment is the same invoice PDF used by the manual “Generate Invoice PDF” flow
+
+Printed Name removed everywhere (UI + API + DB if applicable)
+
+Signature is always required (no toggle)
+
+Stripe flow reliably opens signature modal after payment success
+
+No duplicate emails on retries
+
+Quick Test Checklist
+
+Cash payment → signature modal → sign → save → confirm email sent + PDF attached.
+
+Check payment → same.
+
+Stripe payment → pay in Stripe → return → signature modal appears → sign → save → email sent.
+
+Spam-click “Save Signature” / retry request → only one email sent.
+
+Open the manual “Generate Invoice PDF” modal and compare the PDF to the emailed attachment → must match.
