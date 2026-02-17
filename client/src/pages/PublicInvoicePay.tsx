@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { CreditCard, Loader2, CheckCircle } from "lucide-react";
+import { CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { format } from "date-fns";
+import SignatureCanvas from "react-signature-canvas";
 
 interface PublicInvoicePayProps {
   invoiceId: string;
@@ -57,11 +58,43 @@ function buildAddress(parts: (string | null | undefined)[]): string {
   return parts.filter(Boolean).join(', ');
 }
 
+const MAX_POLL_ATTEMPTS = 20;
+const POLL_INTERVAL_MS = 1500;
+
 export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [invoice, setInvoice] = useState<PublicInvoiceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  const [stripeSuccess, setStripeSuccess] = useState(false);
+  const [stripeCanceled, setStripeCanceled] = useState(false);
+  const [stripeSessionId, setStripeSessionId] = useState<string | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [paymentId, setPaymentId] = useState<number | null>(null);
+  const [showSignature, setShowSignature] = useState(false);
+  const [signatureSaved, setSignatureSaved] = useState(false);
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const sigRef = useRef<SignatureCanvas>(null);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const pollingRef = useRef(false);
+  const signatureTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get("success");
+    const canceled = urlParams.get("canceled");
+    const sessionId = urlParams.get("session_id");
+
+    if (success === "1") {
+      setStripeSuccess(true);
+      if (sessionId) setStripeSessionId(sessionId);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (canceled === "1") {
+      setStripeCanceled(true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -81,6 +114,65 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     };
     fetchInvoice();
   }, [invoiceId]);
+
+  useEffect(() => {
+    if (!stripeSuccess || !stripeSessionId || pollingRef.current || paymentConfirmed) return;
+    pollingRef.current = true;
+
+    const pollForPayment = async () => {
+      for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+        try {
+          const res = await fetch(`/api/public/stripe/session/${stripeSessionId}/payment`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'paid' && data.paymentId) {
+              setPaymentId(data.paymentId);
+              setPaymentConfirmed(true);
+              return;
+            }
+          }
+        } catch (e) {
+          console.error("[PublicInvoicePay] Poll error:", e);
+        }
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+      setPaymentConfirmed(true);
+    };
+    pollForPayment();
+  }, [stripeSuccess, stripeSessionId, paymentConfirmed, invoiceId]);
+
+  useEffect(() => {
+    if (paymentConfirmed && paymentId && !signatureTriggeredRef.current) {
+      const key = `signatureTriggeredForInvoice:${invoiceId}`;
+      if (sessionStorage.getItem(key)) return;
+      signatureTriggeredRef.current = true;
+      sessionStorage.setItem(key, "1");
+      setShowSignature(true);
+    }
+  }, [paymentConfirmed, paymentId, invoiceId]);
+
+  const handleSaveSignature = useCallback(async () => {
+    if (!sigRef.current || sigRef.current.isEmpty() || !paymentId || !stripeSessionId) return;
+    setSignatureSaving(true);
+    try {
+      const signaturePngBase64 = sigRef.current.toDataURL("image/png");
+      const res = await fetch(`/api/public/payments/${paymentId}/signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signaturePngBase64, invoiceId: parseInt(invoiceId), sessionId: stripeSessionId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save signature');
+      }
+      setSignatureSaved(true);
+      setShowSignature(false);
+    } catch (err: any) {
+      console.error("[PublicInvoicePay] Signature save error:", err);
+    } finally {
+      setSignatureSaving(false);
+    }
+  }, [paymentId, invoiceId, stripeSessionId]);
 
   const handlePay = async () => {
     if (isCheckoutLoading || !invoice) return;
@@ -119,7 +211,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     );
   }
 
-  if (error || !invoice) {
+  if (error && !stripeCanceled && !stripeSuccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
@@ -129,6 +221,120 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
           <p className="text-gray-500">
             This invoice may no longer be available or the link may be incorrect.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (stripeSuccess && showSignature) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full overflow-hidden">
+          <div className="px-6 pt-6 pb-4 text-center">
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Payment Successful</h2>
+            <p className="text-sm text-gray-500 mb-4">Please sign below to confirm your payment.</p>
+          </div>
+          <div className="px-6 pb-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+              <SignatureCanvas
+                ref={sigRef}
+                penColor="black"
+                canvasProps={{
+                  width: 350,
+                  height: 200,
+                  className: 'w-full',
+                  style: { width: '100%', height: '200px', touchAction: 'none' },
+                }}
+                onBegin={() => setHasDrawn(true)}
+              />
+            </div>
+            <div className="flex gap-3 mt-4">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { sigRef.current?.clear(); setHasDrawn(false); }}
+              >
+                Clear
+              </Button>
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={!hasDrawn || signatureSaving}
+                onClick={handleSaveSignature}
+              >
+                {signatureSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : 'Confirm & Sign'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (stripeSuccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
+          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            {signatureSaved ? 'Thank You!' : (paymentConfirmed ? 'Payment Successful' : 'Confirming Payment...')}
+          </h2>
+          {!paymentConfirmed && (
+            <div className="flex items-center justify-center gap-2 text-gray-500 mt-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <p className="text-sm">Verifying your payment...</p>
+            </div>
+          )}
+          {paymentConfirmed && (
+            <p className="text-gray-500 mt-1">
+              {signatureSaved
+                ? 'Your payment and signature have been recorded. A receipt will be sent to your email.'
+                : 'Your payment has been recorded successfully.'}
+            </p>
+          )}
+          {invoice && (
+            <div className="mt-6 pt-4 border-t border-gray-100 text-sm text-gray-600 space-y-1">
+              <p><span className="font-medium">Invoice:</span> {invoice.invoiceNumber}</p>
+              <p><span className="font-medium">Amount:</span> {formatCurrency(invoice.balanceDueCents || invoice.totalCents)}</p>
+              {invoice.company.name && (
+                <p><span className="font-medium">Paid to:</span> {invoice.company.name}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (stripeCanceled) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
+          <XCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Canceled</h2>
+          <p className="text-gray-500 mb-6">
+            Your payment was not completed. You can try again when you're ready.
+          </p>
+          <Button
+            onClick={() => {
+              setStripeCanceled(false);
+              setError(null);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Return to Invoice
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!invoice) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
+          <h2 className="text-xl font-semibold mb-2 text-gray-900">Invoice not found</h2>
+          <p className="text-gray-500">This invoice may no longer be available.</p>
         </div>
       </div>
     );
@@ -155,7 +361,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 md:py-12">
       <div className="max-w-[900px] mx-auto">
-        {/* EcoLogic Header */}
         <div className="text-center mb-10">
           <h1 className="text-4xl font-extrabold tracking-tight text-black" style={{ fontFamily: 'Inter, Arial, sans-serif', letterSpacing: '-0.5px' }}>
             EcoLogic
@@ -165,12 +370,9 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
           </p>
         </div>
 
-        {/* Invoice Document */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Invoice Header */}
           <div className="px-8 pt-8 pb-6 md:px-10 md:pt-10">
             <div className="flex flex-col md:flex-row md:justify-between gap-6">
-              {/* Company Info */}
               <div>
                 <h2 className="text-lg font-bold text-gray-900">{invoice.company.name}</h2>
                 {companyAddress && (
@@ -184,7 +386,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                 )}
               </div>
 
-              {/* Invoice Meta */}
               <div className="md:text-right">
                 <h3 className="text-2xl font-bold text-gray-900 tracking-tight">INVOICE</h3>
                 <div className="mt-2 space-y-1 text-sm">
@@ -214,7 +415,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           </div>
 
-          {/* Bill To + Job */}
           <div className="px-8 pb-6 md:px-10">
             <div className="flex flex-col md:flex-row gap-6">
               {invoice.customer && (
@@ -238,7 +438,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           </div>
 
-          {/* Line Items Table */}
           {lineItems.length > 0 && (
             <div className="px-8 pb-6 md:px-10">
               <table className="w-full text-sm">
@@ -271,7 +470,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           )}
 
-          {/* Totals */}
           <div className="px-8 pb-8 md:px-10">
             <div className="flex justify-end">
               <div className="w-full max-w-[280px] space-y-2">
@@ -307,7 +505,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           </div>
 
-          {/* Pay Button (only for unpaid) */}
           {!isPaid && invoice.totalCents > 0 && (
             <div className="px-8 pb-8 md:px-10">
               <Button
@@ -330,7 +527,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           )}
 
-          {/* Paid Confirmation */}
           {isPaid && (
             <div className="px-8 pb-8 md:px-10">
               <div className="text-center text-green-600 font-medium flex items-center justify-center gap-2">

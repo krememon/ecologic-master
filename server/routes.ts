@@ -9537,8 +9537,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           companyId: invoice.companyId.toString(),
           jobId: invoice.jobId ? invoice.jobId.toString() : '',
         },
-        success_url: `${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appBaseUrl}/invoice/${invoice.id}/pay`,
+        success_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`,
       });
       
       await storage.updateInvoice(invoiceId, {
@@ -9550,6 +9550,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating public checkout session:", error);
       res.status(500).json({ message: "Failed to create payment session" });
+    }
+  });
+
+  // GET /api/public/stripe/session/:sessionId/payment - Verify Stripe session and find associated payment
+  app.get('/api/public/stripe/session/:sessionId/payment', async (req, res) => {
+    try {
+      if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
+      const { sessionId } = req.params;
+      if (!sessionId || sessionId.length < 10) return res.status(400).json({ error: 'Invalid session ID' });
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (!session || !session.metadata?.invoiceId) {
+        return res.json({ paymentId: null, status: 'unknown' });
+      }
+
+      const invoiceId = parseInt(session.metadata.invoiceId);
+      if (session.payment_status !== 'paid') {
+        return res.json({ paymentId: null, invoiceId, status: 'pending' });
+      }
+
+      const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
+      const stripePayment = allPayments?.find(
+        (p: any) => p.status === 'paid' && (p.stripeSessionId === sessionId || p.paymentMethod === 'card' || p.paymentMethod === 'credit_card')
+      );
+
+      if (stripePayment) {
+        return res.json({ paymentId: stripePayment.id, invoiceId, status: 'paid' });
+      }
+      return res.json({ paymentId: null, invoiceId, status: 'processing' });
+    } catch (error: any) {
+      console.error('[PublicStripeSession] Error:', error.message);
+      res.status(500).json({ error: 'Failed to verify session' });
+    }
+  });
+
+  // POST /api/public/payments/:paymentId/signature - Save signature for a public payment (validated by Stripe session)
+  app.post('/api/public/payments/:paymentId/signature', async (req, res) => {
+    try {
+      const paymentId = parseInt(req.params.paymentId, 10);
+      if (isNaN(paymentId)) return res.status(400).json({ error: 'Invalid payment ID' });
+
+      const { signaturePngBase64, invoiceId, sessionId } = req.body;
+      if (!signaturePngBase64 || typeof signaturePngBase64 !== 'string') {
+        return res.status(400).json({ error: 'Signature image is required' });
+      }
+      if (!sessionId) {
+        return res.status(400).json({ error: 'Session ID is required for public signature' });
+      }
+
+      if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
+      let session;
+      try {
+        session = await stripe.checkout.sessions.retrieve(sessionId);
+      } catch (e: any) {
+        return res.status(400).json({ error: 'Invalid Stripe session' });
+      }
+      if (!session || session.payment_status !== 'paid') {
+        return res.status(400).json({ error: 'Payment not confirmed by Stripe' });
+      }
+      const sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
+
+      const payment = await storage.getPaymentById(paymentId);
+      if (!payment) return res.status(404).json({ error: 'Payment not found' });
+      if (payment.status !== 'paid') return res.status(400).json({ error: 'Signature can only be captured for paid payments' });
+
+      if (sessionInvoiceId && payment.invoiceId && payment.invoiceId !== sessionInvoiceId) {
+        return res.status(403).json({ error: 'Session does not match this payment' });
+      }
+
+      const existing = await storage.getPaymentSignature(paymentId);
+      if (existing) return res.json({ signature: existing });
+
+      const sig = await storage.createPaymentSignature({
+        companyId: payment.companyId,
+        paymentId,
+        jobId: payment.jobId || null,
+        invoiceId: invoiceId || payment.invoiceId || null,
+        signedByName: '',
+        signaturePngBase64,
+      });
+
+      (async () => {
+        try {
+          if (payment.receiptEmailSentAt) {
+            console.log('[PublicReceiptEmail] already sent - skipping paymentId=' + paymentId);
+            return;
+          }
+          const effectiveInvoiceId = invoiceId || payment.invoiceId;
+          if (!effectiveInvoiceId) {
+            console.log('[PublicReceiptEmail] skipped - no invoice paymentId=' + paymentId);
+            return;
+          }
+          const invoice = await storage.getInvoice(effectiveInvoiceId);
+          if (!invoice) {
+            console.log('[PublicReceiptEmail] skipped - invoice not found invoiceId=' + effectiveInvoiceId);
+            return;
+          }
+          const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
+          const customerEmail = customer?.email;
+          if (!customerEmail) {
+            console.log('[PublicReceiptEmail] missing customer email - skipping');
+            return;
+          }
+          const company = await storage.getCompany(payment.companyId);
+          const companyName = company?.name || 'Your contractor';
+          const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Valued Customer';
+          const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount) * 100);
+          const amountFormatted = `$${(amountCents / 100).toFixed(2)}`;
+          const paidDate = payment.paidDate
+            ? new Date(payment.paidDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+          let pdfAttachment: { filename: string; content: Buffer } | null = null;
+          if (invoice.pdfUrl) {
+            try {
+              const pdfPath = invoice.pdfUrl.startsWith('/') ? invoice.pdfUrl.substring(1) : invoice.pdfUrl;
+              if (fs.existsSync(pdfPath)) {
+                const pdfBuffer = fs.readFileSync(pdfPath);
+                pdfAttachment = { filename: `Invoice_${invoice.invoiceNumber.replace(/-/g, '_')}.pdf`, content: pdfBuffer };
+                console.log(`[PublicReceiptEmail] reusing existing PDF`);
+              }
+            } catch (pdfErr: any) {
+              console.log('[PublicReceiptEmail] existing PDF read failed:', pdfErr?.message);
+            }
+          }
+          if (!pdfAttachment && invoice.jobId) {
+            try {
+              const generated = await generateInvoicePdfForJob(invoice.jobId, payment.companyId);
+              const pdfBuffer = fs.readFileSync(generated.filePath);
+              pdfAttachment = { filename: generated.fileName, content: pdfBuffer };
+            } catch (genErr: any) {
+              console.error('[PublicReceiptEmail] PDF generation failed:', genErr?.message);
+            }
+          }
+
+          await sendPaymentReceiptEmail({
+            to: customerEmail,
+            customerName,
+            companyName,
+            invoiceNumber: invoice.invoiceNumber,
+            amountFormatted,
+            paymentMethod: payment.paymentMethod || 'other',
+            paidDate,
+            pdfAttachment,
+          });
+          await db
+            .update(payments)
+            .set({ receiptEmailSentAt: new Date() })
+            .where(and(eq(payments.id, paymentId), sql`receipt_email_sent_at IS NULL`));
+          console.log(`[PublicReceiptEmail] sent paymentId=${paymentId} to=${customerEmail}`);
+        } catch (emailErr: any) {
+          console.error('[PublicReceiptEmail] error:', emailErr?.message || emailErr);
+        }
+      })();
+
+      res.json({ signature: { id: sig.id, signedAt: sig.signedAt } });
+    } catch (error: any) {
+      console.error('Error saving public payment signature:', error);
+      res.status(500).json({ error: 'Failed to save signature' });
     }
   });
 
@@ -12950,8 +13109,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[Stripe] Using appBaseUrl: ${appBaseUrl}`);
       console.log(`[Stripe] Charging amount: ${amountInCents} cents (balance: ${currentBalanceDueCents}, total: ${invoiceTotalCents})`);
-      console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`);
-      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`);
+      console.log(`[Stripe] Success URL: ${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`);
+      console.log(`[Stripe] Cancel URL: ${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`);
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -12974,8 +13133,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobId: invoice.jobId ? String(invoice.jobId) : '',
           isPartialPayment: isPartialPayment ? 'true' : 'false',
         },
-        success_url: `${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appBaseUrl}/stripe/return?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`,
       });
 
       console.log(`[Stripe] Created checkout session ${session.id} for invoice ${invoice.id}`);
