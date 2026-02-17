@@ -772,8 +772,23 @@ export async function setupAuth(app: Express) {
           });
         });
       } catch (error: any) {
-        console.error("[AppleAuth] Callback error:", error.message);
-        console.error("[AppleAuth] Stack:", error.stack);
+        console.error("[AppleAuth] Callback error message:", error?.message);
+        console.error("[AppleAuth] Callback error stack:", error?.stack);
+        if (error?.response) {
+          console.error("[AppleAuth] Apple token HTTP status:", error.response.status);
+          console.error("[AppleAuth] Apple token response data:", error.response.data);
+        }
+
+        if (process.env.NODE_ENV === "development") {
+          return res.status(500).json({
+            error: "apple_auth_failed",
+            message: error?.message,
+            stack: error?.stack,
+            appleStatus: error?.response?.status,
+            appleData: error?.response?.data,
+          });
+        }
+
         res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("Apple Sign-In failed. Please try again."));
       }
     });
