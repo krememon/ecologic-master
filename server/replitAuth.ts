@@ -637,13 +637,21 @@ export async function setupAuth(app: Express) {
           const existingUser = await storage.getUserByEmail(normalizedEmail);
           
           if (existingUser) {
-            user = await storage.updateUser(existingUser.id, {
-              appleSub,
-              appleEmail: normalizedEmail,
-              appleIsPrivateEmail,
-              emailVerified: true,
-            });
-            console.log("[AppleAuth] Linked Apple to existing email user:", user.id);
+            if (!existingUser.appleSub) {
+              user = await storage.updateUser(existingUser.id, {
+                appleSub,
+                appleEmail: normalizedEmail,
+                appleIsPrivateEmail,
+                emailVerified: true,
+              });
+              console.log("[AppleAuth] Linked Apple to existing email user:", user.id);
+            } else if (existingUser.appleSub !== appleSub) {
+              console.error("[AppleAuth] Email already linked to different Apple account");
+              return res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("This email is already linked to a different Apple account. Please sign in with your original Apple ID or use email/password."));
+            } else {
+              user = existingUser;
+              console.log("[AppleAuth] User matched by email, appleSub already set:", user.id);
+            }
           } else {
             user = await storage.createUser({
               id: `apple_${appleSub}`,
@@ -658,16 +666,8 @@ export async function setupAuth(app: Express) {
             console.log("[AppleAuth] Created new user:", user.id);
           }
         } else {
-          user = await storage.createUser({
-            id: `apple_${appleSub}`,
-            email: null,
-            firstName: appleUserName.firstName || '',
-            lastName: appleUserName.lastName || '',
-            appleSub,
-            appleEmail: null,
-            appleIsPrivateEmail: false,
-          });
-          console.log("[AppleAuth] Created new user without email:", user.id);
+          console.log("[AppleAuth] No email from Apple and no existing appleSub match");
+          return res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("Apple did not provide an email address. Please try again or sign in with email/password."));
         }
 
         if (user.status === 'INACTIVE') {
