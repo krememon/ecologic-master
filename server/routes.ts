@@ -292,6 +292,273 @@ function requirePerm(permissions: Permission | Permission[]) {
 // Export for use in other modules
 export { broadcastToCompany };
 
+interface GeneratedInvoicePdf {
+  filePath: string;
+  fileUrl: string;
+  fileName: string;
+  invoiceNumber: string;
+  totalCents: number;
+}
+
+async function generateInvoicePdfForJob(
+  jobId: number,
+  companyId: number,
+  userId?: string,
+): Promise<GeneratedInvoicePdf> {
+  const job = await storage.getJob(jobId);
+  if (!job || job.companyId !== companyId) {
+    throw new Error('Job not found');
+  }
+
+  const company = await storage.getCompany(companyId);
+  if (!company) throw new Error('Company not found');
+
+  const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
+  if (!lineItems || lineItems.length === 0) {
+    throw new Error('No line items on job');
+  }
+
+  let customer: any = null;
+  if (job.customerId) {
+    customer = await storage.getCustomer(job.customerId);
+  } else if (job.clientId) {
+    const client = await storage.getClient(job.clientId);
+    if (client) {
+      customer = {
+        firstName: client.name?.split(' ')[0] || '',
+        lastName: client.name?.split(' ').slice(1).join(' ') || '',
+        email: client.email,
+        phone: client.phone,
+        address: client.address,
+      };
+    }
+  }
+
+  let invoiceNumber: string;
+  const existingInvoice = await storage.getInvoiceByJobId(jobId, companyId);
+  if (existingInvoice?.invoiceNumber) {
+    invoiceNumber = existingInvoice.invoiceNumber;
+  } else {
+    try {
+      const [counter] = await db
+        .insert(companyCounters)
+        .values({ companyId, estimateCounter: 0, invoiceCounter: 1 })
+        .onConflictDoUpdate({
+          target: companyCounters.companyId,
+          set: { invoiceCounter: sql`${companyCounters.invoiceCounter} + 1` },
+        })
+        .returning();
+      invoiceNumber = `INV-${String(counter.invoiceCounter).padStart(5, '0')}`;
+    } catch (e) {
+      const timestamp = Date.now().toString().slice(-6);
+      invoiceNumber = `INV-${timestamp}`;
+    }
+  }
+
+  const fileName = `Invoice_${invoiceNumber.replace(/-/g, '_')}.pdf`;
+  const filePath = path.join('uploads', fileName);
+  if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads', { recursive: true });
+  }
+
+  let subtotalCents = 0;
+  for (const item of lineItems) {
+    subtotalCents += item.lineTotalCents || 0;
+  }
+  const subtotal = subtotalCents / 100;
+  const total = subtotal;
+  const invoiceDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const custName = customer ? `${customer.firstName || ''} ${customer.lastName || ''}`.trim() : job.clientName || 'Customer';
+  const custEmail = customer?.email || '';
+  const custPhone = customer?.phone || '';
+  const custAddress = customer?.address || job.location || '';
+
+  const PAGE_WIDTH = 612;
+  const PAGE_HEIGHT = 792;
+  const MARGIN = 48;
+  const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
+  const LOGO_SIZE = 80;
+  const HEADER_BOX_WIDTH = 180;
+  const GRAY_LIGHT = '#F5F5F5';
+  const GRAY_TEXT = '#666666';
+  const GRAY_BORDER = '#E0E0E0';
+  const BLACK = '#000000';
+  const COL_SERVICE = MARGIN;
+  const COL_QTY = 340;
+  const COL_PRICE = 400;
+  const COL_AMOUNT = 490;
+  const TABLE_ROW_HEIGHT = 20;
+
+  const doc = new PDFDocument({ margin: 48, size: 'LETTER' });
+  const writeStream = fs.createWriteStream(filePath);
+  doc.pipe(writeStream);
+
+  let yPos = MARGIN;
+  const leftColumnWidth = CONTENT_WIDTH - HEADER_BOX_WIDTH - 20;
+
+  if (company.logo) {
+    try {
+      const logoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, MARGIN, yPos, { width: LOGO_SIZE, height: LOGO_SIZE });
+        yPos += LOGO_SIZE + 8;
+      }
+    } catch (e) {}
+  }
+
+  doc.fontSize(16).font('Helvetica-Bold').fillColor(BLACK);
+  doc.text(company.name, MARGIN, yPos, { width: leftColumnWidth });
+  yPos += 20;
+  doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+  if (company.addressLine1) {
+    let addressLine = company.addressLine1;
+    if (company.addressLine2) addressLine += ', ' + company.addressLine2;
+    doc.text(addressLine, MARGIN, yPos, { width: leftColumnWidth });
+    yPos += 13;
+  }
+  if (company.city || company.state || company.postalCode) {
+    const cityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(', ');
+    doc.text(cityLine, MARGIN, yPos, { width: leftColumnWidth });
+    yPos += 13;
+  }
+  if (company.phone) {
+    doc.text(company.phone, MARGIN, yPos, { width: leftColumnWidth });
+    yPos += 13;
+  }
+  if (company.email) {
+    doc.text(company.email, MARGIN, yPos, { width: leftColumnWidth });
+    yPos += 13;
+  }
+
+  const boxX = PAGE_WIDTH - MARGIN - HEADER_BOX_WIDTH;
+  const boxPadding = 12;
+  const boxHeight = 85;
+  const boxY = MARGIN;
+  doc.rect(boxX, boxY, HEADER_BOX_WIDTH, boxHeight).fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
+  let boxTextY = boxY + boxPadding;
+  doc.fontSize(18).font('Helvetica-Bold').fillColor(BLACK);
+  doc.text('INVOICE', boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+  boxTextY += 22;
+  doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+  doc.text(`#${invoiceNumber}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+  boxTextY += 16;
+  doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
+  doc.text(`Date: ${invoiceDate}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+  boxTextY += 14;
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(BLACK);
+  doc.text(`Total: $${total.toFixed(2)}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
+  yPos = Math.max(yPos, boxY + boxHeight) + 25;
+
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
+  doc.text('BILL TO', MARGIN, yPos);
+  yPos += 15;
+  doc.fontSize(11).font('Helvetica').fillColor(BLACK);
+  doc.text(custName, MARGIN, yPos);
+  yPos += 14;
+  doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+  if (custAddress) { doc.text(custAddress, MARGIN, yPos); yPos += 12; }
+  if (custPhone) { doc.text(custPhone, MARGIN, yPos); yPos += 12; }
+  if (custEmail) { doc.text(custEmail, MARGIN, yPos); yPos += 12; }
+  yPos += 20;
+
+  if (job.title) {
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
+    doc.text('JOB:', MARGIN, yPos);
+    doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+    doc.text(job.title, MARGIN + 35, yPos);
+    yPos += 15;
+  }
+  yPos += 10;
+
+  doc.rect(MARGIN, yPos, CONTENT_WIDTH, 25).fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
+  yPos += 7;
+  doc.fontSize(9).font('Helvetica-Bold').fillColor(BLACK);
+  doc.text('SERVICE', COL_SERVICE + 8, yPos);
+  doc.text('QTY', COL_QTY, yPos, { width: 50, align: 'right' });
+  doc.text('PRICE', COL_PRICE, yPos, { width: 70, align: 'right' });
+  doc.text('AMOUNT', COL_AMOUNT, yPos, { width: 70, align: 'right' });
+  yPos += 20;
+
+  for (let i = 0; i < lineItems.length; i++) {
+    const item = lineItems[i];
+    if (i % 2 === 1) {
+      doc.rect(MARGIN, yPos, CONTENT_WIDTH, TABLE_ROW_HEIGHT).fill(GRAY_LIGHT);
+    }
+    doc.fontSize(9).font('Helvetica').fillColor(BLACK);
+    doc.text(item.name || 'Service', COL_SERVICE + 8, yPos + 5, { width: COL_QTY - COL_SERVICE - 20 });
+    const qty = parseFloat(item.quantity) || 1;
+    const unitPrice = (item.unitPriceCents || 0) / 100;
+    const lineTotal = (item.lineTotalCents || 0) / 100;
+    doc.text(qty.toString(), COL_QTY, yPos + 5, { width: 50, align: 'right' });
+    doc.text(`$${unitPrice.toFixed(2)}`, COL_PRICE, yPos + 5, { width: 70, align: 'right' });
+    doc.text(`$${lineTotal.toFixed(2)}`, COL_AMOUNT, yPos + 5, { width: 70, align: 'right' });
+    yPos += TABLE_ROW_HEIGHT;
+  }
+
+  yPos += 15;
+  doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
+  doc.text('Subtotal:', COL_PRICE, yPos, { width: 70, align: 'right' });
+  doc.text(`$${subtotal.toFixed(2)}`, COL_AMOUNT, yPos, { width: 70, align: 'right' });
+  yPos += 15;
+  doc.fontSize(12).font('Helvetica-Bold').fillColor(BLACK);
+  doc.text('TOTAL:', COL_PRICE, yPos, { width: 70, align: 'right' });
+  doc.text(`$${total.toFixed(2)}`, COL_AMOUNT, yPos, { width: 70, align: 'right' });
+
+  if (company.footerText) {
+    doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
+    doc.text(company.footerText, MARGIN, PAGE_HEIGHT - MARGIN - 40, { width: CONTENT_WIDTH, align: 'center' });
+  }
+
+  doc.end();
+  await new Promise<void>((resolve, reject) => {
+    writeStream.on('finish', resolve);
+    writeStream.on('error', reject);
+  });
+
+  const fileUrl = `/uploads/${fileName}`;
+
+  if (userId) {
+    await storage.createDocument({
+      companyId,
+      jobId,
+      name: fileName,
+      type: 'invoice',
+      category: 'Invoices',
+      status: 'Approved',
+      visibility: 'internal',
+      fileUrl,
+      uploadedBy: userId,
+    });
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  if (existingInvoice) {
+    await storage.updateInvoice(existingInvoice.id, {
+      pdfUrl: fileUrl,
+    });
+  } else {
+    await storage.createInvoice({
+      companyId,
+      jobId,
+      clientId: null,
+      customerId: customer?.id || job.customerId || null,
+      invoiceNumber,
+      amount: total.toFixed(2),
+      subtotalCents,
+      taxCents: 0,
+      totalCents: subtotalCents,
+      status: 'pending',
+      issueDate: today,
+      dueDate,
+      pdfUrl: fileUrl,
+      notes: `Generated from job: ${job.title}`,
+    });
+  }
+
+  return { filePath, fileUrl, fileName, invoiceNumber, totalCents: subtotalCents };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Note: uploads directory and static route handled in index.ts (before all middleware)
 
@@ -6030,16 +6297,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const jobId = parseInt(req.params.jobId);
       
-      // Get job with full details
       const job = await storage.getJob(jobId);
       if (!job || job.companyId !== company.id) {
         return res.status(404).json({ message: "Job not found" });
       }
 
-      // Get line items for this job
       const lineItems = await db.select().from(jobLineItems).where(eq(jobLineItems.jobId, jobId)).orderBy(jobLineItems.sortOrder);
-
-      // Validation: Job must have line items
       if (!lineItems || lineItems.length === 0) {
         return res.status(400).json({ 
           message: "Add line items before generating an invoice.",
@@ -6047,7 +6310,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Validation: Job must have a customer
       if (!job.customerId && !job.clientId && !job.clientName) {
         return res.status(400).json({ 
           message: "Assign a customer before generating an invoice.",
@@ -6055,269 +6317,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get customer info if available
-      let customer = null;
-      if (job.customerId) {
-        customer = await storage.getCustomer(job.customerId);
-      } else if (job.clientId) {
-        const client = await storage.getClient(job.clientId);
-        if (client) {
-          customer = {
-            firstName: client.name?.split(' ')[0] || '',
-            lastName: client.name?.split(' ').slice(1).join(' ') || '',
-            email: client.email,
-            phone: client.phone,
-            address: client.address,
-          };
-        }
-      }
+      const generated = await generateInvoicePdfForJob(jobId, company.id, userId);
 
-      // Generate invoice number
-      let invoiceNumber: string;
-      try {
-        const [counter] = await db
-          .insert(companyCounters)
-          .values({ companyId: company.id, estimateCounter: 0, invoiceCounter: 1 })
-          .onConflictDoUpdate({
-            target: companyCounters.companyId,
-            set: { invoiceCounter: sql`${companyCounters.invoiceCounter} + 1` },
-          })
-          .returning();
-        invoiceNumber = `INV-${String(counter.invoiceCounter).padStart(5, '0')}`;
-      } catch (e) {
-        // Fallback if counter fails
-        const timestamp = Date.now().toString().slice(-6);
-        invoiceNumber = `INV-${timestamp}`;
-      }
-
-      // Generate PDF
-      const fileName = `Invoice_${invoiceNumber.replace(/-/g, '_')}.pdf`;
-      const filePath = path.join('uploads', fileName);
-      
-      if (!fs.existsSync('uploads')) {
-        fs.mkdirSync('uploads', { recursive: true });
-      }
-
-      const doc = new PDFDocument({ margin: 48, size: 'LETTER' });
-      const writeStream = fs.createWriteStream(filePath);
-      doc.pipe(writeStream);
-
-      // Page constants
-      const PAGE_WIDTH = 612;
-      const PAGE_HEIGHT = 792;
-      const MARGIN = 48;
-      const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
-      const LOGO_SIZE = 80;
-      const HEADER_BOX_WIDTH = 180;
-      
-      // Colors
-      const GRAY_LIGHT = '#F5F5F5';
-      const GRAY_TEXT = '#666666';
-      const GRAY_BORDER = '#E0E0E0';
-      const BLACK = '#000000';
-      
-      // Calculate totals
-      let subtotalCents = 0;
-      for (const item of lineItems) {
-        subtotalCents += item.lineTotalCents || 0;
-      }
-      const subtotal = subtotalCents / 100;
-      const total = subtotal; // No tax for now, can be added later
-      
-      // Invoice date
-      const invoiceDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-      // Customer info preparation
-      const custName = customer ? `${customer.firstName || ''} ${customer.lastName || ''}`.trim() : job.clientName || 'Customer';
-      const custEmail = customer?.email || '';
-      const custPhone = customer?.phone || '';
-      const custAddress = customer?.address || job.location || '';
-
-      // Table column positions
-      const COL_SERVICE = MARGIN;
-      const COL_QTY = 340;
-      const COL_PRICE = 400;
-      const COL_AMOUNT = 490;
-      const TABLE_ROW_HEIGHT = 20;
-
-      let yPos = MARGIN;
-
-      // ========== HEADER ==========
-      // LEFT SIDE: Logo + Company Info
-      const leftColumnWidth = CONTENT_WIDTH - HEADER_BOX_WIDTH - 20;
-      
-      if (company.logo) {
-        try {
-          const logoPath = company.logo.startsWith('/') ? company.logo.substring(1) : company.logo;
-          if (fs.existsSync(logoPath)) {
-            doc.image(logoPath, MARGIN, yPos, { width: LOGO_SIZE, height: LOGO_SIZE });
-            yPos += LOGO_SIZE + 8;
-          }
-        } catch (e) {
-          console.log('Logo not found, skipping');
-        }
-      }
-      
-      // Company name
-      doc.fontSize(16).font('Helvetica-Bold').fillColor(BLACK);
-      doc.text(company.name, MARGIN, yPos, { width: leftColumnWidth });
-      yPos += 20;
-      
-      // Company contact info
-      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
-      if (company.addressLine1) {
-        let addressLine = company.addressLine1;
-        if (company.addressLine2) addressLine += ', ' + company.addressLine2;
-        doc.text(addressLine, MARGIN, yPos, { width: leftColumnWidth });
-        yPos += 13;
-      }
-      if (company.city || company.state || company.postalCode) {
-        const cityLine = [company.city, company.state, company.postalCode].filter(Boolean).join(', ');
-        doc.text(cityLine, MARGIN, yPos, { width: leftColumnWidth });
-        yPos += 13;
-      }
-      if (company.phone) {
-        doc.text(company.phone, MARGIN, yPos, { width: leftColumnWidth });
-        yPos += 13;
-      }
-      if (company.email) {
-        doc.text(company.email, MARGIN, yPos, { width: leftColumnWidth });
-        yPos += 13;
-      }
-      
-      // RIGHT SIDE: Invoice Info Box
-      const boxX = PAGE_WIDTH - MARGIN - HEADER_BOX_WIDTH;
-      const boxPadding = 12;
-      const boxHeight = 85;
-      const boxY = MARGIN;
-      
-      doc.rect(boxX, boxY, HEADER_BOX_WIDTH, boxHeight)
-         .fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
-      
-      let boxTextY = boxY + boxPadding;
-      
-      doc.fontSize(18).font('Helvetica-Bold').fillColor(BLACK);
-      doc.text('INVOICE', boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
-      boxTextY += 22;
-      
-      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
-      doc.text(`#${invoiceNumber}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
-      boxTextY += 16;
-      
-      doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
-      doc.text(`Date: ${invoiceDate}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
-      boxTextY += 14;
-      
-      doc.fontSize(11).font('Helvetica-Bold').fillColor(BLACK);
-      doc.text(`Total: $${total.toFixed(2)}`, boxX + boxPadding, boxTextY, { width: HEADER_BOX_WIDTH - (boxPadding * 2) });
-
-      yPos = Math.max(yPos, boxY + boxHeight) + 25;
-
-      // ========== BILL TO ==========
-      doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
-      doc.text('BILL TO', MARGIN, yPos);
-      yPos += 15;
-      
-      doc.fontSize(11).font('Helvetica').fillColor(BLACK);
-      doc.text(custName, MARGIN, yPos);
-      yPos += 14;
-      
-      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
-      if (custAddress) {
-        doc.text(custAddress, MARGIN, yPos);
-        yPos += 12;
-      }
-      if (custPhone) {
-        doc.text(custPhone, MARGIN, yPos);
-        yPos += 12;
-      }
-      if (custEmail) {
-        doc.text(custEmail, MARGIN, yPos);
-        yPos += 12;
-      }
-
-      yPos += 20;
-
-      // ========== JOB INFO ==========
-      if (job.title) {
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(BLACK);
-        doc.text('JOB:', MARGIN, yPos);
-        doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
-        doc.text(job.title, MARGIN + 35, yPos);
-        yPos += 15;
-      }
-
-      yPos += 10;
-
-      // ========== TABLE HEADER ==========
-      doc.rect(MARGIN, yPos, CONTENT_WIDTH, 25).fillAndStroke(GRAY_LIGHT, GRAY_BORDER);
-      yPos += 7;
-      doc.fontSize(9).font('Helvetica-Bold').fillColor(BLACK);
-      doc.text('SERVICE', COL_SERVICE + 8, yPos);
-      doc.text('QTY', COL_QTY, yPos, { width: 50, align: 'right' });
-      doc.text('PRICE', COL_PRICE, yPos, { width: 70, align: 'right' });
-      doc.text('AMOUNT', COL_AMOUNT, yPos, { width: 70, align: 'right' });
-      yPos += 20;
-
-      // ========== TABLE ROWS ==========
-      for (let i = 0; i < lineItems.length; i++) {
-        const item = lineItems[i];
-        const isAlternate = i % 2 === 1;
-        
-        if (isAlternate) {
-          doc.rect(MARGIN, yPos, CONTENT_WIDTH, TABLE_ROW_HEIGHT).fill(GRAY_LIGHT);
-        }
-        
-        doc.fontSize(9).font('Helvetica').fillColor(BLACK);
-        const itemName = item.name || 'Service';
-        doc.text(itemName, COL_SERVICE + 8, yPos + 5, { width: COL_QTY - COL_SERVICE - 20 });
-        
-        const qty = parseFloat(item.quantity) || 1;
-        const unitPrice = (item.unitPriceCents || 0) / 100;
-        const lineTotal = (item.lineTotalCents || 0) / 100;
-        
-        doc.text(qty.toString(), COL_QTY, yPos + 5, { width: 50, align: 'right' });
-        doc.text(`$${unitPrice.toFixed(2)}`, COL_PRICE, yPos + 5, { width: 70, align: 'right' });
-        doc.text(`$${lineTotal.toFixed(2)}`, COL_AMOUNT, yPos + 5, { width: 70, align: 'right' });
-        
-        yPos += TABLE_ROW_HEIGHT;
-      }
-
-      // ========== TOTALS ==========
-      yPos += 15;
-      
-      // Subtotal
-      doc.fontSize(10).font('Helvetica').fillColor(GRAY_TEXT);
-      doc.text('Subtotal:', COL_PRICE, yPos, { width: 70, align: 'right' });
-      doc.text(`$${subtotal.toFixed(2)}`, COL_AMOUNT, yPos, { width: 70, align: 'right' });
-      yPos += 15;
-      
-      // Total
-      doc.fontSize(12).font('Helvetica-Bold').fillColor(BLACK);
-      doc.text('TOTAL:', COL_PRICE, yPos, { width: 70, align: 'right' });
-      doc.text(`$${total.toFixed(2)}`, COL_AMOUNT, yPos, { width: 70, align: 'right' });
-
-      // ========== FOOTER ==========
-      if (company.footerText) {
-        doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT);
-        doc.text(company.footerText, MARGIN, PAGE_HEIGHT - MARGIN - 40, { 
-          width: CONTENT_WIDTH, 
-          align: 'center' 
-        });
-      }
-
-      doc.end();
-
-      // Wait for PDF to finish writing
-      await new Promise<void>((resolve, reject) => {
-        writeStream.on('finish', resolve);
-        writeStream.on('error', reject);
-      });
-
-      // Generate PNG preview
       let previewImageUrl: string | null = null;
       try {
-        const pdfBuffer = fs.readFileSync(filePath);
+        const pdfBuffer = fs.readFileSync(generated.filePath);
         const pdfData = new Uint8Array(pdfBuffer);
         const pdfDoc = await pdfjs.getDocument({ data: pdfData }).promise;
         const page = await pdfDoc.getPage(1);
@@ -6333,7 +6337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           viewport: viewport,
         }).promise;
         
-        const previewFileName = fileName.replace('.pdf', '_preview.png');
+        const previewFileName = generated.fileName.replace('.pdf', '_preview.png');
         const previewPath = path.join('uploads', previewFileName);
         const pngBuffer = canvas.toBuffer('image/png');
         fs.writeFileSync(previewPath, pngBuffer);
@@ -6343,82 +6347,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('[Invoice] Failed to generate preview:', previewError);
       }
 
-      // Store as document linked to job
-      const fileUrl = `/uploads/${fileName}`;
-      const document = await storage.createDocument({
-        companyId: company.id,
-        jobId: jobId,
-        name: fileName,
-        type: 'invoice',
-        category: 'Invoices',
-        status: 'Approved',
-        visibility: 'internal',
-        fileUrl,
-        uploadedBy: userId,
-      });
-
-      // Create or update invoice record for payment tracking (upsert to prevent duplicates)
-      const today = new Date().toISOString().split('T')[0];
-      const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      
-      // Check if invoice already exists for this job
       const existingInvoice = await storage.getInvoiceByJobId(jobId, company.id);
-      
-      let invoice;
-      if (existingInvoice) {
-        // Update existing invoice
-        invoice = await storage.updateInvoice(existingInvoice.id, {
-          amount: total.toFixed(2),
-          subtotalCents,
-          taxCents: 0,
-          totalCents: subtotalCents,
-          pdfUrl: fileUrl,
-          notes: `Generated from job: ${job.title}`,
-          updatedAt: new Date(),
-        });
-        console.log(`[InvoiceGenerate] updated invoice`, { invoiceId: invoice.id, jobId });
-      } else {
-        // Create new invoice
-        invoice = await storage.createInvoice({
-          companyId: company.id,
-          jobId: jobId,
-          clientId: null,
-          customerId: customer?.id || job.customerId || null,
-          invoiceNumber: invoiceNumber,
-          amount: total.toFixed(2),
-          subtotalCents,
-          taxCents: 0,
-          totalCents: subtotalCents,
-          status: 'pending',
-          issueDate: today,
-          dueDate: dueDate,
-          pdfUrl: fileUrl,
-          notes: `Generated from job: ${job.title}`,
-        });
-        console.log(`[InvoiceGenerate] saved invoice`, { invoiceId: invoice.id, jobId });
-        
-        // Auto-sync to QuickBooks (fire-and-forget)
-        console.log('[QB] Auto-sync scheduled for invoiceId:', invoice.id);
-        syncInvoiceToQuickBooks(invoice.id, company.id)
+      const invoiceId = existingInvoice?.id;
+
+      const allDocs = await storage.getDocumentsByJob(jobId);
+      const latestDoc = allDocs?.find((d: any) => d.fileUrl === generated.fileUrl);
+
+      if (existingInvoice && !existingInvoice.qboInvoiceId) {
+        console.log('[QB] Auto-sync scheduled for invoiceId:', existingInvoice.id);
+        syncInvoiceToQuickBooks(existingInvoice.id, company.id)
           .then(result => {
             if (result.success) {
-              console.log('[QB] Auto-sync success invoiceId:', invoice.id, 'qboInvoiceId:', result.qboInvoiceId);
+              console.log('[QB] Auto-sync success invoiceId:', existingInvoice.id, 'qboInvoiceId:', result.qboInvoiceId);
             } else {
-              console.log('[QB] Auto-sync failed invoiceId:', invoice.id, 'error:', result.error);
+              console.log('[QB] Auto-sync failed invoiceId:', existingInvoice.id, 'error:', result.error);
             }
           })
-          .catch(err => console.error('[QB] Auto-sync error invoiceId:', invoice.id, err.message));
+          .catch(err => console.error('[QB] Auto-sync error invoiceId:', existingInvoice.id, err.message));
       }
 
-      console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${fileName} docId=${document.id} invoiceId=${invoice.id}`);
+      console.log(`[Invoice] PDF generated jobId=${jobId} fileName=${generated.fileName} invoiceId=${invoiceId}`);
       res.json({ 
-        pdfUrl: fileUrl, 
+        pdfUrl: generated.fileUrl, 
         previewImageUrl,
-        fileName, 
-        documentId: document.id,
-        invoiceId: invoice.id,
-        invoiceNumber,
-        amount: total.toFixed(2),
+        fileName: generated.fileName, 
+        documentId: latestDoc?.id,
+        invoiceId,
+        invoiceNumber: generated.invoiceNumber,
+        amount: (generated.totalCents / 100).toFixed(2),
       });
     } catch (error) {
       console.error("Error generating invoice PDF:", error);
@@ -14483,6 +14439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const viewInvoiceUrl = baseUrl ? `${baseUrl}/invoice/${effectiveInvoiceId}/pay` : undefined;
 
           let pdfAttachment: { filename: string; content: Buffer } | null = null;
+          let pdfReused = false;
+
           if (invoice.pdfUrl) {
             try {
               const pdfPath = invoice.pdfUrl.startsWith('/') ? invoice.pdfUrl.substring(1) : invoice.pdfUrl;
@@ -14492,13 +14450,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   filename: `Invoice_${invoice.invoiceNumber.replace(/-/g, '_')}.pdf`,
                   content: pdfBuffer,
                 };
-                console.log('[ReceiptEmail] PDF attached', { path: pdfPath, size: pdfBuffer.length });
-              } else {
-                console.log('[ReceiptEmail] PDF file not found, sending without attachment', { pdfUrl: invoice.pdfUrl });
+                pdfReused = true;
+                console.log(`[ReceiptEmail] reusing existing PDF path=${pdfPath} size=${pdfBuffer.length}`);
               }
             } catch (pdfErr: any) {
-              console.error('[ReceiptEmail] PDF read error (sending without attachment):', pdfErr?.message);
+              console.log('[ReceiptEmail] existing PDF read failed:', pdfErr?.message);
             }
+          }
+
+          if (!pdfAttachment && invoice.jobId) {
+            try {
+              console.log(`[ReceiptEmail] no existing PDF - generating for jobId=${invoice.jobId}`);
+              const generated = await generateInvoicePdfForJob(invoice.jobId, member.companyId);
+              const pdfBuffer = fs.readFileSync(generated.filePath);
+              pdfAttachment = {
+                filename: generated.fileName,
+                content: pdfBuffer,
+              };
+              console.log(`[ReceiptEmail] generated PDF path=${generated.filePath} size=${pdfBuffer.length}`);
+            } catch (genErr: any) {
+              console.error('[ReceiptEmail] PDF generation failed:', genErr?.message);
+            }
+          }
+
+          if (!pdfAttachment) {
+            console.log(`[ReceiptEmail] no PDF available - sending email without attachment invoiceId=${effectiveInvoiceId}`);
           }
 
           await sendPaymentReceiptEmail({
@@ -14519,7 +14495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .set({ receiptEmailSentAt: new Date() })
             .where(and(eq(payments.id, paymentId), sql`receipt_email_sent_at IS NULL`));
 
-          console.log(`[ReceiptEmail] sending invoiceId=${effectiveInvoiceId} paymentId=${paymentId} to=${customerEmail}`);
+          console.log(`[ReceiptEmail] sent invoiceId=${effectiveInvoiceId} paymentId=${paymentId} to=${customerEmail} pdf=${pdfAttachment ? (pdfReused ? 'reused' : 'generated') : 'none'}`);
         } catch (emailErr: any) {
           console.error('[ReceiptEmail] error (non-blocking):', emailErr?.message || emailErr);
         }
