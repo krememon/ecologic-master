@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
-import { SiGoogle, SiApple } from "react-icons/si";
+import { SiGoogle } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type WizardStep = "email" | "password" | "code";
@@ -376,16 +376,24 @@ export default function SignInWizard() {
                     Continue with Google
                   </Button>
                   
-                  <Button 
+                  <button
                     type="button"
-                    variant="outline"
                     onClick={handleAppleAuth}
                     disabled={isAppleLoading}
-                    className="w-full"
+                    className="w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
+                    style={{ backgroundColor: isAppleLoading ? '#111111' : '#000000' }}
+                    onMouseEnter={(e) => { if (!isAppleLoading) (e.currentTarget.style.backgroundColor = '#111111'); }}
+                    onMouseLeave={(e) => { if (!isAppleLoading) (e.currentTarget.style.backgroundColor = '#000000'); }}
                   >
-                    {isAppleLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <SiApple className="w-4 h-4 mr-2" />}
+                    {isAppleLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 17 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13.545 10.239c-.022-2.234 1.823-3.306 1.906-3.358-.037-.054-1.496-2.171-3.823-2.171-1.624 0-2.953.977-3.737.977-.807 0-2.025-.953-3.337-.927C2.841 4.788 1.264 5.855.64 7.502c-1.283 3.373.326 8.364 1.888 11.101.27.434 1.243 3.44 2.928 3.383 1.156-.05 1.598-.753 2.994-.753 1.375 0 1.78.753 2.996.727 1.264-.022 2.1-1.367 2.725-2.813.89-2.028 1.236-3.998 1.252-4.1-.028-.012-2.878-1.106-2.878-4.808zM10.796 3.152C11.346 2.476 11.718 1.542 11.618.6c-.802.034-1.794.542-2.363 1.198-.505.582-.958 1.543-.84 2.445.903.07 1.827-.445 2.381-1.091z"/>
+                      </svg>
+                    )}
                     Continue with Apple
-                  </Button>
+                  </button>
                   
                   <p className="text-xs text-center text-slate-500 mt-4">
                     Don't have an account?{" "}
