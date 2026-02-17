@@ -92,9 +92,9 @@ export async function sendSignatureRequestEmail({
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <div style="background: linear-gradient(135deg, #2563eb 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">ECOLOGIC</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">${companyName}</p>
+      <div style="padding: 40px 30px 32px 30px; border-radius: 12px 12px 0 0; text-align: center; background-color: #f0f4f8;">
+        <h1 style="margin: 0; font-family: Inter, Arial, sans-serif; font-size: 40px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; line-height: 1;">EcoLogic</h1>
+        <p style="margin: 8px 0 0 0; font-family: Inter, Arial, sans-serif; font-size: 15px; font-weight: 500; color: #64748b;">Professional contractor management</p>
       </div>
       
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
@@ -236,9 +236,9 @@ export async function sendPaymentReceiptEmail({
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <div style="background: linear-gradient(135deg, #2563eb 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px; letter-spacing: 2px;">ECOLOGIC</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">${companyName}</p>
+      <div style="padding: 40px 30px 32px 30px; border-radius: 12px 12px 0 0; text-align: center; background-color: #f0f4f8;">
+        <h1 style="margin: 0; font-family: Inter, Arial, sans-serif; font-size: 40px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; line-height: 1;">EcoLogic</h1>
+        <p style="margin: 8px 0 0 0; font-family: Inter, Arial, sans-serif; font-size: 15px; font-weight: 500; color: #64748b;">Professional contractor management</p>
       </div>
 
       <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
