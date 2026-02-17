@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus, Clock } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { Job, Client } from "@shared/schema";
 import { JobInvoiceModal } from "@/components/JobInvoiceModal";
+import { TimeWheelPicker } from "@/components/TimeWheelPicker";
 
 interface JobDetailsProps {
   jobId: string;
@@ -1561,31 +1562,25 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="schedule-start" className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   Start Time
                 </Label>
-                <Input
-                  id="schedule-start"
-                  type="time"
-                  step="900"
+                <TimeWheelPicker
                   value={scheduleStartTime}
-                  onChange={(e) => setScheduleStartTime(e.target.value)}
-                  placeholder="Select time"
-                  className={`h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 ${!scheduleStartTime ? 'text-slate-400' : ''}`}
+                  onChange={(time) => setScheduleStartTime(time)}
+                  label="Start Time"
+                  className="h-11 bg-slate-100 dark:bg-slate-800 border-0"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="schedule-end" className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   End Time
                 </Label>
-                <Input
-                  id="schedule-end"
-                  type="time"
-                  step="900"
+                <TimeWheelPicker
                   value={scheduleEndTime}
-                  onChange={(e) => setScheduleEndTime(e.target.value)}
-                  placeholder="Select time"
-                  className={`h-11 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-0 ${!scheduleEndTime ? 'text-slate-400' : ''}`}
+                  onChange={(time) => setScheduleEndTime(time)}
+                  label="End Time"
+                  className="h-11 bg-slate-100 dark:bg-slate-800 border-0"
                 />
               </div>
             </div>

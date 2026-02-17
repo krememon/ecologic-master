@@ -1,0 +1,67 @@
+SYSTEM / ROLE:
+You are a senior front-end engineer working inside the EcoLogic codebase.
+Update the Add Schedule modal so BOTH Start Time and End Time use the SAME time-picker modal UI that the app uses everywhere else (the wheel picker modal with “Done” + “Cancel”).
+Do NOT break save logic or scheduling behavior.
+
+GOAL:
+When the user taps Start Time or End Time in the Add Schedule modal, it must open the exact same “Start Time” picker modal used elsewhere (the one shown in the screenshot: wheel picker + big time preview + Done/Cancel).
+
+REQUIREMENTS:
+- Start Time field opens the standard TimePickerModal (wheel picker)
+- End Time field opens the same TimePickerModal (wheel picker)
+- Remove any other time picker implementation currently used in Add Schedule (native input, dropdown, etc.)
+- The selected time should populate the field in “h:mm AM/PM” format.
+- Default state: both fields show “Select time” (no prefilled 9:00 AM).
+- Validation:
+  - End time cannot be <= Start time (same day). If user selects earlier, auto-adjust end time to start+1hr OR show inline error and block save (choose whichever matches current app behavior).
+- Keep UI consistent with Select Customer modal styling (from previous prompt).
+
+IMPLEMENTATION DETAILS:
+1) Locate the existing time picker used for Jobs/Estimates scheduling.
+   - Find the component used to render the “Start Time” modal shown in screenshot.
+   - Reuse that component directly (do not recreate a new picker).
+
+2) Wire the Add Schedule modal fields to open it:
+   - State:
+     - const [showTimePicker, setShowTimePicker] = useState(false)
+     - const [activeTimeField, setActiveTimeField] = useState("start"|"end"|null)
+     - const [startTime, setStartTime] = useState<Date|null or string|null (match existing app convention)
+     - const [endTime, setEndTime] = useState<Date|null or string|null
+
+   - On click Start Time:
+     setActiveTimeField("start"); setShowTimePicker(true)
+
+   - On click End Time:
+     setActiveTimeField("end"); setShowTimePicker(true)
+
+3) Pass correct initial value into picker:
+   - If active field has value, picker opens on that value.
+   - If null, picker opens on current time rounded (or whatever the global picker defaults to), but DO NOT auto-fill the input until user presses Done.
+
+4) Handle Done:
+   - If activeTimeField === "start": setStartTime(chosen)
+   - If activeTimeField === "end": setEndTime(chosen)
+
+5) Ensure the picker modal title changes depending on field:
+   - Title: “Start Time” when editing start
+   - Title: “End Time” when editing end
+
+6) Ensure Save Schedule posts the correct combined datetime:
+   - scheduleDate + startTime -> startAt
+   - scheduleDate + endTime -> endAt
+   - Use the same date+time combine helper the app uses for jobs/estimates scheduling.
+
+7) Remove old time controls:
+   - If there are <input type="time"> or custom dropdowns, replace with clickable input shells (same styling as Select Customer) that just open the picker.
+
+TESTING:
+- Open Add Schedule → Start Time → wheel picker modal appears
+- Set time → Done → field updates
+- Same for End Time
+- Save schedule → persists + displays correctly
+- Ensure no default 9:00 AM prefill unless user chooses it
+- Confirm end time validation works
+
+DELIVERABLES:
+- Start/End time fields both use the standard wheel picker time modal used everywhere in EcoLogic.
+- No regressions in scheduling.
