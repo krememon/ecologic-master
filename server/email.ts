@@ -190,7 +190,6 @@ interface PaymentReceiptEmailParams {
   amountFormatted: string;
   paymentMethod: string;
   paidDate: string;
-  viewInvoiceUrl?: string;
   pdfAttachment?: { filename: string; content: Buffer } | null;
 }
 
@@ -202,7 +201,6 @@ export async function sendPaymentReceiptEmail({
   amountFormatted,
   paymentMethod,
   paidDate,
-  viewInvoiceUrl,
   pdfAttachment,
 }: PaymentReceiptEmailParams): Promise<void> {
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -223,12 +221,6 @@ export async function sendPaymentReceiptEmail({
     other: 'Other',
   };
   const displayMethod = methodLabel[paymentMethod] || paymentMethod || 'N/A';
-
-  const viewButton = viewInvoiceUrl
-    ? `<div style="text-align: center; margin: 30px 0;">
-        <a href="${viewInvoiceUrl}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">View Paid Invoice</a>
-      </div>`
-    : '';
 
   const html = `
     <!DOCTYPE html>
@@ -271,7 +263,6 @@ export async function sendPaymentReceiptEmail({
           </table>
         </div>
 
-        ${viewButton}
       </div>
 
       <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">

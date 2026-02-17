@@ -14435,9 +14435,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ? new Date(payment.paidDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
             : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-          const baseUrl = getAppBaseUrl();
-          const viewInvoiceUrl = baseUrl ? `${baseUrl}/invoice/${effectiveInvoiceId}/pay` : undefined;
-
           let pdfAttachment: { filename: string; content: Buffer } | null = null;
           let pdfReused = false;
 
@@ -14485,7 +14482,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             amountFormatted,
             paymentMethod: payment.paymentMethod || 'other',
             paidDate,
-            viewInvoiceUrl,
             pdfAttachment,
           });
 
