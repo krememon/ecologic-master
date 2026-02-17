@@ -11,7 +11,7 @@ import nodemailer from "nodemailer";
 import { storage } from "./storage";
 import { db } from "./db";
 import { companies, companyMembers } from "@shared/schema";
-import { scrypt, randomBytes, timingSafeEqual, createHmac, createPrivateKey } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHmac, createPrivateKey, createHash } from "crypto";
 import { promisify } from "util";
 import { generateUniqueInviteCode, normalizeCode } from "@shared/inviteCode";
 import * as appleSignin from "apple-signin-auth";
@@ -593,16 +593,21 @@ export async function setupAuth(app: Express) {
           path: '/api/auth/apple/callback',
         });
 
-        const url = appleSignin.getAuthorizationUrl({
-          clientID: process.env.APPLE_CLIENT_ID,
-          redirectUri: appleRedirectUri,
+        const nonceHash = createHash('sha256').update(nonce).digest('hex');
+
+        const params = new URLSearchParams({
+          response_type: 'code id_token',
+          response_mode: 'form_post',
+          client_id: process.env.APPLE_CLIENT_ID!,
+          redirect_uri: appleRedirectUri,
           state,
-          nonce,
-          scope: 'name email',
-          responseMode: 'form_post',
+          nonce: nonceHash,
+          scope: 'openid name email',
         });
 
-        console.log("[AppleAuth] Start: authorization URL generated");
+        const url = `https://appleid.apple.com/auth/authorize?${params.toString()}`;
+
+        console.log("[AppleAuth] start state+nonce set");
         res.json({ url });
       } catch (error) {
         console.error("[AppleAuth] Start error:", error);
@@ -615,6 +620,7 @@ export async function setupAuth(app: Express) {
         const { code, state, id_token: rawIdToken, user: userDataStr } = req.body;
 
         const appleCookie = req.cookies?.apple_auth;
+        console.log(`[AppleAuth] callback cookie present: ${!!appleCookie}`);
         if (!appleCookie) {
           console.error("[AppleAuth] No apple_auth cookie found");
           return res.redirect("/?error=apple_auth_failed&message=Session+expired");
@@ -634,6 +640,7 @@ export async function setupAuth(app: Express) {
           return res.redirect("/?error=apple_auth_failed&message=Invalid+session");
         }
 
+        console.log(`[AppleAuth] callback state match: ${savedState === state}`);
         if (savedState !== state) {
           console.error("[AppleAuth] State mismatch");
           return res.redirect("/?error=apple_auth_failed&message=Invalid+state");
@@ -671,9 +678,10 @@ export async function setupAuth(app: Express) {
         const tokenResponse = await tokenRes.json();
         console.log("[AppleAuth] Token exchange success");
 
+        const expectedNonceHash = createHash('sha256').update(savedNonce).digest('hex');
         const claims = await appleSignin.verifyIdToken(tokenResponse.id_token, {
           audience: process.env.APPLE_CLIENT_ID,
-          nonce: savedNonce,
+          nonce: expectedNonceHash,
         });
 
         const appleSub = claims.sub;
