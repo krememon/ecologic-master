@@ -2011,53 +2011,52 @@ export default function Jobs() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0 space-y-3">
-                {job.location && (
-                  <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MapPin className="h-4 w-4" />
-                    <div className="flex flex-col">
-                      <span className="truncate" data-testid="text-job-location">{job.location}</span>
-                      {(job.city || job.postalCode) && (
-                        <span className="text-xs text-slate-500" data-testid="text-job-city-zip">
-                          {[job.city, job.postalCode].filter(Boolean).join(', ')}
+                {(job.location || job.startDate) && (
+                  <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
+                    {job.location && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(job.location)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 flex-1 min-w-0 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate" data-testid="text-job-location">{job.location}</span>
+                      </a>
+                    )}
+                    {job.startDate && (
+                      <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>
+                          {(() => {
+                            try {
+                              const rawDate = job.startDate as any;
+                              let formattedDate = '';
+                              if (rawDate instanceof Date) {
+                                formattedDate = format(rawDate, 'MMM d, yyyy');
+                              } else if (typeof rawDate === 'string' && rawDate) {
+                                const dateStr = rawDate.split('T')[0];
+                                formattedDate = format(new Date(dateStr + 'T12:00:00'), 'MMM d, yyyy');
+                              } else {
+                                formattedDate = format(new Date(rawDate), 'MMM d, yyyy');
+                              }
+                              const timeStr = (job as any).scheduledTime;
+                              const formattedTime = timeStr ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a') : null;
+                              return formattedTime ? `${formattedDate} • ${formattedTime}` : formattedDate;
+                            } catch {
+                              return 'Scheduled';
+                            }
+                          })()}
                         </span>
-                      )}
-                    </div>
-                  </a>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {job.estimatedCost && (
                   <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                     <DollarSign className="h-4 w-4" />
                     ${Number(job.estimatedCost).toLocaleString()}
-                  </div>
-                )}
-                {job.startDate && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <Calendar className="h-4 w-4" />
-                    {(() => {
-                      try {
-                        const rawDate = job.startDate as any;
-                        let formattedDate = '';
-                        if (rawDate instanceof Date) {
-                          formattedDate = format(rawDate, 'MMM d, yyyy');
-                        } else if (typeof rawDate === 'string' && rawDate) {
-                          const dateStr = rawDate.split('T')[0];
-                          formattedDate = format(new Date(dateStr + 'T12:00:00'), 'MMM d, yyyy');
-                        } else {
-                          formattedDate = format(new Date(rawDate), 'MMM d, yyyy');
-                        }
-                        const timeStr = (job as any).scheduledTime;
-                        const formattedTime = timeStr ? format(new Date(`2000-01-01T${timeStr}`), 'h:mm a') : null;
-                        return formattedTime ? `${formattedDate} • ${formattedTime}` : formattedDate;
-                      } catch {
-                        return 'Scheduled';
-                      }
-                    })()}
                   </div>
                 )}
                 
