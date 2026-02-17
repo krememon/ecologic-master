@@ -11,7 +11,8 @@ import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus } from "lucide-react";
+import { ArrowLeft, User, FileText, Calendar, List, Paperclip, Upload, Trash2, Edit, Users, X, CreditCard, Loader2, CheckCircle2, MoreVertical, Search, UserPlus, Clock } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -153,6 +154,10 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [isSavingCrew, setIsSavingCrew] = useState(false);
   const [viewingSig, setViewingSig] = useState<PaymentSignatureItem | null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleStartTime, setScheduleStartTime] = useState("09:00");
+  const [scheduleEndTime, setScheduleEndTime] = useState("");
   
   const isAdmin = role === 'OWNER' || role === 'SUPERVISOR';
   const canEditJob = role === 'OWNER' || role === 'SUPERVISOR';
@@ -488,6 +493,39 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
     },
   });
 
+  const saveScheduleMutation = useMutation({
+    mutationFn: async (data: { scheduledDate: string; scheduledTime: string; scheduledEndTime: string | null }) => {
+      const response = await apiRequest('PATCH', `/api/jobs/${jobId}/schedule`, data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to save schedule');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs/${jobId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setShowScheduleModal(false);
+      toast({ title: "Schedule saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to save schedule", variant: "destructive" });
+    },
+  });
+
+  const openScheduleModal = () => {
+    if (job?.startDate) {
+      const rawDate = job.startDate as any;
+      const dateStr = typeof rawDate === 'string' ? rawDate.split('T')[0] : rawDate instanceof Date ? rawDate.toISOString().split('T')[0] : '';
+      setScheduleDate(dateStr);
+    } else {
+      setScheduleDate("");
+    }
+    setScheduleStartTime(job?.scheduledTime || "09:00");
+    setScheduleEndTime((job as any)?.scheduledEndTime || "");
+    setShowScheduleModal(true);
+  };
+
   const openNotesModal = () => {
     setEditedNotes(job?.notes || "");
     setIsNotesModalOpen(true);
@@ -718,9 +756,16 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
           {/* Schedule Card - Always visible */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Schedule
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Schedule
+                </span>
+                {job.startDate && canEditJob && (
+                  <Button variant="ghost" size="sm" onClick={openScheduleModal}>
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -782,7 +827,7 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               ) : (
                 <div>
                   {canEditJob && (
-                    <Button variant="default" size="sm" onClick={() => navigate(`/jobs/${jobId}/edit`)}>
+                    <Button variant="default" size="sm" onClick={openScheduleModal}>
                       + Add Schedule
                     </Button>
                   )}
@@ -1480,6 +1525,74 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
               )}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showScheduleModal} onOpenChange={setShowScheduleModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              {job?.startDate ? 'Edit Schedule' : 'Add Schedule'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="schedule-date">Date</Label>
+              <Input
+                id="schedule-date"
+                type="date"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="schedule-start">Start Time</Label>
+                <Input
+                  id="schedule-start"
+                  type="time"
+                  step="900"
+                  value={scheduleStartTime}
+                  onChange={(e) => setScheduleStartTime(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="schedule-end">End Time</Label>
+                <Input
+                  id="schedule-end"
+                  type="time"
+                  step="900"
+                  value={scheduleEndTime}
+                  onChange={(e) => setScheduleEndTime(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowScheduleModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={!scheduleDate || saveScheduleMutation.isPending}
+                onClick={() => {
+                  saveScheduleMutation.mutate({
+                    scheduledDate: scheduleDate,
+                    scheduledTime: scheduleStartTime || '09:00',
+                    scheduledEndTime: scheduleEndTime || null,
+                  });
+                }}
+              >
+                {saveScheduleMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Schedule'
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
