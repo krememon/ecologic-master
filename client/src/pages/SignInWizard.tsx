@@ -265,6 +265,24 @@ export default function SignInWizard() {
     window.location.href = "/api/auth/google";
   };
   
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const handleAppleAuth = async () => {
+    setIsAppleLoading(true);
+    try {
+      const res = await fetch("/api/auth/apple/start");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast({ title: "Error", description: data.error || "Apple Sign-In is not available", variant: "destructive" });
+        setIsAppleLoading(false);
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to start Apple Sign-In", variant: "destructive" });
+      setIsAppleLoading(false);
+    }
+  };
+  
   const getStepNumber = () => {
     switch (step) {
       case "email": return 1;
@@ -361,10 +379,11 @@ export default function SignInWizard() {
                   <Button 
                     type="button"
                     variant="outline"
-                    onClick={() => toast({ title: "Coming Soon", description: "Apple Sign-In coming soon" })}
+                    onClick={handleAppleAuth}
+                    disabled={isAppleLoading}
                     className="w-full"
                   >
-                    <SiApple className="w-4 h-4 mr-2" />
+                    {isAppleLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <SiApple className="w-4 h-4 mr-2" />}
                     Continue with Apple
                   </Button>
                   

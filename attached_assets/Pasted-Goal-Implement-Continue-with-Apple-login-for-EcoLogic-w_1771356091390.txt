@@ -1,0 +1,72 @@
+Goal: Implement “Continue with Apple” login for EcoLogic (web React + Node/Express backend) with a clean OAuth flow and durable account linking.
+
+Constraints:
+- Preserve existing auth system and RBAC patterns.
+- UI must be “hidden not disabled” as usual (only show Apple button where it belongs).
+- Must work on web now. Keep code structured so we can reuse for iOS later.
+- Use secure server-side token exchange and verification.
+- Use HttpOnly cookie session (or match existing login session method).
+- Add targeted logs only (avoid noisy logs).
+
+Backend tasks:
+1) Add env secrets (read from Replit Secrets):
+   - APPLE_CLIENT_ID (Services ID for web)
+   - APPLE_TEAM_ID
+   - APPLE_KEY_ID
+   - APPLE_PRIVATE_KEY (p8 contents with newlines preserved)
+   - APPLE_REDIRECT_URI (must match Apple portal redirect exactly)
+   - APP_BASE_URL (e.g. https://yourdomain.com or Replit URL)
+
+2) Create routes:
+   - GET /api/auth/apple/start
+     Returns { url } where url is Apple authorize URL with:
+       response_type=code
+       response_mode=query
+       scope=name email
+       client_id=APPLE_CLIENT_ID
+       redirect_uri=APPLE_REDIRECT_URI
+       state=random CSRF token
+       nonce=random
+     Store state+nonce server-side in a short-lived store (signed cookie or server session).
+
+   - GET /api/auth/apple/callback
+     - Validate state matches what we stored.
+     - Exchange code for tokens via Apple token endpoint.
+     - Verify id_token signature + claims:
+         issuer https://appleid.apple.com
+         audience == APPLE_CLIENT_ID
+         nonce matches
+     - Extract: sub, email (may be missing later), email_verified, is_private_email
+     - Upsert user in DB:
+         - If apple_sub exists -> sign in that user
+         - Else if email exists and matches existing user -> link apple_sub to that user
+         - Else create new user with email (if present) + apple_sub
+     - Create EcoLogic session (same as normal login) and set HttpOnly cookie.
+     - Redirect to APP_BASE_URL + “/app” (or wherever logged-in landing page is)
+
+3) DB:
+   - Add columns to users table:
+     - apple_sub (unique, nullable)
+     - apple_email (nullable)
+     - apple_is_private_email (nullable boolean)
+   - Add unique index on apple_sub.
+
+4) Security:
+   - Use PKCE if feasible for web (recommended). If too complex, implement nonce+state correctly and document TODO for PKCE.
+   - Ensure cookies are Secure + SameSite=Lax (or existing standard).
+   - No Apple tokens stored long-term unless needed.
+
+Frontend tasks:
+5) Add “Continue with Apple” button on the login screen:
+   - Matches EcoLogic style (dark, premium).
+   - On click: call GET /api/auth/apple/start -> window.location.href = url
+   - Handle loading state + error toast.
+
+6) Post-login:
+   - Ensure auth state refreshes (call existing /me or session endpoint).
+   - Ensure user lands inside the app without getting stuck on spinner.
+
+Deliverables:
+- Working Apple sign-in on web (end-to-end).
+- Minimal logs for debugging: start, callback received, token exchange success/fail, user upsert result (no sensitive token logs).
+- README note: Apple Developer portal values required (Services ID, Key ID, Team ID, Redirect URI).

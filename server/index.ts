@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db-init";
@@ -716,6 +717,8 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
   res.json({ received: true });
 });
+
+app.use(cookieParser());
 
 // Skip body parsers for multipart/form-data uploads (handled by multer)
 app.use((req, res, next) => {

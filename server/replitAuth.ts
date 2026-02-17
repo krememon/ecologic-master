@@ -508,6 +508,219 @@ export async function setupAuth(app: Express) {
     })(req, res, next);
   });
 
+  // Apple Sign-In routes
+  if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY) {
+    const appleSignin = require('apple-signin-auth');
+    
+    const appleRedirectUri = process.env.APPLE_REDIRECT_URI || 
+      (process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}/api/auth/apple/callback`
+        : `http://localhost:5000/api/auth/apple/callback`);
+
+    const crypto = require('crypto');
+    
+    function signAppleState(data: string): string {
+      const secret = process.env.SESSION_SECRET || 'fallback';
+      return crypto.createHmac('sha256', secret).update(data).digest('hex');
+    }
+
+    app.get("/api/auth/apple/start", (req, res) => {
+      try {
+        const state = randomBytes(16).toString('hex');
+        const nonce = randomBytes(16).toString('hex');
+        const createdAt = Date.now().toString();
+
+        const payload = `${state}:${nonce}:${createdAt}`;
+        const sig = signAppleState(payload);
+
+        res.cookie('apple_auth', `${payload}:${sig}`, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'none',
+          maxAge: 10 * 60 * 1000,
+          path: '/api/auth/apple/callback',
+        });
+
+        const url = appleSignin.getAuthorizationUrl({
+          clientID: process.env.APPLE_CLIENT_ID,
+          redirectUri: appleRedirectUri,
+          state,
+          nonce,
+          scope: 'name email',
+          responseMode: 'form_post',
+        });
+
+        console.log("[AppleAuth] Start: authorization URL generated");
+        res.json({ url });
+      } catch (error) {
+        console.error("[AppleAuth] Start error:", error);
+        res.status(500).json({ error: "Failed to start Apple Sign-In" });
+      }
+    });
+
+    app.post("/api/auth/apple/callback", async (req, res) => {
+      try {
+        const { code, state, id_token: rawIdToken, user: userDataStr } = req.body;
+
+        const appleCookie = req.cookies?.apple_auth;
+        if (!appleCookie) {
+          console.error("[AppleAuth] No apple_auth cookie found");
+          return res.redirect("/?error=apple_auth_failed&message=Session+expired");
+        }
+
+        const parts = appleCookie.split(':');
+        if (parts.length !== 4) {
+          console.error("[AppleAuth] Malformed cookie");
+          return res.redirect("/?error=apple_auth_failed&message=Invalid+session");
+        }
+
+        const [savedState, savedNonce, savedCreatedAt, savedSig] = parts;
+        const expectedSig = signAppleState(`${savedState}:${savedNonce}:${savedCreatedAt}`);
+
+        if (savedSig !== expectedSig) {
+          console.error("[AppleAuth] Cookie signature mismatch");
+          return res.redirect("/?error=apple_auth_failed&message=Invalid+session");
+        }
+
+        if (savedState !== state) {
+          console.error("[AppleAuth] State mismatch");
+          return res.redirect("/?error=apple_auth_failed&message=Invalid+state");
+        }
+
+        if (Date.now() - parseInt(savedCreatedAt) > 10 * 60 * 1000) {
+          console.error("[AppleAuth] Session expired");
+          return res.redirect("/?error=apple_auth_failed&message=Session+expired");
+        }
+
+        res.clearCookie('apple_auth', { path: '/api/auth/apple/callback' });
+
+        const privateKey = (process.env.APPLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+        const clientSecret = appleSignin.getClientSecret({
+          clientID: process.env.APPLE_CLIENT_ID,
+          teamID: process.env.APPLE_TEAM_ID,
+          privateKey,
+          keyIdentifier: process.env.APPLE_KEY_ID,
+        });
+
+        const tokenResponse = await appleSignin.getAuthorizationToken(code, {
+          clientID: process.env.APPLE_CLIENT_ID,
+          redirectUri: appleRedirectUri,
+          clientSecret,
+        });
+
+        console.log("[AppleAuth] Token exchange success");
+
+        const claims = await appleSignin.verifyIdToken(tokenResponse.id_token, {
+          audience: process.env.APPLE_CLIENT_ID,
+          nonce: savedNonce,
+        });
+
+        const appleSub = claims.sub;
+        const appleEmail = claims.email || null;
+        const appleIsPrivateEmail = claims.is_private_email === 'true' || claims.is_private_email === true;
+
+        let appleUserName: { firstName?: string; lastName?: string } = {};
+        if (userDataStr) {
+          try {
+            const parsed = typeof userDataStr === 'string' ? JSON.parse(userDataStr) : userDataStr;
+            appleUserName.firstName = parsed?.name?.firstName || '';
+            appleUserName.lastName = parsed?.name?.lastName || '';
+          } catch {}
+        }
+
+        delete (req.session as any).appleAuth;
+
+        let user = await storage.getUserByAppleSub(appleSub);
+
+        if (user) {
+          console.log("[AppleAuth] Existing user found by appleSub:", user.id);
+        } else if (appleEmail) {
+          const { normalizeEmail } = await import("@shared/emailUtils");
+          const normalizedEmail = normalizeEmail(appleEmail);
+          const existingUser = await storage.getUserByEmail(normalizedEmail);
+          
+          if (existingUser) {
+            user = await storage.updateUser(existingUser.id, {
+              appleSub,
+              appleEmail: normalizedEmail,
+              appleIsPrivateEmail,
+              emailVerified: true,
+            });
+            console.log("[AppleAuth] Linked Apple to existing email user:", user.id);
+          } else {
+            user = await storage.createUser({
+              id: `apple_${appleSub}`,
+              email: normalizedEmail,
+              firstName: appleUserName.firstName || '',
+              lastName: appleUserName.lastName || '',
+              emailVerified: true,
+              appleSub,
+              appleEmail: normalizedEmail,
+              appleIsPrivateEmail,
+            });
+            console.log("[AppleAuth] Created new user:", user.id);
+          }
+        } else {
+          user = await storage.createUser({
+            id: `apple_${appleSub}`,
+            email: null,
+            firstName: appleUserName.firstName || '',
+            lastName: appleUserName.lastName || '',
+            appleSub,
+            appleEmail: null,
+            appleIsPrivateEmail: false,
+          });
+          console.log("[AppleAuth] Created new user without email:", user.id);
+        }
+
+        if (user.status === 'INACTIVE') {
+          console.log("[AppleAuth] User is deactivated:", user.id);
+          return res.redirect("/?error=account_inactive&message=" + encodeURIComponent("Your account is deactivated. Please contact your company Owner or Supervisor."));
+        }
+
+        const sessionUser = {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          profileImageUrl: user.profileImageUrl,
+          provider: 'apple',
+          claims: {
+            sub: user.id,
+            email: user.email,
+            first_name: user.firstName,
+            token_version: user.tokenVersion || 0,
+            last_name: user.lastName,
+            profile_image_url: user.profileImageUrl
+          }
+        };
+
+        req.logIn(sessionUser, (loginErr) => {
+          if (loginErr) {
+            console.error("[AppleAuth] Login error:", loginErr);
+            return res.redirect("/?error=login_failed");
+          }
+
+          req.session.save((saveErr) => {
+            if (saveErr) {
+              console.error("[AppleAuth] Session save error:", saveErr);
+              return res.redirect("/?error=session_failed");
+            }
+            console.log("[AppleAuth] Login successful, redirecting");
+            res.redirect("/");
+          });
+        });
+      } catch (error: any) {
+        console.error("[AppleAuth] Callback error:", error.message);
+        res.redirect("/?error=apple_auth_failed&message=" + encodeURIComponent("Apple Sign-In failed. Please try again."));
+      }
+    });
+    
+    console.log("[AppleAuth] Apple Sign-In routes registered");
+  } else {
+    console.log("[AppleAuth] Apple Sign-In not configured (missing env vars)");
+  }
+
   // Password reset routes
   app.post("/api/forgot-password", async (req, res) => {
     try {

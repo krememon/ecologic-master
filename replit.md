@@ -6,7 +6,7 @@ EcoLogic is a professional construction management platform for trade contractor
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Design preferences: Bold, uppercase "EcoLogic" branding with wide letter spacing
-Authentication: Triple authentication options (Email/Password + Replit + Google OAuth)
+Authentication: Quad authentication options (Email/Password + Replit + Google OAuth + Apple Sign-In)
 Registration: Enhanced form with password strength meter and show/hide toggles
 User Flow: Automatic login and dashboard redirect after account creation
 Logo: Custom water drop with leaf logo positioned above EcoLogic title
@@ -19,7 +19,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - Accessible components primarily from Radix UI, incorporating custom "EcoLogic" branding and logo.
 
 **Technical Implementations**:
-- **Authentication**: Supports Replit Auth, email/password, and social logins (Google) with robust session management.
+- **Authentication**: Supports Replit Auth, email/password, and social logins (Google, Apple) with robust session management. Apple Sign-In uses `apple-signin-auth` with server-side token exchange, nonce+state CSRF protection, and `response_mode=form_post`.
 - **Data Management**: PostgreSQL with Drizzle ORM, implementing multi-tenancy and role-based access control (RBAC). Automated constraint enforcement.
 - **Real-time Capabilities**: WebSocket server for live messaging, notifications, and job status updates, complemented by service worker push notifications.
 - **Messaging System**: Comprehensive two-pane interface with 1:1 conversations, real-time delivery, read receipts, and unread counts.
@@ -56,7 +56,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)
 - **ORM**: Drizzle ORM
-- **Authentication**: Passport.js, Replit Auth, Google OAuth
+- **Authentication**: Passport.js, Replit Auth, Google OAuth, Apple Sign-In (apple-signin-auth)
 - **Email**: Resend
 - **SMS**: Twilio
 - **File Uploads**: Multer

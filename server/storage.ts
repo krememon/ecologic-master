@@ -140,6 +140,7 @@ export interface IStorage {
   // Email authentication operations
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByGoogleId(googleId: string): Promise<User | undefined>;
+  getUserByAppleSub(appleSub: string): Promise<User | undefined>;
   createUser(userData: any): Promise<User>;
   updateUser(id: string, user: Partial<UpsertUser>): Promise<User>;
   
@@ -473,6 +474,11 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async getUserByAppleSub(appleSub: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.appleSub, appleSub));
+    return user || undefined;
+  }
+
   async createUser(userData: any): Promise<User> {
     // Generate a unique ID for email-based users
     const userId = `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -513,7 +519,6 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getLinkedAccountMethods(userId: string): Promise<any[]> {
-    // Simple implementation - return array indicating linked methods
     const user = await this.getUser(userId);
     if (!user) return [];
     
@@ -523,6 +528,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (user.googleLinked) {
       methods.push({ provider: 'google', email: user.email });
+    }
+    if (user.appleSub) {
+      methods.push({ provider: 'apple', email: user.appleEmail || user.email });
     }
     return methods;
   }

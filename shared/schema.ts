@@ -88,6 +88,9 @@ export const users = pgTable("users", {
   resetPasswordExpires: timestamp("reset_password_expires"),
   googleId: varchar("google_id").unique(), // Google OAuth sub ID for account linking
   googleLinked: boolean("google_linked").default(false), // Track Google account linking (derived from googleId presence)
+  appleSub: varchar("apple_sub").unique(), // Apple Sign-In subject ID
+  appleEmail: varchar("apple_email"), // Email from Apple (may be relay)
+  appleIsPrivateEmail: boolean("apple_is_private_email"), // Whether Apple relay email
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
   twoFactorSecretEnc: text("two_factor_secret_enc"),
   twoFactorBackupCodesEnc: text("two_factor_backup_codes_enc"),
