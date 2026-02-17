@@ -1221,15 +1221,17 @@ export default function JobDetails({ jobId }: JobDetailsProps) {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="flex flex-col items-center py-12">
-              <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium mb-2">Signature Requests</p>
-              <p className="text-sm text-muted-foreground text-center">
-                Signature requests for this job will appear here.
-              </p>
-            </CardContent>
-          </Card>
+          {paymentSignatures.length === 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center py-12">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-lg font-medium mb-2">Signature Requests</p>
+                <p className="text-sm text-muted-foreground text-center">
+                  Signature requests for this job will appear here.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
