@@ -1,0 +1,56 @@
+GOAL:
+Clean up the Job card UI and specifically improve how the “pending” status looks so it matches EcoLogic’s modern pill style (like Paid/Unpaid pills). Make spacing + alignment look polished.
+
+CONTEXT:
+On the Jobs list, the card shows:
+- Title (Job for Jennifer Pellegrino)
+- Address row with icon
+- Date row with icon
+- A “pending” pill on the right
+
+Right now the “pending” pill looks off (spacing, color, sizing, alignment).
+
+REQUIREMENTS:
+1) Update the status pill styling for “pending” to match the rest of the app:
+- Pill should be smaller, cleaner, vertically centered
+- Soft background (very light), subtle border
+- Text should be readable and consistent casing (capitalize: “Pending”)
+- Same height/radius as other pills
+
+2) Fix card layout:
+- Title row aligns with pill properly (no awkward floating)
+- Meta rows (address + date) align and have consistent gap
+- Avoid cramped spacing and avoid excessive whitespace
+- Ensure long addresses wrap nicely without pushing pill out of place
+
+3) Status pill system:
+If you already have a shared StatusPill component, use it.
+Otherwise create/extend a single utility that maps statuses → styles.
+Do NOT hardcode in multiple places.
+
+SUGGESTED PILL STYLES (match app vibe):
+- Pending:
+  - bg: light gray/blue tint
+  - text: slate/blue-gray
+  - border: subtle (1px)
+  - font: text-xs / font-medium
+  - padding: px-3 py-1
+  - radius: rounded-full
+- Paid uses green, Unpaid uses yellow/red etc (don’t change those)
+
+IMPLEMENTATION NOTES:
+- Ensure “pending” uses same casing everywhere (Pending)
+- Ensure the pill is right-aligned and vertically centered with title row
+- Add “min-w-max” to pill so it doesn’t squish
+- Title should truncate with ellipsis if too long (line-clamp-1), not collide with pill
+
+TESTING:
+- View Jobs list with various statuses: pending, paid, unpaid, archived
+- Test long title + long address
+- Confirm pill stays aligned and consistent across cards
+- No layout shift on mobile widths
+
+DELIVERABLES:
+- Pending pill looks polished and consistent with EcoLogic UI
+- Job card spacing/alignment looks clean and modern
+- Reusable status pill logic (no duplicated styling)

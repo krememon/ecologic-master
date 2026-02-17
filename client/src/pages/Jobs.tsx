@@ -1954,37 +1954,56 @@ export default function Jobs() {
               }}
             >
               {/* Status Badge - Top Right */}
-              {job.status === 'cancelled' ? (
-                <Badge className="absolute top-3 right-3 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
-                  <X className="h-3 w-3" />
-                  Cancelled
-                </Badge>
-              ) : job.status === 'completed' ? (
-                <Badge className="absolute top-3 right-3 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Completed
-                </Badge>
-              ) : job.isPaid ? (
-                <Badge className="absolute top-3 right-3 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Paid
-                </Badge>
-              ) : job.invoicePaymentStatus === 'partial' ? (
-                <Badge className="absolute top-3 right-3 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-100 flex items-center gap-1 px-2 py-0.5 text-xs font-medium">
-                  <DollarSign className="h-3 w-3" />
-                  Partial
-                </Badge>
-              ) : null}
+              {(() => {
+                const pillBase = "absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border min-w-max";
+                if (job.status === 'cancelled') {
+                  return (
+                    <span className={`${pillBase} bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700`}>
+                      <X className="h-3 w-3" />
+                      Cancelled
+                    </span>
+                  );
+                }
+                if (job.status === 'completed') {
+                  return (
+                    <span className={`${pillBase} bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800`}>
+                      <CheckCircle2 className="h-3 w-3" />
+                      Completed
+                    </span>
+                  );
+                }
+                if (job.isPaid) {
+                  return (
+                    <span className={`${pillBase} bg-green-50 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800`}>
+                      <CheckCircle2 className="h-3 w-3" />
+                      Paid
+                    </span>
+                  );
+                }
+                if (job.invoicePaymentStatus === 'partial') {
+                  return (
+                    <span className={`${pillBase} bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800`}>
+                      <DollarSign className="h-3 w-3" />
+                      Partial
+                    </span>
+                  );
+                }
+                return (
+                  <span className={`${pillBase} bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700`}>
+                    Pending
+                  </span>
+                );
+              })()}
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex-1 pr-14">
+                  <div className="flex-1 pr-20 min-w-0">
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <Building2 className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                      {job.clientName || job.client?.name || 'Unassigned Job'}
+                      <Building2 className="h-5 w-5 flex-shrink-0 text-slate-600 dark:text-slate-400" />
+                      <span className="truncate">{job.clientName || job.client?.name || 'Unassigned Job'}</span>
                     </CardTitle>
                     <div className="flex items-center gap-1 mt-1 text-sm text-slate-600 dark:text-slate-400">
-                      <Wrench className="h-3 w-3" />
-                      <span data-testid="text-job-primary-line-item">
+                      <Wrench className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate" data-testid="text-job-primary-line-item">
                         {job.primaryLineItem || 'No line items yet'}
                       </span>
                     </div>
