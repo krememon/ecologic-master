@@ -11,7 +11,7 @@ import nodemailer from "nodemailer";
 import { storage } from "./storage";
 import { db } from "./db";
 import { companies, companyMembers } from "@shared/schema";
-import { scrypt, randomBytes, timingSafeEqual, createHmac } from "crypto";
+import { scrypt, randomBytes, timingSafeEqual, createHmac, createPrivateKey } from "crypto";
 import { promisify } from "util";
 import { generateUniqueInviteCode, normalizeCode } from "@shared/inviteCode";
 import * as appleSignin from "apple-signin-auth";
@@ -518,30 +518,43 @@ export async function setupAuth(app: Express) {
         : `http://localhost:5000/api/auth/apple/callback`);
 
     function getApplePrivateKey(): string {
-      let key = (process.env.APPLE_PRIVATE_KEY || '').trim();
-      key = key.replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+      let raw = (process.env.APPLE_PRIVATE_KEY || '').trim();
+      raw = raw.replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
 
-      if (!key.includes('-----BEGIN PRIVATE KEY-----') || !key.includes('-----END PRIVATE KEY-----')) {
+      if (!raw.includes('-----BEGIN PRIVATE KEY-----') || !raw.includes('-----END PRIVATE KEY-----')) {
         throw new Error('[AppleAuth] APPLE_PRIVATE_KEY is missing BEGIN/END markers');
       }
 
-      const lines = key.split('\n').map(l => l.trim()).filter(Boolean);
-      if (lines.length <= 3) {
-        const header = '-----BEGIN PRIVATE KEY-----';
-        const footer = '-----END PRIVATE KEY-----';
-        const body = key.replace(header, '').replace(footer, '').replace(/\s+/g, '');
-        const wrapped = body.match(/.{1,64}/g)?.join('\n') || body;
-        key = `${header}\n${wrapped}\n${footer}`;
-      }
+      const header = '-----BEGIN PRIVATE KEY-----';
+      const footer = '-----END PRIVATE KEY-----';
+      const body = raw
+        .replace(header, '')
+        .replace(footer, '')
+        .replace(/\s+/g, '');
+      const wrapped = body.match(/.{1,64}/g)?.join('\n') || body;
+      const key = `${header}\n${wrapped}\n${footer}\n`;
 
       const lineCount = key.split('\n').length;
-      console.log(`[AppleAuth] Private key: ${key.length} chars, ${lineCount} lines, valid PEM=true`);
+      const decodedLen = Buffer.from(body, 'base64').length;
+      console.log(`[AppleAuth] Private key: ${key.length} chars, ${lineCount} lines, base64Body=${body.length}, decodedBytes=${decodedLen}`);
       return key;
     }
 
-    const applePrivateKey = getApplePrivateKey();
+    const applePrivateKeyPem = getApplePrivateKey();
+    let appleSigningKey: any;
+    try {
+      appleSigningKey = createPrivateKey({ key: applePrivateKeyPem, format: 'pem' });
+      console.log(`[AppleAuth] createPrivateKey succeeded: true (KeyObject)`);
+    } catch (e: any) {
+      console.error(`[AppleAuth] createPrivateKey failed: ${e.message}`);
+      console.error(`[AppleAuth] The APPLE_PRIVATE_KEY secret may be corrupted or truncated. Please re-paste the full contents of your Apple .p8 key file.`);
+      appleSigningKey = null;
+    }
 
     function buildAppleClientSecret(): string {
+      if (!appleSigningKey) {
+        throw new Error("Apple private key is not available — APPLE_PRIVATE_KEY secret needs to be re-pasted from the original .p8 file");
+      }
       const now = Math.floor(Date.now() / 1000);
       const payload = {
         iss: process.env.APPLE_TEAM_ID,
@@ -550,7 +563,7 @@ export async function setupAuth(app: Express) {
         aud: "https://appleid.apple.com",
         sub: process.env.APPLE_CLIENT_ID,
       };
-      const token = jwt.sign(payload, applePrivateKey, {
+      const token = jwt.sign(payload, appleSigningKey, {
         algorithm: "ES256",
         header: { kid: process.env.APPLE_KEY_ID!, alg: "ES256" },
       });
