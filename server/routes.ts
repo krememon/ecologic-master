@@ -14761,6 +14761,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Google Places proxy routes for debugging and secure API key usage
+  const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  const googlePlacesKeySource = process.env.GOOGLE_PLACES_API_KEY ? 'GOOGLE_PLACES_API_KEY' : (process.env.GOOGLE_MAPS_API_KEY ? 'GOOGLE_MAPS_API_KEY' : 'NONE');
+  const googlePlacesKeySuffix = googlePlacesKey ? googlePlacesKey.slice(-4) : 'N/A';
+  console.log(`[GooglePlaces] Using key source: ${googlePlacesKeySource}, keySuffix=${googlePlacesKeySuffix}`);
+
   app.get('/api/google/places/autocomplete', isAuthenticated, async (req: any, res) => {
     try {
       const q = (req.query.q as string || '').trim();
@@ -14768,12 +14773,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (q.length < 3) {
         return res.json({ predictions: [], status: 'INVALID_REQUEST', note: 'Query too short (min 3 chars)' });
       }
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        console.error('[GooglePlaces] GOOGLE_MAPS_API_KEY is not set');
-        return res.status(500).json({ error: 'Google Maps API key not configured' });
+      if (!googlePlacesKey) {
+        console.error('[GooglePlaces] Missing Google API key (checked GOOGLE_PLACES_API_KEY and GOOGLE_MAPS_API_KEY)');
+        return res.status(500).json({ error: 'Missing Google API key' });
       }
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=address&key=${apiKey}`;
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=address&key=${googlePlacesKey}`;
       const response = await fetch(url);
       const data = await response.json();
       console.log(`[GooglePlaces] autocomplete response status=${response.status}, google_status=${data.status}, predictions=${data.predictions?.length ?? 0}`);
@@ -14797,12 +14801,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!placeId) {
         return res.status(400).json({ error: 'placeId is required' });
       }
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        console.error('[GooglePlaces] GOOGLE_MAPS_API_KEY is not set');
-        return res.status(500).json({ error: 'Google Maps API key not configured' });
+      if (!googlePlacesKey) {
+        console.error('[GooglePlaces] Missing Google API key (checked GOOGLE_PLACES_API_KEY and GOOGLE_MAPS_API_KEY)');
+        return res.status(500).json({ error: 'Missing Google API key' });
       }
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=address_components,formatted_address,geometry,place_id&key=${apiKey}`;
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=address_components,formatted_address,geometry,place_id&key=${googlePlacesKey}`;
       const response = await fetch(url);
       const data = await response.json();
       console.log(`[GooglePlaces] details response status=${response.status}, google_status=${data.status}`);
