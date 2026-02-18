@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PriceBookPickerModal } from "./PriceBookPickerModal";
 import { TimeWheelPicker } from "./TimeWheelPicker";
 import { SelectCustomerModal } from "./CustomerModals";
+import LocationInput from "@/components/LocationInput";
 import type { Customer } from "@shared/schema";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
 import { formatScheduleDisplay } from "@/utils/formatScheduleTimeRange";
@@ -1192,13 +1193,18 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
           <div className="space-y-3 px-4 py-3">
             <div className="space-y-1">
               <Label htmlFor="addressLine1">Street Address</Label>
-              <Input
-                id="addressLine1"
+              <LocationInput
                 value={jobLocation.addressLine1}
-                onChange={(e) => setJobLocation({ ...jobLocation, addressLine1: e.target.value })}
+                onChange={(val) => setJobLocation({ ...jobLocation, addressLine1: val })}
+                onAddressSelected={(addr) => {
+                  setJobLocation({
+                    addressLine1: addr.street,
+                    city: addr.city,
+                    state: addr.state,
+                    zip: addr.postalCode,
+                  });
+                }}
                 placeholder="Street Address"
-                data-testid="input-job-address-line1"
-                className="h-9"
               />
             </div>
             <div className="space-y-1">

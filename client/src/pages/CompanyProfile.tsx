@@ -12,6 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { Loader2, ChevronLeft, Settings2, Upload, X, Building2, Crop } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useCan } from "@/hooks/useCan";
+import LocationInput from "@/components/LocationInput";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { formatPhoneInput } from "@shared/phoneUtils";
@@ -384,10 +385,16 @@ export default function CompanyProfile() {
 
             <div className="space-y-2">
               <Label htmlFor="addressLine1">Address Line 1</Label>
-              <Input
-                id="addressLine1"
+              <LocationInput
                 value={formData.addressLine1 || ""}
-                onChange={(e) => handleChange('addressLine1', e.target.value || null)}
+                onChange={(val) => handleChange('addressLine1', val || null)}
+                onAddressSelected={(addr) => {
+                  handleChange('addressLine1', addr.street || null);
+                  handleChange('city', addr.city || null);
+                  handleChange('state', addr.state || null);
+                  handleChange('postalCode', addr.postalCode || null);
+                  handleChange('country', addr.country || null);
+                }}
                 placeholder="123 Main Street"
               />
             </div>
