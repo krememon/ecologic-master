@@ -338,10 +338,6 @@ export default function Clients() {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       form.reset();
       setIsDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Client added successfully",
-      });
     } catch (error: any) {
       toast({
         title: "Error",
