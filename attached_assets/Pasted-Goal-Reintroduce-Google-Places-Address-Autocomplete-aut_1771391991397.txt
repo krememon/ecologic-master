@@ -1,0 +1,54 @@
+Goal: Reintroduce Google Places Address Autocomplete (autofill) for address fields across EcoLogic.
+
+Scope:
+- Frontend React + backend proxy if needed
+- Must not break existing form validation or save flows
+- Must work on mobile + desktop
+
+Google setup:
+1) Use Google Places API (Places Autocomplete).
+2) Add env secrets:
+   - GOOGLE_MAPS_API_KEY (restricted to correct domains if possible)
+
+Implementation approach (preferred):
+A) Create a reusable <AddressAutocomplete /> component that:
+   - Renders a text input (same style as existing inputs)
+   - Shows dropdown suggestions
+   - On selection, returns structured address parts:
+     { street1, street2, city, state, zip, country, placeId, lat, lng }
+
+B) Integrate it into all relevant screens that have address inputs:
+   - Add/Edit Client address
+   - Job address / Job site address
+   - Company profile address (if present)
+   - Any “New job / New estimate / New invoice” address fields if they exist
+
+Data mapping:
+- Use Places Details to parse components:
+  street_number + route => street1
+  subpremise => street2 (apt/suite)
+  locality => city
+  administrative_area_level_1 => state
+  postal_code => zip
+  country => country
+- If some fields already exist, populate them instead of creating new schema.
+- Keep manual typing/editing allowed after autofill.
+
+UX requirements:
+- If Google fails or no selection is made, user can still type manually (no blocking).
+- No extra buttons. Selection should just fill fields.
+- Debounce input, don’t spam requests.
+- Maintain “hidden not disabled” principles (don’t show extra locked UI).
+
+Security/Cost:
+- If the current setup exposes API keys in the client, keep it but restrict key usage (HTTP referrers).
+- If you already have a backend pattern for external API calls, implement a small backend proxy route:
+  GET /api/google/places/autocomplete?q=
+  GET /api/google/places/details?placeId=
+  Then the frontend calls our backend, not Google directly.
+
+Deliverables:
+- Working autocomplete on all address forms listed above
+- Correctly fills city/state/zip consistently
+- No regressions in save/submit flows
+- Minimal logs, remove debug logs after verification
