@@ -1,0 +1,53 @@
+Goal: Google Places suggestions dropdown appears, but clicking a suggestion does nothing. Fix selection so it fills Street Address, City, State, ZIP (and keeps manual editing possible).
+
+Context:
+- Backend endpoint /api/google/places/autocomplete returns predictions successfully.
+- UI shows dropdown, but selection doesn’t populate fields.
+- We want Google-like behavior: click suggestion -> fills street + city + state + zip.
+
+Tasks:
+
+1) In the address component (LocationInput / AddressAutocomplete):
+   - Ensure each suggestion row has a working click/select handler.
+   - Use onMouseDown (not onClick) to avoid blur closing dropdown before selection.
+     Example: onMouseDown={(e)=>{e.preventDefault(); handleSelect(prediction)}}
+
+2) On selection:
+   a) Immediately set the Street Address input text to the selected prediction description (or structured street1 if already available).
+   b) Call backend place details endpoint with the selected place_id:
+      GET /api/google/places/details?placeId=<place_id>
+      (If this route doesn’t exist yet, create it in backend using Places Details API.)
+
+3) Parse address components from place details:
+   - street_number + route => street1
+   - subpremise => street2 (optional)
+   - locality => city (fallback: postal_town or sublocality)
+   - administrative_area_level_1 => state (use short_name)
+   - postal_code => zip
+   - country => country (optional)
+
+4) Fill the form fields:
+   - Street Address = street1 (and keep street2 separate if field exists)
+   - City = city
+   - State = state
+   - ZIP Code = zip
+   - If the form stores a single address string, still populate the dedicated fields too.
+
+5) State propagation:
+   - Ensure the address component either:
+     - receives setters: setStreet, setCity, setState, setZip, OR
+     - calls an onChange callback with a structured payload:
+       { street1, street2, city, state, zip, placeId, lat, lng }
+   - Make sure parent form updates its internal state so Save works.
+
+6) UX behavior:
+   - After selection, close dropdown and clear suggestions.
+   - Do not show “Autocomplete unavailable” on success.
+   - Keep manual edits allowed after autofill.
+   - Add a small inline error if details fetch fails, but still keep the selected street text.
+
+Acceptance:
+- Clicking a suggestion reliably fills Street/City/State/ZIP.
+- Works inside the Job Location modal (no blur issues).
+- No regressions in saving/submitting forms.
+- Minimal logs, remove debug logs after confirmation.
