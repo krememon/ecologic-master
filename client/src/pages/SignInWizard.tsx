@@ -376,24 +376,22 @@ export default function SignInWizard() {
                     Continue with Google
                   </Button>
                   
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
                     onClick={handleAppleAuth}
                     disabled={isAppleLoading}
-                    className="w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50"
-                    style={{ backgroundColor: isAppleLoading ? '#111111' : '#000000' }}
-                    onMouseEnter={(e) => { if (!isAppleLoading) (e.currentTarget.style.backgroundColor = '#111111'); }}
-                    onMouseLeave={(e) => { if (!isAppleLoading) (e.currentTarget.style.backgroundColor = '#000000'); }}
+                    className="w-full"
                   >
                     {isAppleLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
-                      <svg className="w-4 h-4" viewBox="0 0 17 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.545 10.239c-.022-2.234 1.823-3.306 1.906-3.358-.037-.054-1.496-2.171-3.823-2.171-1.624 0-2.953.977-3.737.977-.807 0-2.025-.953-3.337-.927C2.841 4.788 1.264 5.855.64 7.502c-1.283 3.373.326 8.364 1.888 11.101.27.434 1.243 3.44 2.928 3.383 1.156-.05 1.598-.753 2.994-.753 1.375 0 1.78.753 2.996.727 1.264-.022 2.1-1.367 2.725-2.813.89-2.028 1.236-3.998 1.252-4.1-.028-.012-2.878-1.106-2.878-4.808zM10.796 3.152C11.346 2.476 11.718 1.542 11.618.6c-.802.034-1.794.542-2.363 1.198-.505.582-.958 1.543-.84 2.445.903.07 1.827-.445 2.381-1.091z"/>
+                      <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
                       </svg>
                     )}
                     Continue with Apple
-                  </button>
+                  </Button>
                   
                   <p className="text-xs text-center text-slate-500 mt-4">
                     Don't have an account?{" "}
