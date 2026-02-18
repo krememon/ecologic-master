@@ -63,7 +63,6 @@ export function ConnectBankCard() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Bank Disconnected", description: "Your bank account has been unlinked." });
       queryClient.invalidateQueries({ queryKey: ["/api/plaid/status"] });
     },
     onError: (err: Error) => {
