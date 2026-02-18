@@ -14760,6 +14760,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Google Places proxy routes for debugging and secure API key usage
+  app.get('/api/google/places/autocomplete', isAuthenticated, async (req: any, res) => {
+    try {
+      const q = (req.query.q as string || '').trim();
+      console.log(`[GooglePlaces] autocomplete query length=${q.length}`);
+      if (q.length < 3) {
+        return res.json({ predictions: [], status: 'INVALID_REQUEST', note: 'Query too short (min 3 chars)' });
+      }
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        console.error('[GooglePlaces] GOOGLE_MAPS_API_KEY is not set');
+        return res.status(500).json({ error: 'Google Maps API key not configured' });
+      }
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=address&key=${apiKey}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      console.log(`[GooglePlaces] autocomplete response status=${response.status}, google_status=${data.status}, predictions=${data.predictions?.length ?? 0}`);
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        console.error(`[GooglePlaces] autocomplete error: google_status=${data.status}, error_message=${data.error_message || 'none'}`);
+      }
+      res.json(data);
+    } catch (error: any) {
+      console.error('[GooglePlaces] autocomplete fetch error:', error.message);
+      if (error.response?.data) {
+        console.error('[GooglePlaces] error response data:', error.response.data);
+      }
+      res.status(500).json({ error: 'Failed to fetch autocomplete suggestions' });
+    }
+  });
+
+  app.get('/api/google/places/details', isAuthenticated, async (req: any, res) => {
+    try {
+      const placeId = (req.query.placeId as string || '').trim();
+      console.log(`[GooglePlaces] details placeId length=${placeId.length}`);
+      if (!placeId) {
+        return res.status(400).json({ error: 'placeId is required' });
+      }
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        console.error('[GooglePlaces] GOOGLE_MAPS_API_KEY is not set');
+        return res.status(500).json({ error: 'Google Maps API key not configured' });
+      }
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=address_components,formatted_address,geometry,place_id&key=${apiKey}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      console.log(`[GooglePlaces] details response status=${response.status}, google_status=${data.status}`);
+      if (data.status !== 'OK') {
+        console.error(`[GooglePlaces] details error: google_status=${data.status}, error_message=${data.error_message || 'none'}`);
+      }
+      res.json(data);
+    } catch (error: any) {
+      console.error('[GooglePlaces] details fetch error:', error.message);
+      if (error.response?.data) {
+        console.error('[GooglePlaces] error response data:', error.response.data);
+      }
+      res.status(500).json({ error: 'Failed to fetch place details' });
+    }
+  });
+
   // WebSocket server
   const httpServer = createServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
