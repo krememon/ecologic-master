@@ -47,7 +47,6 @@ export function ConnectBankCard() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Bank Connected", description: "Your bank account has been linked successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/plaid/status"] });
       setLinkToken(null);
       setLinkError(null);
