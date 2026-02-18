@@ -131,12 +131,10 @@ export default function Welcome() {
             </Button>
 
             <Button
+              variant="outline"
               onClick={handleAppleAuth}
               disabled={appleLoading}
-              className="w-full h-11 font-medium rounded-xl text-white mt-3"
-              style={{ backgroundColor: appleLoading ? '#333' : '#000' }}
-              onMouseEnter={(e) => { if (!appleLoading) e.currentTarget.style.backgroundColor = '#111'; }}
-              onMouseLeave={(e) => { if (!appleLoading) e.currentTarget.style.backgroundColor = '#000'; }}
+              className="w-full h-11 font-medium rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 mt-3"
             >
               {appleLoading ? (
                 <Loader2 className="w-5 h-5 mr-3 animate-spin" />
