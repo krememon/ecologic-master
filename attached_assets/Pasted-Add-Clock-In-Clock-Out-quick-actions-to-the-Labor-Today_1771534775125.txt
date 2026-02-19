@@ -1,0 +1,50 @@
+Add Clock In / Clock Out quick actions to the “Labor Today” dashboard card.
+
+CONTEXT
+- We track labor via time sessions (clock-in/out).
+- Live locations depend on active sessions.
+- Owners/Admins must be able to clock in/out too.
+- Backend is source of truth; UI must reflect backend state.
+
+GOALS
+1) On the web Dashboard, the “Labor Today” card should show:
+   - If current user has NO active session: a “Clock In” button
+   - If current user HAS an active session: a “Clock Out” button (and optionally show which job)
+2) Clicking Clock In should require selecting a job (modal with searchable job picker).
+3) Clicking Clock Out should end the active session and immediately update:
+   - “hrs logged” (today)
+   - “techs active”
+   - button state (back to Clock In)
+4) Must work for Owner/Admin as well as roles that already can clock in (Technician/Supervisor if allowed).
+5) RBAC: do not show these controls to roles that should never clock time (ex: Estimator/Dispatcher if that’s your rule).
+
+IMPLEMENTATION REQUIREMENTS
+A) State source:
+- Use the same “active session” source used elsewhere (e.g. /api/time/active or useActiveSession hook on web).
+- Do NOT guess state client-side.
+
+B) Clock-in:
+- Add modal job picker (reuse existing job search picker if you have one).
+- Call POST /api/time/clock-in with jobId
+- On success, refetch/refresh:
+  - active session state
+  - labor today stats
+  - techs active
+
+C) Clock-out:
+- Call POST /api/time/clock-out (with whatever payload it expects)
+- Ensure backend cleans up live location row (already implemented)
+- On success, refetch the same queries
+
+D) UI polish:
+- Keep the card layout the same.
+- Button should fit in the card without crowding (right side recommended).
+- If active session exists, show subtle text: “Clocked in” or “Clocked in: {jobName}”.
+
+DELIVERABLES
+- Files changed
+- Any new components (modal, job picker reuse)
+- Proof steps:
+  1) Clock in from dashboard -> button flips to Clock Out
+  2) Techs active increments
+  3) Clock out -> flips back + techs active decrements

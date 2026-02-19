@@ -10,6 +10,12 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useCan } from "@/hooks/useCan";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCompactCurrency } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Briefcase, 
   FileText, 
@@ -27,7 +33,9 @@ import {
   Car,
   Wrench,
   Coffee,
-  Building
+  Building,
+  MoreHorizontal,
+  ArrowRightLeft
 } from "lucide-react";
 import { format, isToday, isTomorrow, parseISO, startOfDay, subDays, isAfter } from "date-fns";
 import type { Job, Lead, Estimate, Invoice, Customer } from "@shared/schema";
@@ -560,67 +568,62 @@ export default function Home() {
               </Card>
             ) : timeData?.role === 'manager' ? (
               <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30">
-                        <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <h3 className="text-sm font-medium text-slate-900 dark:text-white">Labor Today</h3>
-                    </div>
-                    {timeData.isClockedIn && (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
-                        </span>
-                        Clocked in{timeData.currentJobTitle ? `: ${timeData.currentJobTitle}` : ''}
-                      </span>
-                    )}
-                  </div>
+                <CardContent className="px-4 py-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <span className="text-lg font-semibold text-slate-900 dark:text-white">
-                          {timeData.totalHoursToday.toFixed(1)}
-                        </span>
-                        <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">hrs logged</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 shrink-0">
+                        <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       </div>
-                      <div className="text-slate-300 dark:text-slate-700">|</div>
-                      <div>
-                        <span className="text-lg font-semibold text-slate-900 dark:text-white">
-                          {timeData.activeTechCount}
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white whitespace-nowrap">Labor Today</h3>
+                      {timeData.isClockedIn && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border border-green-200 dark:border-green-800/50 text-green-700 dark:text-green-400 bg-green-50/50 dark:bg-green-900/10 truncate max-w-[200px]">
+                          <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                          </span>
+                          <span className="truncate">
+                            Clocked in{timeData.currentJobTitle ? ` · ${timeData.currentJobTitle}` : ''}
+                          </span>
                         </span>
-                        <span className="text-sm text-slate-500 dark:text-slate-400 ml-1">
-                          {timeData.activeTechCount === 1 ? 'tech' : 'techs'} active
-                        </span>
-                      </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       {timeData.isClockedIn ? (
                         <>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={handleSwitchClick}
-                            disabled={switchJobMutation.isPending}
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2"
-                          >
-                            Switch
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem
+                                onClick={handleSwitchClick}
+                                disabled={switchJobMutation.isPending}
+                                className="text-sm"
+                              >
+                                <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />
+                                Switch job
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => clockOutMutation.mutate()}
                             disabled={clockOutMutation.isPending}
-                            className="border-slate-300 dark:border-slate-700"
+                            className="h-7 px-2.5 text-xs font-medium border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                           >
                             {clockOutMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <>
-                                <Square className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                                Clock Out
+                                <Square className="h-3 w-3 mr-1 fill-current" />
+                                Clock out
                               </>
                             )}
                           </Button>
@@ -630,19 +633,30 @@ export default function Home() {
                           size="sm"
                           onClick={handleClockInClick}
                           disabled={clockInMutation.isPending}
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          className="h-7 px-2.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           {clockInMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <>
-                              <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                              Clock In
+                              <Play className="h-3 w-3 mr-1 fill-current" />
+                              Clock in
                             </>
                           )}
                         </Button>
                       )}
                     </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800/50">
+                    <span className="text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold text-slate-900 dark:text-white">{timeData.totalHoursToday.toFixed(1)}</span>
+                      <span className="text-slate-400 dark:text-slate-500 ml-1">hrs logged</span>
+                    </span>
+                    <span className="text-slate-200 dark:text-slate-700/50 text-xs">|</span>
+                    <span className="text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-semibold text-slate-900 dark:text-white">{timeData.activeTechCount}</span>
+                      <span className="text-slate-400 dark:text-slate-500 ml-1">active</span>
+                    </span>
                   </div>
                 </CardContent>
               </Card>
