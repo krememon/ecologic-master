@@ -1,0 +1,120 @@
+GOAL:
+Implement a global subscription gate using Wouter so that:
+
+- If a logged-in user does NOT have an active subscription,
+  they are automatically redirected to /onboarding/subscription.
+
+- If subscription IS active, user may access the rest of the app.
+
+This must work with the existing backend endpoints:
+GET /api/subscriptions/status
+POST /api/subscriptions/dev-activate
+
+Do NOT break existing auth, RBAC, or routing.
+
+------------------------------------------------
+
+1) ROUTE CONFIRMATION
+
+Ensure this route exists in the main Wouter router:
+
+/onboarding/subscription → SubscriptionPage
+
+If it does not exist, add it.
+
+Example:
+
+<Route path="/onboarding/subscription" component={SubscriptionPage} />
+
+------------------------------------------------
+
+2) CREATE GLOBAL SUBSCRIPTION GATE HOOK
+
+Create a hook:
+
+useSubscriptionGate()
+
+Responsibilities:
+- Runs AFTER auth finishes loading
+- If user is not logged in → do nothing
+- If user is logged in:
+   - Call GET /api/subscriptions/status
+   - If response.active !== true → redirect to /onboarding/subscription
+   - If active → allow normal app flow
+
+Use Wouter’s useLocation() for redirecting.
+
+Safe default:
+If request fails → redirect to /onboarding/subscription
+
+------------------------------------------------
+
+3) WIRE GATE INTO TOP-LEVEL APP SHELL
+
+In the top-level App component (where routes render):
+
+Call:
+
+useSubscriptionGate({ authed, loadingAuth })
+
+Block rendering until:
+
+- Auth finished loading
+- Subscription check finished
+
+Return spinner or null while loading.
+
+------------------------------------------------
+
+4) SUBSCRIPTION PAGE SUCCESS FLOW
+
+Inside SubscriptionPage:
+
+When "Start 7-Day Free Trial" button is clicked:
+
+- Call POST /api/subscriptions/dev-activate
+- If success → redirect to /dashboard
+
+Do NOT leave user on subscription page after success.
+
+------------------------------------------------
+
+5) NO HARD-CODED PLAN LOGIC
+
+Do NOT determine plans here.
+Backend already stores planKey and userLimit.
+Frontend only cares about:
+
+status.active === true / false
+
+------------------------------------------------
+
+6) RESULTING BEHAVIOR
+
+- New user logs in
+- App calls /api/subscriptions/status
+- If inactive → forced to /onboarding/subscription
+- User clicks Start Trial
+- Backend activates subscription
+- App redirects to /dashboard
+- Refreshing browser keeps user unlocked
+
+------------------------------------------------
+
+7) DELIVERABLES
+
+- New useSubscriptionGate hook
+- Hook wired into App shell
+- Confirmed Wouter route for /onboarding/subscription
+- SubscriptionPage redirects on success
+- No regressions in auth or RBAC
+
+------------------------------------------------
+
+IMPORTANT:
+
+Do NOT refactor unrelated routing.
+Do NOT introduce React Router.
+Continue using Wouter only.
+
+After implementation, verify flow end-to-end.

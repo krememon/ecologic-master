@@ -9,6 +9,7 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useSubscriptionGate } from "@/hooks/useSubscriptionGate";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/auth-page";
@@ -82,12 +83,12 @@ function getNextOnboardingRoute(params: {
   user: any;
   onboardingChoice: string | null;
   onboardingIndustry: string | null;
+  subActive: boolean;
 }): string | null {
-  const { user, onboardingChoice, onboardingIndustry } = params;
+  const { user, onboardingChoice, onboardingIndustry, subActive } = params;
   
   if (user?.company) {
     const { onboardingCompleted } = user.company;
-    const subActive = isSubscriptionActive(user.company);
 
     if (onboardingCompleted && subActive) {
       return null;
@@ -153,14 +154,21 @@ function AuthenticatedRouter() {
   useWebSocket();
   usePushNotifications();
 
-  // Get onboarding state from user object (DB is authoritative)
+  const hasCompany = !!user?.company;
+
+  const { active: subActive, loading: subLoading } = useSubscriptionGate({
+    authed: isAuthenticated,
+    loadingAuth: isLoading,
+    hasCompany,
+  });
+
   const onboardingChoice = user?.onboardingChoice || null;
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
   const nextRoute = !isLoading && isAuthenticated && user 
-    ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry })
+    ? getNextOnboardingRoute({ user, onboardingChoice, onboardingIndustry, subActive })
     : null;
 
-  if (isLoading) {
+  if (isLoading || (isAuthenticated && hasCompany && subLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -188,7 +196,6 @@ function AuthenticatedRouter() {
     );
   }
 
-  // If onboarding is incomplete, force user to complete it
   if (nextRoute) {
     return (
       <Switch>
@@ -203,7 +210,6 @@ function AuthenticatedRouter() {
     );
   }
   
-  // Onboarding complete - clear any stale state
   if (onboardingChoice || onboardingIndustry) {
     console.log("[app-router] onboarding complete, clearing state");
     localStorage.removeItem("onboardingChoice");

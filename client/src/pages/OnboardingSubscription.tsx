@@ -52,6 +52,7 @@ export default function OnboardingSubscription() {
       localStorage.removeItem("onboardingChoice");
       localStorage.removeItem("onboardingIndustry");
 
+      await queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
       setLocation("/jobs", { replace: true });
     } catch (error: any) {
