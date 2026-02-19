@@ -1,0 +1,101 @@
+Implement “Team Size → Subscription Plan” mapping using the /onboarding/company screen.
+
+REQUIREMENTS:
+- This screen determines what subscription product will be offered.
+- The user does NOT manually pick a plan. It is auto-selected based on team size button.
+- After company is created, immediately route user into the subscription flow.
+- Follow “hidden not disabled”: if not subscribed, user cannot access the app.
+
+--------------------------------------------
+1) DEFINE SUBSCRIPTION PLAN CONFIG (single source of truth)
+--------------------------------------------
+Create: /src/config/subscriptionPlans.ts (or .js)
+
+Export something like:
+starter: { label:"Starter", price: 29.99, userLimit: 1, productId:"ecologic_starter" }
+team:    { label:"Team", price: 79.99, userLimit: 5, productId:"ecologic_team" }
+pro:     { label:"Pro", price: 159.99, userLimit: 10, productId:"ecologic_pro" }
+scale:   { label:"Scale", price: 299.99, userLimit: 15, productId:"ecologic_scale" }
+
+Also export helper:
+getPlanForTeamSize(selection) that maps:
+"1" -> starter
+"2-5" -> team
+"6-10" -> pro
+"11-15" -> scale
+
+--------------------------------------------
+2) UPDATE /onboarding/company UI LOGIC
+--------------------------------------------
+On team size button click:
+- store selectedTeamSize = "1" | "2-5" | "6-10" | "11-15"
+- derive selectedPlanKey using getPlanForTeamSize
+- visually highlight selected button
+
+Disable Create Company button until:
+- companyName filled
+- team size selected
+
+On submit:
+- call existing createCompany API
+- include these fields:
+  teamSizeRange: selectedTeamSize
+  planKey: selectedPlanKey
+  userLimit: subscriptionPlans[selectedPlanKey].userLimit
+
+--------------------------------------------
+3) BACKEND: STORE PLAN ON COMPANY
+--------------------------------------------
+Update company schema / DB:
+- team_size_range (text)
+- plan_key (text)
+- user_limit (int)
+
+When company is created, persist these.
+
+--------------------------------------------
+4) ROUTING: GO STRAIGHT TO SUBSCRIPTION SCREEN
+--------------------------------------------
+After createCompany success:
+Navigate to: /onboarding/subscription
+
+Pass planKey via:
+- query param (?plan=starter) OR
+- store in onboarding state OR
+- fetch from backend as “company.plan_key”
+
+Prefer backend as source of truth: fetch company and use plan_key.
+
+--------------------------------------------
+5) BUILD /onboarding/subscription PAGE (CONFIRM + PAY)
+--------------------------------------------
+Page shows:
+- “Your plan is ready”
+- Plan label + userLimit + price
+- Button: “Continue to payment”
+
+On click:
+- trigger platform purchase flow (Apple/Google)
+- using productId from subscriptionPlans[planKey].productId
+
+(If purchase integration isn’t wired yet, stub the button and log the productId.)
+
+--------------------------------------------
+6) GATING (DO NOT LET THEM INTO APP)
+--------------------------------------------
+On app load + after login:
+Call GET /api/subscription/status
+If not active:
+redirect to /paywall (or /onboarding/subscription if company exists but not paid)
+
+Make sure locked users cannot navigate to dashboard routes.
+
+--------------------------------------------
+DELIVERABLES CHECKLIST
+--------------------------------------------
+- Team size selection sets planKey correctly
+- Company creation persists planKey + userLimit
+- Routes to /onboarding/subscription
+- Subscription page displays correct plan and uses correct productId
+- Subscription gate redirects locked users
+- Add console logs only around plan selection + routing to debug, then remove

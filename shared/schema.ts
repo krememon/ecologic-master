@@ -132,6 +132,7 @@ export const companies = pgTable("companies", {
   licenseNumber: varchar("license_number"),
   defaultFooterText: text("default_footer_text"),
   industry: varchar("industry", { length: 100 }),
+  teamSizeRange: varchar("team_size_range", { length: 10 }),
   onboardingCompleted: boolean("onboarding_completed").default(false),
   primaryColor: varchar("primary_color").default("#2563EB"),
   secondaryColor: varchar("secondary_color").default("#059669"),

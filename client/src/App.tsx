@@ -64,6 +64,7 @@ import Welcome from "@/pages/Welcome";
 import SignInWizard from "@/pages/SignInWizard";
 import OnboardingChoice from "@/pages/OnboardingChoice";
 import OnboardingCompany from "@/pages/OnboardingCompany";
+import OnboardingSubscription from "@/pages/OnboardingSubscription";
 import DemoCreateJob from "@/pages/DemoCreateJob";
 import PayoutSetup from "@/pages/PayoutSetup";
 
@@ -84,11 +85,9 @@ function getNextOnboardingRoute(params: {
       return null; // Go to dashboard
     }
     
-    // NEW company that hasn't completed onboarding yet
-    // Check if they need to start a trial
     const hasActiveSub = subscriptionStatus === "active" || subscriptionStatus === "trialing";
     if (!hasActiveSub) {
-      return "/onboarding/company"; // Shows subscription/trial step
+      return "/onboarding/subscription";
     }
     
     return null; // Subscription active, go to dashboard
@@ -189,6 +188,7 @@ function AuthenticatedRouter() {
         <Route path="/onboarding/choice" component={OnboardingChoice} />
         <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
+        <Route path="/onboarding/subscription" component={OnboardingSubscription} />
         <Route path="/join-company" component={JoinCompany} />
         <Route>{() => <Redirect to={nextRoute} />}</Route>
       </Switch>

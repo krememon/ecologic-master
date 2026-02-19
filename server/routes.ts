@@ -712,6 +712,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           secondaryColor: company.secondaryColor,
           onboardingCompleted: company.onboardingCompleted ?? false,
           subscriptionStatus: company.subscriptionStatus ?? 'inactive',
+          subscriptionPlan: company.subscriptionPlan ?? null,
+          teamSizeRange: company.teamSizeRange ?? null,
+          maxUsers: company.maxUsers ?? 1,
           trialEndsAt: company.trialEndsAt
         } : null
       };
@@ -3538,7 +3541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("[companies] create: userId=", userId, "provider=", (req.user as any)?.provider);
       
-      const { name, logo, primaryColor, secondaryColor } = req.body;
+      const { name, logo, primaryColor, secondaryColor, teamSizeRange, planKey, userLimit } = req.body;
       
       const { generateUniqueInviteCode } = await import("@shared/inviteCode");
       const inviteCode = await generateUniqueInviteCode(async (code) => {
@@ -3552,7 +3555,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logo,
         primaryColor,
         secondaryColor,
-        ownerId: userId
+        ownerId: userId,
+        teamSizeRange: teamSizeRange || null,
+        subscriptionPlan: planKey || null,
+        maxUsers: userLimit || 1,
       });
       
       res.status(201).json(company);
@@ -3628,8 +3634,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Subscription routes removed - app is now free to use
-  // Legacy endpoint for backwards compatibility with onboarding flow
+  app.get('/api/subscription/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.json({ active: false, status: 'no_company' });
+      }
+      const active = company.subscriptionStatus === 'active' || company.subscriptionStatus === 'trialing';
+      res.json({
+        active,
+        status: company.subscriptionStatus || 'inactive',
+        plan: company.subscriptionPlan || null,
+        maxUsers: company.maxUsers || 1,
+        trialEndsAt: company.trialEndsAt || null,
+      });
+    } catch (error) {
+      console.error('[subscription/status] Error:', error);
+      res.status(500).json({ message: 'Failed to check subscription status' });
+    }
+  });
+
   app.post('/api/subscriptions/start-trial', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.id || req.user?.claims?.sub;
@@ -3641,10 +3666,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'No company found. Please create a company first.' });
       }
       
-      // Update subscription status to trialing
       await storage.updateCompany(company.id, {
         subscriptionStatus: 'trialing',
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
+        onboardingCompleted: true,
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       });
       
       console.log('[start-trial] Company', company.id, 'subscription status set to trialing');
