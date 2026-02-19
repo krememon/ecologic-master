@@ -3635,57 +3635,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Also support legacy path for backward compatibility
   app.get('/api/subscription/status', isAuthenticated, async (req: any, res) => {
+    return res.redirect(307, '/api/subscriptions/status');
+  });
+
+  app.get('/api/subscriptions/status', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
       if (!company) {
         return res.json({ active: false, status: 'no_company' });
       }
-      const isTrial = company.subscriptionStatus === 'trialing';
-      const isActive = company.subscriptionStatus === 'active' || isTrial;
       const periodEnd = company.currentPeriodEnd || company.trialEndsAt || null;
       const expired = periodEnd ? new Date(periodEnd) < new Date() : false;
+      const statusInDb = company.subscriptionStatus || 'inactive';
+      const isActiveInDb = statusInDb === 'active' || statusInDb === 'trialing';
+      const active = isActiveInDb && !expired;
       res.json({
-        active: isActive && !expired,
-        status: company.subscriptionStatus || 'inactive',
+        active,
+        status: active ? statusInDb : 'inactive',
         planKey: company.subscriptionPlan || null,
         userLimit: company.maxUsers || 1,
         currentPeriodEnd: periodEnd,
-        isTrial,
       });
     } catch (error) {
-      console.error('[subscription/status] Error:', error);
+      console.error('[subscriptions/status] Error:', error);
       res.status(500).json({ message: 'Failed to check subscription status' });
     }
   });
 
-  app.post('/api/subscriptions/start-trial', isAuthenticated, async (req: any, res) => {
+  app.post('/api/subscriptions/dev-activate', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user?.id || req.user?.claims?.sub;
-      console.log('[start-trial] User', userId, 'starting trial');
+      const userId = getUserId(req.user);
+      console.log('[dev-activate] User', userId, 'activating subscription (DEV ONLY)');
 
       const company = await storage.getUserCompany(userId);
       if (!company) {
         return res.status(400).json({ message: 'No company found. Please create a company first.' });
       }
 
-      const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const { subscriptionPlans } = await import("@shared/subscriptionPlans");
+      const planKey = company.subscriptionPlan || 'starter';
+      const plan = subscriptionPlans[planKey] || subscriptionPlans.starter;
+
+      const currentPeriodEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       await storage.updateCompany(company.id, {
-        subscriptionStatus: 'trialing',
+        subscriptionStatus: 'active',
+        subscriptionPlan: planKey,
+        maxUsers: plan.userLimit,
+        currentPeriodEnd,
         onboardingCompleted: true,
-        trialEndsAt: trialEnd,
-        currentPeriodEnd: trialEnd,
       });
 
-      console.log('[start-trial] Company', company.id, 'trial started, ends', trialEnd.toISOString());
-      res.json({ ok: true, message: 'Trial started successfully' });
+      console.log('[dev-activate] Company', company.id, 'activated, period ends', currentPeriodEnd.toISOString());
+      res.json({
+        ok: true,
+        active: true,
+        status: 'active',
+        planKey,
+        userLimit: plan.userLimit,
+        currentPeriodEnd,
+      });
     } catch (error: any) {
-      console.error('[start-trial] Error:', error);
-      res.status(500).json({ message: 'Failed to start trial' });
+      console.error('[dev-activate] Error:', error);
+      res.status(500).json({ message: 'Failed to activate subscription' });
     }
   });
 
+  // TODO: Replace this stub with real Apple/Google receipt validation.
+  // When mobile builds are ready:
+  //   - For Apple: verify receipt via App Store Server API (verifyReceipt or App Store Server Notifications v2)
+  //   - For Google: verify purchase token via Google Play Developer API (purchases.subscriptions.get)
+  //   - Parse the validated response for expiresDate, autoRenewStatus, etc.
+  //   - Set currentPeriodEnd from the store's expiration date
+  //   - Store originalTransactionId for deduplication and renewal tracking
   app.post('/api/subscriptions/validate', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
@@ -3706,10 +3730,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Invalid plan key' });
       }
 
-      console.log('[validate] Validating receipt for company', company.id, 'platform:', platform, 'plan:', planKey);
+      // TODO: Call Apple/Google server API here to validate the receipt
+      // and extract the real currentPeriodEnd, originalTransactionId, etc.
+      console.log('[validate] STUB: receipt validation for company', company.id, 'platform:', platform, 'plan:', planKey);
+      console.log('[validate] TODO: Replace with real Apple/Google receipt validation');
 
       const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      const isTrial = true;
 
       await storage.updateCompany(company.id, {
         subscriptionStatus: 'active',
@@ -3722,11 +3748,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.json({
+        active: true,
         status: 'active',
         planKey,
         userLimit: plan.userLimit,
         currentPeriodEnd,
-        isTrial,
       });
     } catch (error: any) {
       console.error('[validate] Error:', error);
@@ -3734,6 +3760,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // TODO: For mobile, restore should re-fetch latest receipt from the store
+  // and re-validate via /api/subscriptions/validate flow
   app.post('/api/subscriptions/restore', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

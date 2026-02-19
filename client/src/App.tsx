@@ -65,10 +65,19 @@ import SignInWizard from "@/pages/SignInWizard";
 import OnboardingChoice from "@/pages/OnboardingChoice";
 import OnboardingCompany from "@/pages/OnboardingCompany";
 import OnboardingSubscription from "@/pages/OnboardingSubscription";
+import Paywall from "@/pages/Paywall";
 import DemoCreateJob from "@/pages/DemoCreateJob";
 import PayoutSetup from "@/pages/PayoutSetup";
 
-// Centralized onboarding route logic
+function isSubscriptionActive(company: any): boolean {
+  if (!company) return false;
+  const status = company.subscriptionStatus;
+  if (status !== "active" && status !== "trialing") return false;
+  const periodEnd = company.currentPeriodEnd || company.trialEndsAt;
+  if (periodEnd && new Date(periodEnd) < new Date()) return false;
+  return true;
+}
+
 function getNextOnboardingRoute(params: {
   user: any;
   onboardingChoice: string | null;
@@ -76,35 +85,33 @@ function getNextOnboardingRoute(params: {
 }): string | null {
   const { user, onboardingChoice, onboardingIndustry } = params;
   
-  // If user has a company
   if (user?.company) {
-    const { onboardingCompleted, subscriptionStatus } = user.company;
-    
-    // Existing company with onboarding complete -> go to dashboard
-    if (onboardingCompleted) {
-      return null; // Go to dashboard
+    const { onboardingCompleted } = user.company;
+    const subActive = isSubscriptionActive(user.company);
+
+    if (onboardingCompleted && subActive) {
+      return null;
     }
-    
-    const hasActiveSub = subscriptionStatus === "active" || subscriptionStatus === "trialing";
-    if (!hasActiveSub) {
+
+    if (onboardingCompleted && !subActive) {
+      return "/paywall";
+    }
+
+    if (!subActive) {
       return "/onboarding/subscription";
     }
-    
-    return null; // Subscription active, go to dashboard
+
+    return null;
   }
   
-  // No company yet - check which path they're on
-  // If no choice made yet, redirect to choice screen
   if (!onboardingChoice) {
     return "/onboarding/choice";
   }
   
-  // Employee path
   if (onboardingChoice === "employee") {
     return "/join-company";
   }
   
-  // Owner path
   if (!onboardingIndustry) {
     return "/onboarding/industry";
   }
@@ -189,6 +196,7 @@ function AuthenticatedRouter() {
         <Route path="/onboarding/industry" component={IndustryOnboarding} />
         <Route path="/onboarding/company" component={OnboardingCompany} />
         <Route path="/onboarding/subscription" component={OnboardingSubscription} />
+        <Route path="/paywall" component={Paywall} />
         <Route path="/join-company" component={JoinCompany} />
         <Route>{() => <Redirect to={nextRoute} />}</Route>
       </Switch>

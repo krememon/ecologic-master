@@ -31,7 +31,7 @@ export default function OnboardingSubscription() {
     return null;
   }
 
-  if (user.company.onboardingCompleted) {
+  if (user.company.onboardingCompleted && user.company.subscriptionStatus === "active") {
     setLocation("/", { replace: true });
     return null;
   }
@@ -40,19 +40,12 @@ export default function OnboardingSubscription() {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      console.log("[subscription] Starting purchase flow for productId:", plan.productId);
-
-      const res = await apiRequest("POST", "/api/subscriptions/start-trial", {
-        planKey,
-        productId: plan.productId,
-      });
+      // TODO: Replace with Apple/Google in-app purchase flow for mobile builds.
+      // For now, call dev-activate to set subscription active with 7-day period.
+      const res = await apiRequest("POST", "/api/subscriptions/dev-activate", {});
 
       if (!res.ok) {
         const data = await res.json();
-        if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
-          return;
-        }
         throw new Error(data.message || "Failed to start subscription");
       }
 
@@ -75,7 +68,8 @@ export default function OnboardingSubscription() {
     if (isRestoring) return;
     setIsRestoring(true);
     try {
-      console.log("[subscription] Restoring purchases...");
+      // TODO: For mobile, call react-native-iap restore and then POST receipt to /api/subscriptions/validate
+      console.log("[subscription] Restoring purchases (stub)...");
       const res = await apiRequest("POST", "/api/subscriptions/restore", {});
 
       if (!res.ok) {
@@ -196,7 +190,7 @@ export default function OnboardingSubscription() {
                   Starting...
                 </>
               ) : (
-                "Start Free Trial"
+                "Start 7-Day Free Trial"
               )}
             </Button>
 

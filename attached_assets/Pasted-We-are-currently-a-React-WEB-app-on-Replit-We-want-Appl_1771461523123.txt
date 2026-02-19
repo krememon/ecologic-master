@@ -1,0 +1,81 @@
+We are currently a React WEB app on Replit. We want Apple/Google subscriptions later via mobile build.
+Implement the full subscription flow UI + backend gating NOW, with a stubbed purchase step.
+
+GOALS:
+- Team size determines plan.
+- User is routed to /onboarding/subscription after company creation.
+- App is locked until subscription status is active.
+- Show 7-day free trial messaging.
+- Create backend subscription schema + endpoints.
+- For now, the "Start free trial" button calls a stub endpoint that marks active (dev only).
+- Add clear TODO markers to replace stub with Apple/Google receipt validation later.
+
+---------------------------------------
+1) CONFIG
+---------------------------------------
+Create /src/config/subscriptionPlans.js:
+starter: $29.99, limit 1
+team: $79.99, limit 5
+pro: $159.99, limit 10
+scale: $299.99, limit 15
+
+Helper getPlanForTeamSize("1"|"2-5"|"6-10"|"11-15").
+
+---------------------------------------
+2) COMPANY CREATION SAVES PLAN
+---------------------------------------
+On /onboarding/company:
+- team size selection -> planKey
+- on submit createCompany, send: teamSizeRange, planKey, userLimit
+
+---------------------------------------
+3) SUBSCRIPTION PAGE
+---------------------------------------
+Create route: /onboarding/subscription
+- Fetch company planKey from backend
+- Display: "7-day free trial, then $X/month"
+- Button: "Start 7-day free trial"
+- Secondary: "Restore purchases" (stub)
+
+On click:
+- POST /api/subscriptions/dev-activate (DEV ONLY) -> sets subscription active with currentPeriodEnd = now + 7 days
+- Then redirect to dashboard
+
+---------------------------------------
+4) BACKEND DATA
+---------------------------------------
+Add fields to company:
+subscription_status (active/inactive)
+plan_key
+user_limit
+current_period_end
+platform
+
+---------------------------------------
+5) ENDPOINTS
+---------------------------------------
+GET /api/subscriptions/status -> returns active if current_period_end > now
+POST /api/subscriptions/dev-activate -> sets active and current_period_end = now + 7 days (only in development)
+
+Add TODO endpoint placeholder:
+POST /api/subscriptions/validate (receipt validation for Apple/Google later)
+
+---------------------------------------
+6) APP GATE
+---------------------------------------
+Global route guard:
+- after login, call /api/subscriptions/status
+- if inactive, force redirect to /paywall (or /onboarding/subscription)
+
+Paywall page shows:
+- plan details
+- button to go to /onboarding/subscription
+
+RULES:
+- Do not show locked pages at all (hidden not disabled).
+- Ensure no infinite redirect loops.
+
+DELIVERABLES:
+- Subscription flow works end-to-end in web using dev-activate
+- App locks properly when trial ends (current_period_end passed)
+- Easy swap later to Apple/Google validation endpoint
