@@ -28,7 +28,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - **Signature Requests**: Electronic signature system with RBAC, secure access tokens, status workflow, and branded email notifications.
 - **Employee Management**: Manages employee status and contact information.
 - **Onboarding**: Invite code system for company onboarding, including owner registration, member joining, and industry-specific Price Book seeding.
-- **Subscription Management**: Team size-based plan auto-selection during onboarding (Starter/Team/Pro/Scale). Config in `shared/subscriptionPlans.ts`. Integrates Stripe for subscription plans, enabling RBAC and plan-based feature limits. Subscription gating prevents unsubscribed users from accessing the app.
+- **Subscription Management**: Team size-based plan auto-selection during onboarding (Starter/Team/Pro/Scale). Config in `shared/subscriptionPlans.ts`. DEV mode uses `POST /api/subscriptions/dev-activate` to set `active` status with 7-day `currentPeriodEnd`. App gate in `App.tsx` checks `isSubscriptionActive()` (status + expiration); expired subscriptions redirect to `/paywall`. `/api/subscriptions/validate` endpoint stubbed with TODO markers for future Apple/Google receipt validation. Subscription gating prevents unsubscribed users from accessing the app.
 - **Timezone Handling**: Robust timezone conversion utilities.
 - **Estimates System**: Job-scoped estimate creation with line item editor, unique numbers, monetary values in cents, and RBAC.
 - **Customer Management**: Manages customer data for estimate recipients with an iOS-style picker.
