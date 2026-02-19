@@ -1,14 +1,14 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { JobsScreen } from '../screens/JobsScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { TimeScreen } from '../screens/TimeScreen';
+import { AccountScreen } from '../screens/AccountScreen';
 import { COLORS } from '../constants/config';
 import { ActiveSessionBanner } from '../components/ActiveSessionBanner';
-import { View } from 'react-native';
 
 export type JobsStackParamList = {
   JobsList: undefined;
@@ -44,9 +44,10 @@ const Tab = createBottomTabNavigator();
 
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   const icons: Record<string, string> = {
-    Schedule: '📅',
     Jobs: '🔧',
+    Schedule: '📅',
     Clock: '⏱️',
+    Account: '👤',
   };
   return (
     <View style={{ alignItems: 'center' }}>
@@ -85,13 +86,14 @@ export function AppTabs() {
           tabBarActiveTintColor: COLORS.primary,
         })}
       >
-        <Tab.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'ECOLOGIC' }} />
         <Tab.Screen
           name="Jobs"
           component={JobsStackNavigator}
           options={{ headerShown: false }}
         />
+        <Tab.Screen name="Schedule" component={ScheduleScreen} options={{ title: 'ECOLOGIC' }} />
         <Tab.Screen name="Clock" component={TimeScreen} options={{ title: 'Time' }} />
+        <Tab.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />
       </Tab.Navigator>
     </View>
   );
