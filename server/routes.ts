@@ -2978,18 +2978,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active session to clock out' });
       }
       
-      // Remove from live locations on clock-out (defensive: match userId + timeLogId)
       let liveLocationDeletedCount = 0;
       try {
-        liveLocationDeletedCount = await storage.deleteUserLiveLocation(userId, log.id);
+        liveLocationDeletedCount = await storage.deleteUserLiveLocation(userId, member.companyId, log.id);
       } catch {}
       
-      // Calculate duration
       const startTime = new Date(log.clockInAt).getTime();
       const endTime = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
       const durationMinutes = Math.max(1, Math.round((endTime - startTime) / 60000));
       
-      console.log('[GEO] clock-out complete', { userId, logId: log.id, durationMinutes, liveLocationDeletedCount });
+      console.log('[GEO] clock-out complete', { userId, timeLogId: log.id, durationMinutes, deletedCount: liveLocationDeletedCount });
       res.json({ 
         success: true, 
         clockedOutAt: log.clockOutAt,
@@ -3151,7 +3149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Time session does not belong to you' });
       }
       if (timeEntry.companyId !== member.companyId) {
-        console.warn(`[GEO] ping rejected: company mismatch, user company ${member.companyId} vs session company ${timeEntry.companyId}`);
+        console.warn('[GEO] ping rejected: company mismatch', { userId, memberCompanyId: member.companyId, timeEntryCompanyId: timeEntry.companyId, timeLogId: resolvedSessionId });
         return res.status(403).json({ error: 'Time session does not belong to your company' });
       }
       if (timeEntry.clockOutAt) {

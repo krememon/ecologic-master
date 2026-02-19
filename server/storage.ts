@@ -410,7 +410,7 @@ export interface IStorage {
   getLatestLocationPings(companyId: number, sinceMinutes?: number): Promise<EmployeeLocationPing[]>;
   upsertUserLiveLocation(data: { userId: string; companyId: number; timeLogId: number; jobId: number | null; latitude: number; longitude: number; accuracy: number | null }): Promise<void>;
   getActiveLiveLocations(companyId: number): Promise<any[]>;
-  deleteUserLiveLocation(userId: string, timeLogId?: number): Promise<number>;
+  deleteUserLiveLocation(userId: string, companyId: number, timeLogId?: number): Promise<number>;
 
   // Refund operations
   getPaymentById(id: number): Promise<any>;
@@ -4251,8 +4251,11 @@ export class DatabaseStorage implements IStorage {
       );
   }
 
-  async deleteUserLiveLocation(userId: string, timeLogId?: number): Promise<number> {
-    const conditions = [eq(userLiveLocations.userId, userId)];
+  async deleteUserLiveLocation(userId: string, companyId: number, timeLogId?: number): Promise<number> {
+    const conditions = [
+      eq(userLiveLocations.userId, userId),
+      eq(userLiveLocations.companyId, companyId),
+    ];
     if (timeLogId) {
       conditions.push(eq(userLiveLocations.timeLogId, timeLogId));
     }

@@ -254,9 +254,8 @@ export function setupAuth(app: Express) {
               const resolvedUserId = typeof passportUser === 'object' && passportUser?.id
                 ? passportUser.id
                 : passportUser;
-              req.session = Object.assign(req.session || {}, sess);
-              req.session.id = sessionId;
               (req as any)._mobileSessionUserId = resolvedUserId;
+              (req as any)._mobileSessionId = sessionId;
             }
           }
         } catch (err: any) {

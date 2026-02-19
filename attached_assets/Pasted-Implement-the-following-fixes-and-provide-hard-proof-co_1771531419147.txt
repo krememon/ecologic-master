@@ -1,0 +1,46 @@
+Implement the following fixes and provide hard proof (code excerpts + test commands + expected outputs). No narration without evidence.
+
+FIX A — Company check in POST /api/location/ping
+1) In server/routes.ts ping handler, after fetching member.companyId and the time entry, add an explicit check:
+   - timeEntry.companyId must equal member.companyId (or the time entry’s company field must match).
+2) If mismatch, return 403 and log: [GEO] ping rejected: company mismatch { userId, memberCompanyId, timeEntryCompanyId, timeLogId }.
+
+FIX B — Defensive deleteUserLiveLocation
+3) Update storage.deleteUserLiveLocation to accept:
+   - userId
+   - companyId
+   - optional timeLogId
+   It must:
+   - delete only rows matching userId + companyId
+   - if timeLogId provided, also match time_log_id
+   - return deletedCount (use returning() or equivalent)
+4) Update the clock-out route to pass companyId + timeLogId and log:
+   [GEO] clock-out complete { userId, timeLogId, deletedCount }
+
+FIX C — Mobile Bearer auth robustness
+5) Locate the Bearer auth middleware. Remove reliance on sessionStore.get() if it causes index creation / init errors.
+6) Instead, query the sessions table directly using the existing Neon pool. Parse sess JSON and extract userId:
+   - if sess.passport.user is a string, use it
+   - if it’s an object, use sess.passport.user.id
+7) Ensure:
+   - If connect.sid cookie exists, bearer auth does NOT run
+   - If bearer auth succeeds, downstream middleware hydrates req.user correctly
+   - If it fails, return 401
+
+DELIVERABLES (EVIDENCE REQUIRED)
+A) Paste the exact updated code blocks for:
+   - ping route company check
+   - deleteUserLiveLocation function
+   - clock-out usage + logs
+   - bearer auth middleware + session table query
+
+B) Provide runnable tests:
+   1) curl /api/location/live with no auth -> 401
+   2) curl /api/location/live with Bearer -> 200 (even if empty list)
+   3) curl /api/location/ping with Bearer while NOT clocked in -> 4xx business error (NOT 401)
+   4) SQL queries:
+      - show row in user_live_locations appears during active session
+      - show it is removed on clock-out (deletedCount logged)
+
+C) Confirm web auth still works:
+   - one screenshot/log line showing a normal cookie-auth request succeeds after the change
