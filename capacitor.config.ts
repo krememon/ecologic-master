@@ -1,14 +1,21 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+const HOSTED_APP_URL = process.env.VITE_CAP_HOSTED_URL || 'https://app.ecologicc.com/wrapper';
+
 const config: CapacitorConfig = {
   appId: 'com.ecologic.app',
   appName: 'EcoLogic',
   webDir: 'dist/public',
   server: {
-    // DEV MODE: Uncomment the line below and set your LAN IP for live reload testing.
-    // url: 'http://192.168.1.XXX:5000',
-    // allowNavigation: ['*'],
+    url: HOSTED_APP_URL,
+    cleartext: false,
     androidScheme: 'https',
+    allowNavigation: [
+      'app.ecologicc.com',
+      'ecologicc.com',
+      'accounts.google.com',
+      'appleid.apple.com',
+    ],
   },
 };
 
