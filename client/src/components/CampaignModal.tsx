@@ -322,10 +322,15 @@ export default function CampaignModal({
                     className="text-sm min-h-[100px] resize-none"
                   />
                   {(channel === "sms" || channel === "both") && (
-                    <p className={`text-xs ${body.length > 160 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {body.length} characters • {Math.ceil(body.length / 160) || 1} SMS segment{Math.ceil(body.length / 160) !== 1 ? 's' : ''}
-                      {body.length > 160 && ' (extra charges may apply)'}
-                    </p>
+                    <div className="space-y-1">
+                      <p className={`text-xs ${body.length > 160 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {body.length} characters • {Math.ceil(body.length / 160) || 1} SMS segment{Math.ceil(body.length / 160) !== 1 ? 's' : ''}
+                        {body.length > 160 && ' (extra charges may apply)'}
+                      </p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        "Reply STOP to opt out" will be appended automatically.
+                      </p>
+                    </div>
                   )}
                 </div>
 

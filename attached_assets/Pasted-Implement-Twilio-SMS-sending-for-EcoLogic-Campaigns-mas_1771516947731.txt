@@ -1,0 +1,154 @@
+Implement Twilio SMS sending for EcoLogic Campaigns (mass texts to clients). We already have email campaigns working—mirror that flow for SMS.
+
+NON-NEGOTIABLES
+- RBAC: Only Owner/Admin (and optionally Dispatcher if we already allow campaigns) can create/send campaigns.
+- “Hidden not disabled”: users without access should not see SMS campaign UI/routes.
+- No changes to existing email campaign logic except shared abstractions.
+- Must be safe: respect opt-out, rate limits, and logging.
+- Phone numbers must be E.164 formatted and validated.
+
+GOAL
+Add a “Text (SMS)” channel to Campaigns so a user can send a mass text campaign to selected Clients via Twilio.
+
+ASSUMPTIONS
+- Frontend: React
+- Backend: Node/Express-ish
+- DB: Postgres
+- We use Resend (or similar) for email campaigns already.
+We will create parallel backend routes + UI components for SMS.
+
+STEP 0 — TWILIO SETUP (SECRETS)
+Add these secrets in Replit:
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_FROM_NUMBER  (must be a Twilio phone number in E.164, ex: +15551234567)
+OPTIONAL (recommended):
+- TWILIO_MESSAGING_SERVICE_SID (if we use Messaging Service instead of a single from-number)
+
+BACKEND — DATABASE
+1) Clients phone fields
+- Ensure clients table has:
+  - phone_raw (text, optional)
+  - phone_e164 (text, indexed, optional)
+  - sms_opt_in (boolean, default true OR false based on our policy)
+  - sms_opted_out_at (timestamp, nullable)
+  - sms_opt_out_source (text, nullable) // “STOP keyword”, “manual”, etc.
+
+2) Campaigns additions
+If we have campaigns tables already:
+- campaigns:
+  - channel (enum: 'email' | 'sms') OR add sms-specific columns
+  - sms_body (text)
+- campaign_recipients (if exists):
+  - add status fields: queued/sent/failed/skipped + error_message + provider_message_id
+
+3) Message log (recommended)
+Add campaign_messages table if we don’t already:
+- id
+- campaign_id
+- client_id
+- to_phone_e164
+- from_phone
+- status ('queued','sent','failed','skipped')
+- provider ('twilio')
+- provider_message_id
+- error_message
+- created_at, sent_at
+
+BACKEND — VALIDATION + SENDING
+4) Phone validation and E.164 normalization
+- Create helper: normalizePhoneToE164(phone, defaultCountry='US') using a library like libphonenumber-js.
+- When saving/updating a client phone, store phone_e164 if valid.
+- If invalid, keep phone_raw but phone_e164 null.
+
+5) Twilio send service
+- Create server/service/twilio.ts with:
+  - sendSms({ to, body, campaignId, clientId }): returns { sid }
+- Use Twilio SDK.
+- Support either:
+  - messagingServiceSid (preferred) OR
+  - from: TWILIO_FROM_NUMBER
+
+6) Sending route (mirrors email)
+Add endpoints similar to email campaign:
+- POST /api/campaigns/sms
+  body: { name, body, recipientsFilter/selectedClientIds, testMode? }
+  creates draft campaign + recipient list
+- POST /api/campaigns/:id/sms/send
+  sends messages in controlled batches
+
+7) Rate limiting + batching
+- Do NOT fire hundreds at once.
+- Implement queue-like batching:
+  - send 10 at a time with small delays OR
+  - background worker if we have one
+Minimum acceptable:
+- sequential send with concurrency=3–5 and robust error handling
+- show progress on UI (sent/failed/skipped counts)
+
+8) Opt-out handling
+- Skip any client with sms_opt_in=false or sms_opted_out_at not null.
+- Add keyword compliance:
+  - Append “Reply STOP to opt out” to SMS (or include it somewhere in UI policy).
+  - Add webhook endpoint:
+    POST /api/webhooks/twilio/sms
+    - verify request (Twilio signature)
+    - if inbound message body contains STOP/UNSUBSCRIBE/CANCEL/END/QUIT:
+        mark that sender’s client record as opted out
+
+9) Error handling
+- If no phone_e164: mark recipient as skipped + reason “No valid phone”
+- If Twilio error: mark failed with error message
+- Always log provider_message_id (Twilio SID)
+
+FRONTEND — CAMPAIGNS UI
+10) Campaign channel selector
+In the existing “Create Campaign” flow:
+- Add channel toggle: Email | Text (SMS)
+- If Email selected: show existing email fields
+- If SMS selected:
+  - Field: “Message” (textarea)
+  - Character counter (160 segments: show estimate)
+  - Preview
+  - Notice about STOP compliance
+
+11) Recipient selection
+Reuse same recipient picker/filters as email:
+- But show counts:
+  - Eligible (valid phone + opted in)
+  - Skipped (no phone / opted out)
+
+12) Sending UX
+- Require confirmation modal:
+  “Send to X clients now?”
+- After send starts:
+  - show progress bar or live counts (sent/failed/skipped)
+- After completion:
+  - show results list (download CSV optional)
+
+RBAC / SECURITY
+13) Route protection
+- Only allowed roles can hit:
+  - POST /api/campaigns/sms
+  - POST /api/campaigns/:id/sms/send
+  - POST /api/webhooks/twilio/sms (public but signature-verified)
+- Ensure users cannot send SMS to clients outside their company scope.
+
+TESTING CHECKLIST
+14) Unit-ish tests / dev tests
+- Client phone normalization (valid/invalid)
+- Sending to 3 test clients (your own numbers)
+- Opt-out: send “STOP” back, confirm client becomes opted out and is skipped in next campaign
+- Failure: invalid phone should be skipped, not crash
+
+DELIVERABLES
+- Working SMS campaigns end-to-end:
+  create -> select recipients -> send -> status results saved
+- Twilio webhook opt-out implemented + verified
+- Clear logs added (but no secrets in logs)
+- Short README note in repo: “How to enable Twilio SMS campaigns”
+
+IMPORTANT NOTES
+- Avoid MMS for now; SMS only.
+- Keep message body under Twilio limits; support multi-segment but show estimate.
+- If we don’t have a background job system, implement safe batching with concurrency limits.

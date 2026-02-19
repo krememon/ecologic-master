@@ -7338,9 +7338,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: 'queued',
           });
 
+          const smsBodyWithOptOut = smsBody!.includes('STOP')
+            ? smsBody!
+            : smsBody! + '\n\nReply STOP to opt out';
+
           const result = await sendCampaignSms({
             to: customer.phone!,
-            body: smsBody!,
+            body: smsBodyWithOptOut,
           });
 
           if (result.success) {
