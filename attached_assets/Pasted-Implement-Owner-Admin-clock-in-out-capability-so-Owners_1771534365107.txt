@@ -1,0 +1,42 @@
+Implement Owner/Admin clock-in/out capability so Owners can generate time sessions and appear on the live map.
+
+CONTEXT
+- Background geo tracking relies on an active time session (ended_at/clockOutAt is null).
+- user_live_locations is populated by POST /api/location/ping and cleared on clock-out.
+- Owners currently do NOT see clock-in/out controls (UI blocked), so they cannot create sessions.
+
+GOAL
+Owners/Admins must be able to clock in/out the same as Technicians, with backend RBAC enforced, and mobile tracking start/stop still tied to clock-in/out success.
+
+PART A — BACKEND (verify before changing)
+1) Find the existing clock-in/out endpoints (ex: POST /api/time/clock-in and POST /api/time/clock-out).
+2) Identify what RBAC restrictions exist that prevent Owner/Admin from clocking in (backend checks and/or UI-only).
+
+PART B — BACKEND CHANGES
+3) Ensure backend allows Owner/Admin to clock in/out:
+   - If there is a role check blocking owners, update it so Owner/Admin is allowed.
+   - Keep all other validations: user must be authenticated + member of company + jobId must be valid + prevent multiple active sessions per user.
+4) Make sure the response still returns timeSessionId/timeLogId consistently for mobile to start tracking.
+
+PART C — WEB UI (React)
+5) Update job details UI so Owner/Admin sees the same clock controls:
+   - Show "Clock In" if no active session for that job/user
+   - Show "Clock Out" if active session exists
+   - Do NOT expose controls to roles that shouldn’t see them (Estimator/Dispatcher if current rules say so)
+6) Preserve existing UX patterns and styling.
+7) Ensure the UI refreshes immediately after clock-in/out (invalidate queries/refetch state).
+
+PART D — MOBILE UI
+8) Update mobile job details screen to show clock controls for Owner/Admin too.
+9) Confirm existing hooks (useActiveSession.ts) already startLocationTracking after clock-in success and stop after clock-out success. Ensure it works for Owner/Admin.
+
+PART E — TESTS / PROOF
+10) Provide proof with:
+   - A log snippet from backend showing Owner user successfully clocked in (role included)
+   - A screenshot (or described UI state) that Owner sees the clock buttons
+   - Confirm that after Owner clock-in, GET /api/location/live returns Owner for Owner/Admin (and only self for non-owners)
+
+DELIVERABLES
+- Exact files changed
+- Key code excerpts for RBAC change (backend) and UI condition (web + mobile)
+- Quick manual test steps

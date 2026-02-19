@@ -2766,12 +2766,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const role = member.role as UserRole;
       const now = Date.now();
       
-      // Technicians only see their own data
       if (role === 'TECHNICIAN') {
         const logs = await storage.getUserTimeLogsToday(userId, member.companyId, today);
         const activeLogWithJob = await storage.getActiveTimeLogWithJob(userId, member.companyId);
         
-        // Calculate total hours
         let totalMinutes = 0;
         for (const log of logs) {
           const start = new Date(log.clockInAt).getTime();
@@ -2790,10 +2788,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Owner, Supervisor, Dispatcher see aggregate data
       const allLogs = await storage.getCompanyTimeLogsToday(member.companyId, today);
       
-      // Get unique users currently clocked in
       const clockedInUsers = new Set<string>();
       let totalMinutes = 0;
       
@@ -2807,10 +2803,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      const myActiveLogWithJob = await storage.getActiveTimeLogWithJob(userId, member.companyId);
+      const myLogs = await storage.getUserTimeLogsToday(userId, member.companyId, today);
+      let myMinutes = 0;
+      for (const log of myLogs) {
+        const start = new Date(log.clockInAt).getTime();
+        const end = log.clockOutAt ? new Date(log.clockOutAt).getTime() : now;
+        myMinutes += (end - start) / 60000;
+      }
+      
       return res.json({
         role: 'manager',
         totalHoursToday: Math.round(totalMinutes / 60 * 100) / 100,
         activeTechCount: clockedInUsers.size,
+        isClockedIn: !!myActiveLogWithJob,
+        clockedInAt: myActiveLogWithJob?.clockInAt || null,
+        myHoursToday: Math.round(myMinutes / 60 * 100) / 100,
+        currentJobId: myActiveLogWithJob?.jobId || null,
+        currentJobTitle: myActiveLogWithJob?.job?.title || null,
+        currentCategory: myActiveLogWithJob?.category || null,
+        activeLog: myActiveLogWithJob ? {
+          id: myActiveLogWithJob.id,
+          jobId: myActiveLogWithJob.jobId,
+          jobTitle: myActiveLogWithJob.job?.title || null,
+          clockInAt: myActiveLogWithJob.clockInAt,
+          category: myActiveLogWithJob.category,
+        } : null,
       });
     } catch (error: any) {
       console.error('Error getting time data:', error);
@@ -2857,12 +2875,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Not a company member' });
       }
       
-      // Only technicians can clock in
-      if (member.role !== 'TECHNICIAN') {
-        return res.status(403).json({ error: 'Only technicians can clock in' });
+      const clockAllowedRoles = ['TECHNICIAN', 'OWNER', 'SUPERVISOR'];
+      if (!clockAllowedRoles.includes(member.role)) {
+        return res.status(403).json({ error: 'Your role cannot clock in' });
       }
       
-      // Check if already clocked in
       const activeLog = await storage.getActiveTimeLog(userId, member.companyId);
       if (activeLog) {
         return res.status(400).json({ error: 'Already clocked in' });
@@ -2870,13 +2887,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { jobId, category } = req.body;
       
-      // Validate jobId if provided - tech must be assigned to the job
-      if (jobId) {
-        // Check crew assignments
+      if (jobId && member.role === 'TECHNICIAN') {
         const assignments = await storage.getUserJobAssignments(userId);
         const isCrewAssigned = assignments.some(a => a.jobId === jobId);
         
-        // Also check direct job.assignedTo field
         const job = await storage.getJob(jobId);
         const isDirectlyAssigned = job?.assignedTo === userId;
         
@@ -2912,20 +2926,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Auto-close any expired time entries before switching
       await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
       
-      // Only technicians can switch jobs
-      if (member.role !== 'TECHNICIAN') {
-        return res.status(403).json({ error: 'Only technicians can switch jobs' });
+      const switchAllowedRoles = ['TECHNICIAN', 'OWNER', 'SUPERVISOR'];
+      if (!switchAllowedRoles.includes(member.role)) {
+        return res.status(403).json({ error: 'Your role cannot switch jobs' });
       }
       
       const { jobId, category } = req.body;
       
-      // Validate jobId if provided - tech must be assigned to the job
-      if (jobId) {
-        // Check crew assignments
+      if (jobId && member.role === 'TECHNICIAN') {
         const assignments = await storage.getUserJobAssignments(userId);
         const isCrewAssigned = assignments.some(a => a.jobId === jobId);
         
-        // Also check direct job.assignedTo field
         const job = await storage.getJob(jobId);
         const isDirectlyAssigned = job?.assignedTo === userId;
         
@@ -2968,9 +2979,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Auto-close any expired time entries before clocking out
       await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
       
-      // Only technicians can clock out
-      if (member.role !== 'TECHNICIAN') {
-        return res.status(403).json({ error: 'Only technicians can clock out' });
+      const clockOutAllowedRoles = ['TECHNICIAN', 'OWNER', 'SUPERVISOR'];
+      if (!clockOutAllowedRoles.includes(member.role)) {
+        return res.status(403).json({ error: 'Your role cannot clock out' });
       }
       
       const log = await storage.clockOut(userId, member.companyId);
