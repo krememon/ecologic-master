@@ -1853,6 +1853,7 @@ export const employeeLocationPings = pgTable("employee_location_pings", {
   accuracy: doublePrecision("accuracy"),
   heading: doublePrecision("heading"),
   speed: doublePrecision("speed"),
+  altitude: doublePrecision("altitude"),
   capturedAt: timestamp("captured_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
@@ -1869,4 +1870,17 @@ export const insertEmployeeLocationPingSchema = createInsertSchema(employeeLocat
 
 export type EmployeeLocationPing = typeof employeeLocationPings.$inferSelect;
 export type InsertEmployeeLocationPing = z.infer<typeof insertEmployeeLocationPingSchema>;
+
+export const userLiveLocations = pgTable("user_live_locations", {
+  userId: varchar("user_id").primaryKey().references(() => users.id),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  timeLogId: integer("time_log_id").references(() => timeLogs.id, { onDelete: "set null" }),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  accuracy: doublePrecision("accuracy"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type UserLiveLocation = typeof userLiveLocations.$inferSelect;
 

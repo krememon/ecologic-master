@@ -1,9 +1,10 @@
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://your-replit-app.replit.app';
 
 export const LOCATION_TRACKING = {
-  INTERVAL_MS: 30000,
-  DISTANCE_FILTER_METERS: 50,
+  INTERVAL_MS: 10000,
+  DISTANCE_FILTER_METERS: 10,
   TASK_NAME: 'ECOLOGIC_BACKGROUND_LOCATION',
+  POLLING_INTERVAL_MS: 10000,
 };
 
 export const COLORS = {

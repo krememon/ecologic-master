@@ -122,6 +122,8 @@ import {
   employeeLocationPings,
   type EmployeeLocationPing,
   type InsertEmployeeLocationPing,
+  userLiveLocations,
+  type UserLiveLocation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -406,6 +408,9 @@ export interface IStorage {
   // Location ping operations
   createLocationPing(ping: InsertEmployeeLocationPing): Promise<EmployeeLocationPing>;
   getLatestLocationPings(companyId: number, sinceMinutes?: number): Promise<EmployeeLocationPing[]>;
+  upsertUserLiveLocation(data: { userId: string; companyId: number; timeLogId: number; jobId: number | null; latitude: number; longitude: number; accuracy: number | null }): Promise<void>;
+  getActiveLiveLocations(companyId: number): Promise<any[]>;
+  deleteUserLiveLocation(userId: string): Promise<void>;
 
   // Refund operations
   getPaymentById(id: number): Promise<any>;
@@ -4194,6 +4199,60 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(employeeLocationPings.userId, desc(employeeLocationPings.capturedAt));
+  }
+
+  async upsertUserLiveLocation(data: { userId: string; companyId: number; timeLogId: number; jobId: number | null; latitude: number; longitude: number; accuracy: number | null }): Promise<void> {
+    await db
+      .insert(userLiveLocations)
+      .values({
+        userId: data.userId,
+        companyId: data.companyId,
+        timeLogId: data.timeLogId,
+        jobId: data.jobId,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: data.accuracy,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: userLiveLocations.userId,
+        set: {
+          companyId: data.companyId,
+          timeLogId: data.timeLogId,
+          jobId: data.jobId,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          accuracy: data.accuracy,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  async getActiveLiveLocations(companyId: number): Promise<any[]> {
+    return await db
+      .select({
+        userId: userLiveLocations.userId,
+        timeLogId: userLiveLocations.timeLogId,
+        jobId: userLiveLocations.jobId,
+        latitude: userLiveLocations.latitude,
+        longitude: userLiveLocations.longitude,
+        accuracy: userLiveLocations.accuracy,
+        updatedAt: userLiveLocations.updatedAt,
+        jobTitle: jobs.title,
+      })
+      .from(userLiveLocations)
+      .innerJoin(timeLogs, eq(userLiveLocations.timeLogId, timeLogs.id))
+      .leftJoin(jobs, eq(userLiveLocations.jobId, jobs.id))
+      .where(
+        and(
+          eq(userLiveLocations.companyId, companyId),
+          isNull(timeLogs.clockOutAt)
+        )
+      );
+  }
+
+  async deleteUserLiveLocation(userId: string): Promise<void> {
+    await db.delete(userLiveLocations).where(eq(userLiveLocations.userId, userId));
   }
 
 }

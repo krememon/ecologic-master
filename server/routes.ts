@@ -2978,12 +2978,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active session to clock out' });
       }
       
+      // Remove from live locations on clock-out
+      await storage.deleteUserLiveLocation(userId).catch(() => {});
+      
       // Calculate duration
       const startTime = new Date(log.clockInAt).getTime();
       const endTime = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
       const durationMinutes = Math.max(1, Math.round((endTime - startTime) / 60000));
       
-      console.log('[Time] clocked out', { userId, logId: log.id, durationMinutes });
+      console.log('[GEO] clocked out, live location removed', { userId, logId: log.id, durationMinutes });
       res.json({ 
         success: true, 
         clockedOutAt: log.clockOutAt,
@@ -3116,14 +3119,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/location/ping', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const { timeSessionId, jobId, lat, lng, accuracy, accuracy_m, heading, speed, capturedAt, captured_at } = req.body;
+      const { timeSessionId, sessionId, jobId, lat, lng, accuracy, accuracy_m, heading, speed, altitude, capturedAt, captured_at, timestamp: ts } = req.body;
+      const resolvedSessionId = timeSessionId || sessionId;
 
       if (lat == null || lng == null) {
         return res.status(400).json({ error: 'lat and lng are required' });
       }
 
-      if (!timeSessionId) {
-        return res.status(400).json({ error: 'timeSessionId is required (must be clocked in)' });
+      if (!resolvedSessionId) {
+        return res.status(400).json({ error: 'timeSessionId/sessionId is required (must be clocked in)' });
       }
 
       const member = await storage.getCompanyMemberByUserId(userId);
@@ -3131,31 +3135,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Not a company member' });
       }
 
-      const timeEntry = await storage.getTimeEntryById(timeSessionId);
+      const timeEntry = await storage.getTimeEntryById(resolvedSessionId);
       if (!timeEntry) {
         return res.status(404).json({ error: 'Time session not found' });
       }
       if (timeEntry.userId !== userId) {
+        console.warn(`[GEO] User ${userId} tried to ping for session ${resolvedSessionId} owned by ${timeEntry.userId}`);
         return res.status(403).json({ error: 'Time session does not belong to you' });
       }
       if (timeEntry.clockOutAt) {
-        return res.status(400).json({ error: 'Time session already ended' });
+        console.warn(`[GEO] Rejected ping for ended session ${resolvedSessionId}`);
+        return res.status(403).json({ error: 'Time session already ended' });
       }
 
       const resolvedAccuracy = accuracy_m ?? accuracy ?? null;
-      const resolvedCapturedAt = captured_at || capturedAt;
+      const resolvedCapturedAt = captured_at || capturedAt || ts;
+      const resolvedJobId = jobId || timeEntry.jobId || null;
 
       const ping = await storage.createLocationPing({
         companyId: member.companyId,
         userId,
-        timeLogId: timeSessionId,
-        jobId: jobId || timeEntry.jobId || null,
+        timeLogId: resolvedSessionId,
+        jobId: resolvedJobId,
         latitude: lat,
         longitude: lng,
         accuracy: resolvedAccuracy,
-        heading: heading || null,
-        speed: speed || null,
+        heading: heading ?? null,
+        speed: speed ?? null,
+        altitude: altitude ?? null,
         capturedAt: resolvedCapturedAt ? new Date(resolvedCapturedAt) : new Date(),
+      });
+
+      await storage.upsertUserLiveLocation({
+        userId,
+        companyId: member.companyId,
+        timeLogId: resolvedSessionId,
+        jobId: resolvedJobId,
+        latitude: lat,
+        longitude: lng,
+        accuracy: resolvedAccuracy,
       });
 
       res.json({ success: true, pingId: ping.id });
@@ -3165,7 +3183,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/schedule/live-locations - Get latest location pings with RBAC
+  // GET /api/location/live - Get live locations for CLOCKED-IN employees only (uses user_live_locations table)
+  app.get('/api/location/live', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) {
+        return res.status(404).json({ error: 'Not a company member' });
+      }
+
+      const userRole = (member.role || 'TECHNICIAN').toUpperCase();
+      const allLocations = await storage.getActiveLiveLocations(company.id);
+
+      // RBAC: Owner sees all clocked-in employees, everyone else sees only themselves
+      const canSeeAll = userRole === 'OWNER';
+      const filtered = canSeeAll
+        ? allLocations
+        : allLocations.filter(l => l.userId === userId);
+
+      if (!canSeeAll && filtered.length === 0) {
+        return res.json([]);
+      }
+
+      const enriched = await Promise.all(
+        filtered.map(async (loc) => {
+          const user = await storage.getUser(loc.userId);
+          const locMember = await storage.getCompanyMember(company.id, loc.userId);
+          return {
+            userId: loc.userId,
+            name: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown',
+            initials: user
+              ? `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase()
+              : '??',
+            role: locMember?.role || 'TECHNICIAN',
+            lat: loc.latitude,
+            lng: loc.longitude,
+            accuracy: loc.accuracy,
+            jobId: loc.jobId,
+            jobTitle: loc.jobTitle || null,
+            timeSessionId: loc.timeLogId,
+            updatedAt: loc.updatedAt,
+          };
+        })
+      );
+
+      res.json(enriched);
+    } catch (error: any) {
+      console.error('[GEO] Error fetching live locations:', error);
+      res.status(500).json({ error: 'Failed to fetch live locations' });
+    }
+  });
+
+  // GET /api/schedule/live-locations - Get latest location pings with RBAC (legacy)
   app.get('/api/schedule/live-locations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

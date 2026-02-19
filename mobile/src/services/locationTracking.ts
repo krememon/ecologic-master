@@ -43,7 +43,7 @@ TaskManager.defineTask(LOCATION_TRACKING.TASK_NAME, async ({ data, error }: any)
   if (!locations || locations.length === 0) return;
 
   const location = locations[locations.length - 1];
-  const { latitude, longitude, accuracy, heading, speed } = location.coords;
+  const { latitude, longitude, accuracy, heading, speed, altitude } = location.coords;
 
   try {
     await api.post('/api/location/ping', {
@@ -52,6 +52,7 @@ TaskManager.defineTask(LOCATION_TRACKING.TASK_NAME, async ({ data, error }: any)
       lat: latitude,
       lng: longitude,
       accuracy_m: accuracy,
+      altitude: altitude != null ? altitude : null,
       heading: heading >= 0 ? heading : null,
       speed: speed >= 0 ? speed : null,
       captured_at: new Date(location.timestamp).toISOString(),
@@ -88,7 +89,7 @@ export async function startLocationTracking(timeLogId: number, jobId: number | n
   }
 
   await Location.startLocationUpdatesAsync(LOCATION_TRACKING.TASK_NAME, {
-    accuracy: Location.Accuracy.High,
+    accuracy: Location.Accuracy.Highest,
     timeInterval: LOCATION_TRACKING.INTERVAL_MS,
     distanceInterval: LOCATION_TRACKING.DISTANCE_FILTER_METERS,
     deferredUpdatesInterval: LOCATION_TRACKING.INTERVAL_MS,

@@ -58,10 +58,11 @@ EcoLogic Mobile lives in `/mobile` and is a native iOS/Android app built with Ex
 - **Auth**: Uses `POST /api/login` with `X-Client-Type: mobile` header to get a `sessionId`, stored in `expo-secure-store`
 - **Session Handling**: Backend middleware accepts `Authorization: Bearer <sessionId>` and loads the session from the PostgreSQL session store; active tracking session persisted in SecureStore for app restart resilience
 - **Navigation**: React Navigation with AuthStack (Login) and AppTabs (Schedule, Jobs, Clock)
-- **Location Tracking**: `expo-location` + `expo-task-manager` for background GPS pings while clocked in
-- **Schedule Map**: `react-native-maps` polling `GET /api/schedule/live-locations` with RBAC markers
-- **Backend Endpoints**: `POST /api/location/ping` (auth + session ownership, accepts both `accuracy`/`accuracy_m` and `capturedAt`/`captured_at`), `GET /api/schedule/live-locations` (RBAC: Owner sees all, everyone else sees only self)
-- **DB Table**: `employee_location_pings` stores lat/lng/accuracy/heading/speed/capturedAt tied to time_logs
+- **Location Tracking**: `expo-location` + `expo-task-manager` for background GPS pings while clocked in (Highest accuracy, 10s interval, 10m distance filter)
+- **Schedule Screen**: List/Map toggle with `react-native-maps` map view and FlatList view, polling `GET /api/location/live` every 10s with RBAC markers
+- **Backend Endpoints**: `POST /api/location/ping` (auth + session ownership, upserts `user_live_locations`, accepts `accuracy`/`accuracy_m`/`altitude` and `capturedAt`/`captured_at`), `GET /api/location/live` (uses `user_live_locations` table, RBAC: Owner sees all, others see only self), `GET /api/schedule/live-locations` (legacy)
+- **DB Tables**: `employee_location_pings` stores lat/lng/accuracy/altitude/heading/speed/capturedAt tied to time_logs; `user_live_locations` stores current position per user for fast live queries
+- **Location Permissions**: Warning banner with "Open Settings" button when background location is denied
 - **To run**: Clone, `cd mobile && npm install`, `npx expo run:ios` or `npx expo run:android` (requires Xcode/Android Studio)
 
 ## External Dependencies

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform } from 'react-native';
 import { useActiveSession } from '../hooks/useActiveSession';
 import { COLORS } from '../constants/config';
 
@@ -27,6 +27,14 @@ export function ActiveSessionBanner() {
     return () => clearInterval(timer);
   }, [activeSession?.clockedInAt]);
 
+  const openSettings = () => {
+    if (Platform.OS === 'ios') {
+      Linking.openURL('app-settings:');
+    } else {
+      Linking.openSettings();
+    }
+  };
+
   if (!activeSession) return null;
 
   return (
@@ -40,8 +48,11 @@ export function ActiveSessionBanner() {
       {locationDenied && (
         <View style={styles.warningBanner}>
           <Text style={styles.warningText}>
-            Location permission denied. Live tracking requires background location access while clocked in.
+            Location permission denied. Live tracking requires background location access.
           </Text>
+          <TouchableOpacity onPress={openSettings} style={styles.settingsButton}>
+            <Text style={styles.settingsButtonText}>Open Settings</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -72,10 +83,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#fef3c7',
     paddingVertical: 6,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   warningText: {
     color: '#92400e',
     fontSize: 12,
     fontWeight: '500',
+    flex: 1,
+  },
+  settingsButton: {
+    backgroundColor: '#92400e',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  settingsButtonText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

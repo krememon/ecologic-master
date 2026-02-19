@@ -1,0 +1,97 @@
+EcoLogic Mobile (Expo React Native dev build) + EcoLogic backend (existing Replit). Implement REAL background geo-tracking tied to clock-in/out and show ONLY CLOCKED-IN employees on a map inside the Schedule tab, with RBAC.
+
+REQUIREMENT
+- The map must show ONLY employees who are currently clocked in (active time session). If not clocked-in, they must NOT appear at all.
+
+ROLES
+- Owner/Admin: can see all CLOCKED-IN employees
+- Everyone else: can only see their own location (and only if THEY are clocked in)
+
+GOALS
+1) On Clock In to a Job: start background location tracking immediately.
+2) On Clock Out: stop background tracking immediately.
+3) Persist pings to backend.
+4) Schedule tab -> Map view showing live markers ONLY for clocked-in sessions.
+5) Backend enforces RBAC; client cannot bypass.
+
+MOBILE (Expo / RN)
+- Use expo-location + expo-task-manager (already installed) + expo-dev-client.
+
+A) Permissions
+- Request foreground, then background “Always”.
+- If background denied: clock-in still works but tracking will NOT start; show warning banner + “Open Settings” button.
+
+B) Background task
+- File: /src/location/backgroundLocation.ts
+- TASK_NAME = "ECOLOGIC_BACKGROUND_LOCATION"
+- TaskManager.defineTask(TASK_NAME, ...) sends latest point to backend:
+  POST /api/location/ping
+  { lat, lng, accuracy, speed, heading, altitude, timestamp, jobId, sessionId }
+  Include auth header.
+- Start tracking:
+  Location.startLocationUpdatesAsync(TASK_NAME, {
+    accuracy: Location.Accuracy.Highest,
+    distanceInterval: 10,
+    timeInterval: 10000,
+    pausesUpdatesAutomatically: false,
+    showsBackgroundLocationIndicator: true,
+    foregroundService (Android): { notificationTitle: "EcoLogic tracking", notificationBody: "Tracking while clocked in" }
+  })
+- Stop tracking: Location.stopLocationUpdatesAsync(TASK_NAME)
+
+C) Tie to Clock In/Out
+- After backend confirms Clock In and returns sessionId:
+  startTracking({ jobId, sessionId })
+- On Clock Out success:
+  stopTracking()
+
+D) Schedule tab Map
+- Add List | Map toggle.
+- Map uses react-native-maps.
+- Poll every 10s while Map is visible:
+  GET /api/location/live
+- Render markers returned from server.
+- Show “Name + job + last updated” in callout.
+
+BACKEND (Replit API)
+A) DB
+1) time_sessions (or your existing clock-in table)
+- Must have: id, user_id, job_id, started_at, ended_at nullable, status/active
+
+2) location_pings
+- id uuid, user_id, job_id, session_id, lat,lng,accuracy,speed,heading,altitude, created_at
+
+3) user_live_location
+- user_id (pk), session_id, job_id, lat,lng,accuracy, updated_at
+
+B) Routes
+1) POST /api/location/ping
+- Auth required
+- Validate: sessionId belongs to requesting user AND is ACTIVE (ended_at is null)
+  - If session not active -> reject (403) and do not store.
+- Insert ping
+- Upsert user_live_location for that user+session
+
+2) GET /api/location/live
+- Auth required
+- Must return ONLY ACTIVE clock-ins:
+  - Join user_live_location to time_sessions where ended_at is null
+- RBAC:
+  - Owner/Admin: return all active sessions (all users)
+  - Non-owner: return only requesting user IF they have an active session; else return []
+
+C) Security
+- Do not accept userId filter from client.
+- Log any attempt to query other users.
+- Server is source of truth.
+
+DELIVERABLES
+- Mobile: permissions + background task + start/stop integrated to clock-in/out + Schedule map toggle + polling.
+- Backend: migrations + endpoints + RBAC enforcement + validation that pings only accepted while session is active.
+- Testing checklist:
+  1) Clock in -> location indicator appears (iOS) and pings hit backend.
+  2) Lock screen 2+ minutes -> pings still arrive.
+  3) Owner sees all clocked-in markers; technician sees only self.
+  4) Clock out -> map removes the user and pings stop.
+  5) Try spoof: send ping with ended sessionId -> server rejects.
+Add minimal logs prefixed [GEO] and avoid spam.
