@@ -1,0 +1,89 @@
+You are verifying (not assuming) that EcoLogic background location + schedule map was implemented correctly.
+
+GOAL: Provide proof with file paths, code excerpts, and runtime logs. If anything is missing or wrong, fix it with minimal changes.
+
+PART 1 — BACKEND VERIFICATION (Replit)
+1) Search for these routes and confirm they exist AND are registered:
+   - POST /api/location/ping
+   - GET /api/location/live
+   Output:
+   - File path(s)
+   - Router registration line(s)
+   - The exact handler functions
+
+2) Confirm DB tables exist (either migrations, schema.sql, or db init code):
+   - location_pings
+   - user_live_locations (user_id PK)
+   Output:
+   - Where tables are created/managed
+   - Column definitions
+
+3) Validate security logic:
+   - POST /api/location/ping must verify sessionId belongs to requesting user AND time_sessions.ended_at IS NULL
+   - GET /api/location/live must return:
+     * Owner/Admin: all active sessions
+     * Non-owner: only requesting user
+   - NO client filters allowed
+   Output:
+   - Show the exact SQL queries (or query builder code)
+
+4) Confirm clock-out endpoint removes live row:
+   - Find clock-out route
+   - Prove it deletes from user_live_locations
+   Output:
+   - File path + code excerpt
+
+5) Add temporary targeted logs (do NOT spam) for:
+   - ping accepted / rejected (include reason)
+   - live endpoint result count
+   - clock-out cleanup count
+   Make logs easy to remove later.
+
+PART 2 — MOBILE VERIFICATION (/mobile)
+6) Find TaskManager background task:
+   - Task name constant
+   - TaskManager.defineTask(...)
+   - Location.startLocationUpdatesAsync(...)
+   - Location.stopLocationUpdatesAsync(...)
+   Output:
+   - File paths + code excerpts
+
+7) Confirm startTracking() is called ONLY after successful clock-in API response, and stopTracking() after clock-out success.
+   Output:
+   - Where clock-in/out happens
+   - The exact call sites
+
+8) Confirm permission flow:
+   - foreground permission request
+   - background permission request
+   - handling if user selects “While Using” vs “Always”
+   Output:
+   - code excerpts + UX behavior notes
+
+9) Confirm ping payload includes: lat,lng,accuracy,altitude,speed,heading,timestamp,jobId,sessionId
+   Output:
+   - code snippet building payload
+
+PART 3 — PROOF TEST (end-to-end)
+10) Add a debug screen or console logs to show:
+   - current tracking status (on/off)
+   - last ping time
+   - last ping response status
+   - sessionId/jobId being used
+   Keep it behind a DEV flag.
+
+11) Provide a step-by-step test plan for iPhone dev build:
+   - Start backend
+   - Login
+   - Clock into a job
+   - Lock screen for 2 minutes
+   - Verify pings received (backend logs)
+   - Open schedule map, confirm marker(s)
+   - Clock out, verify tracking stops and live row is removed
+
+DELIVERABLES
+- A “Verification Report” in the agent response with:
+  ✅ confirmed items with evidence
+  ❌ missing/broken items + fixes applied
+  🔧 exact files changed
+  🧪 test steps

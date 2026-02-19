@@ -2979,14 +2979,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Remove from live locations on clock-out
-      await storage.deleteUserLiveLocation(userId).catch(() => {});
+      let liveLocationCleanedUp = false;
+      try {
+        await storage.deleteUserLiveLocation(userId);
+        liveLocationCleanedUp = true;
+      } catch {}
       
       // Calculate duration
       const startTime = new Date(log.clockInAt).getTime();
       const endTime = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
       const durationMinutes = Math.max(1, Math.round((endTime - startTime) / 60000));
       
-      console.log('[GEO] clocked out, live location removed', { userId, logId: log.id, durationMinutes });
+      console.log('[GEO] clock-out complete', { userId, logId: log.id, durationMinutes, liveLocationCleanedUp });
       res.json({ 
         success: true, 
         clockedOutAt: log.clockOutAt,
@@ -3123,28 +3127,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resolvedSessionId = timeSessionId || sessionId;
 
       if (lat == null || lng == null) {
+        console.log('[GEO] ping rejected: missing lat/lng', { userId });
         return res.status(400).json({ error: 'lat and lng are required' });
       }
 
       if (!resolvedSessionId) {
+        console.log('[GEO] ping rejected: missing sessionId', { userId });
         return res.status(400).json({ error: 'timeSessionId/sessionId is required (must be clocked in)' });
       }
 
       const member = await storage.getCompanyMemberByUserId(userId);
       if (!member) {
+        console.log('[GEO] ping rejected: not a company member', { userId });
         return res.status(404).json({ error: 'Not a company member' });
       }
 
       const timeEntry = await storage.getTimeEntryById(resolvedSessionId);
       if (!timeEntry) {
+        console.log('[GEO] ping rejected: session not found', { userId, sessionId: resolvedSessionId });
         return res.status(404).json({ error: 'Time session not found' });
       }
       if (timeEntry.userId !== userId) {
-        console.warn(`[GEO] User ${userId} tried to ping for session ${resolvedSessionId} owned by ${timeEntry.userId}`);
+        console.warn(`[GEO] ping rejected: session ownership mismatch, user ${userId} tried session ${resolvedSessionId} owned by ${timeEntry.userId}`);
         return res.status(403).json({ error: 'Time session does not belong to you' });
       }
       if (timeEntry.clockOutAt) {
-        console.warn(`[GEO] Rejected ping for ended session ${resolvedSessionId}`);
+        console.warn(`[GEO] ping rejected: session already ended, sessionId=${resolvedSessionId}`);
         return res.status(403).json({ error: 'Time session already ended' });
       }
 
@@ -3176,9 +3184,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         accuracy: resolvedAccuracy,
       });
 
+      console.log('[GEO] ping accepted', { userId, sessionId: resolvedSessionId, lat, lng, pingId: ping.id });
       res.json({ success: true, pingId: ping.id });
     } catch (error: any) {
-      console.error('Error recording location ping:', error);
+      console.error('[GEO] Error recording location ping:', error);
       res.status(500).json({ error: 'Failed to record location' });
     }
   });
@@ -3232,6 +3241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
+      console.log('[GEO] live locations served', { userId, role: userRole, totalActive: allLocations.length, returned: enriched.length });
       res.json(enriched);
     } catch (error: any) {
       console.error('[GEO] Error fetching live locations:', error);
