@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useCan } from "@/hooks/useCan";
 import { Link, useSearch } from "wouter";
-import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Mail, Landmark, FileText } from "lucide-react";
+import { Loader2, ChevronRight, BookOpen, Settings2, Building2, Percent, Clock, Mail, FileText } from "lucide-react";
 import quickbooksLogo from "@/assets/logos/quickbooks-transparent.png";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -96,12 +96,6 @@ export default function Customize() {
       title: "Email Branding",
       description: "Customize look of campaign emails",
       href: "/customize/email-branding",
-    },
-    {
-      icon: Landmark,
-      title: "Financial Connections",
-      description: "Link your bank account for payments and refunds",
-      href: "/customize/financial-connections",
     },
   ];
 
