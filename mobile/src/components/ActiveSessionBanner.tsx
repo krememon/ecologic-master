@@ -4,7 +4,7 @@ import { useActiveSession } from '../hooks/useActiveSession';
 import { COLORS } from '../constants/config';
 
 export function ActiveSessionBanner() {
-  const { activeSession } = useActiveSession();
+  const { activeSession, locationDenied } = useActiveSession();
   const [elapsed, setElapsed] = useState('');
 
   useEffect(() => {
@@ -30,11 +30,20 @@ export function ActiveSessionBanner() {
   if (!activeSession) return null;
 
   return (
-    <View style={styles.banner}>
-      <View style={styles.dot} />
-      <Text style={styles.text}>
-        Clocked in{activeSession.jobTitle ? ` - ${activeSession.jobTitle}` : ''} • {elapsed}
-      </Text>
+    <View>
+      <View style={styles.banner}>
+        <View style={styles.dot} />
+        <Text style={styles.text}>
+          Clocked in{activeSession.jobTitle ? ` - ${activeSession.jobTitle}` : ''} {'\u2022'} {elapsed}
+        </Text>
+      </View>
+      {locationDenied && (
+        <View style={styles.warningBanner}>
+          <Text style={styles.warningText}>
+            Location permission denied. Live tracking requires background location access while clocked in.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -58,5 +67,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '600',
+  },
+  warningBanner: {
+    backgroundColor: '#fef3c7',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  warningText: {
+    color: '#92400e',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

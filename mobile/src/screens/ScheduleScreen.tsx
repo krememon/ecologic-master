@@ -7,12 +7,15 @@ import { COLORS } from '../constants/config';
 interface LiveLocation {
   id: number;
   userId: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number | null;
-  capturedAt: string;
-  userName: string;
+  name: string;
   userInitials: string;
+  role: string;
+  lat: number;
+  lng: number;
+  accuracy_m: number | null;
+  captured_at: string;
+  jobId: number | null;
+  timeSessionId: number | null;
 }
 
 const POLL_INTERVAL = 12000;
@@ -43,7 +46,7 @@ export function ScheduleScreen() {
     const date = new Date(dateStr);
     const now = Date.now();
     const diffSec = Math.floor((now - date.getTime()) / 1000);
-    if (diffSec < 60) return 'Just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
     if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
     return `${Math.floor(diffSec / 3600)}h ago`;
   };
@@ -65,18 +68,19 @@ export function ScheduleScreen() {
         {locations.map((loc) => (
           <Marker
             key={loc.id}
-            coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+            coordinate={{ latitude: loc.lat, longitude: loc.lng }}
           >
             <View style={styles.markerContainer}>
               <View style={styles.markerBubble}>
                 <Text style={styles.markerInitials}>{loc.userInitials}</Text>
               </View>
-              <View style={styles.markerArrow} />
+              <Text style={styles.markerLabel}>{loc.name.split(' ')[0]}</Text>
             </View>
             <Callout>
               <View style={styles.callout}>
-                <Text style={styles.calloutName}>{loc.userName}</Text>
-                <Text style={styles.calloutTime}>Last updated: {formatTime(loc.capturedAt)}</Text>
+                <Text style={styles.calloutName}>{loc.name}</Text>
+                <Text style={styles.calloutRole}>{loc.role}</Text>
+                <Text style={styles.calloutTime}>Updated {formatTime(loc.captured_at)}</Text>
               </View>
             </Callout>
           </Marker>
@@ -122,19 +126,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
-  markerArrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: COLORS.primary,
-    marginTop: -1,
+  markerLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.text,
+    backgroundColor: '#ffffffcc',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 2,
+    overflow: 'hidden',
   },
   callout: { padding: 8, minWidth: 150 },
   calloutName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  calloutRole: { fontSize: 12, color: COLORS.primary, marginTop: 2, fontWeight: '600' },
   calloutTime: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   overlay: {
     position: 'absolute',

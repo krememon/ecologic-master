@@ -1,0 +1,109 @@
+You are working on EcoLogic. We are building a REAL iOS + Android app using React Native with Expo Dev Build (NOT web/PWA). Implement background location tracking tied to clock-in sessions, and show live locations on the Schedule tab map with strict RBAC:
+- Owner sees ALL employee locations
+- Everyone else sees ONLY themselves
+
+====================================================
+PHASE 0 — CREATE MOBILE APP (Expo + Dev Build)
+====================================================
+1) Create a new Expo app under /mobile (TypeScript).
+2) Install and configure navigation (tabs + stacks):
+   - Auth stack: Login
+   - App tabs: Schedule, Jobs, Time
+3) Implement API client:
+   - Base URL from env
+   - JWT storage in secure storage
+   - Auto attach Authorization header
+4) Create standard auth flow:
+   - Login -> store token -> go to App tabs
+   - Logout clears token
+
+====================================================
+PHASE 1 — TIME TRACKING (CLOCK IN / CLOCK OUT)
+====================================================
+1) Create TimeSession concept in mobile UI:
+   - Jobs list -> Job details -> “Clock In”
+   - Active session banner (job name + elapsed time)
+   - “Clock Out”
+2) API integration:
+   - POST /api/time/clock-in -> returns timeSessionId + jobId
+   - POST /api/time/clock-out -> ends session
+3) Persist active session locally so if app restarts, it can resume tracking.
+
+====================================================
+PHASE 2 — REAL BACKGROUND LOCATION (Expo)
+====================================================
+Use Expo background location (NOT browser geolocation):
+- expo-location
+- expo-task-manager
+
+Requirements:
+A) Permission flow:
+- Request foreground permission
+- Then request background permission (“Always”) where supported/required
+- If user denies, show a minimal banner explaining that location is needed for live tracking when clocked in.
+
+B) Background tracking:
+- Define a TaskManager background location task.
+- When user clocks in successfully:
+  - Start background location updates
+  - Ensure the task has access to current timeSessionId + jobId (store in secure storage or async storage)
+- When user clocks out:
+  - Stop background location updates immediately.
+
+C) Ping backend:
+- Each background location update should POST:
+  POST /api/location/ping
+  body: { timeSessionId, jobId, lat, lng, accuracy_m, captured_at }
+
+D) iOS + Android configs (must be correct):
+- iOS: enable background location mode in app config, provide the permission description strings.
+- Android: ensure foreground service / notification for ongoing location updates while tracking.
+
+====================================================
+PHASE 3 — BACKEND (SECURE + RBAC)
+====================================================
+1) Create DB table employee_location_pings:
+- id uuid pk
+- user_id uuid
+- time_session_id uuid
+- job_id uuid nullable
+- lat double
+- lng double
+- accuracy_m int nullable
+- captured_at timestamptz default now()
+Indexes: (user_id, captured_at desc), (time_session_id, captured_at desc)
+
+2) POST /api/location/ping
+- Auth required.
+- Validate: timeSessionId belongs to current user AND is active.
+- Insert ping.
+
+3) GET /api/schedule/live-locations
+- Auth required.
+- RBAC:
+  - If role == Owner: return latest ping for EACH user who has an active time session.
+  - Else: return ONLY latest ping for current user.
+- Response: [{ userId, name, role, lat, lng, accuracy_m, captured_at, jobId, timeSessionId }]
+- Absolutely do not allow query params to expand scope.
+
+====================================================
+PHASE 4 — SCHEDULE TAB MAP (NATIVE)
+====================================================
+1) Use a React Native map library and render a map inside Schedule tab.
+2) Poll GET /api/schedule/live-locations every 10–15 seconds.
+3) Render markers:
+- Owner sees multiple markers
+- Non-owner only sees their own marker (because backend filters)
+Marker UI: avatar initials bubble, name label, “updated Xs ago”.
+
+====================================================
+PHASE 5 — DELIVERABLES
+====================================================
+- /mobile Expo app runs in iOS simulator and Android emulator (Dev Build).
+- Login works.
+- Clock in/out works.
+- Background location continues when app is minimized/locked while clocked in.
+- Stops immediately on clock out.
+- Schedule map shows live markers with RBAC enforced server-side.
+- Keep UI minimal; do NOT rewrite unrelated screens.
+- Add targeted logs during verification, then remove noisy logs.

@@ -2893,7 +2893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const log = await storage.clockIn(userId, member.companyId, jobId, category);
       console.log('[Time] clocked in', { userId, logId: log.id, jobId, category });
-      res.json({ success: true, clockedInAt: log.clockInAt, jobId: log.jobId, category: log.category });
+      res.json({ success: true, timeSessionId: log.id, clockedInAt: log.clockInAt, jobId: log.jobId, category: log.category });
     } catch (error: any) {
       console.error('Error clocking in:', error);
       res.status(500).json({ error: 'Unable to clock in' });
@@ -3116,7 +3116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/location/ping', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const { timeSessionId, jobId, lat, lng, accuracy, heading, speed, capturedAt } = req.body;
+      const { timeSessionId, jobId, lat, lng, accuracy, accuracy_m, heading, speed, capturedAt, captured_at } = req.body;
 
       if (lat == null || lng == null) {
         return res.status(400).json({ error: 'lat and lng are required' });
@@ -3142,6 +3142,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Time session already ended' });
       }
 
+      const resolvedAccuracy = accuracy_m ?? accuracy ?? null;
+      const resolvedCapturedAt = captured_at || capturedAt;
+
       const ping = await storage.createLocationPing({
         companyId: member.companyId,
         userId,
@@ -3149,10 +3152,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobId: jobId || timeEntry.jobId || null,
         latitude: lat,
         longitude: lng,
-        accuracy: accuracy || null,
+        accuracy: resolvedAccuracy,
         heading: heading || null,
         speed: speed || null,
-        capturedAt: capturedAt ? new Date(capturedAt) : new Date(),
+        capturedAt: resolvedCapturedAt ? new Date(resolvedCapturedAt) : new Date(),
       });
 
       res.json({ success: true, pingId: ping.id });
@@ -3181,22 +3184,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allPings = await storage.getLatestLocationPings(company.id, sinceMinutes);
 
-      // RBAC: Owner/Supervisor/Dispatcher see all, others see only themselves
-      const canSeeAll = ['OWNER', 'SUPERVISOR', 'DISPATCHER'].includes(userRole);
+      // RBAC: Only Owner sees all employee locations, everyone else sees only themselves
+      const canSeeAll = userRole === 'OWNER';
       const filteredPings = canSeeAll
         ? allPings
         : allPings.filter(p => p.userId === userId);
 
-      // Enrich with user info
+      // Enrich with user info and member role
       const enrichedPings = await Promise.all(
         filteredPings.map(async (ping) => {
           const user = await storage.getUser(ping.userId);
+          const pingMember = await storage.getCompanyMember(company.id, ping.userId);
           return {
-            ...ping,
-            userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown',
+            id: ping.id,
+            userId: ping.userId,
+            name: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown',
             userInitials: user
               ? `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase()
               : '??',
+            role: pingMember?.role || 'TECHNICIAN',
+            lat: ping.latitude,
+            lng: ping.longitude,
+            accuracy_m: ping.accuracy || null,
+            captured_at: ping.capturedAt,
+            jobId: ping.jobId,
+            timeSessionId: ping.timeLogId,
           };
         })
       );

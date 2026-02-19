@@ -1,10 +1,34 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as SecureStore from 'expo-secure-store';
 import { LOCATION_TRACKING } from '../constants/config';
 import { api } from './api';
 
-let currentTimeLogId: number | null = null;
-let currentJobId: number | null = null;
+const SESSION_KEY = 'ecologic_active_tracking';
+
+interface TrackingSession {
+  timeLogId: number;
+  jobId: number | null;
+}
+
+async function getPersistedSession(): Promise<TrackingSession | null> {
+  try {
+    const data = await SecureStore.getItemAsync(SESSION_KEY);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function persistSession(session: TrackingSession | null): Promise<void> {
+  try {
+    if (session) {
+      await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
+    } else {
+      await SecureStore.deleteItemAsync(SESSION_KEY);
+    }
+  } catch {}
+}
 
 TaskManager.defineTask(LOCATION_TRACKING.TASK_NAME, async ({ data, error }: any) => {
   if (error) {
@@ -12,54 +36,55 @@ TaskManager.defineTask(LOCATION_TRACKING.TASK_NAME, async ({ data, error }: any)
     return;
   }
 
-  if (!data || !currentTimeLogId) return;
+  const session = await getPersistedSession();
+  if (!session || !data) return;
 
   const { locations } = data;
   if (!locations || locations.length === 0) return;
 
   const location = locations[locations.length - 1];
-  const { latitude, longitude } = location.coords;
-  const accuracy = location.coords.accuracy;
-  const heading = location.coords.heading;
-  const speed = location.coords.speed;
+  const { latitude, longitude, accuracy, heading, speed } = location.coords;
 
   try {
     await api.post('/api/location/ping', {
-      timeSessionId: currentTimeLogId,
-      jobId: currentJobId,
+      timeSessionId: session.timeLogId,
+      jobId: session.jobId,
       lat: latitude,
       lng: longitude,
-      accuracy,
+      accuracy_m: accuracy,
       heading: heading >= 0 ? heading : null,
       speed: speed >= 0 ? speed : null,
-      capturedAt: new Date(location.timestamp).toISOString(),
+      captured_at: new Date(location.timestamp).toISOString(),
     });
-    console.log('[Location] Ping sent:', { lat: latitude.toFixed(4), lng: longitude.toFixed(4) });
   } catch (err) {
     console.error('[Location] Failed to send ping:', err);
   }
 });
 
-export async function startLocationTracking(timeLogId: number, jobId: number | null) {
-  currentTimeLogId = timeLogId;
-  currentJobId = jobId;
+let _permissionDenied = false;
+
+export function wasPermissionDenied(): boolean {
+  return _permissionDenied;
+}
+
+export async function startLocationTracking(timeLogId: number, jobId: number | null): Promise<boolean> {
+  _permissionDenied = false;
+
+  await persistSession({ timeLogId, jobId });
 
   const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING.TASK_NAME).catch(() => false);
-  if (isTracking) {
-    console.log('[Location] Already tracking');
-    return;
-  }
+  if (isTracking) return true;
 
   const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
   if (fgStatus !== 'granted') {
-    console.warn('[Location] Foreground permission denied');
-    return;
+    _permissionDenied = true;
+    return false;
   }
 
   const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
   if (bgStatus !== 'granted') {
-    console.warn('[Location] Background permission denied');
-    return;
+    _permissionDenied = true;
+    return false;
   }
 
   await Location.startLocationUpdatesAsync(LOCATION_TRACKING.TASK_NAME, {
@@ -75,20 +100,21 @@ export async function startLocationTracking(timeLogId: number, jobId: number | n
     },
   });
 
-  console.log('[Location] Background tracking started for timeLogId:', timeLogId);
+  return true;
 }
 
 export async function stopLocationTracking() {
-  currentTimeLogId = null;
-  currentJobId = null;
+  await persistSession(null);
 
   const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TRACKING.TASK_NAME).catch(() => false);
   if (isTracking) {
     await Location.stopLocationUpdatesAsync(LOCATION_TRACKING.TASK_NAME);
-    console.log('[Location] Background tracking stopped');
   }
 }
 
-export function isTracking(): boolean {
-  return currentTimeLogId !== null;
+export async function resumeTrackingIfNeeded(): Promise<void> {
+  const session = await getPersistedSession();
+  if (session) {
+    await startLocationTracking(session.timeLogId, session.jobId);
+  }
 }
