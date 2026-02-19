@@ -1,0 +1,93 @@
+We have created Apple App Store subscription products:
+
+ecologic_starter
+ecologic_team
+ecologic_pro
+ecologic_scale
+
+Implement subscription plan mapping + gating in EcoLogic.
+
+------------------------------------
+1) CONFIG FILE
+------------------------------------
+Create /src/config/subscriptionPlans.js
+
+export const subscriptionPlans = {
+  starter: { price: 29.99, userLimit: 1, productId: "ecologic_starter" },
+  team:    { price: 79.99, userLimit: 5, productId: "ecologic_team" },
+  pro:     { price: 159.99, userLimit: 10, productId: "ecologic_pro" },
+  scale:   { price: 299.99, userLimit: 15, productId: "ecologic_scale" }
+};
+
+export function getPlanForTeamSize(size) {
+  if (size === "1") return "starter";
+  if (size === "2-5") return "team";
+  if (size === "6-10") return "pro";
+  if (size === "11-15") return "scale";
+}
+
+------------------------------------
+2) SAVE PLAN WHEN COMPANY CREATED
+------------------------------------
+On /onboarding/company submit:
+Include:
+teamSizeRange
+planKey (derived from getPlanForTeamSize)
+userLimit (from subscriptionPlans)
+
+Persist to company record.
+
+------------------------------------
+3) SUBSCRIPTION SCREEN
+------------------------------------
+Create route: /onboarding/subscription
+
+Show:
+"7-day free trial, then $X/month"
+Plan name
+User limit
+Button: Start 7-day free trial
+
+------------------------------------
+4) DEV TRIAL ACTIVATE
+------------------------------------
+POST /api/subscriptions/dev-activate
+
+Sets:
+subscription_status = "active"
+current_period_end = now + 7 days
+platform = "dev"
+
+Return active.
+
+------------------------------------
+5) STATUS CHECK
+------------------------------------
+GET /api/subscriptions/status
+
+If current_period_end > now → active
+Else → inactive
+
+------------------------------------
+6) GATING
+------------------------------------
+After login:
+If inactive → redirect to /onboarding/subscription
+Else → dashboard
+
+Hide all app pages when inactive.
+
+------------------------------------
+7) PLACEHOLDER FOR REAL APPLE VALIDATION
+------------------------------------
+POST /api/subscriptions/validate
+(TODO later when mobile build exists)
+
+------------------------------------
+DELIVERABLES
+------------------------------------
+- Team size selects plan
+- Company stores plan
+- User routed to subscription screen
+- Clicking Start Trial unlocks app (dev)
+- App locks when expired
