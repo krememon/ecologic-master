@@ -35,8 +35,21 @@ export function useSubscriptionGate({
     refetchOnWindowFocus: true,
   });
 
-  const isSubPage = location === "/onboarding/subscription";
-  const isPaywall = location === "/paywall";
+  const skipPaths = [
+    "/onboarding/subscription",
+    "/onboarding/choice",
+    "/onboarding/industry",
+    "/onboarding/company",
+    "/paywall",
+    "/login",
+    "/signup",
+    "/register",
+    "/welcome",
+    "/forgot-password",
+    "/reset-password",
+    "/join-company",
+  ];
+  const isSkippedRoute = skipPaths.includes(location);
 
   const active = subStatus?.active === true;
   const checkDone = !loadingAuth && (!authed || !hasCompany || !loadingSub);
@@ -45,15 +58,12 @@ export function useSubscriptionGate({
     if (loadingAuth || !authed || !hasCompany) return;
     if (loadingSub) return;
 
-    if (isSubPage || isPaywall) return;
+    if (isSkippedRoute) return;
 
-    if (!active && !isError) {
+    if (!active || isError) {
       setLocation("/onboarding/subscription", { replace: true });
     }
-    if (isError) {
-      setLocation("/onboarding/subscription", { replace: true });
-    }
-  }, [loadingAuth, authed, hasCompany, loadingSub, active, isError, isSubPage, isPaywall, setLocation]);
+  }, [loadingAuth, authed, hasCompany, loadingSub, active, isError, isSkippedRoute, setLocation]);
 
   return {
     active,
