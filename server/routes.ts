@@ -715,7 +715,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           subscriptionPlan: company.subscriptionPlan ?? null,
           teamSizeRange: company.teamSizeRange ?? null,
           maxUsers: company.maxUsers ?? 1,
-          trialEndsAt: company.trialEndsAt
+          trialEndsAt: company.trialEndsAt,
+          currentPeriodEnd: company.currentPeriodEnd ?? null,
         } : null
       };
       
@@ -3641,13 +3642,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!company) {
         return res.json({ active: false, status: 'no_company' });
       }
-      const active = company.subscriptionStatus === 'active' || company.subscriptionStatus === 'trialing';
+      const isTrial = company.subscriptionStatus === 'trialing';
+      const isActive = company.subscriptionStatus === 'active' || isTrial;
+      const periodEnd = company.currentPeriodEnd || company.trialEndsAt || null;
+      const expired = periodEnd ? new Date(periodEnd) < new Date() : false;
       res.json({
-        active,
+        active: isActive && !expired,
         status: company.subscriptionStatus || 'inactive',
-        plan: company.subscriptionPlan || null,
-        maxUsers: company.maxUsers || 1,
-        trialEndsAt: company.trialEndsAt || null,
+        planKey: company.subscriptionPlan || null,
+        userLimit: company.maxUsers || 1,
+        currentPeriodEnd: periodEnd,
+        isTrial,
       });
     } catch (error) {
       console.error('[subscription/status] Error:', error);
@@ -3658,25 +3663,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/subscriptions/start-trial', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.id || req.user?.claims?.sub;
-      console.log('[start-trial] User', userId, 'starting trial (free tier)');
-      
-      // Get user's company
+      console.log('[start-trial] User', userId, 'starting trial');
+
       const company = await storage.getUserCompany(userId);
       if (!company) {
         return res.status(400).json({ message: 'No company found. Please create a company first.' });
       }
-      
+
+      const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       await storage.updateCompany(company.id, {
         subscriptionStatus: 'trialing',
         onboardingCompleted: true,
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        trialEndsAt: trialEnd,
+        currentPeriodEnd: trialEnd,
       });
-      
-      console.log('[start-trial] Company', company.id, 'subscription status set to trialing');
+
+      console.log('[start-trial] Company', company.id, 'trial started, ends', trialEnd.toISOString());
       res.json({ ok: true, message: 'Trial started successfully' });
     } catch (error: any) {
       console.error('[start-trial] Error:', error);
       res.status(500).json({ message: 'Failed to start trial' });
+    }
+  });
+
+  app.post('/api/subscriptions/validate', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { receipt, platform, planKey } = req.body;
+
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(400).json({ message: 'No company found' });
+      }
+
+      if (!receipt || !platform || !planKey) {
+        return res.status(400).json({ message: 'Missing receipt, platform, or planKey' });
+      }
+
+      const { subscriptionPlans } = await import("@shared/subscriptionPlans");
+      const plan = subscriptionPlans[planKey];
+      if (!plan) {
+        return res.status(400).json({ message: 'Invalid plan key' });
+      }
+
+      console.log('[validate] Validating receipt for company', company.id, 'platform:', platform, 'plan:', planKey);
+
+      const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const isTrial = true;
+
+      await storage.updateCompany(company.id, {
+        subscriptionStatus: 'active',
+        subscriptionPlan: planKey,
+        maxUsers: plan.userLimit,
+        subscriptionPlatform: platform,
+        originalTransactionId: receipt,
+        currentPeriodEnd,
+        onboardingCompleted: true,
+      });
+
+      res.json({
+        status: 'active',
+        planKey,
+        userLimit: plan.userLimit,
+        currentPeriodEnd,
+        isTrial,
+      });
+    } catch (error: any) {
+      console.error('[validate] Error:', error);
+      res.status(500).json({ message: 'Failed to validate receipt' });
+    }
+  });
+
+  app.post('/api/subscriptions/restore', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(400).json({ message: 'No company found' });
+      }
+
+      const isActive = company.subscriptionStatus === 'active' || company.subscriptionStatus === 'trialing';
+      const periodEnd = company.currentPeriodEnd || company.trialEndsAt;
+      const expired = periodEnd ? new Date(periodEnd) < new Date() : true;
+
+      if (isActive && !expired) {
+        await storage.updateCompany(company.id, {
+          onboardingCompleted: true,
+        });
+        return res.json({
+          active: true,
+          status: company.subscriptionStatus,
+          planKey: company.subscriptionPlan,
+          userLimit: company.maxUsers,
+          currentPeriodEnd: periodEnd,
+        });
+      }
+
+      res.json({ active: false, message: 'No active subscription found' });
+    } catch (error: any) {
+      console.error('[restore] Error:', error);
+      res.status(500).json({ message: 'Failed to restore purchases' });
     }
   });
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CreditCard, Users, CheckCircle, LogOut } from "lucide-react";
+import { Loader2, Users, CheckCircle, LogOut, RotateCcw, Shield } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { subscriptionPlans } from "@/config/subscriptionPlans";
@@ -13,6 +13,7 @@ export default function OnboardingSubscription() {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const planKey = (user?.company?.subscriptionPlan as PlanKey) || "starter";
   const plan = subscriptionPlans[planKey] || subscriptionPlans.starter;
@@ -35,11 +36,16 @@ export default function OnboardingSubscription() {
     return null;
   }
 
-  const handleContinueToPayment = async () => {
+  const handleStartTrial = async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/subscriptions/start-trial", {});
+      console.log("[subscription] Starting purchase flow for productId:", plan.productId);
+
+      const res = await apiRequest("POST", "/api/subscriptions/start-trial", {
+        planKey,
+        productId: plan.productId,
+      });
 
       if (!res.ok) {
         const data = await res.json();
@@ -59,9 +65,45 @@ export default function OnboardingSubscription() {
       setIsLoading(false);
       toast({
         title: "Error",
-        description: error.message || "Failed to continue. Please try again.",
+        description: error.message || "Failed to start trial. Please try again.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (isRestoring) return;
+    setIsRestoring(true);
+    try {
+      console.log("[subscription] Restoring purchases...");
+      const res = await apiRequest("POST", "/api/subscriptions/restore", {});
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "No active subscription found");
+      }
+
+      const data = await res.json();
+      if (data.active) {
+        await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
+        localStorage.removeItem("onboardingChoice");
+        localStorage.removeItem("onboardingIndustry");
+        setLocation("/jobs", { replace: true });
+      } else {
+        toast({
+          title: "No active subscription",
+          description: "We couldn't find an active subscription for your account.",
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Restore failed",
+        description: error.message || "Could not restore purchases. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -118,7 +160,7 @@ export default function OnboardingSubscription() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-white">{plan.label}</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Monthly subscription</p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">7-day free trial, then ${plan.price}/mo</p>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-slate-800 dark:text-white">${plan.price}</p>
@@ -136,15 +178,15 @@ export default function OnboardingSubscription() {
                   <span>All core features included</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <CreditCard className="w-4 h-4 text-purple-500" />
-                  <span>14-day free trial</span>
+                  <Shield className="w-4 h-4 text-purple-500" />
+                  <span>7-day free trial</span>
                 </div>
               </div>
             </div>
 
             <Button
               type="button"
-              onClick={handleContinueToPayment}
+              onClick={handleStartTrial}
               className="w-full"
               disabled={isLoading}
             >
@@ -159,8 +201,24 @@ export default function OnboardingSubscription() {
             </Button>
 
             <p className="text-xs text-center text-slate-400 dark:text-slate-500 mt-3">
-              No charge today. Cancel anytime during trial.
+              Cancel anytime in App Store / Google Play
             </p>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={handleRestorePurchases}
+                disabled={isRestoring}
+                className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-2"
+              >
+                {isRestoring ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-4 h-4" />
+                )}
+                Restore Purchases
+              </button>
+            </div>
           </div>
 
           <div className="mt-6 text-center">

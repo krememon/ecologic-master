@@ -16,6 +16,7 @@ interface AuthUser extends User {
     teamSizeRange?: string | null;
     maxUsers?: number;
     trialEndsAt?: string | null;
+    currentPeriodEnd?: string | null;
   };
 }
 

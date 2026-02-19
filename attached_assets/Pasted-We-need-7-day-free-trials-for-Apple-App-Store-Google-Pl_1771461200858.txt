@@ -1,0 +1,90 @@
+We need 7-day free trials for Apple App Store + Google Play subscriptions.
+We do NOT implement “double-click to pay” ourselves; the OS purchase sheet handles it.
+Our job is to trigger the purchase flow and then validate receipts server-side.
+
+PLANS + PRODUCT IDS:
+starter: ecologic_starter (7-day free trial)
+team: ecologic_team (7-day free trial)
+pro: ecologic_pro (7-day free trial)
+scale: ecologic_scale (7-day free trial)
+
+---------------------------------------
+1) SUBSCRIPTION SCREEN COPY (TRIAL)
+---------------------------------------
+On /onboarding/subscription, show:
+- “7-day free trial, then $X/month”
+- “Cancel anytime in App Store / Google Play”
+
+The plan is determined from Team Size selection:
+1 -> starter
+2-5 -> team
+6-10 -> pro
+11-15 -> scale
+
+---------------------------------------
+2) PURCHASE FLOW (MOBILE)
+---------------------------------------
+Using react-native-iap:
+- load products
+- when user taps “Start free trial”, call requestSubscription(productId)
+
+Handle outcomes:
+- success: send receipt + platform + planKey to backend validation endpoint
+- canceled: keep user on subscription screen
+- fail: show toast error, allow retry
+
+---------------------------------------
+3) BACKEND RECEIPT VALIDATION MUST RETURN EXPIRATION
+---------------------------------------
+Create/Update endpoint:
+POST /api/subscriptions/validate
+
+Return:
+{
+  status: "active" | "inactive",
+  planKey,
+  userLimit,
+  currentPeriodEnd,
+  isTrial
+}
+
+Save to DB on company:
+- subscription_status
+- plan_key
+- user_limit
+- current_period_end
+- platform
+- original_transaction_id
+
+---------------------------------------
+4) TRIAL COUNTS AS ACTIVE
+---------------------------------------
+If status is active and currentPeriodEnd is in the future:
+- allow access to app
+Else:
+- redirect to /paywall
+
+---------------------------------------
+5) LOCK THE APP UNTIL ACTIVE
+---------------------------------------
+On app load:
+GET /api/subscriptions/status
+If inactive -> force /paywall
+If active -> allow normal routing
+
+No disabled UI: hide restricted pages entirely.
+
+---------------------------------------
+6) RESTORE PURCHASES BUTTON
+---------------------------------------
+Add “Restore Purchases” on subscription/paywall screen.
+It should re-check the store receipt and re-run validation.
+
+---------------------------------------
+DELIVERABLES
+---------------------------------------
+- Subscription page says “7-day free trial then $X/mo”
+- Purchase flow triggers native OS sheet (Apple double click / FaceID handled by OS)
+- Receipt validation stores currentPeriodEnd
+- Trial period unlocks app like active subscription
+- Restore Purchases works

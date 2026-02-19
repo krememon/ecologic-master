@@ -145,6 +145,9 @@ export const companies = pgTable("companies", {
   subscriptionPlan: varchar("subscription_plan"), // starter, professional, enterprise
   maxUsers: integer("max_users").default(1),
   trialEndsAt: timestamp("trial_ends_at"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  subscriptionPlatform: varchar("subscription_platform"),
+  originalTransactionId: varchar("original_transaction_id"),
   // QuickBooks Online integration
   qboRealmId: varchar("qbo_realm_id"),
   qboAccessToken: text("qbo_access_token"),
