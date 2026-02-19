@@ -236,20 +236,32 @@ export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(session(sessionSettings));
 
-  app.use((req: any, _res: any, next: any) => {
+  app.use(async (req: any, _res: any, next: any) => {
     const authHeader = req.headers['authorization'];
     if (authHeader && authHeader.startsWith('Bearer ') && !req.cookies?.['connect.sid']) {
       const sessionId = authHeader.slice(7);
-      if (sessionId && sessionStore) {
-        sessionStore.get(sessionId, (err: any, sess: any) => {
-          if (!err && sess && sess.passport?.user) {
-            req.session = Object.assign(req.session || {}, sess);
-            req.session.id = sessionId;
-            (req as any)._mobileSessionUserId = sess.passport.user;
+      if (sessionId) {
+        try {
+          const { pool: dbPool } = await import('./db');
+          const result = await dbPool.query(
+            'SELECT sess FROM sessions WHERE sid = $1 AND expire > NOW()',
+            [sessionId]
+          );
+          if (result.rows.length > 0) {
+            const sess = result.rows[0].sess;
+            if (sess?.passport?.user) {
+              const passportUser = sess.passport.user;
+              const resolvedUserId = typeof passportUser === 'object' && passportUser?.id
+                ? passportUser.id
+                : passportUser;
+              req.session = Object.assign(req.session || {}, sess);
+              req.session.id = sessionId;
+              (req as any)._mobileSessionUserId = resolvedUserId;
+            }
           }
-          next();
-        });
-        return;
+        } catch (err: any) {
+          console.error('[MobileAuth] Bearer lookup error:', err?.message);
+        }
       }
     }
     next();

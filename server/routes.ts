@@ -2978,11 +2978,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No active session to clock out' });
       }
       
-      // Remove from live locations on clock-out
-      let liveLocationCleanedUp = false;
+      // Remove from live locations on clock-out (defensive: match userId + timeLogId)
+      let liveLocationDeletedCount = 0;
       try {
-        await storage.deleteUserLiveLocation(userId);
-        liveLocationCleanedUp = true;
+        liveLocationDeletedCount = await storage.deleteUserLiveLocation(userId, log.id);
       } catch {}
       
       // Calculate duration
@@ -2990,7 +2989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endTime = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
       const durationMinutes = Math.max(1, Math.round((endTime - startTime) / 60000));
       
-      console.log('[GEO] clock-out complete', { userId, logId: log.id, durationMinutes, liveLocationCleanedUp });
+      console.log('[GEO] clock-out complete', { userId, logId: log.id, durationMinutes, liveLocationDeletedCount });
       res.json({ 
         success: true, 
         clockedOutAt: log.clockOutAt,
@@ -3150,6 +3149,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (timeEntry.userId !== userId) {
         console.warn(`[GEO] ping rejected: session ownership mismatch, user ${userId} tried session ${resolvedSessionId} owned by ${timeEntry.userId}`);
         return res.status(403).json({ error: 'Time session does not belong to you' });
+      }
+      if (timeEntry.companyId !== member.companyId) {
+        console.warn(`[GEO] ping rejected: company mismatch, user company ${member.companyId} vs session company ${timeEntry.companyId}`);
+        return res.status(403).json({ error: 'Time session does not belong to your company' });
       }
       if (timeEntry.clockOutAt) {
         console.warn(`[GEO] ping rejected: session already ended, sessionId=${resolvedSessionId}`);
