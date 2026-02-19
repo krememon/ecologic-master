@@ -3112,6 +3112,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // POST /api/location/ping - Record a location ping from the mobile app
+  app.post('/api/location/ping', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { timeSessionId, jobId, lat, lng, accuracy, heading, speed, capturedAt } = req.body;
+
+      if (lat == null || lng == null) {
+        return res.status(400).json({ error: 'lat and lng are required' });
+      }
+
+      if (!timeSessionId) {
+        return res.status(400).json({ error: 'timeSessionId is required (must be clocked in)' });
+      }
+
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(404).json({ error: 'Not a company member' });
+      }
+
+      const timeEntry = await storage.getTimeEntryById(timeSessionId);
+      if (!timeEntry) {
+        return res.status(404).json({ error: 'Time session not found' });
+      }
+      if (timeEntry.userId !== userId) {
+        return res.status(403).json({ error: 'Time session does not belong to you' });
+      }
+      if (timeEntry.clockOutAt) {
+        return res.status(400).json({ error: 'Time session already ended' });
+      }
+
+      const ping = await storage.createLocationPing({
+        companyId: member.companyId,
+        userId,
+        timeLogId: timeSessionId,
+        jobId: jobId || timeEntry.jobId || null,
+        latitude: lat,
+        longitude: lng,
+        accuracy: accuracy || null,
+        heading: heading || null,
+        speed: speed || null,
+        capturedAt: capturedAt ? new Date(capturedAt) : new Date(),
+      });
+
+      res.json({ success: true, pingId: ping.id });
+    } catch (error: any) {
+      console.error('Error recording location ping:', error);
+      res.status(500).json({ error: 'Failed to record location' });
+    }
+  });
+
+  // GET /api/schedule/live-locations - Get latest location pings with RBAC
+  app.get('/api/schedule/live-locations', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      const member = await storage.getCompanyMember(company.id, userId);
+      if (!member) {
+        return res.status(404).json({ error: 'Not a company member' });
+      }
+
+      const userRole = (member.role || 'TECHNICIAN').toUpperCase();
+      const sinceMinutes = parseInt(req.query.since as string) || 30;
+
+      const allPings = await storage.getLatestLocationPings(company.id, sinceMinutes);
+
+      // RBAC: Owner/Supervisor/Dispatcher see all, others see only themselves
+      const canSeeAll = ['OWNER', 'SUPERVISOR', 'DISPATCHER'].includes(userRole);
+      const filteredPings = canSeeAll
+        ? allPings
+        : allPings.filter(p => p.userId === userId);
+
+      // Enrich with user info
+      const enrichedPings = await Promise.all(
+        filteredPings.map(async (ping) => {
+          const user = await storage.getUser(ping.userId);
+          return {
+            ...ping,
+            userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Unknown',
+            userInitials: user
+              ? `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase()
+              : '??',
+          };
+        })
+      );
+
+      res.json(enrichedPings);
+    } catch (error: any) {
+      console.error('Error fetching live locations:', error);
+      res.status(500).json({ error: 'Failed to fetch live locations' });
+    }
+  });
+
   // Get labor totals for a job
   app.get('/api/jobs/:jobId/labor', isAuthenticated, async (req: any, res) => {
     try {

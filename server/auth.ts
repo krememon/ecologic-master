@@ -235,8 +235,42 @@ export function setupAuth(app: Express) {
 
   app.set("trust proxy", 1);
   app.use(session(sessionSettings));
+
+  app.use((req: any, _res: any, next: any) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ') && !req.cookies?.['connect.sid']) {
+      const sessionId = authHeader.slice(7);
+      if (sessionId && sessionStore) {
+        sessionStore.get(sessionId, (err: any, sess: any) => {
+          if (!err && sess && sess.passport?.user) {
+            req.session = Object.assign(req.session || {}, sess);
+            req.session.id = sessionId;
+            (req as any)._mobileSessionUserId = sess.passport.user;
+          }
+          next();
+        });
+        return;
+      }
+    }
+    next();
+  });
+
   app.use(passport.initialize());
   app.use(passport.session());
+
+  app.use((req: any, _res: any, next: any) => {
+    if (!req.user && (req as any)._mobileSessionUserId) {
+      const userId = (req as any)._mobileSessionUserId;
+      storage.getUser(userId).then((user) => {
+        if (user) {
+          req.user = user;
+        }
+        next();
+      }).catch(() => next());
+      return;
+    }
+    next();
+  });
 
   // Local Strategy (Email/Password)
   passport.use(
@@ -1036,6 +1070,8 @@ export function setupAuth(app: Express) {
       
       req.login(user, (err) => {
         if (err) return next(err);
+
+        const isMobile = req.headers['x-client-type'] === 'mobile';
         res.json({
           message: "Login successful",
           user: {
@@ -1045,6 +1081,7 @@ export function setupAuth(app: Express) {
             lastName: user.lastName,
             profileImageUrl: user.profileImageUrl,
           },
+          ...(isMobile ? { sessionId: req.sessionID } : {}),
         });
       });
     })(req, res, next);

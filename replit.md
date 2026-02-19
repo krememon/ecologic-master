@@ -53,6 +53,17 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - **Plaid Bank Connection**: Owner-only Plaid Link integration for connecting company bank accounts, with encrypted token storage.
 - **Security Hardening**: Comprehensive cross-tenant data isolation, centralized RBAC, secure storage methods, rate limiting, log sanitization, and 404 responses for unauthorized access.
 
+## Mobile App (React Native + Expo)
+EcoLogic Mobile lives in `/mobile` and is a native iOS/Android app built with Expo (TypeScript).
+- **Auth**: Uses `POST /api/login` with `X-Client-Type: mobile` header to get a `sessionId`, stored in `expo-secure-store`
+- **Session Handling**: Backend middleware accepts `Authorization: Bearer <sessionId>` and loads the session from the PostgreSQL session store
+- **Navigation**: React Navigation with AuthStack (Login) and AppTabs (Schedule, Jobs, Clock)
+- **Location Tracking**: `expo-location` + `expo-task-manager` for background GPS pings while clocked in
+- **Schedule Map**: `react-native-maps` polling `GET /api/schedule/live-locations` with RBAC markers
+- **Backend Endpoints**: `POST /api/location/ping` (auth + session ownership), `GET /api/schedule/live-locations` (RBAC: Owner/Supervisor/Dispatcher see all, others see self)
+- **DB Table**: `employee_location_pings` stores lat/lng/accuracy/heading/speed/capturedAt tied to time_logs
+- **To run**: Clone, `cd mobile && npm install`, `npx expo run:ios` or `npx expo run:android` (requires Xcode/Android Studio)
+
 ## External Dependencies
 - **Database**: PostgreSQL (via Neon serverless)
 - **ORM**: Drizzle ORM
