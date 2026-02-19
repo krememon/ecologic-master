@@ -1,0 +1,105 @@
+You are working inside the EcoLogic codebase.
+
+Goal:
+Show live employee locations on the MAP inside the Schedule tab. Location tracking starts when a user clocks in, stops when they clock out. RBAC:
+- Owner can see ALL employee locations.
+- Any non-Owner can ONLY see their own location.
+Follow “hidden not disabled”: do not show locked UI or return unauthorized data.
+
+========================
+1) DATABASE
+========================
+Create table: employee_location_pings
+- id (uuid pk)
+- user_id (uuid fk users)
+- time_session_id (uuid fk time_sessions)  // or whatever table represents clock-in sessions
+- job_id (uuid fk jobs, nullable)
+- lat (double precision)
+- lng (double precision)
+- accuracy_m (int, nullable)
+- captured_at (timestamptz default now())
+
+Indexes:
+- (user_id, captured_at desc)
+- (time_session_id, captured_at desc)
+- (job_id, captured_at desc)
+
+Optional but recommended:
+Create a view or query that returns “latest ping per user” for active sessions.
+
+========================
+2) BACKEND ROUTES
+========================
+A) POST /api/location/ping
+- Auth required.
+- Body: { lat, lng, accuracy_m?, jobId?, timeSessionId }
+- Validate:
+  - timeSessionId belongs to current user AND is active (clocked in)
+  - If jobId provided, ensure session is tied to that job (or allow null if general clock-in)
+- Insert ping row.
+
+B) GET /api/schedule/live-locations
+- Auth required.
+- RBAC filtering:
+  - If currentUser.role === 'Owner' => return latest location for ALL users who currently have an active time session.
+  - Else => return latest location ONLY for currentUser.
+- Response format:
+  [
+    { userId, name, role, lat, lng, accuracy_m, captured_at, jobId?, timeSessionId }
+  ]
+- IMPORTANT: Do NOT return any other users to non-Owner, even if they try query params.
+
+========================
+3) FRONTEND: TRACKING ON CLOCK-IN / CLOCK-OUT
+========================
+A) Add a lightweight “LocationTracker” service/hook:
+- startTracking({ jobId, timeSessionId })
+- stopTracking()
+
+Behavior:
+- On startTracking:
+  - Request browser geolocation permission (navigator.geolocation)
+  - If denied -> show a small non-blocking banner: “Location sharing is off. Enable to use live tracking.”
+  - If granted -> start interval (every 30–60s) to read location and POST /api/location/ping
+- On stopTracking:
+  - Clear interval and stop updates
+
+Trigger points:
+- When user clocks in successfully (timeSession created/activated) => startTracking with returned timeSessionId + jobId
+- When user clocks out successfully => stopTracking
+
+Edge cases:
+- If app refreshes while clocked-in: on app load, check “active time session” endpoint and re-start tracking automatically.
+- If location call fails, keep trying next interval (don’t crash UI).
+
+========================
+4) FRONTEND: SCHEDULE TAB MAP LAYER
+========================
+In Schedule tab map component:
+- Poll GET /api/schedule/live-locations every ~10–15s (or use a refresh button + 15s polling).
+- Render markers:
+  - Owner sees multiple markers (one per active user).
+  - Non-Owner sees only their marker (because backend returns only that).
+- Marker display:
+  - Avatar bubble (initials) + small label
+  - Tooltip/popover: Name, “Last updated: Xs ago”
+- Keep it clean + minimal; do not clutter the map.
+
+========================
+5) SECURITY + PRIVACY
+========================
+- No “all locations” endpoint accessible to non-Owner.
+- Do not send full location history to Schedule map; only latest ping per user.
+- Store history in DB for future features, but the Schedule map uses only latest.
+
+========================
+6) DELIVERABLES
+========================
+- DB migration(s)
+- New API routes
+- LocationTracker hook/service
+- Schedule tab map updated to show live locations layer
+- RBAC tests / checks:
+  - Owner account sees multiple markers
+  - Non-Owner sees only themselves even if they tamper requests
+- Add minimal logging (server: unauthorized attempts, client: tracking start/stop) but remove noisy logs after verification.

@@ -1,0 +1,57 @@
+We are pivoting EcoLogic to a REAL iOS + Android app (not web/PWA, no browser geolocation workarounds).
+
+Build a new mobile app using React Native + Expo (Dev Build), and connect it to our existing EcoLogic backend API.
+
+PHASE 1: Create the mobile app foundation
+- Create a new /mobile folder or new repo structure for EcoLogic Mobile.
+- Use Expo (TypeScript if possible).
+- Set up navigation: Auth stack (Login), App stack (Schedule, Jobs, Time/Clock).
+- Implement API client:
+  - Base URL from env
+  - JWT token storage (secure storage)
+  - Auth header injection
+
+PHASE 2: Implement clock-in/out (native app)
+- Mobile screens:
+  - Job list -> Job details -> Clock In
+  - Active session banner (shows job + elapsed time)
+  - Clock Out
+- On clock-in, backend returns timeSessionId (active session id)
+
+PHASE 3: Real background geo tracking (native)
+- Implement background location updates that run while app is minimized/locked.
+- Requirements:
+  iOS:
+    - request location permission correctly (When In Use -> Always)
+    - enable background location mode
+    - provide required permission descriptions
+  Android:
+    - foreground service notification while tracking
+    - request required permissions including background behavior
+
+Tracking behavior:
+- Start background tracking ONLY when time session is active (clocked in)
+- Stop tracking immediately on clock out
+- Send periodic pings to backend:
+  POST /api/location/ping { timeSessionId, jobId, lat, lng, accuracy, capturedAt }
+
+PHASE 4: Schedule tab map (native)
+- Add map view in Schedule tab (React Native map library)
+- Poll GET /api/schedule/live-locations every 10-15s
+- RBAC:
+  - Owner sees all active users’ latest locations
+  - Non-owner sees ONLY themself
+- Render markers with avatar initials + name + “last updated”
+
+PHASE 5: Backend updates needed
+- Add employee_location_pings table to store location pings tied to time sessions
+- Add POST /api/location/ping (auth + validate session belongs to user and active)
+- Add GET /api/schedule/live-locations with strict RBAC filtering (Owner vs self only)
+- Ensure unauthorized data is never returned
+
+DELIVERABLES:
+- EcoLogic Mobile app runs on iOS simulator and Android emulator
+- Login works
+- Clock-in/out works
+- Background location tracking works while locked/minimized
+- Schedule map shows markers with RBAC enforced server-side

@@ -119,6 +119,9 @@ import {
   paymentSignatures,
   type PaymentSignature,
   type InsertPaymentSignature,
+  employeeLocationPings,
+  type EmployeeLocationPing,
+  type InsertEmployeeLocationPing,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -399,6 +402,10 @@ export interface IStorage {
   updateCompanyAutoClockOutTime(companyId: number, time: string): Promise<void>;
   getTimeEntryById(id: number): Promise<TimeLog | null>;
   updateTimeEntry(id: number, data: { clockInAt: Date; clockOutAt: Date; editedByUserId: string; editReason: string }): Promise<TimeLog | null>;
+
+  // Location ping operations
+  createLocationPing(ping: InsertEmployeeLocationPing): Promise<EmployeeLocationPing>;
+  getLatestLocationPings(companyId: number, sinceMinutes?: number): Promise<EmployeeLocationPing[]>;
 
   // Refund operations
   getPaymentById(id: number): Promise<any>;
@@ -4168,6 +4175,25 @@ export class DatabaseStorage implements IStorage {
   async createPaymentSignature(sig: InsertPaymentSignature): Promise<PaymentSignature> {
     const [created] = await db.insert(paymentSignatures).values(sig).returning();
     return created;
+  }
+
+  async createLocationPing(ping: InsertEmployeeLocationPing): Promise<EmployeeLocationPing> {
+    const [created] = await db.insert(employeeLocationPings).values(ping).returning();
+    return created;
+  }
+
+  async getLatestLocationPings(companyId: number, sinceMinutes: number = 30): Promise<EmployeeLocationPing[]> {
+    const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
+    return await db
+      .selectDistinctOn([employeeLocationPings.userId])
+      .from(employeeLocationPings)
+      .where(
+        and(
+          eq(employeeLocationPings.companyId, companyId),
+          gte(employeeLocationPings.capturedAt, since)
+        )
+      )
+      .orderBy(employeeLocationPings.userId, desc(employeeLocationPings.capturedAt));
   }
 
 }

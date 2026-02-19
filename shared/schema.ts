@@ -1842,3 +1842,31 @@ export const insertPaymentSignatureSchema = createInsertSchema(paymentSignatures
 export type PaymentSignature = typeof paymentSignatures.$inferSelect;
 export type InsertPaymentSignature = z.infer<typeof insertPaymentSignatureSchema>;
 
+export const employeeLocationPings = pgTable("employee_location_pings", {
+  id: serial("id").primaryKey(),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  timeLogId: integer("time_log_id").references(() => timeLogs.id, { onDelete: "set null" }),
+  jobId: integer("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  latitude: doublePrecision("latitude").notNull(),
+  longitude: doublePrecision("longitude").notNull(),
+  accuracy: doublePrecision("accuracy"),
+  heading: doublePrecision("heading"),
+  speed: doublePrecision("speed"),
+  capturedAt: timestamp("captured_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("location_pings_company_id_idx").on(table.companyId),
+  index("location_pings_user_id_idx").on(table.userId),
+  index("location_pings_time_log_id_idx").on(table.timeLogId),
+  index("location_pings_captured_at_idx").on(table.capturedAt),
+]);
+
+export const insertEmployeeLocationPingSchema = createInsertSchema(employeeLocationPings).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type EmployeeLocationPing = typeof employeeLocationPings.$inferSelect;
+export type InsertEmployeeLocationPing = z.infer<typeof insertEmployeeLocationPingSchema>;
+
