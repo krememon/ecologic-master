@@ -1,0 +1,84 @@
+You are working on EcoLogic (React + Tailwind). On iPad, the Settings page layout is broken: the Settings “tabs/cards” (Profile / Appearance / Notifications) are overlapping and collapsing into skinny vertical columns instead of a clean responsive layout.
+
+GOAL
+Fix the Settings tab formatting specifically for iPad/tablet widths (roughly 768–1024px). The layout should:
+- Not overlap
+- Use full available width
+- Look clean and “app-like” on iPad (portrait + landscape)
+- Keep desktop layout unchanged
+- Keep mobile layout unchanged (if it already looks fine)
+- Preserve all existing functionality (toggles, forms, save buttons, etc.)
+
+WHAT TO CHANGE (UI)
+1) Settings page container
+- Add a tablet-friendly max width and padding so content doesn’t get squeezed.
+- Ensure the main Settings content area uses a stable layout grid on tablet.
+
+2) Tabs / sections layout
+If the Settings UI uses a tab header + panels:
+- On iPad: make the tab list horizontally scrollable OR wrap nicely into 2 rows (no overlap).
+- Tab triggers should be consistent height, aligned, and never stack as ultra-thin columns.
+- Panels should take 100% width under the tab header.
+
+If the Settings UI uses “cards/columns” side-by-side:
+- On iPad: switch to 1 column (stacked) OR a 2-column grid, but NEVER 3 skinny columns.
+- Add proper gap spacing and ensure each card min-width is respected.
+
+3) Sidebar interaction on iPad
+- If there’s a left sidebar (main app nav) and it’s forcing content too narrow on iPad:
+  - Make sidebar collapsible on tablet OR reduce its width at md breakpoints.
+  - OR ensure the main content area uses flex-grow and has adequate min-width.
+- Make sure the Settings content does not slide under/behind the sidebar.
+
+TAILWIND BREAKPOINTS (IMPORTANT)
+- Use Tailwind responsive classes: base (mobile), md (tablet), lg (desktop).
+- iPad is usually md range. Fix primarily at `md:` and refine at `lg:` so desktop stays the same.
+
+IMPLEMENTATION DETAILS
+A) Find the Settings page component (likely one of):
+- src/pages/Settings.tsx
+- src/pages/settings/index.tsx
+- src/components/settings/SettingsPage.tsx
+Search for “Settings”, “Billing & Subscription”, “No Company Found”, “Choose Plan”.
+
+B) Fix the layout using one of these patterns (choose what fits the existing structure):
+Option 1 (recommended): 
+- Outer: `flex flex-col w-full`
+- Inner wrapper: `w-full max-w-5xl mx-auto px-4 md:px-6 lg:px-8`
+- Tabs list: `flex gap-2 overflow-x-auto whitespace-nowrap md:overflow-visible md:flex-wrap`
+- Panels: `w-full`
+
+Option 2 (cards grid):
+- Cards container: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4`
+But DO NOT allow 3 columns at md. iPad should be 1 or 2 columns max.
+Use `md:grid-cols-1` (stack) OR `md:grid-cols-2` (two-up), depending on readability.
+
+C) Add min-width safeguards
+- Any “Settings card” should have something like:
+  - `min-w-[280px]` (or similar) ONLY if it won’t break mobile.
+- If using tabs triggers, add:
+  - `min-w-[140px]` and `shrink-0` for horizontal scrolling
+  - or `flex-wrap` with consistent widths
+
+D) Make sure the Billing & Subscription section also respects the same wrapper and doesn’t float weirdly.
+It should align with the rest of Settings sections, with proper vertical spacing.
+
+DELIVERABLES
+1) Update the Settings page layout so iPad/tablet widths render cleanly (no overlap).
+2) Confirm in code/comments what breakpoints you used and why.
+3) Provide before/after screenshots (or describe visually if you can’t screenshot) for:
+   - iPad width (~820px)
+   - Desktop width (>1200px)
+   - Mobile width (~390px)
+
+DO NOT
+- Do not change any business logic.
+- Do not remove any settings options.
+- Do not introduce duplicate buttons.
+- Do not redesign the entire app—only fix layout/responsiveness.
+
+After implementing, test:
+- Switching settings tabs/sections
+- Toggle interactions (Push Notifications)
+- Billing “Choose Plan” state
+- Sidebar navigation still works

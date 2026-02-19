@@ -231,7 +231,7 @@ export default function Settings() {
         <p className="text-slate-600 dark:text-slate-400">Manage your account and preferences</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
         {/* Profile Settings */}
         <Card>
           <CardHeader>
@@ -416,13 +416,13 @@ export default function Settings() {
 
         {/* Billing & Subscription - Owner Only */}
         {user?.role === 'OWNER' && (
-          <div className="md:col-span-3">
+          <div className="lg:col-span-2">
             <BillingSection />
           </div>
         )}
 
         {/* Security Settings */}
-        <Card className="md:col-span-2">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
