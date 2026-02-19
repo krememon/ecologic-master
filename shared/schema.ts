@@ -203,7 +203,7 @@ export const customers = pgTable("customers", {
   geocodePrecision: varchar("geocode_precision", { length: 20 }), // 'exact' or 'approximate'
   qboCustomerId: varchar("qbo_customer_id", { length: 100 }),
   emailOptIn: boolean("email_opt_in").default(true),
-  smsOptIn: boolean("sms_opt_in").default(false),
+  smsOptIn: boolean("sms_opt_in").default(true),
   emailUnsubscribedAt: timestamp("email_unsubscribed_at"),
   smsUnsubscribedAt: timestamp("sms_unsubscribed_at"),
   createdAt: timestamp("created_at").defaultNow(),

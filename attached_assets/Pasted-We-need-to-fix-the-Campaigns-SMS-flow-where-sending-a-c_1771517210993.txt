@@ -1,0 +1,177 @@
+We need to fix the Campaigns SMS flow where sending a campaign returns:
+
+"Campaign Sent — Successfully sent 0 messages."
+
+This should NEVER happen silently. The system must:
+1) Accurately calculate eligible recipients
+2) Block sending if eligible count = 0
+3) Show WHY recipients are ineligible
+4) Log skipped reasons
+
+GOAL
+Ensure SMS campaigns only send when at least 1 valid recipient exists and give clear feedback when none qualify.
+
+-------------------------
+ROOT CAUSES TO CHECK
+-------------------------
+Most likely issues:
+- client.phone_e164 is null
+- sms_opt_in = false
+- wrong company_id filter
+- recipients query only returns email recipients
+- frontend using wrong count field
+
+We must instrument + fix.
+
+-------------------------
+BACKEND FIXES
+-------------------------
+
+1) Add diagnostic logging before sending
+
+Inside SMS send handler (POST /api/campaigns/:id/sms/send):
+
+Log:
+- totalRecipientsFound
+- eligibleRecipients.length
+- skippedNoPhone
+- skippedOptedOut
+- skippedInvalidPhone
+
+Example:
+
+console.log({
+  campaignId,
+  totalRecipients,
+  eligible: eligibleRecipients.length,
+  skippedNoPhone,
+  skippedOptedOut,
+  skippedInvalidPhone
+});
+
+2) Hard stop if eligibleRecipients.length === 0
+
+If zero:
+
+return res.status(400).json({
+  error: "NO_ELIGIBLE_RECIPIENTS",
+  message: "No clients have valid phone numbers or SMS consent."
+});
+
+DO NOT create send job.
+DO NOT mark campaign as sent.
+
+3) Ensure correct recipient query
+
+When building recipient list for SMS:
+
+SELECT clients
+WHERE
+  company_id = ?
+  AND phone_e164 IS NOT NULL
+  AND sms_opt_in = true
+
+Do NOT reuse email-only filters.
+
+4) Ensure phone normalization actually runs
+
+When client is created or updated:
+- normalize phone
+- store phone_e164
+
+If phone cannot be parsed:
+- phone_e164 = null
+
+Add server-side validation so empty / invalid phones cannot silently pass.
+
+5) Store skipped reasons per recipient
+
+When preparing recipients:
+
+if (!client.phone_e164) → skipped_reason = "NO_PHONE"
+else if (!client.sms_opt_in) → skipped_reason = "OPTED_OUT"
+else → eligible
+
+Insert skipped rows into campaign_messages with status="skipped".
+
+-------------------------
+FRONTEND FIXES
+-------------------------
+
+6) Block send button if eligible count = 0
+
+Before allowing Send:
+
+If eligibleCount === 0:
+Show modal:
+
+"0 clients are eligible for SMS.
+Reasons:
+• No valid phone numbers
+• Clients opted out of SMS
+
+Add phone numbers to clients or enable SMS consent."
+
+Disable Send button.
+
+7) Show counts before sending
+
+Above Send button:
+
+Eligible: X
+Skipped (no phone): Y
+Skipped (opted out): Z
+
+8) Replace misleading toast
+
+If backend returns NO_ELIGIBLE_RECIPIENTS:
+
+Show error toast:
+
+"Campaign not sent. No eligible phone numbers found."
+
+Only show "Campaign Sent" if sentCount > 0.
+
+-------------------------
+DATA VERIFICATION SCRIPT
+-------------------------
+
+Create temporary admin route:
+
+GET /api/debug/sms-stats
+
+Returns:
+{
+  totalClients,
+  withPhoneE164,
+  optedIn,
+  eligibleForSms
+}
+
+Use this to verify real data exists.
+
+-------------------------
+SUCCESS CRITERIA
+-------------------------
+
+- If 10 clients have valid phone numbers:
+  → campaign sends to 10
+- If 0 eligible:
+  → campaign is blocked
+- UI clearly explains why
+- Logs show breakdown
+- No more “Successfully sent 0 messages”
+
+-------------------------
+DO NOT
+-------------------------
+- Do not fake success
+- Do not auto-create Twilio requests when zero recipients
+- Do not change email campaign logic
+
+-------------------------
+DELIVERABLES
+-------------------------
+- Updated backend validation
+- Updated frontend UX
+- Proof via logs that eligible counts are correct

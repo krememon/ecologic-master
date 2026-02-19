@@ -7125,7 +7125,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const emailUnsubscribed = !!(c.emailUnsubscribedAt || c.emailOptIn === false);
         const smsUnsubscribed = !!(c.smsUnsubscribedAt || c.smsOptIn === false);
         const emailEligible = !!(c.email && c.emailOptIn === true && !c.emailUnsubscribedAt);
-        const smsEligible = !!(c.phone && c.smsOptIn === true && !c.smsUnsubscribedAt);
+        const phoneDigits = c.phone ? c.phone.replace(/\D/g, '') : '';
+        const smsEligible = !!(c.phone && phoneDigits.length >= 10 && c.smsOptIn === true && !c.smsUnsubscribedAt);
         
         let emailDisabledReason: string | null = null;
         let smsDisabledReason: string | null = null;
@@ -7138,6 +7139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (!smsEligible) {
           if (!c.phone) smsDisabledReason = "No phone";
+          else if (c.phone.replace(/\D/g, '').length < 10) smsDisabledReason = "Invalid phone";
           else if (c.smsUnsubscribedAt) smsDisabledReason = "Unsubscribed";
           else if (!c.smsOptIn) smsDisabledReason = "Not opted in";
         }
@@ -7243,15 +7245,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return c.emailOptIn === true && !c.emailUnsubscribedAt;
       });
       
-      // Filter for SMS eligibility
+      // Filter for SMS eligibility with diagnostic tracking
+      let skippedNoPhone = 0;
+      let skippedOptedOut = 0;
+      let skippedInvalidPhone = 0;
       const smsEligible = selectedCustomers.filter(c => {
-        if (!c.phone) return false;
+        if (!c.phone) { skippedNoPhone++; return false; }
+        const digitsOnly = c.phone.replace(/\D/g, '');
+        if (digitsOnly.length < 10) { skippedInvalidPhone++; return false; }
         if (includeUnsubscribed && isAdmin) {
-          // Admin override: include even if unsubscribed
           return true;
         }
-        return c.smsOptIn === true && !c.smsUnsubscribedAt;
+        if (c.smsOptIn === false || c.smsUnsubscribedAt) { skippedOptedOut++; return false; }
+        return true;
       });
+
+      console.log(`[Campaigns] SMS eligibility: total=${selectedCustomers.length} eligible=${smsEligible.length} skippedNoPhone=${skippedNoPhone} skippedInvalidPhone=${skippedInvalidPhone} skippedOptedOut=${skippedOptedOut}`);
+
+      // Block send if no eligible recipients for the selected channel
+      if (channel === 'sms' && smsEligible.length === 0) {
+        return res.status(400).json({
+          error: "NO_ELIGIBLE_RECIPIENTS",
+          message: "No clients have valid phone numbers or SMS consent.",
+          skippedNoPhone,
+          skippedInvalidPhone,
+          skippedOptedOut,
+        });
+      }
+      if (channel === 'email' && emailEligible.length === 0) {
+        return res.status(400).json({
+          error: "NO_ELIGIBLE_RECIPIENTS",
+          message: "No clients have valid email addresses or email consent.",
+        });
+      }
+      if (channel === 'both' && emailEligible.length === 0 && smsEligible.length === 0) {
+        return res.status(400).json({
+          error: "NO_ELIGIBLE_RECIPIENTS",
+          message: "No clients are eligible for email or SMS.",
+        });
+      }
 
       // Compute body - use emailBody for email/both, smsBody for sms-only
       const body = channel === 'sms' ? smsBody : emailBody;

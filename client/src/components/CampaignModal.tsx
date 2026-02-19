@@ -121,22 +121,53 @@ export default function CampaignModal({
     },
     onSuccess: (data) => {
       const totalSent = (data.emailSent || 0) + (data.smsSent || 0);
-      toast({
-        title: "Campaign Sent",
-        description: `Successfully sent ${totalSent} message${totalSent !== 1 ? 's' : ''}.`,
-      });
+      const totalFailed = (data.emailFailed || 0) + (data.smsFailed || 0);
+      if (totalSent === 0 && totalFailed > 0) {
+        toast({
+          title: "Campaign Failed",
+          description: `All ${totalFailed} message${totalFailed !== 1 ? 's' : ''} failed to send.`,
+          variant: "destructive",
+        });
+      } else if (totalFailed > 0) {
+        toast({
+          title: "Campaign Partially Sent",
+          description: `Sent ${totalSent}, failed ${totalFailed} message${totalFailed !== 1 ? 's' : ''}.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Campaign Sent",
+          description: `Successfully sent ${totalSent} message${totalSent !== 1 ? 's' : ''}.`,
+        });
+      }
       onOpenChange(false);
       resetForm();
       onSendSuccess?.();
     },
     onError: (error: any) => {
-      const message = error?.message || "Failed to send campaign";
       console.error("[Campaign] Send error:", error);
-      toast({
-        title: "Send Error",
-        description: message,
-        variant: "destructive",
-      });
+      let title = "Send Error";
+      let description = "Failed to send campaign";
+      
+      try {
+        const errStr = error?.message || "";
+        const jsonMatch = errStr.match(/^\d+:\s*(.+)/s);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[1]);
+          if (parsed.error === "NO_ELIGIBLE_RECIPIENTS") {
+            title = "No Eligible Recipients";
+            const reasons: string[] = [];
+            if (parsed.skippedNoPhone > 0) reasons.push(`${parsed.skippedNoPhone} missing phone numbers`);
+            if (parsed.skippedInvalidPhone > 0) reasons.push(`${parsed.skippedInvalidPhone} invalid phone numbers`);
+            if (parsed.skippedOptedOut > 0) reasons.push(`${parsed.skippedOptedOut} opted out of SMS`);
+            description = parsed.message + (reasons.length > 0 ? " (" + reasons.join(", ") + ")" : "");
+          } else {
+            description = parsed.message || description;
+          }
+        }
+      } catch {}
+      
+      toast({ title, description, variant: "destructive" });
     },
   });
 
@@ -357,11 +388,32 @@ export default function CampaignModal({
                   </div>
                 </div>
 
-                {/* Warning if no eligible recipients */}
                 {recipientsLoaded && campaignRecipientIds.length === 0 && (
-                  <p className="text-sm text-amber-600 dark:text-amber-400 px-1">
-                    Select at least one recipient to send this campaign.
-                  </p>
+                  <div className="text-sm text-amber-600 dark:text-amber-400 px-1 space-y-1">
+                    <p className="font-medium">No eligible recipients found.</p>
+                    {channel !== "email" && (() => {
+                      const noPhone = recipients.filter(r => r.smsDisabledReason === "No phone").length;
+                      const invalidPhone = recipients.filter(r => r.smsDisabledReason === "Invalid phone").length;
+                      const optedOut = recipients.filter(r => r.smsDisabledReason === "Not opted in" || r.smsDisabledReason === "Unsubscribed").length;
+                      return (noPhone > 0 || invalidPhone > 0 || optedOut > 0) ? (
+                        <ul className="text-xs list-disc list-inside">
+                          {noPhone > 0 && <li>{noPhone} client{noPhone !== 1 ? 's' : ''} missing phone numbers</li>}
+                          {invalidPhone > 0 && <li>{invalidPhone} client{invalidPhone !== 1 ? 's' : ''} with invalid phone numbers</li>}
+                          {optedOut > 0 && <li>{optedOut} client{optedOut !== 1 ? 's' : ''} opted out of SMS</li>}
+                        </ul>
+                      ) : null;
+                    })()}
+                    {channel !== "sms" && (() => {
+                      const noEmail = recipients.filter(r => r.emailDisabledReason === "No email").length;
+                      const emailOptedOut = recipients.filter(r => r.emailDisabledReason === "Not opted in" || r.emailDisabledReason === "Unsubscribed").length;
+                      return (noEmail > 0 || emailOptedOut > 0) ? (
+                        <ul className="text-xs list-disc list-inside">
+                          {noEmail > 0 && <li>{noEmail} client{noEmail !== 1 ? 's' : ''} missing email addresses</li>}
+                          {emailOptedOut > 0 && <li>{emailOptedOut} client{emailOptedOut !== 1 ? 's' : ''} opted out of email</li>}
+                        </ul>
+                      ) : null;
+                    })()}
+                  </div>
                 )}
               </div>
             </div>
