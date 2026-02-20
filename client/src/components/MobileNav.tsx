@@ -237,13 +237,19 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         
         {/* Sidebar */}
         <div className={cn(
-          "fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out",
+          "fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}>
             {/* Header */}
-            <div className="px-6 pb-4 border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
-              <div className="flex items-center justify-between min-h-[48px]">
-                <div className="flex-1 flex flex-col justify-center">
+            <div
+              className="px-4 pb-3 overflow-visible shrink-0"
+              style={{
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+                minHeight: '72px',
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1 flex flex-col justify-center overflow-visible">
                   <EcoLogicLogo size={40} showText={true} className="justify-start" />
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-2">
                     {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
@@ -255,8 +261,10 @@ export default function MobileNav({ user, company }: MobileNavProps) {
               </div>
             </div>
 
+            <div className="h-px bg-slate-200 dark:bg-slate-800 shrink-0" />
+
             {/* Navigation */}
-            <nav className="flex-1 p-4">
+            <nav className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-1">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
