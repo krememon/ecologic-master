@@ -100,7 +100,16 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
         isOpen ? "translate-x-0" : "-translate-x-full sm:translate-x-0" // Toggle on mobile, always visible on desktop
       )}>
       {/* Logo Section */}
-      <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+      <div
+        className="flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-800 shrink-0"
+        style={{
+          minHeight: '72px',
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+          paddingBottom: '12px',
+          paddingLeft: '16px',
+          paddingRight: '16px',
+        }}
+      >
         <EcoLogicLogo size={48} showText={true} className="justify-center" />
         <div className="mt-3 text-center">
           <h2 className="text-sm font-medium text-slate-600 dark:text-slate-400">
@@ -110,7 +119,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-1">
+      <nav className="flex-1 px-4 pt-4 pb-6 space-y-1 mt-2 overflow-y-auto">
         {filteredNavigation.map((item) => {
           const isActive = location === item.href;
           const Icon = item.icon;
