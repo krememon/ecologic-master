@@ -189,9 +189,12 @@ export default function MobileNav({ user, company }: MobileNavProps) {
 
   return (
     <>
-      {/* Mobile Header */}
-      <div className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
-        <div className="flex items-center justify-between">
+      {/* Mobile Header - safe area for iOS notch */}
+      <div
+        className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-[1000]"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+      >
+        <div className="flex items-center justify-between relative" style={{ pointerEvents: 'auto' }}>
           <div 
             onClick={handleToggle}
             className="p-2 cursor-pointer select-none"
@@ -238,7 +241,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}>
             {/* Header */}
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <EcoLogicLogo size={40} showText={true} className="justify-start" />
@@ -313,7 +316,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       </div>
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetContent side="right" className="w-full sm:max-w-md" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
           <SheetHeader className="flex flex-row items-center justify-between pb-4 border-b">
             <SheetTitle>Notifications</SheetTitle>
             <div className="flex items-center gap-1">
