@@ -237,7 +237,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         
         {/* Sidebar */}
         <div className={cn(
-          "fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col",
+          "fixed left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col top-12 h-[calc(100dvh-3rem)]",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}>
             {/* Header */}
