@@ -1098,54 +1098,22 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  // One-time auth tokens for native OAuth (Capacitor deep-link flow)
-  const nativeAuthTokens = new Map<string, { userId: string; expires: number }>();
-
   // Social Auth Routes
   app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-
-  app.get("/api/auth/google/native", (req: any, res, next) => {
-    (req.session as any).oauthPlatform = "capacitor";
-    req.session.save(() => {
-      passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
-    });
-  });
-
-  app.get("/api/auth/native-redirect", (req, res) => {
-    const token = typeof req.query.token === "string" ? req.query.token : "";
-    const error = typeof req.query.error === "string" ? req.query.error : "";
-    if (token && !/^[a-f0-9]{64}$/.test(token)) {
-      return res.status(400).send("Invalid token");
-    }
-    const allowedErrors = ["oauth_failed", "oauth_cancelled", "token_exchange_failed"];
-    const safeError = allowedErrors.includes(error) ? error : "";
-    res.setHeader("Content-Type", "text/html");
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to EcoLogic</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;color:#334155;text-align:center;padding:24px}.c{max-width:320px}h1{font-size:20px;margin-bottom:12px}p{font-size:14px;color:#64748b;margin-bottom:24px}a{display:inline-block;padding:14px 32px;background:#0d9488;color:#fff;border-radius:12px;text-decoration:none;font-weight:600;font-size:16px}</style></head><body><div class="c"><h1>Returning to EcoLogic</h1><p>If the app doesn't open automatically, tap the button below.</p><a id="link">Open EcoLogic</a></div><script>var t="${token}",e="${safeError}";var u=e?"ecologic://auth/callback?error="+e:"ecologic://auth/callback?token="+t;document.getElementById("link").href=u;setTimeout(function(){window.location.href=u},300)</script></body></html>`);
-  });
-
   app.get("/api/auth/google/callback", (req, res, next) => {
-    const isNative = (req.session as any)?.oauthPlatform === "capacitor";
     passport.authenticate("google", async (err: any, user: any, info: any) => {
-      delete (req.session as any).oauthPlatform;
-
-      if (err || !user) {
-        console.error("[google-auth] Error:", err || "no user");
-        if (isNative) {
-          return res.redirect("/api/auth/native-redirect?error=oauth_failed");
-        }
-        return res.redirect(`/auth?error=${err ? 'oauth_failed' : 'oauth_cancelled'}`);
+      if (err) {
+        console.error("[google-auth] Error:", err);
+        return res.redirect("/auth?error=oauth_failed");
       }
-
-      if (isNative) {
-        const token = randomBytes(32).toString("hex");
-        const expires = Date.now() + 5 * 60 * 1000;
-        nativeAuthTokens.set(token, { userId: user.id, expires });
-        console.log("[google-auth] Native auth token created for user:", user.id);
-        return res.redirect(`/api/auth/native-redirect?token=${token}`);
+      if (!user) {
+        return res.redirect("/auth?error=oauth_cancelled");
       }
-
+      
+      // Check if 2FA is enabled for this user
       const fullUser = await storage.getUser(user.id);
       if (fullUser?.twoFactorEnabled) {
+        // Set pending 2FA flag and redirect to 2FA page
         (req.session as any).twoFactorPendingUserId = user.id;
         return req.session.save((saveErr) => {
           if (saveErr) {
@@ -1155,7 +1123,8 @@ export function setupAuth(app: Express) {
           return res.redirect("/two-factor");
         });
       }
-
+      
+      // No 2FA - complete login normally
       req.login(user, (loginErr) => {
         if (loginErr) {
           console.error("[google-auth] Login error:", loginErr);
@@ -1164,47 +1133,6 @@ export function setupAuth(app: Express) {
         return res.redirect("/");
       });
     })(req, res, next);
-  });
-
-  app.post("/api/auth/native-token-exchange", async (req: any, res) => {
-    try {
-      const { token } = req.body;
-      if (!token) return res.status(400).json({ message: "Token required" });
-
-      const entry = nativeAuthTokens.get(token);
-      if (!entry) return res.status(401).json({ message: "Invalid token" });
-
-      nativeAuthTokens.delete(token);
-
-      if (Date.now() > entry.expires) {
-        return res.status(401).json({ message: "Token expired" });
-      }
-
-      const user = await storage.getUser(entry.userId);
-      if (!user) return res.status(401).json({ message: "User not found" });
-
-      if (user.twoFactorEnabled) {
-        (req.session as any).twoFactorPendingUserId = user.id;
-        return req.session.save((saveErr: any) => {
-          if (saveErr) return res.status(500).json({ message: "Session error" });
-          return res.json({ success: true, twoFactor: true });
-        });
-      }
-
-      req.login(user, (loginErr: any) => {
-        if (loginErr) {
-          console.error("[native-token] Login error:", loginErr);
-          return res.status(500).json({ message: "Login failed" });
-        }
-        req.session.save((saveErr: any) => {
-          if (saveErr) console.error("[native-token] Session save error:", saveErr);
-          return res.json({ success: true, user: { id: user.id, email: user.email } });
-        });
-      });
-    } catch (error) {
-      console.error("[native-token] Error:", error);
-      return res.status(500).json({ message: "Internal error" });
-    }
   });
 
   app.get("/api/auth/facebook", passport.authenticate("facebook", { scope: ["email"] }));

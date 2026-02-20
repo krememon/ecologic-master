@@ -352,15 +352,11 @@ export default function Auth() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     try {
       setIsGoogleLoading(true);
-      const { isNativePlatform, openExternalBrowser } = await import("@/lib/capacitor");
-      if (isNativePlatform()) {
-        await openExternalBrowser(window.location.origin + "/api/auth/google/native?platform=capacitor");
-      } else {
-        window.location.href = "/api/auth/google";
-      }
+      // Redirect to Google OAuth endpoint
+      window.location.href = "/auth/google";
     } catch (error) {
       console.error("Google sign-in error:", error);
       setIsGoogleLoading(false);
@@ -373,7 +369,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6" style={{ minHeight: '100dvh', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-6">
       <div className="w-full max-w-md mx-auto p-8">
         
         {/* Logo and Branding */}

@@ -189,12 +189,9 @@ export default function MobileNav({ user, company }: MobileNavProps) {
 
   return (
     <>
-      {/* Mobile Header - safe area for iOS notch */}
-      <div
-        className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 sticky top-0 z-[1000]"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
-      >
-        <div className="flex items-center justify-between relative" style={{ pointerEvents: 'auto' }}>
+      {/* Mobile Header */}
+      <div className="sm:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+        <div className="flex items-center justify-between">
           <div 
             onClick={handleToggle}
             className="p-2 cursor-pointer select-none"
@@ -237,34 +234,28 @@ export default function MobileNav({ user, company }: MobileNavProps) {
         
         {/* Sidebar */}
         <div className={cn(
-          "fixed left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col top-12 h-[calc(100dvh-3rem)]",
+          "fixed top-0 left-0 bottom-0 w-64 bg-white dark:bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}>
             {/* Header */}
-            <div
-              className="px-4 pb-3 overflow-visible shrink-0"
-              style={{
-                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
-                minHeight: '72px',
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 flex flex-col justify-center overflow-visible">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
                   <EcoLogicLogo size={40} showText={true} className="justify-start" />
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-2">
-                    {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
-                  </p>
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                      {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
+                    </p>
+                  </div>
                 </div>
-                <div onClick={handleClose} className="p-2 cursor-pointer -mr-2" style={{ touchAction: 'manipulation' }}>
+                <div onClick={handleClose} className="p-1 cursor-pointer mt-0.5">
                   <X className="h-5 w-5 text-slate-400" />
                 </div>
               </div>
             </div>
 
-            <div className="h-px bg-slate-200 dark:bg-slate-800 shrink-0" />
-
             {/* Navigation */}
-            <nav className="flex-1 p-4 overflow-y-auto">
+            <nav className="flex-1 p-4">
               <div className="space-y-1">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
@@ -310,7 +301,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
               {/* Logout Button */}
               <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button 
-                  onClick={async () => { const { performLogout } = await import("@/lib/capacitor"); performLogout(); }}
+                  onClick={() => window.location.href = '/api/logout'}
                   className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:shadow-sm"
                 >
                   <LogOut className="w-5 h-5 transition-transform duration-200" />
@@ -322,7 +313,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
       </div>
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
           <SheetHeader className="flex flex-row items-center justify-between pb-4 border-b">
             <SheetTitle>Notifications</SheetTitle>
             <div className="flex items-center gap-1">

@@ -6,7 +6,7 @@
         </trust-anchors>
     </base-config>
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">8ba406dd-3601-4e6d-b203-72607ec69813-00-23v869p3ury5l.picard.replit.dev</domain>
+        <domain includeSubdomains="true">ecologicc.com</domain>
         <domain includeSubdomains="true">accounts.google.com</domain>
         <domain includeSubdomains="true">appleid.apple.com</domain>
     </domain-config>

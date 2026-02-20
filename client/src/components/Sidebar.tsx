@@ -100,16 +100,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
         isOpen ? "translate-x-0" : "-translate-x-full sm:translate-x-0" // Toggle on mobile, always visible on desktop
       )}>
       {/* Logo Section */}
-      <div
-        className="flex flex-col items-center justify-center border-b border-slate-200 dark:border-slate-800 shrink-0"
-        style={{
-          minHeight: '72px',
-          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)',
-          paddingBottom: '12px',
-          paddingLeft: '16px',
-          paddingRight: '16px',
-        }}
-      >
+      <div className="p-6 border-b border-slate-200 dark:border-slate-800">
         <EcoLogicLogo size={48} showText={true} className="justify-center" />
         <div className="mt-3 text-center">
           <h2 className="text-sm font-medium text-slate-600 dark:text-slate-400">
@@ -119,7 +110,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 pt-4 pb-6 space-y-1 mt-2 overflow-y-auto">
+      <nav className="flex-1 px-4 py-6 space-y-1">
         {filteredNavigation.map((item) => {
           const isActive = location === item.href;
           const Icon = item.icon;
@@ -190,7 +181,7 @@ export default function Sidebar({ user, company, isOpen, onClose }: SidebarProps
 
         {/* Logout Button */}
         <button 
-          onClick={async () => { const { performLogout } = await import("@/lib/capacitor"); performLogout(); }}
+          onClick={() => window.location.href = '/api/logout'}
           className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:text-red-700 dark:hover:text-red-300 mt-2"
         >
           <LogOut className="w-4 h-4" />

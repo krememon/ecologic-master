@@ -9,7 +9,6 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
-import { useCapacitorDeepLinks } from "@/hooks/useCapacitorDeepLinks";
 import { useSubscriptionGate } from "@/hooks/useSubscriptionGate";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
@@ -154,7 +153,6 @@ function AuthenticatedRouter() {
   
   useWebSocket();
   usePushNotifications();
-  useCapacitorDeepLinks();
 
   const hasCompany = !!user?.company;
 

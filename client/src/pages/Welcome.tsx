@@ -25,13 +25,8 @@ export default function Welcome() {
   const { toast } = useToast();
   const [appleLoading, setAppleLoading] = useState(false);
 
-  const handleGoogleAuth = async () => {
-    const { isNativePlatform, openExternalBrowser } = await import("@/lib/capacitor");
-    if (isNativePlatform()) {
-      await openExternalBrowser(window.location.origin + "/api/auth/google/native?platform=capacitor");
-    } else {
-      window.location.href = "/api/auth/google";
-    }
+  const handleGoogleAuth = () => {
+    window.location.href = "/api/auth/google";
   };
 
   const handleAppleAuth = async () => {
@@ -40,12 +35,7 @@ export default function Welcome() {
       const res = await fetch("/api/auth/apple/start");
       const data = await res.json();
       if (data.url) {
-        const { isNativePlatform, openExternalBrowser } = await import("@/lib/capacitor");
-        if (isNativePlatform()) {
-          await openExternalBrowser(data.url);
-        } else {
-          window.location.href = data.url;
-        }
+        window.location.href = data.url;
       } else {
         throw new Error("No URL returned");
       }
@@ -68,11 +58,11 @@ export default function Welcome() {
   }
   
   return (
-    <div className="flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-auto" style={{ minHeight: '100dvh', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 overflow-auto">
       <div 
         className="flex-1 flex flex-col items-center justify-center px-6"
         style={{ 
-          minHeight: "100dvh",
+          minHeight: "100vh",
           transform: "translateY(clamp(10px, 2vh, 28px))"
         }}
       >
