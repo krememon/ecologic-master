@@ -127,7 +127,7 @@ export default function JoinCompany() {
             <div className="text-center">
               <button
                 type="button"
-                onClick={() => window.location.href = '/api/logout'}
+                onClick={async () => { const { performLogout } = await import("@/lib/capacitor"); performLogout(); }}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
                 data-testid="button-sign-out"
               >

@@ -1,0 +1,42 @@
+EcoLogic is running inside a Capacitor iOS wrapper (WKWebView). In the wrapper build:
+- “Continue with Google” does nothing
+- EcoLogic logo in the left drawer/menu is cut off at the top
+- Signing out sometimes launches Safari instead of returning to the in-app sign-in screen
+- Overall spacing/formatting looks wrong on iOS (safe area / notch / viewport issues)
+
+GOALS
+- Make iOS wrapper layout match the normal mobile web layout (no clipping under notch).
+- Ensure top header buttons and drawer header/logo are fully visible and tappable.
+- Google login works in the wrapper using system browser OAuth and returns to the app.
+- Sign out stays inside the app and returns to the sign-in screen (no Safari launch).
+
+TASKS
+1) Safe-area + viewport foundation
+- Ensure main HTML template includes:
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+- Add global CSS helpers for iOS safe areas:
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+- Replace any critical layout using 100vh with 100dvh or a more stable layout for iOS.
+- Apply safe-area padding to:
+  a) the main top header container
+  b) the drawer/menu header section where the EcoLogic logo sits
+- Make the logo container use flex centering + a min-height so it cannot be clipped.
+
+2) Fix “Continue with Google” in Capacitor
+- Detect if running inside Capacitor.
+- In Capacitor, do NOT use popup/window.open. Instead use @capacitor/browser to open the Google OAuth start URL in Safari.
+- Implement deep link return handling using @capacitor/app (appUrlOpen) so the app receives a callback and completes login.
+- Ensure normal web Google login still works in desktop/mobile Safari.
+- Provide the exact redirect URLs we must add in Google Cloud Console.
+- If Google rejects custom scheme redirects, implement an HTTPS intermediate callback page that immediately redirects to ecologic://auth/callback.
+
+3) Fix sign out staying inside the app
+- Remove any window.location hard redirects for internal routes.
+- After sign out, route using the SPA router (navigate('/login')).
+- If backend signout endpoint responds with redirects, change to JSON and let client route.
+
+DELIVERABLES
+- List files changed.
+- Explain how to test each fix in the iOS simulator.
+- Confirm hamburger/bell/plus and drawer items are tappable and positioned correctly.

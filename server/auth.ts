@@ -1111,6 +1111,18 @@ export function setupAuth(app: Express) {
     });
   });
 
+  app.get("/api/auth/native-redirect", (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    const error = typeof req.query.error === "string" ? req.query.error : "";
+    if (token && !/^[a-f0-9]{64}$/.test(token)) {
+      return res.status(400).send("Invalid token");
+    }
+    const allowedErrors = ["oauth_failed", "oauth_cancelled", "token_exchange_failed"];
+    const safeError = allowedErrors.includes(error) ? error : "";
+    res.setHeader("Content-Type", "text/html");
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to EcoLogic</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;color:#334155;text-align:center;padding:24px}.c{max-width:320px}h1{font-size:20px;margin-bottom:12px}p{font-size:14px;color:#64748b;margin-bottom:24px}a{display:inline-block;padding:14px 32px;background:#0d9488;color:#fff;border-radius:12px;text-decoration:none;font-weight:600;font-size:16px}</style></head><body><div class="c"><h1>Returning to EcoLogic</h1><p>If the app doesn't open automatically, tap the button below.</p><a id="link">Open EcoLogic</a></div><script>var t="${token}",e="${safeError}";var u=e?"ecologic://auth/callback?error="+e:"ecologic://auth/callback?token="+t;document.getElementById("link").href=u;setTimeout(function(){window.location.href=u},300)</script></body></html>`);
+  });
+
   app.get("/api/auth/google/callback", (req, res, next) => {
     const isNative = (req.session as any)?.oauthPlatform === "capacitor";
     passport.authenticate("google", async (err: any, user: any, info: any) => {
@@ -1119,7 +1131,7 @@ export function setupAuth(app: Express) {
       if (err || !user) {
         console.error("[google-auth] Error:", err || "no user");
         if (isNative) {
-          return res.redirect("ecologic://auth/callback?error=oauth_failed");
+          return res.redirect("/api/auth/native-redirect?error=oauth_failed");
         }
         return res.redirect(`/auth?error=${err ? 'oauth_failed' : 'oauth_cancelled'}`);
       }
@@ -1129,7 +1141,7 @@ export function setupAuth(app: Express) {
         const expires = Date.now() + 5 * 60 * 1000;
         nativeAuthTokens.set(token, { userId: user.id, expires });
         console.log("[google-auth] Native auth token created for user:", user.id);
-        return res.redirect(`ecologic://auth/callback?token=${token}`);
+        return res.redirect(`/api/auth/native-redirect?token=${token}`);
       }
 
       const fullUser = await storage.getUser(user.id);

@@ -26,3 +26,10 @@ export function getGoogleSignInUrl(): string {
   }
   return '/api/auth/google';
 }
+
+export async function performLogout(): Promise<void> {
+  try {
+    await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch {}
+  window.location.replace('/auth');
+}

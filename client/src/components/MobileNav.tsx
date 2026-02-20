@@ -241,17 +241,15 @@ export default function MobileNav({ user, company }: MobileNavProps) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}>
             {/* Header */}
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+            <div className="px-6 pb-4 border-b border-slate-200 dark:border-slate-800" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)' }}>
+              <div className="flex items-center justify-between min-h-[48px]">
+                <div className="flex-1 flex flex-col justify-center">
                   <EcoLogicLogo size={40} showText={true} className="justify-start" />
-                  <div className="mt-2">
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                      {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
-                    </p>
-                  </div>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mt-2">
+                    {company?.name || user?.firstName + ' ' + user?.lastName || 'Trade Contractor'}
+                  </p>
                 </div>
-                <div onClick={handleClose} className="p-1 cursor-pointer mt-0.5">
+                <div onClick={handleClose} className="p-2 cursor-pointer -mr-2" style={{ touchAction: 'manipulation' }}>
                   <X className="h-5 w-5 text-slate-400" />
                 </div>
               </div>
@@ -304,7 +302,7 @@ export default function MobileNav({ user, company }: MobileNavProps) {
               {/* Logout Button */}
               <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button 
-                  onClick={() => window.location.href = '/api/logout'}
+                  onClick={async () => { const { performLogout } = await import("@/lib/capacitor"); performLogout(); }}
                   className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out transform hover:scale-105 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 hover:shadow-sm"
                 >
                   <LogOut className="w-5 h-5 transition-transform duration-200" />
