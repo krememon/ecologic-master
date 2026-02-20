@@ -1,0 +1,52 @@
+We are shipping EcoLogic inside a Capacitor iOS wrapper (WKWebView). Google Sign-In currently fails inside the wrapper. Fix Google login the correct way:
+
+REQUIREMENTS
+- Google OAuth must not run inside the embedded WebView.
+- When user taps "Continue with Google" inside the app:
+  1) Open the system browser (Safari / SFSafariViewController) for Google OAuth
+  2) After success, redirect back into the app via deep link
+  3) Complete login and return the user to the dashboard
+
+IMPLEMENTATION PLAN
+A) iOS Capacitor wrapper: Deep linking
+1) Configure a custom URL scheme for the iOS app, e.g.:
+   ecologic://auth/callback
+2) Ensure Capacitor iOS is configured to handle URL open and pass it to JS.
+   - Add/confirm iOS settings in Info.plist and AppDelegate as needed.
+   - Use Capacitor App plugin to listen for 'appUrlOpen'.
+
+B) Web app: OAuth redirect + token exchange
+3) Add a dedicated web route for handling the callback, e.g.:
+   /auth/google/callback
+   which can parse the authorization code/state and exchange with backend for a session/JWT.
+4) Modify the "Continue with Google" button behavior WHEN running inside Capacitor:
+   - Detect Capacitor (window.Capacitor?.isNativePlatform?.() or similar)
+   - Use @capacitor/browser to open:
+     https://<YOUR_BACKEND_OR_WEB>/auth/google/start?platform=ios
+   - That endpoint initiates Google OAuth with redirect_uri pointing to:
+     ecologic://auth/callback (for iOS)
+5) When the app receives the deep link, parse params and call backend to finalize login, then navigate to dashboard.
+
+C) Backend changes
+6) Update backend Google OAuth configuration:
+   - Allow redirect URIs for:
+     - Web: https://ecologicc.com/auth/google/callback (or deployed URL)
+     - iOS: ecologic://auth/callback
+   - If Google requires HTTPS only, use a universal link instead OR use an intermediate HTTPS callback that immediately deep-links to ecologic://auth/callback.
+   - Implement the intermediate callback if needed:
+     https://ecologicc.com/auth/google/native-return -> redirects to ecologic://auth/callback?code=...
+
+TESTING
+- In iOS simulator, tapping Google login should open Safari (not inside the app).
+- After signing in, user is redirected back to EcoLogic app and is logged in.
+- Ensure normal web Google login still works in desktop browser.
+
+DELIVERABLES
+- List iOS wrapper changes (Info.plist, AppDelegate, any Capacitor config).
+- List web/client changes (button handler + callback route).
+- List backend changes (OAuth start + callback endpoints, redirect URIs).
+- Provide exact redirect URIs I must add in Google Cloud Console.
+
+IMPORTANT
+- Do not break Apple Sign-In.
+- Keep RBAC/subscription gate behavior intact after login.
