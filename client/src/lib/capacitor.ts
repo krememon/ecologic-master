@@ -18,7 +18,7 @@ export function getPlatform(): string {
 
 export function getApiBaseUrl(): string {
   if (isNativePlatform()) {
-    return "https://app.ecologicc.com";
+    return window.location.origin;
   }
   return "";
 }
