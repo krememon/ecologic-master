@@ -1,0 +1,51 @@
+ISSUE
+Google sign-in opens accounts.google.com successfully, but when selecting an account, iOS shows:
+“Safari cannot open the page because the address is invalid.”
+This happens right when Google redirects back to our callback redirect URI.
+
+This indicates the redirect URI we are sending to Google is INVALID for iOS Safari OR it uses a custom scheme (ecologic://) that is not correctly registered/allowed for this flow, OR it’s not URL-encoded.
+
+GOAL
+Use an iOS-safe redirect for the OAuth callback:
+- For iOS wrapper: use an https callback URL (same origin as backend), then from that server callback do a final redirect to ecologic:// OR use ASWebAuthenticationSession with a registered callback scheme.
+Since we are using Capacitor Browser (SFSafariViewController), safest is:
+1) Google redirects to https://<backend>/api/auth/google/callback
+2) Backend finishes auth and then redirects to ecologic://auth/callback?token=...
+
+TASKS (Agent)
+A) Verify GoogleStrategy callbackURL is HTTPS (NOT ecologic://)
+1) Locate passport GoogleStrategy config (passport-google-oauth20).
+2) Ensure callbackURL is EXACTLY:
+   https://8ba406dd-...picard.replit.dev/api/auth/google/callback
+   (or whatever our backend route is)
+3) Ensure this EXACT URL is also set in Google Cloud Console OAuth Client “Authorized redirect URIs”.
+4) Do NOT set callbackURL to a custom scheme.
+
+B) Ensure the callback route is mounted at the path we think it is
+1) Confirm the route exists:
+   GET /api/auth/google/callback
+2) Confirm /api/auth/google uses passport.authenticate and actually uses that callback.
+3) Add server logs in callback route:
+   console.log("[google/callback] hit", req.query)
+   console.log("[google/callback] state", req.query.state)
+
+C) After callback, redirect to ecologic:// with proper encoding
+1) After generating token:
+   const tokenEncoded = encodeURIComponent(token)
+   const redirectUrl = `ecologic://auth/callback?token=${tokenEncoded}`
+   console.log("[google/callback] ios final redirect ->", redirectUrl)
+   return res.redirect(redirectUrl)
+
+D) iOS URL scheme must be registered
+1) Ensure Xcode target has URL Types -> Schemes includes: ecologic
+2) Rebuild + rerun simulator after adding scheme.
+
+E) If Safari still says “address invalid” after A-D
+Switch to ASWebAuthenticationSession (recommended for OAuth) via Capacitor’s official App/Auth approach:
+- Replace Browser.open with a proper auth session plugin (or Capacitor Browser with “presentationStyle” may not be enough).
+But do A-D first; 99% this is callbackURL mismatch/unregistered redirect URI.
+
+DELIVERABLE
+- Selecting a Google account completes and returns to EcoLogic (Safari closes).
+- No “address is invalid”.
+- Server logs show /api/auth/google/callback hit, then ios final redirect to ecologic://auth/callback?token=...

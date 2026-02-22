@@ -46,6 +46,7 @@ declare global {
 }
 
 const authCodeStore = new Map<string, { userId: number; expiresAt: number }>();
+const nonceCodeStore = new Map<string, { code: string; expiresAt: number }>();
 
 function generateAuthCode(): string {
   return randomBytes(32).toString("hex");
@@ -57,6 +58,13 @@ function storeAuthCode(userId: number): string {
   return code;
 }
 
+function storeAuthCodeForNonce(nonce: string, userId: number): string {
+  const code = storeAuthCode(userId);
+  nonceCodeStore.set(nonce, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+  console.log("[auth-nonce] Stored code for nonce:", nonce.substring(0, 8) + "...");
+  return code;
+}
+
 function consumeAuthCode(code: string): number | null {
   const entry = authCodeStore.get(code);
   if (!entry) return null;
@@ -65,10 +73,24 @@ function consumeAuthCode(code: string): number | null {
   return entry.userId;
 }
 
+function pollAuthCode(nonce: string): string | null {
+  const entry = nonceCodeStore.get(nonce);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    nonceCodeStore.delete(nonce);
+    return null;
+  }
+  nonceCodeStore.delete(nonce);
+  return entry.code;
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [code, entry] of authCodeStore) {
     if (now > entry.expiresAt) authCodeStore.delete(code);
+  }
+  for (const [nonce, entry] of nonceCodeStore) {
+    if (now > entry.expiresAt) nonceCodeStore.delete(nonce);
   }
 }, 60 * 1000);
 
@@ -1134,43 +1156,74 @@ export function setupAuth(app: Express) {
 
   // Social Auth Routes
   app.get("/api/auth/google", (req, res, next) => {
-    const platform = req.query.platform === "ios" ? "ios" : "web";
-    console.log("[auth/google] hit, query:", req.query, "platform:", platform);
+    const platform = req.query.platform as string || "web";
+    const nonce = req.query.nonce as string || "";
+    const state = platform === "ios" && nonce ? `ios:${nonce}` : platform === "ios" ? "ios" : "web";
+    console.log("[auth/google] hit, platform:", platform, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "state:", state.substring(0, 12));
     passport.authenticate("google", {
       scope: ["profile", "email"],
-      state: platform,
+      state,
       prompt: "select_account",
     })(req, res, next);
   });
+
+  app.get("/api/auth/poll-code", (req, res) => {
+    const nonce = req.query.nonce as string;
+    if (!nonce) return res.status(400).json({ status: "error", message: "nonce required" });
+    const code = pollAuthCode(nonce);
+    if (code) {
+      console.log("[poll-code] Code found for nonce:", nonce.substring(0, 8) + "...");
+      return res.json({ status: "ready", code });
+    }
+    return res.json({ status: "pending" });
+  });
+
+  app.get("/api/auth/google-complete", (_req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    return res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign In Complete</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4;color:#166534}
+.card{text-align:center;padding:2rem}.check{font-size:3rem;margin-bottom:1rem}p{font-size:1.1rem;margin:0.5rem 0}</style></head>
+<body><div class="card"><div class="check">&#10003;</div><p><strong>Sign in complete!</strong></p><p>Return to the EcoLogic app.</p></div></body></html>`);
+  });
+
   app.get("/api/auth/google/callback", (req, res, next) => {
-    console.log("[auth/google/callback] hit, query.state:", req.query.state);
+    const rawState = (req.query.state as string) || "web";
+    console.log("[auth/google/callback] hit, rawState:", rawState);
     passport.authenticate("google", async (err: any, user: any, info: any) => {
-      const platform = req.query.state;
-      console.log("[auth/google/callback] passport done, platform:", platform, "err:", !!err, "user:", !!user);
+      const isIos = rawState === "ios" || rawState.startsWith("ios:");
+      const nonce = rawState.startsWith("ios:") ? rawState.substring(4) : null;
+      console.log("[auth/google/callback] passport done, isIos:", isIos, "nonce:", nonce ? nonce.substring(0, 8) + "..." : "none", "err:", !!err, "user:", !!user);
 
       if (err) {
         console.error("[google-auth] Error:", err);
-        if (platform === "ios") {
-          return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=oauth_failed");
+        if (isIos) {
+          return res.redirect("/api/auth/google-complete");
         }
         return res.redirect("/auth?error=oauth_failed");
       }
       if (!user) {
-        if (platform === "ios") {
-          return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=oauth_cancelled");
+        if (isIos) {
+          return res.redirect("/api/auth/google-complete");
         }
         return res.redirect("/auth?error=oauth_cancelled");
       }
 
-      if (platform === "ios") {
+      if (isIos) {
         const fullUser = await storage.getUser(user.id);
         if (fullUser?.twoFactorEnabled) {
-          return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=2fa_required");
+          console.log("[google-auth] iOS: 2FA required, skipping (not supported in wrapper)");
+          return res.redirect("/api/auth/google-complete");
         }
-        const code = storeAuthCode(user.id);
-        const encodedCode = encodeURIComponent(code);
-        console.log("[google-auth] iOS: issuing auth code for user:", user.id, "code length:", code.length);
-        return sendDeepLinkRedirect(res, `ecologic://auth/callback?code=${encodedCode}`);
+        if (nonce) {
+          storeAuthCodeForNonce(nonce, user.id);
+          console.log("[google-auth] iOS: stored auth code for nonce, redirecting to complete page");
+        } else {
+          const code = storeAuthCode(user.id);
+          console.log("[google-auth] iOS: no nonce, stored auth code:", code.substring(0, 8) + "...");
+        }
+        return res.redirect("/api/auth/google-complete");
       }
       
       // Web flow: Check if 2FA is enabled for this user

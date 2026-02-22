@@ -355,13 +355,9 @@ export default function Auth() {
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
-      const { isNativePlatform, getApiBaseUrl, openSystemBrowser } = await import("@/lib/capacitor");
-      if (isNativePlatform()) {
-        await openSystemBrowser(`${getApiBaseUrl()}/api/auth/google?platform=ios`);
-        setIsGoogleLoading(false);
-      } else {
-        window.location.href = "/api/auth/google";
-      }
+      const { startGoogleAuthNative } = await import("@/lib/capacitor");
+      await startGoogleAuthNative();
+      setIsGoogleLoading(false);
     } catch (error) {
       console.error("Google sign-in error:", error);
       setIsGoogleLoading(false);

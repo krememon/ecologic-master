@@ -27,12 +27,8 @@ export default function Welcome() {
 
   const handleGoogleAuth = async () => {
     try {
-      const { isNativePlatform, getApiBaseUrl, openSystemBrowser } = await import("@/lib/capacitor");
-      if (isNativePlatform()) {
-        await openSystemBrowser(`${getApiBaseUrl()}/api/auth/google?platform=ios`);
-      } else {
-        window.location.href = "/api/auth/google";
-      }
+      const { startGoogleAuthNative } = await import("@/lib/capacitor");
+      await startGoogleAuthNative();
     } catch (err) {
       console.error("[google-auth] Error:", err);
       window.location.href = "/api/auth/google";
