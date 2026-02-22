@@ -1,0 +1,88 @@
+MASTER CONTEXT (EcoLogic)
+We are seeing Google OAuth fail ONLY inside the iPhone simulator wrapper with:
+“Access blocked… Use secure browsers policy… Error 403: disallowed_useragent”.
+On Replit (normal browser) Google login works. We confirmed we use Google OAuth 2.0 via `passport-google-oauth20`.
+
+ROOT CAUSE
+Google blocks OAuth flows inside embedded browsers / WKWebView. Our wrapper runs the `/auth/google` flow inside the WebView, so Google rejects it. Fix is to run Google auth in a “secure system browser” (Safari / ASWebAuthenticationSession) and then deep-link back into the app.
+
+GOAL
+Keep existing web OAuth flow unchanged.
+For iOS wrapper only:
+1) Open Google auth in system browser (Capacitor Browser)
+2) After Passport callback succeeds, redirect to deep link: `ecologic://auth/callback?token=...`
+3) App catches deep link, closes browser, stores token, and navigates to Dashboard.
+
+IMPORTANT
+- Do NOT attempt to do Google OAuth inside the WebView.
+- Must still work on Replit/web exactly like before.
+
+--------------------------------------------
+TASKS (BACKEND - Express + passport-google-oauth20)
+1) Update the “start Google auth” route to accept `?platform=ios` and preserve it through the OAuth round-trip using the OAuth `state` param.
+   - Example: GET `/auth/google?platform=ios`
+   - Use passport authenticate with `state: "ios"` when platform=ios, else state:"web" or omit.
+
+2) Update the Google callback route `/auth/google/callback`:
+   - After successful passport auth, generate our normal EcoLogic session token (JWT preferred).
+   - Read platform from `req.query.state` (Google returns it back).
+   - If platform === "ios":
+        redirect to `ecologic://auth/callback?token=<ENCODED_TOKEN>`
+     else:
+        keep existing behavior (redirect to web app route like `${APP_URL}/auth/callback?token=...` or whatever we currently do).
+
+3) If we currently only use cookies/sessions for web:
+   - Implement a short-lived JWT token for the wrapper redirect OR implement a “one-time code” exchange endpoint:
+       - callback redirects to `ecologic://auth/callback?code=...`
+       - app calls `/api/auth/exchange-code` to get session token.
+   - Choose the simplest approach that matches existing auth architecture; do not break web login.
+
+--------------------------------------------
+TASKS (FRONTEND - React)
+1) Detect wrapper/native platform:
+   - Use `Capacitor.isNativePlatform()` or `window.Capacitor?.isNativePlatform?.()`
+
+2) Update the Google Sign-In button behavior:
+   - If native platform:
+       open system browser using `@capacitor/browser`:
+         `Browser.open({ url: `${API_BASE_URL}/auth/google?platform=ios`, presentationStyle: "popover" })`
+   - Else (web):
+       keep existing behavior (navigate to `${API_BASE_URL}/auth/google` or current method)
+
+3) Add deep link listener in app root (highest-level component where auth bootstraps):
+   - Use `@capacitor/app`:
+     `App.addListener('appUrlOpen', async ({ url }) => { ... })`
+   - If url starts with `ecologic://auth/callback`:
+       - parse `token` (or `code` if you implement exchange)
+       - close browser (`Browser.close()`)
+       - persist token the same way as existing login
+       - refresh auth state
+       - navigate to `/dashboard`
+
+--------------------------------------------
+TASKS (WRAPPER / IOS CONFIG)
+1) Ensure Capacitor has Browser + App plugins installed and synced:
+   - `npm i @capacitor/browser @capacitor/app`
+   - `npx cap sync`
+
+2) Register URL scheme deep link for iOS:
+   - Scheme: `ecologic`
+   - Path: `auth/callback`
+   - Ensure simulator opens the app on `ecologic://auth/callback?...`
+
+--------------------------------------------
+DELIVERABLES
+- Google login works in iPhone simulator wrapper (no 403 disallowed_useragent).
+- Web/Replit Google login remains unchanged.
+- After successful Google auth in wrapper, user lands on Dashboard authenticated.
+
+FILES TO TOUCH (GUIDANCE)
+- Backend auth routes file where `/auth/google` and `/auth/google/callback` live (Express)
+- Frontend login component (Google button handler)
+- Frontend app root (deep link listener + token set)
+- Capacitor config / iOS URL scheme config
+
+VALIDATION STEPS
+1) Web: click Google login → completes as before.
+2) iOS simulator: click Google login → opens Safari-style auth → returns to app → dashboard.
+3) Confirm no redirects to login loop and token persists across refresh.
