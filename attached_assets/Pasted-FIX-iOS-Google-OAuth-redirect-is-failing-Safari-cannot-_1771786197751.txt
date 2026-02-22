@@ -1,0 +1,56 @@
+FIX: iOS Google OAuth redirect is failing (“Safari cannot open the page because the address is invalid”)
+We must ensure the OAuth callback redirects to a VALID deep link URL (proper scheme registered) and that we only attempt that deep link for iOS wrapper.
+
+ROOT CAUSE LIKELY
+Backend is redirecting to an invalid URL such as:
+- ecologic://auth/callback?token=... but the iOS app does NOT have the ecologic URL scheme registered, OR
+- redirect URL contains illegal characters (not encodeURIComponent), OR
+- backend is returning a relative/dead redirect, OR
+- the “deep link” redirect is being attempted inside SFSafariViewController but the scheme isn’t whitelisted/registered.
+
+GOAL
+After Google sign-in completes:
+1) Backend redirects to: ecologic://auth/callback?token=<ENCODED_TOKEN>  (VALID)
+2) iOS app receives it via App.addListener('appUrlOpen'), closes Safari, stores token, routes to dashboard.
+
+TASKS (Agent)
+A) iOS URL Scheme (REQUIRED)
+1) In Xcode, open the iOS target (App).
+2) Ensure URL scheme is registered:
+   - Target -> Info tab -> URL Types -> + add
+   - Identifier: com.ecologic.app (any)
+   - URL Schemes: ecologic
+   (This makes ecologic:// links valid.)
+3) Also ensure Capacitor config uses same appId (already com.ecologic.app).
+
+B) Backend callback redirect must be valid + encoded
+1) In /auth/google/callback after passport auth:
+   - create token (JWT or existing)
+   - const tokenEncoded = encodeURIComponent(token)
+   - if state === "ios":
+       return res.redirect(`ecologic://auth/callback?token=${tokenEncoded}`)
+     else:
+       return res.redirect(`${APP_URL}/auth/callback?token=${tokenEncoded}`)
+2) Ensure NO spaces, no raw JSON, no unencoded characters in token param.
+
+C) Ensure state/platform is passed correctly
+1) In /auth/google:
+   - if req.query.platform === "ios":
+       passport.authenticate("google", { scope:["profile","email"], state:"ios", prompt:"select_account" })
+     else normal
+
+D) Frontend deep link listener
+1) Confirm in native startup:
+   - App.addListener('appUrlOpen', ({ url }) => { if url startsWith 'ecologic://auth/callback' ... })
+2) Parse token, Browser.close(), persist auth token, navigate /dashboard.
+
+E) Debug instrumentation (temporary)
+1) Backend: log the exact redirect URL for ios:
+   console.log("[auth/google/callback] ios redirect ->", redirectUrl)
+2) Frontend: log the received url in appUrlOpen:
+   console.log("[deep-link] received:", url)
+
+DELIVERABLE
+- After signing in with Google, Safari closes and EcoLogic opens logged in (dashboard).
+- No “address is invalid”.
+- Logs confirm redirect URL is ecologic://auth/callback?token=...

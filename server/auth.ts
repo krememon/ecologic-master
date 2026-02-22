@@ -101,17 +101,8 @@ function generateToken() {
 }
 
 function sendDeepLinkRedirect(res: Response, deepLinkUrl: string) {
-  const escaped = deepLinkUrl.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-  res.setHeader("Content-Type", "text/html");
-  return res.send(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Redirecting...</title></head>
-<body>
-<p>Redirecting to EcoLogic...</p>
-<script>
-  window.location.href = '${escaped}';
-  setTimeout(function() { document.body.innerHTML = '<p>If you are not redirected, <a href="${escaped}">tap here</a>.</p>'; }, 2000);
-</script>
-</body></html>`);
+  console.log("[deep-link-redirect] Redirecting to:", deepLinkUrl);
+  return res.redirect(302, deepLinkUrl);
 }
 
 // Email service setup
@@ -1177,8 +1168,9 @@ export function setupAuth(app: Express) {
           return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=2fa_required");
         }
         const code = storeAuthCode(user.id);
-        console.log("[google-auth] iOS: issuing auth code for user:", user.id);
-        return sendDeepLinkRedirect(res, `ecologic://auth/callback?code=${code}`);
+        const encodedCode = encodeURIComponent(code);
+        console.log("[google-auth] iOS: issuing auth code for user:", user.id, "code length:", code.length);
+        return sendDeepLinkRedirect(res, `ecologic://auth/callback?code=${encodedCode}`);
       }
       
       // Web flow: Check if 2FA is enabled for this user
