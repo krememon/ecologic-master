@@ -1,0 +1,82 @@
+TASK: Fix Sign Out on iOS wrapper so it does NOT open Safari. When user taps “Sign Out”, it should:
+1) call backend logout (destroy session + clear cookie)
+2) clear any client auth cache
+3) navigate to /login (or your sign-in route) inside the app
+
+ROOT CAUSE
+Current Sign Out likely uses a link/navigation to `/api/auth/logout` (or similar) which triggers Browser.open / SafariView on iOS.
+We must replace it with a fetch POST/GET to logout endpoint + internal redirect.
+
+FRONTEND CHANGES
+1) Find the Sign Out handler (Sidebar / Menu / Settings):
+   Search for: "Sign Out", "logout", "/api/auth/logout", "window.location", "Browser.open"
+2) Replace with async function:
+
+async function handleSignOut() {
+  try {
+    console.log("[signout] starting");
+
+    // call backend to clear session cookie
+    await fetch("/api/auth/logout", {
+      method: "POST",               // use POST if available; otherwise GET
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    // clear any cached user state
+    // if you use react-query:
+    // queryClient.clear();
+    // if you store anything:
+    localStorage.removeItem("authToken"); // only if it exists
+    sessionStorage.removeItem("coldStartRedirectDone"); // optional
+    // clear any app-specific caches if present
+
+  } catch (e) {
+    console.error("[signout] failed", e);
+  } finally {
+    // IMPORTANT: do NOT open external browser. Just route internally.
+    navigate("/login", { replace: true });
+    // optionally hard refresh the SPA state in webview:
+    // window.location.href = "/login";
+  }
+}
+
+3) Wire button to call handleSignOut() (NOT an <a href="/api/auth/logout">)
+
+BACKEND CHANGES (if needed)
+1) Ensure there is an endpoint that clears session WITHOUT redirecting to Google:
+- POST /api/auth/logout
+- It should:
+  - req.logout() / clear passport session
+  - req.session.destroy(...)
+  - clear cookie (same name you use)
+  - return 200 JSON { ok: true }
+
+Express example logic (adapt to your codebase):
+router.post("/api/auth/logout", (req, res) => {
+  try {
+    req.logout?.(() => {});
+    req.session?.destroy?.(() => {});
+    res.clearCookie("connect.sid", { path: "/" }); // cookie name may differ
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(200).json({ ok: true });
+  }
+});
+
+2) DO NOT res.redirect(...) on this endpoint.
+Redirects are what push Safari flows.
+
+DELIVERABLES
+- Tapping Sign Out never opens Safari.
+- User is signed out (session cookie invalidated).
+- App lands on /login (sign-in screen) immediately.
+- Refreshing after sign out stays logged out.
+
+DEBUG (keep for now)
+Add logs:
+console.log("[signout] click");
+console.log("[signout] logout status", resp.status);
+
+NOTE
+If your logout endpoint is currently GET and used by web, keep it, but add a new POST /api/auth/logout for SPA/native and use that from the app.
