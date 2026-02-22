@@ -1,0 +1,61 @@
+TASK: Fix iOS WRAPPER drawer/menu “fits wrong” — ONLY adjust the drawer’s TOP POSITION (not padding). No redesign.
+
+PROBLEM
+The drawer panel is still starting too high (under the notch/status bar). Adding padding alone didn’t work because the PANEL itself is positioned at top:0 (or translateY) and is being clipped/overlapped. We must move the entire drawer container DOWN by the safe-area inset.
+
+GOAL
+In native iOS wrapper, the entire drawer panel begins below the safe area, matching the web screenshot. No other UI changes.
+
+PLAN (MINIMAL + RELIABLE)
+1) Target the drawer “panel” element (the element that has position: fixed/absolute and slides in).
+2) In native only, set its top to safe-area inset and its height accordingly.
+3) Do NOT change fonts, spacing, widths, or list item layout.
+
+IMPLEMENTATION
+A) Identify correct drawer panel element
+- In DevTools (Safari inspector) select the drawer background/panel element and note its class.
+- It will likely be something like:
+  .sheet-content, .drawer-content, .sidebar-panel, .mobile-drawer, .radix-sheet-content, [data-state="open"] etc.
+
+B) Apply native-only TOP + HEIGHT fix (preferred)
+In global CSS:
+
+/* Native iOS: shift entire drawer panel below notch */
+body.native .DRAWER_PANEL_SELECTOR {
+  top: env(safe-area-inset-top, 0px) !important;
+  height: calc(100vh - env(safe-area-inset-top, 0px)) !important;
+}
+
+/* If it uses bottom:0 already, keep bottom and only set top */
+body.native .DRAWER_PANEL_SELECTOR {
+  top: env(safe-area-inset-top, 0px) !important;
+  bottom: 0 !important;
+}
+
+C) If the drawer uses transform translateY/translate3d for animation
+Add this ONLY while open (don’t break animation):
+body.native .DRAWER_PANEL_SELECTOR[data-state="open"],
+body.native .DRAWER_PANEL_SELECTOR.open {
+  top: env(safe-area-inset-top, 0px) !important;
+}
+
+D) Close button stays the same (only if needed)
+If the X still overlaps, set:
+body.native .DRAWER_CLOSE_SELECTOR {
+  top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+}
+
+E) Do NOT touch app header, page layout, or anything outside the drawer panel.
+
+REQUIRED DELIVERABLES
+1) Add temporary console log / comment with the selector chosen:
+   // iOS drawer panel selector: <...>
+2) Provide exact CSS added + file path.
+
+ACCEPTANCE
+- iOS wrapper drawer top aligns below notch (EcoLogic logo fully visible, not clipped).
+- Drawer items unchanged.
+- Web unaffected.
+
+NOTE FOR AGENT
+You MUST replace DRAWER_PANEL_SELECTOR with the actual element that is positioned fixed/absolute for the drawer. Padding won’t solve this; top/height on the panel will.

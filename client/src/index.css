@@ -380,11 +380,9 @@ html.native #root {
   box-sizing: border-box;
 }
 
-html.native [role="dialog"][class*="fixed"][class*="z-50"] {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
-  box-sizing: border-box;
-}
-
-html.native [role="dialog"][class*="fixed"][class*="z-50"] > button[class*="absolute"][class*="top-4"] {
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
+/* iOS native: shift drawer panel below notch/status bar */
+html.native [role="dialog"][class*="fixed"][class*="z-50"][class*="inset-y-0"] {
+  top: env(safe-area-inset-top, 0px) !important;
+  bottom: 0 !important;
+  height: auto !important;
 }
