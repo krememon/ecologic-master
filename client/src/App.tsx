@@ -147,6 +147,27 @@ function UnsubscribeRouter() {
   return <PublicUnsubscribe />;
 }
 
+const COLD_START_SKIP = ["/auth/callback", "/join-company", "/sign", "/onboarding", "/paywall", "/login", "/signup", "/welcome", "/register"];
+
+function useColdStartRedirect() {
+  const [, setLocation] = useLocation();
+  React.useEffect(() => {
+    if (sessionStorage.getItem("coldStartRedirectDone")) return;
+    sessionStorage.setItem("coldStartRedirectDone", "1");
+    try {
+      const cap = (window as any).Capacitor;
+      const platform = cap?.getPlatform?.();
+      if (!platform || platform === "web") return;
+    } catch { return; }
+    const p = window.location.pathname;
+    if (COLD_START_SKIP.some((s) => p.startsWith(s))) return;
+    if (p !== "/") {
+      console.log("[cold-start] Native cold start, redirecting to /");
+      setLocation("/", { replace: true });
+    }
+  }, [setLocation]);
+}
+
 function AuthenticatedRouter() {
   const path = window.location.pathname;
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -215,6 +236,8 @@ function AuthenticatedRouter() {
     localStorage.removeItem("onboardingChoice");
     localStorage.removeItem("onboardingIndustry");
   }
+
+  useColdStartRedirect();
 
   return (
     <Layout>
