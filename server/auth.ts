@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { Express } from "express";
+import { Express, Response } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -98,6 +98,20 @@ async function comparePasswords(supplied: string, stored: string) {
 
 function generateToken() {
   return randomBytes(32).toString("hex");
+}
+
+function sendDeepLinkRedirect(res: Response, deepLinkUrl: string) {
+  const escaped = deepLinkUrl.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+  res.setHeader("Content-Type", "text/html");
+  return res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Redirecting...</title></head>
+<body>
+<p>Redirecting to EcoLogic...</p>
+<script>
+  window.location.href = '${escaped}';
+  setTimeout(function() { document.body.innerHTML = '<p>If you are not redirected, <a href="${escaped}">tap here</a>.</p>'; }, 2000);
+</script>
+</body></html>`);
 }
 
 // Email service setup
@@ -1140,13 +1154,13 @@ export function setupAuth(app: Express) {
       if (err) {
         console.error("[google-auth] Error:", err);
         if (platform === "ios") {
-          return res.redirect("ecologic://auth/callback?error=oauth_failed");
+          return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=oauth_failed");
         }
         return res.redirect("/auth?error=oauth_failed");
       }
       if (!user) {
         if (platform === "ios") {
-          return res.redirect("ecologic://auth/callback?error=oauth_cancelled");
+          return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=oauth_cancelled");
         }
         return res.redirect("/auth?error=oauth_cancelled");
       }
@@ -1154,11 +1168,11 @@ export function setupAuth(app: Express) {
       if (platform === "ios") {
         const fullUser = await storage.getUser(user.id);
         if (fullUser?.twoFactorEnabled) {
-          return res.redirect("ecologic://auth/callback?error=2fa_required");
+          return sendDeepLinkRedirect(res, "ecologic://auth/callback?error=2fa_required");
         }
         const code = storeAuthCode(user.id);
         console.log("[google-auth] iOS: issuing auth code for user:", user.id);
-        return res.redirect(`ecologic://auth/callback?code=${code}`);
+        return sendDeepLinkRedirect(res, `ecologic://auth/callback?code=${code}`);
       }
       
       // Web flow: Check if 2FA is enabled for this user
