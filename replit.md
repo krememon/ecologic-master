@@ -52,6 +52,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - **Email Unsubscribe System**: Secure one-click unsubscribe for marketing emails with HMAC-signed tokens and public endpoints.
 - **Plaid Bank Connection**: Owner-only Plaid Link integration for connecting company bank accounts, with encrypted token storage.
 - **Security Hardening**: Comprehensive cross-tenant data isolation, centralized RBAC, secure storage methods, rate limiting, log sanitization, and 404 responses for unauthorized access.
+- **Native Wrapper Google OAuth**: System-browser flow for Capacitor iOS/Android wrappers using `@capacitor/browser` + `ecologic://` deep link scheme + one-time auth code exchange (`/api/auth/exchange-code`). Avoids Google's `disallowed_useragent` 403 in WKWebView. Web flow unchanged.
 
 ## Mobile App (React Native + Expo)
 EcoLogic Mobile lives in `/mobile` and is a native iOS/Android app built with Expo (TypeScript).
