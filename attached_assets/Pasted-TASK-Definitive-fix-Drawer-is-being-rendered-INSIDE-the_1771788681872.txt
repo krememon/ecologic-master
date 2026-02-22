@@ -1,0 +1,59 @@
+TASK: Definitive fix — Drawer is being rendered INSIDE the header stacking context / wrong portal mount in iOS wrapper. We must portal it to <body> and apply safe-area only to that portal container. No UI redesign.
+
+WHY PREVIOUS CSS DIDN’T WORK
+If the drawer is mounted inside a container that already has transforms/positioning (common in wrappers), top/height CSS won’t move it correctly. The reliable fix is to render the drawer in a portal attached to document.body (or a dedicated #overlay-root), then safe-area works.
+
+GOAL
+Drawer in iOS wrapper matches web: logo not clipped, panel starts below notch, close X positioned correctly. No changes to drawer content/layout.
+
+IMPLEMENTATION (CHOOSE BASED ON DRAWER LIB)
+1) If using Radix UI / shadcn Sheet/Drawer:
+- Set `container={document.body}` on the Portal if available
+- Or ensure `Portal` mounts to body
+- Use `modal` defaults
+
+Example (Radix):
+<Sheet>
+  <SheetPortal container={document.body}>
+    <SheetOverlay />
+    <SheetContent className="ecologic-drawer">
+      ...
+    </SheetContent>
+  </SheetPortal>
+</Sheet>
+
+2) If using a custom Drawer component:
+- Wrap drawer markup in ReactDOM.createPortal(..., document.body)
+
+const DrawerPortal = ({ children }) => {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+};
+
+3) Add safe-area padding to ONLY the drawer content container:
+body.native .ecologic-drawer {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+  box-sizing: border-box;
+}
+
+4) Ensure drawer content container is positioned correctly:
+body.native .ecologic-drawer {
+  top: 0; /* keep */
+  height: 100vh;
+}
+
+DEBUG STEP (REQUIRED)
+Add a temporary “outline debug” to confirm we are styling the RIGHT element:
+body.native .ecologic-drawer { outline: 2px solid red; }
+Remove after confirmed.
+
+WHAT AGENT MUST DO
+A) Find drawer component file (mobile sidebar / nav drawer / sheet)
+B) Implement portal-to-body for drawer container (Radix container or createPortal)
+C) Add className="ecologic-drawer" to drawer panel element (the one that slides in)
+D) Add the native-only CSS above (and remove debug outline after confirmation)
+
+DELIVERABLE
+- Exact file path of drawer component updated
+- Confirmation drawer is now mounted under document.body (not nested)
+- Screenshot showing drawer top no longer clipped on iOS wrapper

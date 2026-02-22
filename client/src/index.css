@@ -381,8 +381,6 @@ html.native #root {
 }
 
 /* iOS native: shift drawer panel below notch/status bar */
-html.native [role="dialog"][class*="fixed"][class*="z-50"][class*="inset-y-0"] {
+html.native .ecologic-drawer {
   top: env(safe-area-inset-top, 0px) !important;
-  bottom: 0 !important;
-  height: auto !important;
 }
