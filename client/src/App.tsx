@@ -371,55 +371,60 @@ function useCapacitorDeepLinks() {
     let cleanup: (() => void) | undefined;
 
     async function setup() {
-      const { isNativePlatform } = await import("@/lib/capacitor");
-      if (!isNativePlatform()) return;
-
-      const { App: CapApp } = await import("@capacitor/app");
-      const { Browser } = await import("@capacitor/browser");
-
-      const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
-        console.log("[deep-link] Received:", url);
-        if (!url.startsWith("ecologic://auth/callback")) return;
-
-        try {
-          await Browser.close();
-        } catch {}
-
-        const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
-        const code = params.get("code");
-        const error = params.get("error");
-
-        if (error) {
-          console.error("[deep-link] Auth error:", error);
-          window.location.href = "/login?error=" + error;
+      try {
+        const { isNativePlatform, closeSystemBrowser } = await import("@/lib/capacitor");
+        if (!isNativePlatform()) {
+          console.log("[deep-link] Web platform detected, skipping deep link setup");
           return;
         }
 
-        if (code) {
-          try {
-            const res = await fetch("/api/auth/exchange-code", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ code }),
-              credentials: "include",
-            });
+        console.log("[deep-link] Native platform detected, setting up deep link listener");
+        const { App: CapApp } = await import("@capacitor/app");
 
-            if (res.ok) {
-              console.log("[deep-link] Auth code exchanged successfully");
-              queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-              window.location.href = "/";
-            } else {
-              console.error("[deep-link] Exchange failed:", res.status);
+        const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
+          console.log("[deep-link] Received:", url);
+          if (!url.startsWith("ecologic://auth/callback")) return;
+
+          await closeSystemBrowser();
+
+          const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
+          const code = params.get("code");
+          const error = params.get("error");
+
+          if (error) {
+            console.error("[deep-link] Auth error:", error);
+            window.location.href = "/login?error=" + error;
+            return;
+          }
+
+          if (code) {
+            try {
+              const res = await fetch("/api/auth/exchange-code", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code }),
+                credentials: "include",
+              });
+
+              if (res.ok) {
+                console.log("[deep-link] Auth code exchanged successfully");
+                queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+                window.location.href = "/";
+              } else {
+                console.error("[deep-link] Exchange failed:", res.status);
+                window.location.href = "/login?error=exchange_failed";
+              }
+            } catch (err) {
+              console.error("[deep-link] Exchange error:", err);
               window.location.href = "/login?error=exchange_failed";
             }
-          } catch (err) {
-            console.error("[deep-link] Exchange error:", err);
-            window.location.href = "/login?error=exchange_failed";
           }
-        }
-      });
+        });
 
-      cleanup = () => listener.remove();
+        cleanup = () => listener.remove();
+      } catch (err) {
+        console.error("[deep-link] Setup failed (expected on web):", err);
+      }
     }
 
     setup();
