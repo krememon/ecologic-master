@@ -352,11 +352,16 @@ export default function Auth() {
     }
   };
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
-      // Redirect to Google OAuth endpoint
-      window.location.href = "/auth/google";
+      const { isNativePlatform, getApiBaseUrl, openSystemBrowser } = await import("@/lib/capacitor");
+      if (isNativePlatform()) {
+        await openSystemBrowser(`${getApiBaseUrl()}/api/auth/google?platform=ios`);
+        setIsGoogleLoading(false);
+      } else {
+        window.location.href = "/api/auth/google";
+      }
     } catch (error) {
       console.error("Google sign-in error:", error);
       setIsGoogleLoading(false);

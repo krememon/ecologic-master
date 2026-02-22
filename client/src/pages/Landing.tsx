@@ -251,7 +251,14 @@ export default function Landing() {
             </div>
             
             <Button 
-              onClick={() => window.location.href = "/auth/google"}
+              onClick={async () => {
+                const { isNativePlatform, getApiBaseUrl, openSystemBrowser } = await import("@/lib/capacitor");
+                if (isNativePlatform()) {
+                  await openSystemBrowser(`${getApiBaseUrl()}/api/auth/google?platform=ios`);
+                } else {
+                  window.location.href = "/api/auth/google";
+                }
+              }}
               className="w-full bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 flex items-center justify-center space-x-2"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">

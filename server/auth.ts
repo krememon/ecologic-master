@@ -45,6 +45,33 @@ declare global {
   }
 }
 
+const authCodeStore = new Map<string, { userId: number; expiresAt: number }>();
+
+function generateAuthCode(): string {
+  return randomBytes(32).toString("hex");
+}
+
+function storeAuthCode(userId: number): string {
+  const code = generateAuthCode();
+  authCodeStore.set(code, { userId, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return code;
+}
+
+function consumeAuthCode(code: string): number | null {
+  const entry = authCodeStore.get(code);
+  if (!entry) return null;
+  authCodeStore.delete(code);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.userId;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, entry] of authCodeStore) {
+    if (now > entry.expiresAt) authCodeStore.delete(code);
+  }
+}, 60 * 1000);
+
 const scryptAsync = promisify(scrypt);
 
 // Log RESEND_FROM at startup
@@ -1099,21 +1126,44 @@ export function setupAuth(app: Express) {
   });
 
   // Social Auth Routes
-  app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+  app.get("/api/auth/google", (req, res, next) => {
+    const platform = req.query.platform === "ios" ? "ios" : "web";
+    passport.authenticate("google", {
+      scope: ["profile", "email"],
+      state: platform,
+    })(req, res, next);
+  });
   app.get("/api/auth/google/callback", (req, res, next) => {
     passport.authenticate("google", async (err: any, user: any, info: any) => {
+      const platform = req.query.state;
+
       if (err) {
         console.error("[google-auth] Error:", err);
+        if (platform === "ios") {
+          return res.redirect("ecologic://auth/callback?error=oauth_failed");
+        }
         return res.redirect("/auth?error=oauth_failed");
       }
       if (!user) {
+        if (platform === "ios") {
+          return res.redirect("ecologic://auth/callback?error=oauth_cancelled");
+        }
         return res.redirect("/auth?error=oauth_cancelled");
       }
+
+      if (platform === "ios") {
+        const fullUser = await storage.getUser(user.id);
+        if (fullUser?.twoFactorEnabled) {
+          return res.redirect("ecologic://auth/callback?error=2fa_required");
+        }
+        const code = storeAuthCode(user.id);
+        console.log("[google-auth] iOS: issuing auth code for user:", user.id);
+        return res.redirect(`ecologic://auth/callback?code=${code}`);
+      }
       
-      // Check if 2FA is enabled for this user
+      // Web flow: Check if 2FA is enabled for this user
       const fullUser = await storage.getUser(user.id);
       if (fullUser?.twoFactorEnabled) {
-        // Set pending 2FA flag and redirect to 2FA page
         (req.session as any).twoFactorPendingUserId = user.id;
         return req.session.save((saveErr) => {
           if (saveErr) {
@@ -1133,6 +1183,45 @@ export function setupAuth(app: Express) {
         return res.redirect("/");
       });
     })(req, res, next);
+  });
+
+  // Auth code exchange endpoint for native app deep-link flow
+  app.post("/api/auth/exchange-code", async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ message: "Auth code is required" });
+      }
+
+      const userId = consumeAuthCode(code);
+      if (!userId) {
+        return res.status(401).json({ message: "Invalid or expired auth code" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      req.login(user, (loginErr) => {
+        if (loginErr) {
+          console.error("[exchange-code] Login error:", loginErr);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        return res.json({
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          },
+          sessionId: req.sessionID,
+        });
+      });
+    } catch (error) {
+      console.error("[exchange-code] Error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
   });
 
   app.get("/api/auth/facebook", passport.authenticate("facebook", { scope: ["email"] }));

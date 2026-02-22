@@ -261,8 +261,13 @@ export default function SignInWizard() {
     }
   };
   
-  const handleGoogleAuth = () => {
-    window.location.href = "/api/auth/google";
+  const handleGoogleAuth = async () => {
+    const { isNativePlatform, getApiBaseUrl, openSystemBrowser } = await import("@/lib/capacitor");
+    if (isNativePlatform()) {
+      await openSystemBrowser(`${getApiBaseUrl()}/api/auth/google?platform=ios`);
+    } else {
+      window.location.href = "/api/auth/google";
+    }
   };
   
   const [isAppleLoading, setIsAppleLoading] = useState(false);

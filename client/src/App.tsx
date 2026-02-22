@@ -366,8 +366,70 @@ function usePreventScrollbarShift() {
   }, []);
 }
 
+function useCapacitorDeepLinks() {
+  React.useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    async function setup() {
+      const { isNativePlatform } = await import("@/lib/capacitor");
+      if (!isNativePlatform()) return;
+
+      const { App: CapApp } = await import("@capacitor/app");
+      const { Browser } = await import("@capacitor/browser");
+
+      const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
+        console.log("[deep-link] Received:", url);
+        if (!url.startsWith("ecologic://auth/callback")) return;
+
+        try {
+          await Browser.close();
+        } catch {}
+
+        const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
+        const code = params.get("code");
+        const error = params.get("error");
+
+        if (error) {
+          console.error("[deep-link] Auth error:", error);
+          window.location.href = "/login?error=" + error;
+          return;
+        }
+
+        if (code) {
+          try {
+            const res = await fetch("/api/auth/exchange-code", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code }),
+              credentials: "include",
+            });
+
+            if (res.ok) {
+              console.log("[deep-link] Auth code exchanged successfully");
+              queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+              window.location.href = "/";
+            } else {
+              console.error("[deep-link] Exchange failed:", res.status);
+              window.location.href = "/login?error=exchange_failed";
+            }
+          } catch (err) {
+            console.error("[deep-link] Exchange error:", err);
+            window.location.href = "/login?error=exchange_failed";
+          }
+        }
+      });
+
+      cleanup = () => listener.remove();
+    }
+
+    setup();
+    return () => cleanup?.();
+  }, []);
+}
+
 function App() {
   usePreventScrollbarShift();
+  useCapacitorDeepLinks();
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
