@@ -379,3 +379,12 @@ html.native #root {
   padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
 }
+
+html.native [role="dialog"][class*="fixed"][class*="z-50"] {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+  box-sizing: border-box;
+}
+
+html.native [role="dialog"][class*="fixed"][class*="z-50"] > button[class*="absolute"][class*="top-4"] {
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+}
