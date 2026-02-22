@@ -1,0 +1,66 @@
+TASK: iOS WRAPPER header is too high (buttons not clickable). Fix ONLY safe-area / top padding. No redesign.
+
+CONTEXT
+In the iOS wrapper, the top header area is pushed up under the notch/status bar, so the hamburger and + button are not tappable. Web/Replit layout is fine. We want the wrapper to look like the 2nd screenshot (header comfortably below status bar). We previously tried fixes that broke UI; avoid “crazy changes”.
+
+GOAL
+Make header/buttons fully clickable by applying proper iOS safe-area padding at the very top container ONLY when running in native wrapper. Do NOT change component layout, spacing system-wide, or redesign header.
+
+IMPLEMENTATION (SAFE, MINIMAL)
+1) Add a single global CSS rule that pads the app root by the iOS safe area inset:
+   - Apply to the top-level app container ONLY (e.g. #root, body > #root, or .app-shell wrapper).
+   - Use env(safe-area-inset-top) with a fallback.
+   - Do NOT apply to every page component.
+
+2) Ensure the header has no negative margin/top offset and is positioned relative to the padded container.
+
+3) Only enable this padding when running in native (Capacitor) so web layout stays unchanged.
+
+STEPS
+A) Add a tiny native-safe-area flag
+- Create a helper:
+  const isNative = !!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== "web";
+- Add a class on <body> or root container on app startup:
+  document.body.classList.toggle("native", isNative);
+
+B) Add CSS (global, minimal)
+- In global CSS (e.g. src/index.css or src/global.css):
+
+/* ONLY affects wrapper/native */
+body.native {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* If body padding causes any unexpected scroll, instead apply to the root app wrapper: */
+body.native #root {
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: border-box;
+}
+
+(Choose ONE target: either body OR #root, prefer #root if body padding affects anything else.)
+
+C) If the header is “position: fixed” at top: 0
+- Adjust ONLY the fixed header top value in native:
+
+body.native .app-header,
+body.native header {
+  top: env(safe-area-inset-top, 0px);
+}
+
+(Only if needed—do not touch other spacing.)
+
+D) Verify no overlap and buttons clickable
+- In iOS simulator: ensure hamburger and + button are tappable.
+- In web: ensure header did not move.
+
+CONSTRAINTS
+- No layout refactors.
+- No changes to header component structure.
+- No new wrappers around every page.
+- No adding random margins; use safe-area inset only.
+- Keep changes to ≤ 10 lines of CSS + 5 lines of JS.
+
+DELIVERABLE
+- iOS wrapper header sits below status bar/notch and all header buttons are tappable.
+- Web layout remains unchanged.
+- Provide the exact files changed and the exact lines added.

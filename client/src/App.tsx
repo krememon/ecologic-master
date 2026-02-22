@@ -432,9 +432,19 @@ function useCapacitorDeepLinks() {
   }, []);
 }
 
+function useNativeSafeArea() {
+  React.useEffect(() => {
+    const cap = (window as any).Capacitor;
+    const platform = cap?.getPlatform?.();
+    const isNative = !!platform && platform !== "web";
+    document.documentElement.classList.toggle("native", isNative);
+  }, []);
+}
+
 function App() {
   usePreventScrollbarShift();
   useCapacitorDeepLinks();
+  useNativeSafeArea();
 
   return (
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
