@@ -147,11 +147,12 @@ function UnsubscribeRouter() {
   return <PublicUnsubscribe />;
 }
 
-const COLD_START_SKIP = ["/auth/callback", "/join-company", "/sign", "/onboarding", "/paywall", "/login", "/signup", "/welcome", "/register"];
+const COLD_START_SKIP = ["/auth", "/login", "/signup", "/register", "/forgot-password", "/reset-password", "/onboarding", "/join-company", "/paywall", "/sign", "/wrapper", "/welcome"];
 
-function useColdStartRedirect() {
+function useColdStartRedirect(ready: boolean) {
   const [, setLocation] = useLocation();
   React.useEffect(() => {
+    if (!ready) return;
     if (sessionStorage.getItem("coldStartRedirectDone")) return;
     sessionStorage.setItem("coldStartRedirectDone", "1");
     try {
@@ -160,12 +161,12 @@ function useColdStartRedirect() {
       if (!platform || platform === "web") return;
     } catch { return; }
     const p = window.location.pathname;
-    if (COLD_START_SKIP.some((s) => p.startsWith(s))) return;
+    if (COLD_START_SKIP.some((s) => p === s || p.startsWith(s + "/"))) return;
     if (p !== "/") {
       console.log("[cold-start] Native cold start, redirecting to /");
       setLocation("/", { replace: true });
     }
-  }, [setLocation]);
+  }, [ready, setLocation]);
 }
 
 function AuthenticatedRouter() {
@@ -182,6 +183,9 @@ function AuthenticatedRouter() {
     loadingAuth: isLoading,
     hasCompany,
   });
+
+  const coldStartReady = isAuthenticated && hasCompany && !subLoading && subActive;
+  useColdStartRedirect(coldStartReady);
 
   const onboardingChoice = user?.onboardingChoice || null;
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
@@ -236,8 +240,6 @@ function AuthenticatedRouter() {
     localStorage.removeItem("onboardingChoice");
     localStorage.removeItem("onboardingIndustry");
   }
-
-  useColdStartRedirect();
 
   return (
     <Layout>

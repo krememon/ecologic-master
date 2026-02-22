@@ -1,0 +1,89 @@
+TASK: Fix crash “Rendered more hooks than during the previous render” caused by the new cold-start redirect logic. We must NOT conditionally call hooks.
+
+ROOT CAUSE (what to look for)
+Somewhere we added logic like:
+if (isNative) { useEffect(...) }   ❌
+or
+if (authed) { useNavigate() / useLocation() } ❌
+This changes hook order between renders and triggers the exact error you see.
+
+GOAL
+Always call hooks at the top level, then conditionally run logic INSIDE the effect.
+
+FIX (DO THIS EXACTLY)
+1) Find the file where we added the cold-start redirect (likely App.tsx / RootLayout / AppShell / SubscriptionGate / AuthGate).
+2) Ensure ALL hooks are top-level and unconditional:
+   - useNavigate()
+   - useLocation()
+   - useEffect()
+   - any custom hooks (useAuth, useSubscription, useCompany, useIsNative, etc)
+
+3) Use ONE useEffect that early-returns based on conditions.
+
+COPY/PASTE TEMPLATE (use this structure)
+- Replace the variables with your real ones, but KEEP the hook ordering.
+
+const navigate = useNavigate();
+const location = useLocation();
+
+const isNative = /* your existing native detection, but NOT via conditional hook call */;
+const authed = /* from your auth state hook */;
+const hasCompany = /* from your app state */;
+const subReady = /* subscription check finished */;
+const subActive = /* subscription active */;
+
+useEffect(() => {
+  try {
+    if (!isNative) return;
+
+    // only on cold start
+    const key = "coldStartRedirectDone";
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+
+    // skip routes that must not be interrupted
+    const p = location.pathname || "/";
+    const skipPrefixes = [
+      "/auth",
+      "/login",
+      "/signup",
+      "/register",
+      "/forgot-password",
+      "/reset-password",
+      "/onboarding",
+      "/join-company",
+      "/paywall",
+      "/sign",
+      "/wrapper",
+    ];
+    if (skipPrefixes.some((s) => p === s || p.startsWith(s + "/"))) return;
+
+    // wait until gates are known
+    if (!authed) return;
+    if (!hasCompany) return;
+    if (!subReady) return;
+    if (!subActive) return;
+
+    // force Home
+    navigate("/home", { replace: true });
+  } catch (e) {
+    console.error("[cold-start] redirect failed", e);
+  }
+}, [isNative, authed, hasCompany, subReady, subActive, location.pathname, navigate]);
+
+IMPORTANT: DON’T DO THIS
+- Do NOT wrap useEffect/useNavigate/useLocation in if statements.
+- Do NOT call any hook inside a function that might not run.
+
+DELIVERABLES
+- App loads without hook error.
+- Cold start redirects to /home only once per cold start.
+- Background resume does not redirect (sessionStorage prevents it).
+- Deep link routes unaffected.
+
+BONUS DEBUG (remove after)
+console.log("[cold-start]", { isNative, authed, hasCompany, subReady, subActive, path: location.pathname });
+
+GO DO THIS NOW
+Search for: "coldStartRedirectDone" OR "/home" OR "Rendered more hooks" change.
+Fix the hook ordering exactly as above.
