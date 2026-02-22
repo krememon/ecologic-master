@@ -384,3 +384,14 @@ html.native #root {
 html.native .ecologic-drawer {
   top: env(safe-area-inset-top, 0px) !important;
 }
+
+html.native .ecologic-drawer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(-1 * env(safe-area-inset-top, 0px));
+  height: env(safe-area-inset-top, 0px);
+  background: inherit;
+  z-index: 1;
+}
