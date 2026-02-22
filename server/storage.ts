@@ -124,6 +124,9 @@ import {
   type InsertEmployeeLocationPing,
   userLiveLocations,
   type UserLiveLocation,
+  pushTokens,
+  type PushToken,
+  type InsertPushToken,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, inArray, gte, lte, isNotNull, isNull, ne } from "drizzle-orm";
@@ -448,6 +451,12 @@ export interface IStorage {
   getPaymentSignature(paymentId: number): Promise<PaymentSignature | undefined>;
   getPaymentSignaturesByJobId(jobId: number): Promise<PaymentSignature[]>;
   createPaymentSignature(sig: InsertPaymentSignature): Promise<PaymentSignature>;
+
+  // Push token operations
+  registerPushToken(data: InsertPushToken): Promise<PushToken>;
+  getUserPushTokens(userId: string): Promise<PushToken[]>;
+  deactivatePushToken(token: string): Promise<void>;
+  deactivateUserPushTokens(userId: string): Promise<void>;
 
 }
 
@@ -4261,6 +4270,55 @@ export class DatabaseStorage implements IStorage {
     }
     const deleted = await db.delete(userLiveLocations).where(and(...conditions)).returning();
     return deleted.length;
+  }
+
+  // Push token operations
+
+  async registerPushToken(data: InsertPushToken): Promise<PushToken> {
+    await db.update(pushTokens)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(pushTokens.deviceId, data.deviceId),
+          eq(pushTokens.platform, data.platform),
+          eq(pushTokens.isActive, true),
+        )
+      );
+
+    const existing = await db.select().from(pushTokens).where(
+      and(
+        eq(pushTokens.userId, data.userId),
+        eq(pushTokens.deviceId, data.deviceId),
+        eq(pushTokens.platform, data.platform),
+      )
+    );
+    if (existing.length > 0) {
+      const [updated] = await db.update(pushTokens)
+        .set({ token: data.token, isActive: true, lastSeenAt: new Date(), updatedAt: new Date() })
+        .where(eq(pushTokens.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const [token] = await db.insert(pushTokens).values(data).returning();
+    return token;
+  }
+
+  async getUserPushTokens(userId: string): Promise<PushToken[]> {
+    return db.select().from(pushTokens).where(
+      and(eq(pushTokens.userId, userId), eq(pushTokens.isActive, true))
+    );
+  }
+
+  async deactivatePushToken(token: string): Promise<void> {
+    await db.update(pushTokens)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(pushTokens.token, token));
+  }
+
+  async deactivateUserPushTokens(userId: string): Promise<void> {
+    await db.update(pushTokens)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(pushTokens.userId, userId));
   }
 
 }

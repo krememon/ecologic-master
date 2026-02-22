@@ -1884,3 +1884,32 @@ export const userLiveLocations = pgTable("user_live_locations", {
 
 export type UserLiveLocation = typeof userLiveLocations.$inferSelect;
 
+// Push notification tokens
+export const pushPlatformEnum = pgEnum("push_platform", ["ios", "android", "web"]);
+
+export const pushTokens = pgTable("push_tokens", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").references(() => companies.id, { onDelete: "cascade" }),
+  platform: pushPlatformEnum("platform").notNull(),
+  token: text("token").notNull(),
+  deviceId: varchar("device_id", { length: 255 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  lastSeenAt: timestamp("last_seen_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("push_tokens_user_idx").on(table.userId),
+  index("push_tokens_token_idx").on(table.token),
+]);
+
+export const insertPushTokenSchema = createInsertSchema(pushTokens).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastSeenAt: true,
+});
+
+export type PushToken = typeof pushTokens.$inferSelect;
+export type InsertPushToken = z.infer<typeof insertPushTokenSchema>;
+

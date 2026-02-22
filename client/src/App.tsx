@@ -187,6 +187,14 @@ function AuthenticatedRouter() {
   const coldStartReady = isAuthenticated && hasCompany && !subLoading && subActive;
   useColdStartRedirect(coldStartReady);
 
+  React.useEffect(() => {
+    if (coldStartReady) {
+      import("@/lib/capacitor").then(({ registerPushNotifications }) => {
+        registerPushNotifications();
+      });
+    }
+  }, [coldStartReady]);
+
   const onboardingChoice = user?.onboardingChoice || null;
   const onboardingIndustry = localStorage.getItem("onboardingIndustry");
   const nextRoute = !isLoading && isAuthenticated && user 

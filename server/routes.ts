@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
+import { sendPushToUser } from "./pushService";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
@@ -241,7 +242,20 @@ async function broadcastToCompany(companyId: number, message: any, excludeUserId
 }
 
 async function sendPushNotification(userId: string, notification: any) {
-  // Push notification implementation
+  try {
+    await sendPushToUser(userId, {
+      title: notification.title || "EcoLogic",
+      body: notification.body || "",
+      data: {
+        type: notification.type || "",
+        entityType: notification.entityType || "",
+        entityId: String(notification.entityId || ""),
+        linkUrl: notification.linkUrl || "",
+      },
+    });
+  } catch (err) {
+    console.error("[push] sendPushNotification error for user:", userId, err);
+  }
 }
 
 // Simple authentication middleware for protected routes
@@ -14224,6 +14238,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error creating announcement:', error);
       res.status(500).json({ message: 'Failed to create announcement' });
+    }
+  });
+
+  // ============ PUSH NOTIFICATIONS API ============
+
+  app.post('/api/push/register', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { token, platform, deviceId } = req.body;
+      if (!token || !platform || !deviceId) {
+        return res.status(400).json({ message: "token, platform, and deviceId are required" });
+      }
+      if (!["ios", "android", "web"].includes(platform)) {
+        return res.status(400).json({ message: "platform must be ios, android, or web" });
+      }
+      const member = await storage.getCompanyMemberByUserId(userId);
+      const pushToken = await storage.registerPushToken({
+        userId,
+        companyId: member?.companyId || null,
+        platform,
+        token,
+        deviceId,
+        isActive: true,
+      });
+      console.log("[push] Registered token for user:", userId, "device:", deviceId, "platform:", platform);
+      res.json({ ok: true, id: pushToken.id });
+    } catch (error: any) {
+      console.error("[push] Register error:", error);
+      res.status(500).json({ message: "Failed to register push token" });
+    }
+  });
+
+  app.post('/api/push/unregister', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ message: "token is required" });
+      }
+      await storage.deactivateUserPushTokens(userId);
+      console.log("[push] Unregistered all tokens for user:", userId);
+      res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[push] Unregister error:", error);
+      res.status(500).json({ message: "Failed to unregister push token" });
+    }
+  });
+
+  app.post('/api/push/test', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const result = await sendPushToUser(userId, {
+        title: "EcoLogic Test",
+        body: "Push notifications are working!",
+        data: { type: "test", linkUrl: "/" },
+      });
+      console.log("[push] Test push result:", result);
+      res.json({ ok: true, ...result });
+    } catch (error: any) {
+      console.error("[push] Test push error:", error);
+      res.status(500).json({ message: "Failed to send test push" });
     }
   });
 

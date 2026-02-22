@@ -113,6 +113,74 @@ export async function startGoogleAuthNative(): Promise<void> {
   }
 }
 
+let pushRegistered = false;
+
+export function resetPushRegistration(): void {
+  pushRegistered = false;
+}
+
+export async function registerPushNotifications(): Promise<void> {
+  if (!isNativePlatform() || pushRegistered) return;
+
+  try {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    const { Device } = await import("@capacitor/device");
+
+    const permResult = await PushNotifications.requestPermissions();
+    console.log("[push] Permission result:", permResult.receive);
+
+    if (permResult.receive !== "granted") {
+      console.log("[push] Permission denied, skipping registration");
+      return;
+    }
+
+    PushNotifications.addListener("registration", async (token) => {
+      console.log("[push] Got FCM/APNs token:", token.value.substring(0, 20) + "...");
+      const deviceInfo = await Device.getId();
+      const platform = Capacitor.getPlatform() === "ios" ? "ios" : "android";
+
+      try {
+        const res = await fetch("/api/push/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            token: token.value,
+            platform,
+            deviceId: deviceInfo.identifier,
+          }),
+        });
+        const data = await res.json();
+        console.log("[push] Token registered with backend:", data);
+        pushRegistered = true;
+      } catch (err) {
+        console.error("[push] Failed to register token with backend:", err);
+      }
+    });
+
+    PushNotifications.addListener("registrationError", (error) => {
+      console.error("[push] Registration error:", error);
+    });
+
+    PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      console.log("[push] Notification received in foreground:", notification);
+    });
+
+    PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+      console.log("[push] Notification tapped:", action);
+      const data = action.notification.data;
+      if (data?.linkUrl) {
+        window.location.href = data.linkUrl;
+      }
+    });
+
+    await PushNotifications.register();
+    console.log("[push] Registration requested");
+  } catch (err) {
+    console.error("[push] Push setup failed:", err);
+  }
+}
+
 export async function closeSystemBrowser(): Promise<void> {
   if (!isNativePlatform()) return;
   try {

@@ -1,0 +1,103 @@
+TASK: Plan + implement Push Notifications for EcoLogic (Web + iOS wrapper).
+
+GOAL
+- iOS (Capacitor wrapper) gets real push notifications (lock screen, banners).
+- Web gets in-app notifications (and optional browser push later).
+- Backend is the source of truth + can send targeted pushes per user/company.
+
+DECISION
+We should use:
+- iOS native push via APNs through Firebase Cloud Messaging (FCM) OR direct APNs.
+Recommended: FCM (easier token handling + future Android support).
+
+HIGH LEVEL FLOW
+1) App asks user for notification permission (iOS prompt).
+2) iOS returns a device push token (FCM token).
+3) App sends token to backend: POST /api/push/register
+4) Backend stores token (per userId + deviceId + platform).
+5) When an event happens (new job assigned, invoice paid, message, approval request):
+   - backend creates an in-app notification record (DB)
+   - backend also sends push via FCM to that user’s devices
+6) When user taps notification:
+   - app opens and deep-links to the right page (job, message, invoice)
+
+DATABASE
+Create table push_tokens:
+- id
+- userId (FK)
+- companyId (optional)
+- platform: 'ios' | 'android' | 'web'
+- token (string)
+- deviceId (string)
+- createdAt, updatedAt
+- lastSeenAt
+- isActive (boolean)
+
+BACKEND TASKS
+A) Create endpoints:
+- POST /api/push/register  { token, platform, deviceId }
+- POST /api/push/unregister { token }  (optional)
+- POST /api/push/test  (dev only) sends a test push to current user
+
+B) Implement sender:
+- Add Firebase Admin SDK
+- ENV:
+  - FIREBASE_PROJECT_ID
+  - FIREBASE_CLIENT_EMAIL
+  - FIREBASE_PRIVATE_KEY (handle \n newlines)
+- Function sendPushToUser(userId, payload)
+
+C) Trigger pushes from existing events:
+- messaging: new DM message
+- jobs: assigned to crew
+- documents: approval requested/approved/rejected
+- invoices: payment succeeded/failed
+- schedule: appointment changes
+
+IOS / CAPACITOR TASKS
+A) Install plugins:
+- @capacitor/push-notifications
+- @capacitor/device
+- @capacitor/app (for deep linking)
+
+B) iOS native setup:
+- Enable “Push Notifications” capability in Xcode
+- Enable “Background Modes” -> “Remote notifications”
+- Add APNs key/cert in Apple Developer
+- If using FCM:
+  - add GoogleService-Info.plist to iOS project
+  - configure FCM in AppDelegate
+
+C) App code:
+- On login / app start:
+  - PushNotifications.requestPermissions()
+  - PushNotifications.register()
+  - listen for registration token
+  - POST token to backend
+
+D) Tap handling:
+- PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
+    // event.notification.data should include route like "/jobs/123"
+    // navigate inside app
+  });
+
+WEB
+Phase 1 (now): Keep web as in-app notifications only (badge count + list).
+Phase 2 (later): Browser push requires service worker + VAPID + HTTPS + permission. Optional.
+
+DELIVERABLES
+- iOS: receives a test push from /api/push/test
+- Token saved in DB
+- When message/job assignment happens, user receives push
+- Tapping push opens correct screen
+
+NEXT AGENT PROMPT
+Implement “Phase 0” (plumbing + test push):
+1) Add push_tokens table + storage methods
+2) Add POST /api/push/register and POST /api/push/test
+3) Add Firebase Admin SDK sender stub (no events yet)
+4) Add frontend iOS wrapper registration code behind Capacitor check
+5) Log token + confirm it hits backend
+
+IMPORTANT
+Do NOT attempt browser push yet. Only iOS push + in-app notifications.

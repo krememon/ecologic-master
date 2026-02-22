@@ -305,6 +305,10 @@ export default function MobileNav({ user, company }: MobileNavProps) {
                     try {
                       await fetch('/api/logout', { method: 'POST', credentials: 'include' });
                     } catch {}
+                    try {
+                      const { resetPushRegistration } = await import("@/lib/capacitor");
+                      resetPushRegistration();
+                    } catch {}
                     sessionStorage.removeItem("coldStartRedirectDone");
                     window.location.href = '/login';
                   }}
