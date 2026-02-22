@@ -18,7 +18,9 @@ export function getPlatform(): string {
 
 export function getApiBaseUrl(): string {
   if (isNativePlatform()) {
-    return window.location.origin;
+    const origin = window.location.origin;
+    console.log("[capacitor] getApiBaseUrl native, origin:", origin);
+    return origin;
   }
   return "";
 }
@@ -28,6 +30,7 @@ export async function openSystemBrowser(url: string): Promise<void> {
     console.warn("[capacitor] openSystemBrowser called on web, skipping");
     return;
   }
+  console.log("[capacitor] Browser.open opening:", url);
   try {
     const { Browser } = await import("@capacitor/browser");
     await Browser.open({ url, presentationStyle: "popover" as any });

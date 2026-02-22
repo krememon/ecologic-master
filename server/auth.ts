@@ -1139,17 +1139,23 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
+  app.get("/healthz", (_req, res) => res.send("ok"));
+
   // Social Auth Routes
   app.get("/api/auth/google", (req, res, next) => {
     const platform = req.query.platform === "ios" ? "ios" : "web";
+    console.log("[auth/google] hit, query:", req.query, "platform:", platform);
     passport.authenticate("google", {
       scope: ["profile", "email"],
       state: platform,
+      prompt: "select_account",
     })(req, res, next);
   });
   app.get("/api/auth/google/callback", (req, res, next) => {
+    console.log("[auth/google/callback] hit, query.state:", req.query.state);
     passport.authenticate("google", async (err: any, user: any, info: any) => {
       const platform = req.query.state;
+      console.log("[auth/google/callback] passport done, platform:", platform, "err:", !!err, "user:", !!user);
 
       if (err) {
         console.error("[google-auth] Error:", err);

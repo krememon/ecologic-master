@@ -1,0 +1,47 @@
+ISSUE
+After tapping “Continue with Google” on iOS wrapper, Safari opens to a blank page on our Replit domain showing only:
+“If you are not redirected, tap here.”
+It never reaches accounts.google.com and gets stuck.
+
+This indicates our /auth/google start route is not actually initiating the Google redirect (passport authenticate not firing / route not hit / wrong URL / missing scheme), or we’re opening the wrong URL (front-end opening a web callback page instead of the auth start endpoint).
+
+GOAL
+Browser.open must open the REAL backend OAuth start URL that immediately 302’s to accounts.google.com.
+
+TASKS
+1) Confirm the exact URL Browser.open is opening.
+   - Add log right before Browser.open:
+     console.log("[google-auth] opening url:", url)
+   - Ensure it is EXACTLY:
+     https://<BACKEND_HOST>/auth/google?platform=ios
+   - NOT /wrapper, NOT /auth/callback, NOT the frontend domain, NOT app.ecologicc.com.
+
+2) Fix the frontend Google handler to hard-point to the backend auth start endpoint:
+   - If native:
+       const url = `${BACKEND_ORIGIN}/auth/google?platform=ios`
+       await Browser.open({ url })
+   - Else:
+       window.location.href = `${BACKEND_ORIGIN}/auth/google`
+
+3) Backend: ensure /auth/google route actually starts passport flow and redirects to Google.
+   - Add temporary server logs:
+       console.log("[auth/google] hit", req.query)
+       console.log("[auth/google] state:", state)
+   - Ensure route uses:
+       passport.authenticate("google", { scope:["profile","email"], state:"ios", prompt:"select_account" })
+     when platform=ios.
+   - Confirm it responds with 302 to accounts.google.com (not a 200 HTML page).
+
+4) Add a quick test endpoint to verify from iOS Safari:
+   - GET /healthz -> returns 200 "ok"
+   - (This confirms the BACKEND_ORIGIN is correct/reachable)
+
+5) Fix any route mismatch:
+   - If backend routes are mounted under /api, then the correct start route is:
+       https://<BACKEND_HOST>/api/auth/google?platform=ios
+     Update frontend accordingly.
+
+DELIVERABLE
+- Clicking “Continue with Google” opens Safari and immediately navigates to accounts.google.com (Google sign-in UI).
+- No more blank “If you are not redirected” page.
+- Logs show /auth/google was hit and responded with 302 to accounts.google.com.
