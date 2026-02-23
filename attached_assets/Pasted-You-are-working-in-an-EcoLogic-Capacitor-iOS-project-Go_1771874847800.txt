@@ -1,0 +1,102 @@
+You are working in an EcoLogic Capacitor iOS project.
+
+Goal:
+Fix "Plugin Not Installed" for local & push notifications by properly installing and syncing Capacitor Notifications plugin, then confirm iOS native side is wired.
+
+Follow these steps EXACTLY:
+
+---------------------------------------
+1) Install Capacitor Notifications plugin
+---------------------------------------
+
+In project root, run:
+
+npm install @capacitor/notifications
+
+---------------------------------------
+2) Sync plugins to iOS
+---------------------------------------
+
+npx cap sync ios
+
+If prompted, allow any pod installs.
+
+---------------------------------------
+3) Open iOS project
+---------------------------------------
+
+npx cap open ios
+
+---------------------------------------
+4) In Xcode:
+---------------------------------------
+
+TARGET: App
+Signing & Capabilities tab
+
+Ensure these capabilities exist:
+- Push Notifications
+- Background Modes
+  - Remote notifications checked
+
+If missing, add them.
+
+---------------------------------------
+5) AppDelegate.swift verification
+---------------------------------------
+
+Open:
+ios/App/App/AppDelegate.swift
+
+Ensure it contains:
+
+import UIKit
+import Capacitor
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
+
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+
+    return true
+  }
+}
+
+No custom notification code needed — Capacitor handles it.
+
+---------------------------------------
+6) Clean build
+---------------------------------------
+
+In Xcode menu:
+
+Product → Clean Build Folder
+Then Run ▶️ on physical iPhone.
+
+---------------------------------------
+7) Validation
+---------------------------------------
+
+After app launches on phone:
+
+Open EcoLogic → Settings → Notifications → Tap "Enable Notifications"
+
+Expected:
+iOS permission popup appears:
+"EcoLogic Would Like to Send You Notifications"
+
+Then tap "Test Local"
+
+Expected:
+Local notification banner appears.
+
+---------------------------------------
+Rules:
+- Do NOT change UI
+- Do NOT modify routing
+- Do NOT add Firebase or OneSignal
+- Only make what is required for Capacitor notifications to function
+- Log results in console
