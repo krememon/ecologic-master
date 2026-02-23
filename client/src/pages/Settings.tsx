@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/components/ThemeProvider";
-import { User, Moon, Sun, Bell, Shield, Camera, Upload } from "lucide-react";
+import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
+import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification } from "@/lib/capacitor";
+
 
 import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
@@ -40,6 +42,12 @@ export default function Settings() {
   const [deleteAccountModalOpen, setDeleteAccountModalOpen] = useState(false);
   const [twoFactorModalOpen, setTwoFactorModalOpen] = useState(false);
   const [disable2FAModalOpen, setDisable2FAModalOpen] = useState(false);
+  const [pushEnabling, setPushEnabling] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(() => {
+    return isNativePlatform() && !!localStorage.getItem("pushToken");
+  });
+  const [testingLocal, setTestingLocal] = useState(false);
+  const [testingRemote, setTestingRemote] = useState(false);
   
   // Check if user can manage company (Owner/Supervisor only)
   const canManageCompany = can("org.view");
@@ -398,19 +406,103 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label htmlFor="notifications">Push Notifications</Label>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Receive notifications for important updates
-                </p>
+            {isNativePlatform() ? (
+              <>
+                <div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    Enable push notifications to receive alerts for job assignments, messages, and other important updates.
+                  </p>
+                  <Button
+                    className="w-full"
+                    disabled={pushEnabling || pushEnabled}
+                    onClick={async () => {
+                      setPushEnabling(true);
+                      try {
+                        const ok = await registerPushNotifications();
+                        if (ok) {
+                          setPushEnabled(true);
+                          toast({ title: "Notifications Enabled", description: "You will now receive push notifications." });
+                        } else {
+                          toast({ title: "Permission Denied", description: "Please enable notifications in your device Settings.", variant: "destructive" });
+                        }
+                      } catch {
+                        toast({ title: "Error", description: "Could not enable notifications.", variant: "destructive" });
+                      } finally {
+                        setPushEnabling(false);
+                      }
+                    }}
+                  >
+                    <BellRing className="h-4 w-4 mr-2" />
+                    {pushEnabled ? "Notifications Enabled" : pushEnabling ? "Enabling..." : "Enable Notifications"}
+                  </Button>
+                </div>
+
+                <div className="grid gap-2 grid-cols-2">
+                  <Button
+                    variant="outline"
+                    disabled={testingLocal}
+                    onClick={async () => {
+                      setTestingLocal(true);
+                      try {
+                        const ok = await scheduleLocalTestNotification();
+                        if (ok) {
+                          toast({ title: "Test Sent", description: "A test notification will appear in ~2 seconds." });
+                        } else {
+                          toast({ title: "Failed", description: "Could not send test notification. Enable notifications first.", variant: "destructive" });
+                        }
+                      } catch {
+                        toast({ title: "Error", description: "Test notification failed.", variant: "destructive" });
+                      } finally {
+                        setTestingLocal(false);
+                      }
+                    }}
+                  >
+                    <Bell className="h-4 w-4 mr-2" />
+                    {testingLocal ? "Sending..." : "Test Local"}
+                  </Button>
+
+                  {(user?.role === "OWNER" || user?.role === "SUPERVISOR") && (
+                    <Button
+                      variant="outline"
+                      disabled={testingRemote}
+                      onClick={async () => {
+                        setTestingRemote(true);
+                        try {
+                          const res = await fetch("/api/push/test", { method: "POST", credentials: "include" });
+                          const data = await res.json();
+                          if (data.ok) {
+                            toast({ title: "Remote Push Sent", description: `Sent: ${data.sent}, Failed: ${data.failed}` });
+                          } else {
+                            toast({ title: "Push Failed", description: data.message || "Server could not send push.", variant: "destructive" });
+                          }
+                        } catch {
+                          toast({ title: "Error", description: "Could not reach server.", variant: "destructive" });
+                        } finally {
+                          setTestingRemote(false);
+                        }
+                      }}
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      {testingRemote ? "Sending..." : "Test Remote"}
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="notifications">Push Notifications</Label>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Push notifications are available in the native app
+                  </p>
+                </div>
+                <Switch
+                  id="notifications"
+                  checked={notifications}
+                  onCheckedChange={setNotifications}
+                />
               </div>
-              <Switch
-                id="notifications"
-                checked={notifications}
-                onCheckedChange={setNotifications}
-              />
-            </div>
+            )}
           </CardContent>
         </Card>
 

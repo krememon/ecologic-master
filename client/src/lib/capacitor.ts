@@ -113,14 +113,14 @@ export async function startGoogleAuthNative(): Promise<void> {
   }
 }
 
-let pushRegistered = false;
+let pushListenersAdded = false;
 
 export function resetPushRegistration(): void {
-  pushRegistered = false;
+  pushListenersAdded = false;
 }
 
-export async function registerPushNotifications(): Promise<void> {
-  if (!isNativePlatform() || pushRegistered) return;
+export async function registerPushNotifications(): Promise<boolean> {
+  if (!isNativePlatform()) return false;
 
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
@@ -131,53 +131,110 @@ export async function registerPushNotifications(): Promise<void> {
 
     if (permResult.receive !== "granted") {
       console.log("[push] Permission denied, skipping registration");
-      return;
+      return false;
     }
 
-    PushNotifications.addListener("registration", async (token) => {
-      console.log("[push] Got FCM/APNs token:", token.value.substring(0, 20) + "...");
-      const deviceInfo = await Device.getId();
-      const platform = Capacitor.getPlatform() === "ios" ? "ios" : "android";
+    if (!pushListenersAdded) {
+      PushNotifications.addListener("registration", async (token) => {
+        console.log("[push] Got APNs token:", token.value.substring(0, 20) + "...");
+        const deviceInfo = await Device.getId();
+        const platform = Capacitor.getPlatform() === "ios" ? "ios" : "android";
 
-      try {
-        const res = await fetch("/api/push/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            token: token.value,
-            platform,
-            deviceId: deviceInfo.identifier,
-          }),
-        });
-        const data = await res.json();
-        console.log("[push] Token registered with backend:", data);
-        pushRegistered = true;
-      } catch (err) {
-        console.error("[push] Failed to register token with backend:", err);
-      }
-    });
+        const lastToken = localStorage.getItem("pushToken");
+        if (lastToken === token.value) {
+          console.log("[push] Token unchanged, skipping re-register");
+          return;
+        }
 
-    PushNotifications.addListener("registrationError", (error) => {
-      console.error("[push] Registration error:", error);
-    });
+        try {
+          const res = await fetch("/api/push/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              token: token.value,
+              platform,
+              deviceId: deviceInfo.identifier,
+            }),
+          });
+          const data = await res.json();
+          console.log("[push] Token registered with backend:", data);
+          localStorage.setItem("pushToken", token.value);
+        } catch (err) {
+          console.error("[push] Failed to register token with backend:", err);
+        }
+      });
 
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      console.log("[push] Notification received in foreground:", notification);
-    });
+      PushNotifications.addListener("registrationError", (error) => {
+        console.error("[push] Registration error:", error);
+      });
 
-    PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      console.log("[push] Notification tapped:", action);
-      const data = action.notification.data;
-      if (data?.linkUrl) {
-        window.location.href = data.linkUrl;
-      }
-    });
+      PushNotifications.addListener("pushNotificationReceived", async (notification) => {
+        console.log("[push] Notification received in foreground:", notification);
+        try {
+          const { LocalNotifications } = await import("@capacitor/local-notifications");
+          await LocalNotifications.schedule({
+            notifications: [
+              {
+                title: notification.title || "EcoLogic",
+                body: notification.body || "",
+                id: Date.now(),
+                extra: notification.data,
+              },
+            ],
+          });
+        } catch (err) {
+          console.error("[push] Failed to show local notification for foreground push:", err);
+        }
+      });
+
+      PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+        console.log("[push] Notification tapped:", action);
+        const data = action.notification.data;
+        if (data?.linkUrl) {
+          window.location.href = data.linkUrl;
+        }
+      });
+
+      pushListenersAdded = true;
+    }
 
     await PushNotifications.register();
     console.log("[push] Registration requested");
+    return true;
   } catch (err) {
     console.error("[push] Push setup failed:", err);
+    return false;
+  }
+}
+
+export async function scheduleLocalTestNotification(): Promise<boolean> {
+  if (!isNativePlatform()) return false;
+
+  try {
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+
+    const perm = await LocalNotifications.requestPermissions();
+    if (perm.display !== "granted") {
+      console.log("[push] Local notification permission denied");
+      return false;
+    }
+
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          title: "EcoLogic",
+          body: "Notifications are working.",
+          id: Date.now(),
+          schedule: { at: new Date(Date.now() + 2000) },
+        },
+      ],
+    });
+    console.log("[push] Local test notification scheduled");
+    return true;
+  } catch (err) {
+    console.error("[push] Local notification failed:", err);
+    return false;
   }
 }
 

@@ -1,5 +1,6 @@
 import { storage } from "./storage";
 import type { NotificationType, InsertNotification } from "@shared/schema";
+import { sendPushToUser } from "./pushService";
 
 type NotificationParams = {
   companyId: number;
@@ -64,6 +65,23 @@ export async function notifyUsers(
 
   if (notificationsToCreate.length > 0) {
     await storage.createNotifications(notificationsToCreate);
+
+    for (const notif of notificationsToCreate) {
+      try {
+        await sendPushToUser(notif.recipientUserId, {
+          title: notif.title,
+          body: notif.body,
+          data: {
+            type: notif.type || "",
+            entityType: notif.entityType || "",
+            entityId: String(notif.entityId || ""),
+            linkUrl: notif.linkUrl || "",
+          },
+        });
+      } catch (err) {
+        console.error("[push] Failed to send push for notification to user:", notif.recipientUserId, err);
+      }
+    }
   }
 }
 

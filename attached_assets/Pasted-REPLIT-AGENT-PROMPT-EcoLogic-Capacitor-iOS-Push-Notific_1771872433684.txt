@@ -1,0 +1,186 @@
+REPLIT AGENT PROMPT — EcoLogic (Capacitor iOS) Push Notifications: show REAL native popups + testing path
+
+GOAL
+Implement native push notification support for EcoLogic’s Capacitor iOS app so we can:
+1) Ask the user for notification permission in-app (so the iOS popup shows).
+2) Register the device and get a push token.
+3) Send a test notification from the backend (manual button + API endpoint) and see it pop up on a REAL iPhone build from Xcode.
+4) Wire “job assignment / dispatched” events to trigger a push to the assigned technician(s).
+5) Keep UI changes minimal — this is mostly platform + backend plumbing.
+
+IMPORTANT CONSTRAINTS
+- Do NOT refactor UI or routing.
+- Add only the smallest UI needed: a “Enable Notifications” button (Settings page is fine) and a “Send Test Notification” button (Owner-only or behind DEV flag).
+- The app is the source of truth; follow existing RBAC: Technician receives job assignment notifications.
+- Must work on iOS real device build. (Simulator push is unreliable; don’t rely on it.)
+
+HIGH-LEVEL APPROACH (DEV NOW, PROD LATER)
+Phase A (Immediate, local verification):
+- Add LOCAL notification test so we can instantly confirm “native popup” works without any server/provider. (This confirms permissions + iOS presentation.)
+Phase B (Real remote push):
+- Implement device token registration (APNs) and backend storage.
+- Add backend endpoint to send a remote push via APNs using token-based auth (AuthKey_XXXX.p8 + TeamID + KeyID).
+- Add “job assigned” trigger to send push to assigned users.
+
+TECH STACK ASSUMPTIONS
+- Frontend: React + TS
+- Backend: Node/Express routes under /api
+- DB/storage abstraction exists (DatabaseStorage). Add table/model for push tokens.
+
+========================
+A) FRONTEND (CAPACITOR)
+========================
+
+1) Install + register Capacitor Push Notifications plugin
+- Add dependency:
+  npm i @capacitor/push-notifications
+- Ensure iOS platform sync will be needed after code changes (document steps; do not run commands inside Replit since we’re in web env)
+
+2) Create a single notification service module
+Create: client/src/lib/notifications/push.ts (or similar)
+Responsibilities:
+- requestPermissions()
+- register()
+- addListeners() for:
+  - registration (token)
+  - registrationError
+  - pushNotificationReceived (foreground)
+  - pushNotificationActionPerformed (tap)
+- After token is received, POST it to backend: POST /api/push/register with:
+  { token, platform: 'ios', deviceId?, appVersion? }
+- Ensure we don’t spam-register: store last token in localStorage and only POST if changed.
+
+3) Add local notification “sanity test” (for instant native popup check)
+We can use Local Notifications plugin:
+- npm i @capacitor/local-notifications
+- Create: client/src/lib/notifications/local.ts
+- A function: scheduleLocalTestNotification() that triggers a notification 2 seconds later:
+  Title: “EcoLogic”
+  Body: “✅ Notifications are working.”
+This is ONLY used for testing permission + native popup.
+
+4) Minimal UI hooks
+- Add a small section in Settings (or Customize) page:
+  - Button: “Enable Notifications”
+    - Calls requestPermissions() then register() then shows toast “Enabled” or error message.
+  - Button: “Test Notification”
+    - Calls scheduleLocalTestNotification()
+  - If role !== OWNER/ADMIN, hide “Test Notification” (or hide both if you want; but at least allow tech to enable)
+- Also: on first successful login (or on app mount), DO NOT auto-prompt. We only prompt when user taps “Enable Notifications”.
+
+5) Presentation behavior on iOS
+- Ensure foreground notifications are shown:
+  When pushNotificationReceived fires, also show an in-app toast AND (optional) schedule a local notification mirroring it so it pops while foregrounded.
+  (iOS often doesn’t show banner while app is foreground unless configured; this gives us consistent “I saw it” behavior.)
+
+========================
+B) BACKEND (DEVICE REGISTRATION + APNS SENDER)
+========================
+
+6) DB schema
+Add a table for device tokens:
+push_device_tokens:
+- id (uuid)
+- user_id (string/int depending on existing user ids)
+- token (text, unique)
+- platform (text) default 'ios'
+- created_at
+- updated_at
+- last_seen_at
+- is_active (boolean)
+
+Implement storage methods:
+- upsertPushToken(userId, token, platform)
+- getPushTokensForUsers(userIds) -> tokens
+- deactivatePushToken(token)
+
+7) API routes
+Create routes:
+POST /api/push/register
+- Auth required
+- Body: { token, platform }
+- Validate token exists; upsert for current user; return ok
+
+POST /api/push/test
+- Auth required (OWNER/ADMIN only)
+- Body: { userId? } default current user
+- Finds tokens for user and sends a test push via APNs sender (see #8)
+- Return delivery result summary
+
+8) APNs sender (token-based)
+Create server module:
+server/push/apns.ts
+- Uses APNs HTTP/2 provider.
+- Use environment secrets:
+  APNS_TEAM_ID
+  APNS_KEY_ID
+  APNS_BUNDLE_ID (e.g., com.ecologic.app)
+  APNS_AUTH_KEY_P8 (the full .p8 content OR base64)
+- Implement sendPushToTokens(tokens, payload):
+  payload example:
+  {
+    aps: {
+      alert: { title: "EcoLogic", body: "You have been assigned a job." },
+      sound: "default",
+      badge: 1
+    },
+    data: { type: "job_assigned", jobId: "..." }
+  }
+- Use production vs sandbox based on NODE_ENV or a secret APNS_USE_SANDBOX=true for dev builds.
+- Handle errors: Unregistered token -> deactivate it.
+
+NOTE:
+- Do NOT invent the APNs library; pick a stable Node APNs solution (e.g., “apns2” or direct HTTP/2).
+- Keep code small and well-logged behind a [push] prefix.
+
+9) Trigger on “assign tech to job”
+Find where crew assignment happens (the endpoint that updates assigned crew for a job).
+After assignment is saved:
+- Determine added technicians (diff previous assigned list vs new list).
+- For each added tech userId:
+  - Fetch their push tokens
+  - Send push: “New job assigned: {jobName / jobAddress}”
+- Ensure RBAC: only users who should see the job can be notified.
+
+========================
+C) iOS / XCODE CHECKLIST (DOCUMENT ONLY)
+========================
+Add a short “IOS_SETUP.md” with exact steps PJ must do in Xcode:
+1) In Xcode project (App):
+   - Signing & Capabilities:
+     - Select Development Team
+     - Bundle Identifier matches APNS_BUNDLE_ID
+     - Add capability: “Push Notifications”
+     - Add capability: “Background Modes” -> check “Remote notifications”
+2) On device: Settings -> Notifications -> EcoLogic -> Allow Notifications ON
+3) Build & run on real iPhone via cable.
+4) In app: go Settings -> Enable Notifications -> allow popup.
+5) Tap “Test Notification” (local) to confirm banner appears.
+6) Use /api/push/test to confirm remote push appears (requires APNs secrets set).
+
+========================
+D) DELIVERABLES / ACCEPTANCE TESTS
+========================
+Deliverables:
+- client notification modules (push + local) with safe listeners
+- Settings UI with 2 buttons and minimal styling
+- DB schema + storage methods for tokens
+- /api/push/register and /api/push/test routes
+- APNs sender module with sandbox toggle and error handling
+- Job assignment trigger sends push to newly assigned techs
+- IOS_SETUP.md with precise steps
+
+Acceptance tests:
+1) Fresh install on real iPhone -> Tap Enable Notifications -> iOS permission popup appears.
+2) Tap Test Notification -> iOS banner shows “✅ Notifications are working.”
+3) Call POST /api/push/test -> iOS banner shows “EcoLogic test push”.
+4) Assign technician to job -> technician receives push with job info.
+5) No UI regressions; no routing changes; no broken RBAC.
+
+DO NOT DO
+- Do not move headers, navigation, or redesign pages.
+- Do not auto-request permissions on load.
+- Do not break web behavior (web can no-op; guard native-only calls with Capacitor.isNativePlatform()).
+
+START NOW
+Implement Phase A first (permission + local test) so we can instantly validate popups, then proceed to remote push registration + APNs sending.

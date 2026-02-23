@@ -5020,6 +5020,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (crewToAdd.length > 0) {
           await storage.addJobCrewAssignments(jobId, crewToAdd, company.id, userId);
         }
+
+        if (crewToAdd.length > 0) {
+          const assigner = await storage.getUser(userId);
+          const assignerName = assigner ? `${assigner.firstName || ''} ${assigner.lastName || ''}`.trim() || 'Someone' : 'Someone';
+          await notifyTechniciansOnly(crewToAdd, company.id, {
+            type: 'job_assigned',
+            title: 'New Job Assignment',
+            body: `${assignerName} assigned you to job: ${existingJob.title || existingJob.jobNumber || `Job #${jobId}`}`,
+            entityType: 'job',
+            entityId: jobId,
+            linkUrl: `/jobs/${jobId}`,
+          });
+        }
       }
       
       // Update line items if provided
