@@ -1,0 +1,202 @@
+You are working in the EcoLogic repo (React + Capacitor wrapper). On a real iPhone build from Xcode, the console shows:
+
+[error] - [push] Push setup failed: {"code":"UNIMPLEMENTED"}
+
+[error] - [push] Local notification failed: {"code":"UNIMPLEMENTED"}
+
+This means the native iOS build does NOT have the Capacitor notification plugins installed/registered, so the JS calls can’t reach native.
+
+Goal
+
+Fix iOS native build so LocalNotifications and PushNotifications are implemented (no UNIMPLEMENTED).
+
+Make Enable Notifications button trigger the real iOS permission popup.
+
+Make Test Local show a real iOS notification immediately after permission is granted.
+
+Keep changes minimal, no UI redesign.
+
+A) Dependencies + Capacitor Sync (must be correct)
+
+Ensure these are installed:
+
+@capacitor/core
+
+@capacitor/ios
+
+@capacitor/cli (devDependency)
+
+@capacitor/push-notifications
+
+@capacitor/local-notifications
+
+@capacitor/device (optional, useful)
+
+@capacitor/app (already)
+
+@capacitor/browser (already)
+
+If npx cap ... fails (“could not determine executable to run”), fix by ensuring:
+
+@capacitor/cli exists in devDependencies
+
+package.json contains "capacitor": {...} config OR a capacitor.config.ts/json
+
+node_modules/.bin/cap exists after install
+
+Run:
+
+npm i @capacitor/push-notifications @capacitor/local-notifications
+
+npm i -D @capacitor/cli
+
+npx cap sync ios
+
+If still failing, run:
+
+./node_modules/.bin/cap sync ios
+
+Confirm iOS native project updated:
+
+ios/App/App.xcworkspace exists and opens
+
+After sync, plugin pods are installed
+
+B) iOS Capabilities (Xcode)
+
+In Xcode target App → Signing & Capabilities:
+
+Ensure Push Notifications capability is present.
+
+Add Background Modes capability and check:
+
+Remote notifications
+
+(Do not change anything else.)
+
+C) Frontend: Implement a small Notifications service (minimal)
+
+Create client/src/lib/notifications.ts (or similar) with these functions:
+
+1) enableNotifications()
+
+If NOT native (!Capacitor.isNativePlatform()): show toast “Push only works in the iOS app build.”
+
+If native:
+
+Request permission using PushNotifications.requestPermissions()
+
+If granted:
+
+Call PushNotifications.register()
+
+Add listeners:
+
+registration → receives APNs token string. Log it and POST it to backend (create endpoint if missing).
+
+registrationError → log
+
+pushNotificationReceived → log
+
+pushNotificationActionPerformed → log
+
+If denied:
+
+show toast “Permission denied. Enable in Settings.”
+
+Provide “Open Settings” action using App.openUrl({ url: 'app-settings:' }) or App.openUrl({ url: 'UIApplicationOpenSettingsURLString' equivalent }) (Capacitor iOS supports app-settings:)
+
+2) testLocalNotification()
+
+If NOT native: show toast
+
+If native:
+
+Request permission using LocalNotifications.requestPermissions()
+
+If granted:
+
+Schedule one notification for ~2 seconds in the future:
+
+title: EcoLogic
+
+body: Local notification test
+
+id: timestamp or increment
+
+If denied: show toast with “Open Settings”
+
+3) IMPORTANT: prevent “UNIMPLEMENTED”
+
+UNIMPLEMENTED happens when plugin isn’t in native. After installing + syncing, it should disappear.
+
+Still add a defensive check: wrap calls in try/catch and if error code UNIMPLEMENTED, show toast: “Notifications plugin not installed in native build. Run cap sync.”
+
+D) Wire existing Settings UI buttons
+
+Locate the Settings page section where you have:
+
+“Enable Notifications”
+
+“Test Local”
+
+Update them to call:
+
+enableNotifications()
+
+testLocalNotification()
+
+No styling/layout changes.
+
+E) Backend (store token for later real pushes)
+
+Add a minimal endpoint:
+
+POST /api/push/register
+Body: { token: string, platform: 'ios', deviceId?: string }
+
+Auth required
+
+Upsert into a push_tokens table:
+
+id
+
+userId
+
+token (unique)
+
+platform
+
+updatedAt
+
+If a table doesn’t exist, create it (Drizzle schema) and migrate/push.
+
+For now, we’re ONLY storing token. Sending real APNs pushes can come later.
+
+F) Deliverables / Verification steps
+
+After cap sync ios, build/run on real iPhone from Xcode.
+
+Open EcoLogic → Settings → tap Enable Notifications
+
+iOS permission popup appears
+
+Accept → go to iOS Settings → Notifications
+
+EcoLogic appears with toggles
+
+Back in app → tap Test Local
+
+notification appears on device within 2 seconds (lock screen/banner)
+
+Also ensure the console no longer prints UNIMPLEMENTED for push/local.
+
+G) Keep changes small
+
+Do not redesign UI.
+
+Only add the notifications service + wire buttons + minimal backend token storage.
+
+No broad refactors.
+
+Start implementing now.

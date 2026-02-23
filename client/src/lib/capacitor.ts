@@ -119,8 +119,28 @@ export function resetPushRegistration(): void {
   pushListenersAdded = false;
 }
 
-export async function registerPushNotifications(): Promise<boolean> {
-  if (!isNativePlatform()) return false;
+function isUnimplemented(err: any): boolean {
+  return err && (err.code === "UNIMPLEMENTED" || (typeof err.message === "string" && err.message.includes("UNIMPLEMENTED")));
+}
+
+export type PushResult = {
+  success: boolean;
+  error?: "unimplemented" | "denied" | "failed";
+};
+
+export async function openAppSettings(): Promise<void> {
+  try {
+    const { App } = await import("@capacitor/app");
+    // On iOS, this opens the app's settings page in the Settings app
+    // where the user can toggle notification permissions
+    await (App as any).openUrl({ url: "app-settings:" });
+  } catch (err) {
+    console.error("[capacitor] openAppSettings failed:", err);
+  }
+}
+
+export async function registerPushNotifications(): Promise<PushResult> {
+  if (!isNativePlatform()) return { success: false, error: "failed" };
 
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
@@ -131,7 +151,7 @@ export async function registerPushNotifications(): Promise<boolean> {
 
     if (permResult.receive !== "granted") {
       console.log("[push] Permission denied, skipping registration");
-      return false;
+      return { success: false, error: "denied" };
     }
 
     if (!pushListenersAdded) {
@@ -178,7 +198,7 @@ export async function registerPushNotifications(): Promise<boolean> {
               {
                 title: notification.title || "EcoLogic",
                 body: notification.body || "",
-                id: Date.now(),
+                id: Date.now() % 2147483647,
                 extra: notification.data,
               },
             ],
@@ -201,15 +221,23 @@ export async function registerPushNotifications(): Promise<boolean> {
 
     await PushNotifications.register();
     console.log("[push] Registration requested");
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.error("[push] Push setup failed:", err);
-    return false;
+    if (isUnimplemented(err)) {
+      return { success: false, error: "unimplemented" };
+    }
+    return { success: false, error: "failed" };
   }
 }
 
-export async function scheduleLocalTestNotification(): Promise<boolean> {
-  if (!isNativePlatform()) return false;
+export type LocalNotifResult = {
+  success: boolean;
+  error?: "unimplemented" | "denied" | "failed";
+};
+
+export async function scheduleLocalTestNotification(): Promise<LocalNotifResult> {
+  if (!isNativePlatform()) return { success: false, error: "failed" };
 
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
@@ -217,7 +245,7 @@ export async function scheduleLocalTestNotification(): Promise<boolean> {
     const perm = await LocalNotifications.requestPermissions();
     if (perm.display !== "granted") {
       console.log("[push] Local notification permission denied");
-      return false;
+      return { success: false, error: "denied" };
     }
 
     await LocalNotifications.schedule({
@@ -225,16 +253,19 @@ export async function scheduleLocalTestNotification(): Promise<boolean> {
         {
           title: "EcoLogic",
           body: "Notifications are working.",
-          id: Date.now(),
+          id: Date.now() % 2147483647,
           schedule: { at: new Date(Date.now() + 2000) },
         },
       ],
     });
     console.log("[push] Local test notification scheduled");
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.error("[push] Local notification failed:", err);
-    return false;
+    if (isUnimplemented(err)) {
+      return { success: false, error: "unimplemented" };
+    }
+    return { success: false, error: "failed" };
   }
 }
 

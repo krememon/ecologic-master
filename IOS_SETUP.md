@@ -4,6 +4,25 @@
 - Apple Developer Account with Push Notifications enabled
 - Xcode 15+ with real device connected via cable
 - APNs Auth Key (.p8 file) from Apple Developer portal
+- CocoaPods installed (`sudo gem install cocoapods`)
+
+## Step 0: Capacitor Sync (REQUIRED before first build)
+
+After cloning or pulling changes, run these commands from the project root:
+
+```bash
+npm install
+npx cap sync ios
+```
+
+This installs the native plugin pods (`CapacitorPushNotifications`, `CapacitorLocalNotifications`, `CapacitorDevice`) into the Xcode project. Without this step, you will see `UNIMPLEMENTED` errors in the console.
+
+If `npx cap` fails, try:
+```bash
+./node_modules/.bin/cap sync ios
+```
+
+After sync completes, open `ios/App/App.xcworkspace` (not `.xcodeproj`) in Xcode.
 
 ## Step 1: Apple Developer Portal
 

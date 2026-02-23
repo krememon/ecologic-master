@@ -12,8 +12,8 @@ import { useTheme } from "@/components/ThemeProvider";
 import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
-import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification } from "@/lib/capacitor";
-
+import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification, openAppSettings } from "@/lib/capacitor";
+import { ToastAction } from "@/components/ui/toast";
 
 import { useCan } from "@/hooks/useCan";
 import { formatPhoneInput, getRawPhoneValue } from "@shared/phoneUtils";
@@ -418,12 +418,25 @@ export default function Settings() {
                     onClick={async () => {
                       setPushEnabling(true);
                       try {
-                        const ok = await registerPushNotifications();
-                        if (ok) {
+                        const result = await registerPushNotifications();
+                        if (result.success) {
                           setPushEnabled(true);
                           toast({ title: "Notifications Enabled", description: "You will now receive push notifications." });
+                        } else if (result.error === "unimplemented") {
+                          toast({ title: "Plugin Not Installed", description: "Notifications plugin not available. Rebuild the app after running: npx cap sync ios", variant: "destructive" });
+                        } else if (result.error === "denied") {
+                          toast({
+                            title: "Permission Denied",
+                            description: "Please enable notifications in your device Settings.",
+                            variant: "destructive",
+                            action: (
+                              <ToastAction altText="Open Settings" onClick={() => openAppSettings()}>
+                                Open Settings
+                              </ToastAction>
+                            ),
+                          });
                         } else {
-                          toast({ title: "Permission Denied", description: "Please enable notifications in your device Settings.", variant: "destructive" });
+                          toast({ title: "Error", description: "Could not enable notifications.", variant: "destructive" });
                         }
                       } catch {
                         toast({ title: "Error", description: "Could not enable notifications.", variant: "destructive" });
@@ -444,11 +457,24 @@ export default function Settings() {
                     onClick={async () => {
                       setTestingLocal(true);
                       try {
-                        const ok = await scheduleLocalTestNotification();
-                        if (ok) {
+                        const result = await scheduleLocalTestNotification();
+                        if (result.success) {
                           toast({ title: "Test Sent", description: "A test notification will appear in ~2 seconds." });
+                        } else if (result.error === "unimplemented") {
+                          toast({ title: "Plugin Not Installed", description: "Local notifications plugin not available. Rebuild after: npx cap sync ios", variant: "destructive" });
+                        } else if (result.error === "denied") {
+                          toast({
+                            title: "Permission Denied",
+                            description: "Enable notifications in device Settings first.",
+                            variant: "destructive",
+                            action: (
+                              <ToastAction altText="Open Settings" onClick={() => openAppSettings()}>
+                                Open Settings
+                              </ToastAction>
+                            ),
+                          });
                         } else {
-                          toast({ title: "Failed", description: "Could not send test notification. Enable notifications first.", variant: "destructive" });
+                          toast({ title: "Failed", description: "Could not send test notification.", variant: "destructive" });
                         }
                       } catch {
                         toast({ title: "Error", description: "Test notification failed.", variant: "destructive" });
