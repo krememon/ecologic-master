@@ -1,0 +1,100 @@
+REPLIT AGENT PROMPT — EcoLogic iOS Notifications “UNIMPLEMENTED” + No iOS Settings Toggle
+
+Context:
+- We already have @capacitor/push-notifications + @capacitor/local-notifications installed in npm.
+- AppDelegate + Info.plist + capabilities are set.
+- In the iPhone build, tapping “Enable Notifications” / “Test Local” still shows “Plugin Not Installed / UNIMPLEMENTED”.
+- Also: iOS Settings app does NOT show an EcoLogic “Notifications” toggle (so permission prompt likely never happened or app is still using an old build without plugins bridged).
+
+Goal:
+1) Ensure the native iOS project actually contains the Capacitor notification plugins (pods/frameworks) and JS bridge.
+2) Force iOS permission prompt to appear.
+3) Make “Test Local” show a banner on real iPhone.
+4) Keep UI unchanged.
+
+Do NOT:
+- Do not redesign UI.
+- Do not change layouts or sidebar.
+- Only touch: Capacitor plugin wiring, iOS sync/build, and the notification handlers.
+
+Tasks:
+
+A) Confirm the native build includes plugins (this is usually the real issue)
+1. In project root, run:
+   - npm install
+   - npx cap sync ios
+2. After sync, verify files changed under ios/ (Podfile.lock, Pods, xcworkspace updates).
+3. In ios/App/Podfile (or the generated Pods list), confirm pods for:
+   - CapacitorPushNotifications
+   - CapacitorLocalNotifications
+   - CapacitorDevice
+4. In Xcode, open the WORKSPACE (App.xcworkspace), not the .xcodeproj.
+
+B) Add a single runtime diagnostic screen log (no UI change)
+In the existing Notifications section/button handlers, add these logs before calling any plugin:
+- console.log("[notif] platform", Capacitor.getPlatform());
+- console.log("[notif] native", (Capacitor as any).isNativePlatform?.() ?? "unknown");
+- console.log("[notif] has PushNotifications", !!PushNotifications);
+- console.log("[notif] has LocalNotifications", !!LocalNotifications);
+
+If platform != "ios" OR native is false, then we are not inside Capacitor context (stop and fix wrapper load path).
+
+C) Force the iOS permissions prompt (and make iOS Settings toggle appear)
+Important: iOS only shows the app under Settings → Notifications AFTER the app requests permission once.
+Implement in “Enable Notifications” button:
+1) Request local perms:
+   - const local = await LocalNotifications.requestPermissions();
+2) Request push perms:
+   - const push = await PushNotifications.requestPermissions();
+3) If push.receive === "granted":
+   - await PushNotifications.register();
+4) Add listeners once (guard so they don’t double-register):
+   - PushNotifications.addListener("registration", token => console.log("[push] token", token?.value));
+   - PushNotifications.addListener("registrationError", err => console.log("[push] reg error", err));
+   - PushNotifications.addListener("pushNotificationReceived", notif => console.log("[push] received", notif));
+   - PushNotifications.addListener("pushNotificationActionPerformed", action => console.log("[push] action", action));
+
+D) Make “Test Local” always schedule a notification
+Implement “Test Local”:
+- await LocalNotifications.schedule({
+    notifications: [{
+      id: Date.now() % 1000000,
+      title: "EcoLogic Test",
+      body: "Local notification working ✅",
+      schedule: { at: new Date(Date.now() + 1500) },
+      sound: "default",
+    }]
+  });
+
+E) Fix the “still no permission toggle” issue on device (stale installs)
+If permission prompt still doesn’t show:
+1) Delete the EcoLogic app from the iPhone completely.
+2) Restart the iPhone (quick power cycle).
+3) In Xcode: Product → Clean Build Folder.
+4) Re-run on the physical iPhone.
+
+(Old builds without plugins can linger; uninstall forces iOS to treat it as a fresh app and re-trigger prompts.)
+
+F) Verify Xcode capabilities (no code changes)
+In Xcode Target “App” → Signing & Capabilities:
+- Push Notifications enabled
+- Background Modes enabled, “Remote notifications” checked
+(Leave as-is if already present.)
+
+G) Success criteria checklist
+After reinstall + run:
+1) Tap Enable Notifications → iOS permission prompt appears.
+2) After accepting, iOS Settings → Notifications shows EcoLogic with toggles.
+3) Tap Test Local → banner appears within ~2 seconds.
+4) Xcode logs show:
+   - [notif] platform ios
+   - [notif] native true
+   - No UNIMPLEMENTED errors
+   - If push granted: [push] token ...
+
+Deliverables:
+- A short summary of what was changed (files touched)
+- The exact Xcode console output for:
+  - Enable Notifications press
+  - Test Local press
+- Confirm whether Settings → Notifications now shows EcoLogic

@@ -145,9 +145,17 @@ export async function registerPushNotifications(): Promise<PushResult> {
 
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
     const { Device } = await import("@capacitor/device");
 
-    console.log("[push] Requesting permissions...");
+    console.log("[notif] has PushNotifications", !!PushNotifications);
+    console.log("[notif] has LocalNotifications", !!LocalNotifications);
+
+    console.log("[push] Requesting local permissions first...");
+    const localPerm = await LocalNotifications.requestPermissions();
+    console.log("[push] Local permission result:", localPerm.display);
+
+    console.log("[push] Requesting push permissions...");
     const permResult = await PushNotifications.requestPermissions();
     console.log("[push] Permission result:", permResult.receive);
 
