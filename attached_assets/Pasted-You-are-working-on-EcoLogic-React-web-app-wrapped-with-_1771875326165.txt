@@ -1,0 +1,176 @@
+You are working on EcoLogic (React web app wrapped with Capacitor iOS). The user reports “Plugin Not Installed” / `{code:"UNIMPLEMENTED"}` when tapping:
+- Enable Notifications
+- Test Local
+
+That means our JS is calling a plugin that either:
+1) is the WRONG Capacitor plugin name (most likely), OR
+2) is running in web context fallback, OR
+3) wasn’t synced into iOS native build.
+
+IMPORTANT: Capacitor uses TWO different plugins:
+- Local notifications: @capacitor/local-notifications
+- Push notifications: @capacitor/push-notifications
+There is NO single “Notifications” plugin that covers both in the way our UI expects.
+
+Goal:
+Make “Enable Notifications” trigger iOS permission prompt and store permission state.
+Make “Test Local” show a local notification on a real iPhone build.
+Do NOT change UI layout. Only fix native notification plumbing + minimal JS.
+
+========================
+A) Install correct plugins
+========================
+From project root:
+
+npm uninstall @capacitor/notifications || true
+npm install @capacitor/local-notifications @capacitor/push-notifications
+npx cap sync ios
+
+========================
+B) Verify we are truly running native
+========================
+Find the Settings/Notifications component where buttons call notifications.
+
+Add ONE log at the start of each handler:
+console.log("[notif] platform", Capacitor.getPlatform(), "native?", Capacitor.isNativePlatform?.() ?? "n/a");
+
+If platform is "web" or native? false inside the iOS build, then we are not calling plugins in native context; fix by ensuring the screen is running inside Capacitor WebView (not opening in Browser/Safari).
+
+========================
+C) Replace wrong plugin usage in code
+========================
+Search the repo for:
+- "Notifications"
+- "UNIMPLEMENTED"
+- "enableNotifications"
+- "testLocal"
+- "@capacitor/notifications"
+
+Update logic to use correct plugins:
+
+1) Local notifications:
+import { LocalNotifications } from "@capacitor/local-notifications";
+
+2) Push notifications permissions + token (for later):
+import { PushNotifications } from "@capacitor/push-notifications";
+
+Implement:
+
+async function requestNotifPermissions() {
+  // Request both (local + push) so iOS shows the permission prompt properly.
+  const localPerm = await LocalNotifications.requestPermissions();
+  console.log("[notif] localPerm", localPerm);
+
+  const pushPerm = await PushNotifications.requestPermissions();
+  console.log("[notif] pushPerm", pushPerm);
+
+  // Register for remote pushes only if granted
+  if (pushPerm.receive === "granted") {
+    await PushNotifications.register();
+  }
+
+  return {
+    local: localPerm.display,
+    push: pushPerm.receive,
+  };
+}
+
+async function testLocalNotification() {
+  // Schedule an immediate local notification
+  await LocalNotifications.schedule({
+    notifications: [
+      {
+        title: "EcoLogic Test",
+        body: "Local notification working ✅",
+        id: Date.now() % 1000000,
+        schedule: { at: new Date(Date.now() + 1000) }, // 1s from now
+        sound: "default",
+      },
+    ],
+  });
+}
+
+Wire these to the existing buttons WITHOUT changing UI.
+
+========================
+D) iOS native capabilities (Xcode)
+========================
+Open iOS project:
+npx cap open ios
+
+In Xcode → Targets → App → Signing & Capabilities:
+- Ensure “Push Notifications” capability is ON
+- Ensure “Background Modes” is ON and “Remote notifications” is checked (for pushes)
+
+(These do not affect local, but required for push.)
+
+========================
+E) AppDelegate hooks for Push (required)
+========================
+Open: ios/App/App/AppDelegate.swift
+
+Ensure it includes Capacitor push bridging. Add this minimal code:
+
+import UIKit
+import Capacitor
+
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
+
+  var window: UIWindow?
+
+  func application(_ application: UIApplication,
+                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    return true
+  }
+
+  // Forward APNS token to Capacitor
+  func application(_ application: UIApplication,
+                   didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+  }
+
+  func application(_ application: UIApplication,
+                   didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+  }
+
+  func application(_ application: UIApplication,
+                   didReceiveRemoteNotification userInfo: [AnyHashable : Any],
+                   fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    NotificationCenter.default.post(name: .capacitorDidReceiveRemoteNotification, object: userInfo)
+    completionHandler(.newData)
+  }
+}
+
+If those NotificationCenter names don’t compile, use Capacitor docs equivalents available in this project’s Capacitor version; keep it minimal.
+
+========================
+F) Rebuild correctly (critical)
+========================
+1) npx cap sync ios
+2) In Xcode: Product → Clean Build Folder
+3) Run on the REAL iPhone (not simulator)
+
+========================
+G) Confirm success
+========================
+On the iPhone build:
+1) Tap “Enable Notifications”
+Expected: iOS permission prompt appears.
+2) Tap “Test Local”
+Expected: notification banner appears within 1–2 seconds.
+
+========================
+H) Logging
+========================
+Add logs for:
+- permission results
+- PushNotifications.register() call
+- PushNotifications.addListener('registration', ...) and 'registrationError'
+- LocalNotifications.schedule success/failure
+
+Return with:
+- the exact console logs from Xcode
+- confirmation whether iOS prompt appeared
+- whether the local banner appeared

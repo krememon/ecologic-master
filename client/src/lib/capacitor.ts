@@ -140,12 +140,14 @@ export async function openAppSettings(): Promise<void> {
 }
 
 export async function registerPushNotifications(): Promise<PushResult> {
+  console.log("[notif] platform", Capacitor.getPlatform(), "native?", isNativePlatform());
   if (!isNativePlatform()) return { success: false, error: "failed" };
 
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
     const { Device } = await import("@capacitor/device");
 
+    console.log("[push] Requesting permissions...");
     const permResult = await PushNotifications.requestPermissions();
     console.log("[push] Permission result:", permResult.receive);
 
@@ -237,10 +239,12 @@ export type LocalNotifResult = {
 };
 
 export async function scheduleLocalTestNotification(): Promise<LocalNotifResult> {
+  console.log("[notif] testLocal platform", Capacitor.getPlatform(), "native?", isNativePlatform());
   if (!isNativePlatform()) return { success: false, error: "failed" };
 
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
+    console.log("[notif] LocalNotifications plugin loaded");
 
     const perm = await LocalNotifications.requestPermissions();
     if (perm.display !== "granted") {
