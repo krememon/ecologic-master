@@ -12825,26 +12825,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      // Create DM notification for recipients
+      // Create DM push notification for recipients
       const sender = await storage.getUser(userId);
       const senderCompany = await storage.getUserCompany(userId);
-      
-      if (sender && senderCompany) {
+
+      const recipientUserIds = participants.map(p => p.userId);
+      console.log("[dm] message created", { threadId: conversationId, senderUserId: userId, recipientUserIds });
+
+      if (!sender || !senderCompany) {
+        console.log("[dm] WARNING: sender or senderCompany not found — skipping push", { senderFound: !!sender, companyFound: !!senderCompany, userId });
+      }
+
+      if (recipientUserIds.length === 0) {
+        console.log("[dm] WARNING: recipientUserIds is empty — no one to notify", { threadId: conversationId, senderUserId: userId });
+      }
+
+      if (sender && senderCompany && recipientUserIds.length > 0) {
         const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Someone';
-        const messagePreview = body.trim().length > 50 
-          ? body.trim().substring(0, 50) + '...' 
+        const messagePreview = body.trim().length > 80 
+          ? body.trim().substring(0, 80) + '...' 
           : body.trim();
 
-        for (const { userId: recipientId } of participants) {
+        for (const recipientId of recipientUserIds) {
           try {
             await notifyUsers([recipientId], {
               companyId: senderCompany.id,
               type: 'dm_message',
-              title: senderName,
-              body: messagePreview,
+              title: 'New Message',
+              body: `${senderName}: ${messagePreview}`,
               entityType: 'conversation',
               entityId: conversationId,
-              linkUrl: `/messages?conversation=${conversationId}`,
+              linkUrl: `/messages/${conversationId}`,
               meta: {
                 conversationId,
                 senderId: userId,
@@ -12853,7 +12864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               dedupMinutes: 1,
             });
           } catch (notifError) {
-            console.error('[DM notification] Failed to create notification:', notifError);
+            console.error('[dm] Failed to create notification for recipient:', recipientId, notifError);
           }
         }
       }
@@ -15613,31 +15624,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[WS:SEND] Warning: Room ${roomKey} has no sockets`);
             }
 
-            // 5. Create DM bell notification for recipients
+            // 5. Create DM bell + push notification for recipients
             try {
               const sender = await storage.getUser(ws.userId);
               const senderCompany = await storage.getUserCompany(ws.userId);
-              if (sender && senderCompany) {
+
+              const otherParticipants = await db
+                .select({ userId: conversationParticipants.userId })
+                .from(conversationParticipants)
+                .where(and(
+                  eq(conversationParticipants.conversationId, conversationId),
+                  sql`${conversationParticipants.userId} != ${ws.userId}`
+                ));
+
+              const wsRecipientUserIds = otherParticipants.map(p => p.userId);
+              console.log("[dm] message created (ws)", { threadId: conversationId, senderUserId: ws.userId, recipientUserIds: wsRecipientUserIds });
+
+              if (!sender || !senderCompany) {
+                console.log("[dm] WARNING (ws): sender or senderCompany not found — skipping push", { senderFound: !!sender, companyFound: !!senderCompany, userId: ws.userId });
+              }
+              if (wsRecipientUserIds.length === 0) {
+                console.log("[dm] WARNING (ws): recipientUserIds is empty — no one to notify", { threadId: conversationId, senderUserId: ws.userId });
+              }
+
+              if (sender && senderCompany && wsRecipientUserIds.length > 0) {
                 const senderName = [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Someone';
-                const messagePreview = body.trim().length > 50 ? body.trim().substring(0, 50) + '...' : body.trim();
-                const otherParticipants = await db
-                  .select({ userId: conversationParticipants.userId })
-                  .from(conversationParticipants)
-                  .where(and(
-                    eq(conversationParticipants.conversationId, conversationId),
-                    sql`${conversationParticipants.userId} != ${ws.userId}`
-                  ));
-                for (const { userId: recipientId } of otherParticipants) {
-                  await storage.createNotification({
+                const messagePreview = body.trim().length > 80 ? body.trim().substring(0, 80) + '...' : body.trim();
+                for (const recipientId of wsRecipientUserIds) {
+                  await notifyUsers([recipientId], {
                     companyId: senderCompany.id,
-                    recipientUserId: recipientId,
                     type: 'dm_message',
-                    title: senderName,
-                    body: messagePreview,
+                    title: 'New Message',
+                    body: `${senderName}: ${messagePreview}`,
                     entityType: 'conversation',
                     entityId: conversationId,
-                    linkUrl: `/messages?conversation=${conversationId}`,
+                    linkUrl: `/messages/${conversationId}`,
                     meta: { conversationId, senderId: ws.userId, messageId: newMessage.id },
+                    dedupMinutes: 1,
                   });
                 }
               }

@@ -66,6 +66,8 @@ export async function notifyUsers(
         linkUrl: params.linkUrl || null,
         meta: params.meta || null,
       });
+    } else if (params.type === "dm_message") {
+      console.log("[notify] dm deduped — skipping push for recipientUserId=", userId, "entityId=", params.entityId, "dedupWindow=", dedupWindow, "min");
     }
   }
 
@@ -73,8 +75,19 @@ export async function notifyUsers(
     await storage.createNotifications(notificationsToCreate);
 
     for (const notif of notificationsToCreate) {
+      const isDm = notif.type === "dm_message";
       try {
-        await sendPushToUser(notif.recipientUserId, {
+        if (isDm) {
+          const tokens = await storage.getUserPushTokens(notif.recipientUserId);
+          console.log("[notify] dm tokens", { recipientUserId: notif.recipientUserId, tokenCount: tokens.length });
+          if (tokens.length === 0) {
+            console.log("[notify] WARNING: no push tokens for DM recipient", notif.recipientUserId);
+          }
+        }
+
+        console.log(`[notify] queued type=${notif.type} recipientUserId=${notif.recipientUserId} entityId=${notif.entityId}`);
+
+        const pushResult = await sendPushToUser(notif.recipientUserId, {
           title: notif.title,
           body: notif.body,
           data: {
@@ -84,6 +97,10 @@ export async function notifyUsers(
             linkUrl: notif.linkUrl || "",
           },
         });
+
+        if (isDm) {
+          console.log("[notify] dm send result", { recipientUserId: notif.recipientUserId, sent: pushResult.sent, failed: pushResult.failed });
+        }
       } catch (err) {
         console.error("[push] Failed to send push for notification to user:", notif.recipientUserId, err);
       }
