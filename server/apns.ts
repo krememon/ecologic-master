@@ -1,32 +1,74 @@
 import apn from "apn";
+import * as fs from "fs";
+import * as crypto from "crypto";
 import { storage } from "./storage";
 
 const TEAM_ID = process.env.APNS_TEAM_ID;
 const KEY_ID = process.env.APNS_KEY_ID;
-const PRIVATE_KEY = process.env.APNS_PRIVATE_KEY;
 const TOPIC = process.env.APNS_TOPIC || "com.ecologic.app";
+const KEY_PATH = "/tmp/apns_key.p8";
+
+let keyValid = false;
+let keyError = "";
 
 {
   const missing: string[] = [];
   if (!TEAM_ID) missing.push("APNS_TEAM_ID");
   if (!KEY_ID) missing.push("APNS_KEY_ID");
-  if (!PRIVATE_KEY) missing.push("APNS_PRIVATE_KEY");
+  if (!process.env.APNS_PRIVATE_KEY) missing.push("APNS_PRIVATE_KEY");
   if (missing.length > 0) {
     console.warn(`[apns] Missing env vars: ${missing.join(", ")}. Push will not work.`);
   } else {
-    console.log("[apns] All APNS env vars present. topic=", TOPIC);
+    const raw = process.env.APNS_PRIVATE_KEY || "";
+    let cleaned = raw.trim()
+      .replace(/^"|"$/g, "")
+      .replace(/\\n/g, "\n")
+      .replace(/\r\n/g, "\n");
+
+    const hasBegin = cleaned.includes("-----BEGIN PRIVATE KEY-----");
+    let newlineCount = (cleaned.match(/\n/g) || []).length;
+
+    if (hasBegin && newlineCount < 3) {
+      const body = cleaned
+        .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+        .replace(/-----END PRIVATE KEY-----/g, "")
+        .replace(/\s+/g, "");
+      const lines: string[] = [];
+      for (let i = 0; i < body.length; i += 64) {
+        lines.push(body.substring(i, i + 64));
+      }
+      cleaned = `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
+      newlineCount = (cleaned.match(/\n/g) || []).length;
+      console.log("[apns] Reformatted PEM: bodyLen=", body.length, "lines=", lines.length);
+    }
+
+    try {
+      crypto.createPrivateKey(cleaned);
+      keyValid = true;
+    } catch (e: any) {
+      keyValid = false;
+      keyError = e.message || String(e);
+    }
+
+    console.log(`[apns] keySanitized hasBegin=${hasBegin} newlineCount=${newlineCount} keyValid=${keyValid}`);
+    if (!keyValid) {
+      console.error(`[apns] Key validation failed: ${keyError}`);
+    }
+
+    fs.writeFileSync(KEY_PATH, cleaned, { encoding: "utf8" });
+    console.log(`[apns] usingKeyPath=${KEY_PATH}`);
   }
 }
 
 let provider: apn.Provider | null = null;
 
 export function getApnsProvider(): apn.Provider | null {
-  if (!TEAM_ID || !KEY_ID || !PRIVATE_KEY) return null;
+  if (!TEAM_ID || !KEY_ID || !keyValid) return null;
   if (provider) return provider;
 
   provider = new apn.Provider({
     token: {
-      key: PRIVATE_KEY!,
+      key: KEY_PATH,
       keyId: KEY_ID!,
       teamId: TEAM_ID!,
     },
@@ -35,6 +77,14 @@ export function getApnsProvider(): apn.Provider | null {
 
   console.log("[apns] Provider initialized. production=", process.env.NODE_ENV === "production", "topic=", TOPIC);
   return provider;
+}
+
+export function getKeyError(): string {
+  return keyError;
+}
+
+export function isKeyValid(): boolean {
+  return keyValid;
 }
 
 export interface ApnsPushPayload {
@@ -51,6 +101,9 @@ export async function sendApnsPush(params: {
   body: string;
   data?: Record<string, any>;
 }): Promise<{ sent: number; failed: number; failures: Array<{ status: string; response: any; device: string }> }> {
+  if (!keyValid) {
+    return { sent: 0, failed: 0, failures: [{ status: "key_invalid", response: keyError, device: "" }] };
+  }
   const p = getApnsProvider();
   if (!p) {
     console.log("[apns] Provider not available (missing env vars)");
@@ -147,5 +200,5 @@ export async function sendPushToUsers(
 }
 
 export function isApnsConfigured(): boolean {
-  return !!(TEAM_ID && KEY_ID && PRIVATE_KEY);
+  return !!(TEAM_ID && KEY_ID && keyValid);
 }
