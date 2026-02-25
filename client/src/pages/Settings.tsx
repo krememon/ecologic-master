@@ -499,35 +499,37 @@ export default function Settings() {
                     Get Token
                   </Button>
 
-                  <Button
-                    variant="default"
-                    className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white"
-                    disabled={testingRemote}
-                    onClick={async () => {
-                      console.log("REMOTE PUSH TEST BUTTON CLICKED");
-                      setTestingRemote(true);
-                      try {
-                        const res = await fetch("/api/push/test", { method: "POST", credentials: "include" });
-                        const json = await res.json().catch(() => ({}));
-                        console.log("/api/push/test status:", res.status, "json:", json);
-                        alert("push test: " + res.status + " " + JSON.stringify(json));
-                        if (json.ok) {
-                          toast({ title: "Remote Push Sent", description: `Sent: ${json.sent}, Failed: ${json.failed}` });
-                        } else {
-                          toast({ title: "Push Failed", description: json.message || "Server could not send push.", variant: "destructive" });
+                  {import.meta.env.DEV && (
+                    <Button
+                      variant="default"
+                      className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white"
+                      disabled={testingRemote}
+                      onClick={async () => {
+                        console.log("REMOTE PUSH TEST BUTTON CLICKED");
+                        setTestingRemote(true);
+                        try {
+                          const res = await fetch("/api/push/test", { method: "POST", credentials: "include" });
+                          const json = await res.json().catch(() => ({}));
+                          console.log("/api/push/test status:", res.status, "json:", json);
+                          alert("push test: " + res.status + " " + JSON.stringify(json));
+                          if (json.ok) {
+                            toast({ title: "Remote Push Sent", description: `Sent: ${json.sent}, Failed: ${json.failed}` });
+                          } else {
+                            toast({ title: "Push Failed", description: json.message || "Server could not send push.", variant: "destructive" });
+                          }
+                        } catch (err) {
+                          console.error("push test fetch error:", err);
+                          alert("push test error: " + String(err));
+                          toast({ title: "Error", description: "Could not reach server.", variant: "destructive" });
+                        } finally {
+                          setTestingRemote(false);
                         }
-                      } catch (err) {
-                        console.error("push test fetch error:", err);
-                        alert("push test error: " + String(err));
-                        toast({ title: "Error", description: "Could not reach server.", variant: "destructive" });
-                      } finally {
-                        setTestingRemote(false);
-                      }
-                    }}
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    {testingRemote ? "Sending..." : "Send Test Remote Push"}
-                  </Button>
+                      }}
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      {testingRemote ? "Sending..." : "Send Test Remote Push"}
+                    </Button>
+                  )}
                 </div>
               </>
             ) : (
