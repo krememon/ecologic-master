@@ -1,0 +1,81 @@
+✅ GOAL
+
+Make sure we’re editing the real iOS entry points and get native logs to appear in Xcode console. Then we’ll immediately see whether APNs is failing (entitlements/team) or succeeding (token).
+
+1) Find the REAL AppDelegate + ensure it’s compiled
+
+In the repo, locate ALL AppDelegate.swift files under ios/.
+
+Deliverable: list their paths.
+
+Then:
+
+Identify which one is included in the iOS target “App”
+
+Ensure that file has Target Membership checked (in Xcode file inspector)
+
+Remove/avoid duplicates that are not used.
+
+2) Use NSLog (prints sometimes don’t show)
+
+In the actual AppDelegate.swift used by the target, add at top:
+
+import Foundation
+
+Then change every print(...) to NSLog("...").
+
+Add this in didFinishLaunchingWithOptions:
+
+NSLog("✅✅✅ [APNS] didFinishLaunchingWithOptions CALLED")
+
+Also add logs in both callbacks:
+
+NSLog("✅✅✅ [APNS] didRegisterForRemoteNotificationsWithDeviceToken CALLED bytes=%d", deviceToken.count)
+
+NSLog("❌❌❌ [APNS] didFailToRegisterForRemoteNotificationsWithError %@", String(describing: error))
+3) If project is Scene-based, verify SceneDelegate too
+
+Search for SceneDelegate.swift. If it exists, add:
+
+NSLog("✅✅✅ [SCENE] SceneDelegate loaded")
+
+in scene(_:willConnectTo:options:).
+
+Deliverable: confirm which lifecycle is active (SceneDelegate present or not).
+
+4) Confirm Push capability + Background mode (the correct one)
+
+In Xcode → Target “App” → Signing & Capabilities:
+
+✅ Push Notifications
+
+✅ Background Modes → ✅ Remote notifications checked
+
+(Not “Location Push Service Extension”)
+
+5) Rebuild clean and prove native logs appear
+
+Do:
+
+Delete app from iPhone
+
+Xcode: Product → Clean Build Folder
+
+Run on real iPhone
+
+Deliverable: Xcode console shows:
+
+✅✅✅ [APNS] didFinishLaunchingWithOptions CALLED
+
+If we don’t see that, we’re still not editing the correct file/target.
+
+6) After native logs appear, rerun push register once
+
+When app launches and calls PushNotifications.register(), we MUST see one of:
+
+✅✅✅ [APNS] didRegisterForRemoteNotificationsWithDeviceToken... (token exists)
+OR
+
+❌❌❌ [APNS] didFailToRegisterForRemoteNotificationsWithError ... (paste error)
+
+Return that line.
