@@ -47,7 +47,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - **Timesheet Editing (Manager-Only)**: Managers can edit time entries with an audit trail and RBAC.
 - **Archival**: Automatic archival for estimates (when converted) and jobs (when completed and paid).
 - **Schedule Events (Company Calendar)**: Manager-created calendar events (holidays, meetings, reminders) with RBAC-enforced visibility and CRUD operations.
-- **Notifications System**: In-app notification system with 13 types, unread badges, mark-as-read, and deep linking, role-targeted with deduplication.
+- **Notifications System**: In-app notification system with 28 types, unread badges, mark-as-read, and deep linking, role-targeted with deduplication. Includes `tech_clocked_in`/`tech_clocked_out` (managers only, excludes self), `job_starting_soon` (30-min scheduler via `server/jobScheduler.ts`), `invoice_paid` (OWNER only), `job_unassigned` (removed crew members), and DM push delivery via `notifyUsers`.
 - **QuickBooks Online Integration**: Owner-only QBO integration via OAuth 2.0 for customer mapping, manual invoice sync, and automatic payment sync.
 - **Bulk Email/SMS Campaigns**: Bulk promotional messaging to customers from the Clients page with multi-select, preview, opt-in management, and campaign tracking.
 - **Email Unsubscribe System**: Secure one-click unsubscribe for marketing emails with HMAC-signed tokens and public endpoints.

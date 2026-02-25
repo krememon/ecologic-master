@@ -10,6 +10,7 @@ import { db } from "./db";
 import { invoices, payments, customers, companies, jobs, notifications, bankRefunds, refunds } from "../shared/schema";
 import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
 import { notifyManagers } from "./notificationService";
+import { startJobScheduler } from "./jobScheduler";
 
 const app = express();
 
@@ -815,6 +816,7 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     startOverdueInvoiceChecker();
+    startJobScheduler();
   });
 })();
 

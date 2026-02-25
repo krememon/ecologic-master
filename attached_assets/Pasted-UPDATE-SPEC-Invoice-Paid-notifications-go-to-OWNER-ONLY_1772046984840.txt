@@ -1,0 +1,79 @@
+UPDATE SPEC: Invoice Paid notifications go to OWNER ONLY.
+
+Implement EcoLogic V1 push notifications (APNs already working). Use existing push token registration + APNs send code. Do NOT touch Apple Sign-In.
+
+V1 Notifications (exact recipients):
+A) JOB_ASSIGNED -> assigned technician(s)
+B) JOB_REASSIGNED_REMOVED -> removed tech + newly assigned tech
+C) JOB_STARTING_SOON_30M -> assigned tech(s)
+D) DM_NEW_MESSAGE -> DM recipient (exclude sender)
+E) INVOICE_PAID -> OWNER ONLY
+F) TECH_CLOCKED_IN -> OWNER + SUPERVISOR(S)
+G) TECH_CLOCKED_OUT -> OWNER + SUPERVISOR(S), include duration (e.g. "4h 32m")
+
+Requirements:
+1) Notifications pipeline:
+- DB table `notifications` storing events + delivery status.
+- Service that:
+  (a) creates notification rows
+  (b) sends push to all device tokens for target users (push_tokens table)
+- Idempotency to prevent duplicates: `idempotencyKey` unique.
+
+2) DB: Create `notifications` table (minimal):
+- id (pk)
+- companyId
+- type (string)
+- recipientUserId
+- title
+- body
+- data (json) { jobId, invoiceId, threadId, linkUrl, type }
+- createdAt
+- sentAt nullable
+- status: 'queued' | 'sent' | 'failed'
+- error nullable
+- idempotencyKey (unique)
+
+3) Push payload:
+- aps.alert.title/body
+- aps.sound = "default"
+- include data fields: { type, jobId?, threadId?, invoiceId?, linkUrl }
+Link rules:
+- Job notifications: linkUrl `/jobs/:jobId` (fallback `/jobs`)
+- DM: `/messages` (or `/messages/:threadId` if exists)
+- Invoice: `/invoices/:invoiceId` (fallback `/invoices`)
+- Time tracking: `/jobs/:jobId` if available
+
+4) Trigger points:
+A+B) Crew assignment update route:
+- Compare previous assigned techIds vs new assigned techIds
+- For newly added: send JOB_ASSIGNED to those techs
+- For removed: send JOB_REASSIGNED_REMOVED ("You were removed...") to removed techs
+- If reassigned in same operation, both sets get their appropriate message
+C) Job starting soon:
+- Add a simple scheduler/worker (setInterval every 60s) on server startup:
+  - Find jobs starting in ~30 minutes window
+  - Send once per job per assigned tech (idempotencyKey)
+D) DM new message:
+- On DM message create, notify other participant(s) excluding sender
+E) Invoice paid:
+- On invoice status transition to PAID, notify OWNER ONLY (all owners if multiple)
+F+G) Clock in/out:
+- Hook into existing clock-in and clock-out endpoints
+- Recipients: OWNER + SUPERVISOR(S) in same company
+- Clock-out body must include duration "Xh Ym"
+- Include jobId in data if tied to a job
+
+5) Frontend:
+- Remove the “Send Test Remote Push” button OR make it DEV-only (import.meta.env.DEV).
+- No other UI required for now.
+
+6) Logging:
+- [notify] queued type=... recipient=... company=... jobId=...
+- [notify] sent type=... recipient=... devices=n
+- [notify] failed type=... recipient=... error=...
+
+Deliverables:
+- schema/migration + storage methods
+- server/notificationService.ts with create+send helpers + role recipient helpers
+- hooks wired into: crew assignment update, DM send, invoice paid, clock in/out, scheduled 30-min worker
+- manual verification steps documented in a short checklist

@@ -12,6 +12,7 @@ type NotificationParams = {
   linkUrl?: string;
   meta?: Record<string, any>;
   dedupMinutes?: number;
+  excludeUserIds?: string[];
 };
 
 const MANAGER_ROLES = ["OWNER", "SUPERVISOR"];
@@ -37,7 +38,12 @@ export async function notifyUsers(
 ): Promise<void> {
   if (recipientUserIds.length === 0) return;
 
-  const uniqueRecipients = Array.from(new Set(recipientUserIds));
+  let uniqueRecipients = Array.from(new Set(recipientUserIds));
+  if (params.excludeUserIds && params.excludeUserIds.length > 0) {
+    const excludeSet = new Set(params.excludeUserIds);
+    uniqueRecipients = uniqueRecipients.filter(id => !excludeSet.has(id));
+  }
+  if (uniqueRecipients.length === 0) return;
   const notificationsToCreate: InsertNotification[] = [];
 
   const dedupWindow = params.dedupMinutes ?? 60;
@@ -107,6 +113,19 @@ export async function notifyManagers(
     .map((m) => m.userId);
   if (managerIds.length > 0) {
     await notifyUsers(managerIds, { ...params, companyId });
+  }
+}
+
+export async function notifyOwners(
+  companyId: number,
+  params: Omit<NotificationParams, "companyId">
+): Promise<void> {
+  const members = await storage.getCompanyMembers(companyId);
+  const ownerIds = members
+    .filter((m) => m.role.toUpperCase() === "OWNER")
+    .map((m) => m.userId);
+  if (ownerIds.length > 0) {
+    await notifyUsers(ownerIds, { ...params, companyId });
   }
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase, DollarSign, AlertTriangle, ClipboardCheck, Calendar, FileText, UserMinus, RefreshCw } from "lucide-react";
+import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase, DollarSign, AlertTriangle, ClipboardCheck, Calendar, FileText, UserMinus, RefreshCw, Clock, Timer } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
@@ -59,6 +59,12 @@ const getNotificationIcon = (type: string) => {
       return <FileText className="h-4 w-4 text-blue-600" />;
     case 'estimate_converted':
       return <ClipboardCheck className="h-4 w-4 text-green-500" />;
+    case 'tech_clocked_in':
+      return <Clock className="h-4 w-4 text-green-600" />;
+    case 'tech_clocked_out':
+      return <Timer className="h-4 w-4 text-orange-500" />;
+    case 'job_starting_soon':
+      return <Calendar className="h-4 w-4 text-blue-500" />;
     default:
       return <Briefcase className="h-4 w-4 text-slate-500" />;
   }

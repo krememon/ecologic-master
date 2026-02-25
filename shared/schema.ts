@@ -1618,7 +1618,10 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "estimate_status_changed",
   "estimate_converted",
   "job_unassigned",
-  "job_status_changed"
+  "job_status_changed",
+  "tech_clocked_in",
+  "tech_clocked_out",
+  "job_starting_soon"
 ]);
 
 // Notifications table
@@ -1674,7 +1677,10 @@ export type NotificationType =
   | "estimate_status_changed"
   | "estimate_converted"
   | "job_unassigned"
-  | "job_status_changed";
+  | "job_status_changed"
+  | "tech_clocked_in"
+  | "tech_clocked_out"
+  | "job_starting_soon";
 
 export const refundMethodEnum = pgEnum("refund_method", ["card", "bank", "cash", "check", "other"]);
 export const refundProviderEnum = pgEnum("refund_provider", ["stripe", "plaid", "manual"]);

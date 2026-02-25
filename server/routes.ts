@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
+import { notifyUsers, notifyJobCrew, notifyManagers, notifyOwners, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
 import { sendPushToUser } from "./pushService";
 import { sendApnsPush } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
@@ -2922,6 +2922,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const log = await storage.clockIn(userId, member.companyId, jobId, category);
       console.log('[Time] clocked in', { userId, logId: log.id, jobId, category });
+
+      const clockUser = await storage.getUser(userId);
+      const clockUserName = clockUser ? `${clockUser.firstName || ''} ${clockUser.lastName || ''}`.trim() || 'A team member' : 'A team member';
+      let clockBody = `${clockUserName} clocked in`;
+      if (jobId) {
+        const clockJob = await storage.getJob(jobId);
+        if (clockJob) clockBody += ` on ${clockJob.title || clockJob.jobNumber || `Job #${jobId}`}`;
+      }
+      if (category && category !== 'job') clockBody += ` (${category})`;
+      notifyManagers(member.companyId, {
+        type: 'tech_clocked_in',
+        title: 'Technician Clocked In',
+        body: clockBody,
+        entityType: 'time_log',
+        entityId: log.id,
+        linkUrl: '/time-tracking',
+        excludeUserIds: [userId],
+      }).catch(err => console.error('[Clock-in notification error]', err));
+
       res.json({ success: true, timeSessionId: log.id, clockedInAt: log.clockInAt, jobId: log.jobId, category: log.category });
     } catch (error: any) {
       console.error('Error clocking in:', error);
@@ -3012,6 +3031,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const startTime = new Date(log.clockInAt).getTime();
       const endTime = log.clockOutAt ? new Date(log.clockOutAt).getTime() : Date.now();
       const durationMinutes = Math.max(1, Math.round((endTime - startTime) / 60000));
+
+      const clockOutUser = await storage.getUser(userId);
+      const clockOutName = clockOutUser ? `${clockOutUser.firstName || ''} ${clockOutUser.lastName || ''}`.trim() || 'A team member' : 'A team member';
+      const hours = Math.floor(durationMinutes / 60);
+      const mins = durationMinutes % 60;
+      const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      let clockOutBody = `${clockOutName} clocked out after ${durationStr}`;
+      if (log.jobId) {
+        const clockOutJob = await storage.getJob(log.jobId);
+        if (clockOutJob) clockOutBody += ` on ${clockOutJob.title || clockOutJob.jobNumber || `Job #${log.jobId}`}`;
+      }
+      notifyManagers(member.companyId, {
+        type: 'tech_clocked_out',
+        title: 'Technician Clocked Out',
+        body: clockOutBody,
+        entityType: 'time_log',
+        entityId: log.id,
+        linkUrl: '/time-tracking',
+        excludeUserIds: [userId],
+      }).catch(err => console.error('[Clock-out notification error]', err));
       
       console.log('[GEO] clock-out complete', { userId, timeLogId: log.id, durationMinutes, deletedCount: liveLocationDeletedCount });
       res.json({ 
@@ -5514,6 +5553,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           entityType: 'job',
           entityId: jobId,
           linkUrl: `/jobs/${jobId}`,
+        });
+      }
+
+      // Send notifications to removed crew members
+      if (toRemove.length > 0) {
+        const jobLabel = job.title || job.jobNumber || `Job #${jobId}`;
+        await notifyUsers(toRemove, {
+          companyId: company.id,
+          type: 'job_unassigned',
+          title: 'Removed from Job',
+          body: `You were removed from: ${jobLabel}`,
+          entityType: 'job',
+          entityId: jobId,
+          linkUrl: `/jobs`,
         });
       }
 
@@ -12784,9 +12837,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (const { userId: recipientId } of participants) {
           try {
-            await storage.createNotification({
+            await notifyUsers([recipientId], {
               companyId: senderCompany.id,
-              recipientUserId: recipientId,
               type: 'dm_message',
               title: senderName,
               body: messagePreview,
@@ -12798,6 +12850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 senderId: userId,
                 messageId: message.id,
               },
+              dedupMinutes: 1,
             });
           } catch (notifError) {
             console.error('[DM notification] Failed to create notification:', notifError);
@@ -13290,6 +13343,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         collectedByUserId: userId,
       });
 
+      if (newStatus === 'paid') {
+        await notifyOwners(company.id, {
+          type: 'invoice_paid',
+          title: 'Invoice Paid',
+          body: `Invoice ${invoice.invoiceNumber || `#${invoiceId}`} has been paid in full ($${(invoiceTotalCents / 100).toFixed(2)})`,
+          entityType: 'invoice',
+          entityId: invoiceId,
+          linkUrl: `/invoices/${invoiceId}`,
+        });
+      }
+
       res.json({
         success: true,
         amountCents,
@@ -13470,6 +13534,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobId: invoice.jobId || null,
         collectedByUserId: userId,
       });
+
+      if (newStatus === 'paid') {
+        await notifyOwners(company.id, {
+          type: 'invoice_paid',
+          title: 'Invoice Paid',
+          body: `Invoice ${invoice.invoiceNumber || `#${invoice.id}`} has been paid in full ($${(invoiceTotalCents / 100).toFixed(2)})`,
+          entityType: 'invoice',
+          entityId: invoice.id,
+          linkUrl: `/invoices/${invoice.id}`,
+        });
+      }
 
       res.json({
         success: true,
@@ -13762,6 +13837,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             jobId: invoice.jobId || null,
             collectedByUserId: stripeCollectorId,
           });
+
+          if (newStatus === 'paid') {
+            await notifyOwners(invoice.companyId, {
+              type: 'invoice_paid',
+              title: 'Invoice Paid',
+              body: `Invoice ${invoice.invoiceNumber || `#${invoiceId}`} has been paid in full ($${(invoiceTotalCents / 100).toFixed(2)})`,
+              entityType: 'invoice',
+              entityId: invoiceId,
+              linkUrl: `/invoices/${invoiceId}`,
+            });
+          }
         }
       }
 
