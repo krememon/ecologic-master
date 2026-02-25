@@ -66,8 +66,8 @@ export async function notifyUsers(
         linkUrl: params.linkUrl || null,
         meta: params.meta || null,
       });
-    } else if (params.type === "dm_message") {
-      console.log("[notify] dm deduped — skipping push for recipientUserId=", userId, "entityId=", params.entityId, "dedupWindow=", dedupWindow, "min");
+    } else if (params.type === "dm_message" || params.type === "invoice_paid") {
+      console.log(`[notify] ${params.type} deduped — skipping push for recipientUserId=`, userId, "entityId=", params.entityId, "dedupWindow=", dedupWindow, "min");
     }
   }
 
@@ -76,12 +76,15 @@ export async function notifyUsers(
 
     for (const notif of notificationsToCreate) {
       const isDm = notif.type === "dm_message";
+      const isInvoicePaid = notif.type === "invoice_paid";
+      const needsDetailLog = isDm || isInvoicePaid;
+      const logTag = isDm ? "dm" : isInvoicePaid ? "invoice_paid" : notif.type;
       try {
-        if (isDm) {
+        if (needsDetailLog) {
           const tokens = await storage.getUserPushTokens(notif.recipientUserId);
-          console.log("[notify] dm tokens", { recipientUserId: notif.recipientUserId, tokenCount: tokens.length });
+          console.log(`[notify] ${logTag} tokens`, { recipientUserId: notif.recipientUserId, tokenCount: tokens.length });
           if (tokens.length === 0) {
-            console.log("[notify] WARNING: no push tokens for DM recipient", notif.recipientUserId);
+            console.warn(`[notify] ${logTag} NO TOKENS`, { recipientUserId: notif.recipientUserId, entityId: notif.entityId });
           }
         }
 
@@ -98,8 +101,8 @@ export async function notifyUsers(
           },
         });
 
-        if (isDm) {
-          console.log("[notify] dm send result", { recipientUserId: notif.recipientUserId, sent: pushResult.sent, failed: pushResult.failed });
+        if (needsDetailLog) {
+          console.log(`[notify] ${logTag} send result`, { recipientUserId: notif.recipientUserId, sent: pushResult.sent, failed: pushResult.failed });
         }
       } catch (err) {
         console.error("[push] Failed to send push for notification to user:", notif.recipientUserId, err);
@@ -141,7 +144,25 @@ export async function notifyOwners(
   const ownerIds = members
     .filter((m) => m.role.toUpperCase() === "OWNER")
     .map((m) => m.userId);
+
+  const isInvoicePaid = params.type === "invoice_paid";
+  if (isInvoicePaid) {
+    console.log("[notify] invoice_paid owners", { companyId, ownerIds, memberCount: members.length });
+    if (ownerIds.length === 0) {
+      console.warn("[notify] invoice_paid WARNING: no owners found for companyId", companyId);
+    }
+  }
+
   if (ownerIds.length > 0) {
+    if (isInvoicePaid) {
+      for (const ownerId of ownerIds) {
+        const tokens = await storage.getUserPushTokens(ownerId);
+        console.log("[notify] invoice_paid tokens", { recipientUserId: ownerId, tokenCount: tokens.length });
+        if (tokens.length === 0) {
+          console.warn("[notify] invoice_paid NO TOKENS", { recipientUserId: ownerId, entityId: params.entityId });
+        }
+      }
+    }
     await notifyUsers(ownerIds, { ...params, companyId });
   }
 }

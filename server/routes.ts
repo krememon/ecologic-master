@@ -11503,6 +11503,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedInvoice = await storage.updateInvoice(invoiceId, updateData);
 
       if (status === 'paid' && invoice.status !== 'paid') {
+        console.log("[invoice] status change", { invoiceId, fromStatus: invoice.status, toStatus: 'paid', companyId: company.id, triggeredBy: "manual-mark-paid" });
+
         const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
         const existingPayment = await storage.getPaymentByInvoiceId(invoiceId);
         if (!existingPayment) {
@@ -11533,6 +11535,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[Invoice] Job ${invoice.jobId} paymentStatus updated to paid`);
           await tryArchiveCompletedPaidJob(invoice.jobId);
         }
+
+        const paidAmountDollars = (invoiceTotalCents / 100).toFixed(2);
+        await notifyOwners(company.id, {
+          type: 'invoice_paid',
+          title: 'Payment Received',
+          body: `Invoice paid – $${paidAmountDollars}`,
+          entityType: 'invoice',
+          entityId: invoiceId,
+          linkUrl: `/invoices/${invoiceId}`,
+        });
       }
       
       console.log(`[Invoice] Updated invoice`, { invoiceId, status, userId });
@@ -11540,6 +11552,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating invoice:", error);
       res.status(500).json({ message: "Failed to update invoice" });
+    }
+  });
+
+  // POST /api/invoices/:id/test-paid-notification — TEMP test endpoint (OWNER only)
+  app.post('/api/invoices/:id/test-paid-notification', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member || member.role.toUpperCase() !== 'OWNER') {
+        return res.status(403).json({ message: 'Owner only' });
+      }
+
+      const invoiceId = parseInt(req.params.id);
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice || invoice.companyId !== member.companyId) {
+        return res.status(404).json({ message: 'Invoice not found' });
+      }
+
+      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount || '0') * 100);
+      const paidAmountDollars = (invoiceTotalCents / 100).toFixed(2);
+
+      console.log("[invoice] TEST-paid-notification", { invoiceId, companyId: member.companyId, currentStatus: invoice.status, totalDollars: paidAmountDollars });
+
+      await notifyOwners(member.companyId, {
+        type: 'invoice_paid',
+        title: 'Payment Received',
+        body: `Invoice paid – $${paidAmountDollars}`,
+        entityType: 'invoice',
+        entityId: invoiceId,
+        linkUrl: `/invoices/${invoiceId}`,
+      });
+
+      res.json({ ok: true, invoiceId, companyId: member.companyId, amountDollars: paidAmountDollars });
+    } catch (error: any) {
+      console.error("[invoice] test-paid-notification error:", error);
+      res.status(500).json({ message: error.message || "Failed" });
     }
   });
 
@@ -13355,10 +13403,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (newStatus === 'paid') {
+        console.log("[invoice] status change", { invoiceId, fromStatus: invoice.status, toStatus: 'paid', companyId: company.id, paidAmount: amountDollars, triggeredBy: "manual-payment-collection" });
         await notifyOwners(company.id, {
           type: 'invoice_paid',
-          title: 'Invoice Paid',
-          body: `Invoice ${invoice.invoiceNumber || `#${invoiceId}`} has been paid in full ($${(invoiceTotalCents / 100).toFixed(2)})`,
+          title: 'Payment Received',
+          body: `Invoice paid – $${(invoiceTotalCents / 100).toFixed(2)}`,
           entityType: 'invoice',
           entityId: invoiceId,
           linkUrl: `/invoices/${invoiceId}`,
@@ -13547,10 +13596,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (newStatus === 'paid') {
+        console.log("[invoice] status change", { invoiceId: invoice.id, fromStatus: invoice.status, toStatus: 'paid', companyId: company.id, paidAmount: amountDollars, triggeredBy: "record-customer-payment" });
         await notifyOwners(company.id, {
           type: 'invoice_paid',
-          title: 'Invoice Paid',
-          body: `Invoice ${invoice.invoiceNumber || `#${invoice.id}`} has been paid in full ($${(invoiceTotalCents / 100).toFixed(2)})`,
+          title: 'Payment Received',
+          body: `Invoice paid – $${(invoiceTotalCents / 100).toFixed(2)}`,
           entityType: 'invoice',
           entityId: invoice.id,
           linkUrl: `/invoices/${invoice.id}`,
@@ -13850,10 +13900,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           if (newStatus === 'paid') {
+            console.log("[invoice] status change", { invoiceId, fromStatus: invoice.status, toStatus: 'paid', companyId: invoice.companyId, paidAmount: amountDollars, triggeredBy: "stripe-webhook" });
             await notifyOwners(invoice.companyId, {
               type: 'invoice_paid',
-              title: 'Invoice Paid',
-              body: `Invoice ${invoice.invoiceNumber || `#${invoiceId}`} has been paid in full ($${(invoiceTotalCents / 100).toFixed(2)})`,
+              title: 'Payment Received',
+              body: `Invoice paid – $${(invoiceTotalCents / 100).toFixed(2)}`,
               entityType: 'invoice',
               entityId: invoiceId,
               linkUrl: `/invoices/${invoiceId}`,

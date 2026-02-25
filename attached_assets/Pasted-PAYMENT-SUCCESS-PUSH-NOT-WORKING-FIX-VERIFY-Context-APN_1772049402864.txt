@@ -1,0 +1,80 @@
+PAYMENT SUCCESS PUSH NOT WORKING — FIX + VERIFY
+
+Context:
+- APNs working.
+- Job + DM pushes working.
+- “Invoice Paid” should notify OWNER ONLY.
+- User reports no notification when payment is successful.
+
+DO NOT TOUCH Apple Sign-In.
+DO NOT break existing push flows.
+
+GOAL:
+When an invoice becomes PAID (payment successful), send a push to OWNER user(s).
+
+STEP 1 — FIND THE TRUE “PAYMENT SUCCESS” SOURCE OF TRUTH
+Search the backend for where invoice status is set to “paid”, “PAID”, “succeeded”, “SUCCESS”, or similar.
+Examples to search:
+- "invoice" + "paid"
+- "status" + "PAID"
+- "payment_intent" / "stripe" / "webhook"
+- "markPaid" / "paidAt"
+- "updateInvoiceStatus"
+
+We must send the notification from the place that ACTUALLY changes the invoice status, not from the UI button.
+
+STEP 2 — ADD HARD LOGS AT THE STATUS CHANGE
+At the exact line where invoice status changes, add:
+console.log("[invoice] status change", { invoiceId, fromStatus, toStatus, companyId, paidAmount, triggeredBy: "webhook|manual|api" });
+
+If you can’t easily know fromStatus, fetch current invoice first and log it.
+
+STEP 3 — TRIGGER NOTIFICATION ONLY ON TRANSITION TO PAID
+Only send push when:
+fromStatus !== "PAID" AND toStatus === "PAID"
+
+Then call notification service:
+type: "invoice_paid"
+title: "Payment Received"
+body: `Invoice paid – $${amount}`
+data: { type:"invoice_paid", entityType:"invoice", entityId: invoiceId, linkUrl:`/invoices/${invoiceId}` }
+
+STEP 4 — RESOLVE RECIPIENTS = OWNER ONLY
+Implement a helper:
+getCompanyOwners(companyId) -> userIds[]
+(If multiple owners exist, notify all.)
+
+Add logs:
+console.log("[notify] invoice_paid owners", { companyId, ownerIds });
+
+STEP 5 — SEND + LOG TOKEN COUNT + RESULT
+Before sending:
+console.log("[notify] invoice_paid tokens", { recipientUserId, tokenCount });
+
+After sending:
+console.log("[notify] invoice_paid result", { recipientUserId, sent, failed, failures });
+
+If tokenCount === 0:
+console.warn("[notify] invoice_paid NO TOKENS", { recipientUserId, invoiceId });
+
+STEP 6 — ADD A BACKEND TEST ENDPOINT (TEMP) TO PROVE THE PIPELINE
+Add POST /api/invoices/:id/test-paid-notification (OWNER only) that:
+- loads invoice
+- triggers the exact same invoice_paid notify logic
+- returns { ok, ownersNotified, perOwnerResults }
+
+This isolates “event not firing” vs “push not sending”.
+
+STEP 7 — VERIFY
+A) Use the test endpoint first — confirm push arrives.
+B) Then do a real payment success flow and confirm logs show:
+[invoice] status change ... toStatus="PAID"
+[notify] invoice_paid owners ...
+[notify] invoice_paid tokens tokenCount>0
+[notify] invoice_paid result sent=1 failed=0
+
+DELIVERABLES:
+- The correct hook in the actual status-change code path (webhook/manual)
+- Clear logs proving it fires once on transition
+- Owner receives push on successful payment
+- Temporary test endpoint included (we can remove later)
