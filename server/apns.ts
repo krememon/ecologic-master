@@ -6,8 +6,16 @@ const KEY_ID = process.env.APNS_KEY_ID;
 const PRIVATE_KEY = process.env.APNS_PRIVATE_KEY;
 const TOPIC = process.env.APNS_TOPIC || "com.ecologic.app";
 
-if (!TEAM_ID || !KEY_ID || !PRIVATE_KEY) {
-  console.warn("[apns] Missing APNS_* env vars. Push will not work.");
+{
+  const missing: string[] = [];
+  if (!TEAM_ID) missing.push("APNS_TEAM_ID");
+  if (!KEY_ID) missing.push("APNS_KEY_ID");
+  if (!PRIVATE_KEY) missing.push("APNS_PRIVATE_KEY");
+  if (missing.length > 0) {
+    console.warn(`[apns] Missing env vars: ${missing.join(", ")}. Push will not work.`);
+  } else {
+    console.log("[apns] All APNS env vars present. topic=", TOPIC);
+  }
 }
 
 let provider: apn.Provider | null = null;

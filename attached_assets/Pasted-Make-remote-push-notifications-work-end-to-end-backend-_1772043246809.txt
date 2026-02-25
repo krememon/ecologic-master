@@ -1,0 +1,140 @@
+Make remote push notifications work end-to-end (backend → APNs → iPhone) using the new APNS_ secrets*, while guaranteeing Apple Sign-In is untouched.
+
+NON-NEGOTIABLE SAFETY RULES
+
+DO NOT rename, delete, or modify any existing Apple Sign-In secrets (APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY, etc.).
+
+DO NOT change any Apple Sign-In routes, auth flows, tokens, callbacks, polling, or UI.
+
+Push notifications must use ONLY:
+
+APNS_TEAM_ID
+
+APNS_KEY_ID
+
+APNS_PRIVATE_KEY
+
+Topic / bundle id: com.ecologic.app (or APNS_TOPIC override)
+
+If you need a Team ID, use APNS_TEAM_ID only (even if it matches APPLE_TEAM_ID).
+
+REQUIRED DELIVERABLES
+
+POST /api/push/register (auth required) saves the device token for the logged-in user (already exists; verify it still works).
+
+POST /api/push/test (auth required) sends a real APNs push to the saved token:
+
+title: EcoLogic
+
+body: Remote push works ✅
+
+sound: default
+
+API returns JSON with sent, failed, and failures details.
+
+Console logs show APNs provider initialized and APNs result summary.
+
+Apple Sign-In still works exactly the same (no regressions).
+
+IMPLEMENTATION TASKS
+1) APNs sender (server)
+
+Use the existing APNs implementation already in the repo (custom HTTP/2 OR apn package — keep whichever is currently in place, but must be stable).
+
+Ensure it reads credentials strictly from:
+
+process.env.APNS_TEAM_ID
+
+process.env.APNS_KEY_ID
+
+process.env.APNS_PRIVATE_KEY
+
+Topic must be process.env.APNS_TOPIC || "com.ecologic.app".
+
+production should be process.env.NODE_ENV === "production".
+
+Add clear logs:
+
+[apns] provider initialized
+
+[apns] topic=<...> production=<...>
+
+[apns] sending tokenLen=<...>
+
+[apns] result sent=<n> failed=<n> failures=<...>
+
+If env vars are missing, log which ones are missing (names only) and return a helpful error from the endpoint.
+
+2) Token storage
+
+Confirm /api/push/register is saving the device token for the authenticated user.
+
+If the DB table exists, keep using it.
+
+If not, create a minimal table (or minimal storage) without breaking anything else.
+
+Minimum fields:
+
+userId
+
+token
+
+platform ("ios")
+
+deviceId
+
+updatedAt
+
+Avoid duplicate inserts (upsert by userId+deviceId if possible).
+
+3) Test endpoint
+
+Implement/verify POST /api/push/test (auth required):
+
+Fetch latest token for the current user
+
+Call sendApnsPush({ token, title, body })
+
+Return:
+
+{ "ok": true, "sent": <n>, "failed": <n>, "failures": [...] }
+
+If no token exists:
+
+Return 400 with { ok:false, message:"No push token registered for this user yet" }
+
+4) Frontend
+
+Confirm the push registration event posts to /api/push/register only when logged in (avoid Unauthorized spam).
+
+If not logged in yet, queue token locally and register once auth becomes valid.
+
+Add a temporary button somewhere obvious (Settings / Debug / Sidebar):
+
+“Send Test Remote Push”
+
+Calls POST /api/push/test
+
+Logs the JSON response.
+
+VALIDATION STEPS (MUST BE DONE)
+
+Restart server so APNS_* env vars load.
+
+Login on iPhone.
+
+Confirm /api/push/register returns { ok:true }.
+
+Press “Send Test Remote Push”.
+
+Confirm /api/push/test returns sent: 1 and the iPhone receives the notification.
+
+OUTPUT REQUIRED FROM YOU (AGENT)
+
+File paths changed + what changed (short)
+
+Example /api/push/test response JSON
+
+Any [apns] result logs if failed
+
+Again: Do not touch Apple Sign-In.
