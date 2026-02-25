@@ -6,6 +6,7 @@ import { conversationRoom } from "./wsRooms";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
 import { sendPushToUser } from "./pushService";
+import { sendApnsPush } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
@@ -14305,14 +14306,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tokens = await storage.getUserPushTokens(userId);
       console.log("[push] Test push for user:", userId, "tokens:", tokens.length);
       if (tokens.length === 0) {
-        return res.json({ ok: false, message: "No push tokens registered for this user. Tap 'Enable Notifications' first.", sent: 0, failed: 0 });
+        return res.json({ ok: false, message: "No push tokens registered for this user. Tap 'Enable Notifications' first.", sent: 0, failed: 0, failures: [] });
       }
-      const result = await sendPushToUser(userId, {
+      const latestToken = tokens[0].token;
+      const result = await sendApnsPush({
+        token: latestToken,
         title: "EcoLogic",
-        body: "Remote push works",
+        body: "Remote push works ✅",
         data: { type: "test", linkUrl: "/" },
       });
-      console.log("[push] Test push result:", result);
+      console.log("[push] Test push result:", JSON.stringify(result));
       res.json({ ok: result.sent > 0, ...result });
     } catch (error: any) {
       console.error("[push] Test push error:", error);
