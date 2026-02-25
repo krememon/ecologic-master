@@ -1,0 +1,80 @@
+Goal: Add bulletproof push logging that prints:
+
+permission status
+
+registration token
+
+registration errors
+
+push received action
+
+and a manual “Print token now” button
+
+1) Create a dedicated push debug helper
+
+Create file: src/utils/pushDebug.ts
+
+import { PushNotifications } from '@capacitor/push-notifications';
+import { Capacitor } from '@capacitor/core';
+
+let listenersAttached = false;
+
+export async function initPushDebug() {
+  if (!Capacitor.isNativePlatform()) {
+    console.log('[push-debug] Not native platform, skipping');
+    return;
+  }
+  if (listenersAttached) return;
+  listenersAttached = true;
+
+  console.log('[push-debug] Attaching listeners...');
+
+  PushNotifications.addListener('registration', (token) => {
+    console.log('🔥🔥🔥 [push-debug] APNS TOKEN:', token.value);
+  });
+
+  PushNotifications.addListener('registrationError', (err) => {
+    console.error('❌❌❌ [push-debug] REG ERROR:', JSON.stringify(err));
+  });
+
+  PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    console.log('📩 [push-debug] PUSH RECEIVED:', JSON.stringify(notification));
+  });
+
+  PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+    console.log('👆 [push-debug] PUSH ACTION:', JSON.stringify(action));
+  });
+
+  const perm = await PushNotifications.requestPermissions();
+  console.log('[push-debug] Permission result:', perm);
+
+  if (perm.receive === 'granted') {
+    console.log('[push-debug] Calling register()...');
+    await PushNotifications.register();
+    console.log('[push-debug] register() called');
+  } else {
+    console.log('[push-debug] Permission NOT granted');
+  }
+}
+2) Call it once on app startup
+
+In your main startup file (where you currently log [main.tsx] Starting app initialization), add:
+
+import { initPushDebug } from './utils/pushDebug';
+
+// after app boot / inside first run effect
+initPushDebug();
+3) Add a temporary “Get Token” button somewhere visible
+
+Add a button in any settings page / debug page / even sidebar footer:
+
+import { PushNotifications } from '@capacitor/push-notifications';
+
+<button
+  onClick={async () => {
+    console.log('[push-debug] Manual register() pressed');
+    await PushNotifications.register();
+  }}
+>
+  Push Debug: Register Again
+</button>

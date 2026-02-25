@@ -12,7 +12,11 @@ window.addEventListener("unhandledrejection", (e) => {
   console.error("[UnhandledRejection]", e.reason);
 });
 
+import { initPushDebug } from "./utils/pushDebug";
+
 console.log("[main.tsx] Starting app initialization, pathname:", window.location.pathname);
+
+initPushDebug();
 
 // App version for cache-busting (update this when deploying significant changes)
 const APP_VERSION = "2026.01.14.3";

@@ -13,6 +13,7 @@ import { User, Moon, Sun, Bell, Shield, Camera, Upload, BellRing, Send } from "l
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { BillingSection } from "@/components/BillingSection";
 import { isNativePlatform, registerPushNotifications, scheduleLocalTestNotification, openAppSettings } from "@/lib/capacitor";
+import { manualRegister } from "@/utils/pushDebug";
 import { ToastAction } from "@/components/ui/toast";
 
 import { useCan } from "@/hooks/useCan";
@@ -450,7 +451,7 @@ export default function Settings() {
                   </Button>
                 </div>
 
-                <div className="grid gap-2 grid-cols-2">
+                <div className="grid gap-2 grid-cols-3">
                   <Button
                     variant="outline"
                     disabled={testingLocal}
@@ -485,6 +486,17 @@ export default function Settings() {
                   >
                     <Bell className="h-4 w-4 mr-2" />
                     {testingLocal ? "Sending..." : "Test Local"}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      await manualRegister();
+                      toast({ title: "Register Called", description: "Check Xcode console for token output." });
+                    }}
+                  >
+                    Get Token
                   </Button>
 
                   {(user?.role === "OWNER" || user?.role === "SUPERVISOR") && (
