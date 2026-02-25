@@ -1,0 +1,85 @@
+✅ GOAL
+
+Guarantee native [APNS] logs appear in Xcode console, proving we’re editing the correct iOS entry file, then confirm APNs success/failure.
+
+1) Find the actual AppDelegate used by the build
+
+Search the repo for all files containing class AppDelegate OR @UIApplicationMain.
+
+List every match and its full path.
+
+Identify which one is referenced by the iOS target.
+
+Deliverable: “Using AppDelegate at: <path>” + confirm no duplicate AppDelegate is still in target.
+
+2) Ensure Target Membership is enabled for the correct AppDelegate
+
+In Xcode:
+
+Click the real AppDelegate.swift
+
+Open File Inspector (right side)
+
+Under Target Membership, ensure App is checked.
+
+If it wasn’t checked, check it.
+
+3) Replace print() with NSLog() (shows up reliably)
+
+In the real AppDelegate.swift (the one in target membership), add:
+
+import Foundation
+
+Then add these logs:
+
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+  NSLog("✅✅✅ [APNS] didFinishLaunchingWithOptions CALLED")
+  return true
+}
+
+func application(_ application: UIApplication,
+                 didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+  let tokenHex = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+  NSLog("✅✅✅ [APNS] didRegisterForRemoteNotificationsWithDeviceToken CALLED bytes=%d token=%@", deviceToken.count, tokenHex)
+  NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+}
+
+func application(_ application: UIApplication,
+                 didFailToRegisterForRemoteNotificationsWithError error: Error) {
+  NSLog("❌❌❌ [APNS] didFailToRegisterForRemoteNotificationsWithError %@", String(describing: error))
+  NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+}
+
+(Keep the Capacitor NotificationCenter posts.)
+
+4) If SceneDelegate exists, log it too
+
+Search for SceneDelegate.swift. If found, add:
+
+NSLog("✅✅✅ [SCENE] SceneDelegate willConnect called")
+
+in scene(_:willConnectTo:options:).
+
+5) Clean rebuild + reinstall
+
+Delete EcoLogic app from iPhone
+
+Xcode: Product → Clean Build Folder
+
+Run on iPhone again
+
+6) REQUIRED proof in logs
+
+After app opens, Xcode console MUST show at least:
+
+✅✅✅ [APNS] didFinishLaunchingWithOptions CALLED
+
+Then after push register, it must show either:
+
+✅✅✅ [APNS] didRegisterForRemoteNotificationsWithDeviceToken...
+OR
+
+❌❌❌ [APNS] didFailToRegisterForRemoteNotificationsWithError...
+
+Deliverable: Paste those [APNS] lines.
