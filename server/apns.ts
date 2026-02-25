@@ -135,14 +135,15 @@ function sendSinglePush(
 export async function sendApnsPushToTokens(
   tokens: string[],
   payload: ApnsPushPayload
-): Promise<{ sent: number; failed: number }> {
+): Promise<{ sent: number; failed: number; failures: Array<{ status: number; reason: string; token: string }> }> {
   const config = getApnsConfig();
   if (!config) {
     console.log("[push/apns] APNs not configured - missing APNS_TEAM_ID, APNS_KEY_ID, APNS_BUNDLE_ID, or APNS_AUTH_KEY_P8");
-    return { sent: 0, failed: 0 };
+    return { sent: 0, failed: 0, failures: [] };
   }
 
   const host = config.useSandbox ? APNS_HOST_SANDBOX : APNS_HOST_PRODUCTION;
+  console.log("[push/apns] Using host:", host, "bundleId:", config.bundleId);
   const jwt = createJwt(config.teamId, config.keyId, config.key);
 
   const apnsPayload: Record<string, any> = {
@@ -162,24 +163,34 @@ export async function sendApnsPushToTokens(
 
   let sent = 0;
   let failed = 0;
+  const failures: Array<{ status: number; reason: string; token: string }> = [];
 
   for (const deviceToken of tokens) {
+    console.log("[push/apns] Sending to token (len):", deviceToken.length, "prefix:", deviceToken.substring(0, 12) + "...");
     const result = await sendSinglePush(host, deviceToken, config.bundleId, jwt, apnsPayload);
     if (result.success) {
       sent++;
       console.log("[push/apns] Sent successfully to token:", deviceToken.substring(0, 12) + "...");
     } else {
       failed++;
-      console.error("[push/apns] Failed for token:", deviceToken.substring(0, 12) + "...", "status:", result.status, result.body);
+      let reason = "unknown";
+      try {
+        const parsed = JSON.parse(result.body);
+        reason = parsed.reason || result.body;
+      } catch {
+        reason = result.body || "connection_error";
+      }
+      console.error("[push/apns] Failed for token:", deviceToken.substring(0, 12) + "...", "status:", result.status, "reason:", reason);
+      failures.push({ status: result.status, reason, token: deviceToken.substring(0, 8) + "..." });
 
-      if (result.status === 410 || (result.body && result.body.includes("Unregistered"))) {
+      if (result.status === 410 || reason === "Unregistered" || reason === "BadDeviceToken") {
         await storage.deactivatePushToken(deviceToken);
-        console.log("[push/apns] Deactivated unregistered token:", deviceToken.substring(0, 12) + "...");
+        console.log("[push/apns] Deactivated bad/unregistered token:", deviceToken.substring(0, 12) + "...");
       }
     }
   }
 
-  return { sent, failed };
+  return { sent, failed, failures };
 }
 
 export async function sendPushToUser(

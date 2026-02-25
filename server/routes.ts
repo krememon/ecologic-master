@@ -14302,16 +14302,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/push/test', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
+      const tokens = await storage.getUserPushTokens(userId);
+      console.log("[push] Test push for user:", userId, "tokens:", tokens.length);
+      if (tokens.length === 0) {
+        return res.json({ ok: false, message: "No push tokens registered for this user. Tap 'Enable Notifications' first.", sent: 0, failed: 0 });
+      }
       const result = await sendPushToUser(userId, {
-        title: "EcoLogic Test",
-        body: "Push notifications are working!",
+        title: "EcoLogic",
+        body: "Remote push works",
         data: { type: "test", linkUrl: "/" },
       });
       console.log("[push] Test push result:", result);
-      res.json({ ok: true, ...result });
+      res.json({ ok: result.sent > 0, ...result });
     } catch (error: any) {
       console.error("[push] Test push error:", error);
-      res.status(500).json({ message: "Failed to send test push" });
+      res.status(500).json({ ok: false, message: "Failed to send test push", error: error.message });
     }
   });
 

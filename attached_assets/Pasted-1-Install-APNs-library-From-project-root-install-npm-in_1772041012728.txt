@@ -1,0 +1,187 @@
+1) Install APNs library
+
+From project root, install:
+
+npm install apn
+2) Backend: Create APNs helper
+
+Create file: server/apns.ts
+
+Requirements
+
+Use token auth (APNS_TEAM_ID, APNS_KEY_ID, APNS_PRIVATE_KEY)
+
+Use topic = com.ecologic.app
+
+production should be false unless NODE_ENV === "production"
+
+Add strong logs + error handling
+
+Code (create exactly):
+
+import apn from "apn";
+
+const TEAM_ID = process.env.APNS_TEAM_ID;
+const KEY_ID = process.env.APNS_KEY_ID;
+const PRIVATE_KEY = process.env.APNS_PRIVATE_KEY;
+const TOPIC = process.env.APNS_TOPIC || "com.ecologic.app";
+
+if (!TEAM_ID || !KEY_ID || !PRIVATE_KEY) {
+  console.warn("[apns] Missing APNS_* env vars. Push will not work.");
+}
+
+let provider: apn.Provider | null = null;
+
+export function getApnsProvider() {
+  if (provider) return provider;
+
+  provider = new apn.Provider({
+    token: {
+      key: PRIVATE_KEY!,
+      keyId: KEY_ID!,
+      teamId: TEAM_ID!,
+    },
+    production: process.env.NODE_ENV === "production",
+  });
+
+  console.log("[apns] Provider initialized. production=", process.env.NODE_ENV === "production");
+  return provider;
+}
+
+export async function sendApnsPush(params: {
+  token: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+}) {
+  const p = getApnsProvider();
+
+  const note = new apn.Notification();
+  note.topic = TOPIC;
+  note.alert = { title: params.title, body: params.body };
+  note.payload = params.data || {};
+  note.sound = "default";
+  note.badge = 1;
+
+  console.log("[apns] Sending push to token (len):", params.token?.length);
+
+  const result = await p.send(note, params.token);
+
+  console.log("[apns] Result:", {
+    sent: result.sent?.length,
+    failed: result.failed?.length,
+    failures: (result.failed || []).map((f) => ({
+      status: f.status,
+      response: f.response,
+      error: f.error ? String(f.error) : null,
+      device: f.device ? `${String(f.device).slice(0, 8)}...` : null,
+    })),
+  });
+
+  return result;
+}
+3) Backend: Add token register + test endpoints
+
+Find where your API routes are defined (likely server/routes.ts or server/index.ts).
+
+Add TWO endpoints:
+
+A) POST /api/push/register
+
+Auth required (use your existing auth middleware)
+
+Body: { token: string, platform: "ios", deviceId?: string }
+
+Store server-side as “latest token for this user” (MVP can store in DB; if DB work is too heavy, store in memory but log that it’s temporary)
+
+B) POST /api/push/test
+
+Auth required
+
+Uses stored token for that user (or allow override via body { token?: string })
+
+Sends push:
+
+title: EcoLogic
+
+body: Remote push works ✅
+
+Implementation instructions
+
+If you already have Postgres + Drizzle schema patterns, create a table push_devices:
+
+id, userId, platform, deviceId, token, updatedAt
+
+Unique on (userId, deviceId) if deviceId exists, otherwise (userId, token)
+
+Implement upsertPushDeviceToken(userId, platform, deviceId, token)
+
+Implement getLatestPushTokenForUser(userId)
+
+If DB work is too risky, use an in-memory Map<userId, token> JUST for now, but label it clearly in logs.
+
+Send uses sendApnsPush() from server/apns.ts.
+
+4) Frontend: Send token to backend immediately when received
+
+Where you currently attach push listeners (your pushDebug.ts), modify the registration listener to also POST to backend:
+
+Endpoint: POST /api/push/register
+
+Body includes:
+
+token: token.value
+
+platform: "ios"
+
+deviceId from Device.getId() (use @capacitor/device)
+
+Example snippet (agent should integrate cleanly):
+
+import { Device } from "@capacitor/device";
+
+PushNotifications.addListener("registration", async (token) => {
+  console.log("🔥🔥🔥 [push-debug] APNS TOKEN:", token.value);
+
+  try {
+    const id = await Device.getId();
+    await fetch("/api/push/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token.value, platform: "ios", deviceId: id.identifier }),
+      credentials: "include",
+    });
+    console.log("[push-debug] Token saved to backend");
+  } catch (e) {
+    console.error("[push-debug] Failed saving token:", e);
+  }
+});
+5) Frontend: Add a “Send Test Remote Push” button
+
+Add a temporary button anywhere easy (Settings / Debug / Sidebar footer):
+
+On click: POST /api/push/test
+
+Show success/failure toast/log.
+
+✅ DELIVERABLES (MUST SHOW)
+
+Server logs show APNs provider initialized
+
+Hitting “Send Test Remote Push” returns JSON with sent: 1
+
+iPhone receives a notification that says:
+EcoLogic — Remote push works ✅
+
+⚠️ IMPORTANT DEBUGGING RULES
+
+If APNs fails, return the failure details in the API response (status/response/error) so we can fix it instantly.
+Common errors to surface:
+
+BadDeviceToken
+
+TopicDisallowed
+
+Unregistered
+
+InvalidProviderToken

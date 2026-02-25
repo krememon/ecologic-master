@@ -14,8 +14,23 @@ export async function initPushDebug() {
 
   const { PushNotifications } = await import("@capacitor/push-notifications");
 
-  PushNotifications.addListener("registration", (token) => {
+  PushNotifications.addListener("registration", async (token) => {
     console.log("[push-debug] APNS TOKEN:", token.value);
+
+    try {
+      const { Device } = await import("@capacitor/device");
+      const id = await Device.getId();
+      const res = await fetch("/api/push/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token.value, platform: "ios", deviceId: id.identifier }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      console.log("[push-debug] Token saved to backend:", data);
+    } catch (e) {
+      console.error("[push-debug] Failed saving token:", e);
+    }
   });
 
   PushNotifications.addListener("registrationError", (err) => {
