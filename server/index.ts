@@ -835,6 +835,11 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1') {
+      console.log('[subscriptions] DEV BYPASS enabled');
+    } else {
+      console.log('[subscriptions] DEV BYPASS disabled');
+    }
     startOverdueInvoiceChecker();
     startJobScheduler();
   });

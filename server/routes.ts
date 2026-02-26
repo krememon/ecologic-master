@@ -3902,6 +3902,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/subscriptions/status', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
+
+      if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_SUBSCRIPTION === '1') {
+        return res.json({
+          active: true,
+          status: 'active',
+          planKey: 'dev',
+          userLimit: 999,
+          currentPeriodEnd: null,
+          bypass: true,
+          reason: 'dev_bypass',
+        });
+      }
+
       const company = await storage.getUserCompany(userId);
       if (!company) {
         return res.json({ active: false, status: 'no_company' });

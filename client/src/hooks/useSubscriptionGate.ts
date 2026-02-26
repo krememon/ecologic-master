@@ -7,6 +7,8 @@ interface SubscriptionStatus {
   planKey: string | null;
   userLimit: number;
   currentPeriodEnd: string | null;
+  bypass?: boolean;
+  reason?: string;
 }
 
 export function useSubscriptionGate({
@@ -67,5 +69,6 @@ export function useSubscriptionGate({
     active,
     loading: stillLoading,
     subStatus: gotValidResponse ? subStatus : undefined,
+    bypass: gotValidResponse && subStatus?.bypass === true,
   };
 }

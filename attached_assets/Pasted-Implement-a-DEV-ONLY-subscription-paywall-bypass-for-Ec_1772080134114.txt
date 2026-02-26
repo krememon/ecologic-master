@@ -1,0 +1,70 @@
+Implement a DEV-ONLY subscription/paywall bypass for EcoLogic so I can keep building without getting stuck behind the paywall.
+
+Requirements
+
+Bypass must be controlled by an environment variable, e.g. BYPASS_SUBSCRIPTION=1
+
+It must ONLY work in development (and must be impossible to accidentally enable in production)
+
+Do NOT change any real Stripe logic; do NOT modify DB subscription records
+
+Do NOT weaken authentication
+
+Must keep existing global subscription gate structure intact, just override “active” when bypass is enabled
+
+Backend changes
+
+In the /api/subscriptions/status route (or wherever subscription status is computed), add:
+
+If process.env.NODE_ENV !== 'production' AND process.env.BYPASS_SUBSCRIPTION === '1':
+
+return { active: true, status: 'active', bypass: true, reason: 'dev_bypass' }
+
+(Optionally include plan: 'dev')
+
+Add one concise startup log (only once at server boot) showing whether the bypass is enabled:
+
+[subscriptions] DEV BYPASS enabled or [subscriptions] DEV BYPASS disabled
+
+Make sure the bypass runs AFTER auth is validated (still require a logged-in user).
+So: if not authenticated → still return 401. If authenticated → bypass activates.
+
+Frontend changes
+
+In the subscription gate hook/logic:
+
+If the server returns bypass: true, treat as active and proceed normally.
+
+Do not show paywall UI.
+
+Also add a small banner/badge somewhere subtle (top-right of dashboard or in settings) saying:
+
+“DEV: Subscription bypass enabled”
+
+Only show it when bypass is true.
+
+Replit env setup
+
+Update .env.example (or docs) to include:
+
+BYPASS_SUBSCRIPTION=1
+
+Do NOT hardcode it in code; must be env-driven.
+
+Acceptance tests
+
+With BYPASS_SUBSCRIPTION=1 and dev mode:
+
+Logged-in users can access the app without paywall.
+
+/api/subscriptions/status returns active with bypass:true.
+
+With BYPASS_SUBSCRIPTION unset:
+
+behavior remains exactly the same as before.
+
+In production (NODE_ENV=production):
+
+bypass is ignored even if env var is set.
+
+Deliver the changes with minimal diffs and no duplicate UI.
