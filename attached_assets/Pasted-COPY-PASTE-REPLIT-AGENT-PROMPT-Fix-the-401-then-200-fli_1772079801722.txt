@@ -1,0 +1,156 @@
+COPY/PASTE REPLIT AGENT PROMPT (Fix the “401 then 200” flicker + WS connect/disconnect loop)
+
+We improved session config and WS auth, but we still see this pattern on startup:
+
+GET /api/auth/user 401 (very fast, ~2ms)
+
+2 seconds later: GET /api/auth/user 200
+
+WS authenticates then immediately disconnects, then reconnects again later
+
+This is causing UI flicker + WS churn. We need to make auth bootstrap stable and eliminate the “401 then 200” race.
+
+ROOT CAUSE (what to assume)
+
+This is almost always caused by auth bootstrap timing:
+
+Frontend calls /api/auth/user immediately on app mount.
+
+At that exact moment, the session cookie is not present yet (or the browser hasn’t attached it due to redirect timing), so server correctly returns 401.
+
+Moments later, the cookie is present (or auth finishes), so the next call returns 200.
+
+The frontend likely reacts to the 401 as “logged out”, tears down WS, redirects, etc. Then flips back on 200 → WS reconnects.
+
+We do NOT want to “make 401 go away” on the backend. We want the frontend to treat early 401s as “unknown” until auth resolves.
+
+GOALS
+
+No UI “logged out” flicker on initial boot.
+
+No WS connect/disconnect loop caused by auth state flipping.
+
+Auth state transitions must be deterministic:
+
+unknown/loading → authed OR unauthed
+
+never unauthed for a transient 401 during bootstrap
+
+Keep RBAC + security intact.
+
+FRONTEND CHANGES (PRIMARY FIX)
+1) Add an explicit auth bootstrap state machine
+
+In the auth store/hook (wherever we load current user), implement:
+
+authStatus: 'loading' | 'authed' | 'unauthed'
+
+On app mount:
+
+set loading
+
+call GET /api/auth/user with credentials: 'include'
+
+if 200 → set authed
+
+if 401 → DO NOT immediately set unauthed
+
+retry once after a short delay (e.g., 500–800ms)
+
+if second attempt is still 401 → set unauthed
+
+if network error → keep loading briefly then show “connection issue” (don’t force logout)
+
+Important: only treat user as truly logged out if:
+
+/api/logout succeeded, OR
+
+two consecutive /api/auth/user calls returned 401, OR
+
+we have an explicit “no cookie” + “no session” confirmed after bootstrap
+
+2) Prevent boot-time duplicate calls
+
+Find where /api/auth/user is being called (maybe multiple places: App.tsx + layout + WS provider). Ensure only ONE bootstrap request occurs.
+
+If using React Query / SWR, ensure staleTime, retry policy doesn’t spam.
+
+If using custom hooks, ensure they aren’t mounted twice.
+
+3) WebSocket should only connect after auth is stable
+
+In the WS provider:
+
+Don’t open WS while authStatus === 'loading'
+
+Only connect when authStatus === 'authed'
+
+If auth becomes unauthed, close WS and don’t reconnect until authed again
+
+Add a small debounce (e.g., 300ms) to prevent connect/disconnect thrash on rapid state changes
+
+Also ensure client does NOT close WS just because route changes—WS should live at the top-level provider.
+
+BACKEND CHANGES (SECONDARY / DIAGNOSTICS)
+4) Add a single debug log to confirm whether cookie existed on the 401 request
+
+For /api/auth/user only, when returning 401, log:
+
+hasCookieHeader (boolean)
+
+sessionID (present/absent only, not value)
+
+origin + host
+
+x-forwarded-proto
+
+req.secure
+
+This will confirm if the first 401 is because cookie wasn’t attached.
+
+5) Add /api/auth/debug-session endpoint (if not already)
+
+Return JSON:
+
+hasCookieHeader
+
+hasSessionID
+
+hasUser
+
+req.secure
+
+xForwardedProto
+No secrets.
+
+ACCEPTANCE TESTS
+
+Hard refresh app.
+
+Auth status stays loading for a moment, then becomes authed without a visible logout screen.
+
+No “login redirect” flicker.
+
+On refresh, even if the first /api/auth/user returns 401 then 200, the UI should NOT flip to logged-out state.
+
+WS:
+
+should connect once after auth becomes authed
+
+should not immediately disconnect due to auth flipping
+
+Logout:
+
+after POST /api/logout, auth becomes unauthed immediately, WS closes, and stays closed.
+
+DELIVERABLES
+
+Updated auth bootstrap logic with retry-once behavior and loading/authed/unauthed states
+
+WS provider connect gating + debounce
+
+Minimal backend 401 logging for /api/auth/user (debug env only)
+
+Confirm in console logs that the first 401 no longer causes UI/WS thrash
+
+DO NOT weaken security (no bypass auth, no “return 200 with null user”).

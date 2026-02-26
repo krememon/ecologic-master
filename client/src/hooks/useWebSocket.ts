@@ -9,16 +9,18 @@ interface WebSocketMessage {
 }
 
 export function useWebSocket() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const authFailCountRef = useRef(0);
 
   const connect = useCallback(() => {
     if (!isAuthenticated || !user?.id) return;
     if (authFailCountRef.current >= 3) return;
+    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
 
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -44,10 +46,10 @@ export function useWebSocket() {
             disconnect();
             window.location.href = '/?error=' + (message.data?.code || 'session_revoked') + '&message=' + encodeURIComponent(message.data?.message || 'Your session has ended. Please sign in again.');
           } else if (message.type === 'invite_code_rotated') {
-            const event = new CustomEvent('invite_code_rotated', { 
+            const evt = new CustomEvent('invite_code_rotated', { 
               detail: message.data 
             });
-            window.dispatchEvent(event);
+            window.dispatchEvent(evt);
           } else if (message.type === 'new_message') {
             toast({
               title: "New Message",
@@ -105,6 +107,10 @@ export function useWebSocket() {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+    if (connectDebounceRef.current) {
+      clearTimeout(connectDebounceRef.current);
+      connectDebounceRef.current = null;
+    }
     
     if (wsRef.current) {
       wsRef.current.close();
@@ -114,9 +120,14 @@ export function useWebSocket() {
   }, []);
 
   useEffect(() => {
+    if (isLoading) return;
+
     if (isAuthenticated && user?.id) {
       authFailCountRef.current = 0;
-      connect();
+      if (connectDebounceRef.current) clearTimeout(connectDebounceRef.current);
+      connectDebounceRef.current = setTimeout(() => {
+        connect();
+      }, 300);
     } else {
       disconnect();
     }
@@ -124,7 +135,7 @@ export function useWebSocket() {
     return () => {
       disconnect();
     };
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, isLoading]);
 
   return {
     isConnected,

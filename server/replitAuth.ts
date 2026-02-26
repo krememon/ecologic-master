@@ -1377,8 +1377,16 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const isAuthed = hasPassport ? req.isAuthenticated() : !!req.user;
   
   if (!isAuthed || !req.user) {
-    if (process.env.AUTH_DEBUG === 'true') {
-      console.log("[auth] 401: sessionID=", !!req.sessionID, "cookie=", !!req.headers.cookie, "path=", req.path);
+    if (process.env.AUTH_DEBUG === 'true' || req.path === '/api/auth/user') {
+      console.log("[auth] 401:", {
+        path: req.path,
+        hasCookie: !!req.headers.cookie,
+        hasSessionID: !!req.sessionID,
+        secure: req.secure,
+        proto: req.headers['x-forwarded-proto'],
+        origin: req.headers.origin || '-',
+        host: req.headers.host,
+      });
     }
     return res.status(401).json({ ok: false, code: "UNAUTHENTICATED", message: "Unauthorized" });
   }
