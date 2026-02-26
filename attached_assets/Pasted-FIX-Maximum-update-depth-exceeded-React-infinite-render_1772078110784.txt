@@ -1,0 +1,71 @@
+FIX “Maximum update depth exceeded” (React infinite render loop)
+
+Context:
+- EcoLogic React app (Capacitor wrapper) now shows “Application Error: Maximum update depth exceeded”.
+- This is a React infinite state update loop (setState triggers render triggers setState…).
+- It started after recent notification/payment notification work.
+- Goal: identify the exact component + line and fix with minimal changes.
+
+Rules:
+- Do NOT touch Apple Sign-In.
+- Do NOT touch APNs server code unless needed.
+- Focus ONLY on the frontend render loop.
+
+Step 1 — Capture the real stack trace (most important)
+1) Run the app in dev and open browser console.
+2) Click the red overlay “Maximum update depth exceeded”.
+3) Copy the FIRST stack trace line that points to our source (not node_modules), usually something like:
+   at SomeComponent (src/....tsx:123)
+4) If overlay doesn’t show full trace, add in main.tsx temporarily:
+   window.addEventListener("error", e => console.log("[window.error]", e.error));
+   window.addEventListener("unhandledrejection", e => console.log("[unhandledrejection]", e.reason));
+Then reload and capture the stack again.
+DO NOT proceed until you identify the exact component file+line.
+
+Step 2 — Typical causes to check (fix patterns)
+In the component shown by the stack trace, look for ANY of these patterns and fix them:
+
+A) setState inside render
+❌ if (something) setX(...)
+✅ move into useEffect with correct deps, or compute value without setState
+
+B) useEffect without dependency array that sets state
+❌ useEffect(() => { setX(...) })
+✅ add deps: useEffect(() => { ... }, [dep1, dep2])
+✅ OR if it should run once: useEffect(() => { ... }, [])
+
+C) useEffect depends on state it sets (self-trigger)
+❌ useEffect(() => { setX(...) }, [x])
+✅ guard it:
+   useEffect(() => {
+     if (x === desired) return;
+     setX(desired);
+   }, [x, desired]);
+
+D) Derived state from props/router being re-set every render
+❌ useEffect(() => setForm(router.query...), [router.query]) if query object identity changes each render
+✅ depend only on stable primitives (id/string), not whole objects:
+   const id = router.query?.id
+   useEffect(() => { ... }, [id])
+
+E) Toast/alert/state loop
+If you call toast() / setToastState in an effect that reruns constantly, it can loop.
+✅ ensure toasts are triggered only on user action OR on a guarded transition.
+
+Step 3 — Add a defensive “render loop breaker” if needed
+If it’s unclear which state is looping, add temporary logs:
+console.log("[render] ComponentName", { a, b, c });
+and in each effect:
+console.log("[effect] name fired", deps);
+Then reload and see which effect spams. Fix that one.
+
+Step 4 — Make the minimal fix and verify
+- After the fix, the red overlay must disappear.
+- Verify Notifications page loads.
+- Verify “Send Test Remote Push” button still works.
+- Verify job + DM push flows still work (no changes required there).
+
+Deliverables:
+1) Exact root cause (component + line) described in a short comment in code.
+2) Minimal change fix (deps/guard/remove setState-in-render).
+3) Remove any temporary debug listeners/log spam after confirmed fixed.
