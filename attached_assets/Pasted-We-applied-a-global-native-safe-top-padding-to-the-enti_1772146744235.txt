@@ -1,0 +1,128 @@
+We applied a global native safe-top padding to the entire app wrapper and it broke the home page layout (everything shifted down), and it did not fix the Notifications modal header. That means the notifications UI is rendered inside a fixed modal overlay attached to body that ignores app wrapper padding.
+
+GOAL
+
+Revert the global app padding changes so the home page goes back to normal
+
+Apply safe-top offset ONLY to the modal overlay layer in native iOS so headers aren’t under the status bar
+
+Keep desktop web unchanged
+
+HARD RULES
+
+Do NOT redesign UI
+
+Keep changes scoped and minimal
+
+Only apply when Capacitor.isNativePlatform() AND iOS
+
+Remove debug bar after verification
+
+Step 1 — REVERT the global app wrapper changes
+
+Undo these if they exist:
+
+<div className="nativeViewport"> wrapper around <App />
+
+html.native-ios .nativeViewport { padding-top: ... }
+
+Any global body::before safe area debug overlay
+
+Any global “push entire app down” CSS vars
+
+Home page must return to the exact prior layout.
+
+Keep ONLY the “NATIVE BUILD” badge for now (debug).
+
+Step 2 — Identify the real modal overlay element used by Notifications
+
+Search for the Notifications modal and find the actual overlay container element that covers the screen. It usually has one of these:
+
+position: fixed
+
+top: 0 or inset: 0
+
+z-index high
+This overlay is likely shared across modals.
+
+We need its actual class name(s). Examples might be:
+
+.modalOverlay
+
+.overlay
+
+.dialogOverlay
+
+.sheetOverlay
+
+.MuiModal-root (if using MUI)
+Do not guess — find the real DOM class from the code.
+
+Add ONE unique class to the overlay container if it doesn’t already have a stable one:
+
+appModalOverlay
+
+Example:
+
+<div className="modalOverlay appModalOverlay">
+
+If notifications uses a unique overlay, then add:
+
+notificationsOverlay
+
+Step 3 — Apply safe-top ONLY to the overlay in native iOS
+
+In global CSS add:
+
+html.native-ios .appModalOverlay {
+  top: 56px !important;
+  height: calc(100vh - 56px) !important;
+}
+
+html.native-ios .appModalOverlay {
+  inset: auto 0 0 0 !important;
+}
+
+Notes:
+
+This MUST ONLY target the overlay layer (fixed full-screen element), not the page content.
+
+If overlay uses 100dvh, keep it but subtract 56.
+
+If the overlay is using transform for centering, do NOT touch it—only top/inset/height.
+
+Step 4 — If the header is inside the overlay but still overlaps, also add padding inside overlay
+
+If needed (only if title still too high), add:
+
+html.native-ios .appModalOverlay .modalHeader {
+  padding-top: 12px !important;
+}
+
+But ONLY if the overlay itself is already shifted down.
+
+Step 5 — Ensure native-ios class exists (keep this)
+
+Keep native iOS detection (do NOT set global padding):
+
+import { Capacitor } from "@capacitor/core";
+if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios") {
+  document.documentElement.classList.add("native-ios");
+}
+Step 6 — Verify + remove temporary debug
+
+Confirm home page is back to normal (no extra top gap)
+
+Open Notifications modal: title/divider should now be below status bar
+
+Remove any temporary outlines/debug red overlay (but keep “NATIVE BUILD” badge if you want)
+
+Deliverables
+
+Revert global padding changes
+
+Add stable overlay class appModalOverlay (or use existing)
+
+Apply iOS-only overlay offset (top/height/inset)
+
+Confirm with screenshots: home normal + notifications header fixed

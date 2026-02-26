@@ -128,7 +128,7 @@ const initApp = async () => {
     root.render(<ErrorBoundary><PayoutSetup token={setupToken} /></ErrorBoundary>);
   } else {
     console.log("[main.tsx] Rendering main App");
-    root.render(<ErrorBoundary><div className="nativeViewport"><App /></div></ErrorBoundary>);
+    root.render(<ErrorBoundary><App /></ErrorBoundary>);
   }
 };
 
