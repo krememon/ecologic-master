@@ -1,0 +1,54 @@
+FIX SUBSCRIPTION STATUS 401 LOOP + PAYWALL FLOW (NO BYPASS)
+
+Context:
+- We sometimes see /api/subscriptions/status 401 "Unauthorized" before session is established.
+- After login verify-code, req.login succeeds and /api/auth/user works.
+- Frontend is calling subscriptions/status too early (before auth cookie/session is ready), causing redirect loops and broken UX.
+
+Goals:
+1) Never call /api/subscriptions/status unless user is authenticated AND auth loading is complete.
+2) If /api/subscriptions/status returns 401, treat it as "not logged in yet" (do NOT redirect to paywall).
+3) Avoid infinite rerenders / max update depth issues: keep effects dependency-safe and idempotent.
+4) Keep paywall logic intact (no bypass). Only fix timing + guardrails.
+
+Backend changes:
+- In /api/subscriptions/status, if req.user is missing:
+  return res.status(401).json({ ok:false, code:"UNAUTHENTICATED", message:"Unauthorized" })
+(no change in behavior, but add code field if not present)
+
+Frontend changes (most important):
+- In the subscription gate hook / auth bootstrap (wherever we call subscriptions/status):
+  - Ensure we have explicit states: authLoading, isAuthed (or user != null), hasCompany, subLoading, subscriptionStatus.
+  - Only fetch subscription status when:
+      authLoading === false AND isAuthed === true AND hasCompany === true
+  - When fetch returns 401:
+      set subscriptionStatus to "unknown"
+      DO NOT redirect
+      Simply return and allow auth flow to complete
+  - When fetch returns 200 and active=false:
+      redirect to /paywall (or /onboarding/subscription)
+  - When active=true:
+      allow app
+
+- Add a one-shot “inFlight” or “lastCheckedUserId” ref so it doesn’t refetch repeatedly:
+  const lastCheckedRef = useRef<string|null>(null);
+  if (lastCheckedRef.current === user.id) return;
+  lastCheckedRef.current = user.id;
+
+- Add clear logs (temporary):
+  console.log("[sub-gate] authLoading", authLoading, "isAuthed", isAuthed, "hasCompany", hasCompany)
+  console.log("[sub-gate] checking subscription for user", user?.id)
+  console.log("[sub-gate] status result", json)
+  console.warn("[sub-gate] 401 from subscriptions/status — waiting for auth")
+
+Verification:
+1) Hard refresh / cold start in Capacitor and web.
+2) Confirm no subscription/status call happens before /api/auth/user returns 200.
+3) Confirm no redirect to paywall on 401.
+4) Confirm paywall only triggers for real inactive subscriptions after authenticated status check.
+
+Deliverables:
+- PR/changeset implementing guarded subscription status fetching
+- No more 401 spam loops
+- No max update depth error
+- Paywall still works correctly when subscription is actually inactive

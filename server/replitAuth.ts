@@ -1315,7 +1315,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   
   if (!isAuthed || !req.user) {
     console.log("Authentication failed: no session or user");
-    return res.status(401).json({ message: "Unauthorized" });
+    return res.status(401).json({ ok: false, code: "UNAUTHENTICATED", message: "Unauthorized" });
   }
 
   const user = req.user as any;

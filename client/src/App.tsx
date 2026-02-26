@@ -182,6 +182,7 @@ function AuthenticatedRouter() {
     authed: isAuthenticated,
     loadingAuth: isLoading,
     hasCompany,
+    userId: user?.id,
   });
 
   const coldStartReady = isAuthenticated && hasCompany && !subLoading && subActive;
