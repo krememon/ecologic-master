@@ -386,6 +386,20 @@ html.native .ecologic-drawer {
 }
 
 
+/* Temporary debug badge: confirms native build is running (remove after verifying safe area fix) */
+html[data-native="1"]::before {
+  content: "NATIVE BUILD";
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 999999;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  pointer-events: none;
+}
+
 html.native .ecologic-drawer::before {
   content: "";
   position: absolute;

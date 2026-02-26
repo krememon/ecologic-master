@@ -22,13 +22,7 @@ import { initPushDebug } from "./utils/pushDebug";
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     if (isCapacitor && isIOS) {
       document.documentElement.classList.add("native-ios");
-      import("@capacitor/status-bar").then(({ StatusBar, Style }) => {
-        StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
-        StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
-        console.log("[iOS StatusBar] overlaysWebView=false applied");
-      }).catch((e) => {
-        console.log("[iOS StatusBar] plugin not available", e);
-      });
+      document.documentElement.setAttribute("data-native", "1");
     }
   } catch {}
 })();
