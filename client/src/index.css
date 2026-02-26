@@ -396,6 +396,13 @@ html.native .ecologic-drawer {
   visibility: hidden;
 }
 
+/* iOS native wrapper: push Notifications sheet below status bar / Dynamic Island.
+   The sheet uses position:fixed + inset-y-0 (top:0 bottom:0), so we must override top
+   directly on the fixed container. --ios-safe-top is set from JS at boot (56px default). */
+html.native-ios .notificationsModalRoot {
+  top: var(--ios-safe-top, 56px) !important;
+}
+
 html.native .ecologic-drawer::before {
   content: "";
   position: absolute;

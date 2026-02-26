@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase, DollarSign, AlertTriangle, ClipboardCheck, Calendar, FileText, UserMinus, RefreshCw, Clock, Timer } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
@@ -14,24 +14,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-function getNativeSafeTopPx(): number {
-  try {
-    const isCapacitor = !!(window as any).Capacitor;
-    const isIOS =
-      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    if (!isCapacitor || !isIOS) return 0;
-    const el = document.getElementById("safe-area-top-probe");
-    if (el) {
-      const h = parseFloat(getComputedStyle(el).height || "0");
-      if (h > 0) return Math.round(h);
-    }
-    return 44;
-  } catch {
-    return 0;
-  }
-}
 
 interface Notification {
   id: number;
@@ -98,14 +80,7 @@ interface HeaderProps {
 export default function Header({ title, subtitle, user, className }: HeaderProps) {
   const { toggle } = useSidebar();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [safeTop, setSafeTop] = useState(0);
   const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    if (notificationsOpen) {
-      setSafeTop(getNativeSafeTopPx());
-    }
-  }, [notificationsOpen]);
 
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
     queryKey: ['/api/notifications/unread-count'],
@@ -223,7 +198,7 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
       </header>
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md" style={safeTop > 0 ? { paddingTop: safeTop + 12 } : undefined}>
+        <SheetContent side="right" className="w-full sm:max-w-md notificationsModalRoot">
           <SheetHeader className="space-y-0 pb-0">
             <div className="flex items-center justify-between px-0 py-1">
               <SheetTitle className="text-base font-semibold">Notifications</SheetTitle>

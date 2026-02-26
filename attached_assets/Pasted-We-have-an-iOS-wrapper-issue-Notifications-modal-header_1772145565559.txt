@@ -1,0 +1,135 @@
+We have an iOS wrapper issue: Notifications modal header is still under the status bar/dynamic island. Even inline padding on the header didn’t move anything, meaning we are either editing the wrong element or the modal container itself is pinned (fixed/absolute top:0) and header padding can’t affect its position.
+
+HARD RULES
+
+No redesign.
+
+Scope to Notifications modal only.
+
+Desktop unchanged.
+
+We need a guaranteed offset so the entire Notifications modal content starts below the status bar.
+
+Step A — FIND THE REAL NOTIFICATIONS MODAL ROOT (critical)
+
+Search codebase for the literal string:
+
+"Notifications" (title text)
+
+"No notifications yet"
+
+Open the component that renders that exact empty state. That is the real modal.
+
+Identify the outermost container for the Notifications modal that likely has:
+
+position: fixed or absolute
+
+top: 0
+
+left: 0
+
+width: 100%
+
+maybe height: 100% / 100vh / overlay styles
+
+We will call this element the Notifications Modal Root.
+
+Step B — Add a unique class to that OUTERMOST ROOT
+
+Add class name:
+
+notificationsModalRoot
+
+Example:
+
+<div className="modalOverlay notificationsModalRoot">
+  ...
+</div>
+
+(or whatever your root is — but it must be the top-level element that positions the modal)
+
+Step C — FORCE the modal root to sit below the status bar on native iOS (guaranteed)
+
+Add this to global CSS:
+
+/* This only affects iOS wrapper. */
+html.native-ios .notificationsModalRoot {
+  /* If the modal is fixed at top:0, push it down */
+  top: var(--ios-safe-top, 56px) !important;
+}
+
+/* Also ensure position is fixed/absolute respects 'top' */
+html.native-ios .notificationsModalRoot {
+  position: fixed !important; /* only if it already is fixed; if it's absolute keep absolute */
+}
+
+But we must not accidentally change positioning if it’s not fixed. So do this safely:
+
+If the root currently uses position: fixed, keep it fixed.
+
+If it uses absolute, keep it absolute.
+
+Do NOT change position unless necessary. The important part is top.
+
+Add a CSS fallback if the modal root is NOT using top, but uses inset: 0:
+
+html.native-ios .notificationsModalRoot {
+  inset: auto 0 0 0 !important;
+  top: var(--ios-safe-top, 56px) !important;
+}
+Step D — Set --ios-safe-top from JS at runtime (native iOS only)
+
+In the app entry (main.jsx/tsx), add:
+
+(() => {
+  try {
+    const isCapacitor = !!window.Capacitor;
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    if (isCapacitor && isIOS) {
+      document.documentElement.classList.add("native-ios");
+
+      // Conservative safe top for Dynamic Island devices
+      document.documentElement.style.setProperty("--ios-safe-top", "56px");
+    }
+  } catch {}
+})();
+
+This is intentionally a fixed value because env() is failing in this wrapper.
+
+If 56px still isn’t enough on your device, increase to 64px (but start with 56).
+
+Step E — TEMP DEBUG CONFIRM (must do)
+
+To confirm we are touching the correct element, temporarily add:
+
+html.native-ios .notificationsModalRoot {
+  outline: 3px solid red !important;
+}
+
+Run the wrapper, open Notifications modal, verify you see a red outline around the entire modal.
+If you do NOT see it, we are still editing the wrong element — keep searching until the outline appears on the visible modal.
+
+Once confirmed working, REMOVE the outline rule.
+
+Acceptance
+
+In iOS wrapper: Notifications modal content (title/divider/X) starts below the status bar and is not overlapped.
+
+Desktop web unchanged.
+
+No other modals affected.
+
+Deliverables
+
+notificationsModalRoot class on actual modal root container
+
+native-ios detection adding class + css var
+
+CSS top/inset override scoped to html.native-ios .notificationsModalRoot
+
+Remove debug outline after verification
+
+Add a comment explaining this is for iOS wrapper safe area

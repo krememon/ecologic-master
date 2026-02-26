@@ -22,6 +22,7 @@ import { initPushDebug } from "./utils/pushDebug";
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     if (isCapacitor && isIOS) {
       document.documentElement.classList.add("native-ios");
+      document.documentElement.style.setProperty("--ios-safe-top", "56px");
     }
   } catch {}
 })();
