@@ -111,7 +111,14 @@ const getOidcConfig = memoize(
   { maxAge: 3600 * 1000 }
 );
 
-export function getSession() {
+const isSecure = process.env.NODE_ENV === "production" ||
+  process.env.REPLIT_DEV_DOMAIN !== undefined ||
+  process.env.REPL_SLUG !== undefined;
+
+let _sessionMiddleware: ReturnType<typeof session> | null = null;
+
+export function getSessionMiddleware() {
+  if (_sessionMiddleware) return _sessionMiddleware;
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
@@ -120,18 +127,24 @@ export function getSession() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
-  return session({
+  _sessionMiddleware = session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', // Required for session to persist after Stripe redirect
+      secure: isSecure,
+      sameSite: isSecure ? 'none' : 'lax',
       maxAge: sessionTtl,
     },
   });
+  console.log(`[session] cookie secure=${isSecure}, sameSite=${isSecure ? 'none' : 'lax'}`);
+  return _sessionMiddleware;
+}
+
+export function getSession() {
+  return getSessionMiddleware();
 }
 
 function updateUserSession(
@@ -159,8 +172,65 @@ async function upsertUser(
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
+
+  app.use(async (req: any, _res: any, next: any) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ') && !req.cookies?.['connect.sid']) {
+      const sessionId = authHeader.slice(7);
+      if (sessionId) {
+        try {
+          const { pool: dbPool } = await import('./db');
+          const result = await dbPool.query(
+            'SELECT sess FROM sessions WHERE sid = $1 AND expire > NOW()',
+            [sessionId]
+          );
+          if (result.rows.length > 0) {
+            const sess = result.rows[0].sess;
+            if (sess?.passport?.user) {
+              const passportUser = sess.passport.user;
+              const resolvedUserId = typeof passportUser === 'object' && passportUser?.id
+                ? passportUser.id
+                : passportUser;
+              (req as any)._mobileSessionUserId = resolvedUserId;
+              (req as any)._mobileSessionId = sessionId;
+            }
+          }
+        } catch (err: any) {
+          console.error('[MobileAuth] Bearer lookup error:', err?.message);
+        }
+      }
+    }
+    next();
+  });
+
   app.use(passport.initialize());
   app.use(passport.session());
+
+  app.use((req: any, _res: any, next: any) => {
+    if (!req.user && (req as any)._mobileSessionUserId) {
+      const userId = (req as any)._mobileSessionUserId;
+      storage.getUser(userId).then((user: any) => {
+        if (user) {
+          req.user = user;
+        }
+        next();
+      }).catch(() => next());
+      return;
+    }
+    next();
+  });
+
+  app.get('/api/auth/debug-session', (req: any, res) => {
+    res.json({
+      hasSessionID: !!req.sessionID,
+      hasUser: !!req.user,
+      userId: req.user?.id || req.user?.claims?.sub || null,
+      cookiePresent: !!req.headers.cookie,
+      origin: req.headers.origin || null,
+      host: req.headers.host || null,
+      cookieConfig: { secure: isSecure, sameSite: isSecure ? 'none' : 'lax' },
+    });
+  });
 
   const config = await getOidcConfig();
 
@@ -1283,13 +1353,7 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // Debug environment variable
-  console.log("BYPASS_AUTH environment variable:", process.env.BYPASS_AUTH);
-  
-  // Bypass authentication for development if BYPASS_AUTH is set
   if (process.env.BYPASS_AUTH === 'true') {
-    console.log("🚀 Authentication bypassed for development");
-    // Set a mock user for bypassed authentication
     req.user = {
       id: '43456086',
       email: 'pjpell077@gmail.com',
@@ -1305,26 +1369,21 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
       stripeCustomerId: null,
       createdAt: new Date(),
       updatedAt: new Date()
-    } as any; // Use 'as any' to bypass strict typing for the bypass user
+    } as any;
     return next();
   }
 
-  // Safe auth check - handle cases where Passport methods may not exist
   const hasPassport = typeof req.isAuthenticated === "function";
   const isAuthed = hasPassport ? req.isAuthenticated() : !!req.user;
   
   if (!isAuthed || !req.user) {
-    console.log("Authentication failed: no session or user");
+    if (process.env.AUTH_DEBUG === 'true') {
+      console.log("[auth] 401: sessionID=", !!req.sessionID, "cookie=", !!req.headers.cookie, "path=", req.path);
+    }
     return res.status(401).json({ ok: false, code: "UNAUTHENTICATED", message: "Unauthorized" });
   }
 
   const user = req.user as any;
-  console.log("Authentication check - user:", { 
-    id: user.id, 
-    email: user.email, 
-    provider: user.provider,
-    hasExpiresAt: !!user.expires_at 
-  });
 
   // Check user status and tokenVersion from database
   const userId = user.claims?.sub || user.id;
@@ -1357,9 +1416,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     });
   }
 
-  // For Google OAuth users (no expires_at) or email/password users
   if (!user.expires_at || user.provider === 'email') {
-    console.log("Allowing access for Google OAuth or email user");
     return next();
   }
 

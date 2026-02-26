@@ -1,0 +1,172 @@
+You are working in the EcoLogic repo (React frontend + Express backend). We have a bug where auth looks valid (GET /api/auth/user 200) and then shortly after we get GET /api/auth/user 401 and the WebSocket disconnects. Logs show:
+
+“Allowing access for Google OAuth or email user” then later
+
+“Authentication failed: no session or user”
+
+WebSocket connects, receives {type:'auth', userId: ...}, then WS closes
+
+This is classic session cookie not being sent / not being persisted, usually due to CORS + credentials, SameSite/Secure cookie flags, and/or missing trust proxy when running behind Replit/https.
+
+We must fix this properly (not by bypassing auth), and also make WebSocket auth consistent.
+
+GOALS
+
+Stop the random 401s after login.
+
+Ensure browser always sends session cookie to /api/*.
+
+Ensure WebSocket connections authenticate using the same session (preferred) OR a short-lived token, not a raw userId.
+
+Keep the “hidden not disabled” RBAC approach intact (don’t weaken permissions).
+
+Add minimal targeted logs to verify cookie + session behavior (no spam).
+
+BACKEND TASKS (Express)
+A) Fix session + cookie config for Replit + local dev
+
+Locate where express-session is initialized.
+
+Implement environment-aware settings:
+
+app.set('trust proxy', 1) (important behind proxies / Replit)
+
+Cookie settings must be correct:
+
+In production/https: cookie.secure = true and sameSite = 'none' if frontend is on a different origin
+
+In local http: cookie.secure = false and sameSite = 'lax'
+
+Ensure cookie has a stable name and reasonable maxAge
+
+Ensure you are not accidentally resetting the session or regenerating incorrectly
+
+Important: Our frontend might be served from a different origin during dev (Vite on 5173). If so, cookies will not work unless:
+
+CORS allows credentials
+
+cookie sameSite/secure are correct
+
+frontend uses credentials: 'include'
+
+B) Ensure CORS is correct
+
+In the Express CORS config:
+
+credentials: true
+
+origin must be explicit (not *) and include:
+
+local dev origin(s) (ex: http://localhost:5173)
+
+replit preview domain origin(s)
+
+Add a helper that builds an allowlist from env vars like APP_ORIGIN, REPLIT_DOMAINS, etc.
+
+C) Add a small debug endpoint + logging (temporary but useful)
+
+Add a GET /api/auth/debug-session that returns:
+
+whether req.sessionID exists
+
+whether req.user exists
+
+cookie settings summary (don’t leak secrets)
+
+headers origin, host, and whether cookie header is present
+
+Add a single-line log (only when debug env enabled) on every /api/auth/user hit:
+
+sessionID present?
+
+req.user present?
+
+cookie header present?
+Do not print full cookies or secrets.
+
+D) WebSocket auth: stop accepting raw userId
+
+Right now WS receives {type:'auth', userId} and then we still see auth failures.
+
+Fix WS auth one of these ways (prefer Option 1):
+
+Option 1 (Preferred): Share Express session with WebSocket upgrade
+
+Reuse the same sessionMiddleware and passport.initialize() / passport.session() (or your auth attach logic) for WS upgrade requests.
+
+During WS connection, parse cookies, load session, attach ws.user.
+
+If no session/user, close WS with a clear reason.
+
+Then the client does NOT need to send userId at all.
+
+Option 2: Issue a short-lived WS token after login
+
+On successful login, backend returns a signed short-lived token (5 min).
+
+Client sends {type:'auth', token}.
+
+WS validates token server-side and binds the connection to that user.
+
+Do NOT accept a raw userId without proof.
+
+Implement Option 1 if the WS library supports it (ws does). Otherwise Option 2.
+
+FRONTEND TASKS (React)
+E) Ensure every API call includes credentials
+
+Find the API client wrapper (fetch, axios, etc).
+
+If using fetch: set credentials: 'include' on ALL requests to /api/*.
+
+If using axios: axios.defaults.withCredentials = true.
+
+Make sure the baseURL is consistent (avoid mixing localhost, 127.0.0.1, preview domains). Mixing hosts breaks cookies.
+
+F) WebSocket client changes
+
+Remove sending { userId } as “auth” proof.
+
+If Option 1: WS connects normally and server authenticates via cookie/session; client can just send {type:'ping'} etc.
+
+If Option 2: client requests/receives token, then sends {type:'auth', token} once, waits for {type:'auth_ok'}.
+
+Also prevent the UI from spamming reconnect loops if auth fails; show a clean “Session expired, please log in again” flow.
+
+ACCEPTANCE TESTS (Must pass)
+
+Log in with email code.
+
+Refresh page 5 times → /api/auth/user stays 200 every time.
+
+Open app, wait 2 minutes → no random 401s.
+
+WebSocket stays connected (or reconnects cleanly) and is authenticated.
+
+GET /api/subscriptions/status works consistently (no 401 right after login).
+
+No new bypasses added (do NOT rely on “Allowing access for Google OAuth or email user” to skip session).
+
+DELIVERABLES
+
+Code changes to backend session/cors
+
+Code changes to frontend credentials + WS auth flow
+
+A short note in console logs showing:
+
+session cookie set after login
+
+session cookie received on subsequent requests
+
+ws authenticated user id (server-side) without trusting client-provided userId
+
+DO NOT:
+
+Remove auth checks
+
+Use localStorage tokens unless it’s the short-lived WS token option
+
+Add duplicate buttons or break RBAC
+
+Print secrets in logs

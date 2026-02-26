@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 
 interface WebSocketMessage {
   type: string;
   data?: any;
+  userId?: string;
 }
 
 export function useWebSocket() {
@@ -13,9 +14,11 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const authFailCountRef = useRef(0);
 
-  const connect = () => {
+  const connect = useCallback(() => {
     if (!isAuthenticated || !user?.id) return;
+    if (authFailCountRef.current >= 3) return;
 
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -25,14 +28,9 @@ export function useWebSocket() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WS] connected');
         setIsConnected(true);
-        
-        // Authenticate with the server
-        ws.send(JSON.stringify({
-          type: 'auth',
-          userId: user.id
-        }));
+        authFailCountRef.current = 0;
       };
 
       ws.onmessage = (event) => {
@@ -40,27 +38,23 @@ export function useWebSocket() {
           const message: WebSocketMessage = JSON.parse(event.data);
           
           if (message.type === 'auth_success') {
-            console.log('WebSocket authenticated successfully');
+            console.log('[WS] authenticated via session, userId=', message.userId);
           } else if (message.type === 'session_revoked') {
-            // User was deactivated - force sign out and redirect
-            console.log('Session revoked - redirecting to login');
+            console.log('[WS] session revoked');
             disconnect();
             window.location.href = '/?error=' + (message.data?.code || 'session_revoked') + '&message=' + encodeURIComponent(message.data?.message || 'Your session has ended. Please sign in again.');
           } else if (message.type === 'invite_code_rotated') {
-            // Dispatch custom event for invite code rotation
             const event = new CustomEvent('invite_code_rotated', { 
               detail: message.data 
             });
             window.dispatchEvent(event);
           } else if (message.type === 'new_message') {
-            // Show notification for new message
             toast({
               title: "New Message",
               description: `${message.data.senderName}: ${message.data.content.substring(0, 50)}${message.data.content.length > 50 ? '...' : ''}`,
               duration: 5000,
             });
             
-            // Trigger browser notification if permission granted
             if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('New Message', {
                 body: `${message.data.senderName}: ${message.data.content}`,
@@ -70,34 +64,43 @@ export function useWebSocket() {
             }
           }
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          console.error('[WS] parse error:', error);
         }
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (ev) => {
+        console.log(`[WS] closed code=${ev.code}`);
         setIsConnected(false);
         wsRef.current = null;
         
-        // Attempt to reconnect after 3 seconds
+        if (ev.code === 4401 || ev.code === 1008) {
+          authFailCountRef.current++;
+          console.log(`[WS] auth failure #${authFailCountRef.current}`);
+          if (authFailCountRef.current >= 3) {
+            console.log('[WS] too many auth failures — session may be expired');
+            return;
+          }
+        }
+
         if (isAuthenticated) {
+          const delay = Math.min(3000 * Math.pow(1.5, authFailCountRef.current), 15000);
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
-          }, 3000);
+          }, delay);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WS] error:', error);
         setIsConnected(false);
       };
 
     } catch (error) {
-      console.error('Error creating WebSocket connection:', error);
+      console.error('[WS] connection error:', error);
     }
-  };
+  }, [isAuthenticated, user?.id]);
 
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -108,10 +111,11 @@ export function useWebSocket() {
       wsRef.current = null;
     }
     setIsConnected(false);
-  };
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated && user?.id) {
+      authFailCountRef.current = 0;
       connect();
     } else {
       disconnect();

@@ -719,6 +719,26 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
   res.json({ received: true });
 });
 
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    const allowed = [
+      process.env.APP_BASE_URL,
+      ...(process.env.REPLIT_DOMAINS || '').split(',').filter(Boolean).map(d => `https://${d}`),
+    ].filter(Boolean);
+    if (allowed.includes(origin) || origin.endsWith('.replit.dev') || origin.endsWith('.replit.app')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Client-Type');
+    }
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(cookieParser());
 
 // Skip body parsers for multipart/form-data uploads (handled by multer)

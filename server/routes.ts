@@ -1,9 +1,10 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import { createServer, type Server, ServerResponse } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { conversationRoom } from "./wsRooms";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, getSessionMiddleware } from "./replitAuth";
+import passport from "passport";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOwners, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
 import { sendPushToUser } from "./pushService";
 import { sendApnsPush } from "./apns";
@@ -697,7 +698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
       
-      console.log("Auth user endpoint - userId:", userId);
+      
       const user = await storage.getUser(userId);
       
       if (!user) {
@@ -15447,31 +15448,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // WebSocket server
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ noServer: true });
 
-  wss.on('connection', (ws: ExtendedWebSocket, req) => {
-    console.log('New WebSocket connection');
+  httpServer.on('upgrade', (req: any, socket, head) => {
+    if (req.url !== '/ws') {
+      socket.destroy();
+      return;
+    }
+
+    const res = new ServerResponse(req);
+    res.assignSocket(socket);
+
+    const sessionMw = getSessionMiddleware();
+    sessionMw(req, res as any, () => {
+      passport.initialize()(req, res as any, () => {
+        passport.session()(req, res as any, () => {
+          const user = req.user as any;
+          const userId = user?.id || user?.claims?.sub;
+          if (!userId) {
+            console.log('[WS] upgrade rejected: no session user');
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+          wss.handleUpgrade(req, socket, head, (ws) => {
+            (ws as any).userId = userId;
+            wss.emit('connection', ws, req);
+          });
+        });
+      });
+    });
+  });
+
+  wss.on('connection', (ws: ExtendedWebSocket, req: any) => {
+    const userId = ws.userId!;
+    console.log(`[WS] authenticated connection: userId=${userId}`);
     ws.rooms = new Set();
+
+    if (!wsClients.has(userId)) {
+      wsClients.set(userId, new Set());
+    }
+    wsClients.get(userId)!.add(ws);
+    ws.send(JSON.stringify({ type: 'auth_success', userId }));
 
     ws.on('message', async (data) => {
       try {
         const message = JSON.parse(data.toString());
-        console.log('Received message:', message);
         
-        // Handle auth message to track this connection
-        if (message.type === 'auth' && message.userId) {
-          ws.userId = message.userId;
-          
-          // Add this socket to the user's set
-          if (!wsClients.has(ws.userId)) {
-            wsClients.set(ws.userId, new Set());
-          }
-          const userSockets = wsClients.get(ws.userId);
-          if (userSockets) {
-            userSockets.add(ws);
-          }
-          
-          ws.send(JSON.stringify({ type: 'auth_success' }));
+        if (message.type === 'auth') {
+          // Already authenticated via session — ignore client auth messages
         }
         
         // Handle thread:join - user joins a conversation room
@@ -15749,7 +15774,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     ws.on('close', () => {
-      console.log('WebSocket connection closed');
+      if (ws.userId) console.log(`[WS] disconnected: userId=${ws.userId}`);
       
       // Remove this socket from all rooms
       if (ws.rooms) {
