@@ -385,14 +385,15 @@ html.native .ecologic-drawer {
   top: env(safe-area-inset-top, 0px) !important;
 }
 
-/* iOS native wrapper: pad Notifications modal below Dynamic Island / status bar */
-.native-ios .notificationsModalRoot {
-  padding-top: 56px;
-}
-@supports (padding-top: env(safe-area-inset-top)) {
-  .native-ios .notificationsModalRoot {
-    padding-top: calc(env(safe-area-inset-top, 56px) + 28px);
-  }
+/* Probe element: measures safe-area-inset-top at runtime for iOS native wrapper */
+#safe-area-top-probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: env(safe-area-inset-top, 0px);
+  width: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 html.native .ecologic-drawer::before {

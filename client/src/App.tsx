@@ -481,6 +481,7 @@ function App() {
     <ThemeProvider defaultTheme="light" storageKey="ui-theme">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <div id="safe-area-top-probe" aria-hidden="true" />
           <Toaster />
           <Router />
         </TooltipProvider>

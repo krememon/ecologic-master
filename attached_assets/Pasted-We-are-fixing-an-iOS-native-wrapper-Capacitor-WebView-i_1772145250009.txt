@@ -1,0 +1,133 @@
+We are fixing an iOS native wrapper (Capacitor/WebView) issue where the Notifications modal header (title + divider + X) is too high / under the status bar. Prior CSS env(safe-area-inset-top) approaches are not working (likely returning 0 or not applying). We need a reliable runtime-measured top inset and apply it to ONLY the Notifications modal header.
+
+HARD RULES
+
+Do NOT redesign UI
+
+Do NOT change typography, colors, spacing beyond adding top padding
+
+Fix must be scoped to Notifications modal only
+
+Desktop web must remain unchanged
+
+Plan (Do exactly this)
+1) Add a tiny safe-area probe element (only in native wrapper)
+
+In the main app shell (App component or layout that is always mounted), add a hidden div that measures safe-area top correctly.
+
+Add this element near the root of the app:
+
+<div id="safe-area-top-probe" aria-hidden="true" />
+
+Add CSS (global):
+
+#safe-area-top-probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: env(safe-area-inset-top, 0px);
+  width: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+Even if env() is 0, we’ll fallback.
+
+2) Compute a real safeTopPx at runtime (Capacitor iOS only)
+
+Create a helper function (in a small util file or inside the Notifications modal file) that returns a number:
+
+Logic:
+
+If NOT native wrapper, return 0
+
+If native wrapper on iOS:
+
+Try to read computed height from #safe-area-top-probe
+
+If 0, fallback to a conservative iPhone notch value (44)
+
+Return that
+
+Implementation example:
+
+export function getNativeSafeTopPx() {
+  try {
+    const isCapacitor = !!window.Capacitor;
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    if (!isCapacitor || !isIOS) return 0;
+
+    const el = document.getElementById("safe-area-top-probe");
+    if (el) {
+      const h = parseFloat(getComputedStyle(el).height || "0");
+      if (h && h > 0) return Math.round(h);
+    }
+
+    // Fallback if WebView reports 0
+    return 44; // standard notch safe top
+  } catch {
+    return 0;
+  }
+}
+3) Apply safe top padding INLINE to the Notifications header wrapper
+
+In the Notifications modal component, identify the wrapper that contains:
+
+“Notifications” title
+
+divider line
+
+X button
+
+Call the helper when modal opens/mounts, store in state, and apply inline style:
+
+const [safeTop, setSafeTop] = useState(0);
+
+useEffect(() => {
+  setSafeTop(getNativeSafeTopPx());
+}, []);
+
+Then apply:
+
+<div
+  className="notificationsHeader"
+  style={{ paddingTop: safeTop ? safeTop + 12 : undefined }}
+>
+  ...
+</div>
+
+Key details:
+
+Only add padding when safeTop > 0
+
+Add +12px so it looks like normal breathing room
+
+Do NOT change existing header padding/margins unless needed (this adds on top)
+
+If this creates too much padding on non-notch devices, safeTop will be 0 there (or small).
+
+4) Ensure viewport meta has viewport-fit=cover (but do not rely on it)
+
+In index.html, ensure:
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+Acceptance Tests
+
+iOS wrapper: Notifications header is clearly below status bar / dynamic island and matches Safari layout vibe (not crushed)
+
+Safari/desktop web: unchanged
+
+X remains clickable and aligned
+
+Deliverables
+
+Implement probe element + CSS
+
+Implement getNativeSafeTopPx()
+
+Add inline paddingTop to Notifications header wrapper only
+
+No other UI changes
