@@ -1,0 +1,149 @@
+You are working on EcoLogic (React web app inside iOS native wrapper / WebView via Capacitor).
+
+Problem
+
+On iPhone (native wrapper), the Notifications modal header (“Notifications” title + X close) is pushed into / under the status bar and looks out of frame. In normal browser it looks fine. This is a Safe Area / notch padding issue.
+
+Requirements
+
+Do NOT redesign anything
+
+Do NOT change colors, spacing style, typography, or layout beyond what’s needed
+
+Only fix safe-area / top padding so it looks normal on iPhone wrapper
+
+Must work for:
+
+iPhone notch devices
+
+non-notch iPhones
+
+desktop browser
+
+Make sure the title + close X are fully visible and aligned like before
+
+Implementation Plan
+1) Ensure iOS safe area is enabled (viewport-fit=cover)
+
+Find the main HTML file:
+
+client/index.html or public/index.html (wherever the meta viewport is)
+
+Update/add the viewport meta tag to include:
+
+viewport-fit=cover
+
+Example:
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+Do not break existing viewport settings—merge if one already exists.
+
+2) Add a global CSS safe-area variable and helper class
+
+In your global CSS (one of these: client/src/index.css, client/src/global.css, styles.css, etc.) add:
+
+a CSS variable for safe-area-top
+
+a utility class for “safe header padding”
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+/* Use for top headers inside modals on iOS wrapper */
+.safe-header {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+
+Important:
+
+Keep it minimal
+
+Don’t change other global styles
+
+3) Apply safe-header ONLY to the Notifications modal header container
+
+Find the Notifications modal component (search for):
+
+"Notifications" text
+
+NotificationsModal
+
+notifications modal
+
+the close button X in that modal
+
+Locate the header container that wraps:
+
+the “Notifications” title
+
+the close X button
+
+Add the safe-header class to that header container only.
+
+Example:
+
+<div className="modalHeader safe-header">
+  <h2>Notifications</h2>
+  <button ...>✕</button>
+</div>
+
+If you are using Tailwind, you can implement the same effect with inline style instead of class, but prefer the class for cleanliness.
+
+4) Prevent the close button from drifting / clipping
+
+In the Notifications header CSS (local module or existing class), ensure:
+
+header uses flex
+
+center alignment
+
+close button stays in view
+
+Example minimal rules (only if needed):
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+Do NOT change font sizes or add new elements.
+
+5) Ensure the modal content doesn’t get hidden behind bottom browser UI (optional but safe)
+
+If the modal is height: 100vh, iOS webview can be weird. If you already use 100vh, replace for the modal container ONLY with 100dvh fallback:
+
+.modalContainer {
+  height: 100vh;
+  height: 100dvh;
+}
+
+Only do this if you see clipping issues. Don’t touch other layouts.
+
+Testing Checklist (must do)
+
+Desktop browser: Notifications modal looks identical to before.
+
+iPhone wrapper:
+
+title “Notifications” fully visible and not under the status bar
+
+close X visible and tappable
+
+header looks “normal” (not pushed up)
+
+iPhone notch + non-notch behavior is correct.
+
+Deliverables
+
+Commit with:
+
+viewport meta updated with viewport-fit=cover
+
+global CSS safe-area var + .safe-header
+
+Notifications modal header updated to include .safe-header
+
+Add a short comment in code explaining it’s for iOS safe area in native wrapper.

@@ -385,6 +385,16 @@ html.native .ecologic-drawer {
   top: env(safe-area-inset-top, 0px) !important;
 }
 
+/* iOS native wrapper: push sheet/modal headers below status bar / notch */
+html.native .safe-header {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 4px);
+}
+
+/* iOS native wrapper: shift sheet built-in close button below notch */
+html.native .sheet-close-btn {
+  top: calc(env(safe-area-inset-top, 0px) + 1rem) !important;
+}
+
 html.native .ecologic-drawer::before {
   content: "";
   position: absolute;
