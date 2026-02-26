@@ -1,0 +1,116 @@
+Current issue
+
+We already moved the X down, but the Notifications title and the divider line are still too high / under the status bar in the iOS wrapper. We need to apply safe-area top padding to the entire header region, not just the close button.
+
+Strict requirements
+
+Do NOT redesign anything
+
+Do NOT change fonts, sizes, colors, spacing style, or layout beyond safe-area padding
+
+Fix should be scoped to Notifications modal only
+
+Desktop web must look identical to before
+
+What to do
+1) Verify viewport-fit=cover exists (don’t rework anything)
+
+In client/index.html or public/index.html, ensure:
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+If a viewport tag already exists, only append viewport-fit=cover to it.
+
+2) Add a safe-area helper that pads the WHOLE header
+
+In global CSS (where .modalHeader/global styles live), add:
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+/* Adds notch-safe padding without changing desktop layout */
+.ios-safe-top {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+
+Notes:
+
+Keep + 12px small so it looks normal.
+
+Do not change any other CSS.
+
+3) Apply ios-safe-top to the Notifications header WRAPPER (the one containing title + divider)
+
+Find the Notifications modal component.
+You need the element that contains:
+
+“Notifications” title
+
+the divider line under it
+
+(and/or the area that includes the X)
+
+Add ios-safe-top to that wrapper, not just the X container.
+
+Example structure to target (yours may differ):
+
+<div className="notificationsHeader">   // <-- ADD ios-safe-top here
+  <div className="headerRow">
+    <h2>Notifications</h2>
+    <button className="closeBtn">✕</button>
+  </div>
+  <div className="divider" />
+</div>
+
+Update to:
+
+<div className="notificationsHeader ios-safe-top">
+  ...
+</div>
+
+If there isn’t a single wrapper that contains both title and divider, create the smallest possible wrapper around them (no style changes) and put ios-safe-top on that wrapper.
+
+4) Don’t double-pad the close button
+
+If we previously added padding/margin to the X button container, remove that extra padding so it doesn’t get pushed down too far.
+
+Rule:
+
+Only one place should apply the safe-area top padding: the header wrapper.
+
+5) iOS-only guard (optional but preferred if it affects desktop)
+
+If ios-safe-top changes desktop even slightly (it shouldn’t because env() is 0), then add a body class for iOS wrapper and scope it:
+
+Frontend (runs once on app load):
+
+Detect iOS + running in Capacitor (or simply presence of window.Capacitor), then add:
+
+document.documentElement.classList.add("native-ios");
+
+CSS:
+
+.native-ios .ios-safe-top {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+
+But only do this if desktop gets affected. Prefer the simplest path first.
+
+Testing
+
+iPhone wrapper: title “Notifications” and divider are fully below status bar and look normal.
+
+Desktop browser: looks exactly the same as before.
+
+X stays aligned and not overly pushed.
+
+Deliverable
+
+Commit with:
+
+Safe-area helper CSS
+
+Applying it to Notifications header wrapper (title + divider)
+
+Removing any previous “X-only” padding so we don’t stack offsets
