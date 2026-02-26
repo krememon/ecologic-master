@@ -385,9 +385,14 @@ html.native .ecologic-drawer {
   top: env(safe-area-inset-top, 0px) !important;
 }
 
-/* iOS native wrapper: pad sheet content below status bar / notch */
-html.native .ios-safe-top {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+/* iOS native wrapper: pad Notifications modal below Dynamic Island / status bar */
+.native-ios .notificationsModalRoot {
+  padding-top: 56px;
+}
+@supports (padding-top: env(safe-area-inset-top)) {
+  .native-ios .notificationsModalRoot {
+    padding-top: calc(env(safe-area-inset-top, 56px) + 28px);
+  }
 }
 
 html.native .ecologic-drawer::before {

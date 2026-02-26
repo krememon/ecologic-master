@@ -14,6 +14,18 @@ window.addEventListener("unhandledrejection", (e) => {
 
 import { initPushDebug } from "./utils/pushDebug";
 
+(() => {
+  try {
+    const isCapacitor = !!(window as any).Capacitor;
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (isCapacitor && isIOS) {
+      document.documentElement.classList.add("native-ios");
+    }
+  } catch {}
+})();
+
 console.log("[main.tsx] Starting app initialization, pathname:", window.location.pathname);
 
 initPushDebug();

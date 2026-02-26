@@ -1,0 +1,121 @@
+We’re still having the Notifications modal header (title + divider + X) render under/too close to the iOS status bar in the native wrapper. Prior “env(safe-area-inset-top)” attempts aren’t sticking (likely because the wrapper/WebView isn’t reporting env correctly or existing CSS overrides).
+
+Goal
+
+Move the entire Notifications modal header block (title + divider + X) down below the Dynamic Island reliably.
+
+Hard constraints
+
+Do NOT change any UI styling besides vertical positioning of the header area
+
+Do NOT touch other modals/pages
+
+This fix should be scoped to Notifications modal only
+
+Desktop web must remain identical
+
+Implement a robust, iOS-wrapper-only safe area offset
+1) Add iOS wrapper class on app boot (ONLY when inside Capacitor iOS)
+
+In the main client entry (one of: client/src/main.tsx, client/src/main.jsx, client/src/index.tsx, client/src/App.tsx), add:
+
+(() => {
+  try {
+    const isCapacitor = !!window.Capacitor;
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    if (isCapacitor && isIOS) {
+      document.documentElement.classList.add("native-ios");
+    }
+  } catch {}
+})();
+
+This does nothing on normal desktop web.
+
+2) Force a deterministic top offset for the Notifications header (with safe-area if available)
+
+In global CSS, add:
+
+/* Only in native iOS wrapper */
+.native-ios .notificationsModalHeader {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Put header below status bar / Dynamic Island */
+.native-ios .notificationsModalHeader {
+  /* If env works, use it. If not, fallback to a fixed offset */
+  transform: translateY(calc(env(safe-area-inset-top, 0px) + 28px));
+}
+
+But transform can create weird click areas for the X on some devices.
+
+So prefer padding-top on the modal container instead of transform:
+
+✅ Better version:
+
+.native-ios .notificationsModalRoot {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 28px);
+}
+
+Then leave the header layout alone.
+
+3) Apply classes to ONLY the Notifications modal
+
+In the Notifications modal component, add two classnames:
+
+Root wrapper of the modal content: notificationsModalRoot
+
+The header section wrapper containing title + divider + X: notificationsModalHeader
+
+Example:
+
+<div className="modalContainer notificationsModalRoot">
+  <div className="modalHeader notificationsModalHeader">
+    ...
+  </div>
+  ...
+</div>
+
+Do not change any other markup or styles. Only add these class names.
+
+4) Add a fallback when env() returns 0 in WebView
+
+Some iOS webviews return 0 for safe-area-inset-top.
+
+Add a CSS fallback using @supports? Not enough.
+
+Instead add a second rule that only applies if safe-area is 0 is hard. So we do a conservative fixed padding that is ONLY in native-ios:
+
+.native-ios .notificationsModalRoot {
+  padding-top: 56px;
+}
+@supports (padding-top: env(safe-area-inset-top)) {
+  .native-ios .notificationsModalRoot {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 28px);
+  }
+}
+
+This guarantees it moves down even if env() fails.
+
+56px is a safe “below island” baseline; adjust slightly only if needed, but keep changes minimal.
+
+Acceptance
+
+In iOS wrapper: Notifications title + divider + X are clearly below the Dynamic Island/status bar.
+
+In desktop browser: Notifications modal looks unchanged.
+
+No changes to other modals.
+
+Deliverables
+
+Commit with:
+
+native-ios class add on boot (Capacitor + iOS only)
+
+Notifications modal root/header classnames
+
+CSS rules above (scoped to .native-ios and Notifications only)
