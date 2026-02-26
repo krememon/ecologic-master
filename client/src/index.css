@@ -386,8 +386,38 @@ html.native .ecologic-drawer {
 }
 
 
+/* iOS native wrapper: push entire app below status bar / Dynamic Island */
+html.native-ios .nativeViewport {
+  padding-top: var(--native-safe-top, 56px);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* iOS native wrapper: push fixed overlays (sheets, dialogs) below status bar */
+html.native-ios [data-radix-portal] > [data-state] {
+  top: var(--native-safe-top, 56px) !important;
+}
+html.native-ios [data-radix-portal] > div[role="dialog"] {
+  top: var(--native-safe-top, 56px) !important;
+  height: calc(100vh - var(--native-safe-top, 56px)) !important;
+  max-height: calc(100vh - var(--native-safe-top, 56px)) !important;
+}
+
+/* DEBUG: translucent red bar showing safe area (remove after verification) */
+html.native-ios body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--native-safe-top, 56px);
+  background: rgba(255,0,0,0.08);
+  z-index: 999999;
+  pointer-events: none;
+}
+
 /* Temporary debug badge: confirms native build is running (remove after verifying safe area fix) */
-html[data-native="1"]::before {
+html[data-native="1"]::after {
   content: "NATIVE BUILD";
   position: fixed;
   top: 0;

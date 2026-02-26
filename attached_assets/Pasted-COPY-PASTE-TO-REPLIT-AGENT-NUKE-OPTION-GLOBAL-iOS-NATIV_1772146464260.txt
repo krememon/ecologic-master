@@ -1,0 +1,137 @@
+COPY/PASTE TO REPLIT AGENT (NUKE OPTION — GLOBAL iOS NATIVE SAFE TOP WRAPPER, GUARANTEED FIX)
+
+We are in a real native build (badge confirms). The Notifications header is still under the status bar/Dynamic Island. At this point, we stop trying to target the modal and we fix the root of all layout: the entire React app needs a top safe-area offset in native iOS.
+
+This is the only guaranteed fix because:
+
+If the WebView/safe-area isn’t behaving, the most reliable method is adding a top padding to the app root wrapper in native iOS.
+
+This will make the whole app behave like Safari (content starts below status bar).
+
+No redesign — it’s just shifting content down, which is exactly what we want.
+
+HARD RULES
+
+No UI redesign
+
+No random spacing changes beyond the safe-top offset
+
+Apply ONLY on Capacitor iOS native builds
+
+Desktop web unchanged
+
+1) Add native-iOS detection + set a CSS variable for safe top
+
+In main.tsx (or the earliest entry file), add this BEFORE React renders:
+
+import { Capacitor } from "@capacitor/core";
+
+(() => {
+  try {
+    const isNative = Capacitor.isNativePlatform();
+    const isIOS = Capacitor.getPlatform && Capacitor.getPlatform() === "ios";
+
+    if (isNative && isIOS) {
+      document.documentElement.classList.add("native-ios");
+      // Fixed safe-top for Dynamic Island devices (works even if env() fails)
+      document.documentElement.style.setProperty("--native-safe-top", "56px");
+    }
+  } catch {}
+})();
+
+(Do not remove anything else.)
+
+2) Wrap the ENTIRE app in a single “viewport” div and apply padding-top there
+
+Find where you render <App /> (main.tsx). Wrap it:
+
+root.render(
+  <div className="nativeViewport">
+    <App />
+  </div>
+);
+
+If you already have a top-level layout wrapper, use that instead, but it MUST wrap the whole app.
+
+3) Add CSS that pushes the whole app down ONLY in native iOS
+
+In global CSS:
+
+html.native-ios .nativeViewport {
+  padding-top: var(--native-safe-top, 56px);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+This is the actual fix. It forces all content (including modals) to start below the status bar.
+
+4) Fix modals that are position: fixed + top: 0 so they respect the new offset
+
+If your modal overlays are fixed to the viewport (common), they may still start at the very top of the screen and “ignore” the padding on the app wrapper.
+
+So in global CSS add a NARROW rule that only affects modal overlays in native iOS:
+
+Search your modal overlay class (examples: .modalOverlay, .modalContainer, .dialogOverlay, .sheetOverlay).
+
+Apply:
+
+html.native-ios .modalOverlay {
+  top: var(--native-safe-top, 56px) !important;
+  height: calc(100vh - var(--native-safe-top, 56px)) !important;
+}
+
+If your project uses a different class name, use the actual one. Don’t guess — find the overlay class used by Notifications modal.
+
+If the modal uses inset: 0, override it:
+
+html.native-ios .modalOverlay {
+  inset: auto 0 0 0 !important;
+  top: var(--native-safe-top, 56px) !important;
+}
+5) DEBUG CONFIRM (MANDATORY, then remove)
+
+Add a temporary translucent bar so we can see the reserved safe area:
+
+html.native-ios body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--native-safe-top, 56px);
+  background: rgba(255,0,0,0.08);
+  z-index: 999999;
+  pointer-events: none;
+}
+
+Rebuild and confirm:
+
+You see the faint red strip at the top
+
+“Notifications” title is BELOW that strip
+
+After confirmed, REMOVE this debug body::before rule.
+
+6) Rebuild native iOS app
+npx cap sync ios
+npx cap open ios
+
+Run from Xcode on the device.
+
+Acceptance
+
+Notifications header is no longer under status bar / dynamic island
+
+Other top headers across the app also look correct (this is expected)
+
+Desktop web unchanged
+
+Deliverables
+
+native-ios detection + --native-safe-top
+
+.nativeViewport wrapper + padding
+
+modal overlay top/inset override (using the real overlay class)
+
+add debug red bar to confirm, then remove it after verification

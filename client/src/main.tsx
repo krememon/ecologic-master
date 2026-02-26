@@ -23,6 +23,7 @@ import { initPushDebug } from "./utils/pushDebug";
     if (isCapacitor && isIOS) {
       document.documentElement.classList.add("native-ios");
       document.documentElement.setAttribute("data-native", "1");
+      document.documentElement.style.setProperty("--native-safe-top", "56px");
     }
   } catch {}
 })();
@@ -127,7 +128,7 @@ const initApp = async () => {
     root.render(<ErrorBoundary><PayoutSetup token={setupToken} /></ErrorBoundary>);
   } else {
     console.log("[main.tsx] Rendering main App");
-    root.render(<ErrorBoundary><App /></ErrorBoundary>);
+    root.render(<ErrorBoundary><div className="nativeViewport"><App /></div></ErrorBoundary>);
   }
 };
 
