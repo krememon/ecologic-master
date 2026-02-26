@@ -1,0 +1,124 @@
+We’ve tried multiple CSS safe-area fixes and nothing changes, including inline styles. That strongly means this is NOT a web/CSS issue — it’s the native iOS wrapper overlaying the WebView under the status bar.
+
+Safari looks normal because Safari does NOT overlay the page the same way. Our Capacitor wrapper likely has StatusBar overlay enabled, so the WebView starts at y=0 behind the Dynamic Island. CSS won’t reliably fix this.
+
+Goal
+
+Make the entire WebView layout start below the iOS status bar (Dynamic Island safe area) in the native wrapper — so ALL pages/modals (including Notifications) render correctly without per-component hacks.
+
+Hard rules
+
+Do NOT redesign UI
+
+Do NOT change any app spacing manually
+
+Fix it at the native wrapper layer
+
+Must work on notch + non-notch devices
+
+Step 1 — Ensure StatusBar plugin exists
+
+Check package.json for:
+
+@capacitor/status-bar
+
+If missing, install:
+
+npm i @capacitor/status-bar
+npx cap sync ios
+Step 2 — Set “Status bar does NOT overlay webview” on iOS startup
+
+Find the main app bootstrap (where you initialize Capacitor stuff) — likely client/src/main.jsx, client/src/main.tsx, or a central App.tsx.
+
+Add:
+
+import { Capacitor } from "@capacitor/core";
+import { StatusBar, Style } from "@capacitor/status-bar";
+
+async function configureIOSStatusBar() {
+  try {
+    if (Capacitor.getPlatform() !== "ios") return;
+
+    // THIS IS THE KEY: push WebView content below status bar
+    await StatusBar.setOverlaysWebView({ overlay: false });
+
+    // Optional (don’t change UI): just keep status bar readable
+    await StatusBar.setStyle({ style: Style.Dark });
+  } catch (e) {
+    console.log("[iOS StatusBar] configure failed", e);
+  }
+}
+
+configureIOSStatusBar();
+
+Important:
+
+This must run as early as possible (before routes/modals render if possible).
+
+This should NOT affect desktop web at all.
+
+Step 3 — Also set Capacitor config fallback (belt + suspenders)
+
+Open capacitor.config.ts or capacitor.config.json.
+
+Add/ensure a StatusBar section:
+
+If TS:
+
+const config: CapacitorConfig = {
+  plugins: {
+    StatusBar: {
+      overlaysWebView: false,
+    },
+  },
+};
+export default config;
+
+If JSON:
+
+{
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": false
+    }
+  }
+}
+
+Then run:
+
+npx cap sync ios
+Step 4 — Verify in Xcode iOS project (if needed)
+
+If the above still doesn’t apply, confirm the iOS project has the StatusBar plugin wired correctly.
+
+Run:
+
+npx cap open ios
+
+Then rebuild on device/simulator.
+
+Step 5 — Remove ALL the Notifications-only hacks
+
+If we previously added special CSS classes, padding, transforms, etc. to Notifications modal header, remove them after confirming the native fix works — because the global native fix should make everything align naturally like Safari.
+
+Acceptance test (must pass)
+
+Open Notifications modal in iOS wrapper:
+
+“Notifications” title is NOT under the time / dynamic island
+
+divider line sits normally
+
+X aligns correctly
+
+Check any other top headers (Jobs modal, Documents modal) also look better (this fix should help globally)
+
+Desktop web unchanged
+
+Deliverables
+
+Commit adding StatusBar plugin + StatusBar.setOverlaysWebView({ overlay: false })
+
+Capacitor config updated with overlaysWebView: false
+
+Remove Notifications-only safe-area hacks (after verifying)

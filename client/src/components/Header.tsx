@@ -198,7 +198,7 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
       </header>
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md notificationsModalRoot">
+        <SheetContent side="right" className="w-full sm:max-w-md">
           <SheetHeader className="space-y-0 pb-0">
             <div className="flex items-center justify-between px-0 py-1">
               <SheetTitle className="text-base font-semibold">Notifications</SheetTitle>

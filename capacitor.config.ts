@@ -17,6 +17,11 @@ const config: CapacitorConfig = {
       'appleid.apple.com',
     ],
   },
+  plugins: {
+    StatusBar: {
+      overlaysWebView: false,
+    },
+  },
 };
 
 export default config;
