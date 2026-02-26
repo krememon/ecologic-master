@@ -23,6 +23,26 @@ import ChangePasswordModal from "@/components/ChangePasswordModal";
 import TwoFactorSetupModal from "@/components/TwoFactorSetupModal";
 import Disable2FAModal from "@/components/Disable2FAModal";
 
+function PushTokenStatus() {
+  const { data, isLoading } = useQuery<{ userId: number; count: number; tokens: any[] }>({
+    queryKey: ['/api/push/tokens/me'],
+    refetchInterval: 30000,
+  });
+  if (isLoading) return <p className="col-span-2 text-xs text-slate-400">Loading token status...</p>;
+  if (!data) return <p className="col-span-2 text-xs text-red-400">Could not fetch token status</p>;
+  return (
+    <div className="col-span-2 p-2 rounded bg-slate-100 dark:bg-slate-800 text-xs space-y-1">
+      <p className="font-medium">Push Tokens: {data.count}</p>
+      {data.tokens.map((t: any) => (
+        <p key={t.id} className="text-slate-500">
+          {t.platform} · {t.tokenSuffix} · {t.isActive ? '✓ active' : '✗ inactive'}
+        </p>
+      ))}
+      {data.count === 0 && <p className="text-amber-500">No tokens registered. Tap "Enable Notifications" first.</p>}
+    </div>
+  );
+}
+
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -500,35 +520,34 @@ export default function Settings() {
                   </Button>
 
                   {import.meta.env.DEV && (
-                    <Button
-                      variant="default"
-                      className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white"
-                      disabled={testingRemote}
-                      onClick={async () => {
-                        console.log("REMOTE PUSH TEST BUTTON CLICKED");
-                        setTestingRemote(true);
-                        try {
-                          const res = await fetch("/api/push/test", { method: "POST", credentials: "include" });
-                          const json = await res.json().catch(() => ({}));
-                          console.log("/api/push/test status:", res.status, "json:", json);
-                          alert("push test: " + res.status + " " + JSON.stringify(json));
-                          if (json.ok) {
-                            toast({ title: "Remote Push Sent", description: `Sent: ${json.sent}, Failed: ${json.failed}` });
-                          } else {
-                            toast({ title: "Push Failed", description: json.message || "Server could not send push.", variant: "destructive" });
+                    <>
+                      <PushTokenStatus />
+                      <Button
+                        variant="default"
+                        className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white"
+                        disabled={testingRemote}
+                        onClick={async () => {
+                          setTestingRemote(true);
+                          try {
+                            const res = await fetch("/api/push/test", { method: "POST", credentials: "include" });
+                            const json = await res.json().catch(() => ({}));
+                            console.log("[push-test]", res.status, json);
+                            if (json.ok) {
+                              toast({ title: "Remote Push Sent", description: `Sent: ${json.sent}, Failed: ${json.failed}. Tokens: ${json.tokensCount}` });
+                            } else {
+                              toast({ title: "Push Failed", description: json.message || "Server could not send push.", variant: "destructive" });
+                            }
+                          } catch (err) {
+                            toast({ title: "Error", description: "Could not reach server.", variant: "destructive" });
+                          } finally {
+                            setTestingRemote(false);
                           }
-                        } catch (err) {
-                          console.error("push test fetch error:", err);
-                          alert("push test error: " + String(err));
-                          toast({ title: "Error", description: "Could not reach server.", variant: "destructive" });
-                        } finally {
-                          setTestingRemote(false);
-                        }
-                      }}
-                    >
-                      <Send className="h-4 w-4 mr-2" />
-                      {testingRemote ? "Sending..." : "Send Test Remote Push"}
-                    </Button>
+                        }}
+                      >
+                        <Send className="h-4 w-4 mr-2" />
+                        {testingRemote ? "Sending..." : "Send Test Remote Push"}
+                      </Button>
+                    </>
                   )}
                 </div>
               </>

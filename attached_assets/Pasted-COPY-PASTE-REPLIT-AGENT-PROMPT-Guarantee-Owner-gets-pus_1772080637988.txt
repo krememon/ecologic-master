@@ -1,0 +1,152 @@
+COPY/PASTE REPLIT AGENT PROMPT (Guarantee Owner gets push after payment + add debug tooling)
+
+We need to ensure: after a successful payment, the company Owner receives a push notification on their iPhone (APNs) AND the in-app notification is created.
+
+Constraints
+
+Keep security intact.
+
+Work in dev + production-ready behavior.
+
+Add diagnostic endpoints/logs so we can verify every step.
+
+Step 1 — Confirm device token registration & storage
+Backend
+
+Find where iOS push tokens are registered (likely /api/push/register or similar). If missing, create:
+
+POST /api/push/register
+
+Auth required
+
+Body: { platform: 'ios'|'android', token: string, deviceId?: string, appVersion?: string }
+
+Upsert into DB table device_tokens keyed by (userId, platform, token) or (userId, deviceId)
+
+Store: userId, companyId, platform, token, lastSeenAt, createdAt
+
+Return { ok: true }
+
+Add DEV/ADMIN debug endpoints:
+
+GET /api/push/tokens/me → list tokens for current user
+
+GET /api/push/tokens/company (Owner/Admin only) → list tokens by user in company (counts only; don’t print full tokens in logs)
+
+Add minimal logs (DEV only):
+
+when token registered: [push] registered token for userId=... platform=ios tokenSuffix=....
+
+Frontend (Capacitor iOS)
+
+Ensure on app start (after auth is authed), we:
+
+request permissions
+
+register for APNs
+
+obtain token
+
+POST it to /api/push/register with credentials: include
+
+Add a visible debug line in Settings (DEV only):
+
+“Push token registered ✅ / not registered ❌”
+
+Step 2 — Ensure payment success actually triggers push to Owner
+Backend (Stripe webhook handler)
+
+Identify the payment success event we use (likely:
+
+checkout.session.completed
+
+invoice.payment_succeeded
+
+or payment_intent.succeeded)
+
+Implement a single “payment succeeded” handler that:
+
+resolves companyId + ownerUserId reliably
+
+creates an in-app notification record:
+
+type: payment_received or subscription_activated
+
+title/body: “Payment received” / “Subscription activated”
+
+meta: include amount, currency, stripe ids
+
+devTest flag false for real payments
+
+After creating the notification record, send push to:
+
+the Owner’s saved iOS device tokens (all of them)
+
+Push payload:
+
+title: “EcoLogic”
+
+body: “Payment received. Your subscription is active.”
+
+include data: { notificationId, companyId, route: '/settings/billing' }
+
+Add logs (important):
+
+[stripe] payment_succeeded companyId=... ownerUserId=...
+
+[notify] created inapp notificationId=...
+
+[push] send ownerUserId=... tokens=3 ok=2 fail=1
+
+Log only tokenSuffix and APNs error codes (no secrets)
+
+Step 3 — Add “Send test push to me” button (for iPhone validation)
+Backend
+
+Add POST /api/dev/push/test
+
+DEV only, auth required
+
+sends a push to current user’s tokens
+
+returns detailed results per token (ok/fail + error)
+
+Frontend
+
+Add button in Settings → Notifications (DEV only):
+
+“Send test push”
+
+Shows result toast + details (tokens ok/fail)
+
+Step 4 — APNs environment sanity checks
+
+Ensure APNs client uses correct:
+
+keyId, teamId, bundleId/topic
+
+environment selection:
+
+dev builds typically use sandbox
+
+production App Store builds use production
+
+Add startup log:
+
+[apns] env=sandbox topic=com.... keyId=... teamId=...
+
+If we’re using a single APNs endpoint that auto-selects, confirm it.
+
+Acceptance tests (must pass)
+
+A) On iPhone (native build), tap “Send test push” → notification appears.
+B) Make a real test payment:
+
+webhook logs show payment_succeeded → owner resolved
+
+in-app notification appears
+
+push appears on iPhone
+C) If no tokens exist, logs clearly say “0 tokens registered” (no silent failure).
+
+Deliver changes with clean code and no bypass hacks.

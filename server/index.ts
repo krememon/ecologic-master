@@ -9,7 +9,7 @@ import Stripe from "stripe";
 import { db } from "./db";
 import { invoices, payments, customers, companies, jobs, notifications, bankRefunds, refunds } from "../shared/schema";
 import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
-import { notifyManagers } from "./notificationService";
+import { notifyManagers, notifyOwners } from "./notificationService";
 import { startJobScheduler } from "./jobScheduler";
 
 const app = express();
@@ -518,6 +518,28 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       }
 
       console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid`);
+
+      const targetCompanyIdForNotif = companyId ? parseInt(companyId) : existingInvoice.companyId;
+      const amountDollars = (amountCents / 100).toFixed(2);
+      try {
+        console.log(`[stripe] payment_succeeded companyId=${targetCompanyIdForNotif} invoiceId=${invoiceId} amount=$${amountDollars}`);
+        await notifyOwners(targetCompanyIdForNotif, {
+          type: 'invoice_paid',
+          title: 'Payment Received',
+          body: `Invoice paid – $${amountDollars}`,
+          entityType: 'invoice',
+          entityId: parseInt(invoiceId),
+          linkUrl: `/invoicing/${invoiceId}`,
+          meta: {
+            invoiceId,
+            amountCents: String(amountCents),
+            stripeSessionId: session.id,
+            stripePaymentIntentId: session.payment_intent as string,
+          },
+        });
+      } catch (notifErr) {
+        console.error('[stripe] notification error:', notifErr);
+      }
 
       // Fire-and-forget: Sync payment to QuickBooks
       if (paymentId) {

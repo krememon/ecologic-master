@@ -7,7 +7,7 @@ import { setupAuth, isAuthenticated, getSessionMiddleware } from "./replitAuth";
 import passport from "passport";
 import { notifyUsers, notifyJobCrew, notifyManagers, notifyOwners, notifyOfficeStaff, notifyJobCrewAndManagers, notifyTechniciansOnly, notifyJobCrewAndOffice, createPaymentNotifications } from "./notificationService";
 import { sendPushToUser } from "./pushService";
-import { sendApnsPush } from "./apns";
+import { sendApnsPush, sendApnsPushToTokens } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
@@ -14438,7 +14438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deviceId,
         isActive: true,
       });
-      console.log("[push] Registered token for user:", userId, "device:", deviceId, "platform:", platform);
+      console.log(`[push] registered token userId=${userId} platform=${platform} tokenSuffix=...${token.slice(-8)}`);
       res.json({ ok: true, id: pushToken.id });
     } catch (error: any) {
       console.error("[push] Register error:", error);
@@ -14470,18 +14470,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (tokens.length === 0) {
         return res.json({ ok: false, message: "No push tokens registered for this user. Tap 'Enable Notifications' first.", sent: 0, failed: 0, failures: [] });
       }
-      const latestToken = tokens[0].token;
-      const result = await sendApnsPush({
-        token: latestToken,
+      const allTokenStrs = tokens.map(t => t.token);
+      const result = await sendApnsPushToTokens(allTokenStrs, {
         title: "EcoLogic",
         body: "Remote push works ✅",
+        sound: "default",
         data: { type: "test", linkUrl: "/" },
       });
       console.log("[push] Test push result:", JSON.stringify(result));
-      res.json({ ok: result.sent > 0, ...result });
+      res.json({
+        ok: result.sent > 0,
+        tokensCount: tokens.length,
+        ...result,
+        tokenSuffixes: tokens.map(t => '...' + t.token.slice(-8)),
+      });
     } catch (error: any) {
       console.error("[push] Test push error:", error);
       res.status(500).json({ ok: false, message: "Failed to send test push", error: error.message });
+    }
+  });
+
+  app.get('/api/push/tokens/me', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const tokens = await storage.getUserPushTokens(userId);
+      res.json({
+        userId,
+        count: tokens.length,
+        tokens: tokens.map(t => ({
+          id: t.id,
+          platform: t.platform,
+          tokenSuffix: '...' + t.token.slice(-8),
+          deviceId: t.deviceId,
+          isActive: t.isActive,
+          lastSeenAt: t.lastSeenAt,
+          createdAt: t.createdAt,
+        })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch tokens" });
+    }
+  });
+
+  app.get('/api/push/tokens/company', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member || member.role.toUpperCase() !== 'OWNER') {
+        return res.status(403).json({ message: "Owner only" });
+      }
+      const members = await storage.getCompanyMembers(member.companyId);
+      const result = [];
+      for (const m of members) {
+        const tokens = await storage.getUserPushTokens(m.userId);
+        result.push({
+          userId: m.userId,
+          role: m.role,
+          tokenCount: tokens.length,
+          platforms: tokens.map(t => t.platform),
+          active: tokens.filter(t => t.isActive).length,
+        });
+      }
+      res.json({ companyId: member.companyId, members: result });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to fetch company tokens" });
     }
   });
 

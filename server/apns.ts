@@ -57,6 +57,8 @@ let keyError = "";
 
     fs.writeFileSync(KEY_PATH, cleaned, { encoding: "utf8" });
     console.log(`[apns] usingKeyPath=${KEY_PATH}`);
+    const apnsEnv = process.env.NODE_ENV === "production" ? "production" : "sandbox";
+    console.log(`[apns] env=${apnsEnv} topic=${TOPIC} keyId=${KEY_ID} teamId=${TEAM_ID}`);
   }
 }
 
