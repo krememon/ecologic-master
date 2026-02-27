@@ -396,6 +396,11 @@ html.native-ios .appSheetContent {
   top: var(--native-safe-top, 56px) !important;
 }
 
+/* iOS native wrapper: push DM thread header below status bar / Dynamic Island */
+html.native-ios .dmThreadHeader {
+  padding-top: calc(var(--native-safe-top, 56px) + 8px) !important;
+}
+
 /* Temporary debug badge: confirms native build (remove after verifying safe area fix) */
 html[data-native="1"]::after {
   content: "NATIVE BUILD";

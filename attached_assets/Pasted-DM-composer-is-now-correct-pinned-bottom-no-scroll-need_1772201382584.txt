@@ -1,0 +1,86 @@
+DM composer is now correct (pinned bottom, no scroll needed). Remaining issue: on native iOS build, the DM header is too high and is being blocked by the Dynamic Island / status bar.
+
+We previously fixed Notifications screen safe-area issues; we need to apply the same approach here, but only for the DM thread header (do not globally shift all pages).
+
+Goal
+
+DM thread header (back arrow + avatar + name/role) must always render below the iOS status bar / Dynamic Island.
+
+Must work in Capacitor iOS (native build).
+
+Must not affect desktop web.
+
+Must not re-break other pages.
+
+Implementation plan
+1) Create a reusable “safe-area top” utility
+
+We need a CSS class (Tailwind or plain CSS) that applies top padding using iOS safe area:
+
+padding-top: env(safe-area-inset-top);
+
+Also include a small baseline padding (like 8–12px) so it looks right on devices with and without a notch:
+
+padding-top: calc(env(safe-area-inset-top) + 8px);
+
+Add this to a global CSS file (or Tailwind config via arbitrary values).
+
+Example (plain CSS):
+
+.ios-safe-top {
+  padding-top: calc(env(safe-area-inset-top) + 8px);
+}
+2) Apply it to the DM thread header container
+
+In the DM thread page component:
+
+Find the header wrapper (the top row with back button + avatar + name)
+
+Add:
+
+className="ios-safe-top" only when running in iOS native
+
+keep existing header spacing/padding intact (don’t double pad)
+
+We already have a helper in the codebase for detecting iOS + Capacitor (we used this elsewhere). Reuse it:
+
+isNativeIOS() or similar
+
+If none exists, implement a small helper:
+
+checks window.Capacitor?.isNativePlatform() AND Capacitor.getPlatform() === 'ios'
+
+3) DO NOT shift the whole page — shift header only
+
+Do NOT add safe-area padding to the entire DM screen because we already fixed the composer and internal scroll.
+Only the header should move down.
+
+4) Confirm status bar overlay behavior
+
+Since the header is being blocked, confirm we still have:
+
+StatusBar.setOverlaysWebView({ overlay: false }) for iOS
+But even with that, some pages may still need safe-area padding.
+Do not remove or change status bar config right now; just fix DM header layout.
+
+5) Acceptance tests
+
+Open DM thread on iPhone with Dynamic Island:
+
+✅ back button + name fully visible (no overlap)
+
+Scroll messages:
+
+✅ header stays correct
+
+Other screens:
+
+✅ unaffected
+
+6) Deliverables
+
+Add .ios-safe-top class (or Tailwind equivalent)
+
+Apply it to DM thread header wrapper only for native iOS
+
+No extra debug logs or layout regressions

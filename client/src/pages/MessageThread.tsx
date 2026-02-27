@@ -584,8 +584,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
       className="fixed inset-0 flex flex-col bg-background overflow-hidden z-40"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      {/* Header - fixed height */}
-      <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card">
+      {/* Header - fixed height, with iOS safe area top padding */}
+      <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card dmThreadHeader">
         <Button
           variant="ghost"
           size="icon"
