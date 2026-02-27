@@ -14490,6 +14490,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/dev/scheduler/job_starting_soon/run', isAuthenticated, async (req: any, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
+    try {
+      const { checkUpcomingJobs } = await import("./jobScheduler");
+      const stats = await checkUpcomingJobs();
+      res.json({ ok: true, ...stats });
+    } catch (error: any) {
+      console.error("[dev] scheduler run error:", error);
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
   app.get('/api/push/tokens/me', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);

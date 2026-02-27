@@ -1,0 +1,143 @@
+We need to finish push notification testing by implementing Job Starting Soon.
+
+Requirement
+
+30 minutes before a job’s scheduled start time, send a push notification to the assigned crew members.
+
+Notification text:
+
+Title: EcoLogic
+
+Body: Job starting in 30 minutes
+
+Only to users who are assigned to that job (technicians + any assigned crew members).
+
+Must create an in-app notification too (same event).
+
+Must NOT send duplicates if the scheduler runs every 5 minutes.
+
+Must respect RBAC/visibility rules (Technicians only for assigned jobs; office users can still receive if assigned or if rules allow, but this event is for assigned crew primarily).
+
+We already have the JobScheduler log: job_starting_soon scheduler (every 5 min). Hook this up properly.
+
+Backend Implementation
+1) Define the notification type
+
+Add notification type: job_starting_soon (if not already present).
+Payload/meta should include:
+
+jobId
+
+scheduledStartAt
+
+optional minutes=30
+
+Deep link route should open the job details/modal (whatever our app uses), e.g.:
+
+/jobs?open=<jobId> or job:<jobId> depending on existing notification routing
+
+2) Scheduler logic (runs every 5 minutes)
+
+In the scheduler task:
+
+Determine “now” in UTC (consistent with stored job times)
+
+Find jobs that:
+
+have a scheduledStartAt in the future
+
+start time is within a window that catches the 30-minute mark despite 5-min cadence:
+
+window: scheduledStartAt is between now + 30min and now + 35min
+
+are not canceled/completed
+
+have assigned crew members
+
+3) Prevent duplicates (CRITICAL)
+
+Implement idempotency so the same job doesn’t notify the same user twice.
+
+Options (pick best for our codebase):
+
+Add a DB table notification_dedup with unique key: (userId, type, jobId, fireAtBucket)
+
+OR store on notifications table a unique dedupeKey:
+
+dedupeKey = "job_starting_soon:<jobId>:<scheduledStartAtISO>:30"
+
+Add a unique constraint on dedupeKey per user/company if needed
+
+On each run:
+
+before creating notification, check if dedupeKey already exists → skip
+
+4) Fan-out to assigned crew
+
+From job assignment data (we already have crew assignment feature):
+
+Get assigned userIds for the job
+
+For each user:
+
+create in-app notification record
+
+attempt push to all saved device tokens
+
+if no device tokens → still create in-app
+
+5) Push send
+
+Use the existing push sending path used by “job assigned” and “new message”.
+Payload:
+
+title EcoLogic
+
+body Job starting in 30 minutes
+
+data includes type, jobId, and route/deep link so tapping takes you to the job.
+
+6) Logging (DEV only, concise)
+
+Add one line per run:
+
+[job_starting_soon] scanned=__ eligibleJobs=__ notificationsCreated=__ pushesSent=__ skippedDuplicates=__
+And per job (DEV only):
+
+jobId, startAt, recipients count
+
+Remove noisy logs after.
+
+Frontend
+7) Ensure tapping the push opens the right screen
+
+If our push handler already routes based on data.route or data.jobId, confirm it works.
+If not:
+
+implement handling for type=job_starting_soon to open the job details modal for that job.
+
+Acceptance tests
+
+Create a job scheduled for ~31–34 minutes from now, assign a technician, ensure they have a registered push token.
+
+Wait for scheduler tick (or add a DEV endpoint to manually run the scheduler once):
+
+POST /api/dev/scheduler/job_starting_soon/run (DEV only, Owner/Admin)
+
+Verify:
+
+assigned tech receives push: “Job starting in 30 minutes”
+
+in-app notification created
+
+rerun scheduler → no duplicate push/notification
+
+Deliverables
+
+Working scheduler-based 30-min “job starting soon” in-app + push
+
+Idempotent dedupe (no duplicates across ticks)
+
+Correct recipient targeting (assigned crew only)
+
+Deep link opens job details

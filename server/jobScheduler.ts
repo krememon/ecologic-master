@@ -8,26 +8,29 @@ const NOTIFY_WINDOW_MS = 30 * 60 * 1000;
 
 const notifiedJobIds = new Set<number>();
 
-async function checkUpcomingJobs(): Promise<void> {
+export async function checkUpcomingJobs(): Promise<{ scanned: number; eligible: number; notified: number; skipped: number }> {
+  const stats = { scanned: 0, eligible: 0, notified: 0, skipped: 0 };
+
   try {
     const now = new Date();
-    const windowEnd = new Date(now.getTime() + NOTIFY_WINDOW_MS);
+    const windowStart = new Date(now.getTime() + 30 * 60 * 1000);
+    const windowEnd = new Date(now.getTime() + 35 * 60 * 1000);
 
-    const nowDate = now.toISOString().slice(0, 10);
-    const windowDate = windowEnd.toISOString().slice(0, 10);
-    const nowTime = now.toTimeString().slice(0, 5);
-    const windowTime = windowEnd.toTimeString().slice(0, 5);
+    const wsDate = windowStart.toISOString().slice(0, 10);
+    const weDate = windowEnd.toISOString().slice(0, 10);
+    const wsTime = windowStart.toTimeString().slice(0, 5);
+    const weTime = windowEnd.toTimeString().slice(0, 5);
 
     let query: string;
-    if (nowDate === windowDate) {
+    if (wsDate === weDate) {
       query = `
         SELECT id, title, start_date, scheduled_time, company_id
         FROM jobs
         WHERE status IN ('active', 'pending')
-          AND start_date = '${nowDate}'
+          AND start_date = '${wsDate}'
           AND scheduled_time IS NOT NULL
-          AND scheduled_time >= '${nowTime}'
-          AND scheduled_time <= '${windowTime}'
+          AND scheduled_time >= '${wsTime}'
+          AND scheduled_time <= '${weTime}'
       `;
     } else {
       query = `
@@ -36,40 +39,43 @@ async function checkUpcomingJobs(): Promise<void> {
         WHERE status IN ('active', 'pending')
           AND scheduled_time IS NOT NULL
           AND (
-            (start_date = '${nowDate}' AND scheduled_time >= '${nowTime}')
+            (start_date = '${wsDate}' AND scheduled_time >= '${wsTime}')
             OR
-            (start_date = '${windowDate}' AND scheduled_time <= '${windowTime}')
+            (start_date = '${weDate}' AND scheduled_time <= '${weTime}')
           )
       `;
     }
 
     const result = await db.execute(sql.raw(query));
+    stats.scanned = (result.rows as any[]).length;
 
     for (const row of result.rows as any[]) {
-      if (notifiedJobIds.has(row.id)) continue;
+      if (notifiedJobIds.has(row.id)) {
+        stats.skipped++;
+        continue;
+      }
 
-      const jobDateTime = new Date(`${row.start_date}T${row.scheduled_time}:00`);
-      const minutesUntil = Math.round((jobDateTime.getTime() - now.getTime()) / 60000);
-
-      if (minutesUntil < 0 || minutesUntil > 35) continue;
-
+      stats.eligible++;
       notifiedJobIds.add(row.id);
 
       const jobLabel = row.title || `Job #${row.id}`;
-      const timeStr = row.scheduled_time;
 
       try {
         await notifyJobCrew(row.id, row.company_id, {
           type: "job_starting_soon",
-          title: "Job Starting Soon",
-          body: `${jobLabel} starts at ${timeStr} (in ~${minutesUntil} min)`,
+          title: "EcoLogic",
+          body: "Job starting in 30 minutes",
           entityType: "job",
           entityId: row.id,
           linkUrl: `/jobs/${row.id}`,
+          meta: { jobTitle: jobLabel, scheduledTime: row.scheduled_time },
         });
-        console.log(`[JobScheduler] Sent job_starting_soon for job ${row.id} (${jobLabel}) in ${minutesUntil}m`);
+        stats.notified++;
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[job_starting_soon] job=${row.id} "${jobLabel}" startAt=${row.start_date}T${row.scheduled_time}`);
+        }
       } catch (err) {
-        console.error(`[JobScheduler] Failed to notify for job ${row.id}:`, err);
+        console.error(`[job_starting_soon] Failed for job ${row.id}:`, err);
       }
     }
 
@@ -80,8 +86,11 @@ async function checkUpcomingJobs(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error("[JobScheduler] Error checking upcoming jobs:", err);
+    console.error("[job_starting_soon] Error:", err);
   }
+
+  console.log(`[job_starting_soon] scanned=${stats.scanned} eligible=${stats.eligible} notified=${stats.notified} skipped=${stats.skipped}`);
+  return stats;
 }
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
