@@ -11,7 +11,6 @@ export default function StripeReturn() {
     const sessionId = urlParams.get("session_id");
 
     if (!invoiceId) {
-      console.log("[StripeReturn] No invoiceId, redirecting to /jobs");
       setLocation("/jobs", { replace: true });
       return;
     }
@@ -44,7 +43,12 @@ export default function StripeReturn() {
           animation: 'spin 1s linear infinite',
           margin: '0 auto 16px'
         }} />
-        <p style={{ color: '#6b7280', fontSize: '16px' }}>Redirecting...</p>
+        <p style={{ color: '#1f2937', fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+          Returning to EcoLogic...
+        </p>
+        <p style={{ color: '#6b7280', fontSize: '14px' }}>
+          Tap "Done" if this window doesn't close automatically.
+        </p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>

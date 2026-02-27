@@ -180,11 +180,13 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         await openInAppBrowser(data.url, () => {
           setIsLoading(false);
           invalidateAll();
+          queryClient.invalidateQueries({ queryKey: ['/api/subscriptions/status'] });
         });
       } else if (data.url) {
         await openInAppBrowser(data.url, () => {
           setIsLoading(false);
           invalidateAll();
+          queryClient.invalidateQueries({ queryKey: ['/api/subscriptions/status'] });
         });
       } else {
         throw new Error("No checkout URL received");

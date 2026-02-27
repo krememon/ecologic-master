@@ -1,0 +1,120 @@
+COPY/PASTE REPLIT AGENT PROMPT (Stripe in-app browser: auto-close and return to app after success/cancel; no “stuck in internal browser”)
+
+Issue: We moved Stripe Checkout to an in-app browser (Capacitor). Purchase works, but after payment completes, user can tap “Back to Jobs” and it stays inside the in-app browser instead of returning to the app automatically.
+
+Goal
+
+On native iOS:
+
+After success, user should be automatically routed back to the app (close in-app browser).
+
+After cancel, also return to the app (close in-app browser).
+
+The app should then refresh subscription status and navigate to the correct screen (Jobs or wherever we want).
+
+Root cause
+
+Stripe’s success_url / cancel_url currently point to a normal web URL (inside the in-app browser), so Stripe redirects there and the in-app browser stays open. We need a return URL that the app can intercept and then close the browser.
+
+Fix Plan (Best Practice)
+1) Set Stripe success_url and cancel_url to an in-app return route we control
+
+In backend where we create the Stripe Checkout Session, set:
+
+success_url = ${APP_URL}/stripe/return?result=success&session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = ${APP_URL}/stripe/return?result=cancel
+
+(Use your existing domain/APP_URL.)
+
+This route must be a lightweight page in our app frontend that:
+
+Detects it’s running in native (Capacitor)
+
+Notifies the app of the result
+
+Closes the in-app browser immediately
+
+2) Implement /stripe/return route in the frontend
+
+Create a small page/component at /stripe/return that:
+
+Reads query params result + session_id
+
+If native:
+
+import { Browser } from '@capacitor/browser'
+
+await Browser.close()
+
+Then redirect the app to the correct screen:
+
+/jobs on success
+
+/billing or previous screen on cancel
+
+If web:
+
+Redirect normally (e.g., /jobs on success, /billing on cancel)
+
+Important:
+
+Show a minimal “Returning to EcoLogic…” UI (so there’s no blank screen) but it should close instantly on native.
+
+3) Refresh subscription state after closing browser
+
+After Browser closes, in the app:
+
+call existing GET /api/subscriptions/status
+
+update auth/subscription store
+
+remove paywall gating immediately
+
+Where to put this:
+
+In the /stripe/return route right before/after closing (best), OR
+
+In a global listener that runs when Browser closes.
+
+4) Add a Browser “finished” fallback (safety)
+
+In the place we open checkout:
+
+add a listener for browser close / finished (if available in your Capacitor version)
+
+when closed, refresh subscription status anyway
+
+This covers cases where the user manually closes the browser.
+
+5) Ensure “Back to Jobs” inside Stripe doesn’t keep them stuck
+
+Since success_url now loads /stripe/return, we will close the browser from there, so the user can’t remain inside the in-app browser after success.
+
+Acceptance tests (native iOS)
+
+Start checkout → complete payment → press “Back to …”
+
+✅ browser closes automatically
+
+✅ app opens Jobs (or desired screen)
+
+✅ subscription status becomes active and paywall disappears
+
+Cancel checkout:
+
+✅ browser closes and app returns (no stuck browser)
+
+Manually close the in-app browser mid-checkout:
+
+✅ app remains usable, subscription status refresh runs
+
+Deliverables
+
+Backend: success_url/cancel_url updated to /stripe/return
+
+Frontend: /stripe/return route closes Capacitor Browser and navigates back into app
+
+Subscription status refresh after return
+
+Safety fallback on browser close
