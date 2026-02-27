@@ -1,0 +1,92 @@
+We now get this error on iOS native:
+
+"Clipboard" plugin is not implemented on ios
+
+This means the JS code is calling the Capacitor Clipboard plugin, but the iOS native wrapper doesn’t include the plugin.
+
+Goal
+
+Make Capacitor Clipboard work in the iOS native build.
+
+Ensure copy works without keyboard focus.
+
+Step 1 — Verify dependencies
+
+Confirm @capacitor/clipboard is installed in package.json.
+If not:
+
+npm i @capacitor/clipboard
+
+Confirm Capacitor core packages exist and versions are consistent:
+
+@capacitor/core
+
+@capacitor/ios
+
+@capacitor/cli
+If versions mismatch, align them.
+
+Step 2 — Sync plugin to iOS native project
+
+Run:
+
+npx cap sync ios
+
+If there are errors, fix them. This step is required for the iOS project to include new plugins.
+
+Step 3 — Ensure the iOS project is rebuilt
+
+After syncing:
+
+npx cap open ios
+Then in Xcode:
+
+Clean build folder (Product → Clean Build Folder)
+
+Build/Run again on simulator/device
+
+If we are using a CI or prebuilt iOS wrapper, ensure it’s regenerated with the new plugin.
+
+Step 4 — Confirm plugin is actually registered
+
+In iOS project:
+
+Check ios/App/Podfile and Podfile.lock updated
+
+Run pod install if needed (cap sync normally handles this)
+
+Ensure CAPBridge loads plugins automatically (normal Capacitor behavior)
+
+Add a one-time debug check in JS (DEV only):
+
+console.log('Capacitor platform:', Capacitor.getPlatform(), 'isNative:', Capacitor.isNativePlatform());
+
+Call Clipboard.write and catch error, log it.
+
+Remove debug logs after.
+
+Step 5 — Provide a temporary fallback (while rebuilding)
+
+Until iOS is rebuilt, keep functionality usable:
+
+If Clipboard plugin throws “not implemented”:
+
+fallback to Share plugin (native share sheet) OR show a modal with:
+
+the company code in a selectable box
+
+instructions: “Tap and hold to copy”
+
+But the real fix is rebuilding iOS with the plugin.
+
+Acceptance tests
+
+After rebuilding iOS:
+
+Tap “Copy company code” → ✅ success
+
+Paste into Notes → ✅ correct
+
+No “Clipboard not implemented” error
+
+Deliver changes + ensure iOS wrapper sync/rebuild steps are documented in README or a short dev note.

@@ -53,7 +53,12 @@ export default function InviteTeamButton() {
           setIsDisabled(false);
         }, 2000);
       } else {
-        throw new Error(result.error || "Failed to copy to clipboard");
+        setIsDisabled(false);
+        toast({
+          title: "Couldn't copy automatically",
+          description: `Your code: ${inviteCode} — tap and hold to copy`,
+          duration: 8000,
+        });
       }
     } catch (error) {
       setIsDisabled(false);

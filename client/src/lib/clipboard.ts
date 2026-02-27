@@ -2,8 +2,9 @@ import { Capacitor } from "@capacitor/core";
 
 export interface CopyResult {
   ok: boolean;
-  method: "capacitor" | "navigator" | "textarea" | "none";
+  method: "capacitor" | "navigator" | "share" | "none";
   error?: string;
+  textToCopy?: string;
 }
 
 export async function copyText(text: string): Promise<boolean> {
@@ -23,24 +24,34 @@ export async function copyTextWithDetails(text: string): Promise<CopyResult> {
     try {
       const { Clipboard } = await import("@capacitor/clipboard");
       await Clipboard.write({ string: text });
-      if (isDev) console.log("[clipboard] success via capacitor");
+      if (isDev) console.log("[clipboard] success via capacitor plugin");
       return { ok: true, method: "capacitor" };
     } catch (err: any) {
       const errMsg = err?.message || String(err);
-      if (isDev) console.error("[clipboard] capacitor failed:", errMsg);
-
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-          if (isDev) console.log("[clipboard] native fallback to navigator.clipboard succeeded");
-          return { ok: true, method: "navigator" };
-        }
-      } catch (navErr: any) {
-        if (isDev) console.error("[clipboard] navigator fallback also failed:", navErr?.message);
-      }
-
-      return { ok: false, method: "none", error: errMsg };
+      if (isDev) console.error("[clipboard] capacitor plugin failed:", errMsg);
     }
+
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        if (isDev) console.log("[clipboard] success via navigator.clipboard on native");
+        return { ok: true, method: "navigator" };
+      }
+    } catch (err: any) {
+      if (isDev) console.error("[clipboard] navigator.clipboard failed on native:", err?.message);
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+        if (isDev) console.log("[clipboard] shared via native share sheet");
+        return { ok: true, method: "share" };
+      } catch (err: any) {
+        if (isDev) console.error("[clipboard] share failed:", err?.message);
+      }
+    }
+
+    return { ok: false, method: "none", error: "Clipboard plugin not available. Run: npx cap sync ios && rebuild in Xcode.", textToCopy: text };
   }
 
   if (navigator.clipboard && window.isSecureContext) {
@@ -66,9 +77,10 @@ export async function copyTextWithDetails(text: string): Promise<CopyResult> {
     const result = document.execCommand("copy");
     document.body.removeChild(textarea);
     if (isDev) console.log("[clipboard] textarea/execCommand result:", result);
-    return { ok: result, method: "textarea" };
+    if (result) return { ok: true, method: "navigator" };
   } catch (err: any) {
     if (isDev) console.error("[clipboard] textarea fallback failed:", err?.message);
-    return { ok: false, method: "none", error: err?.message };
   }
+
+  return { ok: false, method: "none", error: "All clipboard methods failed", textToCopy: text };
 }
