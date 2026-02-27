@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { openInAppBrowser } from "@/lib/capacitor";
 import { useCan } from "@/hooks/useCan";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
@@ -176,9 +177,15 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       
       if (data.url && data.sessionId) {
         localStorage.setItem("stripe_session", data.sessionId);
-        window.location.href = data.url;
+        await openInAppBrowser(data.url, () => {
+          setIsLoading(false);
+          invalidateAll();
+        });
       } else if (data.url) {
-        window.location.href = data.url;
+        await openInAppBrowser(data.url, () => {
+          setIsLoading(false);
+          invalidateAll();
+        });
       } else {
         throw new Error("No checkout URL received");
       }

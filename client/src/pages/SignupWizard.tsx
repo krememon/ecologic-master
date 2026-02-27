@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowLeft, Building2, Users, HelpCircle, Check } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { openInAppBrowser } from "@/lib/capacitor";
 
 type WizardStep = 
   | "identity" 
@@ -379,7 +380,7 @@ export default function SignupWizard() {
       if (!res.ok) {
         const data = await res.json();
         if (data.checkoutUrl) {
-          window.location.href = data.checkoutUrl;
+          await openInAppBrowser(data.checkoutUrl);
           return;
         }
         throw new Error(data.message || "Failed to start trial");

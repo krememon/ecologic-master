@@ -290,3 +290,23 @@ export async function closeSystemBrowser(): Promise<void> {
     console.error("[capacitor] Browser.close failed:", err);
   }
 }
+
+export async function openInAppBrowser(url: string, onClose?: () => void): Promise<void> {
+  if (!isNativePlatform()) {
+    window.location.href = url;
+    return;
+  }
+  try {
+    const { Browser } = await import("@capacitor/browser");
+    if (onClose) {
+      const listener = await Browser.addListener("browserFinished", () => {
+        listener.remove();
+        onClose();
+      });
+    }
+    await Browser.open({ url, presentationStyle: "fullscreen" });
+  } catch (err) {
+    console.error("[capacitor] Browser.open failed, falling back:", err);
+    window.location.href = url;
+  }
+}

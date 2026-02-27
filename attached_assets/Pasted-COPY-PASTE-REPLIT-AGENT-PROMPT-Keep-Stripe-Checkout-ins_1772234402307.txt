@@ -1,0 +1,123 @@
+COPY/PASTE REPLIT AGENT PROMPT (Keep Stripe Checkout inside the app: open checkout URL in in-app browser / Capacitor Browser or in-app WebView; prevent external Safari redirect)
+
+Bug: When I choose Card as a payment method, it forwards me to an external Stripe Checkout page (Safari/outside the app). We need Stripe checkout to stay internal to the app.
+
+Goal
+
+On native iOS build (Capacitor), opening Stripe Checkout should:
+
+open in an in-app browser (NOT Safari), or
+
+open inside a dedicated in-app WebView screen that we control
+
+User completes checkout and returns to app cleanly
+
+Desktop web behavior can remain as-is (new tab ok), but don’t break it
+
+Step 1 — Find where checkout is launched
+
+Locate the code path when “Card” is selected and we create/open Stripe Checkout:
+
+where we receive checkoutUrl from backend
+
+where we call window.location.href = checkoutUrl or window.open(checkoutUrl, ...)
+
+Search for:
+
+checkoutUrl
+
+stripe checkout
+
+/api/stripe/checkout
+
+createCheckoutSession
+
+window.open
+
+location.href
+
+Step 2 — For native: open checkout using Capacitor Browser
+
+Preferred approach (fast + reliable):
+
+Install:
+
+npm i @capacitor/browser
+
+Sync:
+
+npx cap sync ios
+
+In the client, when opening checkoutUrl:
+
+If Capacitor.isNativePlatform():
+
+import { Browser } from '@capacitor/browser'
+
+await Browser.open({ url: checkoutUrl, presentationStyle: 'fullscreen' })
+
+Else (web):
+
+keep existing behavior (window.location.href or window.open)
+
+This keeps it inside the app and feels native.
+
+Step 3 — Handle return/back to app (success/cancel)
+
+Stripe Checkout should be configured with:
+
+success_url and cancel_url
+
+For native builds, ensure these URLs are app-handled:
+
+Either:
+
+a deep link scheme (e.g. ecologic://billing/success?...)
+
+OR a universal link to our domain that the app intercepts
+
+OR (simpler) a web URL route in our app (/billing/stripe-return?status=success) that closes the in-app browser
+
+Implementation detail:
+
+Listen for Browser finished event:
+
+when Browser closes, call /api/subscriptions/status and refresh UI
+
+Also ensure our return page shows “Payment complete, returning…” and triggers a refresh + redirect back into the app.
+
+If we already have success/cancel routes, reuse them.
+
+Step 4 — Prevent external redirects everywhere
+
+Make sure no other code path uses:
+
+target="_blank" on native
+
+window.open(url, '_system') (Cordova style)
+
+location.assign(url) on native
+
+All checkout openings on native must go through Capacitor Browser.
+
+Acceptance tests
+
+Native iOS:
+
+Tap Card → ✅ opens Stripe checkout inside app
+
+Complete payment → ✅ returns to app, subscription status becomes active
+
+Cancel → ✅ returns to app, no external Safari
+
+Web:
+
+still works normally
+
+Deliverables
+
+Use @capacitor/browser for checkout URL on native
+
+Ensure return handling refreshes subscription status + navigates correctly
+
+No regressions to web checkout
