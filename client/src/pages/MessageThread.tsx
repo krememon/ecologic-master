@@ -581,7 +581,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Show header and composer immediately, even while loading
   return (
     <div 
-      className="flex flex-col bg-background overflow-hidden h-full"
+      className="fixed inset-0 flex flex-col bg-background overflow-hidden z-40"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* Header - fixed height */}
       <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card">
@@ -700,8 +701,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         )}
       </div>
 
-      {/* Composer - pinned at bottom with iOS safe area */}
-      <div className="flex-shrink-0 px-3 py-2 border-t border-border bg-card safe-area-bottom">
+      {/* Composer - pinned at bottom */}
+      <div className="flex-shrink-0 px-3 py-2 border-t border-border bg-card">
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}

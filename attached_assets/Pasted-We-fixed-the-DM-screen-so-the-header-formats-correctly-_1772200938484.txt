@@ -1,0 +1,151 @@
+We fixed the DM screen so the header formats correctly on open, but now the message composer/input bar is out of frame (partially/mostly below the screen) in the native iOS build.
+
+We need the DM screen to behave like iMessage:
+
+Header pinned at top
+
+Messages scroll in the middle
+
+Composer pinned at bottom and ALWAYS visible
+
+Respect iOS safe area (home indicator)
+
+No whole-page scrolling; only messages area scrolls
+
+This must work in the “native build” wrapper.
+
+What’s likely happening
+
+The DM screen is inside a parent layout that has its own height/scroll rules, so 100vh / h-screen isn’t matching the real visible viewport in iOS.
+
+Or the composer is outside the internal flex column, so it gets pushed below.
+
+Or safe-area padding is missing and the composer is being clipped.
+
+We need a robust layout using 100dvh + safe-area inset + overflow-hidden at the page level.
+
+IMPLEMENTATION REQUIREMENTS
+1) Make DM Thread page a true full-viewport flex column (no outer scroll)
+
+In the DM thread route/page component (single conversation view), ensure the top-level wrapper is:
+
+height: 100dvh (and fallback min-height: 100vh)
+
+display: flex; flex-direction: column;
+
+overflow: hidden;
+
+Do not rely on global layout scrolling for this page.
+
+If there is a global container like <main className="flex-1 overflow-y-auto">,
+add a per-route override so that on the DM thread route:
+
+main becomes overflow-hidden
+
+and the thread page manages its own scroll internally
+
+(Implement a noScroll flag on the layout or a route-specific wrapper class.)
+
+2) Composer must be inside the flex column and pinned with safe-area padding
+
+Ensure composer lives INSIDE the DM page wrapper as the last child and has:
+
+flex: 0 0 auto
+
+padding-bottom: env(safe-area-inset-bottom) (plus normal padding)
+
+If there is an iOS bottom bar, add a few px extra
+
+Example Tailwind-style:
+
+wrapper: h-[100dvh] min-h-screen flex flex-col overflow-hidden
+
+composer: shrink-0 border-t bg-white px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+12px)]
+
+Do NOT use position: fixed unless absolutely necessary—prefer flex layout first.
+
+3) Messages area is the ONLY scroll container
+
+The messages list container must be:
+
+flex: 1 1 auto
+
+overflow-y: auto
+
+min-height: 0 (IMPORTANT in flex layouts so overflow works properly)
+
+-webkit-overflow-scrolling: touch
+
+If min-height: 0 is missing, iOS Safari/WebView often pushes the bottom element off-screen.
+
+4) Ensure input is not clipped by any parent padding/margins
+
+Search the DM page and parent containers for:
+
+pb-* huge padding
+
+bottom-* transforms
+
+absolute positioned composer
+
+h-screen used in nested components
+
+extra wrappers that add overflow-hidden incorrectly
+
+We want:
+
+outer: overflow hidden
+
+middle: overflow auto
+
+bottom: visible
+
+5) Keyboard behavior (keep fixed)
+
+Do not re-introduce autofocus.
+When keyboard opens, composer should remain visible.
+If needed:
+
+Ensure we’re not using 100vh (use 100dvh) to handle the dynamic viewport when keyboard appears.
+
+6) Add a temporary visual debug (remove after)
+
+While adjusting, add a dev-only outline:
+
+messages container outline
+
+composer outline
+so we can confirm what’s off-screen.
+Remove before finishing.
+
+Acceptance Tests
+
+Open DM thread in native iOS build:
+
+✅ header looks correct immediately
+
+✅ composer is fully visible at bottom (not cut off)
+
+✅ no whole-page scrolling
+
+Scroll:
+
+✅ only messages area scrolls
+
+Keyboard:
+
+✅ tapping input opens keyboard and composer stays visible
+
+✅ no layout jump that hides send button
+
+Short convo:
+
+✅ composer still pinned bottom, content doesn’t float weird
+
+Deliverables
+
+DM thread layout fixed with 100dvh + min-height:0 + safe-area padding
+
+Global layout override so DM page doesn’t inherit whole-page scroll
+
+Clean code, no duplicate wrappers, remove temp outlines/logs
