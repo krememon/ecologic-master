@@ -3843,27 +3843,35 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
+  async getNotifications(userId: string, limit: number = 50, allowedTypes?: string[]): Promise<Notification[]> {
+    const conditions = [eq(notifications.recipientUserId, userId)];
+    if (allowedTypes && allowedTypes.length > 0) {
+      conditions.push(sql`${notifications.type} IN (${sql.join(allowedTypes.map(t => sql`${t}`), sql`, `)})`);
+    } else {
+      conditions.push(ne(notifications.type, 'document_uploaded'));
+    }
     return db
       .select()
       .from(notifications)
-      .where(and(
-        eq(notifications.recipientUserId, userId),
-        ne(notifications.type, 'document_uploaded')
-      ))
+      .where(and(...conditions))
       .orderBy(desc(notifications.createdAt))
       .limit(limit);
   }
 
-  async getUnreadNotificationCount(userId: string): Promise<number> {
+  async getUnreadNotificationCount(userId: string, allowedTypes?: string[]): Promise<number> {
+    const conditions = [
+      eq(notifications.recipientUserId, userId),
+      sql`${notifications.readAt} IS NULL`,
+    ];
+    if (allowedTypes && allowedTypes.length > 0) {
+      conditions.push(sql`${notifications.type} IN (${sql.join(allowedTypes.map(t => sql`${t}`), sql`, `)})`);
+    } else {
+      conditions.push(ne(notifications.type, 'document_uploaded'));
+    }
     const result = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(notifications)
-      .where(and(
-        eq(notifications.recipientUserId, userId),
-        sql`${notifications.readAt} IS NULL`,
-        ne(notifications.type, 'document_uploaded')
-      ));
+      .where(and(...conditions));
     return result[0]?.count || 0;
   }
 

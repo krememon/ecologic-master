@@ -73,12 +73,22 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   const { can, canAny, role } = useCan();
   
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
-    queryKey: ['/api/notifications/unread-count'],
+    queryKey: ['/api/notifications/unread-count', { view: 'home' }],
+    queryFn: async () => {
+      const res = await fetch('/api/notifications/unread-count?view=home', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch unread count');
+      return res.json();
+    },
     refetchInterval: 30000,
   });
 
   const { data: notifications = [], isLoading: notificationsLoading } = useQuery<Notification[]>({
-    queryKey: ['/api/notifications'],
+    queryKey: ['/api/notifications', { view: 'home' }],
+    queryFn: async () => {
+      const res = await fetch('/api/notifications?view=home', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch notifications');
+      return res.json();
+    },
     enabled: notificationsOpen,
   });
 
@@ -109,8 +119,8 @@ export default function MobileNav({ user, company }: MobileNavProps) {
     },
     onSuccess: () => {
       setClearError(null);
-      queryClient.setQueryData(['/api/notifications'], []);
-      queryClient.setQueryData(['/api/notifications/unread-count'], { unreadCount: 0 });
+      queryClient.setQueryData(['/api/notifications', { view: 'home' }], []);
+      queryClient.setQueryData(['/api/notifications/unread-count', { view: 'home' }], { unreadCount: 0 });
     },
     onError: () => {
       setClearError('Failed to clear notifications');

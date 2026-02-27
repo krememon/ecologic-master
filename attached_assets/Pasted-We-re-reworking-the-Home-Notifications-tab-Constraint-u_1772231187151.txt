@@ -1,0 +1,114 @@
+We’re reworking the Home → Notifications tab. Constraint update: Announcements must still show in the Notifications tab.
+
+Goal
+
+Notifications tab should display ONLY:
+
+Push-enabled notification types we implemented:
+
+job_assigned
+
+message_received
+
+job_starting_soon
+
+Announcements (whatever our existing “announcement” type/feed is)
+
+Everything else currently showing in Notifications must be removed from that tab.
+
+No UI redesign required right now—just correct what shows up.
+
+Step 1 — Single source of truth allowlist
+
+Create a shared config:
+
+shared/notifications/notificationAllowlist.ts
+
+Export:
+
+PUSH_ENABLED_TYPES = new Set(['job_assigned','message_received','job_starting_soon'])
+
+NOTIFICATIONS_TAB_ALLOWED_TYPES = new Set([...PUSH_ENABLED_TYPES, 'announcement'])
+
+If announcements are not a notification “type” but a separate feed:
+
+Still include them in the tab via the combined query below.
+
+Step 2 — Determine how Announcements are stored
+
+Investigate current implementation:
+
+Are announcements stored in the same notifications table with type='announcement'?
+
+Or is there a separate announcements table and the tab merges them client-side?
+
+Choose the correct strategy:
+
+A) Announcements are in the notifications table
+
+Filter server-side by NOTIFICATIONS_TAB_ALLOWED_TYPES.
+
+B) Announcements are separate
+
+Add an endpoint GET /api/notifications/feed?scope=home
+
+returns a unified list sorted by createdAt including:
+
+notification rows filtered to push-enabled types
+
+announcement rows mapped into the same shape (id, type='announcement', title, body, createdAt, route, etc.)
+
+Step 3 — Filter at API layer (preferred)
+
+Update the endpoint used by the Notifications tab:
+
+Add query param view=home
+
+When view=home, return:
+
+only type IN PUSH_ENABLED_TYPES
+
+plus announcements (either from same table or merged feed)
+
+Do NOT change other uses of /api/notifications elsewhere.
+
+Step 4 — Frontend changes
+
+Update the Notifications tab to use the filtered dataset:
+
+/api/notifications?view=home (or /api/notifications/feed?scope=home)
+Ensure:
+
+unread count and “mark read” still work for notifications
+
+announcements can be “read” only if that existed before; otherwise leave as non-read-tracked
+
+No visual changes beyond items disappearing.
+
+Acceptance tests
+
+Notifications tab shows:
+
+✅ Job assigned
+
+✅ New message
+
+✅ Job starting soon
+
+✅ Announcements
+
+Notifications tab does NOT show any other notification type
+
+Other places that rely on other notifications (if any) are unaffected
+
+Sorting by newest works across announcements + notifications
+
+Deliverables
+
+Shared allowlist config
+
+API filtering/combined feed for Home Notifications tab
+
+Frontend switched to the new filtered feed
+
+No UI redesign, just correct contents

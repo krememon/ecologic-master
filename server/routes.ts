@@ -14558,7 +14558,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-      const notifications = await storage.getNotifications(userId, limit);
+      const view = req.query.view as string | undefined;
+      let allowedTypes: string[] | undefined;
+      if (view === 'home') {
+        const { NOTIFICATIONS_TAB_ALLOWED_TYPES } = await import("@shared/notificationAllowlist");
+        allowedTypes = [...NOTIFICATIONS_TAB_ALLOWED_TYPES];
+      }
+      const notifications = await storage.getNotifications(userId, limit, allowedTypes);
       res.json(notifications);
     } catch (error: any) {
       console.error('Error fetching notifications:', error);
@@ -14570,7 +14576,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/notifications/unread-count', isAuthenticated, async (req: any, res) => {
     try {
       const userId = getUserId(req.user);
-      const count = await storage.getUnreadNotificationCount(userId);
+      const view = req.query.view as string | undefined;
+      let allowedTypes: string[] | undefined;
+      if (view === 'home') {
+        const { NOTIFICATIONS_TAB_ALLOWED_TYPES } = await import("@shared/notificationAllowlist");
+        allowedTypes = [...NOTIFICATIONS_TAB_ALLOWED_TYPES];
+      }
+      const count = await storage.getUnreadNotificationCount(userId, allowedTypes);
       res.json({ unreadCount: count });
     } catch (error: any) {
       console.error('Error fetching unread count:', error);
