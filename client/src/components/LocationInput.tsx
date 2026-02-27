@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { loadMapsOnce } from '@/lib/mapsLoader';
 import { Input } from '@/components/ui/input';
 
@@ -32,14 +31,14 @@ export default function LocationInput({
   placeholder?: string; disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const dropdownRef = useRef<HTMLUListElement | null>(null);
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [useBackend, setUseBackend] = useState(false);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [backendError, setBackendError] = useState(false);
   const [hasQueried, setHasQueried] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSelectingRef = useRef(false);
 
@@ -65,19 +64,40 @@ export default function LocationInput({
             formatted_address: p.formatted_address || '',
           });
         });
+
+        const repositionPacContainer = () => {
+          if (!inputRef.current) return;
+          const pacEl = document.querySelector('.pac-container') as HTMLElement | null;
+          if (!pacEl) return;
+          const rect = inputRef.current.getBoundingClientRect();
+          pacEl.style.position = 'fixed';
+          pacEl.style.top = `${rect.bottom + 2}px`;
+          pacEl.style.left = `${rect.left}px`;
+          pacEl.style.width = `${rect.width}px`;
+          pacEl.style.zIndex = '99999';
+        };
+
+        const observer = new MutationObserver(() => repositionPacContainer());
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+        inputRef.current!.addEventListener('focus', repositionPacContainer);
+        inputRef.current!.addEventListener('input', repositionPacContainer);
+
+        const inputEl = inputRef.current!;
+        cleanupRef.current = () => {
+          observer.disconnect();
+          inputEl.removeEventListener('focus', repositionPacContainer);
+          inputEl.removeEventListener('input', repositionPacContainer);
+        };
       })
       .catch((err: any) => {
         if (!active) return;
         setUseBackend(true);
       });
 
-    return () => { active = false; };
-  }, []);
-
-  const updateDropdownPosition = useCallback(() => {
-    if (!inputRef.current) return;
-    const rect = inputRef.current.getBoundingClientRect();
-    setDropdownPos({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+    return () => {
+      active = false;
+      cleanupRef.current?.();
+    };
   }, []);
 
   const fetchPredictions = useCallback(async (query: string) => {
@@ -93,7 +113,6 @@ export default function LocationInput({
       if (data.status === 'OK' && data.predictions?.length > 0) {
         setPredictions(data.predictions.map((p: any) => ({ place_id: p.place_id, description: p.description })));
         setBackendError(false);
-        updateDropdownPosition();
         setShowDropdown(true);
       } else if (data.status === 'ZERO_RESULTS') {
         setPredictions([]);
@@ -110,7 +129,7 @@ export default function LocationInput({
       setPredictions([]);
       setShowDropdown(false);
     }
-  }, [updateDropdownPosition]);
+  }, []);
 
   const selectPrediction = useCallback(async (prediction: Prediction) => {
     isSelectingRef.current = true;
@@ -171,29 +190,14 @@ export default function LocationInput({
     }, 250);
   }, []);
 
-  useEffect(() => {
-    if (!showDropdown) return;
-    const handleScroll = () => updateDropdownPosition();
-    window.addEventListener('scroll', handleScroll, true);
-    return () => window.removeEventListener('scroll', handleScroll, true);
-  }, [showDropdown, updateDropdownPosition]);
-
   const showErrorBanner = useBackend && hasQueried && backendError;
 
   const dropdown = useBackend && showDropdown && predictions.length > 0
-    ? createPortal(
+    ? (
         <ul
-          ref={dropdownRef}
           role="listbox"
-          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto"
-          style={{
-            position: 'fixed',
-            top: dropdownPos.top,
-            left: dropdownPos.left,
-            width: dropdownPos.width,
-            zIndex: 2147483647,
-            pointerEvents: 'auto',
-          }}
+          className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto z-[9999]"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {predictions.map((p, idx) => (
             <li
@@ -214,19 +218,17 @@ export default function LocationInput({
               {p.description}
             </li>
           ))}
-        </ul>,
-        document.body
+        </ul>
       )
     : null;
 
   return (
-    <div>
+    <div ref={containerRef} className="relative">
       <Input
         ref={inputRef}
         value={value}
         onChange={e => handleChange(e.target.value)}
         onFocus={() => {
-          updateDropdownPosition();
           if (useBackend && predictions.length > 0) setShowDropdown(true);
         }}
         onBlur={handleBlur}

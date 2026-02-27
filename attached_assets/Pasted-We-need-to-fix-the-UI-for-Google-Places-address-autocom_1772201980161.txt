@@ -1,0 +1,163 @@
+We need to fix the UI for Google Places address autocomplete when adding a client address. In native iOS build, the suggestions dropdown is too wide / mis-positioned / clipped and doesn’t fit neatly within the modal (see screenshot).
+
+This likely happens because the autocomplete dropdown is rendered in a portal to document.body (or absolutely positioned without respect to the modal container), plus iOS safe-area/viewport issues.
+
+Goal
+
+Autocomplete dropdown should be aligned to the address input, the same width as the input, and fully visible inside the modal.
+
+It must not overflow the screen or get clipped weirdly.
+
+Works in iOS native build and desktop web.
+
+Step 1 — Identify the autocomplete implementation
+
+Find the address input component used in “Add Client” modal and determine which lib we’re using:
+
+react-google-autocomplete
+
+@react-google-maps/api Places Autocomplete
+
+use-places-autocomplete
+
+custom dropdown from backend results
+
+Search for:
+
+Autocomplete
+
+places
+
+google.maps.places
+
+getPlacePredictions
+
+Once found, follow the steps for the correct approach below.
+
+Step 2 — Implement a dropdown that is owned by the modal, not by body
+
+Preferred fix: render the suggestions list ourselves inside the modal, directly under the input, instead of letting Google render its own dropdown.
+
+If we already have predictions data (like predictions)
+
+Create a <div> under the input:
+
+position: absolute; left: 0; right: 0; top: 100%;
+
+max-height: 240px; overflow-y: auto;
+
+z-index high enough inside modal (e.g. 50 or 100)
+
+border, rounded, shadow, bg-white
+
+Wrap input + dropdown in a relative container so width matches the input.
+
+Clicking a suggestion fills the input and closes the list.
+
+Ensure the list closes on:
+
+blur (with a short delay so click registers)
+
+selecting item
+
+pressing escape
+
+For iOS: add -webkit-overflow-scrolling: touch
+
+If the library forces a body-level dropdown
+
+Some libs inject .pac-container into the body (Google’s native dropdown). In that case:
+
+Step 3 — If .pac-container is used, force it to style correctly (fallback)
+
+Implement a CSS override that:
+
+raises z-index above modals
+
+constrains width
+
+fixes font sizing
+But the hard part: positioning/width.
+
+Approach:
+
+On focus of the address input, measure the input rect:
+
+const rect = inputEl.getBoundingClientRect()
+
+Then, locate the Google dropdown container:
+
+document.querySelector('.pac-container')
+
+Apply inline styles to that element:
+
+style.width = rect.width + 'px'
+
+style.left = rect.left + 'px'
+
+style.top = (rect.bottom + 6) + 'px'
+
+style.position = 'fixed' (important in iOS webview/modals)
+
+style.zIndex = '99999'
+
+Also keep it updated on:
+
+window resize
+
+modal scroll (if any)
+
+orientation changes
+
+Add CSS:
+
+.pac-container { z-index: 99999 !important; border-radius: 12px; box-shadow: ...; }
+(Use existing design tokens; don’t hardcode weird colors.)
+
+Also ensure we remove cleanup listeners on unmount.
+
+Step 4 — Modal clipping/overflow
+
+If the modal container has overflow: hidden, a dropdown inside it may get clipped. For the “owned dropdown” approach:
+
+Put dropdown inside the same relative wrapper but ensure the modal content area allows it:
+
+either keep modal content overflow: visible (preferred for this component)
+
+or render the dropdown in a portal inside the modal root, not body
+
+If we keep body-level pac-container, clipping won’t matter, but positioning must be fixed.
+
+Acceptance tests
+
+In Add Client modal, tap Address:
+
+✅ dropdown appears directly under input
+
+✅ dropdown width matches input
+
+✅ dropdown fully visible and scrollable
+
+✅ no weird clipping at screen edges
+
+Selecting a suggestion:
+
+✅ fills address
+
+✅ closes dropdown
+
+iOS native build:
+
+✅ still works with keyboard open
+
+Desktop:
+
+✅ still looks normal
+
+Deliverables
+
+Implement preferred “owned dropdown” if feasible with current code
+
+Otherwise implement robust .pac-container measurement + fixed positioning fallback
+
+Keep code clean and avoid global hacks beyond .pac-container targeting

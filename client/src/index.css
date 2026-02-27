@@ -401,6 +401,32 @@ html.native-ios .dmThreadHeader {
   padding-top: calc(var(--native-safe-top, 56px) + 8px) !important;
 }
 
+/* Google Places .pac-container: constrain width, position, and z-index inside modals */
+.pac-container {
+  z-index: 99999 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  font-family: inherit !important;
+  margin-top: 2px !important;
+}
+.pac-item {
+  padding: 8px 12px !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+  cursor: pointer !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+}
+.pac-item:first-child {
+  border-top: none !important;
+}
+.pac-item:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+.pac-item-query {
+  font-size: 0.875rem !important;
+}
+
 /* Temporary debug badge: confirms native build (remove after verifying safe area fix) */
 html[data-native="1"]::after {
   content: "NATIVE BUILD";
