@@ -10,6 +10,7 @@ export default function InviteTeamButton() {
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
+  const [showCode, setShowCode] = useState<string | null>(null);
 
   if (!can("org.view")) {
     return null;
@@ -21,11 +22,9 @@ export default function InviteTeamButton() {
     setIsDisabled(true);
 
     try {
-      // Fetch invite code from API (fresh on every click)
       const response = await fetch("/api/company/info");
       
       if (!response.ok) {
-        // If 403, user lost permission - component will unmount on next render
         if (response.status === 403) {
           return;
         }
@@ -43,6 +42,7 @@ export default function InviteTeamButton() {
 
       if (result.ok) {
         setIsCopied(true);
+        setShowCode(null);
         const devSuffix = import.meta.env.DEV ? ` (${result.method})` : "";
         toast({
           description: `Company code copied to clipboard${devSuffix}`,
@@ -54,10 +54,10 @@ export default function InviteTeamButton() {
         }, 2000);
       } else {
         setIsDisabled(false);
+        setShowCode(inviteCode);
         toast({
-          title: "Couldn't copy automatically",
-          description: `Your code: ${inviteCode} — tap and hold to copy`,
-          duration: 8000,
+          title: "Copy not available",
+          description: "Tap and hold the code to copy",
         });
       }
     } catch (error) {
@@ -71,7 +71,15 @@ export default function InviteTeamButton() {
   };
 
   return (
-    <>
+    <div className="flex items-center gap-2">
+      {showCode && (
+        <span
+          className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-mono text-slate-800 dark:text-slate-200 select-all"
+          style={{ WebkitUserSelect: "text", userSelect: "all" }}
+        >
+          {showCode}
+        </span>
+      )}
       <Button
         variant="outline"
         onClick={handleClick}
@@ -82,6 +90,6 @@ export default function InviteTeamButton() {
         <Users className="h-4 w-4 mr-2" />
         {isCopied ? "Copied" : "Invite Team"}
       </Button>
-    </>
+    </div>
   );
 }
