@@ -56,6 +56,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ws = useRef<WebSocket | null>(null);
   const genRef = useRef(0);
@@ -447,12 +448,14 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     };
   }, [user, currentConvId]);
 
-  // Smart scroll: instant on mount, smooth for new messages
   const scrollToBottom = (smooth: boolean) => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: smooth ? "smooth" : "auto",
-      block: "end",
-    });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (smooth) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
   };
 
   useEffect(() => {
@@ -578,13 +581,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
   // Show header and composer immediately, even while loading
   return (
     <div 
-      className="flex flex-col bg-background overflow-hidden"
-      style={{
-        height: '100dvh',
-        maxHeight: '100dvh',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}
+      className="flex flex-col bg-background overflow-hidden h-full"
     >
       {/* Header - fixed height */}
       <div className="flex-shrink-0 flex items-center gap-3 p-4 border-b border-border bg-card">
@@ -627,6 +624,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
 
       {/* Messages Area - flex-1 to fill available space, only this scrolls */}
       <div 
+        ref={messagesContainerRef}
         className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-3 pt-4 touch-pan-y" 
         data-testid="scroll-area-messages"
         style={{
@@ -702,8 +700,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
         )}
       </div>
 
-      {/* Composer - fixed at bottom */}
-      <div className="flex-shrink-0 px-3 py-2 border-t border-border bg-card">
+      {/* Composer - pinned at bottom with iOS safe area */}
+      <div className="flex-shrink-0 px-3 py-2 border-t border-border bg-card safe-area-bottom">
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}

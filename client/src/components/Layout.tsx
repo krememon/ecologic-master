@@ -41,7 +41,7 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Main Content - no padding for fullscreen routes */}
         <main className={`flex-1 min-h-0 overflow-hidden ${isFullscreenRoute ? '' : 'px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto'}`}>
-          <div className={isFullscreenRoute ? '' : 'w-full max-w-7xl mx-auto'}>
+          <div className={isFullscreenRoute ? 'h-full' : 'w-full max-w-7xl mx-auto'}>
             {children}
           </div>
         </main>

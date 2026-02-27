@@ -1,0 +1,126 @@
+We fixed the “keyboard auto-opens” issue. Now we need to fix DM formatting/layout.
+
+Current bug (based on screenshots)
+
+Screenshot #1 (on open): DM thread looks “wrong” — content is positioned like the page is at the top, and the message composer area doesn’t feel anchored / the page feels like it needs to be scrolled to reach the proper layout.
+
+Screenshot #2 (after scrolling down): This is the correct look: messages sit properly above the composer, and the composer is visible/anchored at the bottom.
+
+Goal
+
+When I open a DM, it should immediately look like screenshot #2, without me needing to scroll the entire page.
+
+Key requirement
+
+Right now the DM screen is likely inside a parent layout that scrolls the whole page. We need:
+
+No full-page scroll on the DM screen
+
+Only the messages list area should scroll (middle section)
+
+Header stays at top, composer stays pinned at bottom
+
+What to implement
+1) Convert the DM Thread page to a 3-part fixed layout
+
+On the DM thread route/page component (the one showing a single conversation), restructure layout to:
+
+Outer container: full viewport height with no body/page scrolling
+
+Header: fixed height, not scrollable
+
+Messages area: flex: 1, overflow-y: auto
+
+Composer: pinned to bottom (not scrollable)
+
+Use CSS like:
+
+outer: height: 100dvh (fallback: 100vh), display: flex, flex-direction: column, overflow: hidden
+
+messages: flex: 1, overflow-y: auto, -webkit-overflow-scrolling: touch
+
+composer wrapper: flex: 0 0 auto
+
+Important: ensure parent page/container (like MainLayout) doesn’t force scrolling. If the global layout uses overflow-y-auto, we must override it on the DM screen (or provide a “no-scroll” page mode).
+
+2) Prevent “whole page scroll”
+
+If the app uses a global wrapper like:
+
+<main className="flex-1 overflow-y-auto">
+
+Then for the DM thread page, we must ensure:
+
+the page itself is overflow-hidden
+
+the messages list is the only overflow-y-auto
+
+Do not break other pages.
+
+3) Make the thread open at the bottom (without moving the whole page)
+
+When opening a conversation:
+
+scroll the messages container (not window) to bottom:
+
+messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+
+Do this:
+
+after messages load
+
+after images render (if any)
+
+after a new message is appended
+
+But do NOT steal focus (we already fixed keyboard autofocus).
+
+Also handle the case of very short conversations: layout should still “sit” at bottom properly (composer pinned, messages above).
+
+4) Safe area / iOS native build
+
+Because this is a native build:
+
+Add bottom padding for the composer using env(safe-area-inset-bottom) so it doesn’t collide with iPhone home indicator.
+
+Ensure header respects top inset if needed (but don’t re-break status bar fixes).
+
+5) Keep existing behavior
+
+Do not change DM search, thread list, sending messages, or RBAC.
+
+No duplicate scroll containers that cause weird bounce.
+
+No “double scroll” (avoid nested overflow containers inside the messages list unless necessary).
+
+Acceptance tests
+
+Open a DM thread:
+
+✅ immediately looks like screenshot #2 (composer visible/pinned, messages positioned correctly)
+
+✅ no need to scroll the whole page
+
+Scroll:
+
+✅ only the messages area scrolls
+
+✅ header and composer do not move
+
+New message arrives / sent:
+
+✅ messages area scrolls to bottom smoothly (only if user is near bottom; don’t yank them if they scrolled up)
+
+iOS native:
+
+✅ composer not blocked by home indicator
+
+✅ no layout jump
+
+Deliverables
+
+Updated DM thread page layout using a fixed 3-part flex column + internal scroll
+
+Updated scroll-to-bottom logic targeting the messages container (not window)
+
+Minimal diff, remove any temporary logs
