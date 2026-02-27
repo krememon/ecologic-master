@@ -983,7 +983,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(companyMembers.userId, users.id))
       .where(eq(companyMembers.companyId, companyId))
       .orderBy(
-        sql`CASE ${companyMembers.role} WHEN 'OWNER' THEN 0 WHEN 'SUPERVISOR' THEN 1 WHEN 'DISPATCHER' THEN 2 WHEN 'TECHNICIAN' THEN 3 ELSE 4 END`,
+        sql`CASE ${companyMembers.role}::text WHEN 'OWNER' THEN 0 WHEN 'SUPERVISOR' THEN 1 WHEN 'DISPATCHER' THEN 2 WHEN 'TECHNICIAN' THEN 3 ELSE 4 END`,
         users.firstName,
         users.lastName,
       );

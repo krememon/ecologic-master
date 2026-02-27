@@ -1,0 +1,119 @@
+COPY/PASTE REPLIT AGENT PROMPT (Announcements recipients list shows “No employees found” even though Employees page shows members; fix endpoint + company scoping + include inactive if needed)
+
+In Announcements → Recipients picker, it says “No employees found” even though the Employees page shows Jennifer (and others). So the recipients picker is pulling from the wrong source or filtering everyone out.
+
+We need the recipients list to correctly show the company employees (including Jennifer).
+
+Observations from screenshots
+
+Employees page shows: Jennifer Pellegrino (Technician, Inactive) and “All Employees (2)”.
+
+Recipients picker shows none.
+
+Likely causes:
+
+Recipients endpoint is filtering to active only, and Jennifer is inactive.
+
+Recipients endpoint is using wrong company scoping (companyId mismatch).
+
+Recipients query is excluding technicians or specific roles.
+
+Recipients picker is calling a different endpoint than Employees page.
+
+Goals
+
+Recipients picker should show all company members by default (Active + Inactive), OR at minimum show Inactive too if that’s allowed for announcements.
+
+It must match the Employees page membership list source-of-truth.
+
+No cross-company leakage.
+
+Step 1 — Find what endpoint Recipients picker uses
+
+Search in frontend for the “Recipients” modal/picker component:
+
+Recipients
+
+Search employees
+
+No employees found
+
+announcement
+
+audience
+
+Confirm which API is called and what params it uses.
+
+Also identify what endpoint Employees page uses to show All Employees.
+
+Compare them: if different, unify.
+
+Step 2 — Unify backend: create/standardize a single “company members” query
+
+Create or reuse one backend method that returns members for the logged-in user’s company:
+
+GET /api/company/members
+
+Return fields needed by both:
+
+id, firstName, lastName, email, role, status / isActive, joinedAt
+
+Important: do NOT filter out inactive by default. Provide a query param if needed:
+
+?includeInactive=1 (default true for announcements)
+
+?activeOnly=1 (only if some screens want it)
+
+In Announcements recipients list, call with includeInactive.
+
+Step 3 — Fix recipients filtering logic
+
+In the recipients picker frontend, remove any filters that exclude:
+
+inactive users
+
+certain roles (technician/supervisor/etc.)
+unless explicitly intended.
+
+If you want to visually show inactive, keep them selectable or disable them—BUT for now just make them appear (no UI redesign).
+
+Step 4 — Validate company scoping
+
+Ensure the backend determines companyId from the authenticated session/user membership:
+
+do NOT accept companyId from the client
+
+confirm the current user has a membership and use that companyId
+
+If the user can be in multiple companies, select the “active company” the app uses (same as Employees page).
+
+Step 5 — Add a quick dev log (temporary)
+
+When calling the recipients endpoint, log:
+
+userId
+
+resolved companyId
+
+returned member count
+Remove after confirmed.
+
+Acceptance tests
+
+Open Employees page: see Jennifer (inactive).
+
+Open Announcements → Recipients:
+
+✅ Jennifer shows up (even if inactive)
+
+✅ search finds her by name/email
+
+✅ selected count increments
+
+Deliverables
+
+Recipients picker uses the same company members source as Employees page
+
+Inactive members included (at least for announcements)
+
+No employees found bug fixed without redesign
