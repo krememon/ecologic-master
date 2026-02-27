@@ -415,26 +415,37 @@ function useCapacitorDeepLinks() {
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
           console.log("[deep-link] Received:", url);
 
-          if (url.startsWith("ecologic://stripe-return")) {
-            console.log("[deep-link] Stripe return detected");
+          const isStripeReturn = url.includes("/stripe/return") || url.startsWith("ecologic://stripe-return");
+          if (isStripeReturn) {
+            console.log("[deep-link] Stripe return detected:", url);
             try {
               const { Browser } = await import("@capacitor/browser");
               await Browser.close();
             } catch {}
 
-            const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
-            const result = params.get("result");
+            let params: URLSearchParams;
+            try {
+              params = new URL(url.replace("ecologic://stripe-return", "https://placeholder/stripe/return")).searchParams;
+            } catch {
+              params = new URLSearchParams();
+            }
             const invoiceId = params.get("invoiceId");
+            const canceled = params.get("canceled");
+            const sessionId = params.get("session_id");
 
             queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
             queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
             queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
             queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
 
-            if (result === "success" && invoiceId) {
-              window.location.href = `/invoice/${invoiceId}/pay?success=1`;
-            } else if (invoiceId) {
+            if (canceled === "1" && invoiceId) {
               window.location.href = `/invoice/${invoiceId}/pay?canceled=1`;
+            } else if (invoiceId && sessionId) {
+              window.location.href = `/invoice/${invoiceId}/pay?success=1&session_id=${sessionId}`;
+            } else if (invoiceId) {
+              window.location.href = `/invoice/${invoiceId}/pay?success=1`;
             } else {
               window.location.href = "/jobs";
             }

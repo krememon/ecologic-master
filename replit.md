@@ -54,6 +54,7 @@ EcoLogic is a multi-tenant web application using React 18 (TypeScript, Vite, Tai
 - **Plaid Bank Connection**: Owner-only Plaid Link integration for connecting company bank accounts, with encrypted token storage.
 - **Security Hardening**: Comprehensive cross-tenant data isolation, centralized RBAC, secure storage methods, rate limiting, log sanitization, and 404 responses for unauthorized access.
 - **Native Wrapper Google OAuth**: System-browser flow for Capacitor iOS/Android wrappers using `@capacitor/browser` + `ecologic://` deep link scheme + one-time auth code exchange (`/api/auth/exchange-code`). Avoids Google's `disallowed_useragent` 403 in WKWebView. Web flow unchanged.
+- **Stripe Native Return (Universal Links)**: Stripe checkout always returns to `APP_BASE_URL/stripe/return`. On iOS, the AASA file at `/.well-known/apple-app-site-association` registers `/stripe/return*` for Universal Links. The `appUrlOpen` handler in App.tsx catches both `https://app.ecologicc.com/stripe/return?...` universal links and legacy `ecologic://stripe-return` deep links, closes the in-app browser, invalidates caches, and navigates to the payment result page. Xcode must have Associated Domains: `applinks:app.ecologicc.com`. No custom-scheme redirect needed.
 
 ## Mobile App (React Native + Expo)
 EcoLogic Mobile lives in `/mobile` and is a native iOS/Android app built with Expo (TypeScript).

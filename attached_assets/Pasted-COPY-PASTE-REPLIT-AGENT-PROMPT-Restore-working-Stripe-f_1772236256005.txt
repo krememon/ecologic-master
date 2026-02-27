@@ -1,0 +1,153 @@
+COPY/PASTE REPLIT AGENT PROMPT (Restore working Stripe flow: Pay → Confirmation/“signature” → Auto-return to native app. Fix “Safari can’t redirect” by using universal links + appUrlOpen + Browser.close. No more Replit-dev return pages.)
+
+We broke the Stripe return flow. After payment it now says Safari can’t redirect and we’re not reliably returning to the native wrapper. I’m pissed because this worked before. The required flow is:
+
+Pay → Confirmation (“signature” step if required) → Automatically back to the EcoLogic native app
+
+We need to restore a stable, production-correct return flow.
+
+0) Clarify “Signature”
+
+In Stripe, the “signature/confirm” step is usually:
+
+3D Secure / bank authorization (only appears for some cards)
+
+OR Stripe Checkout confirmation screen
+
+We cannot force 3DS for every card, but we can test it using a 3DS test card and ensure checkout is configured correctly. The key is: whatever Stripe shows, once it finishes, we must auto-return to the app.
+
+1) Root cause of “Safari can’t redirect”
+
+This happens when:
+
+Stripe redirects to a custom scheme (ecologic://...) from a browser context that blocks it, OR
+
+The return URL is a replit.dev page trying to JS-redirect and iOS blocks it, OR
+
+We’re using a tap here page instead of a real app-return mechanism.
+
+Fix: Use Universal Links (https) as the return URL + have the app intercept the link and close the Browser. This is the most reliable iOS behavior.
+
+2) Implement Universal Link return (most reliable)
+A) Choose a real domain for app links
+
+We should NOT use *.replit.dev for universal links. Use your real domain:
+
+https://ecologicc.com (preferred)
+or a dedicated subdomain:
+
+https://app.ecologicc.com
+
+If we don’t have this yet, set it up now (minimal landing/redirect ok).
+
+B) Stripe success/cancel URLs
+
+Update backend checkout session to:
+
+success_url = https://ecologicc.com/stripe/return?result=success&session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = https://ecologicc.com/stripe/return?result=cancel
+
+No custom scheme in Stripe anymore.
+
+C) iOS Universal Links setup (required)
+
+In Xcode:
+
+Add Associated Domains capability
+
+Add:
+
+applinks:ecologicc.com (and applinks:app.ecologicc.com if used)
+
+Host the Apple App Site Association file at:
+
+https://ecologicc.com/.well-known/apple-app-site-association
+This must include the app’s Team ID + bundle id and the path /stripe/return*.
+
+(Agent: add a short doc for what to put in AASA; do not hardcode team id if unknown—use the existing app’s bundle/team values.)
+
+3) App-side interception + close Stripe Browser
+
+In Capacitor app bootstrap:
+
+Listen for App.addListener('appUrlOpen', ...)
+
+When URL path starts with /stripe/return:
+
+Close in-app browser: await Browser.close()
+
+Call /api/subscriptions/status and update app state
+
+Navigate:
+
+success → /jobs
+
+cancel → /billing
+
+This guarantees we return to the wrapper and the browser closes.
+
+4) Keep a fallback ONLY for web
+
+The /stripe/return page can render:
+
+“Returning to EcoLogic…”
+
+If web: show a button “Continue to app”
+But on native the app should intercept immediately and the Browser should close, so the user should barely see it.
+
+5) Ensure the “confirmation/signature” step appears in testing
+
+We can’t force it for all cards, but we can test it.
+
+A) Ensure Checkout Session config is correct
+
+In backend create session:
+
+billing_address_collection: 'required'
+
+customer_email or customer
+
+mode: 'subscription' if subscription
+
+payment_method_types: ['card']
+
+B) Test with a 3DS card
+
+Use Stripe’s 3D Secure test card to ensure the extra authorization step appears during testing.
+
+6) Acceptance tests
+
+Native iOS:
+
+Start checkout → pay → (3DS/auth if card requires) → complete
+
+✅ Browser closes automatically
+
+✅ Wrapper app shows
+
+✅ Subscription becomes active
+
+✅ Navigates to Jobs
+
+Cancel:
+
+✅ Browser closes
+
+✅ Back to Billing
+
+Web:
+
+✅ Return page works normally
+
+Deliverables
+
+Stripe success/cancel set to https://ecologicc.com/stripe/return...
+
+Associated Domains enabled + AASA file instructions
+
+appUrlOpen handler closes Browser + refreshes subscription + routes
+
+Confirm 3DS/“signature” step via test card docs
+
+Do NOT ship any solution that relies on replit.dev return URLs or a “tap here” page for native. Universal Links + Browser.close is the stable fix.
