@@ -14400,7 +14400,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? [sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.email || 'Owner'
         : 'Owner';
 
-      // Create notifications for each recipient
+      const dedupeKey = `announcement:${Date.now()}:${userId}`;
+
       const notifications = [];
       for (const recipientId of recipientUserIds) {
         try {
@@ -14416,11 +14417,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
             meta: {
               senderId: userId,
               senderName,
+              dedupeKey,
             },
           });
           notifications.push(notification);
         } catch (err) {
           console.error('[Announcement] Failed to create notification for', recipientId, err);
+        }
+      }
+
+      const pushPreview = message.length > 100 ? message.slice(0, 97) + '...' : message;
+      const recipientIds = [...recipientUserIds];
+      for (const recipientId of recipientIds) {
+        try {
+          await sendPushToUser(recipientId, {
+            title: 'EcoLogic',
+            body: `📢 ${pushPreview}`,
+            data: {
+              type: 'announcement',
+              route: '/notifications',
+            },
+          });
+        } catch (err) {
+          console.error('[Announcement] Push failed for', recipientId, err);
         }
       }
 

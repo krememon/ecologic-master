@@ -1,0 +1,138 @@
+COPY/PASTE REPLIT AGENT PROMPT (Announcements: send push notification on create + create in-app bell notification; respect recipients + dedupe + deep link)
+
+We need to update Announcements so that when an announcement is created it:
+
+Sends a push notification to the selected recipients (or company-wide audience, depending on existing UI),
+
+Also appears in the Notifications bell page (in-app notifications feed).
+
+This must work in native iOS push (already working for other types).
+
+Goals
+
+Creating an announcement triggers:
+
+Push notification to recipients
+
+In-app notification record(s) visible in Notifications tab/bell
+
+Must respect company scoping + recipient selection
+
+Must avoid duplicates if the request retries
+
+Must include a deep link so tapping push opens Announcements (or the announcement detail)
+
+Step 1 — Define notification type for announcements
+
+Use a consistent type:
+
+announcement_created (preferred) OR reuse existing announcement if that’s already how announcements are stored.
+
+Important: make sure this type is included in:
+
+the Notifications tab allowlist we created earlier (push-enabled + announcements)
+
+Step 2 — Backend: on announcement creation, fan-out notifications
+
+In the route that creates announcements (e.g. POST /api/announcements):
+After the announcement is saved:
+
+Resolve recipient userIds:
+
+If “send to all” exists: all company members (optionally include inactive? probably active only)
+
+If “selected recipients”: exactly those userIds
+
+For each recipient:
+
+Create an in-app notification row:
+
+type: 'announcement_created' (or announcement)
+
+title: announcement title (or “Announcement”)
+
+body: announcement message (truncate safely)
+
+data: { announcementId } plus route info
+
+companyId, createdBy, createdAt
+
+dedupeKey: announcement_created:<announcementId>:<userId>
+
+Send push to each recipient’s device tokens:
+
+title: EcoLogic
+
+body: announcement title OR “New announcement” + short preview
+
+data: { type: 'announcement_created', announcementId, route: '/announcements?open=...' }
+
+Dedupe (critical)
+
+If the client retries or the route gets hit twice, prevent duplicate pushes/notifications:
+
+Enforce unique (userId, dedupeKey) or unique dedupeKey per user on notifications table.
+
+Before inserting, check if exists → skip.
+
+Step 3 — Decide who receives pushes
+
+Use these rules:
+
+Do NOT send to the creator if you don’t want them notified (default: skip creator). If you want them included, keep them.
+
+Only send to users who have push tokens. Still create in-app notification regardless.
+
+Step 4 — Frontend routing
+
+Ensure push tap and in-app click routes correctly:
+
+If we have an Announcements page: open it and highlight the announcement.
+
+If announcements appear inside Notifications list: clicking should open Announcements view/detail.
+
+Implement handler for:
+
+type === 'announcement_created' to navigate to announcement detail.
+
+Step 5 — Bell page display
+
+Ensure the Notifications bell feed includes announcements:
+
+If announcements are separate entities, map them into the same feed response (recommended)
+
+OR store them as notification rows so the bell page already shows them.
+
+No UI redesign required—just make them appear.
+
+Acceptance tests
+
+Create announcement to a single employee:
+
+✅ employee receives push
+
+✅ announcement appears in bell feed
+
+Create announcement to all:
+
+✅ everyone gets push (except creator if skipped)
+
+✅ bell shows it
+
+Retry create request / refresh:
+
+✅ no duplicate pushes/notifications
+
+Tap push:
+
+✅ opens the announcement
+
+Deliverables
+
+Announcement creation triggers push + in-app bell notification
+
+Recipient fan-out implemented correctly
+
+Dedupe key prevents duplicates
+
+Tap-to-open routing for announcement notifications
