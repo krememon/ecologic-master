@@ -1,0 +1,118 @@
+We found a bug in Employees → Invite Team flow:
+
+If I tap Invite Team and then back out / don’t complete it, the company code ends up showing on the Employees screen (it “sticks” in the UI).
+
+Also, I want to remove the “Copy not available / Tap and hold…” popup/toast entirely.
+
+Important constraint: ZERO UI changes.
+The Employees page should look exactly the same as it did before (no code pill showing, no extra labels, no new buttons, no banners). Invite Team should stay the same visually the whole time.
+
+Goals
+
+Employees page never shows the company code unless it always did before (right now it’s incorrectly showing).
+
+Pressing Invite Team should NOT leave any “code state” visible after closing/canceling.
+
+Remove the “Copy not available” popup/toast (and any other new messaging we added).
+
+Keep the “Invite Team” flow functional.
+
+What to fix
+1) Remove “code display” UI that was added
+
+Search for the code being rendered on the Employees page (likely a pill near the Invite Team button).
+Remove it completely and restore prior layout.
+
+Look for variables like:
+
+companyCode
+
+inviteCode
+
+joinCode
+
+codeCopied
+
+showCode
+
+copyError
+
+copyNotAvailable
+
+Make sure nothing renders the code on Employees page anymore.
+
+2) Fix the state leak
+
+This is likely a state management issue:
+
+a piece of state (e.g. showInviteCode, inviteOpen, code) is stored in a parent component or global store and not reset when the modal closes.
+
+Fix:
+
+The Invite modal/sheet should have its own internal state, and on close it must reset:
+
+any “show code”
+
+any “copy status”
+
+any “errors”
+
+If the code is stored at the Employees page level, move it inside the Invite modal component OR ensure onClose resets it to initial state.
+
+Also ensure that closing the modal via:
+
+X button
+
+tapping outside
+
+pressing back
+all triggers the same cleanup.
+
+3) Remove the “Copy not available” toast/popup entirely
+
+We do NOT want any message popping up now (even a small toast).
+So:
+
+Delete the toast call that shows “Copy not available…”
+
+Delete any fallback alert/popup for copy failure.
+
+If copy fails silently, that’s acceptable for now (dev phase), but the UI must not change.
+
+4) Keep clipboard behavior safe
+
+Do not reintroduce keyboard popping up.
+Do not focus any hidden inputs.
+If clipboard plugin isn’t available, just no-op silently for now.
+
+(We’ll revisit reliable copy later once Clipboard plugin is properly implemented in iOS.)
+
+Acceptance tests
+
+Tap Invite Team → open modal → close it without doing anything:
+
+✅ Employees page looks identical to before
+
+✅ no code pill shows
+
+✅ no popup/toast shows
+
+Tap Invite Team → attempt copy:
+
+✅ no popup/toast
+
+✅ Employees UI unchanged
+
+Re-open Invite Team multiple times:
+
+✅ no leaking state, consistent UI every time
+
+Deliverables
+
+Remove accidental code rendering in Employees UI
+
+Reset invite-related state on modal close
+
+Remove “Copy not available” messaging entirely
+
+No visual/UI changes other than removing the accidental code display
