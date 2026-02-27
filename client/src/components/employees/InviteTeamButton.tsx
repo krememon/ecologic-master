@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Users } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
@@ -9,7 +9,6 @@ export default function InviteTeamButton() {
   const { toast } = useToast();
   const [isCopied, setIsCopied] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Don't render if user lacks permission
   if (!can("org.view")) {
@@ -27,19 +26,19 @@ export default function InviteTeamButton() {
       }
     }
 
-    // Fallback for older browsers or insecure contexts
     try {
-      const textarea = textareaRef.current;
-      if (!textarea) return false;
-
+      const textarea = document.createElement("textarea");
       textarea.value = text;
+      textarea.setAttribute("readonly", "");
       textarea.style.position = "fixed";
-      textarea.style.left = "-999999px";
-      textarea.style.top = "-999999px";
+      textarea.style.left = "-9999px";
+      textarea.style.top = "-9999px";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
       textarea.select();
-      document.execCommand("copy");
-      textarea.value = "";
-      return true;
+      const result = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return result;
     } catch (err) {
       return false;
     }
@@ -108,19 +107,6 @@ export default function InviteTeamButton() {
         <Users className="h-4 w-4 mr-2" />
         {isCopied ? "Copied" : "Invite Team"}
       </Button>
-      {/* Hidden textarea for clipboard fallback */}
-      <textarea
-        ref={textareaRef}
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          left: "-999999px",
-          top: "-999999px",
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-        tabIndex={-1}
-      />
     </>
   );
 }

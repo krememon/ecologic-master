@@ -1,0 +1,92 @@
+Bug: On native iOS build, when I tap Invite Team, the keyboard pops up immediately even though I didn’t tap a text field. We need to stop that.
+
+This means something in the Invite flow is auto-focusing an input (or calling .focus()), or the button tap is triggering focus due to event bubbling.
+
+Goal
+
+Tapping Invite Team opens the Invite modal/sheet WITHOUT opening the keyboard.
+
+Keyboard should only open when the user taps into the first input.
+
+What to do
+1) Find the Invite Team flow
+
+Locate:
+
+the Invite Team button handler
+
+the modal/sheet component it opens (e.g. InviteTeamModal, InviteMemberDialog, etc.)
+
+the first input field inside it (email/name/code, etc.)
+
+Search for:
+
+Invite Team
+
+InviteTeam
+
+InviteMember
+
+invite modal
+
+company code
+
+copy to clipboard
+
+2) Remove any auto-focus
+
+Inside the invite modal:
+
+If any input has autoFocus, remove it.
+
+If there’s a useEffect(() => inputRef.current?.focus(), ...), remove it.
+
+If there’s a component like <DialogContent initialFocusRef={...}> or Radix onOpenAutoFocus, handle it.
+
+3) If using Radix/shadcn Dialog: block auto focus on open
+
+If it’s Radix Dialog/Sheet:
+
+Add onOpenAutoFocus={(e) => e.preventDefault()} on the DialogContent / SheetContent
+This is the cleanest fix for iOS “keyboard pops open” issues.
+
+Also ensure we don’t call focus in onOpenChange.
+
+4) Prevent button click from focusing hidden inputs
+
+Sometimes the invite modal is mounted but hidden, and an input can be focused via state transitions.
+Confirm:
+
+The invite modal is not rendered in DOM “open but visually hidden” with an input focused.
+
+When opening, do not set state that triggers a form validation focus.
+
+5) Keep good UX
+
+Add a subtle “Tap to type” behavior: user taps the email/name field → keyboard opens.
+
+After they submit, it’s okay to keep focus if they’re adding multiple invites, but do NOT focus on initial open.
+
+Acceptance tests
+
+Tap Invite Team:
+
+✅ modal opens
+
+✅ keyboard does NOT open
+
+Tap the first input:
+
+✅ keyboard opens normally
+
+Close modal and reopen:
+
+✅ keyboard still does not auto-open
+
+Deliverables
+
+Remove autofocus / focus effects in invite modal
+
+Add Radix onOpenAutoFocus preventDefault if applicable
+
+No regressions to invite functionality
