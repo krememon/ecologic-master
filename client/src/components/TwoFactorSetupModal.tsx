@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, X, Copy, CheckCircle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { copyText } from "@/lib/clipboard";
 
 interface TwoFactorSetupModalProps {
   open: boolean;
@@ -92,13 +93,13 @@ export default function TwoFactorSetupModal({ open, onOpenChange, isEnabled }: T
   };
 
   const copyManualKey = async () => {
-    await navigator.clipboard.writeText(manualKey);
+    await copyText(manualKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const copyBackupCodes = async () => {
-    await navigator.clipboard.writeText(backupCodes.join("\n"));
+    await copyText(backupCodes.join("\n"));
     toast({ title: "Copied", description: "Backup codes copied to clipboard" });
   };
 

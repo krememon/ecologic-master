@@ -1,0 +1,98 @@
+On native iOS build, copying the company code now fails with:
+
+failed to copy to clipboard -[RTIInputSystemClient remoteTextInputSessionWithID:performInputOperation:] Can only perform input operation for an active session
+
+This started after we prevented the keyboard from auto-opening (which is correct). The copy action must be refactored to use the proper native clipboard API and not depend on a focused input session.
+
+Goals
+
+Copy company code works reliably on iOS native without needing keyboard focus
+
+No keyboard pop-up when tapping “Invite Team” or “Copy code”
+
+Works on web too
+
+Step 1 — Find the copy-to-clipboard code
+
+Locate the place where “Company code copied to clipboard” toast is triggered. It’s likely using one of:
+
+navigator.clipboard.writeText(...)
+
+document.execCommand('copy')
+
+focusing/selecting an <input> and copying
+
+a clipboard helper that falls back to input selection
+
+We need to remove any approach that:
+
+focuses an input
+
+selects text
+
+calls execCommand('copy') in native iOS webview
+
+Step 2 — Implement a unified clipboard helper
+
+Create a small helper function copyText(text: string): Promise<boolean>:
+
+Native iOS/Android (Capacitor)
+
+Use @capacitor/clipboard:
+
+import { Clipboard } from '@capacitor/clipboard'
+
+await Clipboard.write({ string: text })
+Return true if success.
+
+Web fallback
+
+Prefer navigator.clipboard.writeText(text) if available and secure context
+
+Else fallback to a hidden textarea method (NOT using execCommand on iOS native)
+
+But only use the textarea fallback on desktop web if needed.
+
+Important: Detect native via Capacitor.isNativePlatform().
+
+Step 3 — Ensure copy runs only on explicit user tap
+
+Make sure the copy call happens only inside the button onClick handler.
+Do NOT call copy inside useEffect when the modal opens.
+
+Also ensure we do not do “auto-copy on open” behavior.
+
+Step 4 — Fix toast messaging
+
+If copy succeeds: show “Company code copied to clipboard”
+
+If it fails: show “Couldn’t copy — tap and hold to copy” (and optionally show the code with a selectable field)
+
+No console spam.
+
+Step 5 — Safety: avoid input-session operations
+
+If there is any code selecting text like:
+
+inputRef.current.focus()
+
+inputRef.current.select()
+Remove it entirely for native.
+
+If we still want a “selectable” code display, render it as plain text or a read-only box but do not programmatically focus it.
+
+Acceptance tests
+
+On iOS native:
+
+Tap “Copy company code” → ✅ copies successfully, toast shows success
+
+No keyboard appears
+
+On web:
+
+Copy still works
+
+No more RTIInputSystemClient errors
+
+Deliver minimal diff and keep existing UI intact.

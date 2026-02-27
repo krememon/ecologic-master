@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { copyText } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -734,8 +735,8 @@ export default function SignatureRequests({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedRequest.signUrl || '');
+                      onClick={async () => {
+                        await copyText(selectedRequest.signUrl || '');
                         toast({
                           title: "Link copied",
                           description: "Signing link copied to clipboard",
