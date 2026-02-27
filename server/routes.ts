@@ -14311,6 +14311,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ EMPLOYEES API ============
+
+  app.get('/api/employees', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const company = await storage.getUserCompany(userId);
+      if (!company) {
+        return res.status(404).json({ message: 'Company not found' });
+      }
+      const members = await storage.getCompanyMembersWithUsers(company.id);
+      res.json(members);
+    } catch (error: any) {
+      console.error('Error fetching employees:', error);
+      res.status(500).json({ message: 'Failed to fetch employees' });
+    }
+  });
+
   // ============ ANNOUNCEMENTS API ============
 
   // POST /api/announcements - Create announcement (Owner only)

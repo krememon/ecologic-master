@@ -963,6 +963,44 @@ export class DatabaseStorage implements IStorage {
       .where(eq(companyMembers.companyId, companyId));
   }
 
+  async getCompanyMembersWithUsers(companyId: number): Promise<Array<{
+    userId: string;
+    role: string;
+    user: { id: string; firstName: string | null; lastName: string | null; email: string | null; profileImageUrl: string | null; status: string };
+  }>> {
+    const rows = await db
+      .select({
+        userId: companyMembers.userId,
+        role: companyMembers.role,
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        profileImageUrl: users.profileImageUrl,
+        status: users.status,
+      })
+      .from(companyMembers)
+      .innerJoin(users, eq(companyMembers.userId, users.id))
+      .where(eq(companyMembers.companyId, companyId))
+      .orderBy(
+        sql`CASE ${companyMembers.role} WHEN 'OWNER' THEN 0 WHEN 'SUPERVISOR' THEN 1 WHEN 'DISPATCHER' THEN 2 WHEN 'TECHNICIAN' THEN 3 ELSE 4 END`,
+        users.firstName,
+        users.lastName,
+      );
+    return rows.map(r => ({
+      userId: r.userId,
+      role: r.role,
+      user: {
+        id: r.id,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email,
+        profileImageUrl: r.profileImageUrl,
+        status: r.status,
+      },
+    }));
+  }
+
   async deleteUserAccount(userId: string): Promise<void> {
     await db.transaction(async (tx) => {
       // 1. Remove user from company memberships

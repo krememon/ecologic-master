@@ -1,0 +1,112 @@
+Find the Announcements UI where employees appear (recipient selector / “send to” / audience picker).
+Trace the data source:
+
+Which API endpoint is used? (examples: /api/users, /api/members, /api/company/members, /api/team, etc.)
+
+What query params exist (companyId, role filters, activeOnly)?
+
+Search code for:
+
+Announcements
+
+recipient
+
+audience
+
+employee
+
+members
+
+team
+
+the component that renders the list
+
+Step 2 — Backend: ensure we have a correct “company members” endpoint
+
+If one already exists, verify it returns correct rows. If not, create:
+
+GET /api/company/members
+
+Auth required
+
+Determines companyId from the authenticated user/session (do NOT accept it from client)
+
+Returns all members for that company with fields needed by UI:
+
+id, firstName, lastName, email, role, avatarUrl?, isActive?
+
+Sort by role priority (Owner first) then name
+
+Must not include users from other companies
+
+RBAC: any logged-in company member can fetch the list (Announcements UI needs it). If you want tighter, allow at least Owner/Admin.
+
+Add minimal logging only if needed (remove after).
+
+Step 3 — Data correctness checks (most common causes)
+
+Fix any of these if present:
+
+Wrong join: query uses users.companyId but real membership is in memberships table
+
+Filtering too hard: only showing certain roles (e.g., only technicians)
+
+Active flag: filtering out users missing active=true when field is null
+
+Stale caching: API client cached response; needs refetch on open
+
+Different company context: frontend using wrong companyId or using an old one after logout/login
+
+Make the backend query source-of-truth: memberships for the current company.
+
+Step 4 — Frontend: ensure it calls the correct endpoint and renders all results
+
+Update the Announcements employee list to fetch from /api/company/members
+
+Ensure request includes credentials (session cookies)
+
+Remove any frontend filters that hide valid employees unless explicitly intended
+
+Ensure the component renders:
+
+name fallback (if no first/last name, show email)
+
+role label if present
+
+Also ensure the list refreshes when:
+
+opening the Announcements modal/page
+
+after inviting a team member (if they should appear immediately)
+
+If we use React Query/SWR, set:
+
+refetchOnWindowFocus: true (optional)
+
+or explicitly refetch() when modal opens
+
+Step 5 — Acceptance tests
+
+Company has multiple roles/users.
+
+Open Announcements employee list:
+
+✅ shows everyone in company
+
+✅ no missing users
+
+✅ no users from other companies
+
+Invite a new user, refresh/open again:
+
+✅ new user appears
+
+Deliverables
+
+Correct backend endpoint/query for company members
+
+Announcements employee list uses that endpoint
+
+Fix any bad filters/caching that caused missing employees
+
+No UI redesign; just correct data and display
