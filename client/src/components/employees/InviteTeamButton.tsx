@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Users } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
 import { useToast } from "@/hooks/use-toast";
+import { Capacitor } from "@capacitor/core";
+import { Clipboard } from "@capacitor/clipboard";
 
 export default function InviteTeamButton() {
   const { can } = useCan();
@@ -10,19 +12,25 @@ export default function InviteTeamButton() {
   const [isCopied, setIsCopied] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
 
-  // Don't render if user lacks permission
   if (!can("org.view")) {
     return null;
   }
 
   const copyToClipboard = async (text: string): Promise<boolean> => {
-    // Try modern clipboard API first
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Clipboard.write({ string: text });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     if (navigator.clipboard && window.isSecureContext) {
       try {
         await navigator.clipboard.writeText(text);
         return true;
-      } catch (err) {
-        // Fall through to fallback
+      } catch {
       }
     }
 
@@ -39,7 +47,7 @@ export default function InviteTeamButton() {
       const result = document.execCommand("copy");
       document.body.removeChild(textarea);
       return result;
-    } catch (err) {
+    } catch {
       return false;
     }
   };
