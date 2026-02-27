@@ -381,8 +381,9 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
           // Invalidate peopleList to update inbox preview and timestamp
           queryClient.invalidateQueries({ queryKey: ["peopleList"] });
           
-          // Refocus textarea
-          textareaRef.current?.focus();
+          if (composerFocusedRef.current) {
+            textareaRef.current?.focus();
+          }
         } else {
           // Mark as failed using merge
           setMessages(prev => {
@@ -472,12 +473,7 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
     }
   }, [currentConvId]);
 
-  // Auto-focus composer on mount (only if can send)
-  useEffect(() => {
-    if (canSend && !dmError) {
-      textareaRef.current?.focus();
-    }
-  }, [canSend, dmError]);
+  const composerFocusedRef = useRef(false);
 
   const handleSend = () => {
     if (!messageBody.trim() || !currentConvId) return;
@@ -716,6 +712,8 @@ export default function MessageThread({ conversationId }: MessageThreadProps) {
             value={messageBody}
             onChange={(e) => setMessageBody(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => { composerFocusedRef.current = true; }}
+            onBlur={() => { composerFocusedRef.current = false; }}
             className="min-h-[44px] max-h-32 resize-none"
             rows={1}
             disabled={!canSend}

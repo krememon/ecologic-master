@@ -1,0 +1,99 @@
+We have a UX bug in Messaging / DMs: when I open a DM thread, it auto-focuses the message input and iOS/Capacitor opens the keyboard immediately. We need it to NOT open the keyboard until the user taps the input.
+
+Goal
+
+Opening a DM thread should not auto-open the keyboard.
+
+The input should only focus when:
+
+user taps into it, OR
+
+user taps a “Reply” button (if we add one), OR
+
+user is actively sending a message and we intentionally keep focus after send (optional)
+
+What to do
+
+Find the cause of auto-focus
+
+Search the codebase for:
+
+autoFocus
+
+.focus()
+
+focusInput
+
+initialFocusRef
+
+setTimeout(() => inputRef.current?.focus())
+
+useEffect that focuses when activeThreadId changes
+
+any modal open handlers that call focus
+
+Remove/disable automatic focus on thread open
+
+If the input has autoFocus, remove it.
+
+If there’s a useEffect that runs on conversation selection and calls focus(), remove it or gate it behind a user action.
+
+If it’s a reusable component (e.g. <MessageComposer />), ensure it defaults to no autofocus.
+
+Add a safe “intentional focus” pathway
+
+Keep an inputRef.
+
+Provide a function like focusComposer() that can be called only from user interactions:
+
+tapping the input container
+
+tapping a “Reply” / “Message” button
+
+Do not call focusComposer() from useEffect / on mount / on thread change.
+
+Preserve good typing UX
+
+After sending a message, it’s okay to keep focus (keyboard stays open) only if the user already had the keyboard open.
+
+Implement:
+
+Track wasFocused or keyboardOpen (simple boolean you set when input receives focus / blur).
+
+After send: if wasFocused === true, keep focus; otherwise don’t.
+
+Capacitor/iOS edge cases
+
+Some components (e.g. custom Input wrappers) may auto-focus via ref on mount.
+
+Make sure no parent container triggers focus due to click-to-open behavior.
+
+If there is a “scroll to bottom” routine that focuses input, decouple them.
+
+Acceptance tests
+
+Open Messaging → open any DM thread:
+
+✅ keyboard does NOT open automatically
+
+✅ screen does not jump upward
+
+Tap inside the message input:
+
+✅ keyboard opens normally and cursor appears
+
+Send a message:
+
+If keyboard was open already: ✅ stays open (nice UX)
+
+If keyboard was not open: ✅ does not force open
+
+Desktop web behavior stays normal.
+
+Deliverables
+
+Fix implemented with minimal diffs
+
+No duplicate input fields or extra buttons
+
+If you add any debug logging while testing, remove it at the end
