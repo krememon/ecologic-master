@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Users } from "lucide-react";
 import { useCan } from "@/hooks/useCan";
 import { useToast } from "@/hooks/use-toast";
-import { copyText } from "@/lib/clipboard";
+import { copyTextWithDetails } from "@/lib/clipboard";
 
 export default function InviteTeamButton() {
   const { can } = useCan();
@@ -39,22 +39,21 @@ export default function InviteTeamButton() {
         throw new Error("No invite code available");
       }
 
-      // Copy to clipboard
-      const success = await copyText(inviteCode);
+      const result = await copyTextWithDetails(inviteCode);
 
-      if (success) {
+      if (result.ok) {
         setIsCopied(true);
+        const devSuffix = import.meta.env.DEV ? ` (${result.method})` : "";
         toast({
-          description: "Company code copied to clipboard",
+          description: `Company code copied to clipboard${devSuffix}`,
         });
 
-        // Revert label after exactly 2000ms
         setTimeout(() => {
           setIsCopied(false);
           setIsDisabled(false);
         }, 2000);
       } else {
-        throw new Error("Failed to copy to clipboard");
+        throw new Error(result.error || "Failed to copy to clipboard");
       }
     } catch (error) {
       setIsDisabled(false);

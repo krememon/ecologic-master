@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useCompanyInviteCode } from "@/hooks/useCompanyInviteCode";
 import { formatDistanceToNow } from "date-fns";
-import { copyText } from "@/lib/clipboard";
+import { copyTextWithDetails } from "@/lib/clipboard";
 
 export default function CompanyInviteCode() {
   const [copied, setCopied] = useState(false);
@@ -18,18 +18,19 @@ export default function CompanyInviteCode() {
   const copyToClipboard = async () => {
     if (!company?.inviteCode) return;
     
-    const success = await copyText(company.inviteCode);
-    if (success) {
+    const result = await copyTextWithDetails(company.inviteCode);
+    if (result.ok) {
       setCopied(true);
+      const devSuffix = import.meta.env.DEV ? ` (${result.method})` : "";
       toast({
         title: "Copied!",
-        description: "Invite code copied to clipboard",
+        description: `Invite code copied to clipboard${devSuffix}`,
       });
       setTimeout(() => setCopied(false), 2000);
     } else {
       toast({
         title: "Failed to copy",
-        description: "Couldn't copy — tap and hold to copy",
+        description: "Couldn't copy — tap and hold the code to copy",
         variant: "destructive",
       });
     }

@@ -1,0 +1,124 @@
+Copy still fails on iOS native (“Failed to copy to clipboard”). This means we’re either:
+
+NOT actually using Capacitor Clipboard at runtime (falling back to navigator.clipboard / execCommand)
+
+Clipboard plugin isn’t installed/synced into iOS
+
+The native build hasn’t been rebuilt after adding the plugin
+
+Or the copy handler is still doing input-session operations (focus/select)
+
+We need a definitive fix with proper native clipboard usage + verification.
+
+Step 1 — Verify plugin is installed and synced
+
+Check package.json for @capacitor/clipboard. If missing:
+
+npm i @capacitor/clipboard
+
+Run:
+
+npx cap sync ios
+
+Confirm iOS project has the plugin integrated (Pods/Package).
+
+If you added the plugin, you MUST ensure the iOS wrapper was rebuilt/synced.
+
+Step 2 — Implement a single source of truth helper: copyToClipboard(text)
+
+Create src/utils/clipboard.ts (or similar):
+
+Requirements:
+
+Detect native via Capacitor:
+
+import { Capacitor } from '@capacitor/core'
+
+const isNative = Capacitor.isNativePlatform()
+
+If native:
+
+import { Clipboard } from '@capacitor/clipboard'
+
+await Clipboard.write({ string: text })
+
+return { ok: true }
+
+If web:
+
+try navigator.clipboard.writeText(text) if available
+
+else fallback to hidden textarea + document.execCommand('copy')
+Return { ok: boolean, method: 'capacitor'|'navigator'|'textarea', error?: string }
+
+Important:
+
+Never call .focus() or .select() on any visible input in the native path.
+
+Do not require any active text input session.
+
+Step 3 — Replace ALL copy usages
+
+Search for:
+
+“copy to clipboard”
+
+navigator.clipboard
+
+execCommand('copy')
+
+“company code”
+Replace every instance with the helper.
+
+For the “Company code copied” action in Employees/Invite flow:
+
+Call copyToClipboard(companyCode) inside the onClick handler.
+
+If ok: show success toast.
+
+If fail: show toast with “Copy failed” + show the code in a selectable box and a second button “Copy again”.
+
+Step 4 — Add DEV-only debug on iOS native
+
+Temporarily log (DEV only) when user taps copy:
+
+platform: Capacitor.getPlatform()
+
+isNative: boolean
+
+method used from helper
+
+error if any
+
+Remove logs after we confirm.
+
+Also show the method in the toast subtitle in DEV:
+
+“Copied (native)” / “Copied (web)”
+So we can confirm it’s not silently using the wrong path.
+
+Step 5 — Rebuild requirement (critical)
+
+After changes:
+
+npx cap sync ios
+
+rebuild the iOS app (Xcode run)
+
+If we don’t rebuild, the plugin won’t be present and copy will keep failing.
+
+Acceptance tests
+
+On iOS native:
+
+Tap copy → ✅ success toast
+
+Paste into Notes → ✅ correct code
+
+DEV toast indicates method = capacitor
+
+On desktop web:
+
+Copy still works
+
+Deliver minimal diffs, keep UI unchanged except for better error handling.
