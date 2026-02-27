@@ -395,6 +395,9 @@ html.native-ios .appSheetOverlay {
 html.native-ios .appSheetContent {
   top: var(--native-safe-top, 56px) !important;
 }
+html.native-ios .appSheetContent.sheetBottomSide {
+  top: auto !important;
+}
 
 /* iOS native wrapper: push DM thread header below status bar / Dynamic Island */
 html.native-ios .dmThreadHeader {

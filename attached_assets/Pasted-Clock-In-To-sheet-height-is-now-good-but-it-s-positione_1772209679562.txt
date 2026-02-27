@@ -1,0 +1,93 @@
+Clock In To sheet height is now good, but it’s positioned too high. I want it to feel like a true bottom sheet: it should sit on the lower half of the screen, anchored to the bottom (like Apple Maps / iOS sheets). Keep the current styling exactly the same.
+
+Goal
+
+Sheet is anchored to bottom
+
+Only occupies lower half (about 50–60% of screen height)
+
+Top of sheet should start around mid-screen (not near the top)
+
+Background remains dimmed
+
+Content inside remains unchanged
+
+Internal scroll stays inside the sheet body if needed
+
+Implementation
+1) Ensure the sheet container is bottom-aligned
+
+Find the wrapper that positions the modal/sheet. It’s probably a fixed inset-0 flex ... overlay.
+
+Set overlay alignment:
+
+display: flex
+
+align-items: flex-end (Tailwind: items-end)
+
+justify-content: center (or justify-center / justify-end depending on current structure)
+
+Add pb-[env(safe-area-inset-bottom)] or a small bottom padding so it doesn’t kiss the home indicator
+
+Example:
+
+overlay: fixed inset-0 z-50 flex items-end justify-center bg-black/40
+
+add p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]
+
+2) Set the sheet height to lower-half
+
+Set sheet content:
+
+width: min(640px, 100%) on desktop (keep existing)
+
+max-height: 60dvh (or exactly 55dvh)
+
+min-height: 45dvh
+
+border-radius top corners unchanged
+
+If we want a consistent “half sheet”:
+
+use height: 55dvh (fixed) OR keep auto but cap with max-height
+Pick whichever preserves the current look best.
+
+3) Keep internal layout intact
+
+Do not change inner padding, typography, buttons, card styles.
+Only adjust:
+
+overlay alignment (bottom)
+
+sheet height constraints (lower-half)
+
+4) Animation (optional but nice)
+
+If there’s a slide-in animation, ensure it slides up from bottom (not from center/top).
+Do not introduce heavy libs.
+
+Acceptance tests
+
+Open Clock In To:
+
+✅ sheet appears from bottom
+
+✅ occupies lower half-ish (top edge near middle of screen)
+
+✅ looks exactly like before internally
+
+Scroll:
+
+✅ only body scrolls inside sheet if needed
+
+iOS safe area:
+
+✅ bottom padding keeps it above home indicator
+
+Deliverables
+
+Bottom-aligned overlay (items-end)
+
+Lower-half sheet sizing
+
+No visual regressions inside the sheet

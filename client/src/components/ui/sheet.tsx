@@ -69,7 +69,7 @@ const SheetContent = React.forwardRef<
         e.preventDefault();
         onCloseAutoFocus?.(e);
       }}
-      className={cn("appSheetContent", sheetVariants({ side }), className)}
+      className={cn("appSheetContent", side === "bottom" && "sheetBottomSide", sheetVariants({ side }), className)}
       {...props}
     >
       {children}
