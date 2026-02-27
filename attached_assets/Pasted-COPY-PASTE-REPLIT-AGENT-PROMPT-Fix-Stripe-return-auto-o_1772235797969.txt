@@ -1,0 +1,140 @@
+COPY/PASTE REPLIT AGENT PROMPT (Fix Stripe return: auto-open native app + close browser; and fix “signature wasn’t requested” by ensuring Stripe requires billing details + card auth flow correctly)
+
+We’re in a bad state after recent Stripe changes:
+
+After payment completes, it shows a web page saying “Returning to EcoLogic… tap here” inside the in-app browser.
+✅ We need it to automatically return to the native wrapper app (no manual tap).
+
+Signature wasn’t requested (we expected the final confirmation/signature/authorization step but it didn’t happen).
+
+We need to fix both cleanly.
+
+PART A — Auto-return to native app (NO “tap here”)
+Root cause
+
+We are still using a web return page (/stripe/return) that tries to deep link via a clickable link, but iOS in-app browser often blocks auto-redirects unless done correctly (and we’re not closing the browser from the native side).
+
+Correct behavior required
+
+When Stripe redirects after success/cancel, the native app should intercept it, close the Stripe browser, and navigate inside app.
+
+Implementation Plan (do this exactly)
+1) Use deep links in Stripe success_url/cancel_url
+
+In backend Checkout Session creation:
+
+success_url = ecologic://stripe-return?result=success&session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = ecologic://stripe-return?result=cancel
+
+Do NOT use any http(s) return page for native.
+
+2) Ensure iOS is configured to open ecologic://
+
+In Xcode:
+
+Target → Info → URL Types
+
+Add scheme: ecologic
+
+In Capacitor config, ensure nothing blocks it.
+
+3) Handle appUrlOpen and close Browser immediately
+
+In app bootstrap (main.tsx/app init):
+
+Add App.addListener('appUrlOpen', ...)
+
+If url includes stripe-return:
+
+await Browser.close() (close the in-app Stripe browser)
+
+call /api/subscriptions/status and refresh client subscription state
+
+route user:
+
+success → /jobs (or wherever)
+
+cancel → /billing
+
+4) Remove the “Returning to EcoLogic…” web page for native flow
+
+We should NOT land on that page on native anymore.
+If it still exists for web, that’s fine, but native must not use it.
+
+5) Safety fallback
+
+If appUrlOpen doesn’t fire (rare):
+
+Keep a manual “tap here” link on the web return page, but native should never rely on it.
+
+PART B — “Signature wasn’t even requested”
+
+We need to clarify what “signature” means here.
+
+If you mean Stripe Checkout final confirmation / 3D Secure / card authorization, that only appears when:
+
+The card requires it, OR
+
+You configure Checkout to collect certain info (billing, etc.) and use proper settings.
+
+Fix plan (make Checkout behave consistently)
+1) Ensure Checkout Session is created with correct fields
+
+In backend when creating Checkout Session:
+
+Use mode: 'subscription' (if subscription) or payment (if one-time)
+
+Ensure payment_method_types: ['card']
+
+Ensure billing_address_collection: 'required'
+
+Ensure customer_email or customer is set
+
+Ensure payment_method_collection is configured correctly for subscriptions:
+
+payment_method_collection: 'always' (if needed)
+
+2) If you need a “signature-like confirmation” every time
+
+That’s not guaranteed by Stripe—3DS prompts depend on the card/bank.
+To reliably test that flow, use Stripe test cards that trigger 3D Secure authentication.
+
+3) Ensure we’re not accidentally skipping the “final step”
+
+If we’re using a saved customer/payment method and not forcing collection, it may skip steps. Confirm whether we’re reusing a Stripe customer and saved PM.
+
+Acceptance tests
+Native:
+
+Start checkout → complete payment:
+
+✅ app returns automatically (no “tap here” page)
+
+✅ Stripe browser closes
+
+✅ subscription becomes active
+
+✅ lands on Jobs
+
+Cancel:
+
+✅ browser closes
+
+✅ returns to Billing
+
+Checkout flow:
+
+billing address required prompts as expected
+
+if using a 3DS test card, auth step appears
+
+Deliverables
+
+Stripe success/cancel deep links (ecologic://)
+
+iOS URL scheme configured
+
+appUrlOpen handler closes Browser + refreshes subscription + navigates
+
+Checkout Session config updated to require billing info and avoid unintended skipping

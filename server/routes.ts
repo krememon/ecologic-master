@@ -9994,6 +9994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         mode: 'payment',
+        billing_address_collection: 'required',
         line_items: [{
           price_data: {
             currency: 'usd',
@@ -13642,8 +13643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (typeof value === 'string') params.set(key, value);
     }
     const deepLink = `ecologic://stripe-return?${params.toString()}`;
-    res.setHeader('Content-Type', 'text/html');
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to EcoLogic</title></head><body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:system-ui;background:#f9fafb"><div style="text-align:center"><p style="color:#1f2937;font-size:18px;font-weight:600">Returning to EcoLogic...</p><p style="color:#6b7280;font-size:14px">If the app doesn't open, <a href="${deepLink}">tap here</a>.</p></div><script>window.location.href="${deepLink}";</script></body></html>`);
+    res.redirect(302, deepLink);
   });
 
   // POST /api/payments/checkout - Create a Stripe Checkout session for an invoice
@@ -13751,7 +13751,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
         mode: 'payment',
+        billing_address_collection: 'required',
         line_items: [
           {
             price_data: {
