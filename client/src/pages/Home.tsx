@@ -835,14 +835,14 @@ export default function Home() {
       )}
 
       <Sheet open={showJobPicker} onOpenChange={setShowJobPicker}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
-          <SheetHeader className="pb-4">
+        <SheetContent side="bottom" className="max-h-[60dvh] rounded-t-3xl flex flex-col overflow-hidden pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
+          <SheetHeader className="flex-shrink-0 pb-4">
             <SheetTitle className="text-center">
               {jobPickerMode === 'clockIn' ? 'Clock In To' : 'Switch To'}
             </SheetTitle>
           </SheetHeader>
           
-          <div className="space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
@@ -857,7 +857,7 @@ export default function Home() {
               <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                 Your Jobs
               </p>
-              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+              <div className="space-y-1">
                 {myJobs
                   .filter(job => 
                     job.status !== 'completed' && 

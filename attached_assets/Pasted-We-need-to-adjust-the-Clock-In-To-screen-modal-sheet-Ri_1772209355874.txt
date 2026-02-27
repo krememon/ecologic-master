@@ -1,0 +1,109 @@
+We need to adjust the Clock In To screen (modal/sheet). Right now it opens too tall (almost full-screen). I want it to feel like an iOS half-sheet: it should come up about halfway (or ~60% max) and look clean/premium — without messing up the existing layout/styles inside.
+
+Goals
+
+Modal height should be half-sheet (not full screen)
+
+Content should remain visually the same (spacing, cards, buttons)
+
+If content exceeds the max height, the content area scrolls inside the sheet (not the entire page)
+
+Respect iOS safe areas (top notch not relevant since it’s a bottom sheet, but bottom inset is)
+
+Don’t break desktop web behavior
+
+What to change
+1) Identify the Clock In modal component
+
+Find the component that renders this sheet/modal (likely something like ClockInModal, ClockInSheet, ClockInToModal).
+
+Determine what modal system it uses:
+
+Radix Dialog / shadcn Dialog
+
+Radix Sheet
+
+Custom bottom sheet
+
+2) Make the container a constrained bottom sheet
+
+We want:
+
+anchored to bottom
+
+max-height around 60vh (or 65vh), and min-height around 45vh
+
+rounded top corners
+
+internal scrolling for the content region only
+
+Implement container sizing:
+
+Use dynamic viewport units for iOS: max-height: 65dvh (fallback 65vh)
+
+height: auto
+
+overflow: hidden on the sheet container
+
+Add padding-bottom: env(safe-area-inset-bottom) (plus normal padding)
+
+3) Make only the body scroll (not header)
+
+Split sheet into:
+
+Header (title + close): fixed
+
+Body (search + list + activities grid): scrollable if needed
+
+Footer (if any): fixed
+
+Critical flex rule: body must have min-height: 0 to allow scrolling.
+
+Example structure (conceptually):
+
+SheetContent: flex flex-col overflow-hidden + height constraints
+
+Header: shrink-0
+
+Body: flex-1 min-h-0 overflow-y-auto
+
+Footer: shrink-0 (if used)
+
+4) Preserve the exact look
+
+Do NOT redesign the cards/typography.
+Just constrain the sheet height and introduce internal scroll if needed.
+
+5) Ensure background page does not scroll behind the sheet
+
+If it currently scrolls behind, lock background scroll while modal is open (Radix usually handles this, but confirm).
+
+Acceptance tests
+
+Open Clock In To:
+
+✅ sheet opens ~half screen (not nearly full)
+
+✅ header/title/close stays visible
+
+✅ content looks the same, just contained
+
+If there are many jobs:
+
+✅ body scrolls inside sheet, header stays put
+
+iOS:
+
+✅ bottom safe area respected, nothing clipped by home indicator
+
+Desktop:
+
+✅ still looks like a clean modal (doesn’t become weirdly tiny)
+
+Deliverables
+
+Update Clock In modal/sheet container sizing (half-sheet)
+
+Internal scroll for body section only
+
+No regressions to existing UI styles
