@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { openInAppBrowser } from "@/lib/capacitor";
+import { openInAppBrowser, isNativePlatform } from "@/lib/capacitor";
 import { useCan } from "@/hooks/useCan";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
@@ -172,6 +172,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         invoiceId: numericInvoiceId,
         returnBaseUrl: window.location.origin,
         ...(partialEnabled ? { amountCents: paymentAmountCents } : {}),
+        ...(isNativePlatform() ? { native: true } : {}),
       });
       const data = await response.json();
       

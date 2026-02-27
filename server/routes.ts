@@ -13636,6 +13636,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/stripe/native-return', (req, res) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === 'string') params.set(key, value);
+    }
+    const deepLink = `ecologic://stripe-return?${params.toString()}`;
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to EcoLogic</title></head><body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:system-ui;background:#f9fafb"><div style="text-align:center"><p style="color:#1f2937;font-size:18px;font-weight:600">Returning to EcoLogic...</p><p style="color:#6b7280;font-size:14px">If the app doesn't open, <a href="${deepLink}">tap here</a>.</p></div><script>window.location.href="${deepLink}";</script></body></html>`);
+  });
+
   // POST /api/payments/checkout - Create a Stripe Checkout session for an invoice
   app.post('/api/payments/checkout', isAuthenticated, async (req: any, res) => {
     try {
@@ -13659,7 +13669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You do not have permission to create payment links" });
       }
 
-      const { invoiceId, returnBaseUrl, amountCents: requestedAmountCents } = req.body;
+      const { invoiceId, returnBaseUrl, amountCents: requestedAmountCents, native: isNativeClient } = req.body;
       
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
@@ -13728,7 +13738,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `Partial payment for invoice ${invoice.invoiceNumber}`
         : (invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`);
 
-      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c`);
+      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c native=${!!isNativeClient}`);
+
+      let successUrl: string;
+      let cancelUrl: string;
+      if (isNativeClient) {
+        successUrl = `${appBaseUrl}/api/stripe/native-return?result=success&invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
+        cancelUrl = `${appBaseUrl}/api/stripe/native-return?result=cancel&invoiceId=${invoice.id}`;
+      } else {
+        successUrl = `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
+        cancelUrl = `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`;
+      }
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -13751,8 +13771,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           jobId: invoice.jobId ? String(invoice.jobId) : '',
           isPartialPayment: isPartialPayment ? 'true' : 'false',
         },
-        success_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
       });
 
       console.log(`[Stripe] Created checkout session ${session.id} for invoice ${invoice.id}`);

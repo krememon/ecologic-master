@@ -1,0 +1,144 @@
+COPY/PASTE REPLIT AGENT PROMPT (Fix Stripe success redirect so it closes in-app browser and returns to Capacitor wrapper instead of loading login screen inside Stripe browser)
+
+Problem:
+After Stripe payment completes, it redirects to our app URL (replit.dev login screen) inside the Stripe in-app browser, instead of returning to the actual Capacitor wrapper app.
+
+We need Stripe success to:
+
+Close the in-app browser
+
+Bring the user back into the native wrapper
+
+Refresh subscription status
+
+Navigate to Jobs (or correct screen)
+
+NEVER show the login screen inside the Stripe browser
+
+🔥 Root Cause
+
+Right now success_url and cancel_url are normal web URLs (replit.dev).
+Stripe redirects there → browser loads it → stays inside in-app browser.
+
+That will NEVER automatically return to the wrapper unless we intercept it.
+
+✅ Correct Architecture (Production Safe)
+
+We must use a deep link scheme so the native app intercepts the redirect.
+
+STEP 1 — Add Deep Link Scheme to Capacitor
+
+In capacitor.config.ts, add:
+
+server: {
+  androidScheme: "https"
+},
+plugins: {
+  App: {
+    launchUrl: "ecologic://"
+  }
+}
+
+Then in iOS project:
+
+Open Xcode
+
+Target → Signing & Capabilities
+
+Add URL Types
+
+Identifier: ecologic
+
+URL Scheme: ecologic
+
+This allows ecologic:// links to open the wrapper app.
+
+STEP 2 — Change Stripe success/cancel URLs (CRITICAL)
+
+In backend where Checkout Session is created:
+
+Replace:
+
+success_url: `${APP_URL}/stripe/return?...`
+cancel_url: `${APP_URL}/stripe/return?...`
+
+WITH:
+
+success_url: `ecologic://stripe-return?result=success&session_id={CHECKOUT_SESSION_ID}`
+cancel_url: `ecologic://stripe-return?result=cancel`
+
+This makes Stripe redirect to a deep link instead of web URL.
+
+STEP 3 — Listen for Deep Link in App
+
+In your main frontend entry (e.g. main.tsx or App bootstrap):
+
+import { App } from '@capacitor/app';
+
+App.addListener('appUrlOpen', async (event) => {
+  const url = event.url;
+
+  if (url.includes('stripe-return')) {
+    const params = new URL(url).searchParams;
+    const result = params.get('result');
+
+    // Close Stripe browser
+    const { Browser } = await import('@capacitor/browser');
+    await Browser.close();
+
+    // Refresh subscription
+    await fetch('/api/subscriptions/status');
+
+    if (result === 'success') {
+      window.location.href = '/jobs';
+    } else {
+      window.location.href = '/billing';
+    }
+  }
+});
+STEP 4 — Remove Web Return Page
+
+Delete /stripe/return route entirely (we don’t want web redirects anymore).
+
+✅ Expected Behavior After Fix
+
+On native iOS:
+
+User completes Stripe checkout.
+
+Stripe redirects to ecologic://stripe-return?...
+
+Capacitor intercepts it.
+
+Stripe in-app browser closes instantly.
+
+Wrapper app becomes visible.
+
+Subscription status refreshes.
+
+User lands on Jobs.
+
+NO login screen.
+
+NO internal browser stuck state.
+
+🧪 Acceptance Test
+
+Native iOS:
+
+Complete payment
+
+Browser closes automatically
+
+App visible instantly
+
+No web login page
+
+Paywall gone
+
+Lands on Jobs
+
+⚠️ Important
+
+Do NOT rely on web URLs for Stripe return in native apps.
+Deep links are the correct production pattern.

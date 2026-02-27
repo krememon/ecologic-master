@@ -271,7 +271,8 @@ export function JobInvoiceModal({
       console.log("[Checkout] window.location.origin", window.location.origin);
       const response = await apiRequest("POST", "/api/payments/checkout", { 
         invoiceId,
-        returnBaseUrl: window.location.origin 
+        returnBaseUrl: window.location.origin,
+        ...(isNativePlatform() ? { native: true } : {}),
       });
       if (!response.ok) {
         const data = await response.json();

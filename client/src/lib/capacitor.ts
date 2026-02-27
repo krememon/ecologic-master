@@ -299,31 +299,15 @@ export async function openInAppBrowser(url: string, onClose?: () => void): Promi
   try {
     const { Browser } = await import("@capacitor/browser");
     let closed = false;
-    let pageLoadCount = 0;
-    const cleanup: Array<{ remove: () => void }> = [];
 
     const handleClose = () => {
       if (closed) return;
       closed = true;
-      cleanup.forEach((l) => { try { l.remove(); } catch {} });
+      if (finishedListener) { try { finishedListener.remove(); } catch {} }
       if (onClose) onClose();
     };
 
     const finishedListener = await Browser.addListener("browserFinished", handleClose);
-    cleanup.push(finishedListener);
-
-    try {
-      const pageLoadedListener = await Browser.addListener("browserPageLoaded" as any, async () => {
-        pageLoadCount++;
-        if (closed || pageLoadCount <= 1) return;
-        try {
-          await Browser.close();
-        } catch {}
-        handleClose();
-      });
-      cleanup.push(pageLoadedListener);
-    } catch {}
-
     await Browser.open({ url, presentationStyle: "fullscreen" });
   } catch (err) {
     console.error("[capacitor] Browser.open failed, falling back:", err);

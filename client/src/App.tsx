@@ -414,6 +414,33 @@ function useCapacitorDeepLinks() {
 
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
           console.log("[deep-link] Received:", url);
+
+          if (url.startsWith("ecologic://stripe-return")) {
+            console.log("[deep-link] Stripe return detected");
+            try {
+              const { Browser } = await import("@capacitor/browser");
+              await Browser.close();
+            } catch {}
+
+            const params = new URL(url.replace("ecologic://", "https://placeholder/")).searchParams;
+            const result = params.get("result");
+            const invoiceId = params.get("invoiceId");
+
+            queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+
+            if (result === "success" && invoiceId) {
+              window.location.href = `/invoice/${invoiceId}/pay?success=1`;
+            } else if (invoiceId) {
+              window.location.href = `/invoice/${invoiceId}/pay?canceled=1`;
+            } else {
+              window.location.href = "/jobs";
+            }
+            return;
+          }
+
           if (!url.startsWith("ecologic://auth/callback")) return;
 
           await closeSystemBrowser();
