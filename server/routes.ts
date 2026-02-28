@@ -13723,21 +13723,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amountInCents = currentBalanceDueCents;
       }
 
-      // Determine base URL for return redirects
-
-      // Use the frontend-provided returnBaseUrl if valid, otherwise fall back to env/header
-      let appBaseUrl: string;
-      if (returnBaseUrl && typeof returnBaseUrl === 'string' && returnBaseUrl.startsWith('https://')) {
-        appBaseUrl = returnBaseUrl;
+      let stripeReturnBase: string;
+      if (process.env.APP_BASE_URL) {
+        stripeReturnBase = process.env.APP_BASE_URL;
+      } else if (returnBaseUrl && typeof returnBaseUrl === 'string' && returnBaseUrl.startsWith('https://')) {
+        stripeReturnBase = returnBaseUrl;
       } else {
-        // Fallback: build from request headers or env
         const proto = req.headers["x-forwarded-proto"] || 'https';
         const host = req.headers["x-forwarded-host"] || req.headers.host;
-        if (host) {
-          appBaseUrl = `${proto}://${host}`;
-        } else {
-          appBaseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
-        }
+        stripeReturnBase = host ? `${proto}://${host}` : `https://${process.env.REPLIT_DEV_DOMAIN}`;
       }
 
       const isPartialPayment = amountInCents < currentBalanceDueCents;
@@ -13745,10 +13739,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `Partial payment for invoice ${invoice.invoiceNumber}`
         : (invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`);
 
-      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c returnBase=${appBaseUrl}`);
+      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c returnBase=${stripeReturnBase}`);
 
-      const successUrl = `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`;
+      const successUrl = `${stripeReturnBase}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${stripeReturnBase}/stripe/return?invoiceId=${invoice.id}&canceled=1`;
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],

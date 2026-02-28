@@ -1,0 +1,112 @@
+COPY/PASTE REPLIT AGENT PROMPT (Real fix: use ecologicc.com universal link return + close browser on appUrlOpen; stop using replit.app for Stripe return)
+
+We need Stripe Checkout to return to the Capacitor wrapper app after payment, not open EcoLogic inside the in-app Safari browser.
+
+Key point: The wrapper can only “tell the difference” if the return URL is an App Link (Universal Link) that iOS routes to the app. replit.app cannot be used for this.
+
+Goal flow
+
+Pay → confirmation → Stripe redirects to https://ecologicc.com/stripe/return?... → iOS opens the EcoLogic wrapper app (NOT the browser) → app closes any open Browser → refresh subscription → go to Jobs.
+
+Step 1 — Make Stripe return URLs use ecologicc.com (NOT replit.app)
+
+In backend where we create Stripe Checkout Session:
+
+success_url = https://ecologicc.com/stripe/return?result=success&session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = https://ecologicc.com/stripe/return?result=cancel
+
+Do not use APP_URL when APP_URL is replit.app for these return URLs.
+
+Step 2 — Configure iOS Universal Links
+
+In Xcode:
+
+Target → Signing & Capabilities → add Associated Domains
+
+Add:
+
+applinks:ecologicc.com
+
+Now we must host the AASA file on ecologicc.com:
+
+https://ecologicc.com/.well-known/apple-app-site-association
+
+It must include:
+
+your Team ID + bundle id
+
+paths: /stripe/return*
+
+Example shape (fill in TEAMID + BUNDLEID from Xcode):
+{
+"applinks": {
+"apps": [],
+"details": [
+{
+"appID": "TEAMID.BUNDLEID",
+"paths": ["/stripe/return*"]
+}
+]
+}
+}
+
+This file must be served with correct headers (application/json) and no redirects.
+
+Step 3 — Add appUrlOpen handler to close Browser + refresh subscription
+
+In app bootstrap (main.tsx or App root), add:
+
+App.addListener('appUrlOpen', async ({ url }) => { ... })
+
+If url starts with https://ecologicc.com/stripe/return:
+
+await Browser.close() (close the Stripe browser if it’s still open)
+
+call /api/subscriptions/status
+
+update subscription state
+
+navigate:
+
+success → /jobs
+
+cancel → /billing
+
+Also add App.addListener('resume', ...) to re-check subscription status as backup.
+
+Step 4 — Make /stripe/return page minimal (web fallback)
+
+On the website route /stripe/return, render “Returning…” and a button “Open EcoLogic” (optional) for non-app users.
+
+But on native, it shouldn’t show, because universal link should open the app directly.
+
+Acceptance tests
+
+Native iOS:
+
+Start checkout
+
+Finish payment
+
+✅ iOS opens EcoLogic wrapper app automatically
+
+✅ Stripe browser is closed
+
+✅ subscription flips active
+
+✅ user lands on Jobs
+
+Cancel:
+
+✅ returns to app
+
+✅ goes to Billing
+
+Non-negotiable rule
+
+DO NOT use replit.app/replit.dev as Stripe return URL for native deep return. It will always reopen inside the browser and the wrapper cannot distinguish it.
+
+If you want an even better solution (no browser at all), we can switch to Stripe PaymentSheet in the native wrapper later. But this universal link approach is the correct way to make Checkout return to the wrapper.
+
+If you don’t want to touch domains today: the only other option is ditch Checkout and use PaymentSheet (native) so there’s nothing to “return” from.
