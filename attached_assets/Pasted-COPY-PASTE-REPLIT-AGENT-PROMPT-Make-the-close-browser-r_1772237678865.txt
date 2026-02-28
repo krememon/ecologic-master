@@ -1,0 +1,140 @@
+COPY/PASTE REPLIT AGENT PROMPT (Make the “close browser + return to wrapper” work NOW. Your current change set is incomplete because you’re only listening for browserFinished (close event) but Stripe never closes the browser. Fix by closing the browser from /stripe/return using a native-only deep link + appUrlOpen, with a safe fallback. Also fix domain mismatch ecologicc.com vs app.ecologicc.com.)
+
+We need to fix the real problem: Stripe doesn’t automatically close the Capacitor Browser. So listening for browserFinished only helps after the user manually closes the browser — that’s not our desired flow.
+
+Right now the flow is:
+Stripe → redirects to /stripe/return → shows “Returning…” inside the Stripe browser → stays there (because browser is still open) → user is stuck.
+
+REQUIRED FLOW
+
+Pay → confirmation → redirect → browser closes automatically → wrapper app is visible again → app refreshes subscription → route to Jobs.
+
+1) Fix the mismatch: ecologicc.com vs app.ecologicc.com
+
+Your Xcode Associated Domains says:
+
+applinks:app.ecologicc.com
+
+But backend says return URLs prioritize APP_BASE_URL (ecologicc.com).
+
+That means Universal Links may NOT fire because the domain doesn’t match.
+
+Do this:
+
+Choose ONE domain for universal links (recommended: app.ecologicc.com)
+
+Stripe success/cancel must use THAT exact domain:
+
+https://app.ecologicc.com/stripe/return?...
+
+AASA must be served from that exact domain:
+
+https://app.ecologicc.com/.well-known/apple-app-site-association
+
+Associated Domains must match:
+
+applinks:app.ecologicc.com
+
+If we keep ecologicc.com, then Associated Domains must be applinks:ecologicc.com. No mixing.
+
+2) Stop relying on “page renders in main WKWebView”
+
+This is the core misunderstanding. /stripe/return is loading in the Stripe browser, not the main WKWebView. Storing flags in localStorage doesn’t help because it’s the browser’s storage context, not the wrapper’s.
+
+We need a mechanism that causes iOS to switch from the browser back to the app.
+
+3) Correct universal-link return strategy (works without manual close)
+
+We must make Stripe return to a universal link domain, then have the app intercept it via appUrlOpen and immediately close Browser.
+
+A) In native app: add App.addListener('appUrlOpen')
+
+If url path begins with /stripe/return:
+
+await Browser.close()
+
+parse query params (result + session_id)
+
+call /api/subscriptions/status and update state
+
+route success → /jobs, cancel → /billing
+
+B) In the browser return page /stripe/return, do NOT “redirect to /”
+
+For universal links, the browser is supposed to hand off to the app. The return page should be minimal and not try to “help” by redirecting or changing pages.
+
+4) Add a dev-safe fallback that works even when Universal Links don’t
+
+Because in dev you’re still on replit domains sometimes.
+
+On /stripe/return, add a single button:
+
+“Open EcoLogic”
+that links to a custom scheme:
+
+ecologic://stripe-return?result=success&session_id=...
+
+And in the app:
+
+also handle ecologic://stripe-return in appUrlOpen the same way (close browser + refresh + route)
+
+This gives:
+
+Production: universal link auto-opens app
+
+Dev: user can tap once if universal link isn’t active yet
+
+But we still want automatic return in production.
+
+5) Why your current browserFinished approach is failing
+
+Because browserFinished triggers only when:
+
+the user hits the X to close the browser
+
+Stripe is not going to close it for you.
+So we must force-close it when we detect a Stripe return callback in the app (via appUrlOpen).
+
+6) Deliverables
+
+Fix domain consistency:
+
+Choose app.ecologicc.com everywhere (Stripe URLs, AASA hosting, Associated Domains)
+
+Add appUrlOpen handler:
+
+on both universal links and custom scheme
+
+Update /stripe/return page:
+
+minimal “Returning…”
+
+no redirects
+
+include fallback “Open EcoLogic” deep link button
+
+Remove/stop using localStorage flags as the primary mechanism for Stripe return; it is unreliable across Browser vs WKWebView contexts.
+
+Acceptance tests
+
+Production-style (app.ecologicc.com):
+
+Complete Stripe payment
+
+✅ iOS opens EcoLogic wrapper automatically
+
+✅ Browser closes
+
+✅ Subscription updates
+
+✅ Route to Jobs
+
+Dev fallback:
+
+If universal link not active, you see “Returning…”
+
+Tap “Open EcoLogic”
+
+✅ returns to wrapper and closes browser
+
+Do NOT do more UI work or other payment changes until this is fixed. This is strictly routing + browser-close behavior.

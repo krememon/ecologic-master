@@ -1,23 +1,24 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 export default function StripeReturn() {
   const [, setLocation] = useLocation();
+  const [showFallback, setShowFallback] = useState(false);
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const invoiceId = urlParams.get("invoiceId") || "";
+  const canceled = urlParams.get("canceled");
+  const sessionId = urlParams.get("session_id") || "";
+  const result = canceled === "1" ? "cancel" : "success";
+
+  const deepLinkParams = new URLSearchParams();
+  deepLinkParams.set("result", result);
+  if (invoiceId) deepLinkParams.set("invoiceId", invoiceId);
+  if (sessionId) deepLinkParams.set("session_id", sessionId);
+  const deepLinkUrl = `ecologic://stripe-return?${deepLinkParams.toString()}`;
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const invoiceId = urlParams.get("invoiceId");
-    const canceled = urlParams.get("canceled");
-    const sessionId = urlParams.get("session_id");
-
-    const result = canceled === "1" ? "cancel" : "success";
-
     console.log("[stripe-return] Page loaded:", { result, invoiceId, sessionId });
-
-    localStorage.setItem("stripeReturnResult", result);
-    if (invoiceId) localStorage.setItem("stripeReturnInvoiceId", invoiceId);
-    if (sessionId) localStorage.setItem("stripeReturnSessionId", sessionId);
-    console.log("[stripe-return] Flags written to localStorage");
 
     let isNative = false;
     try {
@@ -26,13 +27,10 @@ export default function StripeReturn() {
     } catch {}
 
     if (isNative) {
-      console.log("[stripe-return] Native detected — flags stored, waiting for browser close");
+      console.log("[stripe-return] Native detected — waiting for universal link or manual close");
+      setTimeout(() => setShowFallback(true), 1500);
       return;
     }
-
-    localStorage.removeItem("stripeReturnResult");
-    localStorage.removeItem("stripeReturnInvoiceId");
-    localStorage.removeItem("stripeReturnSessionId");
 
     if (!invoiceId) {
       setLocation("/jobs", { replace: true });
@@ -46,7 +44,7 @@ export default function StripeReturn() {
       if (sessionId) params.set("session_id", sessionId);
       setLocation(`/invoice/${invoiceId}/pay?${params.toString()}`, { replace: true });
     }
-  }, [setLocation]);
+  }, [setLocation, result, invoiceId, sessionId, canceled]);
 
   return (
     <div style={{
@@ -70,9 +68,26 @@ export default function StripeReturn() {
         <p style={{ color: '#1f2937', fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
           Returning to EcoLogic...
         </p>
-        <p style={{ color: '#6b7280', fontSize: '14px' }}>
+        <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
           Tap "Done" if this window doesn't close automatically.
         </p>
+        {showFallback && (
+          <a
+            href={deepLinkUrl}
+            style={{
+              display: 'inline-block',
+              padding: '12px 24px',
+              backgroundColor: '#3b82f6',
+              color: '#ffffff',
+              borderRadius: '8px',
+              textDecoration: 'none',
+              fontWeight: '600',
+              fontSize: '16px',
+            }}
+          >
+            Open EcoLogic
+          </a>
+        )}
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
