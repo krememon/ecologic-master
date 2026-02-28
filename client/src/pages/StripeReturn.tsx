@@ -12,6 +12,13 @@ export default function StripeReturn() {
 
     const result = canceled === "1" ? "cancel" : "success";
 
+    console.log("[stripe-return] Page loaded:", { result, invoiceId, sessionId });
+
+    localStorage.setItem("stripeReturnResult", result);
+    if (invoiceId) localStorage.setItem("stripeReturnInvoiceId", invoiceId);
+    if (sessionId) localStorage.setItem("stripeReturnSessionId", sessionId);
+    console.log("[stripe-return] Flags written to localStorage");
+
     let isNative = false;
     try {
       const cap = (window as any).Capacitor;
@@ -19,25 +26,13 @@ export default function StripeReturn() {
     } catch {}
 
     if (isNative) {
-      localStorage.setItem("stripeReturnResult", result);
-      if (invoiceId) localStorage.setItem("stripeReturnInvoiceId", invoiceId);
-      if (sessionId) localStorage.setItem("stripeReturnSessionId", sessionId);
-
-      const closeBrowser = async () => {
-        try {
-          const { Browser } = await import("@capacitor/browser");
-          await Browser.close();
-        } catch (e) {
-          console.warn("[stripe-return] Browser.close() failed:", e);
-        }
-      };
-
-      closeBrowser();
-      setTimeout(closeBrowser, 300);
-      setTimeout(closeBrowser, 800);
-      setTimeout(closeBrowser, 1500);
+      console.log("[stripe-return] Native detected — flags stored, waiting for browser close");
       return;
     }
+
+    localStorage.removeItem("stripeReturnResult");
+    localStorage.removeItem("stripeReturnInvoiceId");
+    localStorage.removeItem("stripeReturnSessionId");
 
     if (!invoiceId) {
       setLocation("/jobs", { replace: true });

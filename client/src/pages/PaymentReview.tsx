@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { openInAppBrowser } from "@/lib/capacitor";
+import { openStripeBrowser, isNativePlatform } from "@/lib/capacitor";
 import { useCan } from "@/hooks/useCan";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
@@ -175,21 +175,21 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       });
       const data = await response.json();
       
-      if (data.url && data.sessionId) {
+      if (!data.url) {
+        throw new Error("No checkout URL received");
+      }
+      if (data.sessionId) {
         localStorage.setItem("stripe_session", data.sessionId);
-        await openInAppBrowser(data.url, () => {
-          setIsLoading(false);
-          invalidateAll();
-          queryClient.invalidateQueries({ queryKey: ['/api/subscriptions/status'] });
-        });
-      } else if (data.url) {
-        await openInAppBrowser(data.url, () => {
+      }
+      if (isNativePlatform()) {
+        await openStripeBrowser(data.url, () => {
+          console.log("[PaymentReview] Stripe browser closed, refreshing");
           setIsLoading(false);
           invalidateAll();
           queryClient.invalidateQueries({ queryKey: ['/api/subscriptions/status'] });
         });
       } else {
-        throw new Error("No checkout URL received");
+        window.location.href = data.url;
       }
     } catch (err: any) {
       setIsLoading(false);

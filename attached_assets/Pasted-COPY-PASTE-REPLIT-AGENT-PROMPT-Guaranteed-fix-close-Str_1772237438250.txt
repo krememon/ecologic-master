@@ -1,0 +1,125 @@
+COPY/PASTE REPLIT AGENT PROMPT (Guaranteed fix: close Stripe Browser via window.postMessage + Capacitor App listener; works even when return URL is replit.app)
+
+Stripe Checkout returns to eco-logic-pjpell077.replit.app inside the in-app browser and stays there (shows login screen). We need the wrapper to force close the Stripe browser the moment the return page loads.
+
+Non-negotiable behavior
+
+After payment success/cancel:
+
+Stripe redirects to ${APP_URL}/stripe/return?...
+
+That page must immediately close the in-app browser
+
+Wrapper becomes visible
+
+Wrapper refreshes subscription status and routes to Jobs
+
+Important: We cannot rely on universal links on replit.app.
+
+We must close Browser from inside the app using a message signal.
+
+Step 1 — Create /stripe/return page that sends a “close browser” signal
+
+Implement route /stripe/return in the frontend.
+
+On mount:
+
+read query params: result, session_id
+
+write them to localStorage:
+
+stripe_return_result
+
+stripe_return_session_id
+
+send a message to the wrapper app:
+
+window.parent.postMessage({ type: 'STRIPE_RETURN', result, session_id }, '*')
+
+also window.postMessage({ type: 'STRIPE_RETURN', result, session_id }, '*') (belt + suspenders)
+
+render “Returning…” minimal UI
+
+Do NOT try to navigate to /login or anything here. Just signal and wait.
+
+Step 2 — In the wrapper app, listen for that message and close Browser
+
+In app bootstrap (main.tsx / App root), add:
+
+window.addEventListener('message', async (event) => { ... })
+
+If event.data?.type === 'STRIPE_RETURN':
+
+call Browser.close() (Capacitor Browser)
+
+refresh subscription status: call /api/subscriptions/status
+
+update global subscription state
+
+route:
+
+success → /jobs
+
+cancel → /billing
+
+Also add a backup:
+
+App.addListener('resume', ...) to re-check localStorage flag and route
+
+Step 3 — Ensure we are using Capacitor Browser (not window.open / Safari)
+
+Audit the code that opens Stripe:
+
+It MUST be import { Browser } from '@capacitor/browser' then Browser.open({ url })
+
+If we are using window.open anywhere on iOS native, STOP.
+
+Step 4 — Backend: ensure success/cancel return to /stripe/return
+
+In create checkout session:
+
+success_url = ${APP_URL}/stripe/return?result=success&session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = ${APP_URL}/stripe/return?result=cancel
+
+Step 5 — Debug logging (short, targeted)
+
+Add logs:
+
+When opening Browser for checkout: log URL
+
+On /stripe/return page mount: log params + “posted STRIPE_RETURN”
+
+In message listener: log receipt and whether Browser.close succeeded (try/catch)
+
+Acceptance tests
+
+Native iOS:
+
+Start checkout → complete payment
+
+Stripe redirects to /stripe/return inside the browser
+
+✅ wrapper receives STRIPE_RETURN message
+
+✅ browser closes immediately
+
+✅ wrapper routes to Jobs and subscription updates
+
+Cancel:
+
+✅ closes browser and returns to Billing
+
+Notes
+
+This works even on replit.app because it does not depend on iOS universal links. It depends on our own message bridge + Browser.close.
+
+DELIVERABLES:
+
+/stripe/return page implemented
+
+global window message listener in wrapper
+
+ensure checkout uses Capacitor Browser.open
+
+refresh subscription and route after close

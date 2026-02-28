@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { openInAppBrowser, isNativePlatform } from "@/lib/capacitor";
+import { openStripeBrowser, isNativePlatform } from "@/lib/capacitor";
 
 interface JobInvoiceModalProps {
   open: boolean;
@@ -281,16 +281,23 @@ export function JobInvoiceModal({
       
       if (data.url) {
         if (isNativePlatform()) {
-          await openInAppBrowser(data.url);
+          await openStripeBrowser(data.url, () => {
+            console.log("[JobInvoiceModal] Stripe browser closed, refreshing");
+            queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+          });
+          toast({
+            title: "Payment Link Created",
+            description: "Stripe Checkout opened. Complete the payment to continue.",
+          });
         } else {
           window.open(data.url, "_blank");
+          toast({
+            title: "Payment Link Created",
+            description: "Stripe Checkout page opened in a new tab. Share this with your customer.",
+          });
         }
-        toast({
-          title: "Payment Link Created",
-          description: isNativePlatform()
-            ? "Stripe Checkout opened. Complete the payment to continue."
-            : "Stripe Checkout page opened in a new tab. Share this with your customer.",
-        });
       }
     } catch (error: any) {
       toast({
