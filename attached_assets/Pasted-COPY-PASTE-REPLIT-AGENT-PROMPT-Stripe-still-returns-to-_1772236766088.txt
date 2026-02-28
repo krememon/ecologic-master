@@ -1,0 +1,138 @@
+COPY/PASTE REPLIT AGENT PROMPT (Stripe still returns to EcoLogic inside the in-app browser instead of the wrapper. Fix by intercepting the return URL inside Capacitor Browser and closing it when it hits our domain/return path; no universal links needed for dev domains. Works on replit.app.)
+
+We still have the issue:
+
+Checkout opens in Capacitor in-app browser (good).
+
+After payment, Stripe redirects to our EcoLogic URL inside that same in-app browser (eco-logic-pjpell077.replit.app) instead of returning to the wrapper app automatically.
+
+This is expected because we’re on a dev domain (replit.app) and we don’t have universal links set up for it. So the “open app” intercept won’t happen automatically.
+
+We need a dev-safe fix that works right now:
+✅ Detect when the in-app browser navigates to our return URL and then programmatically close the browser, bringing the user back to the wrapper.
+
+✅ Correct Fix for Dev Domains (Capacitor Browser “close on return”)
+Goal flow (dev + prod)
+
+Pay → Stripe success page → redirect to our return URL → Browser auto-closes → wrapper app is visible again → app refreshes subscription status → navigate to Jobs.
+
+Step 1 — Ensure Stripe success/cancel URLs go to a known return route
+
+In backend Checkout Session creation, set:
+
+success_url = ${APP_URL}/stripe/return?result=success&session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = ${APP_URL}/stripe/return?result=cancel
+
+Where APP_URL is your current running domain (replit.app in your screenshot).
+
+Important: This route must be inside our app so we can run JS on it.
+
+Step 2 — Implement /stripe/return page that closes the Capacitor Browser
+
+Create a frontend route /stripe/return that does ONLY this:
+
+Behavior
+
+If native Capacitor:
+
+Call Browser.close() immediately
+
+Store the result somewhere the main app can pick up (localStorage)
+
+If web:
+
+Just redirect to /jobs or /billing
+
+Implementation (React route)
+
+In your router add a page StripeReturn.tsx and mount it at /stripe/return.
+
+StripeReturn.tsx should:
+
+Detect native: Capacitor.isNativePlatform()
+
+Write a flag to localStorage:
+
+stripeReturnResult=success|cancel
+
+stripeReturnSessionId=...
+
+Then call Browser.close()
+
+Then show a minimal “Returning…” text (but it should close instantly)
+
+Key requirement: Use a short setTimeout fallback to retry close a few times (sometimes close is async).
+
+Step 3 — When the app becomes visible again, read the flag and navigate + refresh
+
+In app bootstrap (main.tsx / root App component):
+
+On mount and on resume:
+
+read localStorage.stripeReturnResult
+
+if present:
+
+clear it
+
+call /api/subscriptions/status
+
+update subscription state
+
+navigate to:
+
+success → /jobs
+
+cancel → /billing
+
+Also add:
+
+App.addListener('resume', ...) so it runs as soon as the browser closes and wrapper app is back.
+
+Why this works
+
+We can’t rely on iOS universal links in dev.
+But we can:
+
+redirect Stripe to a route inside our own app
+
+that route runs JS
+
+and JS can close the Capacitor Browser
+
+revealing the wrapper again
+
+This is the correct dev solution and will stop the “EcoLogic inside Stripe browser” problem.
+
+Acceptance Tests
+
+Native iOS:
+
+Checkout → pay → Stripe redirects to .../stripe/return?...
+
+✅ Browser closes instantly
+
+✅ Wrapper app visible again
+
+✅ subscription status refreshes
+
+✅ routes to Jobs
+
+Cancel:
+
+✅ closes browser
+
+✅ returns to Billing
+
+Deliverables
+
+/stripe/return route that closes Browser on native + sets localStorage flags
+
+Root app “resume” handler that reads flags, refreshes subscription, and navigates
+
+Stripe success/cancel URLs point to /stripe/return
+
+IMPORTANT
+
+Do NOT try to do universal links on replit.app or replit.dev — that’s not going to be reliable. This “close on return page” method is the correct approach for dev and will immediately fix your flow.

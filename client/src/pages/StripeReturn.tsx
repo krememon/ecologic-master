@@ -10,6 +10,35 @@ export default function StripeReturn() {
     const canceled = urlParams.get("canceled");
     const sessionId = urlParams.get("session_id");
 
+    const result = canceled === "1" ? "cancel" : "success";
+
+    let isNative = false;
+    try {
+      const cap = (window as any).Capacitor;
+      isNative = cap?.isNativePlatform?.() === true;
+    } catch {}
+
+    if (isNative) {
+      localStorage.setItem("stripeReturnResult", result);
+      if (invoiceId) localStorage.setItem("stripeReturnInvoiceId", invoiceId);
+      if (sessionId) localStorage.setItem("stripeReturnSessionId", sessionId);
+
+      const closeBrowser = async () => {
+        try {
+          const { Browser } = await import("@capacitor/browser");
+          await Browser.close();
+        } catch (e) {
+          console.warn("[stripe-return] Browser.close() failed:", e);
+        }
+      };
+
+      closeBrowser();
+      setTimeout(closeBrowser, 300);
+      setTimeout(closeBrowser, 800);
+      setTimeout(closeBrowser, 1500);
+      return;
+    }
+
     if (!invoiceId) {
       setLocation("/jobs", { replace: true });
       return;

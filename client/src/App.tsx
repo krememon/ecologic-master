@@ -501,6 +501,62 @@ function useCapacitorDeepLinks() {
   }, []);
 }
 
+function useStripeReturnResume() {
+  React.useEffect(() => {
+    function handleStripeReturn() {
+      const result = localStorage.getItem("stripeReturnResult");
+      if (!result) return;
+
+      const invoiceId = localStorage.getItem("stripeReturnInvoiceId");
+      const sessionId = localStorage.getItem("stripeReturnSessionId");
+
+      localStorage.removeItem("stripeReturnResult");
+      localStorage.removeItem("stripeReturnInvoiceId");
+      localStorage.removeItem("stripeReturnSessionId");
+
+      console.log("[stripe-resume] Found return flags:", { result, invoiceId, sessionId });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
+
+      if (result === "cancel" && invoiceId) {
+        window.location.href = `/invoice/${invoiceId}/pay?canceled=1`;
+      } else if (result === "success" && invoiceId) {
+        const params = new URLSearchParams({ success: "1" });
+        if (sessionId) params.set("session_id", sessionId);
+        window.location.href = `/invoice/${invoiceId}/pay?${params.toString()}`;
+      } else {
+        window.location.href = "/jobs";
+      }
+    }
+
+    handleStripeReturn();
+
+    let cleanup: (() => void) | undefined;
+
+    async function setupResume() {
+      try {
+        const { isNativePlatform } = await import("@/lib/capacitor");
+        if (!isNativePlatform()) return;
+
+        const { App: CapApp } = await import("@capacitor/app");
+        const listener = await CapApp.addListener("resume", () => {
+          console.log("[stripe-resume] App resumed, checking for return flags");
+          setTimeout(handleStripeReturn, 100);
+        });
+        cleanup = () => listener.remove();
+      } catch {}
+    }
+
+    setupResume();
+    return () => cleanup?.();
+  }, []);
+}
+
 function useNativeSafeArea() {
   React.useEffect(() => {
     const cap = (window as any).Capacitor;
@@ -513,6 +569,7 @@ function useNativeSafeArea() {
 function App() {
   usePreventScrollbarShift();
   useCapacitorDeepLinks();
+  useStripeReturnResume();
   useNativeSafeArea();
 
   return (

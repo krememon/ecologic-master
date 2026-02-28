@@ -13745,12 +13745,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `Partial payment for invoice ${invoice.invoiceNumber}`
         : (invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`);
 
-      const prodBaseUrl = process.env.APP_BASE_URL || appBaseUrl;
+      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c returnBase=${appBaseUrl}`);
 
-      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c returnBase=${prodBaseUrl}`);
-
-      const successUrl = `${prodBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${prodBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`;
+      const successUrl = `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`;
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
