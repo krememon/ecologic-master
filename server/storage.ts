@@ -853,11 +853,21 @@ export class DatabaseStorage implements IStorage {
     let overdueCount = 0;
     const todayStr = now.toISOString().split('T')[0];
     
+    const succeededPayStatuses = new Set(['paid', 'succeeded', 'completed']);
+    const paidSumsByInv: Record<number, number> = {};
+    for (const p of allPayments) {
+      if (p.invoiceId && succeededPayStatuses.has((p.status || '').toLowerCase())) {
+        paidSumsByInv[p.invoiceId] = (paidSumsByInv[p.invoiceId] || 0) + (p.amountCents || Math.round(parseFloat(p.amount || '0') * 100));
+      }
+    }
+
     for (const inv of allInvoices) {
       const invStatus = (inv.status || '').toLowerCase();
-      if (invStatus === 'cancelled' || invStatus === 'void' || invStatus === 'paid') continue;
+      if (invStatus === 'cancelled' || invStatus === 'void' || invStatus === 'draft') continue;
       
-      const balanceCents = inv.balanceDueCents || (inv.totalCents - (inv.paidAmountCents || 0));
+      const totalCents = inv.totalCents > 0 ? inv.totalCents : Math.round(parseFloat(inv.amount || '0') * 100);
+      const paidCents = paidSumsByInv[inv.id] || 0;
+      const balanceCents = Math.max(0, totalCents - paidCents);
       if (balanceCents > 0) {
         stillOwedTotalCents += balanceCents;
         

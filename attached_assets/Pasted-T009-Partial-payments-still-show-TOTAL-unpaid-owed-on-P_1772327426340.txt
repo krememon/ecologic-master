@@ -1,0 +1,134 @@
+T009 — Partial payments still show “$TOTAL unpaid/owed” on Payments page: fix by (1) proving webhook is firing + (2) making invoice owed/status computed from succeeded payments (server-side, source-of-truth), not a stale invoice field.
+
+SYMPTOM
+- Invoice total $350
+- Paid $200 (Stripe actually charged $200)
+- Payments page still says $350 unpaid/owed (and/or invoice pill “Unpaid”)
+=> This means either:
+A) Webhook is NOT updating the invoice/payment status in DB (most common), OR
+B) Webhook updates, but the Payments/Invoices read endpoints are NOT using the paid amount to compute “owed/status” (they’re using invoice.total only), OR
+C) Payment rows exist but are stuck as non-succeeded (e.g., “requires_payment_method/processing”) so your “sum succeeded” is 0.
+
+WE WILL FIX THIS THE SAFE WAY:
+1) Add instrumentation to prove webhook is hitting and payments are being marked succeeded.
+2) Make owed/status computed server-side from SUM(payments where status='succeeded') so UI can never be wrong again—even if incremental updates fail once.
+3) Update UI to display owed/status from those computed fields.
+
+PART 1 — WEBHOOK MUST BE VERIFIED (no guessing)
+A) Add a tiny DB table to log webhook receipts (for debugging only)
+Create table stripe_webhook_events:
+- id uuid
+- type text
+- stripe_event_id text unique
+- created_at timestamptz default now()
+- payload_json jsonb (optional, can omit if too big)
+
+In /api/webhooks/stripe:
+- BEFORE any business logic, after signature verify:
+  - insert stripe_event_id + type (ON CONFLICT DO NOTHING)
+  - console.log('[stripe-webhook] received', event.id, event.type)
+
+B) Confirm raw-body middleware is correct
+- The webhook route MUST use express.raw({ type: 'application/json' })
+- AND express.json() must NOT run before it for that route.
+Implementation pattern:
+  app.post('/api/webhooks/stripe', express.raw({ type:'application/json' }), handler)
+  app.use(express.json())  // after webhook registration OR apply json to other routes only
+
+C) Add a debug endpoint for YOU (admin-only)
+GET /api/debug/stripe/webhooks/recent
+- returns last 20 webhook rows
+This will instantly tell us if Stripe is even calling your backend.
+
+If webhook rows are empty after a payment, webhook isn’t reaching the server -> nothing else will work reliably.
+
+PART 2 — MAKE OWED/STATUS IMPOSSIBLE TO BE WRONG
+Right now your UI is clearly not reflecting partials. We fix that by computing from payments.
+
+D) Define canonical computed fields
+For any invoice:
+- total_cents
+- paid_cents = SUM(payments.amount_cents WHERE invoice_id = ? AND status='succeeded')
+- owed_cents = max(total_cents - paid_cents, 0)
+- status:
+    if owed_cents == 0 -> 'paid'
+    else if paid_cents > 0 -> 'partial'
+    else -> 'unpaid'
+
+E) Implement server-side compute on every invoice fetch + list
+Wherever you have:
+- GET /api/invoices/:id
+- GET /api/invoices (list)
+- GET /api/payments page data endpoint (if it’s based on invoices)
+Update queries to include paid_cents and owed_cents computed from payments.
+
+Example approach (Postgres):
+- LEFT JOIN payments p ON p.invoice_id=i.id AND p.status='succeeded'
+- SELECT i.*, COALESCE(SUM(p.amount_cents),0) AS paid_cents,
+         GREATEST(i.total_cents - COALESCE(SUM(p.amount_cents),0), 0) AS owed_cents
+- GROUP BY i.id
+
+If invoice list is used in multiple places, create a reusable DB helper:
+- getInvoiceWithComputedTotals(invoiceId)
+- listInvoicesWithComputedTotals(filters)
+
+F) OPTIONAL: keep invoice.amount_paid_cents/status columns, but derive them from SUM on webhook
+If you want to persist for speed:
+On webhook success AND on manual payment:
+- recompute paid_cents via SUM(succeeded) for that invoice (do NOT increment blindly)
+- set invoice.amount_paid_cents = paid_cents
+- set invoice.status based on owed
+This avoids double-increment bugs and makes retries safe.
+
+PART 3 — ENSURE PAYMENT ROWS ACTUALLY BECOME “SUCCEEDED”
+G) In webhook payment_intent.succeeded:
+- Find payment row by provider_ref=pi.id
+- Update payment.status='succeeded'
+- If payment row not found (possible if create-intent didn’t create it), upsert one using metadata.invoiceId and pi.amount.
+- Then recompute invoice paid/owed/status (using SUM approach above).
+
+Also handle:
+- payment_intent.payment_failed -> mark payment failed
+- charge.refunded / refund.updated -> mark refunded + recompute totals
+
+PART 4 — FRONTEND: SHOW COMPUTED OWED + PARTIAL PILL
+H) Update invoice cards + payments page UI
+Do NOT calculate owed from only invoice.total.
+Use:
+- invoice.owed_cents (from backend)
+- invoice.paid_cents (from backend)
+- invoice.status (from backend)
+
+Pill:
+- unpaid/partial/paid based on invoice.status
+Label:
+- show “$X owed” where X = owed_cents/100
+
+I) Refetch after payment
+After confirmPayment returns:
+- refetch invoice details + invoice list + payments page data
+(But even if you forget, a refresh will show correct values now because backend computes from payments.)
+
+TARGETED DEBUG LOGS (add, then remove later)
+- On create-intent: log invoiceId + chosen amount
+- On webhook receive: log event.id + type
+- On webhook apply: log invoiceId + computed paid/owed/status
+
+ACCEPTANCE TEST
+1) Create invoice $350
+2) Pay $200
+3) Check /api/debug/stripe/webhooks/recent shows payment_intent.succeeded event
+4) Invoice list shows:
+   - Partial pill
+   - $150 owed
+5) Payments page shows correct owed/status for that invoice
+6) Pay remaining $150
+7) Invoice becomes Paid, owed $0
+
+DELIVERABLES
+- Webhook logging table + debug endpoint (admin-only)
+- Invoice endpoints return computed paid_cents/owed_cents/status from succeeded payments
+- Webhook marks payment succeeded and recomputes invoice totals
+- UI uses owed_cents + status from backend
+
+DO THIS NOW — this is the fastest way to stop the “still shows full unpaid” bug permanently.

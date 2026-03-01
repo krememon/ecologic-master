@@ -10,6 +10,7 @@ import { sendPushToUser } from "./pushService";
 import { sendApnsPush, sendApnsPushToTokens } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
+import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments } from "./invoiceRecompute";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
@@ -49,7 +50,7 @@ import {
 import { db } from "./db";
 import { eq, and, lt, gt, sql, desc } from "drizzle-orm";
 import Stripe from "stripe";
-import { invoices, payments, refunds, plaidAccounts, companies } from "../shared/schema";
+import { invoices, payments, refunds, plaidAccounts, companies, stripeWebhookEvents } from "../shared/schema";
 import { plaidClient } from "./services/plaid";
 import { encryptToken, decryptToken, isEncryptionAvailable } from "./utils/crypto";
 import { Products, CountryCode } from "plaid";
@@ -11130,6 +11131,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const allInvoices = await storage.getInvoices(company.id);
 
+      const allCompanyPayments = await db
+        .select({
+          invoiceId: payments.invoiceId,
+          amountCents: payments.amountCents,
+          status: payments.status,
+        })
+        .from(payments)
+        .where(eq(payments.companyId, company.id));
+
+      const succeededStatuses = new Set(['paid', 'succeeded', 'completed']);
+      const paidSumByInvoice: Record<number, number> = {};
+      for (const p of allCompanyPayments) {
+        if (p.invoiceId && succeededStatuses.has((p.status || '').toLowerCase())) {
+          paidSumByInvoice[p.invoiceId] = (paidSumByInvoice[p.invoiceId] || 0) + (p.amountCents || 0);
+        }
+      }
+
       let allRefunds: any[] = [];
       try {
         allRefunds = await storage.getRefundsByCompanyId(company.id);
@@ -11156,7 +11174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .map((inv: any) => {
           const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
-          const paidCents = inv.paidAmountCents || 0;
+          const paidCents = paidSumByInvoice[inv.id] || 0;
           const balanceCents = Math.max(totalCents - paidCents, 0);
           const refundedCents = refundTotalsByInvoice[inv.id] || 0;
           const pendingRefundedCents = pendingRefundTotalsByInvoice[inv.id] || 0;
@@ -11451,7 +11469,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const invoiceList = await storage.getInvoices(company.id);
-      res.json(invoiceList);
+
+      const companyPayments = await db
+        .select({
+          invoiceId: payments.invoiceId,
+          amountCents: payments.amountCents,
+          status: payments.status,
+        })
+        .from(payments)
+        .where(eq(payments.companyId, company.id));
+
+      const paidStatuses = new Set(['paid', 'succeeded', 'completed']);
+      const paidSums: Record<number, number> = {};
+      for (const p of companyPayments) {
+        if (p.invoiceId && paidStatuses.has((p.status || '').toLowerCase())) {
+          paidSums[p.invoiceId] = (paidSums[p.invoiceId] || 0) + (p.amountCents || 0);
+        }
+      }
+
+      const enriched = invoiceList.map((inv: any) => {
+        const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
+        const computedPaidCents = paidSums[inv.id] || 0;
+        const computedOwedCents = Math.max(0, totalCents - computedPaidCents);
+        let computedStatus: string;
+        const dbStatus = (inv.status || '').toLowerCase();
+        if (dbStatus === 'refunded' || dbStatus === 'partially_refunded' || dbStatus === 'cancelled' || dbStatus === 'void' || dbStatus === 'draft') {
+          computedStatus = dbStatus;
+        } else if (computedOwedCents === 0 && totalCents > 0) {
+          computedStatus = 'paid';
+        } else if (computedPaidCents > 0) {
+          computedStatus = 'partial';
+        } else {
+          computedStatus = dbStatus || 'unpaid';
+        }
+        return {
+          ...inv,
+          paidAmountCents: computedPaidCents,
+          balanceDueCents: computedOwedCents,
+          computedStatus,
+        };
+      });
+
+      res.json(enriched);
     } catch (error) {
       console.error("Error fetching invoices:", error);
       res.status(500).json({ message: "Failed to fetch invoices" });
@@ -11475,10 +11534,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Invoice not found" });
       }
       
-      console.log("[Invoice API] invoiceId:", invoiceId, "invoice.customerId:", invoice.customerId, "job.customerId:", (invoice.job as any)?.customerId);
-      console.log("[Invoice API] customer:", invoice.customer ? `${invoice.customer.firstName} ${invoice.customer.lastName} / ${invoice.customer.companyName}` : 'null');
+      const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
       
-      res.json(invoice);
+      res.json({
+        ...invoice,
+        paidAmountCents: computed.paidCents,
+        balanceDueCents: computed.owedCents,
+        computedStatus: computed.computedStatus,
+      });
     } catch (error) {
       console.error("Error fetching invoice:", error);
       res.status(500).json({ message: "Failed to fetch invoice" });
@@ -13366,12 +13429,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const amountDollars = (amountCents / 100).toFixed(2);
 
-      // Calculate new balance
-      const newPaidAmountCents = currentPaidAmountCents + amountCents;
-      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
-      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
-
-      // Create payment record
       const payment = await storage.createPayment({
         companyId: company.id,
         jobId: invoice.jobId || null,
@@ -13388,16 +13445,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: `Manual ${paymentMethodValue.toLowerCase()} payment recorded`,
       });
 
-      // Update invoice with new payment amounts and status
-      await storage.updateInvoice(invoiceId, {
-        status: newStatus,
-        paidAmountCents: newPaidAmountCents,
-        balanceDueCents: newBalanceDueCents,
-        ...(newStatus === 'paid' ? {
-          paidDate: new Date().toISOString().split('T')[0],
-          paidAt: new Date(),
-        } : {}),
-      } as any);
+      const recomputed = await persistRecomputedTotals(invoiceId);
+      const newStatus = recomputed.computedStatus;
 
       // Update job paymentStatus if invoice is associated with a job
       if (invoice.jobId) {
@@ -13565,10 +13614,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const amountDollars = (amountCents / 100).toFixed(2);
 
-      const newPaidAmountCents = currentPaidAmountCents + amountCents;
-      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
-      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
-
       const payment = await storage.createPayment({
         companyId: company.id,
         jobId: invoice.jobId || null,
@@ -13584,15 +13629,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notes: `Manual ${paymentMethodValue} payment recorded`,
       });
 
-      await storage.updateInvoice(invoice.id, {
-        status: newStatus,
-        paidAmountCents: newPaidAmountCents,
-        balanceDueCents: newBalanceDueCents,
-        ...(newStatus === 'paid' ? {
-          paidDate: new Date().toISOString().split('T')[0],
-          paidAt: new Date(),
-        } : {}),
-      } as any);
+      const recomputed2 = await persistRecomputedTotals(invoice.id);
+      const newStatus = recomputed2.computedStatus;
 
       if (invoice.jobId) {
         const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
@@ -13851,23 +13889,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (invoice && invoice.status !== 'paid') {
           const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
           const amountCents = session.amount_total || invoiceTotalCents;
-          const prevPaidCents = invoice.paidAmountCents || 0;
-          const newPaidAmountCents = Math.min(invoiceTotalCents, prevPaidCents + amountCents);
-          const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
-          const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
-
-          await storage.updateInvoice(invoiceId, {
-            status: newStatus,
-            paidAmountCents: newPaidAmountCents,
-            balanceDueCents: newBalanceDueCents,
-            ...(newStatus === 'paid' ? {
-              paidDate: new Date().toISOString().split('T')[0],
-              paidAt: new Date(),
-            } : {}),
-            stripeCheckoutSessionId: session.id,
-            stripePaymentIntentId: session.payment_intent as string,
-          } as any);
-          console.log(`[Stripe] Invoice ${invoiceId} updated to '${newStatus}' from session check (paid: ${newPaidAmountCents}, balance: ${newBalanceDueCents})`);
 
           // Create payment record (idempotency: check by stripePaymentIntentId)
           const paymentIntentId = session.payment_intent as string;
@@ -13903,7 +13924,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }).catch(err => console.error('[QB] Stripe payment sync error:', err));
           }
 
-          // Update job paymentStatus
+          const recomputedConfirm = await persistRecomputedTotals(invoiceId);
+          const newStatus = recomputedConfirm.computedStatus;
+          console.log(`[Stripe] Invoice ${invoiceId} recomputed from confirm: paid=${recomputedConfirm.paidCents} owed=${recomputedConfirm.owedCents} status=${newStatus}`);
+
           if (invoice.jobId) {
             const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
             await storage.updateJob(invoice.jobId, {
@@ -14325,6 +14349,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in refund debug:", error);
       res.status(500).json({ message: "Failed to generate debug info" });
+    }
+  });
+
+  app.get('/api/debug/stripe/webhooks/recent', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMember(userId);
+      if (!member || member.role !== 'owner') {
+        return res.status(404).json({ message: "Not found" });
+      }
+
+      const events = await db
+        .select()
+        .from(stripeWebhookEvents)
+        .orderBy(desc(stripeWebhookEvents.createdAt))
+        .limit(20);
+
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching webhook events:", error);
+      res.status(500).json({ message: "Failed to fetch webhook events" });
+    }
+  });
+
+  app.get('/api/debug/invoice/:id/recompute', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMember(userId);
+      if (!member || member.role !== 'owner') {
+        return res.status(404).json({ message: "Not found" });
+      }
+
+      const invoiceId = parseInt(req.params.id);
+      const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
+
+      const invoicePayments = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.invoiceId, invoiceId));
+
+      res.json({
+        invoiceId,
+        computed,
+        paymentRows: invoicePayments.map(p => ({
+          id: p.id,
+          amountCents: p.amountCents,
+          status: p.status,
+          paymentMethod: p.paymentMethod,
+          stripePaymentIntentId: p.stripePaymentIntentId,
+          paidDate: p.paidDate,
+        })),
+      });
+    } catch (error) {
+      console.error("Error in invoice recompute debug:", error);
+      res.status(500).json({ message: "Failed to recompute" });
     }
   });
 

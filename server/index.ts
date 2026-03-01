@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs";
 import Stripe from "stripe";
 import { db } from "./db";
-import { invoices, payments, customers, companies, jobs, notifications, bankRefunds, refunds } from "../shared/schema";
+import { invoices, payments, customers, companies, jobs, notifications, bankRefunds, refunds, stripeWebhookEvents } from "../shared/schema";
 import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
 import { notifyManagers, notifyOwners } from "./notificationService";
 import { startJobScheduler } from "./jobScheduler";
@@ -335,6 +335,8 @@ async function syncPaymentToQboFromWebhook(
   }
 }
 
+import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments } from "./invoiceRecompute";
+
 // Stripe webhook endpoint - MUST use raw body for signature verification
 // This MUST be before express.json() middleware
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -360,7 +362,19 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  console.log(`[Stripe Webhook] Received event: ${event.type}`);
+  console.log(`[Stripe Webhook] Received event: ${event.id} ${event.type}`);
+
+  try {
+    await db.insert(stripeWebhookEvents).values({
+      stripeEventId: event.id,
+      eventType: event.type,
+      invoiceId: (event.data.object as any)?.metadata?.invoiceId ? parseInt((event.data.object as any).metadata.invoiceId) : null,
+      amountCents: (event.data.object as any)?.amount || (event.data.object as any)?.amount_total || null,
+      metadata: (event.data.object as any)?.metadata || null,
+    }).onConflictDoNothing();
+  } catch (logErr) {
+    console.error('[Stripe Webhook] Failed to log event:', logErr);
+  }
 
   // Handle checkout.session.completed event
   if (event.type === 'checkout.session.completed') {
@@ -433,62 +447,6 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
       const now = new Date();
       const amountCents = session.amount_total || 0;
-      const invoiceTotalCents = existingInvoice.totalCents > 0 ? existingInvoice.totalCents : Math.round(parseFloat(existingInvoice.amount) * 100);
-      const prevPaidCents = existingInvoice.paidAmountCents || 0;
-      const newPaidAmountCents = Math.min(invoiceTotalCents, prevPaidCents + amountCents);
-      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
-      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
-
-      console.log(`[Stripe Webhook] Invoice ${invoiceId}: amount=${amountCents}, total=${invoiceTotalCents}, prevPaid=${prevPaidCents}, newPaid=${newPaidAmountCents}, balance=${newBalanceDueCents}, newStatus=${newStatus}`);
-
-      await db
-        .update(invoices)
-        .set({
-          status: newStatus,
-          paidAmountCents: newPaidAmountCents,
-          balanceDueCents: newBalanceDueCents,
-          ...(newStatus === 'paid' ? {
-            paidAt: now,
-            paidDate: now.toISOString().split('T')[0],
-          } : {}),
-          stripeCheckoutSessionId: session.id,
-          stripePaymentIntentId: session.payment_intent as string,
-          updatedAt: now,
-        })
-        .where(eq(invoices.id, parseInt(invoiceId)));
-
-      if (effectiveJobId) {
-        const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
-        console.log(`[Stripe Webhook] Job ${effectiveJobId} BEFORE update: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
-
-        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        const updateResult = await db
-          .update(jobs)
-          .set({
-            paymentStatus: jobPaymentStatus,
-            ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
-          })
-          .where(eq(jobs.id, effectiveJobId))
-          .returning({ id: jobs.id });
-        console.log(`[Stripe Webhook] Job ${effectiveJobId} paymentStatus updated to '${jobPaymentStatus}', rows=${updateResult.length}`);
-
-        if (jobPaymentStatus === 'paid') {
-          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
-          console.log(`[Stripe Webhook] Job ${effectiveJobId} AFTER update: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
-          if (jobAfter && !jobAfter.archivedAt) {
-            await db.update(jobs).set({
-              status: 'archived',
-              archivedAt: now,
-              archivedReason: 'paid',
-            }).where(eq(jobs.id, effectiveJobId));
-            console.log(`[Stripe Webhook] Job ${effectiveJobId} auto-archived (paid)`);
-          } else if (jobAfter) {
-            console.log(`[Stripe Webhook] Job ${effectiveJobId} already archived, skipping`);
-          }
-        }
-      } else {
-        console.log(`[Stripe Webhook] No jobId for invoice ${invoiceId} — skipping job update and archival`);
-      }
 
       const [existingPayment] = await db
         .select()
@@ -517,7 +475,35 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         console.log(`[Stripe Webhook] Payment already exists for payment intent ${session.payment_intent}`);
       }
 
-      console.log(`[Stripe Webhook] Invoice ${invoiceId} marked as paid`);
+      const recomputed = await persistRecomputedTotals(parseInt(invoiceId));
+      const newStatus = recomputed.computedStatus;
+      console.log(`[Stripe Webhook] Invoice ${invoiceId} recomputed: paid=${recomputed.paidCents} owed=${recomputed.owedCents} status=${newStatus}`);
+
+      await db.update(invoices).set({
+        stripeCheckoutSessionId: session.id,
+        stripePaymentIntentId: session.payment_intent as string,
+      }).where(eq(invoices.id, parseInt(invoiceId)));
+
+      if (effectiveJobId) {
+        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+        await db.update(jobs).set({
+          paymentStatus: jobPaymentStatus,
+          ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
+        }).where(eq(jobs.id, effectiveJobId));
+        console.log(`[Stripe Webhook] Job ${effectiveJobId} paymentStatus updated to '${jobPaymentStatus}'`);
+
+        if (jobPaymentStatus === 'paid') {
+          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+          if (jobAfter && !jobAfter.archivedAt) {
+            await db.update(jobs).set({
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'paid',
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} auto-archived (paid)`);
+          }
+        }
+      }
 
       const targetCompanyIdForNotif = companyId ? parseInt(companyId) : existingInvoice.companyId;
       const amountDollars = (amountCents / 100).toFixed(2);
@@ -625,57 +611,6 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
       const now = new Date();
       const amountCents = paymentIntent.amount || 0;
-      const invoiceTotalCents = existingInvoice.totalCents > 0 ? existingInvoice.totalCents : Math.round(parseFloat(existingInvoice.amount) * 100);
-      const prevPaidCents = existingInvoice.paidAmountCents || 0;
-      const newPaidAmountCents = Math.min(invoiceTotalCents, prevPaidCents + amountCents);
-      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
-      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
-
-      console.log(`[Stripe Webhook] PI Invoice ${invoiceId}: amount=${amountCents}, total=${invoiceTotalCents}, prevPaid=${prevPaidCents}, newPaid=${newPaidAmountCents}, balance=${newBalanceDueCents}, newStatus=${newStatus}`);
-
-      await db
-        .update(invoices)
-        .set({
-          status: newStatus,
-          paidAmountCents: newPaidAmountCents,
-          balanceDueCents: newBalanceDueCents,
-          ...(newStatus === 'paid' ? {
-            paidAt: now,
-            paidDate: now.toISOString().split('T')[0],
-          } : {}),
-          stripePaymentIntentId: paymentIntent.id,
-          updatedAt: now,
-        })
-        .where(eq(invoices.id, parseInt(invoiceId)));
-
-      if (effectiveJobId) {
-        const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
-        console.log(`[Stripe Webhook] PI Job ${effectiveJobId} BEFORE update: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
-
-        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        const updateResult = await db
-          .update(jobs)
-          .set({
-            paymentStatus: jobPaymentStatus,
-            ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
-          })
-          .where(eq(jobs.id, effectiveJobId))
-          .returning({ id: jobs.id });
-        console.log(`[Stripe Webhook] PI Job ${effectiveJobId} paymentStatus updated to '${jobPaymentStatus}', rows=${updateResult.length}`);
-
-        if (jobPaymentStatus === 'paid') {
-          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
-          console.log(`[Stripe Webhook] PI Job ${effectiveJobId} AFTER update: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
-          if (jobAfter && !jobAfter.archivedAt) {
-            await db.update(jobs).set({
-              status: 'archived',
-              archivedAt: now,
-              archivedReason: 'paid',
-            }).where(eq(jobs.id, effectiveJobId));
-            console.log(`[Stripe Webhook] PI Job ${effectiveJobId} auto-archived (paid)`);
-          }
-        }
-      }
 
       const [newPayment] = await db.insert(payments).values({
         companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
@@ -692,6 +627,35 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
       const paymentId = newPayment.id;
       console.log(`[Stripe Webhook] PI Payment record created for invoice ${invoiceId} paymentId=${paymentId}`);
+
+      const recomputed = await persistRecomputedTotals(parseInt(invoiceId));
+      const newStatus = recomputed.computedStatus;
+      console.log(`[Stripe Webhook] PI Invoice ${invoiceId} recomputed: paid=${recomputed.paidCents} owed=${recomputed.owedCents} status=${newStatus}`);
+
+      await db.update(invoices).set({
+        stripePaymentIntentId: paymentIntent.id,
+      }).where(eq(invoices.id, parseInt(invoiceId)));
+
+      if (effectiveJobId) {
+        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+        await db.update(jobs).set({
+          paymentStatus: jobPaymentStatus,
+          ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
+        }).where(eq(jobs.id, effectiveJobId));
+        console.log(`[Stripe Webhook] PI Job ${effectiveJobId} paymentStatus updated to '${jobPaymentStatus}'`);
+
+        if (jobPaymentStatus === 'paid') {
+          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+          if (jobAfter && !jobAfter.archivedAt) {
+            await db.update(jobs).set({
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'paid',
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] PI Job ${effectiveJobId} auto-archived (paid)`);
+          }
+        }
+      }
 
       const targetCompanyIdForNotif = companyId ? parseInt(companyId) : existingInvoice.companyId;
       const amountDollars = (amountCents / 100).toFixed(2);

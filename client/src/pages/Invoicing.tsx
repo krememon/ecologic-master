@@ -181,15 +181,18 @@ export default function Invoicing() {
   };
 
   const formatOwed = (invoice: Invoice) => {
+    const inv = invoice as any;
+    if (typeof inv.balanceDueCents === 'number') return inv.balanceDueCents;
     const total = invoice.totalCents > 0 ? invoice.totalCents : (invoice.amount ? Math.round(parseFloat(invoice.amount) * 100) : 0);
-    const paid = (invoice as any).paidAmountCents || 0;
-    const owed = Math.max(total - paid, 0);
-    return owed;
+    const paid = inv.paidAmountCents || 0;
+    return Math.max(total - paid, 0);
   };
 
   const getDisplayStatus = (invoice: Invoice) => {
+    const inv = invoice as any;
+    if (inv.computedStatus) return inv.computedStatus;
     const total = invoice.totalCents > 0 ? invoice.totalCents : (invoice.amount ? Math.round(parseFloat(invoice.amount) * 100) : 0);
-    const paid = (invoice as any).paidAmountCents || 0;
+    const paid = inv.paidAmountCents || 0;
     if (invoice.status === 'void' || invoice.status === 'cancelled' || invoice.status === 'draft') return invoice.status;
     if (paid >= total && total > 0) return 'paid';
     if (paid > 0) return 'partial';
