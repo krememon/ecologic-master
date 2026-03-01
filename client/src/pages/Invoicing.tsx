@@ -174,13 +174,26 @@ export default function Invoicing() {
   };
 
   const formatAmount = (invoice: Invoice) => {
-    if (invoice.totalCents && invoice.totalCents > 0) {
-      return `$${(invoice.totalCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-    }
-    if (invoice.amount) {
-      return `$${parseFloat(invoice.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-    }
-    return '$0.00';
+    const total = invoice.totalCents > 0 ? invoice.totalCents : (invoice.amount ? Math.round(parseFloat(invoice.amount) * 100) : 0);
+    const paid = (invoice as any).paidAmountCents || 0;
+    const owed = Math.max(total - paid, 0);
+    return `$${(total / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+  };
+
+  const formatOwed = (invoice: Invoice) => {
+    const total = invoice.totalCents > 0 ? invoice.totalCents : (invoice.amount ? Math.round(parseFloat(invoice.amount) * 100) : 0);
+    const paid = (invoice as any).paidAmountCents || 0;
+    const owed = Math.max(total - paid, 0);
+    return owed;
+  };
+
+  const getDisplayStatus = (invoice: Invoice) => {
+    const total = invoice.totalCents > 0 ? invoice.totalCents : (invoice.amount ? Math.round(parseFloat(invoice.amount) * 100) : 0);
+    const paid = (invoice as any).paidAmountCents || 0;
+    if (invoice.status === 'void' || invoice.status === 'cancelled' || invoice.status === 'draft') return invoice.status;
+    if (paid >= total && total > 0) return 'paid';
+    if (paid > 0) return 'partial';
+    return invoice.status || 'unpaid';
   };
 
   return (
@@ -374,8 +387,8 @@ export default function Invoicing() {
                     {!isSelectMode && <FileText className="h-5 w-5 text-slate-600 dark:text-slate-400" />}
                     {invoice.invoiceNumber || `Invoice #${invoice.id}`}
                   </CardTitle>
-                  <Badge variant={getStatusBadgeVariant(invoice.status)}>
-                    {invoice.status}
+                  <Badge variant={getStatusBadgeVariant(getDisplayStatus(invoice))}>
+                    {getDisplayStatus(invoice)}
                   </Badge>
                 </div>
               </CardHeader>
@@ -410,6 +423,16 @@ export default function Invoicing() {
                   <DollarSign className="h-4 w-4" />
                   {formatAmount(invoice)}
                 </div>
+                {(() => {
+                  const owedCents = formatOwed(invoice);
+                  const displayStatus = getDisplayStatus(invoice);
+                  if (displayStatus === 'paid' || displayStatus === 'void' || displayStatus === 'cancelled' || displayStatus === 'draft') return null;
+                  return (
+                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                      ${(owedCents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })} owed
+                    </p>
+                  );
+                })()}
                 {invoice.jobId && (invoice as any).job?.title && (
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-[1px] rounded-full border border-slate-200 dark:border-slate-700 leading-snug">

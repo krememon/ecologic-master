@@ -1,0 +1,119 @@
+T008 — Fix invoice “Unpaid” bug for partial payments (status + remaining balance)
+
+PROBLEM
+- User paid $100 on a $350 invoice (Stripe charged correctly).
+- Invoice list card still shows:
+  - status pill = “Unpaid”
+  - “$350.00 owed”
+- Expected:
+  - status pill = “Partial”
+  - “$250.00 owed” (remaining balance)
+
+ROOT CAUSE (most likely)
+- We are not updating invoice amountPaid/status on webhook success, OR
+- UI is not using amountPaid to compute owed/status, OR
+- We’re storing the Stripe Payment row but not applying it to the invoice totals.
+
+GOALS
+1) Persist invoice payment progress:
+   - invoice.amount_paid_cents increments on each succeeded payment (manual + stripe)
+2) Compute invoice status correctly:
+   - unpaid: amount_paid_cents == 0
+   - partial: 0 < amount_paid_cents < total_cents
+   - paid: amount_paid_cents >= total_cents
+3) UI invoice list card uses remaining balance:
+   - owed = max(total_cents - amount_paid_cents, 0)
+   - pill matches status
+4) Works for multiple partial payments until paid.
+
+BACKEND — REQUIRED FIXES
+A) Ensure invoice has payment tracking fields
+- Confirm invoices table has:
+  - total_cents (or subtotal/total)
+  - amount_paid_cents (default 0)
+  - status (unpaid/partial/paid)
+If missing, add a migration:
+- ADD COLUMN amount_paid_cents INTEGER NOT NULL DEFAULT 0
+- ADD COLUMN status TEXT NOT NULL DEFAULT 'unpaid'
+(If you already have these fields but named differently, adapt accordingly.)
+
+B) Stripe webhook: apply payment to invoice
+In /api/webhooks/stripe handler on `payment_intent.succeeded`:
+1) Find payment row by provider_ref = paymentIntent.id
+2) Idempotency guard:
+   - If payment.status === 'succeeded' return 200
+3) Update payment.status='succeeded'
+4) Apply to invoice:
+   - invoice.amount_paid_cents = invoice.amount_paid_cents + payment.amount_cents
+   - owed = max(invoice.total_cents - invoice.amount_paid_cents, 0)
+   - invoice.status:
+       if owed == 0 -> 'paid'
+       else if invoice.amount_paid_cents > 0 -> 'partial'
+       else 'unpaid'
+5) Save invoice
+
+IMPORTANT:
+- Use a DB transaction so payment + invoice updates are atomic.
+- If multiple payments can hit at once, lock the invoice row (or use a single UPDATE with arithmetic).
+
+C) Manual payments must also apply to invoice (cash/check)
+Wherever we handle manual payments:
+- After creating payment row with status='succeeded':
+  - increment invoice.amount_paid_cents
+  - recompute status as above
+
+D) Add a “recalc” safety helper (optional but recommended)
+Create a function:
+- recalcInvoicePaid(invoiceId)
+It:
+- sums succeeded payments for that invoice
+- sets invoice.amount_paid_cents to sum
+- sets status accordingly
+Use this in webhook as a fallback if you suspect mismatch.
+
+FRONTEND — REQUIRED FIXES
+E) Invoice list card display must use remaining balance
+Find the component rendering the list card (“$350 owed” + pill).
+Change logic to:
+- total = invoice.total_cents
+- paid = invoice.amount_paid_cents (default 0)
+- owed = Math.max(total - paid, 0)
+
+Pill:
+- if owed === 0 -> “Paid”
+- else if paid > 0 -> “Partial”
+- else -> “Unpaid”
+
+Amount label:
+- show owed as currency (e.g., $250.00 owed)
+
+F) Make sure invoice list refreshes after payment
+After payment confirmation:
+- refetch invoice details and invoice list
+- OR invalidate/react-query cache
+- OR broadcast via your app’s event bus
+This ensures the list updates without needing a hard refresh.
+
+DEBUGGING CHECKS (DO THESE WHILE IMPLEMENTING)
+1) After webhook success, log:
+   - invoiceId, invoice.total_cents, invoice.amount_paid_cents BEFORE/AFTER, computed owed, computed status
+2) Confirm payment row has amount_cents=10000 and status='succeeded'
+3) Confirm invoice.amount_paid_cents is 10000 after webhook, not 0
+
+ACCEPTANCE CRITERIA
+- Pay $100 on $350:
+  - invoice shows “Partial” pill
+  - shows “$250.00 owed”
+- Pay another $250:
+  - invoice shows “Paid” pill
+  - owed shows $0.00 (or hides owed)
+- Works across app reloads (DB correct)
+- No duplicate increments when webhook retries
+
+DELIVERABLES
+- Backend: webhook + manual payment logic updated with invoice paid tracking
+- DB migration if needed
+- Frontend: invoice list card uses amount_paid_cents and shows Partial correctly
+- Quick test script/notes in replit.md for partial payment scenario
+
+START NOW: implement end-to-end and test with a $350 invoice -> pay $100 -> verify UI + DB.
