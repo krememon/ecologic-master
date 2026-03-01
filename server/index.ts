@@ -583,10 +583,59 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       if (existingPaymentCheck) {
         console.log('[webhook pi.succeeded] existing payment found', { paymentId: existingPaymentCheck.id, invoiceId: existingPaymentCheck.invoiceId, status: existingPaymentCheck.status });
 
-        if (existingPaymentCheck.status !== 'succeeded') {
-          await db.update(payments).set({ status: 'succeeded' }).where(eq(payments.id, existingPaymentCheck.id));
+        const wasProcessing = existingPaymentCheck.status !== 'succeeded';
+
+        if (wasProcessing) {
+          await db.update(payments).set({ status: 'succeeded', paidDate: new Date() }).where(eq(payments.id, existingPaymentCheck.id));
           console.log(`[Stripe Webhook] Upgraded payment ${existingPaymentCheck.id} status from '${existingPaymentCheck.status}' to 'succeeded'`);
-          await persistRecomputedTotals(parseInt(invoiceId));
+          const recomputed = await persistRecomputedTotals(parseInt(invoiceId));
+          const upgradedStatus = recomputed.computedStatus;
+
+          await db.update(invoices).set({
+            stripePaymentIntentId: paymentIntent.id,
+          }).where(eq(invoices.id, parseInt(invoiceId)));
+
+          if (effectiveJobId) {
+            const jobPaymentStatus = upgradedStatus === 'paid' ? 'paid' : 'partial';
+            const now = new Date();
+            await db.update(jobs).set({
+              paymentStatus: jobPaymentStatus,
+              ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] PI upgrade: Job ${effectiveJobId} paymentStatus → '${jobPaymentStatus}'`);
+
+            if (jobPaymentStatus === 'paid') {
+              const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+              if (jobAfter && !jobAfter.archivedAt) {
+                await db.update(jobs).set({
+                  status: 'archived',
+                  archivedAt: now,
+                  archivedReason: 'paid',
+                }).where(eq(jobs.id, effectiveJobId));
+                console.log(`[Stripe Webhook] PI upgrade: Job ${effectiveJobId} auto-archived`);
+              }
+            }
+          }
+
+          const amountDollars = ((existingPaymentCheck.amountCents || 0) / 100).toFixed(2);
+          const targetCompanyIdForNotif = companyId ? parseInt(companyId) : existingInvoice.companyId;
+          try {
+            await notifyOwners(targetCompanyIdForNotif, {
+              type: 'invoice_paid',
+              title: 'Payment Received',
+              body: `Invoice paid – $${amountDollars}`,
+              entityType: 'invoice',
+              entityId: parseInt(invoiceId),
+              linkUrl: `/invoicing/${invoiceId}`,
+              meta: {
+                invoiceId,
+                amountCents: String(existingPaymentCheck.amountCents || 0),
+                stripePaymentIntentId: paymentIntent.id,
+              },
+            });
+          } catch (notifErr) {
+            console.error('[stripe] PI upgrade notification error:', notifErr);
+          }
         }
 
         if (!existingPaymentCheck.qboPaymentId && existingPaymentCheck.qboPaymentSyncStatus !== 'synced') {
@@ -599,7 +648,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
             .catch(err => console.error('[QB-PAY] Retry sync error:', err));
         }
 
-        if (effectiveJobId) {
+        if (!wasProcessing && effectiveJobId) {
           const [jobCheck] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
           if (jobCheck && jobCheck.status === 'completed' && jobCheck.paymentStatus === 'paid' && !jobCheck.archivedAt) {
             const now = new Date();
@@ -612,7 +661,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           }
         }
 
-        return res.json({ received: true, message: 'Already processed' });
+        return res.json({ received: true, message: wasProcessing ? 'Upgraded to succeeded' : 'Already processed' });
       }
 
       const now = new Date();
@@ -635,7 +684,8 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       console.log('[WEBHOOK APPLY]', { invoiceId, paymentId, status: 'succeeded', amountCents, piId: paymentIntent.id });
 
       const recomputed = await persistRecomputedTotals(parseInt(invoiceId));
-      console.log('[webhook pi.succeeded] recomputed', { invoiceId, paidCents: recomputed.paidCents, owedCents: recomputed.owedCents, computedStatus: recomputed.computedStatus });
+      const newStatus = recomputed.computedStatus;
+      console.log('[webhook pi.succeeded] recomputed', { invoiceId, paidCents: recomputed.paidCents, owedCents: recomputed.owedCents, computedStatus: newStatus });
 
       await db.update(invoices).set({
         stripePaymentIntentId: paymentIntent.id,

@@ -1,0 +1,123 @@
+T015 — Ensure Stripe PaymentElement payments are RECORDED in Payments ledger + stats bubbles (Earnings / Paid Today / Still Owed)
+
+OBSERVATION (from your screenshots)
+- You have an invoice showing “$700 owed / Unpaid”
+- But you also have “Paid” entries ($300, $350) in the list
+- The stats bubble shows:
+  - Earnings This Month: $0
+  - Paid Today: $0
+  - Still Owed: $2,000
+=> This means the stats + “owed” rows are NOT being computed from the same canonical payment ledger that is being written for Stripe, OR Stripe payments are not being written in the same “payments table” schema that the Payments page expects.
+
+GOALS
+1) Every successful Stripe card payment creates/updates a Payment ledger row that the Payments page uses.
+2) Payments page list items and top stats are computed from that ledger (NOT from old invoice columns / NOT from legacy checkout sessions).
+3) Manual (cash/check) payments continue to work.
+4) Partial payments reflect:
+   - invoice row shows Partial + remaining owed
+   - stats update:
+     - Paid Today includes card payments
+     - Earnings This Month includes card payments
+     - Still Owed decreases based on remaining balance
+5) Idempotent: webhook retries never double-count.
+
+STEP 1 — Define ONE canonical payments ledger model (what the page consumes)
+Confirm the Payments page is driven by ONE endpoint (likely /api/payments/ledger or /api/payments).
+Standardize that endpoint to return:
+- items[] (rows for invoices with computed totals)
+- stats (earnings/paidToday/stillOwed/overdue)
+
+We will compute everything from two tables:
+- invoices (total_cents, dates, customer/job)
+- payments (amount_cents, status, method, created_at, invoice_id, provider, provider_ref)
+
+CRITICAL: Stripe payments must land in the SAME `payments` table with:
+- method='card'
+- provider='stripe'
+- status in allowed set ('succeeded' recommended)
+- invoice_id = invoices.id (UUID)
+- created_at set correctly (so “Paid Today” and “This Month” work)
+
+STEP 2 — Ensure Stripe flow actually writes ledger rows (source of truth = webhook)
+A) On PaymentIntent creation (create-intent route)
+- Insert a payment row with:
+  status='processing' or 'requires_payment_method'
+  amount_cents = chosen amount
+  provider_ref = pi.id
+  invoice_id = invoice.id
+  method='card', provider='stripe'
+This guarantees we have a row even before success.
+
+B) On webhook payment_intent.succeeded
+- Find payment row by provider_ref=pi.id
+- If not found, CREATE IT using metadata.invoiceId
+- Then set status='succeeded'
+- Optionally store receipt_url, brand, last4, charge_id
+- Do NOT do heavy QB sync inline—queue or fire-and-forget to avoid delays
+
+Idempotency:
+- If already status='succeeded', return 200 without changing sums.
+
+STEP 3 — Fix Payments page stats computation (why earnings show $0)
+Right now, your stats are likely filtering by:
+- method != 'card' OR provider != 'stripe'
+- OR status == 'paid' only (and Stripe now uses 'succeeded')
+- OR using invoice columns instead of payment sums
+
+Implement stats from payments table:
+- Earnings This Month:
+  SUM(amount_cents) WHERE status in ('succeeded','paid','completed')
+  AND paidAt/created_at within current month
+  AND (provider='stripe' OR provider='manual')  // include both
+- Paid Today:
+  SUM(amount_cents) WHERE status in allowed set
+  AND paid date is today
+- Still Owed:
+  SUM(max(invoice.total_cents - paid_cents_per_invoice, 0)) across invoices not fully paid
+  (paid_cents_per_invoice computed from payments)
+
+IMPORTANT:
+Use the SAME “counted statuses” everywhere:
+LOWER(status) IN ('succeeded','paid','completed')
+So manual cash/check still count and Stripe counts too.
+
+STEP 4 — Fix invoice “owed/unpaid” row in Payments list
+The Payments list top row “$700 owed / Unpaid” must come from:
+- total_cents - SUM(payments for that invoice with allowed status)
+If your list is showing full total owed, it means the SUM for that invoice is returning 0.
+That happens if:
+- payments.invoice_id doesn’t match invoices.id
+- statuses aren’t in allowed set
+- org filter mismatch
+
+So in the ledger endpoint, include per-item debug counts while we test:
+diagnostics: { paymentRowsFound, countedRowsFound, countedStatuses }
+(Only in DEV; don’t show in UI)
+
+STEP 5 — Frontend: Ensure the Payments page is using the new ledger endpoint
+- Payments page should use:
+  response.stats for the top tiles
+  response.items for the list
+- Remove any legacy fallback that sets earnings to 0 when a field is missing.
+- Make sure money formatting uses cents.
+
+ACCEPTANCE TEST (must pass)
+1) Create invoice $700
+2) Pay partial $300 by card (Stripe PaymentIntent)
+3) Payments page should show:
+   - That invoice row: Partial pill + $400 owed
+   - Earnings This Month increases by $300
+   - Paid Today increases by $300 (if done today)
+   - Still Owed decreases by $300 relative to before
+4) Pay remaining $400:
+   - Invoice row becomes Paid
+   - Still Owed decreases accordingly
+5) Cash/check payment also updates stats
+
+DELIVERABLES
+- Stripe webhook guarantees payment ledger row exists + status='succeeded'
+- /api/payments/ledger computes items + stats from payments table using consistent status set
+- Payments page consumes that endpoint and shows correct bubbles + partial status
+- Add temporary DEV-only diagnostics and remove once confirmed
+
+DO THIS NOW: make the ledger + stats authoritative and include Stripe payments in the exact same ledger path as manual payments.

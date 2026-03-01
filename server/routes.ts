@@ -10027,6 +10027,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`[PublicIntent] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id}`);
 
+      const [existingPiPayment] = await db.select({ id: payments.id }).from(payments).where(eq(payments.stripePaymentIntentId, paymentIntent.id));
+      if (!existingPiPayment) {
+        await db.insert(payments).values({
+          companyId: invoice.companyId,
+          invoiceId: invoice.id,
+          jobId: invoice.jobId || null,
+          customerId: invoice.customerId || null,
+          amount: (amountInCents / 100).toFixed(2),
+          amountCents: amountInCents,
+          paymentMethod: 'stripe',
+          status: 'processing',
+          stripePaymentIntentId: paymentIntent.id,
+          paidDate: new Date(),
+        });
+        console.log(`[PublicIntent] Pre-inserted payment row for PI ${paymentIntent.id}`);
+      }
+
       const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
 
       res.json({
@@ -10133,11 +10150,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
-      const matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === pi);
+      let matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === pi);
 
       if (!matchedPayment) {
         console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=pending (no payment row yet)`);
         return res.json({ status: 'pending' });
+      }
+
+      if (matchedPayment.status === 'processing') {
+        await db.update(payments).set({ status: 'succeeded', paidDate: new Date() }).where(eq(payments.id, matchedPayment.id));
+        console.log(`[StripeConfirm] Upgraded payment ${matchedPayment.id} from 'processing' to 'succeeded' (PI confirmed by Stripe)`);
+        await persistRecomputedTotals(invoiceId);
+        matchedPayment = { ...matchedPayment, status: 'succeeded' };
       }
 
       const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
@@ -13868,6 +13892,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`[Stripe] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id}`);
+
+      const [existingPiPayment] = await db.select({ id: payments.id }).from(payments).where(eq(payments.stripePaymentIntentId, paymentIntent.id));
+      if (!existingPiPayment) {
+        await db.insert(payments).values({
+          companyId: company.id,
+          invoiceId: invoice.id,
+          jobId: invoice.jobId || null,
+          customerId: invoice.customerId || null,
+          amount: (amountInCents / 100).toFixed(2),
+          amountCents: amountInCents,
+          paymentMethod: 'stripe',
+          status: 'processing',
+          stripePaymentIntentId: paymentIntent.id,
+          paidDate: new Date(),
+        });
+        console.log(`[Stripe] Pre-inserted payment row for PI ${paymentIntent.id}`);
+      }
 
       const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
 
