@@ -1,0 +1,133 @@
+T021 — Re-introduce “Signature after payment” (in-app) + save to Client Job History card
+
+GOAL
+After a card payment succeeds (full payment OR final “collect remaining” that makes invoice paid), prompt the user to capture a signature. Save that signature to the job/invoice so it shows inside the Client → Job History card for that job.
+
+KEY RULES
+- Signature capture should be REQUIRED only when the invoice becomes fully PAID (not on partials unless you want it).
+- Must work on web + iPhone Capacitor (touch-friendly).
+- Store signature as an image (PNG) + metadata.
+- Do NOT block payment settlement; payment is already complete. Signature step is a post-payment receipt step.
+- Respect RBAC: only roles allowed to collect payment can collect signature.
+- “Hidden not disabled”: if user can’t sign, don’t show signature UI.
+
+DATA MODEL
+Add a signatures table (preferred) OR attach fields to invoices/jobs.
+
+Preferred: `payment_signatures` table:
+- id UUID PK
+- org_id UUID
+- job_id UUID (required)
+- invoice_id UUID (required)
+- payment_id UUID (optional but ideal)
+- signed_by_name TEXT (optional)
+- signed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+- signature_url TEXT (or storage_key) NOT NULL
+- signature_mime TEXT DEFAULT 'image/png'
+- signature_width INT
+- signature_height INT
+- device_info TEXT (optional)
+- created_at / updated_at
+
+Storage:
+- Store signature image in your existing storage bucket (same system as documents/uploads).
+- Save a storage key/url in DB.
+- Keep permissions same as other job artifacts (customer_internal, office_only, etc). Default: office_only or customer_internal (your call). I suggest: `customer_internal` so it can be seen in job history by office roles.
+
+UX FLOW
+A) When payment completes AND invoice becomes “paid”
+Trigger a “Signature Required” bottom-sheet modal:
+
+Title: “Collect Signature”
+Subtitle: “Have the customer sign to confirm payment.”
+Canvas area (signature pad)
+Buttons:
+- “Clear”
+- Primary “Save Signature”
+Optional checkbox: “Customer declined to sign” (if checked, allow closing and record a declined flag)
+
+IMPORTANT: Only open this modal when invoice status is confirmed as PAID from backend (not just Stripe confirmPayment return). Use the same polling/refetch you already have.
+
+B) When payment is PARTIAL
+Do not show signature modal (unless you want; default NO).
+
+C) Where to trigger
+Two places:
+1) Invoice payment flow (Pay full amount)
+2) Collect Remaining Balance flow (finishes invoice)
+After refetch shows computedStatus === 'paid' AND invoice.signature is not already present -> open signature modal.
+
+SIGNATURE PAD IMPLEMENTATION (Frontend)
+- Use a lightweight signature library compatible with React:
+  - Option 1: react-signature-canvas
+  - Option 2: signature_pad (vanilla) + a small wrapper
+- Must support touch input on iPhone.
+- Export PNG:
+  - canvas.toDataURL('image/png')
+  - Convert base64 -> Blob -> upload.
+
+UPLOAD + SAVE (Backend)
+1) Create endpoint to accept signature upload:
+POST /api/signatures
+Body: { jobId, invoiceId, paymentId?, imageBase64, signedByName? }
+Auth: required + RBAC check (same as collecting payment)
+
+Server:
+- Validate user can access job/invoice.
+- Decode base64 to buffer.
+- Upload to storage path like:
+  signatures/{orgId}/{jobId}/{invoiceId}/{timestamp}.png
+- Insert DB row into payment_signatures with signature_url/storage_key.
+- Return { ok:true, signatureId, signatureUrl }
+
+2) Read endpoints
+- Extend job history response to include latest signature info:
+  - signatureUrl
+  - signedAt
+  - invoiceId
+On Client Job History cards, show:
+- “Signature on file” (click to view)
+- Small pen icon optional
+- If tapped: open preview modal with signature image.
+
+CLIENT JOB HISTORY CARD DISPLAY
+On each job card (in client history list), show:
+- If signature exists for that job:
+  - A small row: “Signed • Feb 28” or “Signature on file”
+  - Tap opens a modal to view signature (and download if owner/admin)
+
+SECURITY / PERMISSIONS
+- Signature preview obeys job visibility rules (same as documents).
+- Technicians:
+  - If technicians can collect payment, they can capture signature.
+  - If not, hide signature capture.
+
+EDGE CASES
+- Customer refuses to sign:
+  - Allow “Skip (Customer declined)” but record a row with declined=true (optional).
+- Signature already exists:
+  - Do not prompt again; show “Signature on file”
+  - Add Owner-only action “Replace signature” later (not required now).
+- Offline / flaky network:
+  - If upload fails, keep modal open and allow retry.
+
+ACCEPTANCE TESTS
+1) Full payment:
+- Pay $350 -> invoice becomes paid -> signature modal appears
+- Save signature -> closes modal -> job history card shows “Signature on file”
+2) Partial payment:
+- Pay $100 of $350 -> no signature modal
+3) Collect remaining:
+- Pay remaining $250 -> invoice becomes paid -> signature modal appears -> save -> shows in job history
+4) iPhone:
+- Draw with finger, save works, preview works
+
+DELIVERABLES
+- DB migration for payment_signatures (or invoice/job fields if you choose)
+- Storage upload path + backend POST /api/signatures
+- Frontend signature modal w/ clear + save
+- Trigger logic after invoice transitions to paid
+- Client Job History card displays signature indicator + preview modal
+- No regressions to payments/invoices pages
+
+IMPLEMENT NOW.

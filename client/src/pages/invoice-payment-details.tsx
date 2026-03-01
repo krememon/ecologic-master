@@ -4,6 +4,8 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import StripePaymentForm from "@/components/StripePaymentForm";
+import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
+import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 import {
   ArrowLeft,
   DollarSign,
@@ -98,6 +100,14 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const canRefund = REFUND_ROLES.has(userRole);
   const canCollect = COLLECT_ROLES.has(userRole);
 
+  const {
+    isModalOpen: sigModalOpen,
+    pendingPayment: sigPendingPayment,
+    triggerSignature,
+    onSignatureComplete: handleSigComplete,
+    onModalDismiss: handleSigDismiss,
+  } = useSignatureAfterPayment();
+
   function handleRefundClick() {
     navigate(`/refunds/new?invoiceId=${invoiceId}`);
   }
@@ -162,6 +172,13 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
         const result = await res.json();
         if (result.status === "succeeded") {
           invalidateAll();
+          if (result.newStatus === "paid" && result.paymentId) {
+            triggerSignature({
+              paymentId: result.paymentId,
+              jobId: data?.jobId || undefined,
+              invoiceId: parseInt(invoiceId),
+            });
+          }
           return;
         }
       } catch {}
@@ -432,6 +449,17 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
           )}
         </DialogContent>
       </Dialog>
+
+      {sigPendingPayment && (
+        <SignatureCaptureModal
+          open={sigModalOpen}
+          onOpenChange={(open) => { if (!open) handleSigDismiss(); }}
+          paymentId={sigPendingPayment.paymentId}
+          jobId={sigPendingPayment.jobId}
+          invoiceId={sigPendingPayment.invoiceId}
+          onComplete={handleSigComplete}
+        />
+      )}
     </div>
   );
 }
