@@ -1,0 +1,142 @@
+T013 — Stop patching blindly: add ONE hard “ledger truth” view and force UI to use it (fixes partials + stats in one shot)
+
+We’re going in circles because every “fix” is being applied in a different place (invoice endpoints, confirm route, webhook, UI) and we still don’t have a single canonical source the UI MUST display.
+
+So we are going to do this:
+
+✅ Create ONE server endpoint that returns the Payments page rows + owed/status computed ONLY from the payments ledger (not invoice columns).
+✅ Make the Payments page use ONLY that endpoint.
+✅ Add one server-side “recompute invoice from ledger” helper used everywhere.
+✅ Add a “diagnostic payload” in the endpoint response so we can see EXACTLY why paid=0 when it happens.
+
+This ends the guessing.
+
+--------------------------------------------------------------------
+PART 1 — Create a canonical Payments Ledger API (this becomes source-of-truth)
+--------------------------------------------------------------------
+
+1) Add endpoint:
+GET /api/payments/ledger
+
+It must return rows like:
+{
+  items: [
+    {
+      invoiceId,
+      invoiceNumber,
+      customerName,
+      jobName,
+      totalCents,
+      paidCents,
+      balanceDueCents,
+      computedStatus,   // unpaid | partial | paid
+      lastPayment: { amountCents, status, provider, createdAt, providerRef }
+    },
+    ...
+  ],
+  stats: {
+    stillOwedCents,
+    paidTodayCents,
+    overdueCount,
+    earningsThisMonthCents
+  },
+  debug: {
+    countedStatuses: ['succeeded','paid','completed'],
+    orgIdUsed,
+    sqlNotes
+  }
+}
+
+CRITICAL:
+- paidCents must be computed as:
+  SUM(payments.amount_cents) WHERE payments.invoice_id = invoices.id
+  AND LOWER(payments.status) IN ('succeeded','paid','completed')
+- balanceDueCents = max(totalCents - paidCents, 0)
+- computedStatus based on paid/balance
+- Everything is filtered by org_id / account_id consistently (same org id for invoices and payments)
+
+2) Also include for each item a tiny “why paid=0” debug:
+diagnostics: {
+  paymentRowsFound: <count of payments for that invoice_id>,
+  succeededCount: <count with allowed status>,
+  latestStatusesSample: ['requires_payment_method','processing',...],
+  invoiceIdKeyUsed: invoices.id
+}
+
+This will show immediately if:
+- there are 0 payment rows linked (linkage mismatch)
+- there are payment rows but status not in allowed set
+- org filter is excluding them
+
+--------------------------------------------------------------------
+PART 2 — Force the Payments page UI to use ONLY /api/payments/ledger
+--------------------------------------------------------------------
+
+3) Update frontend Payments page:
+- Remove any code that displays “owed” from invoice.total alone.
+- Display:
+  - pill = computedStatus
+  - owed = balanceDueCents
+- Stats cards use stats from ledger response.
+
+This guarantees the UI cannot show “full owed” unless ledger compute says paid=0.
+
+--------------------------------------------------------------------
+PART 3 — Fix the real cause if ledger compute still shows paid=0
+--------------------------------------------------------------------
+
+After deploying T013, do ONE test:
+- Create invoice total $700
+- Pay $300
+- Open Payments page, click the invoice row, and log the diagnostics for that row.
+
+Then fix based on the diagnostics:
+
+CASE A) paymentRowsFound = 0
+=> Payments are NOT being written with payments.invoice_id = invoices.id
+FIX:
+- In create-intent route, insert payment row with invoice_id = invoice.id (UUID).
+- In webhook fallback insert, use metadata.invoiceId and set invoice_id correctly.
+- Ensure you are not mistakenly storing jobId or invoiceNumber into invoice_id.
+
+CASE B) paymentRowsFound > 0 but succeededCount = 0
+=> Status mismatch
+FIX:
+- In webhook: set status='succeeded' on the matched payment row.
+- In confirm/manual: set status in allowed set.
+- Update SUM countedStatuses if you truly use different labels.
+
+CASE C) paymentRowsFound > 0, succeededCount > 0, but UI still shows full owed
+=> Frontend is not using ledger fields
+FIX:
+- Replace display fields with ledger response fields (paidCents/balanceDueCents/computedStatus).
+
+CASE D) payment exists but orgIdUsed excludes it
+=> Org scoping mismatch
+FIX:
+- Ensure payments rows have org_id set and match invoice.org_id.
+- Or compute via invoice join without requiring payments.org_id separately.
+
+--------------------------------------------------------------------
+PART 4 — Add “recompute invoice from ledger” and run it after success
+--------------------------------------------------------------------
+
+4) Add helper:
+recomputeInvoiceTotalsFromPayments(invoiceId)
+- paid = SUM allowed statuses
+- update invoice.amount_paid_cents, invoice.balance_due_cents, invoice.status (optional)
+- return computed object
+
+Use it in:
+- webhook payment_intent.succeeded
+- manual payment record route
+- (optional) confirm route
+
+--------------------------------------------------------------------
+DELIVERABLES
+- /api/payments/ledger implemented as canonical computed source with per-row diagnostics
+- Payments page uses it exclusively
+- One partial payment test shows Partial + remaining balance correctly
+- If not, diagnostics will reveal exact cause and you fix that specific cause
+
+DO THIS EXACTLY. No more “maybe status”, no more scattered computations.
