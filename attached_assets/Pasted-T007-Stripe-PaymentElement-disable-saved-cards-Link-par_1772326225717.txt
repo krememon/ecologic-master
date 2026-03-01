@@ -1,0 +1,149 @@
+T007 — Stripe PaymentElement: disable saved cards/Link + partial payment updates amount + keep ledger/QB safe
+
+CONTEXT
+- We switched from Stripe Checkout redirect to inline PaymentElement.
+- In test mode, Stripe is showing “Link” + a saved test card (•••• 4242).
+- We must ensure: users must enter card details every time (no saved cards / no Link one-tap).
+- We must support partial payments: when user enters partial amount, the “Pay $X.XX” button updates instantly AND Stripe charges exactly that amount.
+
+GOALS
+1) Do NOT show saved cards / Link / saved payment methods UI inside PaymentElement.
+2) Do NOT save cards for later use (no customer attachment, no setup_future_usage).
+3) Partial Payment:
+   - Toggle ON shows amount input.
+   - The Pay button label reflects the amount input in real-time.
+   - The Stripe PaymentIntent amount matches the chosen partial amount (cents).
+4) Keep Payments ledger + QuickBooks logic safe (source-of-truth is DB; webhook finalizes).
+
+IMPORTANT STRIPE FACTS (what to implement)
+- Saved cards typically appear when:
+  a) Link is enabled in PaymentElement, OR
+  b) PaymentIntent is created with a Stripe Customer / customer_session, OR
+  c) setup_future_usage is set (Stripe tries to reuse), OR
+  d) you’re using “remember me” features.
+- To force “fill card every time”:
+  - Do NOT pass `customer` or `customer_email` intending to create customers.
+  - Do NOT create/use Customer Sessions.
+  - Do NOT set `setup_future_usage`.
+  - Disable Link inside PaymentElement via options (and optionally disable wallets too).
+
+BACKEND CHANGES (Express)
+A) Update create-intent route to accept partial amount
+POST /api/payments/stripe/create-intent
+Body: { invoiceId, amountCents?: number }  // amountCents optional; defaults to full amountDue
+
+Server logic:
+1. Load invoice, validate access (RBAC).
+2. Compute maxDueCents.
+3. If amountCents provided:
+   - validate integer
+   - MIN: 50 (Stripe min typically 50 cents USD; enforce >= 50)
+   - MAX: maxDueCents
+4. Create Stripe PaymentIntent with:
+   - amount: chosenAmountCents
+   - currency: 'usd'
+   - automatic_payment_methods: { enabled: true }
+   - IMPORTANT: do NOT include customer, do NOT include setup_future_usage
+   - metadata: { invoiceId, paymentKind: 'invoice', ecologic: 'true' }
+5. Create payments ledger row (status='requires_payment_method', method='card', provider='stripe', provider_ref=pi.id, amount_cents=chosenAmountCents).
+6. Return { clientSecret, publishableKey, paymentIntentId, amountCents: chosenAmountCents }
+
+B) Ensure webhook finalizes payment + invoice amount_paid properly for partials
+On payment_intent.succeeded:
+- Find payment by provider_ref = pi.id
+- Idempotency guard: if payment.status === 'succeeded' return 200
+- Mark payment.status='succeeded'
+- Increment invoice.amount_paid_cents += payment.amount_cents
+- Set invoice.status:
+  - paid if amount_paid_cents >= total_cents
+  - partial if 0 < amount_paid_cents < total_cents
+  - unpaid otherwise
+- Trigger QuickBooks sync ONCE per payment row (guard with quickbooks_payment_id)
+
+FRONTEND CHANGES (React)
+C) Disable Link + saved methods in PaymentElement UI
+Where we render <Elements> / <PaymentElement>, set options:
+
+- Use Elements options:
+  - { clientSecret, appearance, loader: 'auto' }
+
+- PaymentElement options:
+  - wallets: { applePay: 'never', googlePay: 'never' }  (optional; set to 'auto' if you DO want wallets)
+  - fields: { billingDetails: 'never' } (optional)
+  - terms: { card: 'never' } (optional)
+  - NOTE: The key piece is disabling Link. Stripe’s API can vary by version; implement the most compatible approach:
+    1) Pass PaymentElement option `paymentMethodOrder: ['card']` to force card only.
+    2) Ensure we are not enabling Link anywhere else.
+    3) If Stripe supports it in our installed version, explicitly disable Link:
+       - In Stripe Dashboard, disable Link for the account (Payments → Link) OR
+       - In code, set `linkAuthentication: 'never'` if available.
+  - If a specific option is unsupported by the current @stripe/react-stripe-js version, remove it and fall back to “card-only” ordering + dashboard Link off.
+
+IMPLEMENTATION REQUIREMENT:
+- After this change, PaymentElement should render a plain card form (no Link block, no “use this card” saved card UI).
+
+D) Partial Payment UI + Pay button label
+In InvoiceDetails.tsx (or wherever payment UI lives):
+- Add state:
+  - partialEnabled: boolean
+  - partialAmount: string (e.g. "200")
+  - computedAmountCents: derived from partialAmount when enabled, else fullDueCents
+- Render:
+  - Toggle “Partial Payment”
+  - If enabled: numeric input for amount (dollars)
+  - Show helper text: remaining after payment.
+
+Pay button:
+- Label must be dynamic:
+  - Pay $X.XX where X is (computedAmountCents/100).toFixed(2)
+
+E) PaymentIntent regeneration when amount changes
+Stripe PaymentIntent amount must match what we intend to charge.
+EASIEST, RELIABLE APPROACH:
+- When user changes partialAmount (debounced 400–600ms):
+  1) Call create-intent again with amountCents
+  2) Replace clientSecret in state
+  3) Re-mount <Elements> by changing a `key={paymentIntentId}` so PaymentElement resets cleanly
+
+Rules:
+- Only regenerate if:
+  - partialEnabled is true
+  - amount is valid and different from last created amount
+- If invalid, disable Pay button and show inline error.
+
+F) Confirm payment without redirecting out of app
+When clicking Pay:
+- stripe.confirmPayment({ elements, redirect: 'if_required' })
+- On immediate success, show “Processing…” then refetch invoice/payments (or poll) until webhook updated DB.
+
+SECURITY / “NO SAVED CARD” GUARANTEES
+G) Backend: ensure we never save cards
+- Confirm PaymentIntent creation does NOT include:
+  - customer
+  - customer_email (if it triggers customer creation in your code path, remove it)
+  - setup_future_usage
+- Do not create Stripe Customers for this flow unless we intentionally want saved payment methods later.
+
+H) Dashboard (if needed)
+If Link still appears due to Stripe account settings:
+- Add a short note in replit.md on how to disable Link in Stripe Dashboard for this project’s Stripe account.
+- But prefer code-based card-only first.
+
+QA CHECKLIST
+1) Card Payment screen shows a normal card entry form (no Link, no saved “Visa Credit •••• 4242” tile).
+2) Paying twice requires card entry twice (no saved card offered).
+3) Partial Payment:
+   - Enter 200 -> button says Pay $200.00
+   - Stripe charges $200.00 (verify in Stripe test dashboard)
+   - Invoice shows partial with remaining due
+   - Payments ledger row amount_cents=20000
+4) Full payment still works.
+5) Webhook finalization updates DB even if app closed.
+6) QB sync triggers once per payment row (no duplicates).
+
+DELIVERABLES
+- Code changes implementing A–H.
+- Minimal UI polish consistent with EcoLogic style.
+- No regressions in Payments page list.
+
+START NOW: implement and test in sandbox.

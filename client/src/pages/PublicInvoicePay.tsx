@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import SignatureCanvas from "react-signature-canvas";
 import { useToast } from "@/hooks/use-toast";
@@ -75,6 +78,8 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [publishableKey, setPublishableKey] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [intentAmountCents, setIntentAmountCents] = useState<number>(0);
+  const [partialEnabled, setPartialEnabled] = useState(false);
+  const [partialAmountStr, setPartialAmountStr] = useState("");
 
   const [stripeSuccess, setStripeSuccess] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
@@ -173,8 +178,14 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     }
   }, [paymentId, invoiceId, paymentIntentId]);
 
+  const balanceDue = invoice ? (invoice.balanceDueCents || invoice.totalCents) : 0;
+  const publicPartialCents = Math.round(parseFloat(partialAmountStr || "0") * 100);
+  const isPublicPartialValid = publicPartialCents >= 50 && publicPartialCents <= balanceDue;
+  const publicPaymentAmount = partialEnabled ? publicPartialCents : balanceDue;
+
   const handlePay = async () => {
     if (isCheckoutLoading || !invoice) return;
+    if (partialEnabled && !isPublicPartialValid) return;
     setIsCheckoutLoading(true);
     try {
       const res = await fetch('/api/public/invoices/create-intent', {
@@ -182,6 +193,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           invoiceId: parseInt(invoiceId),
+          ...(partialEnabled ? { amountCents: publicPaymentAmount } : {}),
         }),
       });
       if (!res.ok) {
@@ -555,10 +567,46 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
           </div>
 
           {!isPaid && invoice.totalCents > 0 && !showPaymentForm && (
-            <div className="px-8 pb-8 md:px-10">
+            <div className="px-8 pb-8 md:px-10 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium text-gray-700">Partial Payment</Label>
+                <Switch
+                  checked={partialEnabled}
+                  onCheckedChange={(checked) => {
+                    setPartialEnabled(checked);
+                    if (!checked) setPartialAmountStr("");
+                  }}
+                />
+              </div>
+              {partialEnabled && (
+                <div className="space-y-1">
+                  <Input
+                    type="number"
+                    min="0.50"
+                    step="0.01"
+                    max={(balanceDue / 100).toFixed(2)}
+                    placeholder="Amount in dollars"
+                    value={partialAmountStr}
+                    onChange={(e) => setPartialAmountStr(e.target.value)}
+                    className="h-12 text-lg"
+                  />
+                  {partialAmountStr && !isPublicPartialValid && (
+                    <p className="text-xs text-red-500">
+                      {publicPartialCents < 50
+                        ? "Minimum payment is $0.50"
+                        : `Maximum is ${formatCurrency(balanceDue)}`}
+                    </p>
+                  )}
+                  {partialAmountStr && isPublicPartialValid && (
+                    <p className="text-xs text-gray-500">
+                      Remaining after payment: {formatCurrency(balanceDue - publicPartialCents)}
+                    </p>
+                  )}
+                </div>
+              )}
               <Button
                 onClick={handlePay}
-                disabled={isCheckoutLoading}
+                disabled={isCheckoutLoading || (partialEnabled && !isPublicPartialValid)}
                 className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
               >
                 {isCheckoutLoading ? (
@@ -569,7 +617,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                 ) : (
                   <>
                     <CreditCard className="h-5 w-5 mr-2" />
-                    Pay {formatCurrency(invoice.balanceDueCents || invoice.totalCents)}
+                    Pay {formatCurrency(publicPaymentAmount)}
                   </>
                 )}
               </Button>

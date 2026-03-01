@@ -73,6 +73,8 @@ function CheckoutForm({
       <PaymentElement
         options={{
           layout: "tabs",
+          paymentMethodOrder: ["card"],
+          wallets: { applePay: "never", googlePay: "never" },
         }}
       />
 
@@ -136,6 +138,7 @@ export default function StripePaymentForm({
         Card Payment
       </h3>
       <Elements
+        key={clientSecret}
         stripe={stripePromise}
         options={{
           clientSecret,

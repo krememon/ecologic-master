@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
 import StripePaymentForm from "@/components/StripePaymentForm";
 import { format } from "date-fns";
@@ -54,6 +55,8 @@ interface InvoiceData {
   lineItems?: InvoiceLineItem[] | null;
   stripeCheckoutSessionId?: string | null;
   stripePaymentIntentId?: string | null;
+  paidAmountCents?: number;
+  balanceDueCents?: number;
   paidAt?: string | null;
   qboInvoiceId?: string | null;
   qboSyncStatus?: string | null;
@@ -109,6 +112,8 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
   const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
   const [stripeAmountCents, setStripeAmountCents] = useState<number>(0);
+  const [partialEnabled, setPartialEnabled] = useState(false);
+  const [partialAmountStr, setPartialAmountStr] = useState("");
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [sendMode, setSendMode] = useState<'email' | 'text'>('email');
   const [emailValue, setEmailValue] = useState('');
@@ -144,12 +149,21 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     },
   });
 
+  const invoiceTotalCents = invoice ? (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100)) : 0;
+  const currentPaidCents = invoice?.paidAmountCents || 0;
+  const balanceRemainingCents = invoice?.balanceDueCents || (invoiceTotalCents - currentPaidCents);
+  const partialAmountCents = Math.round(parseFloat(partialAmountStr || "0") * 100);
+  const isPartialValid = partialAmountCents >= 50 && partialAmountCents <= balanceRemainingCents;
+  const paymentAmountCents = partialEnabled ? partialAmountCents : balanceRemainingCents;
+
   const handlePayWithCard = async () => {
     if (isCheckoutLoading) return;
+    if (partialEnabled && !isPartialValid) return;
     setIsCheckoutLoading(true);
     try {
       const res = await apiRequest('POST', '/api/payments/stripe/create-intent', {
         invoiceId: parseInt(invoiceId),
+        ...(partialEnabled ? { amountCents: paymentAmountCents } : {}),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -169,11 +183,14 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
 
   const handleCardPaymentSuccess = async () => {
     queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+    queryClient.invalidateQueries({ queryKey: [`/api/invoices/${invoiceId}`] });
     queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
     queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
     toast({ title: "Payment successful!" });
     setShowCardForm(false);
     setStripeClientSecret(null);
+    setPartialEnabled(false);
+    setPartialAmountStr("");
   };
 
   const handleCardPaymentCancel = () => {
@@ -401,20 +418,59 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         </div>
       )}
 
-      {/* Primary Pay Button - Shows for unpaid invoices with amount > 0 */}
+      {/* Partial Payment Toggle + Pay Button */}
       {canPay && invoice.totalCents > 0 && !showCardForm && (
-        <Button 
-          onClick={handlePayWithCard}
-          disabled={isCheckoutLoading}
-          className="w-full mb-2 bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          {isCheckoutLoading ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <CreditCard className="h-4 w-4 mr-2" />
+        <div className="space-y-3 mb-2">
+          {balanceRemainingCents > 0 && (
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Partial Payment</Label>
+              <Switch
+                checked={partialEnabled}
+                onCheckedChange={(checked) => {
+                  setPartialEnabled(checked);
+                  if (!checked) setPartialAmountStr("");
+                }}
+              />
+            </div>
           )}
-          {isCheckoutLoading ? 'Processing...' : 'Pay'}
-        </Button>
+          {partialEnabled && (
+            <div className="space-y-1">
+              <Input
+                type="number"
+                min="0.50"
+                step="0.01"
+                max={(balanceRemainingCents / 100).toFixed(2)}
+                placeholder="Amount in dollars"
+                value={partialAmountStr}
+                onChange={(e) => setPartialAmountStr(e.target.value)}
+              />
+              {partialAmountStr && !isPartialValid && (
+                <p className="text-xs text-red-500">
+                  {partialAmountCents < 50
+                    ? "Minimum payment is $0.50"
+                    : `Maximum is ${formatCurrency(balanceRemainingCents)}`}
+                </p>
+              )}
+              {partialAmountStr && isPartialValid && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Remaining after payment: {formatCurrency(balanceRemainingCents - partialAmountCents)}
+                </p>
+              )}
+            </div>
+          )}
+          <Button
+            onClick={handlePayWithCard}
+            disabled={isCheckoutLoading || (partialEnabled && !isPartialValid)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isCheckoutLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CreditCard className="h-4 w-4 mr-2" />
+            )}
+            {isCheckoutLoading ? 'Processing...' : `Pay ${formatCurrency(paymentAmountCents)}`}
+          </Button>
+        </div>
       )}
 
       {/* Secondary Send Invoice Button */}
