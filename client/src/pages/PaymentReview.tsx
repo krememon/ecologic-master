@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { X, Loader2, Plus, ChevronDown, ChevronUp, Banknote, FileCheck, CreditCard, CheckCircle2, Cloud, CloudOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { openStripeBrowser, isNativePlatform } from "@/lib/capacitor";
 import { useCan } from "@/hooks/useCan";
+import StripePaymentForm from "@/components/StripePaymentForm";
 import { SignatureCaptureModal } from "@/components/SignatureCaptureModal";
 import { useSignatureAfterPayment } from "@/hooks/useSignatureAfterPayment";
 
@@ -81,6 +81,12 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const [partialEnabled, setPartialEnabled] = useState(false);
   const [partialAmountStr, setPartialAmountStr] = useState("");
   const [resultPaymentId, setResultPaymentId] = useState<number | null>(null);
+
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
+  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
+  const [stripeAmountCents, setStripeAmountCents] = useState<number>(0);
+  const [stripePaymentIntentId, setStripePaymentIntentId] = useState<string | null>(null);
 
   const {
     isModalOpen: signatureModalOpen,
@@ -154,47 +160,88 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
   const handleMethodSelect = (method: PaymentMethod) => {
     if (partialEnabled && !isPartialValid) return;
     if (method === 'card') {
-      handleStripeCheckout();
+      handleCardPayment();
     } else {
       setSelectedMethod(method);
       setConfirmModalOpen(true);
     }
   };
 
-  const handleStripeCheckout = async () => {
+  const handleCardPayment = async () => {
     if (isLoading) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await apiRequest("POST", "/api/payments/checkout", {
+      const response = await apiRequest("POST", "/api/payments/stripe/create-intent", {
         invoiceId: numericInvoiceId,
-        returnBaseUrl: window.location.origin,
         ...(partialEnabled ? { amountCents: paymentAmountCents } : {}),
       });
       const data = await response.json();
       
-      if (!data.url) {
-        throw new Error("No checkout URL received");
+      if (!data.clientSecret || !data.publishableKey) {
+        throw new Error("Failed to initialize card payment");
       }
-      if (data.sessionId) {
-        localStorage.setItem("stripe_session", data.sessionId);
-      }
-      if (isNativePlatform()) {
-        await openStripeBrowser(data.url, () => {
-          console.log("[PaymentReview] Stripe browser closed, refreshing");
-          setIsLoading(false);
-          invalidateAll();
-          queryClient.invalidateQueries({ queryKey: ['/api/subscriptions/status'] });
-        });
-      } else {
-        window.location.href = data.url;
-      }
+      
+      setStripeClientSecret(data.clientSecret);
+      setStripePublishableKey(data.publishableKey);
+      setStripeAmountCents(data.amountCents || paymentAmountCents);
+      setStripePaymentIntentId(data.paymentIntentId || null);
+      setShowCardForm(true);
+      setIsLoading(false);
     } catch (err: any) {
       setIsLoading(false);
-      setError(err.message || "Failed to start payment");
+      setError(err.message || "Failed to start card payment");
     }
+  };
+
+  const handleCardPaymentSuccess = async (paymentIntentId: string) => {
+    setShowCardForm(false);
+    setViewState('processing');
+    
+    try {
+      let confirmed = false;
+      for (let i = 0; i < 15; i++) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
+          const res = await fetch(`/api/payments/stripe/confirm?paymentIntentId=${paymentIntentId}`, {
+            credentials: 'include',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'succeeded' || data.paid) {
+              setPaidAmount(data.amountCents || stripeAmountCents);
+              setResultNewStatus(data.newStatus || (data.balanceRemaining > 0 ? 'partial' : 'paid'));
+              setResultBalanceRemaining(data.balanceRemaining || 0);
+              setResultPaymentId(data.paymentId || null);
+              confirmed = true;
+              break;
+            }
+          }
+        } catch {}
+      }
+      
+      if (!confirmed) {
+        setPaidAmount(stripeAmountCents);
+        setResultNewStatus(stripeAmountCents < balanceRemainingCents ? 'partial' : 'paid');
+        setResultBalanceRemaining(Math.max(0, balanceRemainingCents - stripeAmountCents));
+      }
+      
+      invalidateAll();
+      setViewState('success');
+    } catch (err: any) {
+      setError(err.message || "Payment may have succeeded but confirmation failed. Please check your invoices.");
+      setViewState('review');
+    }
+  };
+
+  const handleCardPaymentCancel = () => {
+    setShowCardForm(false);
+    setStripeClientSecret(null);
+    setStripePublishableKey(null);
+    setStripeAmountCents(0);
+    setStripePaymentIntentId(null);
   };
 
   const invalidateAll = () => {
@@ -628,54 +675,67 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
           </div>
         )}
 
-        <div className="space-y-3 pt-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              Select payment method
-            </h2>
-            {partialEnabled && isPartialValid && (
-              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                {formatCurrency(paymentAmountCents / 100)}
-              </span>
-            )}
+        {showCardForm && stripeClientSecret && stripePublishableKey ? (
+          <div className="pt-4">
+            <StripePaymentForm
+              clientSecret={stripeClientSecret}
+              publishableKey={stripePublishableKey}
+              amountCents={stripeAmountCents}
+              invoiceId={numericInvoiceId}
+              onSuccess={handleCardPaymentSuccess}
+              onCancel={handleCardPaymentCancel}
+            />
           </div>
-          
-          <div className="grid grid-cols-3 gap-3">
-            <Button
-              variant="outline"
-              className="flex flex-col items-center gap-2 h-24 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
-              onClick={() => handleMethodSelect('cash')}
-              disabled={paymentDisabled}
-            >
-              <Banknote className="h-8 w-8 text-green-600" />
-              <span className="text-sm font-medium">Cash</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="flex flex-col items-center gap-2 h-24 hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-              onClick={() => handleMethodSelect('check')}
-              disabled={paymentDisabled}
-            >
-              <FileCheck className="h-8 w-8 text-blue-600" />
-              <span className="text-sm font-medium">Check</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="flex flex-col items-center gap-2 h-24 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20"
-              onClick={() => handleMethodSelect('card')}
-              disabled={paymentDisabled}
-            >
-              {isLoading ? (
-                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-              ) : (
-                <CreditCard className="h-8 w-8 text-purple-600" />
+        ) : (
+          <div className="space-y-3 pt-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Select payment method
+              </h2>
+              {partialEnabled && isPartialValid && (
+                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                  {formatCurrency(paymentAmountCents / 100)}
+                </span>
               )}
-              <span className="text-sm font-medium">Card</span>
-            </Button>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-3">
+              <Button
+                variant="outline"
+                className="flex flex-col items-center gap-2 h-24 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
+                onClick={() => handleMethodSelect('cash')}
+                disabled={paymentDisabled}
+              >
+                <Banknote className="h-8 w-8 text-green-600" />
+                <span className="text-sm font-medium">Cash</span>
+              </Button>
+              
+              <Button
+                variant="outline"
+                className="flex flex-col items-center gap-2 h-24 hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                onClick={() => handleMethodSelect('check')}
+                disabled={paymentDisabled}
+              >
+                <FileCheck className="h-8 w-8 text-blue-600" />
+                <span className="text-sm font-medium">Check</span>
+              </Button>
+              
+              <Button
+                variant="outline"
+                className="flex flex-col items-center gap-2 h-24 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                onClick={() => handleMethodSelect('card')}
+                disabled={paymentDisabled}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                ) : (
+                  <CreditCard className="h-8 w-8 text-purple-600" />
+                )}
+                <span className="text-sm font-medium">Card</span>
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <Dialog open={confirmModalOpen} onOpenChange={setConfirmModalOpen}>

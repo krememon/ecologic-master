@@ -562,6 +562,204 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     }
   }
 
+  if (event.type === 'payment_intent.succeeded') {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const { invoiceId, companyId, jobId } = paymentIntent.metadata || {};
+
+    console.log(`[Stripe Webhook] payment_intent.succeeded: piId=${paymentIntent.id}, amount=${paymentIntent.amount}, metadata=${JSON.stringify(paymentIntent.metadata)}`);
+
+    if (!invoiceId) {
+      console.error('[Stripe Webhook] payment_intent.succeeded: No invoiceId in metadata');
+      return res.json({ received: true, message: 'No invoiceId in metadata, skipping' });
+    }
+
+    const resolvedJobId = jobId ? parseInt(jobId) : null;
+
+    try {
+      const [existingInvoice] = await db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, parseInt(invoiceId)));
+
+      if (!existingInvoice) {
+        console.error(`[Stripe Webhook] payment_intent.succeeded: Invoice ${invoiceId} not found`);
+        return res.status(404).send('Invoice not found');
+      }
+
+      const effectiveJobId = resolvedJobId || existingInvoice.jobId;
+      console.log(`[Stripe Webhook] payment_intent.succeeded: Resolved jobId: metadata=${resolvedJobId}, invoice.jobId=${existingInvoice.jobId}, effective=${effectiveJobId}`);
+
+      const [existingPaymentCheck] = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.stripePaymentIntentId, paymentIntent.id));
+
+      if (existingPaymentCheck) {
+        console.log(`[Stripe Webhook] payment_intent.succeeded: Payment already exists for PI ${paymentIntent.id}, idempotent skip`);
+
+        if (!existingPaymentCheck.qboPaymentId && existingPaymentCheck.qboPaymentSyncStatus !== 'synced') {
+          console.log(`[QB-PAY] Retrying QBO sync for PI payment paymentId=${existingPaymentCheck.id}`);
+          syncPaymentToQboFromWebhook(existingPaymentCheck.id, existingInvoice.companyId, paymentIntent.id)
+            .then(result => {
+              if (result.success) console.log(`[QB-PAY] Retry sync success: ${result.qboPaymentId}`);
+              else console.log(`[QB-PAY] Retry sync: ${result.error}`);
+            })
+            .catch(err => console.error('[QB-PAY] Retry sync error:', err));
+        }
+
+        if (effectiveJobId) {
+          const [jobCheck] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+          if (jobCheck && jobCheck.status === 'completed' && jobCheck.paymentStatus === 'paid' && !jobCheck.archivedAt) {
+            const now = new Date();
+            await db.update(jobs).set({
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'completed_and_paid',
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] Job ${effectiveJobId} retroactively archived on idempotent PI webhook`);
+          }
+        }
+
+        return res.json({ received: true, message: 'Already processed' });
+      }
+
+      const now = new Date();
+      const amountCents = paymentIntent.amount || 0;
+      const invoiceTotalCents = existingInvoice.totalCents > 0 ? existingInvoice.totalCents : Math.round(parseFloat(existingInvoice.amount) * 100);
+      const prevPaidCents = existingInvoice.paidAmountCents || 0;
+      const newPaidAmountCents = Math.min(invoiceTotalCents, prevPaidCents + amountCents);
+      const newBalanceDueCents = Math.max(0, invoiceTotalCents - newPaidAmountCents);
+      const newStatus = newBalanceDueCents === 0 ? 'paid' : 'partial';
+
+      console.log(`[Stripe Webhook] PI Invoice ${invoiceId}: amount=${amountCents}, total=${invoiceTotalCents}, prevPaid=${prevPaidCents}, newPaid=${newPaidAmountCents}, balance=${newBalanceDueCents}, newStatus=${newStatus}`);
+
+      await db
+        .update(invoices)
+        .set({
+          status: newStatus,
+          paidAmountCents: newPaidAmountCents,
+          balanceDueCents: newBalanceDueCents,
+          ...(newStatus === 'paid' ? {
+            paidAt: now,
+            paidDate: now.toISOString().split('T')[0],
+          } : {}),
+          stripePaymentIntentId: paymentIntent.id,
+          updatedAt: now,
+        })
+        .where(eq(invoices.id, parseInt(invoiceId)));
+
+      if (effectiveJobId) {
+        const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+        console.log(`[Stripe Webhook] PI Job ${effectiveJobId} BEFORE update: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
+
+        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
+        const updateResult = await db
+          .update(jobs)
+          .set({
+            paymentStatus: jobPaymentStatus,
+            ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
+          })
+          .where(eq(jobs.id, effectiveJobId))
+          .returning({ id: jobs.id });
+        console.log(`[Stripe Webhook] PI Job ${effectiveJobId} paymentStatus updated to '${jobPaymentStatus}', rows=${updateResult.length}`);
+
+        if (jobPaymentStatus === 'paid') {
+          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, effectiveJobId));
+          console.log(`[Stripe Webhook] PI Job ${effectiveJobId} AFTER update: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
+          if (jobAfter && !jobAfter.archivedAt) {
+            await db.update(jobs).set({
+              status: 'archived',
+              archivedAt: now,
+              archivedReason: 'paid',
+            }).where(eq(jobs.id, effectiveJobId));
+            console.log(`[Stripe Webhook] PI Job ${effectiveJobId} auto-archived (paid)`);
+          }
+        }
+      }
+
+      const [newPayment] = await db.insert(payments).values({
+        companyId: companyId ? parseInt(companyId) : existingInvoice.companyId,
+        invoiceId: parseInt(invoiceId),
+        jobId: effectiveJobId || null,
+        customerId: existingInvoice.customerId || null,
+        amount: (amountCents / 100).toFixed(2),
+        amountCents: amountCents,
+        paymentMethod: 'stripe',
+        status: 'paid',
+        stripePaymentIntentId: paymentIntent.id,
+        paidDate: now,
+      }).returning({ id: payments.id });
+
+      const paymentId = newPayment.id;
+      console.log(`[Stripe Webhook] PI Payment record created for invoice ${invoiceId} paymentId=${paymentId}`);
+
+      const targetCompanyIdForNotif = companyId ? parseInt(companyId) : existingInvoice.companyId;
+      const amountDollars = (amountCents / 100).toFixed(2);
+      try {
+        console.log(`[stripe] payment_intent.succeeded companyId=${targetCompanyIdForNotif} invoiceId=${invoiceId} amount=$${amountDollars}`);
+        await notifyOwners(targetCompanyIdForNotif, {
+          type: 'invoice_paid',
+          title: 'Payment Received',
+          body: `Invoice paid – $${amountDollars}`,
+          entityType: 'invoice',
+          entityId: parseInt(invoiceId),
+          linkUrl: `/invoicing/${invoiceId}`,
+          meta: {
+            invoiceId,
+            amountCents: String(amountCents),
+            stripePaymentIntentId: paymentIntent.id,
+          },
+        });
+      } catch (notifErr) {
+        console.error('[stripe] PI notification error:', notifErr);
+      }
+
+      if (paymentId) {
+        const targetCompanyId = companyId ? parseInt(companyId) : existingInvoice.companyId;
+        console.log(`[QB-PAY] Triggered from PI webhook invoiceId=${invoiceId} stripeId=${paymentIntent.id}`);
+
+        syncPaymentToQboFromWebhook(paymentId, targetCompanyId, paymentIntent.id)
+          .then(result => {
+            if (result.success) {
+              console.log(`[QB-PAY] PI webhook payment synced: ${result.qboPaymentId}`);
+            } else {
+              console.log(`[QB-PAY] PI webhook payment sync: ${result.error}`);
+            }
+          })
+          .catch(err => console.error('[QB-PAY] PI webhook sync error:', err));
+      }
+    } catch (error: any) {
+      console.error('[Stripe Webhook] Error processing payment_intent.succeeded:', error);
+      return res.status(500).send('Error processing payment');
+    }
+  }
+
+  if (event.type === 'payment_intent.payment_failed') {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const { invoiceId } = paymentIntent.metadata || {};
+    const lastError = paymentIntent.last_payment_error;
+
+    console.warn(`[Stripe Webhook] payment_intent.payment_failed: piId=${paymentIntent.id}, invoiceId=${invoiceId || 'none'}, error=${lastError?.message || 'unknown'}`);
+
+    if (invoiceId) {
+      try {
+        const [existingPayment] = await db
+          .select()
+          .from(payments)
+          .where(eq(payments.stripePaymentIntentId, paymentIntent.id));
+
+        if (existingPayment) {
+          await db.update(payments).set({
+            status: 'failed',
+          }).where(eq(payments.id, existingPayment.id));
+          console.log(`[Stripe Webhook] Payment ${existingPayment.id} marked as failed`);
+        }
+      } catch (error: any) {
+        console.error('[Stripe Webhook] Error processing payment_intent.payment_failed:', error.message);
+      }
+    }
+  }
+
   if (event.type === 'charge.refunded' || event.type === 'charge.refund.updated') {
     const charge = event.data.object as Stripe.Charge;
     const chargeRefunds = charge.refunds?.data || [];

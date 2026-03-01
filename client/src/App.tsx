@@ -43,7 +43,6 @@ import JobEdit from "@/pages/JobEdit";
 import ClientDetail from "@/pages/ClientDetail";
 import PaySuccess from "@/pages/PaySuccess";
 import PayCancel from "@/pages/PayCancel";
-import StripeReturn from "@/pages/StripeReturn";
 import PaymentReview from "@/pages/PaymentReview";
 import PublicInvoicePay from "@/pages/PublicInvoicePay";
 import Leads from "@/pages/Leads";
@@ -126,7 +125,6 @@ function PaymentRouter() {
     <Switch>
       <Route path="/pay/success" component={PaySuccess} />
       <Route path="/pay/cancel" component={PayCancel} />
-      <Route path="/stripe/return" component={StripeReturn} />
     </Switch>
   );
 }
@@ -314,7 +312,6 @@ function AuthenticatedRouter() {
         <Route path="/jobs/:jobId/pay/:invoiceId">
           {(params) => <PaymentReview jobId={params.jobId} invoiceId={params.invoiceId} />}
         </Route>
-        <Route path="/stripe/return" component={StripeReturn} />
         <Route path="/profile">{() => <Redirect to="/settings" />}</Route>
         <Route>{() => <Redirect to="/jobs" />}</Route>
       </Switch>
@@ -414,47 +411,6 @@ function useCapacitorDeepLinks() {
 
         const listener = await CapApp.addListener("appUrlOpen", async ({ url }) => {
           console.log("[deep-link] Received:", url);
-
-          const isStripeReturn = url.includes("/stripe/return") || url.startsWith("ecologic://stripe-return");
-          if (isStripeReturn) {
-            console.log("[deep-link] Stripe return detected:", url);
-            try {
-              const { Browser } = await import("@capacitor/browser");
-              await Browser.close();
-            } catch {}
-
-            let params: URLSearchParams;
-            try {
-              params = new URL(url.replace("ecologic://stripe-return", "https://placeholder/stripe/return")).searchParams;
-            } catch {
-              params = new URLSearchParams();
-            }
-            const invoiceId = params.get("invoiceId");
-            const canceled = params.get("canceled");
-            const result = params.get("result");
-            const sessionId = params.get("session_id");
-            const isCancel = canceled === "1" || result === "cancel";
-
-            console.log("[deep-link] Stripe params:", { invoiceId, canceled, result, sessionId, isCancel });
-
-            queryClient.invalidateQueries({ queryKey: ["/api/subscriptions/status"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/payments/stats"] });
-
-            if (isCancel && invoiceId) {
-              window.location.href = `/invoice/${invoiceId}/pay?canceled=1`;
-            } else if (invoiceId && sessionId) {
-              window.location.href = `/invoice/${invoiceId}/pay?success=1&session_id=${sessionId}`;
-            } else if (invoiceId) {
-              window.location.href = `/invoice/${invoiceId}/pay?success=1`;
-            } else {
-              window.location.href = "/jobs";
-            }
-            return;
-          }
 
           if (!url.startsWith("ecologic://auth/callback")) return;
 

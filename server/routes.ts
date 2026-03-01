@@ -9946,84 +9946,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/public/invoices/checkout - Create Stripe checkout for public invoice payment
-  app.post('/api/public/invoices/checkout', async (req, res) => {
+
+  // POST /api/public/invoices/create-intent - Create a Stripe PaymentIntent for public invoice payment (no auth)
+  app.post('/api/public/invoices/create-intent', async (req, res) => {
     try {
       if (!stripe) {
         return res.status(500).json({ message: "Payment system not configured" });
       }
-      
-      const { invoiceId, returnBaseUrl } = req.body;
-      
+
+      const { invoiceId, amountCents: requestedAmountCents } = req.body;
+
       if (!invoiceId || typeof invoiceId !== 'number') {
         return res.status(400).json({ message: "Invoice ID is required" });
       }
-      
+
       const invoice = await storage.getInvoice(invoiceId);
-      
+
       if (!invoice) {
         return res.status(404).json({ message: "Invoice not found" });
       }
-      
-      // Prevent payment if already paid
+
       if (invoice.status === 'paid') {
         return res.status(400).json({ message: "This invoice has already been paid" });
       }
-      
-      // Prevent payment if voided/cancelled
+
       if (invoice.status === 'void' || invoice.status === 'cancelled') {
         return res.status(400).json({ message: "This invoice is no longer valid" });
       }
-      
-      // Get amount in cents
-      const amountInCents = invoice.totalCents || Math.round(parseFloat(invoice.amount) * 100) || 0;
-      
-      if (amountInCents <= 0) {
-        return res.status(400).json({ message: "Invoice has no amount due" });
+
+      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
+      const currentPaidAmountCents = invoice.paidAmountCents || 0;
+      const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
+
+      let amountInCents: number;
+      if (requestedAmountCents !== undefined && requestedAmountCents !== null) {
+        const parsed = parseInt(String(requestedAmountCents), 10);
+        if (isNaN(parsed) || parsed < 50) {
+          return res.status(400).json({ message: "Payment amount must be at least $0.50" });
+        }
+        if (parsed > currentBalanceDueCents) {
+          return res.status(400).json({ message: "Payment amount cannot exceed balance due" });
+        }
+        amountInCents = parsed;
+      } else {
+        amountInCents = currentBalanceDueCents;
       }
-      
-      // Get company for description
+
+      if (amountInCents < 50) {
+        return res.status(400).json({ message: "Payment amount must be at least $0.50 (Stripe minimum)" });
+      }
+
       const company = await storage.getCompany(invoice.companyId);
-      
-      const appBaseUrl = process.env.APP_BASE_URL || returnBaseUrl || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      
-      console.log(`[PublicCheckout] Creating session for invoice ${invoice.id}, amount: ${amountInCents} cents`);
-      
-      // Create Stripe Checkout Session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'payment',
-        billing_address_collection: 'required',
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Invoice ${invoice.invoiceNumber}`,
-              description: company?.name ? `Payment to ${company.name}` : undefined,
-            },
-            unit_amount: amountInCents,
-          },
-          quantity: 1,
-        }],
+
+      console.log(`[PublicIntent] Creating PaymentIntent for invoice ${invoice.id}, amount: ${amountInCents} cents`);
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountInCents,
+        currency: 'usd',
+        automatic_payment_methods: { enabled: true },
         metadata: {
-          invoiceId: invoice.id.toString(),
+          invoiceId: String(invoice.id),
           invoiceNumber: invoice.invoiceNumber,
-          companyId: invoice.companyId.toString(),
-          jobId: invoice.jobId ? invoice.jobId.toString() : '',
+          companyId: String(invoice.companyId),
+          jobId: invoice.jobId ? String(invoice.jobId) : '',
+          isPartialPayment: amountInCents < currentBalanceDueCents ? 'true' : 'false',
         },
-        success_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appBaseUrl}/stripe/return?invoiceId=${invoice.id}&canceled=1`,
       });
-      
-      await storage.updateInvoice(invoiceId, {
-        stripeCheckoutSessionId: session.id,
+
+      console.log(`[PublicIntent] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id}`);
+
+      const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amountCents: amountInCents,
+        publishableKey,
       });
-      
-      console.log(`[PublicCheckout] Created session ${session.id} for invoice ${invoice.id}`);
-      res.json({ url: session.url });
-    } catch (error) {
-      console.error("Error creating public checkout session:", error);
-      res.status(500).json({ message: "Failed to create payment session" });
+    } catch (error: any) {
+      console.error("Error creating public PaymentIntent:", error);
+      res.status(500).json({ message: error.message || "Failed to create payment intent" });
     }
   });
 
@@ -10059,52 +10061,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/payments/stripe/confirm - Confirm Stripe payment by session, supports partial payments
+  // GET /api/payments/stripe/confirm - Confirm Stripe payment by session or payment_intent_id, supports partial payments
   app.get('/api/payments/stripe/confirm', async (req, res) => {
     try {
       if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
 
       const invoiceIdParam = req.query.invoiceId as string;
       const sessionId = req.query.session_id as string;
+      const paymentIntentIdParam = req.query.payment_intent_id as string;
 
-      if (!invoiceIdParam || !sessionId) {
-        return res.status(400).json({ error: 'invoiceId and session_id are required' });
+      if (!invoiceIdParam) {
+        return res.status(400).json({ error: 'invoiceId is required' });
       }
 
       const invoiceId = parseInt(invoiceIdParam, 10);
       if (isNaN(invoiceId)) return res.status(400).json({ error: 'Invalid invoiceId' });
 
-      const session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ['payment_intent'],
-      });
+      let pi: string | null = null;
 
-      if (!session || session.payment_status !== 'paid') {
-        console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=none status=pending`);
-        return res.json({ status: 'pending' });
-      }
+      if (paymentIntentIdParam) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdParam);
+        if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+          console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${paymentIntentIdParam} status=pending (pi status: ${paymentIntent?.status})`);
+          return res.json({ status: 'pending' });
+        }
+        const piInvoiceId = paymentIntent.metadata?.invoiceId ? parseInt(paymentIntent.metadata.invoiceId) : null;
+        if (piInvoiceId !== invoiceId) {
+          return res.status(400).json({ error: 'PaymentIntent does not match this invoice' });
+        }
+        pi = paymentIntentIdParam;
+      } else if (sessionId) {
+        const session = await stripe.checkout.sessions.retrieve(sessionId, {
+          expand: ['payment_intent'],
+        });
 
-      const pi = typeof session.payment_intent === 'object'
-        ? session.payment_intent?.id
-        : session.payment_intent;
+        if (!session || session.payment_status !== 'paid') {
+          console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=none status=pending`);
+          return res.json({ status: 'pending' });
+        }
 
-      if (!pi) {
-        console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=missing status=pending`);
-        return res.json({ status: 'pending' });
-      }
+        pi = typeof session.payment_intent === 'object'
+          ? session.payment_intent?.id || null
+          : session.payment_intent;
 
-      const sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
-      if (!sessionInvoiceId) {
-        return res.status(400).json({ error: 'Session missing invoice metadata' });
-      }
-      if (sessionInvoiceId !== invoiceId) {
-        return res.status(400).json({ error: 'Session does not match this invoice' });
+        if (!pi) {
+          console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=missing status=pending`);
+          return res.json({ status: 'pending' });
+        }
+
+        const sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
+        if (!sessionInvoiceId) {
+          return res.status(400).json({ error: 'Session missing invoice metadata' });
+        }
+        if (sessionInvoiceId !== invoiceId) {
+          return res.status(400).json({ error: 'Session does not match this invoice' });
+        }
+      } else {
+        return res.status(400).json({ error: 'session_id or payment_intent_id is required' });
       }
 
       const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
       const matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === pi);
 
       if (!matchedPayment) {
-        console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=${pi} status=pending`);
+        console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=pending`);
         return res.json({ status: 'pending' });
       }
 
@@ -10113,7 +10133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newBalanceCents = invoice?.balanceDueCents ?? (invoiceTotalCents - (invoice?.paidAmountCents || 0));
       const isPartial = newBalanceCents > 0;
 
-      console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=${pi} status=recorded`);
+      console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=recorded`);
       return res.json({
         status: 'recorded',
         paymentId: matchedPayment.id,
@@ -10143,16 +10163,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
-      let session;
-      try {
-        session = await stripe.checkout.sessions.retrieve(sessionId);
-      } catch (e: any) {
-        return res.status(400).json({ error: 'Invalid Stripe session' });
+      let sessionInvoiceId: number | null = null;
+
+      if (sessionId.startsWith('pi_')) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(sessionId);
+          if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+            return res.status(400).json({ error: 'Payment not confirmed by Stripe' });
+          }
+          sessionInvoiceId = paymentIntent.metadata?.invoiceId ? parseInt(paymentIntent.metadata.invoiceId) : null;
+        } catch (e: any) {
+          return res.status(400).json({ error: 'Invalid Stripe PaymentIntent' });
+        }
+      } else {
+        let session;
+        try {
+          session = await stripe.checkout.sessions.retrieve(sessionId);
+        } catch (e: any) {
+          return res.status(400).json({ error: 'Invalid Stripe session' });
+        }
+        if (!session || session.payment_status !== 'paid') {
+          return res.status(400).json({ error: 'Payment not confirmed by Stripe' });
+        }
+        sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
       }
-      if (!session || session.payment_status !== 'paid') {
-        return res.status(400).json({ error: 'Payment not confirmed by Stripe' });
-      }
-      const sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
 
       const payment = await storage.getPaymentById(paymentId);
       if (!payment) return res.status(404).json({ error: 'Payment not found' });
@@ -13646,15 +13680,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: [
           {
             appID: `${teamId}.${bundleId}`,
-            paths: ['/stripe/return*'],
+            paths: ['/invoice/*/pay', '/auth/*'],
           },
         ],
       },
     });
   });
 
-  // POST /api/payments/checkout - Create a Stripe Checkout session for an invoice
-  app.post('/api/payments/checkout', isAuthenticated, async (req: any, res) => {
+  // POST /api/payments/stripe/create-intent - Create a Stripe PaymentIntent for in-app payment
+  app.post('/api/payments/stripe/create-intent', isAuthenticated, async (req: any, res) => {
     try {
       if (!stripe) {
         return res.status(500).json({ message: "Stripe is not configured" });
@@ -13662,58 +13696,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userId = getUserId(req.user);
       const company = await storage.getUserCompany(userId);
-      
+
       if (!company) {
         return res.status(404).json({ message: "Company not found" });
       }
 
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      
-      // RBAC: Owner, Supervisor, Dispatcher, Estimator, Technician can create payment links
-      // Technician requires assignment check done after loading invoice
+
       if (!['OWNER', 'SUPERVISOR', 'TECHNICIAN'].includes(userRole)) {
-        return res.status(403).json({ message: "You do not have permission to create payment links" });
+        return res.status(403).json({ message: "You do not have permission to create payments" });
       }
 
-      const { invoiceId, returnBaseUrl, amountCents: requestedAmountCents } = req.body;
-      
+      const { invoiceId, amountCents: requestedAmountCents } = req.body;
+
       if (!invoiceId) {
         return res.status(400).json({ message: "Invoice ID is required" });
       }
 
-      // Load invoice from DB
       const invoice = await storage.getInvoice(invoiceId);
-      
+
       if (!invoice || invoice.companyId !== company.id) {
         return res.status(404).json({ message: "Invoice not found" });
       }
 
-      // For technicians, verify they are assigned to the job linked to this invoice
       if (userRole === 'TECHNICIAN' && invoice.jobId) {
-        const crewAssignments = await storage.getJobCrewAssignments(invoice.jobId);
-        const isAssigned = crewAssignments.some(c => c.userId === userId);
+        const assignments = await storage.getJobCrewAssignments(invoice.jobId);
+        const isAssigned = assignments.some(c => c.userId === userId);
         if (!isAssigned) {
           return res.status(403).json({ message: "You can only collect payments for jobs you are assigned to" });
         }
       }
 
-      // Check if invoice is already paid
       if (invoice.status?.toLowerCase() === 'paid') {
         return res.status(400).json({ message: "This invoice has already been paid" });
       }
 
-      // Calculate balance remaining
       const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
       const currentPaidAmountCents = invoice.paidAmountCents || 0;
       const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
 
-      // Determine charge amount (support partial payments)
       let amountInCents: number;
       if (requestedAmountCents !== undefined && requestedAmountCents !== null) {
         const parsed = parseInt(String(requestedAmountCents), 10);
-        if (isNaN(parsed) || parsed <= 0) {
-          return res.status(400).json({ message: "Payment amount must be a positive number" });
+        if (isNaN(parsed) || parsed < 50) {
+          return res.status(400).json({ message: "Payment amount must be at least $0.50" });
         }
         if (parsed > currentBalanceDueCents) {
           return res.status(400).json({ message: "Payment amount cannot exceed balance due" });
@@ -13723,63 +13750,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amountInCents = currentBalanceDueCents;
       }
 
-      let stripeReturnBase: string;
-      if (process.env.APP_BASE_URL) {
-        stripeReturnBase = process.env.APP_BASE_URL;
-      } else if (returnBaseUrl && typeof returnBaseUrl === 'string' && returnBaseUrl.startsWith('https://')) {
-        stripeReturnBase = returnBaseUrl;
-      } else {
-        const proto = req.headers["x-forwarded-proto"] || 'https';
-        const host = req.headers["x-forwarded-host"] || req.headers.host;
-        stripeReturnBase = host ? `${proto}://${host}` : `https://${process.env.REPLIT_DEV_DOMAIN}`;
+      if (amountInCents < 50) {
+        return res.status(400).json({ message: "Payment amount must be at least $0.50 (Stripe minimum)" });
       }
 
-      const isPartialPayment = amountInCents < currentBalanceDueCents;
-      const description = isPartialPayment 
-        ? `Partial payment for invoice ${invoice.invoiceNumber}`
-        : (invoice.notes || `Payment for invoice ${invoice.invoiceNumber}`);
+      console.log(`[Stripe] Creating PaymentIntent: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c`);
 
-      console.log(`[Stripe] Creating checkout: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c returnBase=${stripeReturnBase}`);
-
-      const successUrl = `${stripeReturnBase}/stripe/return?invoiceId=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`;
-      const cancelUrl = `${stripeReturnBase}/stripe/return?invoiceId=${invoice.id}&canceled=1`;
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'payment',
-        billing_address_collection: 'required',
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: `Invoice ${invoice.invoiceNumber}`,
-                description,
-              },
-              unit_amount: amountInCents,
-            },
-            quantity: 1,
-          },
-        ],
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amountInCents,
+        currency: 'usd',
+        automatic_payment_methods: { enabled: true },
         metadata: {
           invoiceId: String(invoice.id),
           companyId: String(company.id),
           jobId: invoice.jobId ? String(invoice.jobId) : '',
-          isPartialPayment: isPartialPayment ? 'true' : 'false',
+          isPartialPayment: amountInCents < currentBalanceDueCents ? 'true' : 'false',
         },
-        success_url: successUrl,
-        cancel_url: cancelUrl,
       });
 
-      console.log(`[Stripe] Created checkout session ${session.id} for invoice ${invoice.id}`);
-      
-      res.json({ 
-        url: session.url, 
-        sessionId: session.id 
+      console.log(`[Stripe] Created PaymentIntent ${paymentIntent.id} for invoice ${invoice.id}`);
+
+      const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amountCents: amountInCents,
+        publishableKey,
       });
     } catch (error: any) {
-      console.error('Error creating Stripe checkout session:', error);
-      res.status(500).json({ message: error.message || "Failed to create payment session" });
+      console.error('Error creating Stripe PaymentIntent:', error);
+      res.status(500).json({ message: error.message || "Failed to create payment intent" });
     }
   });
 

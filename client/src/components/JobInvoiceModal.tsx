@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FileText, Mail, Loader2, Download, ExternalLink, RefreshCw, AlertCircle, ArrowRight, ArrowLeft, Maximize2, CreditCard, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { openStripeBrowser, isNativePlatform } from "@/lib/capacitor";
 
 interface JobInvoiceModalProps {
   open: boolean;
@@ -266,48 +265,21 @@ export function JobInvoiceModal({
       return;
     }
 
-    setPaymentLinkLoading(true);
+    const paymentUrl = `${window.location.origin}/invoice/${invoiceId}/pay`;
     try {
-      console.log("[Checkout] window.location.origin", window.location.origin);
-      const response = await apiRequest("POST", "/api/payments/checkout", { 
-        invoiceId,
-        returnBaseUrl: window.location.origin,
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Failed to create payment link");
-      }
-      const data = await response.json();
-      
-      if (data.url) {
-        if (isNativePlatform()) {
-          await openStripeBrowser(data.url, () => {
-            console.log("[JobInvoiceModal] Stripe browser closed, refreshing");
-            queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-            queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-          });
-          toast({
-            title: "Payment Link Created",
-            description: "Stripe Checkout opened. Complete the payment to continue.",
-          });
-        } else {
-          window.open(data.url, "_blank");
-          toast({
-            title: "Payment Link Created",
-            description: "Stripe Checkout page opened in a new tab. Share this with your customer.",
-          });
-        }
-      }
-    } catch (error: any) {
+      await navigator.clipboard.writeText(paymentUrl);
       toast({
-        title: "Error",
-        description: error.message || "Failed to create payment link",
-        variant: "destructive",
+        title: "Payment Link Copied",
+        description: "Share this link with your customer so they can pay online.",
       });
-    } finally {
-      setPaymentLinkLoading(false);
+    } catch {
+      window.open(paymentUrl, "_blank");
+      toast({
+        title: "Payment Link Opened",
+        description: "Share this page link with your customer to collect payment.",
+      });
     }
+    setPaymentLinkLoading(false);
   };
 
   const isEmailValid = toEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail);

@@ -317,28 +317,3 @@ export async function openInAppBrowser(url: string, onClose?: () => void): Promi
   }
 }
 
-export async function openStripeBrowser(url: string, onBrowserClosed: () => void): Promise<void> {
-  if (!isNativePlatform()) {
-    window.location.href = url;
-    return;
-  }
-  try {
-    const { Browser } = await import("@capacitor/browser");
-    let closed = false;
-
-    const handleClose = () => {
-      if (closed) return;
-      closed = true;
-      console.log("[stripe-browser] Browser closed, triggering callback");
-      try { finishedListener.remove(); } catch {}
-      onBrowserClosed();
-    };
-
-    const finishedListener = await Browser.addListener("browserFinished", handleClose);
-    console.log("[stripe-browser] Opening Stripe checkout:", url);
-    await Browser.open({ url, presentationStyle: "fullscreen" });
-  } catch (err) {
-    console.error("[stripe-browser] Browser.open failed, falling back:", err);
-    window.location.href = url;
-  }
-}

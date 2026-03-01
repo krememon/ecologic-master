@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, User, FileText, Calendar, List, DollarSign, ExternalLink, XCircle, Loader2, CreditCard, Send, Mail, MessageSquare, Cloud, Check } from "lucide-react";
+import StripePaymentForm from "@/components/StripePaymentForm";
 import { format } from "date-fns";
 
 interface InvoiceDetailsProps {
@@ -104,6 +105,10 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
   
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
+  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
+  const [stripeAmountCents, setStripeAmountCents] = useState<number>(0);
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
   const [sendMode, setSendMode] = useState<'email' | 'text'>('email');
   const [emailValue, setEmailValue] = useState('');
@@ -143,25 +148,38 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
     if (isCheckoutLoading) return;
     setIsCheckoutLoading(true);
     try {
-      const returnBaseUrl = window.location.origin;
-      const res = await apiRequest('POST', '/api/payments/checkout', {
+      const res = await apiRequest('POST', '/api/payments/stripe/create-intent', {
         invoiceId: parseInt(invoiceId),
-        returnBaseUrl,
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to create checkout session');
+        throw new Error(errorData.message || 'Failed to initialize payment');
       }
-      const { url } = await res.json();
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error('No checkout URL returned');
-      }
+      const { clientSecret, publishableKey, amountCents } = await res.json();
+      setStripeClientSecret(clientSecret);
+      setStripePublishableKey(publishableKey);
+      setStripeAmountCents(amountCents);
+      setShowCardForm(true);
     } catch (error: any) {
       toast({ title: error.message || "Payment failed", variant: "destructive" });
+    } finally {
       setIsCheckoutLoading(false);
     }
+  };
+
+  const handleCardPaymentSuccess = async () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+    toast({ title: "Payment successful!" });
+    setShowCardForm(false);
+    setStripeClientSecret(null);
+  };
+
+  const handleCardPaymentCancel = () => {
+    setShowCardForm(false);
+    setStripeClientSecret(null);
+    setStripePublishableKey(null);
   };
 
   const formatPhoneNumber = (value: string): string => {
@@ -369,8 +387,22 @@ export default function InvoiceDetails({ invoiceId }: InvoiceDetailsProps) {
         </a>
       )}
 
+      {/* Inline Card Payment Form */}
+      {showCardForm && stripeClientSecret && stripePublishableKey && (
+        <div className="mb-4">
+          <StripePaymentForm
+            clientSecret={stripeClientSecret}
+            publishableKey={stripePublishableKey}
+            amountCents={stripeAmountCents}
+            invoiceId={parseInt(invoiceId)}
+            onSuccess={handleCardPaymentSuccess}
+            onCancel={handleCardPaymentCancel}
+          />
+        </div>
+      )}
+
       {/* Primary Pay Button - Shows for unpaid invoices with amount > 0 */}
-      {canPay && invoice.totalCents > 0 && (
+      {canPay && invoice.totalCents > 0 && !showCardForm && (
         <Button 
           onClick={handlePayWithCard}
           disabled={isCheckoutLoading}

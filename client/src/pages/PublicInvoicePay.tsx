@@ -4,6 +4,7 @@ import { CreditCard, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import SignatureCanvas from "react-signature-canvas";
 import { useToast } from "@/hooks/use-toast";
+import StripePaymentForm from "@/components/StripePaymentForm";
 
 interface PublicInvoicePayProps {
   invoiceId: string;
@@ -69,9 +70,13 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const [error, setError] = useState<string | null>(null);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [publishableKey, setPublishableKey] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [intentAmountCents, setIntentAmountCents] = useState<number>(0);
+
   const [stripeSuccess, setStripeSuccess] = useState(false);
-  const [stripeCanceled, setStripeCanceled] = useState(false);
-  const [stripeSessionId, setStripeSessionId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [paymentId, setPaymentId] = useState<number | null>(null);
   const [confirmedAmountCents, setConfirmedAmountCents] = useState<number | null>(null);
@@ -85,22 +90,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   const pollingRef = useRef(false);
   const signatureTriggeredRef = useRef(false);
   const hasRedirectedRef = useRef(false);
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get("success");
-    const canceled = urlParams.get("canceled");
-    const sessionId = urlParams.get("session_id");
-
-    if (success === "1") {
-      setStripeSuccess(true);
-      if (sessionId) setStripeSessionId(sessionId);
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (canceled === "1") {
-      setStripeCanceled(true);
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
 
   useEffect(() => {
     const fetchInvoice = async () => {
@@ -121,11 +110,11 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     fetchInvoice();
   }, [invoiceId]);
 
-  const runConfirmPoll = useCallback(async () => {
-    if (!stripeSessionId) return;
+  const runConfirmPoll = useCallback(async (piId: string) => {
+    if (!piId) return;
     for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
       try {
-        const res = await fetch(`/api/payments/stripe/confirm?invoiceId=${invoiceId}&session_id=${stripeSessionId}`);
+        const res = await fetch(`/api/payments/stripe/confirm?invoiceId=${invoiceId}&payment_intent_id=${piId}`);
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'recorded' && data.paymentId) {
@@ -138,19 +127,12 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
           }
         }
       } catch (e) {
-        // silent retry
       }
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
     pollingRef.current = false;
     setPollTimedOut(true);
-  }, [stripeSessionId, invoiceId]);
-
-  useEffect(() => {
-    if (!stripeSuccess || !stripeSessionId || pollingRef.current || paymentConfirmed) return;
-    pollingRef.current = true;
-    runConfirmPoll();
-  }, [stripeSuccess, stripeSessionId, paymentConfirmed, runConfirmPoll]);
+  }, [invoiceId]);
 
   useEffect(() => {
     if (paymentConfirmed && paymentId && !signatureTriggeredRef.current) {
@@ -163,14 +145,14 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
   }, [paymentConfirmed, paymentId, invoiceId]);
 
   const handleSaveSignature = useCallback(async () => {
-    if (!sigRef.current || sigRef.current.isEmpty() || !paymentId || !stripeSessionId) return;
+    if (!sigRef.current || sigRef.current.isEmpty() || !paymentId || !paymentIntentId) return;
     setSignatureSaving(true);
     try {
       const signaturePngBase64 = sigRef.current.toDataURL("image/png");
       const res = await fetch(`/api/public/payments/${paymentId}/signature`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signaturePngBase64, invoiceId: parseInt(invoiceId), sessionId: stripeSessionId }),
+        body: JSON.stringify({ signaturePngBase64, invoiceId: parseInt(invoiceId), sessionId: paymentIntentId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -189,35 +171,49 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     } finally {
       setSignatureSaving(false);
     }
-  }, [paymentId, invoiceId, stripeSessionId]);
+  }, [paymentId, invoiceId, paymentIntentId]);
 
   const handlePay = async () => {
     if (isCheckoutLoading || !invoice) return;
     setIsCheckoutLoading(true);
     try {
-      const returnBaseUrl = window.location.origin;
-      const res = await fetch('/api/public/invoices/checkout', {
+      const res = await fetch('/api/public/invoices/create-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           invoiceId: parseInt(invoiceId),
-          returnBaseUrl,
         }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to create checkout session');
+        throw new Error(data.message || 'Failed to initiate payment');
       }
-      const { url } = await res.json();
-      if (url) {
-        window.location.href = url;
-      } else {
-        throw new Error('No checkout URL returned');
-      }
+      const data = await res.json();
+      setClientSecret(data.clientSecret);
+      setPublishableKey(data.publishableKey);
+      setPaymentIntentId(data.paymentIntentId);
+      setIntentAmountCents(data.amountCents);
+      setShowPaymentForm(true);
     } catch (err: any) {
       setError(err.message || 'Payment failed');
+    } finally {
       setIsCheckoutLoading(false);
     }
+  };
+
+  const handlePaymentSuccess = (piId: string) => {
+    setPaymentIntentId(piId);
+    setShowPaymentForm(false);
+    setStripeSuccess(true);
+    pollingRef.current = true;
+    runConfirmPoll(piId);
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPaymentForm(false);
+    setClientSecret(null);
+    setPublishableKey(null);
+    setPaymentIntentId(null);
   };
 
   if (isLoading) {
@@ -228,7 +224,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
     );
   }
 
-  if (error && !stripeCanceled && !stripeSuccess) {
+  if (error && !stripeSuccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
@@ -310,9 +306,8 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                 variant="outline"
                 onClick={() => {
                   setStripeSuccess(false);
-                  setStripeCanceled(false);
                   setPollTimedOut(false);
-                  setStripeSessionId(null);
+                  setPaymentIntentId(null);
                   pollingRef.current = false;
                 }}
               >
@@ -323,7 +318,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                 onClick={() => {
                   setPollTimedOut(false);
                   pollingRef.current = true;
-                  runConfirmPoll();
+                  if (paymentIntentId) runConfirmPoll(paymentIntentId);
                 }}
               >
                 Retry
@@ -378,29 +373,6 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
               </Button>
             </div>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  if (stripeCanceled) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-md w-full p-8 text-center">
-          <XCircle className="h-16 w-16 text-amber-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Payment Canceled</h2>
-          <p className="text-gray-500 mb-6">
-            Your payment was not completed. You can try again when you're ready.
-          </p>
-          <Button
-            onClick={() => {
-              setStripeCanceled(false);
-              setError(null);
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Return to Invoice
-          </Button>
         </div>
       </div>
     );
@@ -582,7 +554,7 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
             </div>
           </div>
 
-          {!isPaid && invoice.totalCents > 0 && (
+          {!isPaid && invoice.totalCents > 0 && !showPaymentForm && (
             <div className="px-8 pb-8 md:px-10">
               <Button
                 onClick={handlePay}
@@ -601,6 +573,19 @@ export default function PublicInvoicePay({ invoiceId }: PublicInvoicePayProps) {
                   </>
                 )}
               </Button>
+            </div>
+          )}
+
+          {!isPaid && showPaymentForm && clientSecret && publishableKey && (
+            <div className="px-8 pb-8 md:px-10">
+              <StripePaymentForm
+                clientSecret={clientSecret}
+                publishableKey={publishableKey}
+                amountCents={intentAmountCents}
+                invoiceId={invoice.id}
+                onSuccess={handlePaymentSuccess}
+                onCancel={handlePaymentCancel}
+              />
             </div>
           )}
 

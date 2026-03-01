@@ -1,0 +1,172 @@
+ROLE: You are the Replit Agent for EcoLogic (React + Express). Implement in-app Stripe payments that NEVER redirect to checkout.stripe.com. Replace current Stripe Checkout Session flow with Stripe Payment Element (PaymentIntents) so payments stay inside EcoLogic on web + iPhone Capacitor.
+
+GOALS
+1) Card payments happen INSIDE EcoLogic (Stripe Payment Element), no external Stripe hosted checkout page.
+2) Works in normal web browser AND iPhone/Android Capacitor WebView.
+3) EcoLogic remains source of truth: create/update our Payments ledger + mark invoice paid on success.
+4) Stripe webhooks are the final authority (avoid “paid UI but not paid in DB”).
+5) Preserve/extend existing Payments page + QuickBooks sync flow (do not break QB integration).
+6) Follow “hidden not disabled” RBAC: only roles allowed to collect payment can see/perform card payment.
+
+CONSTRAINTS
+- Do NOT collect raw card data on our servers. Use Stripe.js + Payment Element only.
+- Do NOT open new tabs/windows in iOS; keep everything in-app.
+- Must be idempotent on webhook (no duplicate payments).
+- No UX regressions: the old “Pay -> Card/Cash/Check” still exists.
+
+HIGH-LEVEL CHANGE
+- REMOVE Stripe Checkout Session redirect flow.
+- ADD PaymentIntent flow:
+  Backend: create PaymentIntent for an invoice and return clientSecret.
+  Frontend: render Stripe Payment Element inside EcoLogic and confirm payment.
+  Backend: Stripe webhook (payment_intent.succeeded, payment_intent.payment_failed, charge.refunded) updates DB.
+
+STEP 0 — AUDIT (quick)
+- Find where Stripe Checkout Session is created (likely /api/payments/checkout or /api/stripe/checkout).
+- Find current “Pay Invoice” UI flow and Payments page data model.
+- Identify Invoice table fields (status, amountDue/total, etc.) and Payment table fields (method/status/providerRef etc.) or create them.
+
+BACKEND WORK (Express)
+A) ENV + Stripe init
+- Ensure STRIPE_SECRET_KEY is used server-side.
+- Add STRIPE_WEBHOOK_SECRET for webhook verification.
+- Add STRIPE_PUBLISHABLE_KEY for client.
+
+B) Data model (migrations)
+Create/extend a payments table (or equivalent) with:
+- id (uuid)
+- invoice_id (fk)
+- amount_cents
+- currency (default 'usd')
+- method enum: 'card' | 'cash' | 'check'
+- status enum: 'requires_payment_method' | 'processing' | 'succeeded' | 'failed' | 'refunded'
+- provider enum: 'stripe' | 'manual'
+- provider_ref (string)  // Stripe PaymentIntent id (pi_...)
+- stripe_charge_id (string, optional)
+- stripe_customer_id (string, optional)
+- receipt_url (string, optional)
+- last4 (string, optional), brand (string, optional)
+- created_at, updated_at
+- quickbooks_payment_id (string, optional) // for idempotent QB sync
+
+Also ensure invoices support multiple payments if needed:
+- invoices.total_cents, invoices.amount_paid_cents (or compute)
+- invoices.status: 'unpaid'|'partial'|'paid'
+If invoice schema already exists, adapt without breaking.
+
+C) Route: Create PaymentIntent for an invoice
+POST /api/payments/stripe/create-intent
+Body: { invoiceId }
+Auth: required. RBAC: allow Owner/Admin + Dispatcher + Supervisor (if they have job access) + Estimator if allowed by your business rules. Technicians only if you explicitly want them to collect payment (default: NO).
+Server:
+1. Load invoice by invoiceId, validate user can access it.
+2. Compute amount due in cents (invoice total - already paid).
+3. Create a Stripe PaymentIntent:
+   - amount, currency
+   - automatic_payment_methods: { enabled: true } (or keep to card only if you want)
+   - metadata: { invoiceId, ecologicPaymentLedger: 'true' }
+4. Upsert a payments ledger row in DB with:
+   - method='card', provider='stripe'
+   - status='requires_payment_method' (or 'processing')
+   - provider_ref = paymentIntent.id
+5. Return: { clientSecret, publishableKey, paymentIntentId, amountCents, currency }
+
+D) Webhook: Stripe -> EcoLogic (source of truth)
+POST /api/webhooks/stripe
+- MUST use raw body middleware ONLY on this route to verify signature.
+- Verify signature with STRIPE_WEBHOOK_SECRET.
+Handle events:
+1) payment_intent.succeeded
+   - Find payment row by provider_ref = pi.id (or by metadata.invoiceId fallback).
+   - Idempotency: if payment.status already 'succeeded' return 200.
+   - Update payment.status='succeeded'
+   - Optionally fetch latest charge to store receipt_url, brand/last4, charge_id.
+   - Update invoice amount_paid/status to paid/partial.
+   - Trigger QuickBooks sync (async job or background queue; if none exists, call existing sync function but guard with quickbooks_payment_id idempotency).
+2) payment_intent.payment_failed
+   - Update payment.status='failed'
+3) charge.refunded (or refund.updated)
+   - Create a refund record OR set payment.status='refunded' (choose simplest: set refunded if full refund; partial refund can be added later).
+Return 200 quickly.
+
+E) Route: Get Stripe publishable key
+GET /api/payments/stripe/config -> { publishableKey }
+
+F) Keep existing manual methods
+POST /api/payments/manual
+Body: { invoiceId, method: 'cash'|'check', amountCents, note/checkNumber }
+- Create payment row provider='manual', status='succeeded'
+- Update invoice totals
+- Trigger QB sync same as card (but provider='manual')
+
+FRONTEND WORK (React)
+G) Install Stripe libs
+- Add @stripe/stripe-js and @stripe/react-stripe-js
+- Create a StripeProvider wrapper.
+
+H) UI Flow: Invoice -> Pay modal/screen
+- Keep method chooser (Card/Cash/Check).
+- For Card:
+  1) Call POST /api/payments/stripe/create-intent with invoiceId.
+  2) Render <Elements stripe={loadStripe(publishableKey)} options={{ clientSecret }}>
+  3) Render <PaymentElement />
+  4) Pay button calls stripe.confirmPayment({ elements, confirmParams: { return_url: window.location.origin + '/invoices/'+invoiceId+'?paid=1' }, redirect: 'if_required' })
+     IMPORTANT: Use redirect:'if_required' so it stays in-app unless absolutely necessary (rare).
+  5) On immediate success, show “Processing / Paid” UI but still rely on webhook to finalize DB.
+  6) Poll payment status endpoint or refetch invoice/payments after a short delay until DB shows succeeded.
+
+I) Add endpoints/UI helpers
+- GET /api/payments/by-invoice/:invoiceId -> list ledger rows
+- Payments page should display:
+  - method badge
+  - status
+  - providerRef (shortened)
+  - receipt link if present
+  - last4/brand if stored
+No breaking changes: if Payments page already exists, extend it.
+
+J) iPhone Capacitor considerations
+- Ensure confirmPayment doesn’t open external browser:
+  - Use redirect:'if_required'
+  - Keep return_url inside same origin
+- If you have existing “openExternalUrl” logic, remove it for Stripe flow.
+- Never use window.open for payment.
+
+K) RBAC / “hidden not disabled”
+- If user role isn’t allowed to collect card payments, hide the Card option entirely.
+- Keep consistent with existing invoice access rules.
+
+TESTING / ACCEPTANCE CRITERIA
+1) In browser: Pay invoice by card without leaving EcoLogic domain.
+2) In iPhone Capacitor: Pay invoice by card without opening Safari/external web page.
+3) Webhook updates DB even if user closes app right after paying.
+4) No duplicates:
+   - Refreshing webhook event does not create extra payment rows.
+   - QuickBooks sync only creates one QB payment per EcoLogic payment (use quickbooks_payment_id).
+5) Cash/check still work and record properly.
+6) Payments page shows all payment methods correctly.
+7) Logging:
+   - Add targeted logs for: create-intent, confirm result, webhook received, webhook applied, QB sync triggered.
+   - Do NOT spam logs on every render.
+
+DELIVERABLES
+- PR/commit with:
+  - New Stripe PaymentIntent routes
+  - Stripe webhook route w/ signature verification
+  - DB migration updates
+  - Frontend Payment Element screen integrated into Pay flow
+  - Updated Payments page rendering card payments
+  - Removed Checkout Session redirect logic
+- Provide a short “How to configure env” note:
+  - STRIPE_SECRET_KEY
+  - STRIPE_PUBLISHABLE_KEY
+  - STRIPE_WEBHOOK_SECRET
+  - Webhook endpoint URL to register in Stripe dashboard
+
+IMPORTANT IMPLEMENTATION NOTES
+- Webhook route must use raw body (express.raw({type:'application/json'})) and not express.json().
+- For other routes keep express.json().
+- Store amount in cents everywhere.
+- Never send card details to our backend.
+
+START NOW: implement end-to-end, run locally, and leave the app in a working state with minimal UI polish consistent with EcoLogic design.
