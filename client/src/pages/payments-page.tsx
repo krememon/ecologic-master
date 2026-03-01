@@ -17,8 +17,6 @@ import {
 } from "lucide-react";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 
-type TimeRange = "week" | "month" | "year";
-
 type LedgerItem = {
   invoiceId: number;
   invoiceNumber: string | null;
@@ -28,22 +26,26 @@ type LedgerItem = {
   jobTitle: string | null;
   totalCents: number;
   paidCents: number;
-  balanceCents: number;
+  balanceDueCents: number;
   refundedCents: number;
-  pendingRefundedCents: number;
-  netCollectedCents: number;
-  status: string;
+  computedStatus: string;
   dueDate: string | null;
   issueDate: string | null;
   createdAt: string | null;
   lastActivityDate: string | null;
 };
 
-type StatsData = {
-  thisMonthTotalCents: number;
-  stillOwedTotalCents: number;
-  paidTodayTotalCents: number;
+type LedgerStats = {
+  earningsThisMonthCents: number;
+  stillOwedCents: number;
+  paidTodayCents: number;
   overdueCount: number;
+};
+
+type LedgerResponse = {
+  items: LedgerItem[];
+  stats: LedgerStats;
+  debug?: any;
 };
 
 const formatCents = (cents: number): string => {
@@ -67,7 +69,6 @@ export default function PaymentsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
-  const [timeRange, setTimeRange] = useState<TimeRange>("month");
 
   const {
     isModalOpen: sigModalOpen,
@@ -79,27 +80,34 @@ export default function PaymentsPage() {
     openPendingModal: openSigModal,
   } = useSignatureAfterPayment();
 
-  const { data: ledgerItems = [], isLoading: ledgerLoading } = useQuery<LedgerItem[]>({
+  const { data: ledgerData, isLoading } = useQuery<LedgerResponse>({
     queryKey: ["/api/payments/ledger"],
-  });
-
-  const { data: stats, isLoading: statsLoading } = useQuery<StatsData>({
-    queryKey: ["/api/payments/stats", timeRange],
-    queryFn: async () => {
-      const res = await fetch(`/api/payments/stats?range=${timeRange}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch stats");
-      return res.json();
+    select: (raw: any) => {
+      const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
+      const stats = raw?.stats && typeof raw.stats === "object" ? raw.stats : {};
+      return {
+        items,
+        stats: {
+          earningsThisMonthCents: stats.earningsThisMonthCents || 0,
+          stillOwedCents: stats.stillOwedCents || 0,
+          paidTodayCents: stats.paidTodayCents || 0,
+          overdueCount: stats.overdueCount || 0,
+        },
+      };
     },
   });
+
+  const ledgerItems = ledgerData?.items ?? [];
+  const stats = ledgerData?.stats;
 
   const filteredItems = useMemo(() => {
     let list = ledgerItems;
     if (activeTab !== "all") {
       list = list.filter((item) => {
         if (activeTab === "paid") {
-          return item.status === "paid" || item.status === "refunded" || item.status === "partially_refunded";
+          return item.computedStatus === "paid" || item.computedStatus === "refunded" || item.computedStatus === "partially_refunded";
         }
-        return item.status === activeTab;
+        return item.computedStatus === activeTab;
       });
     }
     if (searchTerm.trim()) {
@@ -108,7 +116,7 @@ export default function PaymentsPage() {
         const name = (item.customerName || "").toLowerCase();
         const invNum = (item.invoiceNumber || "").toLowerCase();
         const totalStr = (item.totalCents / 100).toFixed(2);
-        const balanceStr = (item.balanceCents / 100).toFixed(2);
+        const balanceStr = (item.balanceDueCents / 100).toFixed(2);
         const job = (item.jobTitle || "").toLowerCase();
         return name.includes(q) || invNum.includes(q) || totalStr.includes(q) || balanceStr.includes(q) || job.includes(q);
       });
@@ -147,7 +155,7 @@ export default function PaymentsPage() {
     { key: "partial", label: "Partial" },
   ];
 
-  if (ledgerLoading || statsLoading) {
+  if (isLoading) {
     return (
       <div className="p-4 sm:p-5 space-y-4 max-w-5xl mx-auto">
         <div className="animate-pulse space-y-4">
@@ -164,27 +172,20 @@ export default function PaymentsPage() {
     );
   }
 
-  const rangeLabels: Record<TimeRange, string> = { week: "This Week", month: "This Month", year: "This Year" };
-  const timeRangeOptions: { key: TimeRange; label: string }[] = [
-    { key: "week", label: "Week" },
-    { key: "month", label: "Month" },
-    { key: "year", label: "Year" },
-  ];
-
   const scoreboardItems = [
     {
-      label: rangeLabels[timeRange],
-      value: formatCompactCurrency((stats?.thisMonthTotalCents || 0) / 100),
+      label: "This Month",
+      value: formatCompactCurrency((stats?.earningsThisMonthCents || 0) / 100),
       color: "text-slate-900 dark:text-slate-100",
     },
     {
       label: "Still Owed",
-      value: formatCents(stats?.stillOwedTotalCents || 0),
+      value: formatCents(stats?.stillOwedCents || 0),
       color: "text-amber-600 dark:text-amber-400",
     },
     {
       label: "Paid Today",
-      value: formatCents(stats?.paidTodayTotalCents || 0),
+      value: formatCents(stats?.paidTodayCents || 0),
       color: "text-slate-900 dark:text-slate-100",
     },
     {
@@ -213,21 +214,6 @@ export default function PaymentsPage() {
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
         <div className="px-5 pt-4 pb-2 flex items-center justify-between">
           <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">Earnings</span>
-          <div className="bg-slate-100 dark:bg-slate-800/60 rounded-lg p-[2px] flex">
-            {timeRangeOptions.map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => setTimeRange(opt.key)}
-                className={`text-[11px] font-medium px-3 py-[4px] rounded-md transition-all ${
-                  timeRange === opt.key
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                    : "text-slate-500 dark:text-slate-400"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4">
           {scoreboardItems.map((item, i) => (
@@ -295,31 +281,31 @@ export default function PaymentsPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
           {filteredItems.map((item) => {
             const dateStr = getDateDisplay(item);
-            const isOwed = item.status === "unpaid" || item.status === "partial";
+            const status = item.computedStatus;
+            const isOwed = status === "unpaid" || status === "partial";
             const hasRefunds = (item.refundedCents || 0) > 0;
-            const hasPendingRefunds = (item.pendingRefundedCents || 0) > 0;
 
             let displayAmount: number;
             let amountSuffix = "";
             let amountColor: string;
 
             if (isOwed) {
-              displayAmount = item.balanceCents;
+              displayAmount = item.balanceDueCents;
               amountSuffix = " owed";
-              amountColor = item.status === "unpaid" ? "text-amber-600 dark:text-amber-400" : "text-yellow-600 dark:text-yellow-400";
+              amountColor = status === "unpaid" ? "text-amber-600 dark:text-amber-400" : "text-yellow-600 dark:text-yellow-400";
             } else if (hasRefunds) {
-              displayAmount = item.netCollectedCents;
-              amountColor = item.status === "refunded" ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-slate-100";
+              displayAmount = Math.max(0, item.paidCents - item.refundedCents);
+              amountColor = status === "refunded" ? "text-red-500 dark:text-red-400" : "text-slate-900 dark:text-slate-100";
             } else {
               displayAmount = item.totalCents;
               amountColor = "text-slate-900 dark:text-slate-100";
             }
 
             let subtitle: string;
-            if (item.status === "paid") subtitle = `Paid · ${dateStr}`;
-            else if (item.status === "partial") subtitle = `Partial · ${dateStr}`;
-            else if (item.status === "refunded") subtitle = `Paid · Refunded · ${dateStr}`;
-            else if (item.status === "partially_refunded") subtitle = `Paid · Refunded ${formatCents(item.refundedCents || 0)} · ${dateStr}`;
+            if (status === "paid") subtitle = `Paid · ${dateStr}`;
+            else if (status === "partial") subtitle = `Partial · ${dateStr}`;
+            else if (status === "refunded") subtitle = `Paid · Refunded · ${dateStr}`;
+            else if (status === "partially_refunded") subtitle = `Paid · Refunded ${formatCents(item.refundedCents || 0)} · ${dateStr}`;
             else subtitle = dateStr;
 
             return (
@@ -333,18 +319,13 @@ export default function PaymentsPage() {
                     <p className="font-semibold text-[14px] text-slate-900 dark:text-slate-100 leading-snug break-words">
                       {item.customerName}
                     </p>
-                    {getStatusBadge(item.status)}
+                    {getStatusBadge(status)}
                   </div>
                   <p className="text-[12px] text-slate-400 dark:text-slate-500 leading-relaxed">
                     {subtitle}
                     {item.invoiceNumber && <span className="ml-1.5">· #{item.invoiceNumber}</span>}
                     {item.jobTitle && <span className="ml-1.5">· {item.jobTitle}</span>}
                   </p>
-                  {hasPendingRefunds && (
-                    <p className="text-[11px] text-amber-500 dark:text-amber-400 mt-0.5">
-                      Pending refund: {formatCents(item.pendingRefundedCents)}
-                    </p>
-                  )}
                 </div>
 
                 <div className="text-right shrink-0 mr-0.5">

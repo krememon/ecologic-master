@@ -1,0 +1,105 @@
+T014 — FIX Payments page crash FIRST (enteredItems.map is not a function) + make UI resilient
+
+PRIORITY 0: The app is crashing. Fix this before anything payment-related.
+
+ERROR
+- Payments page throws: `enteredItems.map is not a function`
+- Stack shows: src/pages/payments-page.tsx:404:346 (and nearby)
+=> `enteredItems` is sometimes NOT an array (likely object/null/string/number), but the UI assumes it is.
+
+GOALS
+1) Payments page must never crash even if API returns unexpected shapes.
+2) Add defensive normalization so `.map()` always receives an array.
+3) Add a small error boundary / fallback render for the Payments page list.
+4) Add targeted logging to find the exact bad payload (once), then remove.
+
+STEP 1 — Locate the failing code
+- Open `src/pages/payments-page.tsx`
+- Go to around line ~404
+- Find where `enteredItems.map(...)` is called.
+
+Common patterns:
+- const enteredItems = somethingFromApi
+- const enteredItems = stats.enteredItems
+- const enteredItems = groupedItems[someKey]
+- const enteredItems = response.items
+
+STEP 2 — Normalize enteredItems into an array (HARD FIX)
+Immediately before any `.map`, ensure:
+
+const safeArray = Array.isArray(enteredItems)
+  ? enteredItems
+  : enteredItems
+    ? Object.values(enteredItems)   // if backend returns a keyed object
+    : [];
+
+Then change:
+enteredItems.map(...)
+to:
+safeArray.map(...)
+
+Also do the same for ANY other `.map` in this file that can be non-array:
+- payments.map
+- invoices.map
+- items.map
+- groups.map
+
+RULE:
+Never call `.map` on a variable unless you have `Array.isArray(var)` true.
+
+STEP 3 — Make API response normalization explicit (preferred)
+If this page is consuming `/api/payments/ledger` (or similar), normalize right after fetch:
+
+const data = await res.json()
+
+const items = Array.isArray(data?.items) ? data.items : []
+const stats = data?.stats && typeof data.stats === 'object' ? data.stats : {}
+
+setState({ items, stats })
+
+If `enteredItems` comes from `items` with filtering, compute it from the normalized array.
+
+STEP 4 — Add a small, non-invasive crash guard
+Wrap the list area with a simple fallback:
+
+- If items.length === 0: show “No payments yet”
+- If items is not array (shouldn’t happen after normalization): show “Payments data unavailable” and a “Reload” button
+
+Do NOT leave the generic React error overlay as the user-facing experience.
+
+STEP 5 — Add one-time debug log to identify the bad shape
+Temporarily add:
+
+console.log('[payments-page] enteredItems typeof:', typeof enteredItems, 'isArray:', Array.isArray(enteredItems), 'value:', enteredItems)
+
+and/or log the API payload shape:
+
+console.log('[payments-page] ledger response keys:', Object.keys(data || {}), 'itemsType:', typeof data?.items, 'itemsIsArray:', Array.isArray(data?.items))
+
+IMPORTANT:
+- Add logs only once (e.g., guarded by a ref so it doesn’t spam every render).
+- Remove after fixing.
+
+ACCEPTANCE CRITERIA (crash fix)
+- Payments page loads without crashing.
+- Even if API returns items as {}, null, or undefined, page displays a safe empty state.
+
+-----------------------------------------
+NEXT (after crash is fixed): Partial pill not showing
+-----------------------------------------
+Once the Payments page is stable, we’ll fix partial display properly.
+
+But don’t touch partial logic yet until:
+- Page renders reliably
+- We can see the payment rows / computed fields in UI without crashing
+
+DELIVERABLES
+- payments-page.tsx updated with safe normalization
+- No `.map` called on non-arrays
+- Temporary debug logging added then removed after verified
+- Payments page no longer crashes
+
+DO THIS NOW — fix the crash first, then report back with:
+- What `enteredItems` was (object? null? something else)
+- What the API returned for `items` / `enteredItems`
+So we can fix the backend shape if needed.
