@@ -1,5 +1,9 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import StripePaymentForm from "@/components/StripePaymentForm";
 import {
   ArrowLeft,
   DollarSign,
@@ -12,14 +16,22 @@ import {
   Receipt,
   RotateCcw,
   Plus,
+  Loader2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface InvoicePaymentDetailsProps {
   invoiceId: string;
 }
 
 const REFUND_ROLES = new Set(["OWNER", "ADMIN", "MANAGER", "SUPERVISOR"]);
+const COLLECT_ROLES = new Set(["OWNER", "SUPERVISOR", "TECHNICIAN"]);
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -65,6 +77,15 @@ const refundStatusConfig: Record<string, { color: string; label: string }> = {
 
 export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetailsProps) {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [stripeModalOpen, setStripeModalOpen] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeData, setStripeData] = useState<{
+    clientSecret: string;
+    publishableKey: string;
+    amountCents: number;
+    paymentIntentId: string;
+  } | null>(null);
 
   const { data, isLoading, error } = useQuery<any>({
     queryKey: ["/api/payments/invoice", invoiceId],
@@ -78,11 +99,89 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const { data: membership } = useQuery<{ role: string }>({
     queryKey: ["/api/user/membership"],
   });
-  const canRefund = REFUND_ROLES.has((membership?.role || "").toUpperCase());
+  const userRole = (membership?.role || "").toUpperCase();
+  const canRefund = REFUND_ROLES.has(userRole);
+  const canCollect = COLLECT_ROLES.has(userRole);
 
   function handleRefundClick() {
     navigate(`/refunds/new?invoiceId=${invoiceId}`);
   }
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/payments/invoice", invoiceId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/payments/ledger"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/dashboard/today"] });
+  };
+
+  const handleCollectRemaining = async () => {
+    const balanceDue = data?.balanceDueCents ?? 0;
+    if (balanceDue < 50) {
+      toast({
+        title: "Cannot collect",
+        description: "Remaining balance is too small to charge (Stripe minimum is $0.50).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setStripeLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/payments/stripe/create-intent", {
+        invoiceId: parseInt(invoiceId),
+        amountCents: balanceDue,
+      });
+      const result = await res.json();
+      setStripeData({
+        clientSecret: result.clientSecret,
+        publishableKey: result.publishableKey,
+        amountCents: result.amountCents,
+        paymentIntentId: result.paymentIntentId,
+      });
+      setStripeModalOpen(true);
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to create payment intent",
+        variant: "destructive",
+      });
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
+  const handleCardPaymentSuccess = async (paymentIntentId: string) => {
+    setStripeModalOpen(false);
+    setStripeData(null);
+
+    const maxPolls = 10;
+    for (let i = 0; i < maxPolls; i++) {
+      try {
+        const res = await fetch(
+          `/api/payments/stripe/confirm?invoiceId=${invoiceId}&payment_intent_id=${paymentIntentId}`,
+          { credentials: "include" }
+        );
+        const result = await res.json();
+        if (result.status === "succeeded") {
+          toast({ title: "Payment successful", description: `Collected ${formatCents(result.amountCents || stripeData?.amountCents || 0)}` });
+          invalidateAll();
+          return;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+
+    toast({ title: "Payment processing", description: "Your payment is being processed. It will appear shortly." });
+    invalidateAll();
+  };
+
+  const handleCardPaymentCancel = () => {
+    setStripeModalOpen(false);
+    setStripeData(null);
+  };
 
   if (isLoading) {
     return (
@@ -124,6 +223,8 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   const isRefundedStatus = computedStatus === "refunded" || computedStatus === "partially_refunded";
   const isPaid = computedStatus === "paid" || isRefundedStatus;
   const isPartial = computedStatus === "partial";
+
+  const showCollectButton = canCollect && isPartial && balanceCents > 0;
 
   const refundsByPaymentId: Record<number, any[]> = {};
   for (const r of refundsList) {
@@ -202,6 +303,26 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
           );
         })}
       </div>
+
+      {showCollectButton && (
+        <button
+          onClick={handleCollectRemaining}
+          disabled={stripeLoading}
+          className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+        >
+          {stripeLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Creating payment...
+            </>
+          ) : (
+            <>
+              <CreditCard className="w-4 h-4" />
+              Collect Remaining {formatCents(balanceCents)}
+            </>
+          )}
+        </button>
+      )}
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
@@ -295,6 +416,29 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
           </div>
         )}
       </div>
+
+      <Dialog open={stripeModalOpen} onOpenChange={(open) => { if (!open) handleCardPaymentCancel(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Collect Remaining Balance</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Charging {formatCents(stripeData?.amountCents || balanceCents)} to complete this invoice.
+            </p>
+            {stripeData && (
+              <StripePaymentForm
+                clientSecret={stripeData.clientSecret}
+                publishableKey={stripeData.publishableKey}
+                amountCents={stripeData.amountCents}
+                invoiceId={parseInt(invoiceId)}
+                onSuccess={handleCardPaymentSuccess}
+                onCancel={handleCardPaymentCancel}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

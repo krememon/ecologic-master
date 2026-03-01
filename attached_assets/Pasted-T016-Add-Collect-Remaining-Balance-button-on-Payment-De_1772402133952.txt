@@ -1,0 +1,89 @@
+T016 — Add “Collect Remaining Balance” button on Payment Details page (in-app Stripe PaymentElement)
+
+GOAL
+On the Payment Details screen (the one showing Partial + Invoice Total + Total Payments + Balance Due + Payment History), add a button that lets the user finish the remaining balance IN APP.
+
+If invoice is PARTIAL and balanceDueCents > 0:
+- Show a primary CTA: “Collect Remaining $X.XX”
+- Tapping it opens the same in-app card payment flow (PaymentElement) and charges EXACTLY the remaining balance.
+- After success, page refreshes to “Paid” with balanceDue=$0 and payment history adds another card entry.
+
+UX REQUIREMENTS
+- Only show this button when:
+  - computedStatus === 'partial'
+  - balanceDueCents > 0
+- Hide it for:
+  - paid invoices
+  - unpaid invoices (they should pay from invoice screen)
+  - zero/negative balance
+- Keep RBAC “hidden not disabled”: only roles allowed to take card payments can see the button.
+- Use the same Stripe inline flow you already have (NO redirects, redirect:'if_required').
+
+DATA / API REQUIREMENTS
+- We already have computed fields on this page:
+  - invoiceTotalCents
+  - paidAmountCents
+  - balanceDueCents
+  - computedStatus
+
+Implementation will reuse existing backend route:
+POST /api/payments/stripe/create-intent
+Body: { invoiceId, amountCents }
+- For remaining balance, amountCents = balanceDueCents
+
+FRONTEND IMPLEMENTATION
+1) Locate the Payment Details page component (the screen shown in screenshot).
+   Likely file: src/pages/payment-details-page.tsx OR src/pages/payments/[id].tsx etc.
+
+2) Add CTA below the summary card (above Payment History):
+- Button text:
+  “Collect Remaining $${formatCurrency(balanceDueCents)}”
+- Style: same as other primary actions (blue).
+- Loading state while intent is created and while confirming payment.
+- Disable button if balanceDueCents < 50 (Stripe minimum) and show toast “Remaining balance too small to charge.”
+
+3) On click:
+- Open a modal or bottom sheet:
+  Title: “Collect Remaining Balance”
+  Show:
+   - Remaining amount
+   - Stripe PaymentElement (card fields)
+   - Confirm button “Pay $X.XX”
+   - Cancel
+
+4) Stripe flow:
+- Call create-intent with invoiceId + amountCents=balanceDueCents
+- Mount <Elements key={paymentIntentId} options={{ clientSecret }} stripe={loadStripe(publishableKey)}>
+- Render <PaymentElement /> with the no-saved-cards settings you already implemented
+- Confirm:
+  await stripe.confirmPayment({ elements, redirect:'if_required' })
+
+5) After confirmPayment returns success OR after a short “processing” state:
+- Refetch the Payment Details endpoint (and optionally the payments ledger list)
+- The page should update:
+  - totalPayments increases
+  - balanceDue becomes $0
+  - status pill becomes Paid
+  - Payment History shows the new payment row
+
+BACKEND CHECKS (minimal)
+- Ensure create-intent validates amountCents <= balanceDueCents (not total)
+- Ensure webhook inserts/updates payment row and recomputes invoice totals (already fixed)
+- Ensure ledger / details endpoint returns updated computed fields
+
+EDGE CASES
+- If another payment happens concurrently and balanceDue changes between opening modal and confirming:
+  - When create-intent is called, server should compute current balanceDue and clamp amount to that
+  - If amount becomes 0, return 409 with message “Invoice already paid” and close modal + refresh
+- If payment fails:
+  - Show toast with Stripe error message
+  - Keep modal open
+
+DELIVERABLES
+- “Collect Remaining Balance” button on Payment Details page for partial invoices
+- In-app modal with PaymentElement
+- Charges exactly balanceDueCents
+- Refreshes details and shows Paid when completed
+- RBAC respected (hidden if not allowed)
+
+START NOW: implement the button + modal flow using existing Stripe PaymentElement setup and create-intent route.
