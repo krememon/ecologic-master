@@ -176,6 +176,8 @@ interface PaymentReceiptEmailParams {
   paymentMethod: string;
   paidDate: string;
   pdfAttachment?: { filename: string; content: Buffer } | null;
+  balanceRemainingFormatted?: string;
+  isPartial?: boolean;
 }
 
 export async function sendPaymentReceiptEmail({
@@ -187,12 +189,14 @@ export async function sendPaymentReceiptEmail({
   paymentMethod,
   paidDate,
   pdfAttachment,
-}: PaymentReceiptEmailParams): Promise<void> {
+  balanceRemainingFormatted,
+  isPartial,
+}: PaymentReceiptEmailParams): Promise<string | null> {
   const resendApiKey = process.env.RESEND_API_KEY;
 
   if (!resendApiKey) {
     console.log('[ReceiptEmail] skipped — RESEND_API_KEY not configured');
-    return;
+    return null;
   }
 
   const resolvedFrom = getResendFrom();
@@ -226,7 +230,7 @@ export async function sendPaymentReceiptEmail({
 
         <p style="margin: 0 0 16px 0;">Hello ${customerName},</p>
 
-        <p style="margin: 0 0 20px 0;">Thank you for your payment — your paid invoice is attached.</p>
+        <p style="margin: 0 0 20px 0;">Thank you for your payment${isPartial ? '' : ' — your paid invoice is attached'}.</p>
 
         <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <table style="width: 100%; border-collapse: collapse;">
@@ -237,7 +241,11 @@ export async function sendPaymentReceiptEmail({
             <tr>
               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Amount Paid</td>
               <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #059669; font-size: 18px;">${amountFormatted}</td>
-            </tr>
+            </tr>${isPartial && balanceRemainingFormatted ? `
+            <tr>
+              <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Remaining Balance</td>
+              <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #dc2626;">${balanceRemainingFormatted}</td>
+            </tr>` : ''}
             <tr>
               <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Payment Method</td>
               <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1f2937;">${displayMethod}</td>
@@ -258,12 +266,14 @@ export async function sendPaymentReceiptEmail({
     </html>
   `;
 
+  const subject = `Receipt: ${invoiceNumber} (${isPartial ? 'Partial' : 'Paid'})`;
+
   try {
     const emailPayload: any = {
       from: resolvedFrom,
       reply_to: 'no-reply@ecologicc.com',
       to: [to],
-      subject: `Receipt: ${invoiceNumber} (Paid)`,
+      subject,
       html,
     };
 
@@ -281,7 +291,8 @@ export async function sendPaymentReceiptEmail({
       throw new Error(error.message || 'Failed to send receipt email');
     }
 
-    console.log('[ReceiptEmail] sent', { to, invoiceNumber, id: data?.id, hasPdf: !!pdfAttachment });
+    console.log('[ReceiptEmail] sent', { to, invoiceNumber, id: data?.id, hasPdf: !!pdfAttachment, subject });
+    return data?.id || null;
   } catch (err: any) {
     console.error('[ReceiptEmail] failed:', err?.message || err);
     throw err;

@@ -11,6 +11,7 @@ import { invoices, payments, customers, companies, jobs, notifications, bankRefu
 import { eq, and, sql, lt, isNull, ne } from "drizzle-orm";
 import { notifyManagers, notifyOwners } from "./notificationService";
 import { startJobScheduler } from "./jobScheduler";
+import { sendReceiptForPayment } from "./receiptService";
 
 const app = express();
 
@@ -525,6 +526,11 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           })
           .catch(err => console.error('[QB-PAY] Stripe webhook sync error:', err));
       }
+
+      if (paymentId) {
+        sendReceiptForPayment(paymentId).catch(err =>
+          console.error('[receipt] webhook checkout error:', err?.message));
+      }
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment:', error);
       return res.status(500).send('Error processing payment');
@@ -617,6 +623,11 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           await recomputeJobPaymentAndMaybeArchive(effectiveJobId, 'webhook-pi-idempotent');
         }
 
+        if (wasProcessing) {
+          sendReceiptForPayment(existingPaymentCheck.id).catch(err =>
+            console.error('[receipt] webhook PI upgrade error:', err?.message));
+        }
+
         return res.json({ received: true, message: wasProcessing ? 'Upgraded to succeeded' : 'Already processed' });
       }
 
@@ -686,6 +697,9 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           })
           .catch(err => console.error('[QB-PAY] PI webhook sync error:', err));
       }
+
+      sendReceiptForPayment(paymentId).catch(err =>
+        console.error('[receipt] webhook PI new payment error:', err?.message));
     } catch (error: any) {
       console.error('[Stripe Webhook] Error processing payment_intent.succeeded:', error);
       return res.status(500).send('Error processing payment');

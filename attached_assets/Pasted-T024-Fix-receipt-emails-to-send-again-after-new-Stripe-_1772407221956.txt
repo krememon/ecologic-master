@@ -1,0 +1,137 @@
+T024 — Fix receipt emails to send again after new Stripe PaymentElement flow (webhook-driven + idempotent)
+
+CONTEXT
+Receipts used to send (screenshots show “Receipt: INV-… (Paid)” email + attached PDF invoice).
+After moving from Stripe Checkout redirect to in-app PaymentElement + PaymentIntent, receipts stopped sending.
+
+ROOT CAUSE (most likely)
+Old receipt trigger was tied to:
+- checkout.session.completed
+- or old /api/payments/checkout route
+- or the old “payment successful” page/flow
+Now the new flow completes via:
+- payment_intent.succeeded webhook (Stripe) + ledger recompute
+So the old “send receipt” hook isn’t firing anymore.
+
+GOAL
+Automatically send a receipt email when a payment is SUCCESSFULLY recorded in our DB.
+- Works for Stripe card payments (PaymentIntent) and (optionally) manual cash/check.
+- Email includes a PDF invoice attachment (like before) OR a public invoice link if attachment fails.
+- Must be idempotent: webhook retries MUST NOT send duplicates.
+
+HIGH-LEVEL DESIGN
+1) Receipt sending happens on backend AFTER we set payment.status to succeeded/paid and recompute invoice totals.
+2) For Stripe: trigger in webhook `payment_intent.succeeded` (NOT frontend).
+3) For manual: trigger in manual payment record route after saving.
+4) Record “receipt sent” per payment row to prevent duplicates.
+
+DB CHANGE (idempotency flag)
+Add to payments table:
+- receipt_sent_at TIMESTAMPTZ NULL
+- receipt_email_to TEXT NULL
+- receipt_message_id TEXT NULL (optional, from email provider)
+- receipt_error TEXT NULL (optional)
+
+Migration:
+ALTER TABLE payments
+  ADD COLUMN IF NOT EXISTS receipt_sent_at timestamptz,
+  ADD COLUMN IF NOT EXISTS receipt_email_to text,
+  ADD COLUMN IF NOT EXISTS receipt_message_id text,
+  ADD COLUMN IF NOT EXISTS receipt_error text;
+
+BACKEND — RECEIPT SENDER FUNCTION
+Create: sendPaymentReceiptEmail(paymentId)
+
+Steps:
+1) Load payment + invoice + customer:
+   - payment.amount_cents, status, method/provider, created_at, invoice_id
+   - invoice.number, total_cents, job_id, customer_id, public_token/public_url
+   - customer.email, customer.name
+2) Guardrails:
+   - If payment.receipt_sent_at is not null => return (idempotent)
+   - If customer email missing => set receipt_error='missing_customer_email' and return
+   - If status not in ('succeeded','paid','completed') => return
+3) Generate PDF invoice (same generator used before):
+   - Make sure the “paid”/“partial” state is reflected correctly.
+   - Filename: Invoice_INV-<invoiceNumber>.pdf
+4) Send email (same provider you used before — likely Resend):
+   Subject:
+   - If invoice now paid: “Receipt: INV-<number> (Paid)”
+   - Else: “Receipt: INV-<number> (Partial)”
+   Body includes:
+   - Hello <Name>
+   - Thank you for your payment
+   - Amount paid: $X.XX
+   - Remaining balance: $Y.YY (if partial)
+   - Payment method: Credit Card (Stripe) / Cash / Check
+   - Date
+   - Public invoice link button (always include)
+   Attach PDF invoice (like before)
+5) On success:
+   - Update payments.receipt_sent_at = now()
+   - payments.receipt_email_to = customer.email
+   - payments.receipt_message_id = provider message id
+6) On failure:
+   - payments.receipt_error = error message (truncate)
+   - DO NOT crash webhook; just log
+
+WHERE TO TRIGGER (THIS IS THE FIX)
+A) Stripe webhook: payment_intent.succeeded
+After:
+- marking payment row status='succeeded'
+- recomputing invoice totals/status
+Call:
+- await sendPaymentReceiptEmail(payment.id)
+IMPORTANT:
+- Do not send receipt if payment row not found; if you create one in webhook, then send.
+
+B) Manual payment route
+After inserting payment row status='paid':
+- await sendPaymentReceiptEmail(payment.id)
+
+C) Legacy checkout.session.completed (optional)
+Keep support for any in-flight old sessions:
+- If you still receive this webhook, find/create payment row and call sendPaymentReceiptEmail
+
+PDF GENERATION CHECK (common break after changes)
+The PDF invoice generator might now be expecting invoice.status columns that changed.
+Make it derive paid/partial from computed totals:
+- paidCents = SUM(payments for invoice)
+- balanceDueCents
+So the PDF shows correct totals and “Paid” if balance is 0.
+
+DEV / TEST ENDPOINT (owner-only)
+Add:
+POST /api/debug/payments/:paymentId/send-receipt
+- calls sendPaymentReceiptEmail(paymentId)
+- returns ok:true or error
+This lets us verify email sending instantly without doing a full Stripe flow each time.
+
+LOGGING (must-have for debugging)
+Add logs:
+console.log('[receipt] attempt', { paymentId, invoiceId, to })
+console.log('[receipt] sent', { paymentId, messageId })
+console.log('[receipt] failed', { paymentId, error })
+
+ACCEPTANCE TEST
+1) Do Stripe card payment $100 on invoice $350
+- Expect email “Receipt: INV-… (Partial)”
+- Attachment present, amount paid shown as $100, remaining $250
+2) Collect remaining $250
+- Expect second receipt email for the second payment (or optionally only send on final paid; but current screenshots show receipt per payment, so send per payment)
+3) Verify no duplicates if webhook retries:
+- Re-send same webhook event -> receipt_sent_at prevents re-sending
+
+IMPORTANT DECISION (choose now, default recommended)
+- Send receipts per PAYMENT (recommended) so partials also email.
+- Subject uses (Partial) until fully paid.
+
+DELIVERABLES
+- payments table receipt fields
+- sendPaymentReceiptEmail(paymentId) implemented
+- webhook + manual route triggers added for new Stripe PaymentIntent flow
+- PDF generator uses computed totals
+- owner-only debug endpoint to manually trigger receipt
+- receipts sending again like screenshots
+
+IMPLEMENT NOW.

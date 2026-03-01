@@ -544,6 +544,9 @@ export const payments = pgTable("payments", {
   qboPaymentLastSyncError: text("qbo_payment_last_sync_error"),
   qboPaymentLastSyncedAt: timestamp("qbo_payment_last_synced_at"),
   receiptEmailSentAt: timestamp("receipt_email_sent_at"),
+  receiptEmailTo: varchar("receipt_email_to"),
+  receiptMessageId: varchar("receipt_message_id"),
+  receiptError: text("receipt_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

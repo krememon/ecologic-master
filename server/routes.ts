@@ -11,6 +11,7 @@ import { sendApnsPush, sendApnsPushToTokens } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
 import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive } from "./invoiceRecompute";
+import { sendReceiptForPayment } from "./receiptService";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
@@ -10194,6 +10195,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (inv?.jobId) {
           await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'stripe-confirm');
         }
+
+        sendReceiptForPayment(matchedPayment.id).catch(err =>
+          console.error('[receipt] stripe-confirm error:', err?.message));
       }
 
       const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
@@ -10279,79 +10283,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signaturePngBase64,
       });
 
-      (async () => {
-        try {
-          if (payment.receiptEmailSentAt) {
-            console.log('[PublicReceiptEmail] already sent - skipping paymentId=' + paymentId);
-            return;
-          }
-          const effectiveInvoiceId = invoiceId || payment.invoiceId;
-          if (!effectiveInvoiceId) {
-            console.log('[PublicReceiptEmail] skipped - no invoice paymentId=' + paymentId);
-            return;
-          }
-          const invoice = await storage.getInvoice(effectiveInvoiceId);
-          if (!invoice) {
-            console.log('[PublicReceiptEmail] skipped - invoice not found invoiceId=' + effectiveInvoiceId);
-            return;
-          }
-          const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
-          const customerEmail = customer?.email;
-          if (!customerEmail) {
-            console.log('[PublicReceiptEmail] missing customer email - skipping');
-            return;
-          }
-          const company = await storage.getCompany(payment.companyId);
-          const companyName = company?.name || 'Your contractor';
-          const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Valued Customer';
-          const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount) * 100);
-          const amountFormatted = `$${(amountCents / 100).toFixed(2)}`;
-          const paidDate = payment.paidDate
-            ? new Date(payment.paidDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-            : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-          let pdfAttachment: { filename: string; content: Buffer } | null = null;
-          if (invoice.pdfUrl) {
-            try {
-              const pdfPath = invoice.pdfUrl.startsWith('/') ? invoice.pdfUrl.substring(1) : invoice.pdfUrl;
-              if (fs.existsSync(pdfPath)) {
-                const pdfBuffer = fs.readFileSync(pdfPath);
-                pdfAttachment = { filename: `Invoice_${invoice.invoiceNumber.replace(/-/g, '_')}.pdf`, content: pdfBuffer };
-                console.log(`[PublicReceiptEmail] reusing existing PDF`);
-              }
-            } catch (pdfErr: any) {
-              console.log('[PublicReceiptEmail] existing PDF read failed:', pdfErr?.message);
-            }
-          }
-          if (!pdfAttachment && invoice.jobId) {
-            try {
-              const generated = await generateInvoicePdfForJob(invoice.jobId, payment.companyId);
-              const pdfBuffer = fs.readFileSync(generated.filePath);
-              pdfAttachment = { filename: generated.fileName, content: pdfBuffer };
-            } catch (genErr: any) {
-              console.error('[PublicReceiptEmail] PDF generation failed:', genErr?.message);
-            }
-          }
-
-          await sendPaymentReceiptEmail({
-            to: customerEmail,
-            customerName,
-            companyName,
-            invoiceNumber: invoice.invoiceNumber,
-            amountFormatted,
-            paymentMethod: payment.paymentMethod || 'other',
-            paidDate,
-            pdfAttachment,
-          });
-          await db
-            .update(payments)
-            .set({ receiptEmailSentAt: new Date() })
-            .where(and(eq(payments.id, paymentId), sql`receipt_email_sent_at IS NULL`));
-          console.log(`[PublicReceiptEmail] sent paymentId=${paymentId} to=${customerEmail}`);
-        } catch (emailErr: any) {
-          console.error('[PublicReceiptEmail] error:', emailErr?.message || emailErr);
-        }
-      })();
+      sendReceiptForPayment(paymentId).catch(err =>
+        console.error('[receipt] after public signature error:', err?.message));
 
       res.json({ signature: { id: sig.id, signedAt: sig.signedAt } });
     } catch (error: any) {
@@ -13621,6 +13554,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      sendReceiptForPayment(payment.id).catch(err =>
+        console.error('[receipt] manual payment error:', err?.message));
+
       res.json({
         success: true,
         amountCents,
@@ -14568,6 +14504,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in payments-truth debug:", error);
       res.status(500).json({ message: "Failed to get payments truth" });
+    }
+  });
+
+  app.post('/api/debug/payments/:paymentId/send-receipt', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMember(userId);
+      if (!member || member.role !== 'owner') {
+        return res.status(404).json({ message: "Not found" });
+      }
+      const paymentId = parseInt(req.params.paymentId, 10);
+      if (isNaN(paymentId)) return res.status(400).json({ message: "Invalid payment ID" });
+      const result = await sendReceiptForPayment(paymentId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 
@@ -15608,105 +15560,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         signaturePngBase64,
       });
 
-      // Send receipt email after signature (fire-and-forget, don't block response)
-      (async () => {
-        try {
-          if (payment.receiptEmailSentAt) {
-            console.log('[ReceiptEmail] already sent - skipping paymentId=' + paymentId);
-            return;
-          }
-
-          const effectiveInvoiceId = invoiceId || payment.invoiceId;
-          if (!effectiveInvoiceId) {
-            console.log('[ReceiptEmail] skipped - no invoice paymentId=' + paymentId);
-            return;
-          }
-
-          const invoice = await storage.getInvoice(effectiveInvoiceId);
-          if (!invoice) {
-            console.log('[ReceiptEmail] skipped - invoice not found invoiceId=' + effectiveInvoiceId);
-            return;
-          }
-
-          const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
-          const customerEmail = customer?.email;
-          if (!customerEmail) {
-            console.log('[ReceiptEmail] missing customer email - skipping invoiceId=' + effectiveInvoiceId);
-            return;
-          }
-
-          const company = await storage.getCompany(member.companyId);
-          const companyName = company?.name || 'Your contractor';
-          const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Valued Customer';
-
-          const amountCents = payment.amountCents || Math.round(parseFloat(payment.amount) * 100);
-          const amountFormatted = `$${(amountCents / 100).toFixed(2)}`;
-
-          const paidDate = payment.paidDate
-            ? new Date(payment.paidDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-            : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-          let pdfAttachment: { filename: string; content: Buffer } | null = null;
-          let pdfReused = false;
-
-          if (invoice.pdfUrl) {
-            try {
-              const pdfPath = invoice.pdfUrl.startsWith('/') ? invoice.pdfUrl.substring(1) : invoice.pdfUrl;
-              if (fs.existsSync(pdfPath)) {
-                const pdfBuffer = fs.readFileSync(pdfPath);
-                pdfAttachment = {
-                  filename: `Invoice_${invoice.invoiceNumber.replace(/-/g, '_')}.pdf`,
-                  content: pdfBuffer,
-                };
-                pdfReused = true;
-                console.log(`[ReceiptEmail] reusing existing PDF path=${pdfPath} size=${pdfBuffer.length}`);
-              }
-            } catch (pdfErr: any) {
-              console.log('[ReceiptEmail] existing PDF read failed:', pdfErr?.message);
-            }
-          }
-
-          if (!pdfAttachment && invoice.jobId) {
-            try {
-              console.log(`[ReceiptEmail] no existing PDF - generating for jobId=${invoice.jobId}`);
-              const generated = await generateInvoicePdfForJob(invoice.jobId, member.companyId);
-              const pdfBuffer = fs.readFileSync(generated.filePath);
-              pdfAttachment = {
-                filename: generated.fileName,
-                content: pdfBuffer,
-              };
-              console.log(`[ReceiptEmail] generated PDF path=${generated.filePath} size=${pdfBuffer.length}`);
-            } catch (genErr: any) {
-              console.error('[ReceiptEmail] PDF generation failed:', genErr?.message);
-            }
-          }
-
-          if (!pdfAttachment) {
-            console.log(`[ReceiptEmail] no PDF available - sending email without attachment invoiceId=${effectiveInvoiceId}`);
-          }
-
-          await sendPaymentReceiptEmail({
-            to: customerEmail,
-            customerName,
-            companyName,
-            invoiceNumber: invoice.invoiceNumber,
-            amountFormatted,
-            paymentMethod: payment.paymentMethod || 'other',
-            paidDate,
-            pdfAttachment,
-          });
-
-          // Mark as sent AFTER successful send (idempotent race-safe)
-          await db
-            .update(payments)
-            .set({ receiptEmailSentAt: new Date() })
-            .where(and(eq(payments.id, paymentId), sql`receipt_email_sent_at IS NULL`));
-
-          console.log(`[ReceiptEmail] sent invoiceId=${effectiveInvoiceId} paymentId=${paymentId} to=${customerEmail} pdf=${pdfAttachment ? (pdfReused ? 'reused' : 'generated') : 'none'}`);
-        } catch (emailErr: any) {
-          console.error('[ReceiptEmail] error (non-blocking):', emailErr?.message || emailErr);
-        }
-      })();
+      sendReceiptForPayment(paymentId).catch(err =>
+        console.error('[receipt] after signature error:', err?.message));
 
       res.json({ signature: { id: sig.id, signedAt: sig.signedAt } });
     } catch (error: any) {
