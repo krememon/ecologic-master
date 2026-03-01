@@ -202,6 +202,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
     
     try {
       let confirmed = false;
+      let confirmedPaymentId: number | null = null;
       for (let i = 0; i < 15; i++) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         try {
@@ -215,6 +216,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               setResultNewStatus(data.newStatus || (data.balanceRemaining > 0 ? 'partial' : 'paid'));
               setResultBalanceRemaining(data.balanceRemaining || 0);
               setResultPaymentId(data.paymentId || null);
+              confirmedPaymentId = data.paymentId || null;
               confirmed = true;
               break;
             }
@@ -229,6 +231,11 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       }
       
       invalidateAll();
+
+      if (confirmedPaymentId) {
+        triggerSignature({ paymentId: confirmedPaymentId, jobId: numericJobId, invoiceId: numericInvoiceId });
+      }
+
       setViewState('success');
     } catch (err: any) {
       setError(err.message || "Payment may have succeeded but confirmation failed. Please check your invoices.");

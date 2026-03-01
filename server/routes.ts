@@ -10258,7 +10258,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const payment = await storage.getPaymentById(paymentId);
       if (!payment) return res.status(404).json({ error: 'Payment not found' });
-      if (payment.status !== 'paid') return res.status(400).json({ error: 'Signature can only be captured for paid payments' });
+      const publicPaidStatuses = ['paid', 'succeeded', 'completed'];
+      if (!publicPaidStatuses.includes((payment.status || '').toLowerCase())) {
+        return res.status(400).json({ error: 'Signature can only be captured for paid payments' });
+      }
 
       if (sessionInvoiceId && payment.invoiceId && payment.invoiceId !== sessionInvoiceId) {
         return res.status(403).json({ error: 'Session does not match this payment' });
@@ -15584,7 +15587,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!payment || payment.companyId !== member.companyId) {
         return res.status(404).json({ error: 'Payment not found' });
       }
-      if (payment.status !== 'paid') {
+      const paidStatuses = ['paid', 'succeeded', 'completed'];
+      if (!paidStatuses.includes((payment.status || '').toLowerCase())) {
         return res.status(400).json({ error: 'Signature can only be captured for paid payments' });
       }
       const existing = await storage.getPaymentSignature(paymentId);

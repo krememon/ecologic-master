@@ -1,0 +1,101 @@
+T022 — Signature modal NOT popping after payment: fix trigger (don’t rely on “success screen”; trigger after backend confirms invoice is PAID)
+
+PROBLEM
+You expected the signature modal to appear after payment, but it didn’t. This happens when the trigger is attached to the old “payment successful screen” or to the immediate Stripe confirm result instead of the moment the backend marks the invoice as PAID.
+
+We must trigger signature capture ONLY when:
+- backend computedStatus === 'paid'
+- AND no signature exists yet
+- AND user has permission
+Then open the signature modal.
+
+ROOT CAUSES (most common)
+1) You close/redirect the payment modal and never run the “after paid refetch” logic.
+2) You check status too early (before webhook recompute finishes).
+3) You key off `stripe.confirmPayment` success, but invoice still reads Partial/Unpaid for a moment.
+4) You trigger on a component that unmounts (success screen closes and trigger code never runs).
+5) Signature modal state is in a component that’s not mounted anymore.
+
+FIX STRATEGY (bulletproof)
+A) Create a single function: `maybePromptForSignature(invoiceId)`
+- It:
+  1) Fetches invoice details from backend (the same endpoint that returns computedStatus + balanceDueCents + signatureExists).
+  2) If computedStatus !== 'paid', return false.
+  3) If signature already exists, return false.
+  4) If RBAC disallows, return false.
+  5) Otherwise setSignatureModalOpen(true) and return true.
+
+B) Call it in BOTH payment flows, after payment completion and refresh:
+1) Full payment flow (InvoiceDetails pay modal)
+2) Collect Remaining flow (Payment Details modal)
+
+C) Add a short retry/poll (because webhook can be ~1–3 seconds)
+After confirmPayment succeeds:
+- for i in 1..10:
+   - await fetch invoice
+   - if paid -> open signature modal and stop
+   - else wait 500ms and retry
+Total wait up to ~5 seconds, then stop (and don’t open).
+
+D) Ensure signature modal is mounted at a stable level
+- The signature modal must live in the InvoiceDetails / PaymentDetails parent page (not inside the payment modal that gets closed).
+- So closing the payment modal does NOT unmount signature modal state.
+
+E) Remove old “Payment successful screen” dependency
+- If you removed success popups, good — signature should not depend on them anyway.
+
+IMPLEMENTATION DETAILS
+1) Backend: invoice details response MUST include a signature flag
+Update GET /api/invoices/:id response to include:
+- computedStatus
+- balanceDueCents
+- hasSignature (boolean) OR signatureCount
+If signatures are per-job:
+- hasSignatureForJob
+
+2) Frontend: wire the flow
+
+Pseudo:
+async function handlePaymentSuccess() {
+  // close payment modal
+  setCollectModalOpen(false)
+
+  // refresh invoice/payments
+  await refetchInvoice()
+  await refetchLedger()
+
+  // poll for paid then prompt
+  await pollPaidThenPromptSignature(invoiceId)
+}
+
+async function pollPaidThenPromptSignature(invoiceId) {
+  for (let attempt=0; attempt<10; attempt++) {
+    const inv = await fetchInvoice(invoiceId)
+    if (inv.computedStatus === 'paid' && !inv.hasSignature) {
+      openSignatureModal(invoiceId)
+      return true
+    }
+    await sleep(500)
+  }
+  return false
+}
+
+3) Logging (temporary)
+Add:
+console.log('[signature] check', { invoiceId, computedStatus, hasSignature })
+console.log('[signature] OPENING modal', { invoiceId })
+
+ACCEPTANCE TEST
+- Pay invoice to completion
+- Within 0–5 seconds after payment, signature modal opens automatically
+- Save signature -> job history shows signature on file
+- Partial payment does NOT trigger signature modal
+
+DELIVERABLES
+- Signature modal trigger moved to “invoice is PAID confirmed by backend”
+- Poll/retry logic added
+- Modal mounted at stable page level (not inside payment modal)
+- Backend includes hasSignature + computedStatus
+- Works for both full payment and collect remaining flows
+
+DO THIS NOW.

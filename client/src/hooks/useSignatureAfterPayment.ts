@@ -1,7 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-
-const PENDING_SIG_KEY = "pendingSignaturePaymentId";
-const PENDING_SIG_META_KEY = "pendingSignatureMeta";
+import { useState, useCallback, useRef } from "react";
 
 interface PendingSignatureMeta {
   paymentId: number;
@@ -9,108 +6,86 @@ interface PendingSignatureMeta {
   invoiceId?: number;
 }
 
-function getPendingFromStorage(): PendingSignatureMeta | null {
+async function checkInvoicePaidAndNoSignature(invoiceId: number, paymentId: number): Promise<{ isPaid: boolean; hasSignature: boolean }> {
   try {
-    const raw = localStorage.getItem(PENDING_SIG_META_KEY);
-    if (raw) return JSON.parse(raw);
-    const legacyId = localStorage.getItem(PENDING_SIG_KEY);
-    if (legacyId) return { paymentId: parseInt(legacyId, 10) };
-  } catch {}
-  return null;
-}
+    const [invRes, sigRes] = await Promise.all([
+      fetch(`/api/payments/invoice/${invoiceId}`, { credentials: 'include' }),
+      fetch(`/api/payments/${paymentId}/signature`, { credentials: 'include' }),
+    ]);
 
-function setPendingInStorage(meta: PendingSignatureMeta) {
-  try {
-    localStorage.setItem(PENDING_SIG_KEY, String(meta.paymentId));
-    localStorage.setItem(PENDING_SIG_META_KEY, JSON.stringify(meta));
-  } catch {}
-}
-
-function clearPendingFromStorage() {
-  try {
-    localStorage.removeItem(PENDING_SIG_KEY);
-    localStorage.removeItem(PENDING_SIG_META_KEY);
-  } catch {}
-}
-
-async function verifyPaymentAndSignature(paymentId: number): Promise<{ isPaid: boolean; hasSignature: boolean }> {
-  try {
-    const res = await fetch(`/api/payments/${paymentId}/signature`, { credentials: 'include' });
-    if (res.ok) {
-      const data = await res.json();
-      return { isPaid: true, hasSignature: !!data.signature };
+    let isPaid = false;
+    if (invRes.ok) {
+      const invData = await invRes.json();
+      const status = (invData.invoiceStatus || invData.computedStatus || invData.status || '').toLowerCase();
+      isPaid = status === 'paid';
+      console.log('[signature] check invoice', { invoiceId, invoiceStatus: status, isPaid });
     }
-    if (res.status === 404) {
-      return { isPaid: false, hasSignature: false };
+
+    let hasSignature = false;
+    if (sigRes.ok) {
+      const sigData = await sigRes.json();
+      hasSignature = !!sigData.signature;
+      console.log('[signature] check signature', { paymentId, hasSignature });
     }
-  } catch {}
-  return { isPaid: true, hasSignature: false };
+
+    return { isPaid, hasSignature };
+  } catch (err) {
+    console.log('[signature] check error', err);
+    return { isPaid: false, hasSignature: false };
+  }
 }
 
 export function useSignatureAfterPayment() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingSignatureMeta | null>(null);
   const triggeredRef = useRef<number | null>(null);
-  const redirectedRef = useRef(false);
-
-  const openModal = useCallback(async (meta: PendingSignatureMeta) => {
-    if (triggeredRef.current === meta.paymentId) {
-      return;
-    }
-
-    const { isPaid, hasSignature } = await verifyPaymentAndSignature(meta.paymentId);
-
-    if (!isPaid) {
-      clearPendingFromStorage();
-      return;
-    }
-
-    if (hasSignature) {
-      clearPendingFromStorage();
-      return;
-    }
-
-    triggeredRef.current = meta.paymentId;
-    redirectedRef.current = false;
-    setPendingPayment(meta);
-    setPendingInStorage(meta);
-    setIsModalOpen(true);
-  }, []);
 
   const triggerSignature = useCallback(async (meta: PendingSignatureMeta) => {
-    setPendingInStorage(meta);
-    await openModal(meta);
-  }, [openModal]);
+    if (triggeredRef.current === meta.paymentId) {
+      console.log('[signature] already triggered for paymentId', meta.paymentId);
+      return;
+    }
+
+    if (!meta.invoiceId) {
+      console.log('[signature] no invoiceId, skipping');
+      return;
+    }
+
+    console.log('[signature] polling for paid status', { invoiceId: meta.invoiceId, paymentId: meta.paymentId });
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const { isPaid, hasSignature } = await checkInvoicePaidAndNoSignature(meta.invoiceId, meta.paymentId);
+
+      if (isPaid && !hasSignature) {
+        console.log('[signature] OPENING modal', { invoiceId: meta.invoiceId, paymentId: meta.paymentId, attempt });
+        triggeredRef.current = meta.paymentId;
+        setPendingPayment(meta);
+        setIsModalOpen(true);
+        return;
+      }
+
+      if (hasSignature) {
+        console.log('[signature] signature already exists, skipping');
+        return;
+      }
+
+      if (attempt < 9) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+
+    console.log('[signature] invoice not fully paid after polling, skipping modal');
+  }, []);
 
   const onSignatureComplete = useCallback(() => {
     setIsModalOpen(false);
     setPendingPayment(null);
-    clearPendingFromStorage();
     triggeredRef.current = null;
-    if (!redirectedRef.current) {
-      redirectedRef.current = true;
-      setTimeout(() => {
-        window.location.href = '/jobs';
-      }, 1200);
-    }
+    console.log('[signature] signature saved successfully');
   }, []);
 
   const onModalDismiss = useCallback(() => {
-  }, []);
-
-  useEffect(() => {
-    const stored = getPendingFromStorage();
-    if (!stored) return;
-    if (triggeredRef.current === stored.paymentId) return;
-
-    (async () => {
-      const { isPaid, hasSignature } = await verifyPaymentAndSignature(stored.paymentId);
-      if (!isPaid || hasSignature) {
-        clearPendingFromStorage();
-        return;
-      }
-      setPendingPayment(stored);
-    })();
+    setIsModalOpen(false);
   }, []);
 
   const hasPendingSignature = pendingPayment !== null && !isModalOpen;

@@ -172,7 +172,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
         const result = await res.json();
         if (result.status === "succeeded") {
           invalidateAll();
-          if (result.newStatus === "paid" && result.paymentId) {
+          if (result.paymentId) {
             triggerSignature({
               paymentId: result.paymentId,
               jobId: data?.jobId || undefined,
