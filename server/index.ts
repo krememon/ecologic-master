@@ -552,7 +552,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
     const paymentIntent = event.data.object as Stripe.PaymentIntent;
     const { invoiceId, companyId, jobId } = paymentIntent.metadata || {};
 
-    console.log(`[Stripe Webhook] payment_intent.succeeded: piId=${paymentIntent.id}, amount=${paymentIntent.amount}, metadata=${JSON.stringify(paymentIntent.metadata)}`);
+    console.log('[webhook pi.succeeded]', { pi: paymentIntent.id, metaInvoiceId: paymentIntent.metadata?.invoiceId, metaCompanyId: paymentIntent.metadata?.companyId, amount: paymentIntent.amount });
 
     if (!invoiceId) {
       console.error('[Stripe Webhook] payment_intent.succeeded: No invoiceId in metadata');
@@ -581,7 +581,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         .where(eq(payments.stripePaymentIntentId, paymentIntent.id));
 
       if (existingPaymentCheck) {
-        console.log(`[Stripe Webhook] payment_intent.succeeded: Payment already exists for PI ${paymentIntent.id}, idempotent skip`);
+        console.log('[webhook pi.succeeded] existing payment found', { paymentId: existingPaymentCheck.id, invoiceId: existingPaymentCheck.invoiceId, status: existingPaymentCheck.status });
 
         if (existingPaymentCheck.status !== 'succeeded') {
           await db.update(payments).set({ status: 'succeeded' }).where(eq(payments.id, existingPaymentCheck.id));
@@ -632,11 +632,10 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       }).returning({ id: payments.id });
 
       const paymentId = newPayment.id;
-      console.log('[WEBHOOK APPLY]', { invoiceId, paymentId, status: 'succeeded' });
+      console.log('[WEBHOOK APPLY]', { invoiceId, paymentId, status: 'succeeded', amountCents, piId: paymentIntent.id });
 
       const recomputed = await persistRecomputedTotals(parseInt(invoiceId));
-      const newStatus = recomputed.computedStatus;
-      console.log(`[Stripe Webhook] PI Invoice ${invoiceId} recomputed: paid=${recomputed.paidCents} owed=${recomputed.owedCents} status=${newStatus}`);
+      console.log('[webhook pi.succeeded] recomputed', { invoiceId, paidCents: recomputed.paidCents, owedCents: recomputed.owedCents, computedStatus: recomputed.computedStatus });
 
       await db.update(invoices).set({
         stripePaymentIntentId: paymentIntent.id,

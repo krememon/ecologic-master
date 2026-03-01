@@ -6592,7 +6592,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ invoice: null });
       }
       
-      res.json({ invoice });
+      const computed = await recomputeInvoiceTotalsFromPayments(invoice.id);
+      res.json({
+        invoice: {
+          ...invoice,
+          paidAmountCents: computed.paidCents,
+          balanceDueCents: computed.owedCents,
+          computedStatus: computed.computedStatus,
+        }
+      });
     } catch (error) {
       console.error("Error fetching job invoice:", error);
       res.status(500).json({ message: "Failed to fetch invoice" });
@@ -9916,15 +9924,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const computed = await recomputeInvoiceTotalsFromPayments(invoice.id);
+
       res.json({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         totalCents: invoice.totalCents,
         subtotalCents: invoice.subtotalCents,
         taxCents: invoice.taxCents,
-        paidAmountCents: invoice.paidAmountCents || 0,
-        balanceDueCents: invoice.balanceDueCents || 0,
-        status: invoice.status,
+        paidAmountCents: computed.paidCents,
+        balanceDueCents: computed.owedCents,
+        computedStatus: computed.computedStatus,
+        status: computed.computedStatus,
         dueDate: invoice.dueDate,
         issueDate: invoice.issueDate,
         lineItems: invoice.lineItems,
@@ -9967,17 +9978,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Invoice not found" });
       }
 
-      if (invoice.status === 'paid') {
-        return res.status(400).json({ message: "This invoice has already been paid" });
-      }
-
       if (invoice.status === 'void' || invoice.status === 'cancelled') {
         return res.status(400).json({ message: "This invoice is no longer valid" });
       }
 
-      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
-      const currentPaidAmountCents = invoice.paidAmountCents || 0;
-      const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
+      const computed = await recomputeInvoiceTotalsFromPayments(invoice.id);
+      if (computed.computedStatus === 'paid') {
+        return res.status(400).json({ message: "This invoice has already been paid" });
+      }
+
+      const invoiceTotalCents = computed.totalCents;
+      const currentBalanceDueCents = computed.owedCents;
 
       let amountInCents: number;
       if (requestedAmountCents !== undefined && requestedAmountCents !== null) {
@@ -9999,7 +10010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const company = await storage.getCompany(invoice.companyId);
 
-      console.log(`[PublicIntent] Creating PaymentIntent for invoice ${invoice.id}, amount: ${amountInCents} cents`);
+      console.log('[create-intent public]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: invoice.companyId, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents });
 
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountInCents,
@@ -13766,13 +13777,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      if (invoice.status?.toLowerCase() === 'paid') {
+      const computed = await recomputeInvoiceTotalsFromPayments(invoice.id);
+      if (computed.computedStatus === 'paid') {
         return res.status(400).json({ message: "This invoice has already been paid" });
       }
 
-      const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
-      const currentPaidAmountCents = invoice.paidAmountCents || 0;
-      const currentBalanceDueCents = invoice.balanceDueCents || (invoiceTotalCents - currentPaidAmountCents);
+      const invoiceTotalCents = computed.totalCents;
+      const currentBalanceDueCents = computed.owedCents;
 
       let amountInCents: number;
       if (requestedAmountCents !== undefined && requestedAmountCents !== null) {
@@ -13792,7 +13803,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payment amount must be at least $0.50 (Stripe minimum)" });
       }
 
-      console.log(`[Stripe] Creating PaymentIntent: invoice=${invoice.id} amount=${amountInCents}c balance=${currentBalanceDueCents}c`);
+      console.log('[create-intent]', { invoiceIdParam: invoiceId, invoiceIdDb: invoice.id, companyId: company.id, totalCents: invoiceTotalCents, balanceDue: currentBalanceDueCents, paidSoFar: computed.paidCents, amountCents: amountInCents });
 
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountInCents,
@@ -14381,6 +14392,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in invoice recompute debug:", error);
       res.status(500).json({ message: "Failed to recompute" });
+    }
+  });
+
+  app.get('/api/debug/invoice/:id/payments-truth', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const member = await storage.getCompanyMember(userId);
+      if (!member || member.role !== 'owner') {
+        return res.status(404).json({ message: "Not found" });
+      }
+
+      const invoiceId = parseInt(req.params.id);
+      if (isNaN(invoiceId)) {
+        return res.status(400).json({ message: "Invalid invoice ID" });
+      }
+
+      const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      const allPayments = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.invoiceId, invoiceId));
+
+      const paidStatuses = new Set(['paid', 'succeeded', 'completed']);
+      let paidCents = 0;
+      for (const p of allPayments) {
+        if (paidStatuses.has((p.status || '').toLowerCase())) {
+          paidCents += (p.amountCents || 0);
+        }
+      }
+      const owedCents = Math.max(0, (invoice.totalCents || 0) - paidCents);
+      const computedStatus = owedCents === 0 && (invoice.totalCents || 0) > 0 ? 'paid' : paidCents > 0 ? 'partial' : 'unpaid';
+
+      const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+      const suspiciousPayments = await db
+        .select()
+        .from(payments)
+        .where(and(
+          eq(payments.paymentMethod, 'stripe'),
+          sql`${payments.paidDate} > ${thirtyMinAgo}`,
+          sql`(${payments.invoiceId} IS NULL OR ${payments.invoiceId} != ${invoiceId})`
+        ));
+
+      res.json({
+        invoice: {
+          id: invoice.id,
+          companyId: invoice.companyId,
+          totalCents: invoice.totalCents,
+          invoiceNumber: invoice.invoiceNumber,
+          jobId: invoice.jobId,
+          dbStatus: invoice.status,
+          dbPaidAmountCents: invoice.paidAmountCents,
+          dbBalanceDueCents: invoice.balanceDueCents,
+        },
+        paymentsAll: allPayments.map(p => ({
+          id: p.id,
+          companyId: p.companyId,
+          invoiceId: p.invoiceId,
+          amountCents: p.amountCents,
+          status: p.status,
+          paymentMethod: p.paymentMethod,
+          stripePaymentIntentId: p.stripePaymentIntentId,
+          paidDate: p.paidDate,
+        })),
+        computed: { paidCents, owedCents, computedStatus },
+        paymentsSuspicious: suspiciousPayments.map(p => ({
+          id: p.id,
+          companyId: p.companyId,
+          invoiceId: p.invoiceId,
+          amountCents: p.amountCents,
+          status: p.status,
+          stripePaymentIntentId: p.stripePaymentIntentId,
+          paidDate: p.paidDate,
+        })),
+      });
+    } catch (error) {
+      console.error("Error in payments-truth debug:", error);
+      res.status(500).json({ message: "Failed to get payments truth" });
     }
   });
 

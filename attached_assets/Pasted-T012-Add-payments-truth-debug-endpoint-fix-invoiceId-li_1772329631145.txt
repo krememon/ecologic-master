@@ -1,0 +1,52 @@
+T012 — Add “payments truth” debug endpoint + fix invoiceId linkage if wrong (this is blocking partial balances)
+
+Problem:
+Partial card payments charge correctly but invoice/payment pages still show full total owed/unpaid. Status alignment didn’t fix it, so the payment rows are likely NOT being summed for the invoice being displayed (invoiceId mismatch / join mismatch / org filter mismatch / UI using raw totals).
+
+1) Add owner-only endpoint:
+GET /api/debug/invoice/:invoiceId/payments-truth
+
+Return JSON:
+{
+  invoice: { id, org_id, total_cents, number, job_id },
+  paymentsAll: [{ id, org_id, invoice_id, amount_cents, status, provider, provider_ref, created_at }],
+  computed: { paid_cents, owed_cents, computedStatus }
+}
+
+Implementation:
+- Load invoice by :invoiceId (UUID). If not found, return 404.
+- Query payments where payments.invoice_id = invoice.id (NO status filter first).
+- Compute:
+  paid_cents = sum(amount_cents where LOWER(status) IN ('succeeded','paid','completed'))
+  owed_cents = max(invoice.total_cents - paid_cents, 0)
+  computedStatus = owed==0 ? 'paid' : paid>0 ? 'partial' : 'unpaid'
+- Also query “suspicious matches” for diagnosis:
+  - payments where provider='stripe' AND provider_ref is recent (last 30 min) AND (invoice_id IS NULL OR invoice_id != invoice.id)
+  - include those in response as paymentsSuspicious
+
+2) Add logs in create-intent route:
+console.log('[create-intent]', { invoiceIdParam, invoiceIdDb: invoice.id, orgId: invoice.org_id, amountCents })
+and after insert:
+console.log('[create-intent] paymentRow', { paymentId, invoice_id: paymentRow.invoice_id, status: paymentRow.status, provider_ref: paymentRow.provider_ref })
+
+3) Add logs in webhook payment_intent.succeeded:
+console.log('[webhook pi.succeeded]', { pi: pi.id, metaInvoiceId: pi.metadata?.invoiceId })
+When locating payment row:
+- log which payment was found and its invoice_id
+After update/recompute:
+- log computed totals for that invoice.
+
+4) After adding this endpoint, run ONE test:
+- Create invoice total $700
+- Pay $300
+- Copy/paste the JSON output from:
+  GET /api/debug/invoice/<that invoice id>/payments-truth
+
+Then fix based on what it shows:
+A) If paymentsAll is empty but paymentsSuspicious shows the Stripe payment with a different invoice_id -> FIX: the create-intent/ledger insert is using the wrong id (likely jobId or public invoice token). Make it store invoices.id UUID.
+B) If paymentsAll contains the payment but computed shows paid=0 -> FIX: status isn’t in allowed set.
+C) If computed is correct but UI still shows full owed -> FIX: payments page is not using owed_cents/computedStatus from backend.
+
+Deliverable:
+- Endpoint implemented
+- Root cause identified and corrected so partial payment shows Partial + remaining balance immediately.
