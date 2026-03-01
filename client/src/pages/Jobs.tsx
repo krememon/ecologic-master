@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2, Archive, RotateCcw } from "lucide-react";
+import { Plus, Building2, Calendar, DollarSign, MapPin, Trash2, Edit, Camera, Search, User, Users, Loader2, X, Check, ChevronDown, FolderOpen, FileText, CheckSquare, List, Upload, Paperclip, Wrench, CheckCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLocation, useSearch } from "wouter";
@@ -110,7 +110,6 @@ export default function Jobs() {
   const [originalAssignedIds, setOriginalAssignedIds] = useState<Set<string>>(new Set());
   const [jobModalTab, setJobModalTab] = useState<'documents' | 'approvals'>('documents');
   const [mainPageTab, setMainPageTab] = useState<'jobs' | 'estimates'>(getInitialTab());
-  const [showArchived, setShowArchived] = useState(false);
   
   // Estimates tab filters
   const [estimatesCustomerFilter, setEstimatesCustomerFilter] = useState<'all' | number>('all');
@@ -238,13 +237,7 @@ export default function Jobs() {
 
 
   const { data: rawJobs = [], isLoading: jobsLoading } = useQuery<JobWithClient[]>({
-    queryKey: ["/api/jobs", { includeArchived: showArchived }],
-    queryFn: async () => {
-      const url = showArchived ? "/api/jobs?includeArchived=true" : "/api/jobs";
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch jobs");
-      return res.json();
-    },
+    queryKey: ["/api/jobs"],
     enabled: isAuthenticated,
   });
   
@@ -449,11 +442,7 @@ export default function Jobs() {
   });
 
   const filteredJobs = jobs.filter(job => {
-    if (showArchived) {
-      if (job.status !== 'archived' && !job.archivedAt) return false;
-    } else {
-      if (job.status === 'archived') return false;
-    }
+    if (job.status === 'archived') return false;
     
     // For TECHNICIAN role, only show jobs assigned to them (via crew assignments)
     if (role === 'TECHNICIAN') {
@@ -623,25 +612,6 @@ export default function Jobs() {
       toast({
         title: "Error",
         description: "Failed to archive job",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const unarchiveJobMutation = useMutation({
-    mutationFn: async (jobId: number) => {
-      const res = await apiRequest("PATCH", `/api/jobs/${jobId}/unarchive`);
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      toast({ title: "Job restored to active" });
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to unarchive job",
         variant: "destructive",
       });
     },
@@ -1932,17 +1902,6 @@ export default function Jobs() {
                 data-testid="input-search-jobs"
               />
             </div>
-            {(role === 'OWNER' || role === 'SUPERVISOR') && (
-              <Button
-                variant={showArchived ? "default" : "outline"}
-                size="sm"
-                className="sm:w-auto"
-                onClick={() => setShowArchived(!showArchived)}
-              >
-                <Archive className="w-4 h-4 mr-2" />
-                {showArchived ? "Showing Archived" : "Archived"}
-              </Button>
-            )}
             <Button className="sm:w-auto" onClick={() => setIsDialogOpen(true)} data-testid="button-create-job">
               <Plus className="w-4 h-4 mr-2" />
               Create New Job
@@ -1993,14 +1952,6 @@ export default function Jobs() {
               {/* Status Badge - Top Right */}
               {(() => {
                 const pillBase = "absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border min-w-max";
-                if (job.status === 'archived') {
-                  return (
-                    <span className={`${pillBase} bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-800`}>
-                      <Archive className="h-3 w-3" />
-                      Archived{job.archivedAt ? ` \u2022 ${format(new Date(job.archivedAt), 'MMM d')}` : ''}
-                    </span>
-                  );
-                }
                 if (job.status === 'cancelled') {
                   return (
                     <span className={`${pillBase} bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700`}>
@@ -2110,48 +2061,30 @@ export default function Jobs() {
                     Created {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                   <div className="flex gap-1 flex-shrink-0">
-                    {job.status === 'archived' && (role === 'OWNER' || role === 'SUPERVISOR') ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          unarchiveJobMutation.mutate(job.id);
-                        }}
-                        disabled={unarchiveJobMutation.isPending}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                        Restore
-                      </Button>
-                    ) : (
-                      <>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLocation(`/jobs/${job.id}/edit`);
-                          }}
-                          data-testid={`button-edit-job-${job.id}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setJobToDelete({ id: job.id, title: job.title });
-                          }}
-                          data-testid={`button-delete-job-${job.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocation(`/jobs/${job.id}/edit`);
+                      }}
+                      data-testid={`button-edit-job-${job.id}`}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setJobToDelete({ id: job.id, title: job.title });
+                      }}
+                      data-testid={`button-delete-job-${job.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>

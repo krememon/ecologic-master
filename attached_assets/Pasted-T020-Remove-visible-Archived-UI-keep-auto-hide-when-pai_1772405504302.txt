@@ -1,0 +1,53 @@
+T020 — Remove visible “Archived” UI, keep auto-hide when paid (silent archive)
+
+CONTEXT
+We want jobs to automatically disappear from the active Jobs list when fully paid, BUT we do NOT want any archive UI (no Archived button/pill/tab/filter). The job must still appear in the client’s Job History and keep invoices/payments.
+
+GOALS
+1) Remove the visible “Archived” button/pill/tab/filter from the UI.
+2) Keep the underlying soft-archive / hidden flag (is_archived) OR rename to is_hidden/is_closed internally — but it must be silent (not user-facing).
+3) When job becomes fully paid, it is auto-hidden from active job lists.
+4) Job still appears in Client → Job History (as normal past job).
+5) Invoices and Payments remain unchanged and accessible.
+
+FRONTEND CHANGES (UI)
+A) Remove the “Archived” button shown in the screenshot
+- Search for label/text “Archived”
+- Search for icon usage near it (archive box icon)
+- Remove that component entirely from:
+  - Jobs page header
+  - Any filters/tabs
+  - Any pills on job cards
+
+B) Client Job History should still include hidden jobs, but do not label them as Archived
+- If there is a “Archived” pill or section header, remove it.
+- Display the job normally like any completed job.
+- Optional: if you want subtle clarity without saying archived, use “Paid” or “Completed” status (only if you already have those statuses).
+
+BACKEND BEHAVIOR (keep)
+C) Keep auto-hide behavior when fully paid
+- Use jobs.is_archived (or jobs.is_hidden) internally.
+- Active jobs list endpoints filter out hidden jobs.
+- Client job history endpoints include hidden jobs by default.
+
+API BEHAVIOR
+D) Active jobs list:
+- GET /api/jobs -> returns only is_archived=false (active)
+E) Client job history:
+- GET /api/clients/:clientId/jobs -> include both active + hidden (no UI label)
+
+NO USER-FACING “ARCHIVE” ANYWHERE
+F) Remove admin unarchive UI/button too (unless Owner-only debug is needed)
+- We can keep an owner-only endpoint to unhide a job for safety, but do NOT show it in UI.
+
+ACCEPTANCE TEST
+1) Fully pay invoice(s) for a job
+2) Job disappears from active Jobs list
+3) Client’s job history still shows the job
+4) No “Archived” button/pill/tab exists anywhere in the UI
+5) Payments + invoices pages still show full history
+
+DELIVERABLES
+- Removed archived button/pill/tab UI
+- Auto-hide logic remains intact
+- Client job history includes hidden jobs silently
