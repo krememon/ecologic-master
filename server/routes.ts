@@ -13718,7 +13718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: [
           {
             appID: `${teamId}.${bundleId}`,
-            paths: ['/invoice/*/pay', '/auth/*'],
+            paths: ['/auth/*'],
           },
         ],
       },
@@ -13822,29 +13822,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/stripe/checkout-session/:sessionId - Resolve Stripe session metadata
-  app.get('/api/stripe/checkout-session/:sessionId', async (req, res) => {
-    try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe is not configured" });
-      }
-      const { sessionId } = req.params;
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log(`[StripeCheckoutSession] Retrieved session ${sessionId}: status=${session.status}, payment_status=${session.payment_status}`);
-      res.json({
-        invoiceId: session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null,
-        jobId: session.metadata?.jobId ? parseInt(session.metadata.jobId) : null,
-        companyId: session.metadata?.companyId ? parseInt(session.metadata.companyId) : null,
-        isPartialPayment: session.metadata?.isPartialPayment === 'true',
-        paymentStatus: session.payment_status,
-        sessionStatus: session.status,
-      });
-    } catch (error: any) {
-      console.error('[StripeCheckoutSession] Error:', error.message);
-      res.status(500).json({ message: "Failed to retrieve checkout session" });
-    }
-  });
-
   // GET /api/payments/latest-for-invoice/:invoiceId - Get latest payment for an invoice
   app.get('/api/payments/latest-for-invoice/:invoiceId', async (req, res) => {
     try {
@@ -13906,7 +13883,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               amount: (amountCents / 100).toFixed(2),
               amountCents: amountCents,
               paymentMethod: 'stripe',
-              status: 'paid',
+              status: 'succeeded',
               stripePaymentIntentId: paymentIntentId,
               stripeCheckoutSessionId: session.id,
               paidDate: new Date(),

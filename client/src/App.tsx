@@ -41,8 +41,6 @@ import InvoiceDetails from "@/pages/InvoiceDetails";
 import JobDetails from "@/pages/JobDetails";
 import JobEdit from "@/pages/JobEdit";
 import ClientDetail from "@/pages/ClientDetail";
-import PaySuccess from "@/pages/PaySuccess";
-import PayCancel from "@/pages/PayCancel";
 import PaymentReview from "@/pages/PaymentReview";
 import PublicInvoicePay from "@/pages/PublicInvoicePay";
 import Leads from "@/pages/Leads";
@@ -117,16 +115,6 @@ function getNextOnboardingRoute(params: {
   }
   
   return "/onboarding/company";
-}
-
-// Separate component for public payment pages - NO auth hooks
-function PaymentRouter() {
-  return (
-    <Switch>
-      <Route path="/pay/success" component={PaySuccess} />
-      <Route path="/pay/cancel" component={PayCancel} />
-    </Switch>
-  );
 }
 
 // Public invoice payment page - NO auth required
@@ -328,10 +316,6 @@ function Router() {
   // Note: main.tsx now handles /reset-password directly, but keep this as backup
   if (path.startsWith('/reset-password') || windowPath.startsWith('/reset-password')) {
     return <ResetPassword />;
-  }
-  
-  if (path.startsWith('/pay/') || path.startsWith('/stripe/')) {
-    return <PaymentRouter />;
   }
   
   if (path.match(/^\/invoice\/\d+\/pay$/)) {

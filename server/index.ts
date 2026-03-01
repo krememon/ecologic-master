@@ -463,13 +463,13 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           amount: (amountCents / 100).toFixed(2),
           amountCents: amountCents,
           paymentMethod: 'stripe',
-          status: 'paid',
+          status: 'succeeded',
           stripePaymentIntentId: session.payment_intent as string,
           stripeCheckoutSessionId: session.id,
           paidDate: now,
         }).returning({ id: payments.id });
         paymentId = newPayment.id;
-        console.log(`[Stripe Webhook] Payment record created for invoice ${invoiceId} paymentId=${paymentId}`);
+        console.log(`[Stripe Webhook] Payment record created for invoice ${invoiceId} paymentId=${paymentId} status=succeeded`);
       } else {
         paymentId = existingPayment.id;
         console.log(`[Stripe Webhook] Payment already exists for payment intent ${session.payment_intent}`);
@@ -583,6 +583,12 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       if (existingPaymentCheck) {
         console.log(`[Stripe Webhook] payment_intent.succeeded: Payment already exists for PI ${paymentIntent.id}, idempotent skip`);
 
+        if (existingPaymentCheck.status !== 'succeeded') {
+          await db.update(payments).set({ status: 'succeeded' }).where(eq(payments.id, existingPaymentCheck.id));
+          console.log(`[Stripe Webhook] Upgraded payment ${existingPaymentCheck.id} status from '${existingPaymentCheck.status}' to 'succeeded'`);
+          await persistRecomputedTotals(parseInt(invoiceId));
+        }
+
         if (!existingPaymentCheck.qboPaymentId && existingPaymentCheck.qboPaymentSyncStatus !== 'synced') {
           console.log(`[QB-PAY] Retrying QBO sync for PI payment paymentId=${existingPaymentCheck.id}`);
           syncPaymentToQboFromWebhook(existingPaymentCheck.id, existingInvoice.companyId, paymentIntent.id)
@@ -620,13 +626,13 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         amount: (amountCents / 100).toFixed(2),
         amountCents: amountCents,
         paymentMethod: 'stripe',
-        status: 'paid',
+        status: 'succeeded',
         stripePaymentIntentId: paymentIntent.id,
         paidDate: now,
       }).returning({ id: payments.id });
 
       const paymentId = newPayment.id;
-      console.log(`[Stripe Webhook] PI Payment record created for invoice ${invoiceId} paymentId=${paymentId}`);
+      console.log('[WEBHOOK APPLY]', { invoiceId, paymentId, status: 'succeeded' });
 
       const recomputed = await persistRecomputedTotals(parseInt(invoiceId));
       const newStatus = recomputed.computedStatus;
