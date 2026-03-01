@@ -11191,15 +11191,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const range = (req.query.range as string) || 'month';
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const todayStr = now.toISOString().split('T')[0];
+
+      let rangeStart: Date;
+      if (range === 'week') {
+        rangeStart = new Date(now);
+        rangeStart.setDate(rangeStart.getDate() - 6);
+        rangeStart.setHours(0, 0, 0, 0);
+      } else if (range === 'year') {
+        rangeStart = new Date(now.getFullYear(), 0, 1);
+      } else {
+        rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
 
       let stillOwedCents = 0;
       let paidTodayCents = 0;
-      let earningsThisMonthCents = 0;
+      let earningsRangeCents = 0;
       let overdueCount = 0;
 
       const items = allInvoices
@@ -11228,7 +11239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
               if (paidDate) {
                 if (paidDate >= todayStart && paidDate <= todayEnd) paidTodayCents += (p.amountCents || 0);
-                if (paidDate >= monthStart) earningsThisMonthCents += (p.amountCents || 0);
+                if (paidDate >= rangeStart) earningsRangeCents += (p.amountCents || 0);
               }
             }
             if (!lastPayment || (p.paidDate && (!lastPayment.paidDate || new Date(p.paidDate) > new Date(lastPayment.paidDate)))) {
@@ -11311,7 +11322,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stillOwedCents,
           paidTodayCents,
           overdueCount,
-          earningsThisMonthCents,
+          earningsRangeCents,
+          range,
         },
         debug: {
           countedStatuses,

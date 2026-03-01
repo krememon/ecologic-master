@@ -36,7 +36,7 @@ type LedgerItem = {
 };
 
 type LedgerStats = {
-  earningsThisMonthCents: number;
+  earningsRangeCents: number;
   stillOwedCents: number;
   paidTodayCents: number;
   overdueCount: number;
@@ -64,11 +64,14 @@ const safeParseDate = (dateStr: string | undefined | null): Date | null => {
 
 type FilterTab = "all" | "unpaid" | "paid" | "partial";
 
+type TimeRange = "week" | "month" | "year";
+
 export default function PaymentsPage() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [recordModalOpen, setRecordModalOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<TimeRange>("month");
 
   const {
     isModalOpen: sigModalOpen,
@@ -81,14 +84,19 @@ export default function PaymentsPage() {
   } = useSignatureAfterPayment();
 
   const { data: ledgerData, isLoading } = useQuery<LedgerResponse>({
-    queryKey: ["/api/payments/ledger"],
+    queryKey: ["/api/payments/ledger", timeRange],
+    queryFn: async () => {
+      const res = await fetch(`/api/payments/ledger?range=${timeRange}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch ledger");
+      return res.json();
+    },
     select: (raw: any) => {
       const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
       const stats = raw?.stats && typeof raw.stats === "object" ? raw.stats : {};
       return {
         items,
         stats: {
-          earningsThisMonthCents: stats.earningsThisMonthCents || 0,
+          earningsRangeCents: stats.earningsRangeCents || 0,
           stillOwedCents: stats.stillOwedCents || 0,
           paidTodayCents: stats.paidTodayCents || 0,
           overdueCount: stats.overdueCount || 0,
@@ -172,10 +180,17 @@ export default function PaymentsPage() {
     );
   }
 
+  const rangeLabels: Record<TimeRange, string> = { week: "This Week", month: "This Month", year: "This Year" };
+  const timeRangeOptions: { key: TimeRange; label: string }[] = [
+    { key: "week", label: "Week" },
+    { key: "month", label: "Month" },
+    { key: "year", label: "Year" },
+  ];
+
   const scoreboardItems = [
     {
-      label: "This Month",
-      value: formatCompactCurrency((stats?.earningsThisMonthCents || 0) / 100),
+      label: rangeLabels[timeRange],
+      value: formatCompactCurrency((stats?.earningsRangeCents || 0) / 100),
       color: "text-slate-900 dark:text-slate-100",
     },
     {
@@ -214,6 +229,21 @@ export default function PaymentsPage() {
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 overflow-hidden">
         <div className="px-5 pt-4 pb-2 flex items-center justify-between">
           <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">Earnings</span>
+          <div className="bg-slate-100 dark:bg-slate-800/60 rounded-lg p-[2px] flex">
+            {timeRangeOptions.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setTimeRange(opt.key)}
+                className={`text-[11px] font-medium px-3 py-[4px] rounded-md transition-all ${
+                  timeRange === opt.key
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4">
           {scoreboardItems.map((item, i) => (

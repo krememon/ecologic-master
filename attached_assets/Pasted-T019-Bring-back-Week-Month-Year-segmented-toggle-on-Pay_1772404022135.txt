@@ -1,0 +1,84 @@
+T019 — Bring back Week / Month / Year segmented toggle on Payments page (drives stats + list)
+
+GOAL
+Restore the old Week / Month / Year segmented control on the Payments page so the user can switch the stats window (and optionally the list) between:
+- Week
+- Month (default)
+- Year
+
+UI REQUIREMENTS (match existing style)
+- Use the same segmented pill/toggle you had before (the small 3-option selector near the stats bubble).
+- Default selection = Month
+- Preserve existing filters (All / Paid / Unpaid / Partial) and search.
+- Keep “hidden not disabled” RBAC as-is (this is just display).
+
+DATA BEHAVIOR
+When the user switches Week/Month/Year:
+- Update the TOP STATS bubble:
+  - Earnings (timeframe)
+  - Paid Today (still “today” regardless of timeframe, OR if you previously did “Paid in timeframe”, keep that previous behavior — prefer to restore the old exact behavior if you can find it)
+  - Still Owed (not timeframe-based; it’s current outstanding)
+  - Overdue (not timeframe-based; it’s current overdue)
+So realistically:
+- Earnings changes by timeframe
+- Paid Today stays today (unless old behavior differs)
+- Still Owed stays current
+- Overdue stays current
+
+IMPLEMENTATION APPROACH (preferred: minimal backend changes)
+A) Frontend state
+In Payments page:
+- const [range, setRange] = useState<'week'|'month'|'year'>('month')
+
+Render segmented control:
+- Week | Month | Year
+- onChange -> setRange(newRange)
+
+B) Backend: support range param on ledger endpoint
+Update:
+GET /api/payments/ledger?range=week|month|year
+
+Server computes stats:
+- earningsCents: sum of successful payments in selected timeframe
+- paidTodayCents: sum successful payments today (optional, unchanged)
+- stillOwedCents: current outstanding
+- overdueCount: current overdue
+
+Time windows:
+- week: last 7 days (or week-to-date if that’s what you previously used; if old code exists, restore that)
+- month: month-to-date
+- year: year-to-date
+
+Implementation detail:
+- Use payments.created_at (or paid_at if you track it) and statuses in allowed set:
+  LOWER(status) IN ('succeeded','paid','completed')
+
+C) Frontend updates
+When range changes:
+- Refetch ledger endpoint with range param
+- Update stats cards accordingly (no page reload)
+
+D) Restore old UI if it exists
+Search git/codebase for:
+- “Week”
+- “Month”
+- “Year”
+- “segmented”
+- “range”
+- “timeframe”
+- “earningsRange”
+If you find the old component, reuse it instead of rebuilding.
+
+ACCEPTANCE CRITERIA
+- Week/Month/Year toggle is visible again on Payments page
+- Default = Month
+- Tapping Week changes Earnings number (and whatever else previously changed)
+- Month and Year work similarly
+- No crashes; styling matches existing controls
+
+DELIVERABLES
+- Segmented toggle restored in UI
+- Ledger endpoint supports range param (or frontend filters if already returned)
+- Stats bubble updates live when toggled
+
+Build it now.
