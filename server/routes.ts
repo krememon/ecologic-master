@@ -10,7 +10,7 @@ import { sendPushToUser } from "./pushService";
 import { sendApnsPush, sendApnsPushToTokens } from "./apns";
 import { sendSignatureRequestEmail, sendTestEmail, getAppBaseUrl, sendPaymentReceiptEmail, getResendFrom } from "./email";
 import { aiScopeAnalyzer } from "./ai-scope-analyzer";
-import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments } from "./invoiceRecompute";
+import { persistRecomputedTotals, recomputeInvoiceTotalsFromPayments, recomputeJobPaymentAndMaybeArchive } from "./invoiceRecompute";
 import { scrypt, randomBytes, timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Helper function to generate deterministic pairKey for 1:1 conversations (must match storage.ts)
@@ -5365,6 +5365,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch('/api/jobs/:id/unarchive', isAuthenticated, requirePerm("jobs.delete"), async (req: any, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      const companyId = req.companyId;
+
+      const job = await storage.getJob(jobId);
+      if (!job) return res.status(404).json({ message: "Job not found" });
+      if (job.companyId !== companyId) return res.status(403).json({ message: "Forbidden" });
+
+      if (job.status !== 'archived' && !job.archivedAt) {
+        return res.status(400).json({ message: "Job is not archived" });
+      }
+
+      const restoredJob = await storage.updateJob(jobId, {
+        status: 'active',
+        archivedAt: null,
+        archivedReason: null,
+      } as any);
+
+      console.log(`[unarchive] Job ${jobId} restored to active by user`);
+      res.json(restoredJob);
+    } catch (error) {
+      console.error("Error unarchiving job:", error);
+      res.status(500).json({ message: "Failed to unarchive job" });
+    }
+  });
+
   // Cancel job (Owner/Supervisor/Dispatcher only)
   app.patch('/api/jobs/:id/cancel', isAuthenticated, async (req: any, res) => {
     try {
@@ -10162,6 +10189,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`[StripeConfirm] Upgraded payment ${matchedPayment.id} from 'processing' to 'succeeded' (PI confirmed by Stripe)`);
         await persistRecomputedTotals(invoiceId);
         matchedPayment = { ...matchedPayment, status: 'succeeded' };
+
+        const [inv] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+        if (inv?.jobId) {
+          await recomputeJobPaymentAndMaybeArchive(inv.jobId, 'stripe-confirm');
+        }
       }
 
       const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
@@ -13545,30 +13577,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const recomputed = await persistRecomputedTotals(invoiceId);
       const newStatus = recomputed.computedStatus;
 
-      // Update job paymentStatus if invoice is associated with a job
       if (invoice.jobId) {
-        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        const now = new Date();
-        if (jobPaymentStatus === 'paid') {
-          const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
-          console.log(`[Payment-Manual] Job ${invoice.jobId} BEFORE: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
-          const archiveFields = jobBefore && jobBefore.status !== 'archived' && !jobBefore.archivedAt
-            ? { status: 'archived', archivedAt: now, archivedReason: 'paid' }
-            : {};
-          await db.update(jobs).set({
-            paymentStatus: 'paid',
-            paidAt: now,
-            ...archiveFields,
-            updatedAt: now,
-          }).where(eq(jobs.id, invoice.jobId));
-          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
-          console.log(`[Payment-Manual] Job ${invoice.jobId} AFTER: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
-        } else {
-          await storage.updateJob(invoice.jobId, {
-            paymentStatus: jobPaymentStatus,
-          } as any);
-          console.log(`[Payment-Manual] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
-        }
+        await recomputeJobPaymentAndMaybeArchive(invoice.jobId, 'manual-payment');
       }
 
       console.log(`[Payment] Manual ${paymentMethodValue} payment recorded for invoice ${invoiceId}: $${amountDollars}`);
@@ -13730,28 +13740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newStatus = recomputed2.computedStatus;
 
       if (invoice.jobId) {
-        const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-        const now = new Date();
-        if (jobPaymentStatus === 'paid') {
-          const [jobBefore] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
-          console.log(`[Payment-Record] Job ${invoice.jobId} BEFORE: status=${jobBefore?.status}, paymentStatus=${jobBefore?.paymentStatus}, archivedAt=${jobBefore?.archivedAt}`);
-          const archiveFields = jobBefore && jobBefore.status !== 'archived' && !jobBefore.archivedAt
-            ? { status: 'archived', archivedAt: now, archivedReason: 'paid' }
-            : {};
-          await db.update(jobs).set({
-            paymentStatus: 'paid',
-            paidAt: now,
-            ...archiveFields,
-            updatedAt: now,
-          }).where(eq(jobs.id, invoice.jobId));
-          const [jobAfter] = await db.select().from(jobs).where(eq(jobs.id, invoice.jobId));
-          console.log(`[Payment-Record] Job ${invoice.jobId} AFTER: status=${jobAfter?.status}, paymentStatus=${jobAfter?.paymentStatus}, archivedAt=${jobAfter?.archivedAt}`);
-        } else {
-          await storage.updateJob(invoice.jobId, {
-            paymentStatus: jobPaymentStatus,
-          } as any);
-          console.log(`[Payment-Record] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
-        }
+        await recomputeJobPaymentAndMaybeArchive(invoice.jobId, 'record-payment');
       }
 
       console.log(`[Payment] Customer ${customerId} payment recorded: $${amountDollars} via ${paymentMethodValue} → invoice ${invoice.id} (${newStatus})`);

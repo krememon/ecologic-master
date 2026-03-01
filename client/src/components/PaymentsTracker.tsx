@@ -62,7 +62,7 @@ interface LedgerStats {
   stillOwedCents: number;
   paidTodayCents: number;
   overdueCount: number;
-  earningsThisMonthCents: number;
+  earningsRangeCents: number;
 }
 
 interface LedgerResponse {
@@ -258,7 +258,7 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
               <span className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">This Month</span>
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatCents(stats?.earningsThisMonthCents || 0)}
+              {formatCents(stats?.earningsRangeCents || 0)}
             </p>
           </CardContent>
         </Card>

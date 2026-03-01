@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { invoices, payments } from "../shared/schema";
+import { invoices, payments, jobs } from "../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export async function recomputeInvoiceTotalsFromPayments(invoiceId: number): Promise<{ paidCents: number; owedCents: number; computedStatus: string; totalCents: number }> {
@@ -38,4 +38,61 @@ export async function persistRecomputedTotals(invoiceId: number): Promise<{ paid
     updatedAt: now,
   }).where(eq(invoices.id, invoiceId));
   return result;
+}
+
+export async function recomputeJobPaymentAndMaybeArchive(
+  jobId: number,
+  via: string = 'unknown',
+): Promise<{ archived: boolean; jobPaymentStatus: string }> {
+  const jobInvoices = await db.select().from(invoices).where(eq(invoices.jobId, jobId));
+
+  if (jobInvoices.length === 0) {
+    return { archived: false, jobPaymentStatus: 'unpaid' };
+  }
+
+  let allPaid = true;
+  let anyPaid = false;
+
+  for (const inv of jobInvoices) {
+    const totalCents = inv.totalCents > 0 ? inv.totalCents : Math.round(parseFloat(inv.amount) * 100);
+    if (totalCents <= 0) continue;
+
+    const [sumResult] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)` })
+      .from(payments)
+      .where(and(
+        eq(payments.invoiceId, inv.id),
+        sql`LOWER(${payments.status}) IN ('paid', 'succeeded', 'completed')`
+      ));
+
+    const paidCents = Number(sumResult?.total || 0);
+    if (paidCents > 0) anyPaid = true;
+    if (paidCents < totalCents) allPaid = false;
+  }
+
+  const jobPaymentStatus = allPaid ? 'paid' : anyPaid ? 'partial' : 'unpaid';
+  const now = new Date();
+
+  await db.update(jobs).set({
+    paymentStatus: jobPaymentStatus,
+    ...(jobPaymentStatus === 'paid' ? { paidAt: now } : {}),
+    updatedAt: now,
+  }).where(eq(jobs.id, jobId));
+
+  let archived = false;
+  if (allPaid) {
+    const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+    if (job && !job.archivedAt) {
+      await db.update(jobs).set({
+        status: 'archived',
+        archivedAt: now,
+        archivedReason: 'paid',
+      }).where(and(eq(jobs.id, jobId), sql`archived_at IS NULL`));
+      archived = true;
+      console.log(`[archive] Job ${jobId} auto-archived (all invoices paid) via=${via}`);
+    }
+  }
+
+  console.log(`[recomputeJob] jobId=${jobId} invoices=${jobInvoices.length} paymentStatus=${jobPaymentStatus} archived=${archived} via=${via}`);
+  return { archived, jobPaymentStatus };
 }

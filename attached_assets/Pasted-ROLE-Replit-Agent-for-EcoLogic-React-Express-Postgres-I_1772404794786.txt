@@ -1,0 +1,200 @@
+ROLE: Replit Agent for EcoLogic (React + Express + Postgres). Implement automatic job archival when a job is fully paid, while preserving invoices, payments, and client job history. Use soft-delete / archive pattern (do NOT hard delete). Maintain RBAC and indexing. Provide migrations, backend hooks, API changes, frontend changes, tests, and rollback plan.
+
+GOAL
+- When a job becomes fully paid (all invoices for the job are paid), mark the job as archived/soft-deleted so it no longer appears in active lists/dashboards.
+- Keep job visible in the client's Job History (archive-list), and keep invoices and payments unchanged and accessible.
+- Payments/invoices must remain the single source of truth.
+- Behavior must be idempotent and safe (no accidental data loss).
+- Preserve ability to unarchive job (owner/admin UI to restore).
+
+HIGH-LEVEL APPROACH
+1) Soft-delete / Archive column on `jobs` (is_archived BOOL DEFAULT false, archived_at TIMESTAMPTZ NULL, archived_by uuid optional).
+2) Update all app queries that list active jobs to filter `WHERE is_archived = false` (default).
+3) Add new client-facing Job History endpoint or add `includeArchived` flag to existing job-list endpoints. Client Job History shows archived jobs.
+4) Add server-side hook in the payment finalization flow (webhook + manual payment) that checks if the job is fully paid; if yes, set job.is_archived = true and archived_at/archived_by.
+5) Add admin UI to view archived jobs and restore (unarchive).
+6) Ensure invoices/payments remain untouched and are still queryable for audit/history.
+7) Add acceptance tests and a rollback (un-archive) script.
+
+DB MIGRATION (SQL)
+-- Add archive fields to jobs
+BEGIN;
+ALTER TABLE jobs
+  ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN archived_at TIMESTAMPTZ NULL,
+  ADD COLUMN archived_by UUID NULL;
+CREATE INDEX idx_jobs_is_archived ON jobs(is_archived);
+COMMIT;
+
+BACKEND: new helper & wiring (Express / Node)
+
+A) Helper: recomputeAndMaybeArchiveJob(jobId, actorUserId)
+- Purpose: check whether job is fully paid (all invoices for job fully paid). If yes and job.is_archived = false then archive it.
+- Steps:
+  1. Query invoices for jobId:
+     SELECT id, total_cents
+     FROM invoices
+     WHERE job_id = $jobId;
+  2. For each invoice compute paid_cents:
+     SELECT COALESCE(SUM(amount_cents),0) AS paid_cents
+     FROM payments
+     WHERE invoice_id = $invoiceId
+       AND LOWER(status) IN ('succeeded','paid','completed');
+  3. If every invoice.paid_cents >= invoice.total_cents then mark job archived:
+     UPDATE jobs
+     SET is_archived = true, archived_at = now(), archived_by = $actorUserId
+     WHERE id = $jobId AND is_archived = false
+     RETURNING id;
+  4. Return boolean archived (true if archived).
+
+- Use a DB transaction or at least consistent read for sums.
+
+B) Where to call it:
+- Primary: After webhook finalizes a payment (payment_intent.succeeded flow)
+  In webhook handler after:
+    - setting payment.status='succeeded';
+    - recomputing invoice totals and invoice.status;
+    - trigger recomputeAndMaybeArchiveJob(invoice.job_id, webhookActorUserId)
+  (actorUserId can be SYSTEM_UUID or webhook service account id)
+- Secondary: After manual payment route (cash/check) finalizes:
+  - call recomputeAndMaybeArchiveJob(invoice.job_id, req.user.id)
+- Tertiary: After any admin action that marks invoice paid (if exists), call helper too.
+
+C) Idempotency:
+- Helper must be idempotent — if already archived, no-op.
+- Use `WHERE is_archived = false` on UPDATE to avoid toggling archived_at repeatedly.
+
+D) Audit/logging:
+- Add a targeted log when archiving:
+  logger.info('[archive] job archived', { jobId, archivedBy: actorUserId, via: 'webhook'|'manual' });
+- Optionally insert into an `job_audit` table for record-of-action.
+
+BACKEND: API changes
+1) Active jobs endpoints (existing)
+- Add filter: WHERE is_archived = false (keep default behavior unchanged).
+
+2) Job list for client history
+- Add query param: `GET /api/clients/:clientId/jobs?includeArchived=true|false`
+  - Default false.
+  - If includeArchived=true, include archived jobs sorted by archived_at desc
+- Or add a dedicated endpoint:
+  GET /api/clients/:clientId/job-history -> returns active+archived with `is_archived` flag and `archived_at`.
+
+3) Admin unarchive endpoint
+- POST /api/jobs/:jobId/unarchive
+  - Auth: Owner/Admin only
+  - Action: set is_archived=false, archived_at=null, archived_by=null
+  - Return updated job
+
+FRONTEND CHANGES (React)
+A) Active jobs lists / dashboards
+- Ensure all queries that power active lists call job endpoints WITHOUT includeArchived (default).
+- Remove any UI that would otherwise show archived jobs in top-level active lists.
+
+B) Client Job History (new/updated UI)
+- On the client profile page, add a “Job History” tab that lists both active and archived jobs (or add a filter toggle Show archived).
+- For archived jobs:
+  - Add an “Archived” pill with archived_at displayed (e.g., "Archived • Mar 01").
+  - Keep invoice/payment links and invoice details accessible exactly as before.
+  - Ensure Payment History and Invoices still render.
+
+C) Payment Details / Invoice Details UI
+- No changes to payments/invoices necessary — they must keep working and link back to job (even if archived). Eg: Payment History should show invoice -> job link; if job archived, clicking job in that flow should open Job History view.
+
+D) Admin Area: Archive management
+- In admin jobs list, add a “Show archived” toggle and unarchive button per row.
+
+E) Notifications
+- Optional: Add a brief in-app notification to job owner (admin) when job archived — but not required. If adding, keep minimal and link to job history.
+
+F) UX: Remove job from lists immediately
+- After a payment completes on the invoice page and webhook confirms, the frontend should refresh job lists and remove the job from active lists if archived.
+- Also refresh the client job history view to show archived job.
+
+ACCEPTANCE CRITERIA / TEST PLAN
+1) Setup
+- Create a job with 2 invoices: $200 and $300 (total $500).
+- Ensure payments table starts empty.
+
+2) Partial flow (should NOT archive)
+- Pay $200 (invoice 1 partial)
+- Expect: job remains active; invoice1 partial; invoice2 unpaid; job NOT archived.
+
+3) Full-pay flow (archive when all invoices are paid)
+- Pay remaining $300 on invoice2 and enough to settle invoice1 if needed so all invoices paid.
+- Webhook triggers everything:
+  - payments rows created (status 'succeeded')
+  - invoices show paid/partial as appropriate
+  - recomputeAndMaybeArchiveJob runs and archives job (is_archived = true) if all invoices fully paid
+- UI:
+  - job disappears from active jobs list (after refresh)
+  - job appears in client Job History with Archived pill + archived_at timestamp
+  - invoices and payment history are intact and accessible
+  - payments/statistics updated normally
+
+4) Manual pay flow
+- If admin records full manual payment (cash/check) that makes all invoices paid, job should archive the same way.
+
+5) Unarchive test
+- Admin uses unarchive endpoint / UI and job returns to active jobs list (is_archived = false).
+
+6) Edge cases
+- Concurrency: if two payments race to complete the last few cents for different invoices, ensure `recomputeAndMaybeArchiveJob` uses SUM and UPDATE WHERE is_archived = false to prevent duplicate writes — no data loss.
+- Partial payments that leave fractional cents: use integer cents everywhere.
+- Invoice paid elsewhere: if invoices were manually marked paid earlier, recompute helper should still archive when all invoices computed paid.
+
+ROLLBACK / SAFETY
+- Because we soft-archive, rolling back is easy: UPDATE jobs SET is_archived=false WHERE id = <jobId>.
+- Add a small admin page to list recently archived jobs and run restore.
+
+LOGGING / MONITORING
+- Log archive actions and who triggered it.
+- Add a small metric: count of jobs auto-archived per day for monitoring.
+
+DEV NOTES & IMPLEMENTATION HINTS
+- Use same DB connection and ORM patterns used in project (knex, prisma, or raw pg). Use single SQL transaction where feasible.
+- Keep payments/invoices unchanged. Only jobs table is updated.
+- Avoid heavy queries in webhook handler; if worried about latency, queue a background job to run recomputeAndMaybeArchiveJob. But safe to run inline if it’s a simple SUM per invoice.
+
+SAMPLE PSEUDOCODE (Node/Express + pg client)
+async function recomputeAndMaybeArchiveJob(jobId, actorUserId) {
+  const invoices = await db.query('SELECT id, total_cents FROM invoices WHERE job_id=$1', [jobId])
+  if (invoices.length === 0) return false
+  for (const inv of invoices) {
+    const { rows } = await db.query(
+      `SELECT COALESCE(SUM(amount_cents),0) AS paid_cents
+       FROM payments WHERE invoice_id=$1 AND LOWER(status) IN ('succeeded','paid','completed')`, [inv.id])
+    inv.paid_cents = +rows[0].paid_cents
+    if (inv.paid_cents < inv.total_cents) return false
+  }
+  // all invoices fully paid, archive
+  const res = await db.query(
+    `UPDATE jobs SET is_archived=true, archived_at=now(), archived_by=$1
+     WHERE id=$2 AND is_archived=false RETURNING id`, [actorUserId || SYSTEM_USER_UUID, jobId])
+  if (res.rowCount > 0) {
+    logger.info('[archive] job archived', { jobId, archivedBy: actorUserId })
+    return true
+  }
+  return false
+}
+
+WHERE TO HOOK:
+- webhook payment_intent.succeeded handler (after marking payment 'succeeded' and recomputing invoice totals)
+- manual payment record handler (after setting payment status 'succeeded')
+- any admin endpoint that marks invoice paid
+
+DELIVERABLES (what to commit)
+- DB migration SQL
+- backend helper function + wiring in webhook and manual payment flow
+- jobs queries updated to default filter is_archived=false
+- new /api/clients/:clientId/job-history or includeArchived flag
+- admin unarchive API
+- frontend: hide archived from active lists, add Job History UI and Archive pill, add Unarchive in admin
+- tests & developer instructions (how to revert / unarchive)
+- logs for archive event
+
+ACCEPTANCE TESTS (repeatable)
+- automated or manual script above (create job, pay partial, pay remaining, assert job.is_archived true, UI updated)
+- unarchive flow restore job
+
+IMPLEMENT NOW.
