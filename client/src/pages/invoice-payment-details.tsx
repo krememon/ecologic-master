@@ -161,7 +161,6 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
         );
         const result = await res.json();
         if (result.status === "succeeded") {
-          toast({ title: "Payment successful", description: `Collected ${formatCents(result.amountCents || stripeData?.amountCents || 0)}` });
           invalidateAll();
           return;
         }
@@ -169,7 +168,6 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
       await new Promise((r) => setTimeout(r, 1500));
     }
 
-    toast({ title: "Payment processing", description: "Your payment is being processed. It will appear shortly." });
     invalidateAll();
   };
 
