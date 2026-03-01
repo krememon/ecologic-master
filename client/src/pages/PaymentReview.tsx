@@ -205,7 +205,7 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       for (let i = 0; i < 15; i++) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         try {
-          const res = await fetch(`/api/payments/stripe/confirm?paymentIntentId=${paymentIntentId}`, {
+          const res = await fetch(`/api/payments/stripe/confirm?invoiceId=${invoiceId}&payment_intent_id=${paymentIntentId}`, {
             credentials: 'include',
           });
           if (res.ok) {

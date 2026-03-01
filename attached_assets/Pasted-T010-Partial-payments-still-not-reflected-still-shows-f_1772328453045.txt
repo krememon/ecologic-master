@@ -1,0 +1,136 @@
+T010 — Partial payments still not reflected (still shows full amount owed): diagnose + fix the REAL mismatch (invoiceId linkage / status / query join) with hard proof
+
+SYMPTOM
+- Stripe charges partial correctly (e.g., $200 of $350)
+- Payments page + invoice card still show FULL amount owed/unpaid
+- You already added computed fields, but UI still wrong => computation is returning paid=0 OR pulling wrong invoice row.
+
+THIS IS NOT A “UI TWEAK” PROBLEM.
+This is almost always one of these:
+1) Payment rows are not linked to the invoice correctly (invoice_id mismatch / stored as job_id / public invoice token id, etc)
+2) Payment rows exist but are not marked status='succeeded' (so SUM(succeeded)=0)
+3) The computed query is joining on the wrong key (invoice.id vs invoice.invoice_number vs invoice.public_id)
+4) You are displaying a “Job owed” number from Jobs table, not invoice owed from computed invoice fields
+5) You’re testing in one org/user but payments recorded under a different org/user scope filter, so the join excludes them
+
+WE WILL FIX THIS WITH A 10-MINUTE “PROVE IT” FLOW:
+- Add a single debug endpoint that returns:
+  - the invoice row
+  - ALL payment rows for that invoice (any status)
+  - the computed paid/owed/status based on those rows
+- Then we align the join keys and the UI to those exact values.
+
+STEP 1 — Add a truth endpoint (OWNER ONLY)
+Create:
+GET /api/debug/invoice/:invoiceId/payments-truth
+
+It must return JSON like:
+{
+  invoice: { id, orgId, total_cents, ... },
+  paymentsAll: [{ id, invoice_id, amount_cents, status, provider_ref, created_at, org_id }],
+  paymentsSucceeded: [...],
+  computed: { paid_cents, owed_cents, status }
+}
+
+Implementation rules:
+- invoiceId is the real invoices.id (UUID)
+- Query payments WITHOUT status filter first (paymentsAll)
+- Then compute succeeded in code:
+  paid = sum(amount_cents where status === 'succeeded')
+  owed = max(total - paid, 0)
+  status = owed==0 ? 'paid' : paid>0 ? 'partial' : 'unpaid'
+- Log this on server once:
+  console.log('[truth]', invoiceId, { total, paid, owed, status, countAll, countSucceeded })
+
+If paymentsAll is EMPTY or succeeded count is 0 => that’s why UI shows full unpaid.
+
+STEP 2 — Identify what key PaymentIntent is actually storing
+In create-intent route (where you make PaymentIntent + create payment row), log + persist:
+- invoiceId you think you’re using
+- invoice.id from DB
+- paymentRow.invoice_id saved
+- paymentIntent.metadata.invoiceId
+
+Add logs:
+console.log('[create-intent] invoiceId', invoiceId, 'invoice.id', invoice.id)
+console.log('[create-intent] paymentRow.invoice_id', paymentRow.invoice_id, 'pi', pi.id)
+
+If paymentRow.invoice_id is NOT the invoices.id (UUID), your joins will never match.
+
+STEP 3 — Ensure webhook updates the SAME payment row to succeeded
+In webhook payment_intent.succeeded:
+- Find payment row by provider_ref = pi.id
+- If not found, fallback:
+  - const invoiceId = event.data.object.metadata?.invoiceId
+  - find latest payment row by invoice_id + amount + provider='stripe' created within last 10 min
+  - or create one if missing (but must set invoice_id correctly)
+
+Then update:
+payment.status='succeeded'
+
+Add logs:
+console.log('[webhook] pi.succeeded', pi.id, 'foundPayment', !!paymentRow, 'invoiceIdMeta', invoiceIdMeta)
+
+If payment rows exist but status never becomes succeeded, SUM(succeeded)=0.
+
+STEP 4 — Fix the computed JOIN (most common actual bug)
+Go to the code you added for:
+- GET /api/invoices
+- GET /api/invoices/:id
+- GET /api/payments/ledger (or whatever powers the Payments page list/stats)
+
+Verify the join condition is EXACTLY:
+payments.invoice_id = invoices.id
+AND you are filtering by org on BOTH tables:
+invoices.org_id = $orgId
+payments.org_id = $orgId   (or ensure payments inherit org via invoice join)
+
+If you accidentally joined:
+- payments.invoice_id = invoices.invoice_number
+- payments.job_id = invoices.id
+- payments.invoice_id = invoices.public_token
+…then paid will always be 0.
+
+Fix it so all queries use the same canonical key: invoices.id UUID.
+
+STEP 5 — Fix the Payments page source (it might be job-based)
+Open the Payments page list component and its API response.
+If it renders:
+- “$X owed” from job.total or invoice.total instead of invoice.balanceDueCents
+…then it will keep showing full amount.
+
+Required:
+- Always use backend fields:
+  - balanceDueCents (owed)
+  - paidAmountCents
+  - computedStatus
+Never compute from raw total without paid.
+
+STEP 6 — Hard refresh caching gotcha
+Ensure after payment success you refetch:
+- /api/payments/ledger
+- /api/invoices (list)
+And ensure server isn’t returning cached mock data.
+If you use react-query, invalidate the correct keys.
+If you use local state from before payment, it will show old totals.
+
+ACCEPTANCE TEST (must pass)
+1) Create invoice total $350
+2) Pay partial $200
+3) Call:
+   GET /api/debug/invoice/:invoiceId/payments-truth
+   Expect:
+   - paymentsAll contains the Stripe payment
+   - paymentsSucceeded contains it
+   - computed: paid=20000 owed=15000 status='partial'
+4) Payments page shows Partial pill and $150 owed
+5) Repeat pay $150 -> status 'paid', owed 0
+
+DELIVERABLES
+- /api/debug/invoice/:invoiceId/payments-truth (owner-only)
+- Verified correct linkage: payments.invoice_id stores invoices.id UUID
+- Webhook sets payment.status='succeeded' reliably
+- All invoice list + payments ledger endpoints use correct join + org filters
+- UI uses computedStatus + balanceDueCents everywhere (no raw total-only display)
+
+DO THIS NOW. Do NOT guess. Use the truth endpoint to identify whether (A) no payment rows, (B) wrong invoice_id linkage, (C) wrong status, or (D) wrong join. Then patch accordingly.

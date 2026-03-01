@@ -10067,9 +10067,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
 
-      const invoiceIdParam = req.query.invoiceId as string;
-      const sessionId = req.query.session_id as string;
-      const paymentIntentIdParam = req.query.payment_intent_id as string;
+      const invoiceIdParam = (req.query.invoiceId || req.query.invoice_id) as string;
+      const sessionId = (req.query.session_id || req.query.sessionId) as string;
+      const paymentIntentIdParam = (req.query.payment_intent_id || req.query.paymentIntentId) as string;
 
       if (!invoiceIdParam) {
         return res.status(400).json({ error: 'invoiceId is required' });
@@ -10125,23 +10125,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === pi);
 
       if (!matchedPayment) {
-        console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=pending`);
+        console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=pending (no payment row yet)`);
         return res.json({ status: 'pending' });
       }
 
-      const invoice = await storage.getInvoice(invoiceId);
-      const invoiceTotalCents = invoice ? (invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100)) : 0;
-      const newBalanceCents = invoice?.balanceDueCents ?? (invoiceTotalCents - (invoice?.paidAmountCents || 0));
-      const isPartial = newBalanceCents > 0;
+      const computed = await recomputeInvoiceTotalsFromPayments(invoiceId);
+      const balanceRemaining = computed.owedCents;
+      const newStatus = computed.computedStatus;
 
-      console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=recorded`);
+      console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${pi} status=succeeded paid=${computed.paidCents} owed=${balanceRemaining} newStatus=${newStatus}`);
       return res.json({
-        status: 'recorded',
+        status: 'succeeded',
+        paid: true,
         paymentId: matchedPayment.id,
         amountCents: matchedPayment.amountCents,
-        isPartial,
-        newBalanceCents: Math.max(0, newBalanceCents),
-        invoicePaymentStatus: invoice?.status || 'unknown',
+        balanceRemaining,
+        newStatus,
+        isPartial: balanceRemaining > 0,
       });
     } catch (error: any) {
       console.error('[StripeConfirm] Error:', error.message);
