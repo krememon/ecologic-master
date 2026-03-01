@@ -11140,43 +11140,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const company = await storage.getUserCompany(userId);
       if (!company) return res.status(404).json({ message: "Company not found" });
 
+      const countedStatuses = ['paid', 'succeeded', 'completed'];
+      const countedSet = new Set(countedStatuses);
+
       const allInvoices = await storage.getInvoices(company.id);
 
       const allCompanyPayments = await db
-        .select({
-          invoiceId: payments.invoiceId,
-          amountCents: payments.amountCents,
-          status: payments.status,
-        })
+        .select()
         .from(payments)
         .where(eq(payments.companyId, company.id));
 
-      const succeededStatuses = new Set(['paid', 'succeeded', 'completed']);
-      const paidSumByInvoice: Record<number, number> = {};
+      const paymentsByInvoice: Record<number, typeof allCompanyPayments> = {};
       for (const p of allCompanyPayments) {
-        if (p.invoiceId && succeededStatuses.has((p.status || '').toLowerCase())) {
-          paidSumByInvoice[p.invoiceId] = (paidSumByInvoice[p.invoiceId] || 0) + (p.amountCents || 0);
+        if (p.invoiceId) {
+          (paymentsByInvoice[p.invoiceId] ??= []).push(p);
         }
       }
 
       let allRefunds: any[] = [];
-      try {
-        allRefunds = await storage.getRefundsByCompanyId(company.id);
-      } catch (e) {}
-      const settledStatuses = new Set(['succeeded', 'settled']);
-      const pendingStatuses = new Set(['pending', 'posted']);
+      try { allRefunds = await storage.getRefundsByCompanyId(company.id); } catch {}
+      const settledRefundStatuses = new Set(['succeeded', 'settled']);
       const refundTotalsByInvoice: Record<number, number> = {};
-      const pendingRefundTotalsByInvoice: Record<number, number> = {};
       for (const r of allRefunds) {
-        if (r.invoiceId && settledStatuses.has(r.status)) {
+        if (r.invoiceId && settledRefundStatuses.has(r.status)) {
           refundTotalsByInvoice[r.invoiceId] = (refundTotalsByInvoice[r.invoiceId] || 0) + r.amountCents;
-        }
-        if (r.invoiceId && pendingStatuses.has(r.status)) {
-          pendingRefundTotalsByInvoice[r.invoiceId] = (pendingRefundTotalsByInvoice[r.invoiceId] || 0) + r.amountCents;
         }
       }
 
-      const ledger = allInvoices
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const todayStr = now.toISOString().split('T')[0];
+
+      let stillOwedCents = 0;
+      let paidTodayCents = 0;
+      let earningsThisMonthCents = 0;
+      let overdueCount = 0;
+
+      const items = allInvoices
         .filter((inv: any) => {
           const s = (inv.status || '').toLowerCase();
           if (s === 'cancelled' || s === 'void' || s === 'draft') return false;
@@ -11185,22 +11187,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .map((inv: any) => {
           const totalCents = inv.totalCents || Math.round(parseFloat(inv.amount || '0') * 100);
-          const paidCents = paidSumByInvoice[inv.id] || 0;
-          const balanceCents = Math.max(totalCents - paidCents, 0);
+          const invPayments = paymentsByInvoice[inv.id] || [];
+
+          let paidCents = 0;
+          let succeededCount = 0;
+          const statusSamples: string[] = [];
+          let lastPayment: any = null;
+
+          for (const p of invPayments) {
+            const st = (p.status || '').toLowerCase();
+            if (statusSamples.length < 5) statusSamples.push(st);
+            if (countedSet.has(st)) {
+              paidCents += (p.amountCents || 0);
+              succeededCount++;
+
+              const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
+              if (paidDate) {
+                if (paidDate >= todayStart && paidDate <= todayEnd) paidTodayCents += (p.amountCents || 0);
+                if (paidDate >= monthStart) earningsThisMonthCents += (p.amountCents || 0);
+              }
+            }
+            if (!lastPayment || (p.paidDate && (!lastPayment.paidDate || new Date(p.paidDate) > new Date(lastPayment.paidDate)))) {
+              lastPayment = p;
+            }
+          }
+
+          const balanceDueCents = Math.max(0, totalCents - paidCents);
           const refundedCents = refundTotalsByInvoice[inv.id] || 0;
-          const pendingRefundedCents = pendingRefundTotalsByInvoice[inv.id] || 0;
-          const netCollectedCents = Math.max(0, paidCents - refundedCents);
 
           const dbStatus = (inv.status || '').toLowerCase();
           let computedStatus: string;
           if (dbStatus === 'refunded' || dbStatus === 'partially_refunded') {
             computedStatus = dbStatus;
-          } else if (balanceCents === 0 && totalCents > 0) {
+          } else if (balanceDueCents === 0 && totalCents > 0) {
             computedStatus = 'paid';
-          } else if (paidCents > 0 && balanceCents > 0) {
+          } else if (paidCents > 0 && balanceDueCents > 0) {
             computedStatus = 'partial';
           } else {
             computedStatus = 'unpaid';
+          }
+
+          if (balanceDueCents > 0) {
+            stillOwedCents += balanceDueCents;
+            if (inv.dueDate && inv.dueDate < todayStr) overdueCount++;
           }
 
           let customerName = 'Unknown Customer';
@@ -11214,38 +11243,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
             customerName = inv.job.clientName;
           }
 
-          const jobTitle = inv.job?.title || null;
-
-          const lastActivityDate = inv.paidDate || inv.updatedAt || inv.createdAt;
-
           return {
             invoiceId: inv.id,
             invoiceNumber: inv.invoiceNumber,
             customerId: inv.customerId,
             customerName,
             jobId: inv.jobId,
-            jobTitle,
+            jobTitle: inv.job?.title || null,
             totalCents,
             paidCents,
-            balanceCents,
+            balanceDueCents,
             refundedCents,
-            pendingRefundedCents,
-            netCollectedCents,
-            status: computedStatus,
+            computedStatus,
             dueDate: inv.dueDate,
             issueDate: inv.issueDate,
             createdAt: inv.createdAt,
-            lastActivityDate,
+            lastActivityDate: inv.paidDate || inv.updatedAt || inv.createdAt,
+            lastPayment: lastPayment ? {
+              amountCents: lastPayment.amountCents,
+              status: lastPayment.status,
+              paymentMethod: lastPayment.paymentMethod,
+              paidDate: lastPayment.paidDate,
+              stripePaymentIntentId: lastPayment.stripePaymentIntentId,
+            } : null,
+            diagnostics: {
+              paymentRowsFound: invPayments.length,
+              succeededCount,
+              latestStatusesSample: statusSamples,
+              invoiceIdKeyUsed: inv.id,
+            },
           };
         });
 
-      ledger.sort((a: any, b: any) => {
+      items.sort((a: any, b: any) => {
         const da = a.lastActivityDate ? new Date(a.lastActivityDate).getTime() : 0;
         const db2 = b.lastActivityDate ? new Date(b.lastActivityDate).getTime() : 0;
         return db2 - da;
       });
 
-      res.json(ledger);
+      res.json({
+        items,
+        stats: {
+          stillOwedCents,
+          paidTodayCents,
+          overdueCount,
+          earningsThisMonthCents,
+        },
+        debug: {
+          countedStatuses,
+          companyIdUsed: company.id,
+          totalInvoicesScanned: allInvoices.length,
+          totalPaymentRows: allCompanyPayments.length,
+        },
+      });
     } catch (error) {
       console.error("Error fetching payments ledger:", error);
       res.status(500).json({ message: "Failed to fetch payments ledger" });

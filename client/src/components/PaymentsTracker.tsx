@@ -27,59 +27,48 @@ import {
 } from "lucide-react";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 
-interface PaymentStats {
-  thisMonthTotalCents: number;
-  stillOwedTotalCents: number;
-  paidTodayTotalCents: number;
-  overdueCount: number;
-}
-
-interface Invoice {
-  id: number;
+interface LedgerItem {
+  invoiceId: number;
   invoiceNumber: string;
-  totalCents: number;
-  paidAmountCents: number;
-  balanceDueCents: number;
-  status: string;
-  dueDate: string;
-  issueDate: string;
   customerId?: number;
-  clientId?: number;
-  customer?: {
-    firstName?: string;
-    lastName?: string;
-    companyName?: string;
-  };
-  client?: {
-    name?: string;
-    email?: string;
-  };
-  job?: {
-    title?: string;
-  };
-  createdAt?: string;
-}
-
-interface Payment {
-  id: number;
-  invoiceId?: number;
-  amount: string;
-  amountCents?: number;
-  paymentMethod: string;
-  status: string;
-  paidDate?: string;
-  createdAt?: string;
-  notes?: string;
-  clientName?: string;
+  customerName: string;
+  jobId?: number;
   jobTitle?: string;
+  totalCents: number;
+  paidCents: number;
+  balanceDueCents: number;
+  refundedCents: number;
+  computedStatus: string;
+  dueDate?: string;
+  issueDate?: string;
+  createdAt?: string;
+  lastActivityDate?: string;
+  lastPayment?: {
+    amountCents: number;
+    status: string;
+    paymentMethod: string;
+    paidDate?: string;
+    stripePaymentIntentId?: string;
+  } | null;
+  diagnostics?: {
+    paymentRowsFound: number;
+    succeededCount: number;
+    latestStatusesSample: string[];
+    invoiceIdKeyUsed: number;
+  };
 }
 
-interface Customer {
-  id: number;
-  firstName?: string;
-  lastName?: string;
-  companyName?: string;
-  email?: string;
+interface LedgerStats {
+  stillOwedCents: number;
+  paidTodayCents: number;
+  overdueCount: number;
+  earningsThisMonthCents: number;
+}
+
+interface LedgerResponse {
+  items: LedgerItem[];
+  stats: LedgerStats;
+  debug: any;
 }
 
 type FilterTab = "all" | "paid" | "unpaid" | "overdue" | "partial";
@@ -99,24 +88,15 @@ interface PaymentsTrackerProps {
 export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
-  const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const { toast } = useToast();
 
-  const { data: stats, isLoading: statsLoading } = useQuery<PaymentStats>({
-    queryKey: ["/api/payments/stats"],
+  const { data: ledgerData, isLoading } = useQuery<LedgerResponse>({
+    queryKey: ["/api/payments/ledger"],
   });
 
-  const { data: invoices = [], isLoading: invoicesLoading } = useQuery<Invoice[]>({
-    queryKey: ["/api/invoices"],
-  });
-
-  const { data: payments = [] } = useQuery<Payment[]>({
-    queryKey: ["/api/payments"],
-  });
-
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ["/api/customers"],
-  });
+  const items = ledgerData?.items || [];
+  const stats = ledgerData?.stats;
 
   const form = useForm<RecordPaymentFormData>({
     resolver: zodResolver(recordPaymentSchema),
@@ -129,20 +109,19 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
 
   const recordPaymentMutation = useMutation({
     mutationFn: async (data: RecordPaymentFormData) => {
-      const invoice = invoices.find(inv => inv.id === parseInt(data.invoiceId));
       const amountCents = Math.round(parseFloat(data.amount) * 100);
-      
+      const item = items.find(i => i.invoiceId === parseInt(data.invoiceId));
       const response = await apiRequest('POST', '/api/payments/manual', {
         invoiceId: parseInt(data.invoiceId),
         amountCents,
         paymentMethod: data.paymentMethod,
-        customerId: invoice?.customerId || invoice?.clientId,
+        customerId: item?.customerId,
       });
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/payments/ledger'] });
       queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/payments/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
@@ -175,31 +154,25 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
     }).format(cents / 100);
   };
 
-  const getInvoiceStatus = (invoice: Invoice): "paid" | "partial" | "unpaid" | "overdue" => {
-    const status = invoice.status?.toLowerCase();
-    if (status === "paid") return "paid";
-    if (status === "partial") return "partial";
-    
-    const balance = invoice.balanceDueCents || (invoice.totalCents - (invoice.paidAmountCents || 0));
-    if (balance === 0) return "paid";
-    if (invoice.paidAmountCents && invoice.paidAmountCents > 0) return "partial";
-    
+  const getFilterStatus = (item: LedgerItem): FilterTab => {
+    const st = item.computedStatus;
+    if (st === 'paid') return 'paid';
+    if (st === 'partial') return 'partial';
     const today = new Date().toISOString().split('T')[0];
-    if (invoice.dueDate && invoice.dueDate < today && balance > 0) return "overdue";
-    
-    return "unpaid";
+    if (item.dueDate && item.dueDate < today && item.balanceDueCents > 0) return 'overdue';
+    if (st === 'unpaid') return 'unpaid';
+    return 'unpaid';
   };
 
-  const getStatusBadge = (status: "paid" | "partial" | "unpaid" | "overdue") => {
-    const configs = {
+  const getStatusBadge = (status: string) => {
+    const configs: Record<string, { color: string; label: string; icon: any }> = {
       paid: { color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400", label: "PAID", icon: CheckCircle },
       partial: { color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400", label: "PARTIAL", icon: Clock },
       unpaid: { color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400", label: "UNPAID", icon: FileText },
       overdue: { color: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400", label: "OVERDUE", icon: AlertTriangle },
     };
-    const config = configs[status];
+    const config = configs[status] || configs.unpaid;
     const Icon = config.icon;
-    
     return (
       <Badge className={`${config.color} flex items-center gap-1 font-semibold text-xs px-2 py-0.5`}>
         <Icon className="w-3 h-3" />
@@ -216,16 +189,6 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
     return { label: method || "Other", icon: DollarSign };
   };
 
-  const getCustomerName = (invoice: Invoice): string => {
-    if (invoice.customer) {
-      const { firstName, lastName, companyName } = invoice.customer;
-      if (companyName) return companyName;
-      return [firstName, lastName].filter(Boolean).join(' ') || 'Unknown';
-    }
-    if (invoice.client?.name) return invoice.client.name;
-    return 'Unknown Customer';
-  };
-
   const safeParseDate = (dateStr: string | undefined | null): Date | null => {
     if (!dateStr) return null;
     try {
@@ -236,46 +199,36 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
     }
   };
 
-  const getDateDisplay = (invoice: Invoice): string => {
-    const status = getInvoiceStatus(invoice);
-    
-    if (status === "paid" || status === "partial") {
-      const relatedPayment = payments.find(p => p.invoiceId === invoice.id);
-      const paidDate = relatedPayment?.paidDate || relatedPayment?.createdAt;
+  const getDateDisplay = (item: LedgerItem): string => {
+    const filterSt = getFilterStatus(item);
+    if (filterSt === "paid" || filterSt === "partial") {
+      const paidDate = item.lastPayment?.paidDate;
       const date = safeParseDate(paidDate);
       if (date) {
-        if (isToday(date)) return `Today • ${format(date, 'h:mm a')}`;
-        if (isYesterday(date)) return `Yesterday • ${format(date, 'h:mm a')}`;
+        if (isToday(date)) return `Today \u2022 ${format(date, 'h:mm a')}`;
+        if (isYesterday(date)) return `Yesterday \u2022 ${format(date, 'h:mm a')}`;
         return format(date, 'MMM d, yyyy');
       }
     }
-    
-    const dueDate = safeParseDate(invoice.dueDate);
+    const dueDate = safeParseDate(item.dueDate);
     if (dueDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
       if (isToday(dueDate)) return "Due Today";
       if (isYesterday(dueDate)) return "Due Yesterday";
-      if (dueDate < today) return `Due ${format(dueDate, 'MMM d')}`;
+      if (dueDate < new Date()) return `Due ${format(dueDate, 'MMM d')}`;
       return `Due ${format(dueDate, 'MMM d')}`;
     }
-    
     return "";
   };
 
-  const filteredInvoices = invoices.filter(invoice => {
+  const filteredItems = items.filter(item => {
     if (activeFilter === "all") return true;
-    const status = getInvoiceStatus(invoice);
-    return status === activeFilter;
+    return getFilterStatus(item) === activeFilter;
   });
 
-  const unpaidInvoices = invoices.filter(inv => {
-    const status = getInvoiceStatus(inv);
-    return status === "unpaid" || status === "partial" || status === "overdue";
+  const unpaidItems = items.filter(item => {
+    const st = item.computedStatus;
+    return st === 'unpaid' || st === 'partial';
   });
-
-  const isLoading = statsLoading || invoicesLoading;
 
   if (isLoading) {
     return (
@@ -305,7 +258,7 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
               <span className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">This Month</span>
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatCents(stats?.thisMonthTotalCents || 0)}
+              {formatCents(stats?.earningsThisMonthCents || 0)}
             </p>
           </CardContent>
         </Card>
@@ -317,7 +270,7 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
               <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400 uppercase tracking-wide">Still Owed</span>
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatCents(stats?.stillOwedTotalCents || 0)}
+              {formatCents(stats?.stillOwedCents || 0)}
             </p>
           </CardContent>
         </Card>
@@ -329,7 +282,7 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
               <span className="text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wide">Paid Today</span>
             </div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatCents(stats?.paidTodayTotalCents || 0)}
+              {formatCents(stats?.paidTodayCents || 0)}
             </p>
           </CardContent>
         </Card>
@@ -368,7 +321,7 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
 
       {/* Payment Feed */}
       <div className="space-y-3">
-        {filteredInvoices.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <DollarSign className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -381,23 +334,20 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
             </CardContent>
           </Card>
         ) : (
-          filteredInvoices.map((invoice) => {
-            const status = getInvoiceStatus(invoice);
-            const customerName = getCustomerName(invoice);
-            const dateDisplay = getDateDisplay(invoice);
-            const balance = invoice.balanceDueCents || (invoice.totalCents - (invoice.paidAmountCents || 0));
-            const amountDisplay = status === "partial" 
-              ? `${formatCents(invoice.paidAmountCents || 0)} of ${formatCents(invoice.totalCents)}`
-              : formatCents(invoice.totalCents);
+          filteredItems.map((item) => {
+            const displayStatus = getFilterStatus(item);
+            const dateDisplay = getDateDisplay(item);
+            const amountDisplay = displayStatus === "partial" 
+              ? `${formatCents(item.paidCents)} of ${formatCents(item.totalCents)}`
+              : formatCents(item.totalCents);
             
-            const relatedPayment = payments.find(p => p.invoiceId === invoice.id);
-            const paymentMethodInfo = relatedPayment ? getPaymentMethodDisplay(relatedPayment.paymentMethod) : null;
+            const paymentMethodInfo = item.lastPayment ? getPaymentMethodDisplay(item.lastPayment.paymentMethod) : null;
 
             return (
               <Card 
-                key={invoice.id} 
+                key={item.invoiceId} 
                 className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => setSelectedPaymentId(invoice.id)}
+                onClick={() => setSelectedInvoiceId(item.invoiceId)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -405,16 +355,16 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
                       <div className="flex items-center gap-2 mb-1">
                         <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
                         <span className="font-semibold text-gray-900 dark:text-white truncate">
-                          {customerName}
+                          {item.customerName}
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Invoice #{invoice.invoiceNumber}
-                        {invoice.job?.title && ` • ${invoice.job.title}`}
+                        Invoice #{item.invoiceNumber}
+                        {item.jobTitle && ` \u2022 ${item.jobTitle}`}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
-                        {getStatusBadge(status)}
-                        {paymentMethodInfo && (status === "paid" || status === "partial") && (
+                        {getStatusBadge(displayStatus)}
+                        {paymentMethodInfo && (displayStatus === "paid" || displayStatus === "partial") && (
                           <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <paymentMethodInfo.icon className="w-3 h-3" />
                             {paymentMethodInfo.label}
@@ -424,16 +374,16 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className={`text-lg font-bold ${
-                        status === "paid" ? "text-green-600 dark:text-green-400" :
-                        status === "overdue" ? "text-red-600 dark:text-red-400" :
-                        status === "partial" ? "text-yellow-600 dark:text-yellow-400" :
+                        displayStatus === "paid" ? "text-green-600 dark:text-green-400" :
+                        displayStatus === "overdue" ? "text-red-600 dark:text-red-400" :
+                        displayStatus === "partial" ? "text-yellow-600 dark:text-yellow-400" :
                         "text-gray-900 dark:text-white"
                       }`}>
                         {amountDisplay}
                       </p>
-                      {status === "partial" && (
+                      {displayStatus === "partial" && (
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatCents(balance)} remaining
+                          {formatCents(item.balanceDueCents)} remaining
                         </p>
                       )}
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
@@ -485,16 +435,16 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {unpaidInvoices.length === 0 ? (
+                        {unpaidItems.length === 0 ? (
                           <div className="p-4 text-center text-gray-500">
                             No unpaid invoices
                           </div>
                         ) : (
-                          unpaidInvoices.map((inv) => (
-                            <SelectItem key={inv.id} value={inv.id.toString()}>
+                          unpaidItems.map((item) => (
+                            <SelectItem key={item.invoiceId} value={item.invoiceId.toString()}>
                               <div className="flex items-center justify-between w-full gap-4">
-                                <span>#{inv.invoiceNumber} - {getCustomerName(inv)}</span>
-                                <span className="text-gray-500">{formatCents(inv.balanceDueCents || inv.totalCents)}</span>
+                                <span>#{item.invoiceNumber} - {item.customerName}</span>
+                                <span className="text-gray-500">{formatCents(item.balanceDueCents)}</span>
                               </div>
                             </SelectItem>
                           ))
@@ -584,11 +534,9 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
 
       {/* Payment Details Modal */}
       <PaymentDetailsModal
-        invoiceId={selectedPaymentId}
-        invoices={invoices}
-        payments={payments}
-        onClose={() => setSelectedPaymentId(null)}
-        getCustomerName={getCustomerName}
+        invoiceId={selectedInvoiceId}
+        items={items}
+        onClose={() => setSelectedInvoiceId(null)}
         formatCents={formatCents}
       />
     </div>
@@ -597,29 +545,34 @@ export function PaymentsTracker({ jobs = [] }: PaymentsTrackerProps) {
 
 interface PaymentDetailsModalProps {
   invoiceId: number | null;
-  invoices: Invoice[];
-  payments: Payment[];
+  items: LedgerItem[];
   onClose: () => void;
-  getCustomerName: (invoice: Invoice) => string;
   formatCents: (cents: number) => string;
 }
 
 function PaymentDetailsModal({ 
   invoiceId, 
-  invoices, 
-  payments, 
+  items, 
   onClose, 
-  getCustomerName,
   formatCents 
 }: PaymentDetailsModalProps) {
+  const { data: invoicePayments } = useQuery<any>({
+    queryKey: ['/api/payments/invoice', invoiceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/payments/invoice/${invoiceId}`, { credentials: 'include' });
+      if (!res.ok) return { payments: [], refunds: [] };
+      return res.json();
+    },
+    enabled: !!invoiceId,
+  });
+
   if (!invoiceId) return null;
   
-  const invoice = invoices.find(inv => inv.id === invoiceId);
-  if (!invoice) return null;
+  const item = items.find(i => i.invoiceId === invoiceId);
+  if (!item) return null;
   
-  const relatedPayments = payments.filter(p => p.invoiceId === invoiceId);
-  const customerName = getCustomerName(invoice);
-  
+  const paymentRows = invoicePayments?.payments || [];
+
   const timelineEvents: Array<{
     label: string;
     date?: string;
@@ -628,24 +581,24 @@ function PaymentDetailsModal({
   }> = [
     {
       label: "Invoice Created",
-      date: invoice.createdAt || invoice.issueDate,
+      date: item.createdAt || item.issueDate,
       completed: true,
     },
     {
       label: "Invoice Sent",
-      date: invoice.issueDate,
-      completed: invoice.status !== "draft",
+      date: item.issueDate,
+      completed: item.computedStatus !== "draft",
     },
-    ...relatedPayments.map(payment => ({
+    ...paymentRows.map((payment: any) => ({
       label: `Payment Received (${payment.paymentMethod})`,
       date: payment.paidDate || payment.createdAt,
       completed: true,
-      amount: payment.amountCents || Math.round(parseFloat(payment.amount) * 100),
+      amount: payment.amountCents || Math.round(parseFloat(payment.amount || '0') * 100),
     })),
   ];
 
-  if (invoice.status === "paid") {
-    const lastPayment = relatedPayments[relatedPayments.length - 1];
+  if (item.computedStatus === "paid") {
+    const lastPayment = paymentRows[paymentRows.length - 1];
     timelineEvents.push({
       label: "Fully Paid",
       date: lastPayment?.paidDate || lastPayment?.createdAt,
@@ -669,14 +622,19 @@ function PaymentDetailsModal({
         
         <div className="p-4 space-y-4">
           <div className="text-center pb-4 border-b border-slate-200 dark:border-slate-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Invoice #{invoice.invoiceNumber}</p>
-            <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">{customerName}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Invoice #{item.invoiceNumber}</p>
+            <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">{item.customerName}</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">
-              {formatCents(invoice.totalCents)}
+              {formatCents(item.totalCents)}
             </p>
-            {(invoice.balanceDueCents || 0) > 0 && (
+            {item.balanceDueCents > 0 && (
               <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
-                {formatCents(invoice.balanceDueCents)} remaining
+                {formatCents(item.balanceDueCents)} remaining
+              </p>
+            )}
+            {item.paidCents > 0 && (
+              <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                {formatCents(item.paidCents)} paid
               </p>
             )}
           </div>
@@ -710,7 +668,7 @@ function PaymentDetailsModal({
                         if (isNaN(parsedDate.getTime())) return null;
                         return (
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {format(parsedDate, 'MMM d, yyyy • h:mm a')}
+                            {format(parsedDate, 'MMM d, yyyy \u2022 h:mm a')}
                           </p>
                         );
                       } catch {

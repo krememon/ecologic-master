@@ -829,7 +829,7 @@ export class DatabaseStorage implements IStorage {
     
     for (const p of allPayments) {
       const status = (p.status || '').toLowerCase();
-      if (status !== 'paid' && status !== 'completed') continue;
+      if (status !== 'paid' && status !== 'succeeded' && status !== 'completed') continue;
       
       const paidDate = p.paidDate ? new Date(p.paidDate) : p.createdAt ? new Date(p.createdAt) : null;
       if (!paidDate) continue;
