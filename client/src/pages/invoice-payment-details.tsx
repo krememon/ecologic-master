@@ -19,12 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface InvoicePaymentDetailsProps {
   invoiceId: string;
@@ -418,25 +413,25 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
       </div>
 
       <Dialog open={stripeModalOpen} onOpenChange={(open) => { if (!open) handleCardPaymentCancel(); }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Collect Remaining Balance</DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              Charging {formatCents(stripeData?.amountCents || balanceCents)} to complete this invoice.
+        <DialogContent className="sm:max-w-[520px] p-0 gap-0 rounded-[20px] overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="px-5 pt-5 pb-3">
+            <h2 className="text-[20px] font-bold text-slate-900 dark:text-slate-100 text-center">
+              Collect Remaining Balance
+            </h2>
+            <p className="text-[14px] text-slate-400 dark:text-slate-500 text-center mt-1">
+              Charge {formatCents(stripeData?.amountCents || balanceCents)} to finish this invoice.
             </p>
-            {stripeData && (
-              <StripePaymentForm
-                clientSecret={stripeData.clientSecret}
-                publishableKey={stripeData.publishableKey}
-                amountCents={stripeData.amountCents}
-                invoiceId={parseInt(invoiceId)}
-                onSuccess={handleCardPaymentSuccess}
-                onCancel={handleCardPaymentCancel}
-              />
-            )}
           </div>
+          {stripeData && (
+            <StripePaymentForm
+              clientSecret={stripeData.clientSecret}
+              publishableKey={stripeData.publishableKey}
+              amountCents={stripeData.amountCents}
+              invoiceId={parseInt(invoiceId)}
+              onSuccess={handleCardPaymentSuccess}
+              onCancel={handleCardPaymentCancel}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

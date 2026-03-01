@@ -1,0 +1,112 @@
+T017 — Redesign “Collect Remaining Balance” modal to match EcoLogic modern sheets (like Add Line Items / Add Client vibe)
+
+GOAL
+Update the “Collect Remaining Balance” modal UI to feel clean + modern like the Add Line Items sheet:
+- Minimal chrome
+- Strong header
+- Subtle helper text
+- Card-style section for Payment Element
+- Big primary button pinned at bottom
+- Consistent spacing, rounded corners, and typography
+- No clutter / no “random red box” unless there’s a real error
+
+IMPORTANT
+Do NOT change payment logic. This is UI only.
+
+TARGET VIBE (match Add Line Items)
+- Top header row: centered title, close “X” on right
+- Body: clean, light background, generous padding
+- A single “Card Payment” card section with PaymentElement inside
+- Bottom CTA bar: Cancel (ghost) + Pay (primary) or just a full-width Pay button (prefer full-width like Add Line Items “Done”)
+
+UI SPEC
+1) Modal container
+- Max width: 520px (desktop) but mobile-first sizing
+- Rounded: 20–24px
+- Padding: 18–20px
+- Background: #fff
+- Soft shadow
+- The modal should scroll internally if needed
+
+2) Header
+- Title: “Collect Remaining Balance”
+- Subtitle line: “Charge $250.00 to finish this invoice.” (dynamic)
+- Close icon right (X)
+- Remove the extra empty space above content (current sheet looks too tall)
+
+3) Payment section card
+- Card container with light border + subtle background (same as Add Line Items list container vibe)
+- Heading: “Card payment”
+- Subtext: “Enter card details to collect the remaining balance.”
+- Put PaymentElement inside with proper padding
+- Ensure PaymentElement area doesn’t look “floating” — it should sit inside the card cleanly
+
+4) Error message styling
+- Replace the big red bordered box with a compact inline alert:
+  - only show when error exists
+  - small icon + short text
+  - no huge red background unless severe
+- Example:
+  “Select a payment method to continue.”
+- Keep it in the card, just above the buttons.
+
+5) Footer CTA (match Add Line Items)
+Option A (preferred): One big full-width primary button pinned:
+- “Pay $250.00”
+- Disabled state while loading
+- Loading spinner inside button while confirming
+
+Also include a small “Cancel” text button on the left in the footer row (optional), but keep the primary action dominant.
+
+Option B: Two-button row:
+- Cancel (outline/ghost)
+- Pay (primary)
+Make sure heights match and spacing is consistent.
+
+6) Spacing / typography
+- Use same font sizes as Add Line Items:
+  - Title ~ 20–22
+  - Subtitle ~ 14–15 muted
+  - Section label ~ 16
+- Increase whitespace between sections (12–16px)
+- Make the payment card slightly inset (like list container)
+
+7) Remove “Link” vibe if possible (optional UI)
+We are NOT changing Stripe behavior here, but visually:
+- If PaymentElement shows Link, it should not break layout.
+(We’ll handle disabling Link separately if needed.)
+
+IMPLEMENTATION TASKS
+A) Find the component that renders this modal:
+- Likely in Payment Details page or a shared modal component.
+Search for:
+- “Collect Remaining Balance”
+- “Pay $”
+- “Charging $”
+- “remaining balance”
+
+B) Refactor layout to mirror Add Line Items sheet structure
+- Reuse the same modal/sheet component used by Add Line Items if possible
+  (the rounded sheet + header + footer button pattern)
+- Ensure consistent CSS classes and spacing tokens
+
+C) Footer pinning
+- The Pay button should stick to bottom like Add Line Items “Done”
+- Content above should scroll if needed (PaymentElement can be tall)
+
+D) Keep logic untouched
+- The create-intent + Elements + confirmPayment code stays the same
+- Only change structure and styling
+
+DELIVERABLES
+- Updated “Collect Remaining Balance” modal with modern EcoLogic sheet design
+- Matches Add Line Items vibe: clean header, card section, pinned CTA
+- No UX regressions; payment still works
+
+TEST
+- Open partial invoice, click “Collect Remaining”
+- Modal looks like Add Line Items sheet
+- Pay button triggers existing flow successfully
+- Error message appears compactly when you click Pay with no method selected
+
+GO BUILD IT NOW.

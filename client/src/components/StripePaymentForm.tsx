@@ -6,8 +6,7 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface StripePaymentFormProps {
   clientSecret: string;
@@ -69,45 +68,51 @@ function CheckoutForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement
-        options={{
-          layout: "tabs",
-          paymentMethodOrder: ["card"],
-          wallets: { applePay: "never", googlePay: "never" },
-        }}
-      />
-
-      {errorMessage && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
-          {errorMessage}
+    <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4">
+        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 p-4">
+          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Card payment</p>
+          <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">Enter card details to collect the remaining balance.</p>
+          <PaymentElement
+            options={{
+              layout: "tabs",
+              paymentMethodOrder: ["card"],
+              wallets: { applePay: "never", googlePay: "never" },
+            }}
+          />
         </div>
-      )}
 
-      <div className="flex gap-3 pt-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          disabled={isProcessing}
-          className="flex-1"
-        >
-          Cancel
-        </Button>
-        <Button
+        {errorMessage && (
+          <div className="flex items-start gap-2 mt-3 px-1">
+            <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+            <p className="text-[13px] text-red-600 dark:text-red-400 leading-snug">{errorMessage}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-4 bg-white dark:bg-slate-900">
+        <button
           type="submit"
           disabled={!stripe || !elements || isProcessing}
-          className="flex-1"
+          className="w-full h-[50px] rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[15px] font-semibold flex items-center justify-center gap-2 transition-colors"
         >
           {isProcessing ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Processing…
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Processing...
             </>
           ) : (
             `Pay ${formatCurrency(amountCents)}`
           )}
-        </Button>
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isProcessing}
+          className="w-full mt-2 h-10 text-[13px] font-medium text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors disabled:opacity-50"
+        >
+          Cancel
+        </button>
       </div>
     </form>
   );
@@ -133,30 +138,43 @@ export default function StripePaymentForm({
   const stripePromise = getStripePromise(publishableKey);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Card Payment
-      </h3>
-      <Elements
-        key={clientSecret}
-        stripe={stripePromise}
-        options={{
-          clientSecret,
-          appearance: {
-            theme: "stripe",
-            variables: {
-              colorPrimary: "#2563eb",
-              borderRadius: "8px",
+    <Elements
+      key={clientSecret}
+      stripe={stripePromise}
+      options={{
+        clientSecret,
+        appearance: {
+          theme: "stripe",
+          variables: {
+            colorPrimary: "#2563eb",
+            borderRadius: "12px",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+            spacingUnit: "4px",
+          },
+          rules: {
+            ".Input": {
+              boxShadow: "none",
+              borderColor: "#e2e8f0",
+              transition: "border-color 0.15s ease",
+            },
+            ".Input:focus": {
+              borderColor: "#2563eb",
+              boxShadow: "0 0 0 1px #2563eb",
+            },
+            ".Label": {
+              fontSize: "13px",
+              fontWeight: "500",
+              color: "#64748b",
             },
           },
-        }}
-      >
-        <CheckoutForm
-          amountCents={amountCents}
-          onSuccess={onSuccess}
-          onCancel={onCancel}
-        />
-      </Elements>
-    </div>
+        },
+      }}
+    >
+      <CheckoutForm
+        amountCents={amountCents}
+        onSuccess={onSuccess}
+        onCancel={onCancel}
+      />
+    </Elements>
   );
 }
