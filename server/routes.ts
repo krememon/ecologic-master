@@ -10086,45 +10086,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GET /api/public/stripe/session/:sessionId/payment - Verify Stripe session and find associated payment
-  app.get('/api/public/stripe/session/:sessionId/payment', async (req, res) => {
-    try {
-      if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
-      const { sessionId } = req.params;
-      if (!sessionId || sessionId.length < 10) return res.status(400).json({ error: 'Invalid session ID' });
-
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-      if (!session || !session.metadata?.invoiceId) {
-        return res.json({ paymentId: null, status: 'unknown' });
-      }
-
-      const invoiceId = parseInt(session.metadata.invoiceId);
-      if (session.payment_status !== 'paid') {
-        return res.json({ paymentId: null, invoiceId, status: 'pending' });
-      }
-
-      const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
-      const stripePayment = allPayments?.find(
-        (p: any) => p.status === 'paid' && (p.stripeSessionId === sessionId || p.paymentMethod === 'card' || p.paymentMethod === 'credit_card')
-      );
-
-      if (stripePayment) {
-        return res.json({ paymentId: stripePayment.id, invoiceId, status: 'paid' });
-      }
-      return res.json({ paymentId: null, invoiceId, status: 'processing' });
-    } catch (error: any) {
-      console.error('[PublicStripeSession] Error:', error.message);
-      res.status(500).json({ error: 'Failed to verify session' });
-    }
-  });
-
-  // GET /api/payments/stripe/confirm - Confirm Stripe payment by session or payment_intent_id, supports partial payments
+  // GET /api/payments/stripe/confirm - Confirm Stripe payment by payment_intent_id, supports partial payments
   app.get('/api/payments/stripe/confirm', async (req, res) => {
     try {
       if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
 
       const invoiceIdParam = (req.query.invoiceId || req.query.invoice_id) as string;
-      const sessionId = (req.query.session_id || req.query.sessionId) as string;
       const paymentIntentIdParam = (req.query.payment_intent_id || req.query.paymentIntentId) as string;
 
       if (!invoiceIdParam) {
@@ -10134,48 +10101,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoiceId = parseInt(invoiceIdParam, 10);
       if (isNaN(invoiceId)) return res.status(400).json({ error: 'Invalid invoiceId' });
 
-      let pi: string | null = null;
-
-      if (paymentIntentIdParam) {
-        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdParam);
-        if (!paymentIntent || paymentIntent.status !== 'succeeded') {
-          console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${paymentIntentIdParam} status=pending (pi status: ${paymentIntent?.status})`);
-          return res.json({ status: 'pending' });
-        }
-        const piInvoiceId = paymentIntent.metadata?.invoiceId ? parseInt(paymentIntent.metadata.invoiceId) : null;
-        if (piInvoiceId !== invoiceId) {
-          return res.status(400).json({ error: 'PaymentIntent does not match this invoice' });
-        }
-        pi = paymentIntentIdParam;
-      } else if (sessionId) {
-        const session = await stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ['payment_intent'],
-        });
-
-        if (!session || session.payment_status !== 'paid') {
-          console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=none status=pending`);
-          return res.json({ status: 'pending' });
-        }
-
-        pi = typeof session.payment_intent === 'object'
-          ? session.payment_intent?.id || null
-          : session.payment_intent;
-
-        if (!pi) {
-          console.log(`[StripeConfirm] invoiceId=${invoiceId} sessionId=${sessionId} pi=missing status=pending`);
-          return res.json({ status: 'pending' });
-        }
-
-        const sessionInvoiceId = session.metadata?.invoiceId ? parseInt(session.metadata.invoiceId) : null;
-        if (!sessionInvoiceId) {
-          return res.status(400).json({ error: 'Session missing invoice metadata' });
-        }
-        if (sessionInvoiceId !== invoiceId) {
-          return res.status(400).json({ error: 'Session does not match this invoice' });
-        }
-      } else {
-        return res.status(400).json({ error: 'session_id or payment_intent_id is required' });
+      if (!paymentIntentIdParam) {
+        return res.status(400).json({ error: 'payment_intent_id is required' });
       }
+
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentIdParam);
+      if (!paymentIntent || paymentIntent.status !== 'succeeded') {
+        console.log(`[StripeConfirm] invoiceId=${invoiceId} pi=${paymentIntentIdParam} status=pending (pi status: ${paymentIntent?.status})`);
+        return res.json({ status: 'pending' });
+      }
+      const piInvoiceId = paymentIntent.metadata?.invoiceId ? parseInt(paymentIntent.metadata.invoiceId) : null;
+      if (piInvoiceId !== invoiceId) {
+        return res.status(400).json({ error: 'PaymentIntent does not match this invoice' });
+      }
+      const pi = paymentIntentIdParam;
 
       const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
       let matchedPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === pi);
@@ -13887,125 +13826,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('[LatestPayment] Error:', error.message);
       res.status(500).json({ message: "Failed to fetch latest payment" });
-    }
-  });
-
-  // GET /api/payments/session/:sessionId - Get payment session status
-  app.get('/api/payments/session/:sessionId', async (req, res) => {
-    try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe is not configured" });
-      }
-
-      const { sessionId } = req.params;
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-      // If payment is successful, update invoice and job status
-      if (session.payment_status === 'paid' && session.metadata?.invoiceId) {
-        const invoiceId = parseInt(session.metadata.invoiceId);
-        const invoice = await storage.getInvoice(invoiceId);
-        
-        if (invoice && invoice.status !== 'paid') {
-          const invoiceTotalCents = invoice.totalCents > 0 ? invoice.totalCents : Math.round(parseFloat(invoice.amount) * 100);
-          const amountCents = session.amount_total || invoiceTotalCents;
-
-          // Create payment record (idempotency: check by stripePaymentIntentId)
-          const paymentIntentId = session.payment_intent as string;
-          let existingPayment = null;
-          if (paymentIntentId) {
-            const allPayments = await storage.getPaymentsByInvoiceId(invoiceId);
-            existingPayment = allPayments?.find((p: any) => p.stripePaymentIntentId === paymentIntentId) || null;
-          }
-          if (!existingPayment) {
-            const stripePayment = await storage.createPayment({
-              companyId: invoice.companyId,
-              invoiceId: invoiceId,
-              jobId: invoice.jobId || null,
-              customerId: invoice.customerId || null,
-              amount: (amountCents / 100).toFixed(2),
-              amountCents: amountCents,
-              paymentMethod: 'stripe',
-              status: 'succeeded',
-              stripePaymentIntentId: paymentIntentId,
-              stripeCheckoutSessionId: session.id,
-              paidDate: new Date(),
-              notes: amountCents < invoiceTotalCents ? 'Partial card payment' : 'Online card payment',
-            });
-            console.log(`[Stripe] Payment record created for invoice ${invoiceId}`);
-
-            // Sync payment to QuickBooks (non-blocking)
-            syncPaymentToQbo(stripePayment.id, invoice.companyId).then(result => {
-              if (result.success) {
-                console.log(`[QB] Stripe payment ${stripePayment.id} synced: ${result.qboPaymentId}`);
-              } else {
-                console.log(`[QB] Stripe payment ${stripePayment.id} sync: ${result.error}`);
-              }
-            }).catch(err => console.error('[QB] Stripe payment sync error:', err));
-          }
-
-          const recomputedConfirm = await persistRecomputedTotals(invoiceId);
-          const newStatus = recomputedConfirm.computedStatus;
-          console.log(`[Stripe] Invoice ${invoiceId} recomputed from confirm: paid=${recomputedConfirm.paidCents} owed=${recomputedConfirm.owedCents} status=${newStatus}`);
-
-          if (invoice.jobId) {
-            const jobPaymentStatus = newStatus === 'paid' ? 'paid' : 'partial';
-            await storage.updateJob(invoice.jobId, {
-              paymentStatus: jobPaymentStatus,
-              ...(jobPaymentStatus === 'paid' ? { paidAt: new Date() } : {}),
-            } as any);
-            console.log(`[Stripe] Job ${invoice.jobId} paymentStatus updated to '${jobPaymentStatus}'`);
-            if (jobPaymentStatus === 'paid') {
-              await tryArchiveCompletedPaidJob(invoice.jobId);
-            }
-          }
-
-          const amountDollars = (amountCents / 100).toFixed(2);
-          const stripeCollectorId = session.metadata?.collectedByUserId || null;
-          await createPaymentNotifications({
-            companyId: invoice.companyId,
-            type: 'payment_collected',
-            title: 'Invoice Paid',
-            body: `A $${amountDollars} card payment was received`,
-            entityType: 'invoice',
-            entityId: invoiceId,
-            linkUrl: invoice.jobId ? `/jobs/${invoice.jobId}` : undefined,
-            jobId: invoice.jobId || null,
-            collectedByUserId: stripeCollectorId,
-          });
-
-          if (newStatus === 'paid') {
-            console.log("[invoice] status change", { invoiceId, fromStatus: invoice.status, toStatus: 'paid', companyId: invoice.companyId, paidAmount: amountDollars, triggeredBy: "stripe-webhook" });
-            await notifyOwners(invoice.companyId, {
-              type: 'invoice_paid',
-              title: 'Payment Received',
-              body: `Invoice paid – $${(invoiceTotalCents / 100).toFixed(2)}`,
-              entityType: 'invoice',
-              entityId: invoiceId,
-              linkUrl: `/invoices/${invoiceId}`,
-            });
-          }
-        }
-      }
-
-      let paymentId = null;
-      if (session.payment_status === 'paid' && session.metadata?.invoiceId) {
-        const invId = parseInt(session.metadata.invoiceId);
-        const allPmts = await storage.getPaymentsByInvoiceId(invId);
-        const piId = session.payment_intent as string;
-        const match = piId ? allPmts?.find((p: any) => p.stripePaymentIntentId === piId) : allPmts?.[allPmts.length - 1];
-        if (match) paymentId = match.id;
-      }
-
-      res.json({
-        status: session.status,
-        paymentStatus: session.payment_status,
-        invoiceId: session.metadata?.invoiceId,
-        jobId: session.metadata?.jobId || null,
-        paymentId,
-      });
-    } catch (error: any) {
-      console.error('Error retrieving session:', error);
-      res.status(500).json({ message: "Failed to retrieve session" });
     }
   });
 

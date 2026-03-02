@@ -1,0 +1,95 @@
+T025 — Fix employee Cash/Check payment: 403 “You do not have permission to record payments” (RBAC + correct capability)
+
+ISSUE
+On native iPhone, when an employee tries to record a CASH or CHECK payment, the app shows:
+403: {"message":"You do not have permission to record payments"}
+
+This is correct RBAC enforcement, but your intended policy is that certain employee roles (likely Dispatcher/Supervisor/Technician on assigned jobs) SHOULD be able to record cash/check payments — or at least cash/check on jobs they can access.
+
+We need to:
+1) Decide the permission rule
+2) Update backend permission check for manual payments
+3) Ensure frontend hides options if user lacks permission (“hidden not disabled”)
+4) Keep card payments behind the right permission too
+
+TARGET PERMISSION POLICY (recommended)
+- Owner/Admin: can record any payment (cash/check/card)
+- Dispatcher: can record payments for any job (since they see all jobs)
+- Supervisor: can record payments for jobs they have access to
+- Technician: can record payments ONLY for jobs assigned to them (cash/check allowed; card allowed only if you want)
+- Estimator: cannot record payments
+
+IMPLEMENTATION
+
+A) Backend: define a single helper
+Create `canRecordPayment(user, job, method)` returning boolean.
+
+Suggested logic:
+- if user.role in ['OWNER','ADMIN'] => true
+- else if user.role === 'DISPATCHER' => true (if they can access job)
+- else if user.role === 'SUPERVISOR' => userCanAccessJob(user, job)
+- else if user.role === 'TECHNICIAN' => userAssignedToJob(user, job)
+- else => false
+
+Optionally restrict method:
+- cash/check: allowed for TECH on assigned jobs
+- card: allowed for TECH only if `job.allowTechCardPayments` (future toggle) otherwise false
+(For now, simplest: same permission for all methods.)
+
+B) Backend: apply this helper to the manual payment route
+Find the endpoint your cash/check buttons call (likely):
+POST /api/payments/manual
+or POST /api/invoices/:id/record-payment
+or similar
+
+Right now it returns 403 for employees.
+Update it to:
+- Load invoice + job
+- If !canRecordPayment(req.user, job, method) => 403
+- Else proceed
+
+IMPORTANT:
+Do NOT accidentally use an overly strict permission that was intended only for “Payments page access”.
+This must be specifically “record payment” capability.
+
+C) Backend: ensure job-access is checked correctly
+- Dispatcher sees all jobs (already in your rules)
+- Supervisor sees jobs they have access to
+- Technician sees only assigned jobs
+So the helper must call the same job-access function you already use elsewhere (do not duplicate logic incorrectly).
+
+D) Frontend: hide Cash/Check buttons if the user can’t record payment
+On Checkout screen:
+- Fetch from backend a boolean capability: `canRecordPayments` (or `canRecordManualPayments`)
+OR derive from role + job access if already available client-side.
+- If false: hide Cash/Check/Card tiles entirely OR show only allowed ones.
+- Do NOT allow clicking then showing a red 403 banner.
+Follow “hidden not disabled”.
+
+E) Better error message (fallback)
+If a 403 still occurs (edge case):
+- Show a friendly toast:
+  “You don’t have access to record payments for this job.”
+- Not a giant red API dump.
+
+ACCEPTANCE TESTS
+1) Technician assigned to job
+- Open invoice checkout
+- Tap Cash -> succeeds, records payment, ledger updates
+- Tap Check -> succeeds
+2) Technician NOT assigned
+- Cash/Check options hidden
+3) Supervisor with job access
+- Can record cash/check
+4) Estimator
+- Payment methods hidden
+5) Owner/Admin
+- Can record all methods
+
+DELIVERABLES
+- canRecordPayment() helper (single source of truth)
+- Manual payment route updated to use it
+- Checkout UI hides methods user can’t use
+- Friendly error fallback
+
+IMPLEMENT NOW.
