@@ -118,6 +118,18 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
 
   const invoice = invoiceData?.invoice;
 
+  const { data: paymentPermissions } = useQuery<{ canRecordManualPayment: boolean }>({
+    queryKey: ['/api/payments/invoice', numericInvoiceId, 'permissions'],
+    queryFn: async () => {
+      const res = await fetch(`/api/payments/invoice/${numericInvoiceId}`, { credentials: 'include' });
+      if (!res.ok) return { canRecordManualPayment: false };
+      const data = await res.json();
+      return { canRecordManualPayment: data.canRecordManualPayment ?? false };
+    },
+    enabled: !isNaN(numericInvoiceId),
+  });
+  const canRecordManual = paymentPermissions?.canRecordManualPayment ?? false;
+
   const { data: lineItems = [], isLoading: lineItemsLoading } = useQuery<LineItem[]>({
     queryKey: ['/api/jobs', numericJobId, 'line-items'],
     queryFn: async () => {
@@ -192,7 +204,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
       setIsLoading(false);
     } catch (err: any) {
       setIsLoading(false);
-      setError(err.message || "Failed to start card payment");
+      let msg = err.message || "Failed to start card payment";
+      try { const parsed = JSON.parse(msg); if (parsed.message) msg = parsed.message; } catch {}
+      setError(msg);
     }
   };
 
@@ -303,7 +317,9 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
         throw new Error(data.message || "Payment failed");
       }
     } catch (err: any) {
-      setError(err.message || "Failed to record payment");
+      let msg = err.message || "Failed to record payment";
+      try { const parsed = JSON.parse(msg); if (parsed.message) msg = parsed.message; } catch {}
+      setError(msg);
       setViewState('review');
     } finally {
       setIsConfirming(false);
@@ -706,26 +722,30 @@ export default function PaymentReview({ jobId, invoiceId }: PaymentReviewProps) 
               )}
             </div>
             
-            <div className="grid grid-cols-3 gap-3">
-              <Button
-                variant="outline"
-                className="flex flex-col items-center gap-2 h-24 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
-                onClick={() => handleMethodSelect('cash')}
-                disabled={paymentDisabled}
-              >
-                <Banknote className="h-8 w-8 text-green-600" />
-                <span className="text-sm font-medium">Cash</span>
-              </Button>
-              
-              <Button
-                variant="outline"
-                className="flex flex-col items-center gap-2 h-24 hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                onClick={() => handleMethodSelect('check')}
-                disabled={paymentDisabled}
-              >
-                <FileCheck className="h-8 w-8 text-blue-600" />
-                <span className="text-sm font-medium">Check</span>
-              </Button>
+            <div className={`grid gap-3 ${canRecordManual ? 'grid-cols-3' : 'grid-cols-1'}`}>
+              {canRecordManual && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center gap-2 h-24 hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
+                    onClick={() => handleMethodSelect('cash')}
+                    disabled={paymentDisabled}
+                  >
+                    <Banknote className="h-8 w-8 text-green-600" />
+                    <span className="text-sm font-medium">Cash</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center gap-2 h-24 hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    onClick={() => handleMethodSelect('check')}
+                    disabled={paymentDisabled}
+                  >
+                    <FileCheck className="h-8 w-8 text-blue-600" />
+                    <span className="text-sm font-medium">Check</span>
+                  </Button>
+                </>
+              )}
               
               <Button
                 variant="outline"

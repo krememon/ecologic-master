@@ -11362,6 +11362,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const member = await storage.getCompanyMember(company.id, userId);
+      const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
+
+      let canRecordManualPayment = false;
+      if (['OWNER', 'ADMIN', 'DISPATCHER', 'SUPERVISOR'].includes(userRole)) {
+        canRecordManualPayment = true;
+      } else if (userRole === 'TECHNICIAN' && invoice.jobId) {
+        const assignments = await storage.getUserJobAssignments(userId);
+        canRecordManualPayment = assignments.some(a => a.jobId === invoice.jobId);
+      }
+
       res.json({
         invoiceId,
         invoiceNumber: invoice.invoiceNumber,
@@ -11378,6 +11389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobId: invoice.jobId,
         payments: enrichedPayments,
         refunds: invoiceRefunds,
+        canRecordManualPayment,
       });
     } catch (error) {
       console.error("Error fetching invoice payments:", error);
@@ -13375,10 +13387,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
-      
-      if (!['OWNER', 'SUPERVISOR'].includes(userRole)) {
-        return res.status(403).json({ message: "You do not have permission to record payments" });
-      }
 
       const { invoiceId, method, checkNumber, amountCents: requestedAmountCents, paymentMethod } = req.body;
       const paymentMethodValue = paymentMethod || method;
@@ -13396,6 +13404,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!invoice || invoice.companyId !== company.id) {
         return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      // Job-scoped RBAC for manual payments
+      let canRecord = false;
+      if (['OWNER', 'ADMIN'].includes(userRole)) {
+        canRecord = true;
+      } else if (userRole === 'DISPATCHER' || userRole === 'SUPERVISOR') {
+        canRecord = true;
+      } else if (userRole === 'TECHNICIAN' && invoice.jobId) {
+        const assignments = await storage.getUserJobAssignments(userId);
+        canRecord = assignments.some(a => a.jobId === invoice.jobId);
+      }
+
+      if (!canRecord) {
+        console.log(`[manual-pay] denied`, { userId, role: userRole, invoiceId, jobId: invoice.jobId, canRecord });
+        return res.status(403).json({ message: "You do not have permission to record payments for this job" });
       }
 
       // Idempotency: Check if invoice is already paid
@@ -13706,7 +13730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const member = await storage.getCompanyMember(company.id, userId);
       const userRole = (member?.role || 'TECHNICIAN').toUpperCase();
 
-      if (!['OWNER', 'SUPERVISOR', 'TECHNICIAN'].includes(userRole)) {
+      if (!['OWNER', 'ADMIN', 'DISPATCHER', 'SUPERVISOR', 'TECHNICIAN'].includes(userRole)) {
         return res.status(403).json({ message: "You do not have permission to create payments" });
       }
 

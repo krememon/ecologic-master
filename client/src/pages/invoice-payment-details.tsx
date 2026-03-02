@@ -28,7 +28,6 @@ interface InvoicePaymentDetailsProps {
 }
 
 const REFUND_ROLES = new Set(["OWNER", "ADMIN", "MANAGER", "SUPERVISOR"]);
-const COLLECT_ROLES = new Set(["OWNER", "SUPERVISOR", "TECHNICIAN"]);
 
 function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -98,7 +97,7 @@ export default function InvoicePaymentDetails({ invoiceId }: InvoicePaymentDetai
   });
   const userRole = (membership?.role || "").toUpperCase();
   const canRefund = REFUND_ROLES.has(userRole);
-  const canCollect = COLLECT_ROLES.has(userRole);
+  const canCollect = data?.canRecordManualPayment ?? false;
 
   const {
     isModalOpen: sigModalOpen,

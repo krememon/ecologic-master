@@ -1,0 +1,108 @@
+T026 — Fix Technician cash/check payments: POST /api/payments/manual returns 403 (RBAC check is too strict / wrong gate)
+
+EVIDENCE (from your logs)
+- Technician user: role="technician"
+- Assigned jobs returned: GET /api/time/my-assignments -> assignedJobIds includes the jobs
+- Technician can open job + invoice fine
+- BUT manual payment attempts:
+  POST /api/payments/manual 403 :: {"message":"You do not have permission to record payments"}
+
+So the backend permission gate for /api/payments/manual is currently blocking technicians even when they are assigned.
+
+GOAL
+Allow technicians to record CASH/CHECK payments for jobs they are assigned to (and that they can access), while still blocking roles like Estimator and blocking technicians for jobs they’re NOT assigned to.
+
+Also update the UI to hide Cash/Check if the user cannot record manual payments (hidden not disabled), but primary fix is backend RBAC.
+
+IMPLEMENTATION (DO THIS EXACTLY)
+
+1) Backend: add a dedicated permission helper for MANUAL payments
+Create helper (or update existing) in your RBAC module, e.g.:
+- src/server/rbac/payments.ts (or wherever)
+
+Function:
+canRecordManualPayment({ user, jobId, orgId }) => boolean
+
+RULES (recommended):
+- Owner/Admin => true
+- Dispatcher => true (they can access all jobs)
+- Supervisor => true ONLY if supervisor has access to job
+- Technician => true ONLY if technician is assigned to job (job_crew contains userId)
+- Estimator => false
+
+2) Update /api/payments/manual route to use JOB-LEVEL permission, not org/company permission
+Right now it likely does something like:
+- requireRole('owner'|'manager') OR requirePermission('payments:write') globally
+That’s why technicians fail.
+
+Change it to:
+- Load invoice + job by invoiceId/jobId from request
+- Verify job belongs to same org/company as user
+- Verify user can access job (your existing job-access rules)
+- Verify canRecordManualPayment(...) === true
+- If ok: insert payment row status='paid' method='cash'|'check' and recompute invoice totals
+
+Pseudo:
+POST /api/payments/manual
+body: { invoiceId, amountCents, method: 'cash'|'check', note? }
+
+route:
+- auth required
+- const invoice = await getInvoice(invoiceId)
+- const job = await getJob(invoice.jobId)
+- if (!job) 404
+- if (job.orgId !== req.user.orgId) 403
+- if (!userCanAccessJob(req.user, job)) 403
+- if (!canRecordManualPayment(req.user, job)) 403 with message "You do not have permission..."
+- insert payment
+- recompute invoice totals
+- send receipt (if enabled)
+- maybe prompt signature only when paid (frontend)
+- return ok + updated computed fields
+
+3) IMPORTANT: Do not use /api/company permission for this
+Your logs show:
+GET /api/company 403 "Insufficient permissions" for technician (expected)
+That means if /api/payments/manual is reusing the same “company admin” check, it will always fail.
+Manual payments must use JOB scope permission, not COMPANY scope.
+
+4) Add targeted debug log (TEMP)
+Inside /api/payments/manual before returning 403:
+log:
+[manual-pay] denied { userId, role, invoiceId, jobId, isAssigned, canAccessJob }
+So we can confirm which predicate is failing.
+Remove after verified.
+
+5) Frontend: hide Cash/Check tiles when user cannot record manual
+We already know technicians SHOULD be allowed on assigned jobs.
+But to avoid future 403 flashes:
+- Add endpoint (or field on invoice payload):
+  invoice.permissions = { canRecordManualPayment: boolean, canTakeCardPayment: boolean }
+OR compute client-side from role + assigned jobs list (less reliable).
+Preferred: backend sends it.
+
+On Checkout screen:
+- If canRecordManualPayment false -> hide Cash + Check tiles.
+- Keep Card tile according to canTakeCardPayment.
+
+ACCEPTANCE TEST
+A) Technician assigned to job (confirmed in /api/time/my-assignments)
+- Open invoice checkout
+- Record Cash $650 -> 200 OK
+- Payments ledger shows entry
+- Invoice status becomes paid
+- Receipt email sends (if enabled)
+B) Technician NOT assigned to job
+- Cash/Check hidden; direct POST returns 403
+C) Estimator
+- Cash/Check hidden; POST returns 403
+D) Owner/Admin
+- Works everywhere
+
+DELIVERABLES
+- Updated /api/payments/manual permission logic (job-scoped)
+- canRecordManualPayment helper
+- Optional invoice permissions returned for UI hiding
+- Temporary debug log for denial
+
+DO THIS NOW. The bug is purely RBAC gating on /api/payments/manual.
