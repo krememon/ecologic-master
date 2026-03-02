@@ -1,0 +1,92 @@
+T027 — Fix /api/payments/manual 500: ReferenceError newBalanceDueCents is not defined (manual payment succeeds but response crashes)
+
+WHAT HAPPENED (from your logs)
+✅ Manual cash payment DID record:
+- recompute shows owed=0 status=paid
+- job auto-archived
+- QB payment sync triggered and completed
+- receipt email sent (hasPdf=false but email did send)
+BUT ❌ the route returned 500 because of:
+ReferenceError: newBalanceDueCents is not defined
+at server/routes.ts:13530
+
+So the backend is doing the work, then crashes while building the response (or post-processing). This must be fixed because it:
+- breaks frontend UX (it thinks payment failed)
+- can cause duplicate attempts
+- might cause double receipts if retries happen later (even though we added idempotency)
+
+GOAL
+Fix the crash by defining or removing newBalanceDueCents, and ensure /api/payments/manual returns 200 with the updated computed invoice state.
+
+PRIMARY FIX
+1) Open server/routes.ts at/near line ~13530
+Search for: newBalanceDueCents
+
+It’s likely used in something like:
+return res.json({
+  ok: true,
+  payment,
+  balanceDueCents: newBalanceDueCents,
+  ...
+})
+
+But that variable was renamed during the Stripe refactor (maybe to balanceDueCents or owedCents) and this route wasn’t updated.
+
+2) Replace newBalanceDueCents with the correct value:
+- If you already recompute invoice totals, use:
+  const { balanceDueCents } = recomputeResult
+OR
+  const owedCents = recomputed.balanceDueCents
+
+If you don’t have it in scope, compute it safely:
+- const newBalanceDueCents = Math.max(0, invoice.total_cents - sumPaidCents)
+
+But BEST: use the SAME recompute helper you already call (since it’s the source of truth).
+
+3) Ensure route returns consistent response shape used by the frontend
+Return:
+{
+  ok: true,
+  paymentId,
+  invoiceId,
+  paidAmountCents,
+  paidAmountTotalCents (sum),
+  balanceDueCents,
+  computedStatus,
+  payment: { id, amountCents, method, status, createdAt }
+}
+
+Also: do not throw if receipt/QB sync fails — log and continue.
+
+SECONDARY FIX (PDF attachment missing)
+Your log shows:
+[ReceiptEmail] sent ... hasPdf: false
+So PDF attachment generation failed or was skipped.
+Not critical for this bug, but we should fix next:
+- Ensure PDF generation path works in manual route environment
+- If PDF fails, still send email with link (already happening)
+
+IDEMPOTENCY / SAFETY
+Because the route crashed after inserting payment, the frontend may retry and create duplicates.
+So add an idempotency guard for manual payments:
+- Accept a clientRequestId UUID in body (generated on frontend once)
+- Store it on payments table (manual_client_request_id UNIQUE)
+- If same requestId arrives again, return the existing payment instead of creating a new one
+
+BUT if you want minimal patch first:
+- Just fix the ReferenceError so it returns 200.
+
+ACCEPTANCE TEST
+1) Technician records cash payment for $650
+2) Server returns 200 (no 500)
+3) Frontend updates invoice to Paid and closes checkout
+4) Only one payment row created
+5) Receipt email sends once
+6) QB sync runs once
+
+DELIVERABLES
+- Fix newBalanceDueCents ReferenceError in /api/payments/manual
+- Return consistent computed invoice state
+- (Optional but recommended) add manual payment idempotency requestId support
+
+DO THIS NOW: it’s a one-line variable fix at routes.ts:13530 plus returning recompute values.

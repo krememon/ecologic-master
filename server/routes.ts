@@ -13527,7 +13527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceId,
         paymentId: payment.id,
         newStatus,
-        balanceRemaining: newBalanceDueCents,
+        balanceRemaining: recomputed.owedCents,
       });
     } catch (error: any) {
       console.error('Error recording manual payment:', error);
@@ -13688,7 +13688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoiceId: invoice.id,
         paymentId: payment.id,
         newStatus,
-        balanceRemaining: newBalanceDueCents,
+        balanceRemaining: recomputed2.owedCents,
       });
     } catch (error: any) {
       console.error('Error recording customer payment:', error);
