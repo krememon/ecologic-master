@@ -1,0 +1,71 @@
+T029 — Update “Estimate Type” picker modal to match the new “Job Type” picker (same sheet, header, spacing, dividers)
+
+GOAL
+The Job Type picker modal got upgraded (rounded sheet, centered title, clean X, nice row spacing/dividers). The Estimate Type picker is still the old style (flat/older header). Update the Estimate Type picker to use the SAME component/style as Job Type.
+
+WHAT “GOOD” LOOKS LIKE (match Job Type modal)
+- Rounded bottom-sheet / modal card (20–24px radius)
+- Centered title (“Estimate Type”)
+- X button top-right (same as Job Type)
+- Same padding + divider line below header
+- List rows with consistent height, subtle dividers, good tap targets
+- Scrollbar style consistent
+- No back arrow in header (unless Job Type has it — mirror exactly)
+
+IMPLEMENTATION PLAN (FASTEST)
+1) Find where Job Type modal is implemented (the upgraded one)
+   - Search for components/files:
+     - "Job Type"
+     - "jobType"
+     - "SelectJobType"
+     - "JobTypeModal"
+     - a shared picker: "OptionPickerSheet", "SelectOptionSheet", "ListPickerModal"
+2) Reuse that exact component for estimates instead of duplicating styles.
+   - The estimate picker should call the same “picker sheet” component with:
+     - title="Estimate Type"
+     - options=[…estimate types…]
+     - selectedValue
+     - onSelect(value)
+     - onClose()
+
+3) If Job Type uses a generic sheet:
+   - Move estimate types into the same “options” data shape:
+     { label: "Diagnostic", value: "diagnostic" } etc.
+
+ESTIMATE TYPES
+Use the same list as current Estimate type list (do not change business logic), just UI.
+If there is a mismatch between job types and estimate types, keep estimate list as-is.
+
+UI DETAILS (copy Job Type exactly)
+- Header:
+  - centered title
+  - top-right X
+  - thin divider
+- List rows:
+  - height ~56px
+  - label left aligned
+  - optional checkmark on selected row (if Job Type shows it)
+  - hover/pressed state (subtle)
+- Modal container:
+  - background: white
+  - shadow: soft
+  - padding: 0 for list, but add internal side padding for rows if Job Type has it
+
+FILES TO TOUCH (likely)
+- Estimate editor modal/page where type is selected
+  e.g. src/components/EstimateTypeModal.tsx OR src/pages/EstimateDetails.tsx
+- Reuse existing JobType picker component
+  e.g. src/components/JobTypePicker.tsx / src/components/OptionPickerSheet.tsx
+
+ACCEPTANCE TEST
+1) Open Estimate → change type
+2) Modal looks identical to Job Type modal (same radius/header/dividers)
+3) Selecting option updates estimate type and closes
+4) Works on iPhone (touch targets, scrolling)
+5) No regressions to job type picker
+
+DELIVERABLES
+- Estimate Type picker migrated to the same component/styles as Job Type picker
+- Screenshot of both modals showing matched UI
+
+DO THIS NOW.

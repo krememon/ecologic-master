@@ -1172,36 +1172,46 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
 
       {/* JOB TYPE Picker Modal */}
       <Dialog open={jobTypeModalOpen} onOpenChange={setJobTypeModalOpen}>
-        <DialogContent className="w-[95vw] max-w-md p-0 gap-0">
-          <div className="flex items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Job Type
+            </DialogTitle>
             <button
               onClick={() => setJobTypeModalOpen(false)}
-              className="mr-3 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
               data-testid="button-back-job-type"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <X className="h-5 w-5" />
             </button>
-            <DialogTitle className="flex-1 text-center text-base font-semibold">Job type</DialogTitle>
-            <div className="w-8" />
           </div>
 
-          <ScrollArea className="max-h-96">
-            <div className="py-2">
-              {JOB_TYPES.map((type) => (
-                <button
-                  key={type}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                  onClick={() => {
-                    setJobType(type);
-                    setJobTypeModalOpen(false);
-                  }}
-                  data-testid={`job-type-${type.toLowerCase().replace(/\s+/g, '-')}`}
-                >
-                  <span className="text-slate-900 dark:text-slate-100">{type}</span>
-                  {jobType === type && (
-                    <Check className="h-5 w-5 text-blue-600" />
+          <ScrollArea className="max-h-[60vh]">
+            <div className="py-1 bg-white dark:bg-slate-900">
+              {JOB_TYPES.map((type, index) => (
+                <div key={type}>
+                  <button
+                    className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                      jobType === type
+                        ? 'bg-blue-50 dark:bg-blue-900/20'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                    }`}
+                    onClick={() => {
+                      setJobType(type);
+                      setJobTypeModalOpen(false);
+                    }}
+                    data-testid={`job-type-${type.toLowerCase().replace(/\s+/g, '-')}`}
+                  >
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{type}</span>
+                    {jobType === type && (
+                      <Check className="h-5 w-5 text-blue-600" />
+                    )}
+                  </button>
+                  {index < JOB_TYPES.length - 1 && (
+                    <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
                   )}
-                </button>
+                </div>
               ))}
             </div>
           </ScrollArea>
