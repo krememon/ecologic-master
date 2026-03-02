@@ -23,6 +23,12 @@ interface JobInfo {
   clientName: string | null;
 }
 
+interface CustomerInfo {
+  id: number;
+  firstName: string;
+  lastName: string;
+}
+
 interface DocumentType {
   id: number;
   name: string;
@@ -31,7 +37,9 @@ interface DocumentType {
   status: string;
   visibility: DocumentVisibility;
   jobId: number | null;
+  customerId: number | null;
   job: JobInfo | null;
+  customer: CustomerInfo | null;
   fileUrl: string;
   fileSize: number | null;
   createdAt: string;
@@ -106,9 +114,9 @@ export default function Documents() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [uploadCategory, setUploadCategory] = useState<DocumentCategory>("Other");
-  const [uploadJobId, setUploadJobId] = useState<string>('company-wide');
-  const [uploadJobPickerOpen, setUploadJobPickerOpen] = useState(false);
-  const [uploadJobSearchQuery, setUploadJobSearchQuery] = useState('');
+  const [uploadCustomerId, setUploadCustomerId] = useState<string>('company-wide');
+  const [uploadCustomerPickerOpen, setUploadCustomerPickerOpen] = useState(false);
+  const [uploadCustomerSearchQuery, setUploadCustomerSearchQuery] = useState('');
   const [uploadVisibility, setUploadVisibility] = useState<DocumentVisibility>('internal');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +140,20 @@ export default function Documents() {
 
   const { data: jobs = [] } = useQuery<JobType[]>({
     queryKey: ["/api/jobs"],
+    enabled: isAuthenticated,
+  });
+
+  interface CustomerType {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    phone?: string | null;
+    companyName?: string | null;
+  }
+
+  const { data: customersList = [] } = useQuery<CustomerType[]>({
+    queryKey: ["/api/customers"],
     enabled: isAuthenticated,
   });
 
@@ -176,7 +198,7 @@ export default function Documents() {
       setUploadOpen(false);
       setUploadName("");
       setUploadCategory(userIsAdmin ? "Other" : "Photos");
-      setUploadJobId("company-wide");
+      setUploadCustomerId("company-wide");
       setSelectedFile(null);
       toast({ title: "Document uploaded", description: "Your document has been uploaded successfully." });
     },
@@ -389,19 +411,19 @@ export default function Documents() {
     }).slice(0, 100);
   }, [availableJobs, jobSearchQuery]);
 
-  const uploadFilteredJobs = useMemo(() => {
-    const query = uploadJobSearchQuery.trim().toLowerCase();
-    if (!query) return availableJobs.slice(0, 100);
-    return availableJobs.filter(job => {
+  const uploadFilteredCustomers = useMemo(() => {
+    const query = uploadCustomerSearchQuery.trim().toLowerCase();
+    if (!query) return customersList.slice(0, 100);
+    return customersList.filter(c => {
       const searchFields = [
-        job.title,
-        job.clientName,
-        job.location,
-        job.city
+        `${c.firstName} ${c.lastName}`,
+        c.email,
+        c.phone,
+        c.companyName,
       ].filter(Boolean).map(f => f!.toLowerCase());
       return searchFields.some(field => field.includes(query));
     }).slice(0, 100);
-  }, [availableJobs, uploadJobSearchQuery]);
+  }, [customersList, uploadCustomerSearchQuery]);
 
   const filteredDocuments = useMemo(() => {
     let result = documents;
@@ -443,8 +465,8 @@ export default function Documents() {
     formData.append("name", uploadName || selectedFile.name);
     formData.append("category", uploadCategory);
     formData.append("visibility", uploadVisibility);
-    if (uploadJobId !== 'company-wide') {
-      formData.append("jobId", uploadJobId);
+    if (uploadCustomerId !== 'company-wide') {
+      formData.append("customerId", uploadCustomerId);
     }
     uploadMutation.mutate(formData);
   };
@@ -592,10 +614,6 @@ export default function Documents() {
               setUploadOpen(open);
               if (open && !userIsAdmin) {
                 setUploadCategory("Photos");
-                // Non-admins must select a job - set first available if none selected
-                if (uploadJobId === 'company-wide' && availableJobs.length > 0) {
-                  setUploadJobId(availableJobs[0].id.toString());
-                }
               }
             }}>
               <DialogTrigger asChild>
@@ -712,27 +730,26 @@ export default function Documents() {
                     </div>
                   )}
                   <div className="space-y-1">
-                    <Label htmlFor="job" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Attach to Job
-                      {!userIsAdmin && <span className="text-red-500 ml-1">*</span>}
+                    <Label htmlFor="client" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Attach to Client
                     </Label>
                     <Button
                       type="button"
                       variant="outline"
                       className="w-full h-10 justify-between"
-                      onClick={() => setUploadJobPickerOpen(true)}
-                      data-testid="button-select-job"
+                      onClick={() => setUploadCustomerPickerOpen(true)}
+                      data-testid="button-select-client"
                     >
                       <span className="truncate">
-                        {uploadJobId === 'company-wide' 
-                          ? (userIsAdmin ? 'Company-wide (No job)' : 'Select a job (required)')
-                          : jobs.find(j => j.id.toString() === uploadJobId)?.title || 'Select job'}
+                        {uploadCustomerId === 'company-wide' 
+                          ? 'Company-wide (No client)'
+                          : (() => {
+                              const c = customersList.find(c => c.id.toString() === uploadCustomerId);
+                              return c ? `${c.firstName} ${c.lastName}` : 'Select client';
+                            })()}
                       </span>
                       <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
                     </Button>
-                    {!userIsAdmin && uploadJobId === 'company-wide' && (
-                      <p className="text-xs text-red-500">Photos must be attached to a job</p>
-                    )}
                   </div>
                   <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700 mt-4">
                     <Button variant="outline" className="h-10" onClick={() => setUploadOpen(false)} data-testid="button-cancel">
@@ -741,7 +758,7 @@ export default function Documents() {
                     <Button 
                       className="h-10"
                       onClick={handleUpload} 
-                      disabled={!selectedFile || uploadMutation.isPending || (!userIsAdmin && uploadJobId === 'company-wide')}
+                      disabled={!selectedFile || uploadMutation.isPending}
                       data-testid="button-submit-upload"
                     >
                       {uploadMutation.isPending ? (
@@ -865,6 +882,11 @@ export default function Documents() {
                       {document.job && (
                         <div className="text-sm text-blue-600 dark:text-blue-400" data-testid={`job-label-${document.id}`}>
                           Job: {document.job.title}{document.job.clientName ? ` - ${document.job.clientName}` : ''}
+                        </div>
+                      )}
+                      {document.customer && (
+                        <div className="text-sm text-emerald-600 dark:text-emerald-400" data-testid={`client-label-${document.id}`}>
+                          Client: {document.customer.firstName} {document.customer.lastName}
                         </div>
                       )}
                       <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400">
@@ -1059,78 +1081,97 @@ export default function Documents() {
         </DialogContent>
       </Dialog>
 
-      {/* Upload Job Picker Modal */}
-      <Dialog open={uploadJobPickerOpen} onOpenChange={(open) => {
-        setUploadJobPickerOpen(open);
-        if (!open) setUploadJobSearchQuery('');
+      {/* Upload Client Picker Modal */}
+      <Dialog open={uploadCustomerPickerOpen} onOpenChange={(open) => {
+        setUploadCustomerPickerOpen(open);
+        if (!open) setUploadCustomerSearchQuery('');
       }}>
-        <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Attach to Job</DialogTitle>
-          </DialogHeader>
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search jobs..."
-              value={uploadJobSearchQuery}
-              onChange={(e) => setUploadJobSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-upload-job-search"
-            />
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 rounded-2xl overflow-hidden max-h-[80vh] flex flex-col" hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Attach to Client
+            </DialogTitle>
+            <button
+              onClick={() => setUploadCustomerPickerOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <div className="flex-1 overflow-auto space-y-1">
-            {/* Quick Options - Only show company-wide for admins */}
-            {userIsAdmin && (
-              <div className="pb-2 mb-2 border-b">
-                <button
-                  onClick={() => {
-                    setUploadJobId('company-wide');
-                    setUploadJobPickerOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                    uploadJobId === 'company-wide' 
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                      : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                  data-testid="upload-option-company-wide"
-                >
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search clients..."
+                value={uploadCustomerSearchQuery}
+                onChange={(e) => setUploadCustomerSearchQuery(e.target.value)}
+                className="pl-10 h-10 rounded-xl"
+                data-testid="input-upload-client-search"
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto py-1 bg-white dark:bg-slate-900">
+            <div>
+              <button
+                onClick={() => {
+                  setUploadCustomerId('company-wide');
+                  setUploadCustomerPickerOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                  uploadCustomerId === 'company-wide'
+                    ? 'bg-blue-50 dark:bg-blue-900/20'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                }`}
+                data-testid="upload-option-company-wide"
+              >
+                <div className="flex items-center gap-3">
                   <Building2 className="h-4 w-4 text-slate-500" />
-                  <span>Company-wide (No job)</span>
-                </button>
-              </div>
-            )}
-            {/* Job List */}
-            {uploadFilteredJobs.length === 0 ? (
+                  <span className="font-medium text-slate-900 dark:text-slate-100">Company-wide (No client)</span>
+                </div>
+                {uploadCustomerId === 'company-wide' && (
+                  <Check className="h-5 w-5 text-blue-600" />
+                )}
+              </button>
+              <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+            </div>
+            {uploadFilteredCustomers.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
-                No matching jobs
+                No matching clients
               </div>
             ) : (
-              uploadFilteredJobs.map((job) => {
-                const isSelected = uploadJobId === job.id.toString();
+              uploadFilteredCustomers.map((customer, index) => {
+                const isSelected = uploadCustomerId === customer.id.toString();
                 return (
-                  <button
-                    key={job.id}
-                    onClick={() => {
-                      setUploadJobId(job.id.toString());
-                      setUploadJobPickerOpen(false);
-                    }}
-                    className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                      isSelected 
-                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' 
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                    data-testid={`upload-option-job-${job.id}`}
-                  >
-                    <Briefcase className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-500" />
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{job.title}</div>
-                      {(job.clientName || job.city) && (
-                        <div className="text-xs text-slate-500 truncate">
-                          {[job.clientName, job.city].filter(Boolean).join(' • ')}
-                        </div>
+                  <div key={customer.id}>
+                    <button
+                      onClick={() => {
+                        setUploadCustomerId(customer.id.toString());
+                        setUploadCustomerPickerOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-4 min-h-[52px] text-left transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50 dark:bg-blue-900/20'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 active:bg-slate-100 dark:active:bg-slate-800'
+                      }`}
+                      data-testid={`upload-option-client-${customer.id}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{customer.firstName} {customer.lastName}</div>
+                        {(customer.email || customer.companyName) && (
+                          <div className="text-xs text-slate-500 truncate">
+                            {[customer.companyName, customer.email].filter(Boolean).join(' • ')}
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check className="h-5 w-5 text-blue-600 shrink-0" />
                       )}
-                    </div>
-                  </button>
+                    </button>
+                    {index < uploadFilteredCustomers.length - 1 && (
+                      <div className="h-px bg-slate-100 dark:bg-slate-800 mx-4" />
+                    )}
+                  </div>
                 );
               })
             )}

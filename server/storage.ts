@@ -1996,6 +1996,7 @@ export class DatabaseStorage implements IStorage {
         id: documents.id,
         companyId: documents.companyId,
         jobId: documents.jobId,
+        customerId: documents.customerId,
         name: documents.name,
         type: documents.type,
         category: documents.category,
@@ -2008,15 +2009,19 @@ export class DatabaseStorage implements IStorage {
         updatedAt: documents.updatedAt,
         jobTitle: jobs.title,
         jobClientName: jobs.clientName,
+        customerFirstName: customers.firstName,
+        customerLastName: customers.lastName,
       })
       .from(documents)
       .leftJoin(jobs, eq(documents.jobId, jobs.id))
+      .leftJoin(customers, eq(documents.customerId, customers.id))
       .where(eq(documents.companyId, companyId));
     
     return result.map(doc => ({
       id: doc.id,
       companyId: doc.companyId,
       jobId: doc.jobId,
+      customerId: doc.customerId,
       name: doc.name,
       type: doc.type,
       category: doc.category,
@@ -2028,6 +2033,7 @@ export class DatabaseStorage implements IStorage {
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
       job: doc.jobId ? { id: doc.jobId, title: doc.jobTitle, clientName: doc.jobClientName } : null,
+      customer: doc.customerId ? { id: doc.customerId, firstName: doc.customerFirstName, lastName: doc.customerLastName } : null,
     }));
   }
 

@@ -449,6 +449,7 @@ export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companies.id),
   jobId: integer("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type"), // contract, permit, blueprint, receipt, photo
   category: varchar("category", { length: 50 }).notNull().default("Other"), // Contracts, Estimates, Invoices, Permits, Photos, Manuals, Other

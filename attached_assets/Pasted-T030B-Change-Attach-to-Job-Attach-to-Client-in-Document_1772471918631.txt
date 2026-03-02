@@ -1,0 +1,111 @@
+T030B — Change “Attach to Job” → “Attach to Client” in Documents (Upload modal + backend support, keep backwards compat)
+
+GOAL
+In Upload Document modal:
+- Replace “Attach to Job” with “Attach to Client”
+- Dropdown lists CLIENTS (customers), not employees
+- Keep “Company-wide (No client)” option
+- Do NOT break existing job-attached docs (backwards compatible)
+- Preserve RBAC “hidden not disabled” doc visibility
+
+IMPORTANT DECISION (safe + fastest)
+We will support BOTH:
+- Existing: documents.jobId (already works)
+- New: documents.customerId (client attach)
+
+UI will show “Attach to Client” going forward.
+(We can keep an optional “Attach to Job” field later if you want, but you asked to replace it.)
+
+UI CHANGES (UploadDocumentModal)
+
+1) Text updates
+- Label: “Attach to Client”
+- Default option: “Company-wide (No client)”
+
+2) Replace dropdown source
+Instead of jobs list, fetch customers list:
+- Use existing endpoint that powers “Select Customer” / client list (likely /api/customers or /api/clients)
+- If that endpoint returns lots, support search (same vibe as Select Customer modal)
+
+3) What gets submitted
+Update upload payload:
+- send customerId (or clientId) instead of jobId
+- keep jobId unset/null
+
+Example body:
+{
+  file,
+  name,
+  category,
+  visibility,
+  customerId: selectedCustomerId || null
+}
+
+BACKEND CHANGES
+
+1) Documents table (if needed)
+If documents table currently has:
+- jobId nullable
+Add:
+- customerId nullable
+
+Migration:
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS customer_id INT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_customer_id ON documents(customer_id);
+
+(Use your exact naming convention.)
+
+2) Upload route
+Where you currently accept jobId:
+- accept customerId too
+- validate customerId belongs to same company
+- store it on document row
+
+3) Document fetch rules
+Wherever documents are fetched:
+- Company-wide docs: jobId IS NULL AND customerId IS NULL
+- Client-attached docs: customerId = X
+- Job-attached docs: jobId = Y (existing)
+
+Update endpoints:
+A) If you have /api/jobs/:id/documents — keep as-is (job docs)
+B) Add /api/customers/:id/documents (or include in existing customer detail endpoint)
+C) Documents page list filters:
+- “All” should include company-wide + client-attached + job-attached (subject to RBAC visibility)
+- If you have “Job picker” currently, replace with “Client picker” OR add a toggle:
+   “Company / Client / Job”
+But since you only asked to change upload modal right now, we will just ensure the new docs show up in:
+- Documents main list
+- Client job history card (you mentioned job history cards earlier)
+So: Client page / Client history must query docs by customerId.
+
+4) RBAC / Visibility
+Visibility rules stay EXACTLY the same; attachment is only metadata.
+- Technicians still only see docs allowed by visibility rules AND (optionally) related to their accessible scope.
+For client-attached docs, scope should be:
+- If technician is assigned to ANY job for that client? (optional)
+To avoid leaks, simplest rule:
+- Client-attached docs are treated like “office docs” unless visibility is customer_internal.
+Recommendation:
+- For client-attached docs:
+  - customer_internal: allowed to anyone who can access at least one job for that client (techs assigned, supervisors for their jobs, dispatcher all, owner all)
+  - office_only/internal/owner_only: as usual
+If you already have a “job-access drives visibility” function, we can implement:
+- canUserAccessCustomer(user, customerId) = true if user can access any job where job.customerId = customerId OR role dispatcher/owner
+Then apply the same doc visibility gate.
+
+ACCEPTANCE TEST
+1) Upload doc → “Attach to Client” → pick Brennan Synch
+2) Document appears:
+- In Documents list
+- In Client history area (wherever you show client history)
+3) Upload Company-wide doc still works
+4) Old job-attached docs still appear in job docs areas
+
+DELIVERABLES
+- Upload modal label + dropdown switched to clients
+- Backend stores customerId on documents
+- Documents list/query includes customer-attached docs
+- Backwards compatible with job-attached docs
+
+IMPLEMENT NOW.

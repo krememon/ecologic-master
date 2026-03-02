@@ -24,7 +24,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Real-time Capabilities**: WebSocket server for real-time communication, authenticating via session cookies.
 - **Push Notifications**: Supports iOS native push notifications directly via APNs HTTP/2, with device token management and server-side JWT signing.
 - **Messaging System**: Features a comprehensive two-pane interface for 1:1 conversations with real-time delivery and read receipts.
-- **File Management**: Handles job photos and documents, integrated with cloud storage.
+- **File Management**: Handles job photos and documents, integrated with cloud storage. Documents can be attached to clients (customers) via `customerId` or to jobs via `jobId`, or left company-wide.
 - **Document Visibility**: Implements role-based document visibility rules enforced at the API level.
 - **Signature Requests**: Electronic signature system with RBAC, secure access tokens, and branded email notifications.
 - **Employee Management**: Manages employee status and contact information.

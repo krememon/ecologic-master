@@ -6058,7 +6058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
       
-      const { name, category, jobId, visibility } = req.body;
+      const { name, category, jobId, customerId, visibility } = req.body;
       
       // Get user role for permission check
       const member = await storage.getCompanyMember(company.id, userId);
@@ -6070,8 +6070,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if this role requires a job for this category
-      if (!jobId && requireJobForUpload(userRole, category)) {
-        return res.status(403).json({ message: "Documents of this type must be attached to a job" });
+      if (!jobId && !customerId && requireJobForUpload(userRole, category)) {
+        return res.status(403).json({ message: "Documents of this type must be attached to a job or client" });
       }
       
       // Technicians can only upload to jobs they are assigned to
@@ -6080,6 +6080,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isAssigned = assignments.some(a => a.userId === userId);
         if (!isAssigned) {
           return res.status(403).json({ message: "You can only upload to jobs you are assigned to" });
+        }
+      }
+      
+      // Validate customerId belongs to the same company
+      if (customerId) {
+        const customer = await storage.getCustomer(parseInt(customerId));
+        if (!customer || customer.companyId !== company.id) {
+          return res.status(400).json({ message: "Invalid client selected" });
         }
       }
       
@@ -6093,6 +6101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const documentData = {
         companyId: company.id,
         jobId: jobId ? parseInt(jobId) : null,
+        customerId: customerId ? parseInt(customerId) : null,
         name: name || req.file.originalname,
         type: req.file.mimetype,
         category: category || 'Other',
