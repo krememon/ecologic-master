@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -791,193 +791,220 @@ export function NewEstimateSheet({ open, onOpenChange, onEstimateCreated, initia
 
       {/* LINE ITEMS Modal */}
       <Dialog open={lineItemsModalOpen} onOpenChange={setLineItemsModalOpen}>
-        <DialogContent className="w-[95vw] max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Line Items</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md p-0 gap-0 max-h-[90vh] overflow-hidden flex flex-col rounded-2xl" preventAutoFocus hideCloseButton>
+          <div className="flex items-center justify-between px-4 h-14 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 shrink-0">
+            <div className="min-w-[44px]" />
+            <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              Line Items
+            </DialogTitle>
+            <button
+              onClick={() => setLineItemsModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-end"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
 
-          <div className="flex-1 overflow-y-auto space-y-4 py-2">
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {lineItems.map((item, index) => (
-              <div key={index} className="p-3 border rounded-lg space-y-3 bg-slate-50 dark:bg-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+              <div key={index} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                     Item {index + 1}
                   </span>
                   {lineItems.length > 1 && (
                     <button
                       onClick={() => removeLineItem(index)}
-                      className="text-red-500 hover:text-red-700"
+                      className="text-red-400 hover:text-red-600 transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                 </div>
-                <Input
-                  placeholder="Name *"
-                  value={item.name}
-                  onChange={(e) => updateLineItem(index, 'name', e.target.value)}
-                />
-                <Textarea
-                  placeholder="Description (optional)"
-                  value={item.description}
-                  onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                  rows={2}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Task Code</Label>
-                    <Input
-                      placeholder="e.g., SVC-001"
-                      value={item.taskCode}
-                      onChange={(e) => updateLineItem(index, 'taskCode', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Unit</Label>
-                    <Select
-                      value={item.unit}
-                      onValueChange={(value) => updateLineItem(index, 'unit', value)}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="each">Each</SelectItem>
-                        <SelectItem value="hour">Hour</SelectItem>
-                        <SelectItem value="ft">Foot</SelectItem>
-                        <SelectItem value="sq_ft">Sq Ft</SelectItem>
-                        <SelectItem value="job">Job</SelectItem>
-                        <SelectItem value="day">Day</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Quantity</Label>
-                    <Input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
-                      min="0"
-                      step="1"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Unit Price ($)</Label>
-                    <Input
-                      type="text"
-                      value={item.priceDisplay}
-                      onChange={(e) => handlePriceChange(index, e.target.value)}
-                      onBlur={() => handlePriceBlur(index)}
-                      onFocus={() => handlePriceFocus(index)}
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <Label className="text-sm font-normal">Taxable</Label>
-                  <Switch
-                    checked={item.taxable}
-                    onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
+
+                <div className="px-4 py-3 space-y-3">
+                  <Input
+                    placeholder="Name *"
+                    value={item.name}
+                    onChange={(e) => updateLineItem(index, 'name', e.target.value)}
+                    className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-base focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
                   />
-                </div>
-                {item.taxable && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTaxPickerLineItemIndex(index);
-                      setTaxPickerOpen(true);
-                    }}
-                    className="w-full flex items-center justify-between py-2 px-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md transition-colors"
-                  >
-                    <span className="text-sm text-slate-600 dark:text-slate-400">Tax rate</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
-                        {item.taxNameSnapshot 
-                          ? `${item.taxNameSnapshot} (${parseFloat(item.taxRatePercentSnapshot || '0').toFixed(3)}%)`
-                          : 'Select tax rate'}
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                  <Textarea
+                    placeholder="Description (optional)"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                    rows={2}
+                    className="rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm resize-none focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
+                  />
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Task Code</Label>
+                      <Input
+                        placeholder="e.g., SVC-001"
+                        value={item.taskCode}
+                        onChange={(e) => updateLineItem(index, 'taskCode', e.target.value)}
+                        className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-base focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
+                      />
                     </div>
-                  </button>
-                )}
-                <div className="flex items-center justify-between py-1 border-t pt-2">
-                  <div>
-                    <Label className="text-sm font-normal">Save to Price Book</Label>
-                    <p className="text-xs text-slate-500">Add as reusable template</p>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Unit</Label>
+                      <Select
+                        value={item.unit}
+                        onValueChange={(value) => updateLineItem(index, 'unit', value)}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="each">Each</SelectItem>
+                          <SelectItem value="hour">Hour</SelectItem>
+                          <SelectItem value="ft">Foot</SelectItem>
+                          <SelectItem value="sq_ft">Sq Ft</SelectItem>
+                          <SelectItem value="job">Job</SelectItem>
+                          <SelectItem value="day">Day</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <Switch
-                    checked={item.saveToPriceBook}
-                    onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
-                  />
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Quantity</Label>
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                        min="0"
+                        step="1"
+                        className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-base focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Unit Price ($)</Label>
+                      <Input
+                        type="text"
+                        value={item.priceDisplay}
+                        onChange={(e) => handlePriceChange(index, e.target.value)}
+                        onBlur={() => handlePriceBlur(index)}
+                        onFocus={() => handlePriceFocus(index)}
+                        placeholder="0.00"
+                        className="h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-base focus:ring-1 focus:ring-blue-500/30 focus:border-blue-400"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="pt-2 border-t space-y-1">
+
+                <div className="border-t border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center justify-between px-4 h-12">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Taxable</span>
+                    <Switch
+                      checked={item.taxable}
+                      onCheckedChange={(checked) => updateLineItem(index, 'taxable', checked)}
+                    />
+                  </div>
+                  {item.taxable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTaxPickerLineItemIndex(index);
+                        setTaxPickerOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between px-4 h-12 border-t border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Tax rate</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          {item.taxNameSnapshot 
+                            ? `${item.taxNameSnapshot} (${parseFloat(item.taxRatePercentSnapshot || '0').toFixed(3)}%)`
+                            : 'Select tax rate'}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                      </div>
+                    </button>
+                  )}
+                  <div className="flex items-center justify-between px-4 h-12 border-t border-slate-100 dark:border-slate-700">
+                    <div>
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Save to Price Book</span>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">Add as reusable template</p>
+                    </div>
+                    <Switch
+                      checked={item.saveToPriceBook}
+                      onCheckedChange={(checked) => updateLineItem(index, 'saveToPriceBook', checked)}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-2.5 bg-slate-50/50 dark:bg-slate-800/30 space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500 dark:text-slate-400">Subtotal</span>
-                    <span className="text-sm">{formatCurrency(calculateLineSubtotal(item))}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">Subtotal</span>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">{formatCurrency(calculateLineSubtotal(item))}</span>
                   </div>
                   {item.taxable && item.taxRatePercentSnapshot && calculateLineTax(item) > 0 && (
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                      <span className="text-xs text-slate-400 dark:text-slate-500">
                         Tax ({parseFloat(item.taxRatePercentSnapshot).toFixed(3)}%)
                       </span>
-                      <span className="text-sm">{formatCurrency(calculateLineTax(item))}</span>
+                      <span className="text-sm text-slate-600 dark:text-slate-400">{formatCurrency(calculateLineTax(item))}</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center pt-1">
-                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total</span>
-                    <span className="text-base font-semibold">{formatCurrency(calculateLineTotal(item))}</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total</span>
+                    <span className="text-base font-bold text-slate-900 dark:text-slate-100">{formatCurrency(calculateLineTotal(item))}</span>
                   </div>
                 </div>
               </div>
             ))}
+          </div>
 
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setLineItemsModalOpen(false);
-                  setPriceBookPickerOpen(true);
-                }}
-                className="flex-1"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                From Price Book
-              </Button>
-              <Button
-                variant="outline"
-                onClick={addLineItem}
-                className="flex-1"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add New
-              </Button>
-            </div>
-
-            <div className="pt-4 border-t space-y-2">
+          <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div className="px-4 py-3 space-y-1.5">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Subtotal</span>
-                <span>{formatCurrency(calculateSubtotal())}</span>
+                <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
+                <span className="text-slate-700 dark:text-slate-300">{formatCurrency(calculateSubtotal())}</span>
               </div>
               {calculateTotalTax() > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-600 dark:text-slate-400">Tax</span>
-                  <span>{formatCurrency(calculateTotalTax())}</span>
+                  <span className="text-slate-500 dark:text-slate-400">Tax</span>
+                  <span className="text-slate-700 dark:text-slate-300">{formatCurrency(calculateTotalTax())}</span>
                 </div>
               )}
-              <div className="flex justify-between text-base font-semibold pt-1 border-t">
-                <span>Total</span>
-                <span>{formatCurrency(calculateGrandTotal())}</span>
+              <div className="flex justify-between pt-1.5 border-t border-slate-100 dark:border-slate-700">
+                <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Total</span>
+                <span className="text-base font-bold text-slate-900 dark:text-slate-100">{formatCurrency(calculateGrandTotal())}</span>
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button onClick={() => setLineItemsModalOpen(false)}>
-              Done
-            </Button>
-          </DialogFooter>
+            <div className="px-4 pb-4 pt-1 space-y-2">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setLineItemsModalOpen(false);
+                    setPriceBookPickerOpen(true);
+                  }}
+                  className="flex-1 h-11 rounded-xl border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  From Price Book
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={addLineItem}
+                  className="flex-1 h-11 rounded-xl border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Add New
+                </Button>
+              </div>
+              <Button
+                onClick={() => setLineItemsModalOpen(false)}
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base"
+              >
+                Done
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

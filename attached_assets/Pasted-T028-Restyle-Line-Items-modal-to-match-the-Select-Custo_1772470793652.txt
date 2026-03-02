@@ -1,0 +1,104 @@
+T028 — Restyle “Line Items” modal to match the “Select Customer” / Add Customer vibe (clean, modern, airy)
+
+GOAL
+Update the Line Items modal UI so it matches the same visual language as the “Select Customer” modal:
+- soft rounded sheet
+- clean header
+- light separators
+- consistent padding
+- simple controls
+- minimal clutter
+Keep all existing functionality, just redesign layout + styling.
+
+DESIGN REFERENCES (what to match)
+Use “Select Customer” modal as the style source:
+- Header: centered title, subtle X at top-right
+- Search bar style (pill input with icon)
+- Content area looks like a list card with dividers
+- Big primary CTA style (blue button)
+- Secondary actions as subtle rows/buttons
+
+WHAT TO CHANGE (UI/UX)
+
+1) Modal container
+- Make the Line Items modal the same width/height behavior as Select Customer
+- Rounded corners: 20–24px
+- Add soft shadow
+- Add consistent padding: 18–20px
+
+2) Header
+- Center title: “Line Items”
+- X button top-right, same size/color as Select Customer
+- Add thin divider line under header
+
+3) Convert the “Item 1 / Item 2” editor layout to “Card Sections”
+Instead of one huge form block, break into 2–3 clean sections:
+
+SECTION A — Item Name + Description
+- Name input full-width, same input style as Select Customer search field (rounded, light border)
+- Description as compact textarea, but shorter height (auto-expand optional)
+
+SECTION B — Details grid (2 columns)
+Row 1:
+- Task Code (left)
+- Unit (right dropdown)
+Row 2:
+- Quantity (left)
+- Unit Price (right)
+
+Make all inputs consistent height and radius.
+
+SECTION C — Toggles as clean rows (like settings list)
+Replace the big spacing toggle look with two “list rows”:
+- Taxable        [toggle]
+- Save to Price Book  (subtitle “Add as reusable template”) [toggle]
+Use same divider lines between rows as Select Customer list rows.
+
+SECTION D — Totals (clean)
+- A small “Totals” box pinned near bottom:
+  Subtotal (left) $xxx.xx (right)
+  Total (left, bold) $xxx.xx (right, bold)
+Use lighter typography like Select Customer
+
+4) Bottom actions (match Add Customer vibe)
+At the bottom:
+- Left: “From Price Book” as a subtle button (outline / light)
+- Center/Right: “Add New” as subtle button
+- Primary CTA: “Done” as the only solid blue button
+
+IMPORTANT:
+- If space is tight on mobile, stack:
+  Row 1: From Price Book | Add New (light buttons)
+  Row 2: Done (full width blue)
+
+5) Reduce visual noise
+- Remove the thick blue focus ring style if it looks harsh on iOS; use a softer focus shadow/border
+- Use consistent spacing and typography:
+  - Title: 20–22px semibold
+  - Labels: 12–13px muted
+  - Inputs: 16px
+
+IMPLEMENTATION NOTES (React)
+- Do not change logic, only layout + classNames
+- Reuse same input styles/classes used by “Select Customer” modal inputs (copy its input component / Tailwind classes)
+- If Select Customer uses a shared <ModalSheet> or <DialogContent> styling, reuse that wrapper for Line Items too
+- Keep keyboard behavior good on iPhone (avoid content jumping). If necessary, make body scrollable and keep footer sticky.
+
+FILES TO TOUCH (likely)
+- src/components/LineItemsModal.tsx (or similar)
+- Any shared modal styles/components
+- Optional: shared Input component styling
+
+ACCEPTANCE CHECK
+- Line Items modal visually matches Select Customer modal style
+- No layout overflow on iPhone
+- Toggles feel like clean settings rows
+- Totals section clean and aligned
+- “Done” primary button matches blue CTA style
+
+DELIVERABLES
+- Updated Line Items modal UI styling + layout
+- No functional regressions
+- Screenshots (desktop + iPhone preview)
+
+DO THIS NOW.
