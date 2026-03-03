@@ -161,7 +161,16 @@ export default function Home() {
       setShowJobPicker(false);
       setJobSearchQuery('');
       if (data?.timeSessionId) {
-        geoTracking.start(data.timeSessionId);
+        console.log('[geo] clock-in success, sessionId=', data.timeSessionId);
+        try {
+          console.log('[geo] calling geoTracking.start...');
+          geoTracking.start(data.timeSessionId);
+          console.log('[geo] geoTracking.start resolved');
+        } catch (err) {
+          console.error('[geo] geoTracking.start FAILED', err);
+        }
+      } else {
+        console.log('[geo] clock-in success but no timeSessionId in response', data);
       }
     },
     onError: () => {
@@ -186,7 +195,12 @@ export default function Home() {
       geoTracking.stop();
       const newSessionId = data?.started?.id;
       if (newSessionId) {
-        geoTracking.start(newSessionId);
+        console.log('[geo] switch success, new sessionId=', newSessionId);
+        try {
+          geoTracking.start(newSessionId);
+        } catch (err) {
+          console.error('[geo] geoTracking.start FAILED on switch', err);
+        }
       }
     },
     onError: () => {

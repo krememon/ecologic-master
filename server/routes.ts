@@ -3266,6 +3266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
       const { sessionId, points } = req.body;
+      console.log('[geo-api] received batch userId=' + userId + ' sessionId=' + sessionId + ' points=' + (Array.isArray(points) ? points.length : 0));
 
       if (!sessionId) {
         return res.status(400).json({ error: 'sessionId is required' });

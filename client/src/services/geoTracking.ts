@@ -18,148 +18,200 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 }
 
+function getPlatform(): string {
+  try {
+    const w = window as any;
+    if (w.Capacitor && typeof w.Capacitor.getPlatform === 'function') {
+      return w.Capacitor.getPlatform();
+    }
+  } catch {}
+  return 'web';
+}
+
+function isNative(): boolean {
+  try {
+    const w = window as any;
+    return w.Capacitor?.isNativePlatform?.() === true;
+  } catch {}
+  return false;
+}
+
 const DISTANCE_THRESHOLD = 50;
 const HEARTBEAT_MS = 60000;
 const ACCURACY_LIMIT = 100;
 
-let sessionId: number | null = null;
+let currentSessionId: number | null = null;
 let watchId: number | null = null;
 let flushIntervalId: ReturnType<typeof setInterval> | null = null;
-let buffer: GeoPoint[] = [];
 let lastSentPoint: { lat: number; lng: number; time: number } | null = null;
+let pointCount = 0;
 
 function log(...args: any[]) {
   console.log('[geo]', ...args);
 }
 
-async function sendBatch(points: GeoPoint[]) {
-  if (points.length === 0 || sessionId === null) return;
+async function sendOnePoint(lat: number, lng: number, accuracy: number, source: string) {
+  if (currentSessionId === null) {
+    log('sendOnePoint skipped — no active session');
+    return;
+  }
+  const point: GeoPoint = {
+    lat,
+    lng,
+    accuracy,
+    recordedAt: new Date().toISOString(),
+    source,
+  };
+  log('sending 1-point batch sessionId=' + currentSessionId, 'source=' + source);
   try {
     const res = await fetch('/api/location/batch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ sessionId, points }),
+      body: JSON.stringify({ sessionId: currentSessionId, points: [point] }),
     });
     if (res.ok) {
       const data = await res.json();
-      log('sent batch n=' + points.length, 'accepted=' + data.accepted, 'rejected=' + data.rejected);
+      log('batch OK accepted=' + data.accepted + ' rejected=' + data.rejected);
     } else {
       const text = await res.text();
-      log('batch failed status=' + res.status, text);
-      buffer = points.concat(buffer);
+      log('batch FAILED status=' + res.status, text);
     }
   } catch (e) {
-    log('batch error', e);
-    buffer = points.concat(buffer);
+    log('batch NETWORK ERROR', e);
   }
 }
 
-async function flushBuffer() {
-  if (buffer.length === 0 || sessionId === null) return;
-  const points = [...buffer];
-  buffer = [];
-  await sendBatch(points);
-}
-
-function addPointAndMaybeSend(lat: number, lng: number, accuracy: number, source: string) {
-  const now = Date.now();
-  const point: GeoPoint = {
-    lat,
-    lng,
-    accuracy,
-    recordedAt: new Date(now).toISOString(),
-    source,
-  };
-
-  let shouldAdd = false;
-  if (!lastSentPoint) {
-    shouldAdd = true;
-    log('first fix — will send immediately');
-  } else {
-    const dist = haversineDistance(lastSentPoint.lat, lastSentPoint.lng, lat, lng);
-    const elapsed = now - lastSentPoint.time;
-    if (dist >= DISTANCE_THRESHOLD || elapsed >= HEARTBEAT_MS) {
-      shouldAdd = true;
-      log('filter pass dist=' + dist.toFixed(0) + 'm elapsed=' + (elapsed / 1000).toFixed(0) + 's');
-    }
-  }
-
-  if (shouldAdd) {
-    lastSentPoint = { lat, lng, time: now };
-    sendBatch([point]);
-  }
-}
-
-function onPosition(pos: GeolocationPosition) {
-  const { latitude: lat, longitude: lng, accuracy, speed } = pos.coords;
-  log('point lat=' + lat.toFixed(6) + ' lng=' + lng.toFixed(6) + ' acc=' + accuracy.toFixed(0) + ' speed=' + (speed ?? 'null') + ' ts=' + pos.timestamp);
+function handlePosition(pos: GeolocationPosition, source: string) {
+  const { latitude: lat, longitude: lng, accuracy, speed, heading, altitude } = pos.coords;
+  pointCount++;
+  log(
+    'point #' + pointCount,
+    'lat=' + lat.toFixed(6),
+    'lng=' + lng.toFixed(6),
+    'acc=' + accuracy.toFixed(0),
+    'speed=' + (speed ?? 'null'),
+    'heading=' + (heading ?? 'null'),
+    'alt=' + (altitude ?? 'null'),
+    'ts=' + pos.timestamp,
+    'source=' + source
+  );
 
   if (accuracy > ACCURACY_LIMIT) {
-    log('point skipped — acc=' + accuracy.toFixed(0) + ' > ' + ACCURACY_LIMIT);
+    log('point SKIPPED — acc=' + accuracy.toFixed(0) + ' > limit=' + ACCURACY_LIMIT);
     return;
   }
 
-  addPointAndMaybeSend(lat, lng, accuracy, 'watch');
+  const now = Date.now();
+  let shouldSend = false;
+
+  if (!lastSentPoint) {
+    shouldSend = true;
+    log('first qualifying point — sending immediately');
+  } else {
+    const dist = haversineDistance(lastSentPoint.lat, lastSentPoint.lng, lat, lng);
+    const elapsed = now - lastSentPoint.time;
+    log('filter check dist=' + dist.toFixed(0) + 'm elapsed=' + (elapsed / 1000).toFixed(0) + 's');
+    if (dist >= DISTANCE_THRESHOLD || elapsed >= HEARTBEAT_MS) {
+      shouldSend = true;
+    } else {
+      log('point filtered out (dist < 50m and elapsed < 60s)');
+    }
+  }
+
+  if (shouldSend) {
+    lastSentPoint = { lat, lng, time: now };
+    sendOnePoint(lat, lng, accuracy, source);
+  }
 }
 
-function onPositionError(err: GeolocationPositionError) {
-  log('watch error code=' + err.code + ' message=' + err.message);
+function onWatchPosition(pos: GeolocationPosition) {
+  handlePosition(pos, 'watch');
 }
 
-const watchOptions: PositionOptions = {
-  enableHighAccuracy: true,
-  timeout: 20000,
-  maximumAge: 0,
-};
+function onWatchError(err: GeolocationPositionError) {
+  log('watch ERROR code=' + err.code + ' message="' + err.message + '"');
+  if (err.code === 1) log('  → PERMISSION_DENIED');
+  if (err.code === 2) log('  → POSITION_UNAVAILABLE');
+  if (err.code === 3) log('  → TIMEOUT');
+}
 
 const geoTracking = {
   start(newSessionId: number) {
+    const platform = getPlatform();
+    const native = isNative();
+    log('start sessionId=' + newSessionId, 'platform=' + platform, 'isNative=' + native);
+    log('navigator.geolocation exists=' + !!navigator.geolocation);
+    log('userAgent=' + navigator.userAgent.substring(0, 120));
+
     if (watchId !== null) {
+      log('stopping previous watch before starting new one');
       this.stop();
     }
-    sessionId = newSessionId;
-    buffer = [];
-    lastSentPoint = null;
 
-    log('start sessionId=' + newSessionId);
+    currentSessionId = newSessionId;
+    lastSentPoint = null;
+    pointCount = 0;
 
     if (!navigator.geolocation) {
-      log('ERROR: navigator.geolocation not available');
+      log('ERROR: navigator.geolocation is NOT available — cannot track');
       return;
     }
 
-    navigator.permissions?.query({ name: 'geolocation' as PermissionName }).then(
-      (result) => log('perm=' + result.state),
-      () => log('perm=query-not-supported')
-    );
+    try {
+      navigator.permissions?.query({ name: 'geolocation' as PermissionName }).then(
+        (result) => {
+          log('perm=' + result.state);
+          result.addEventListener('change', () => {
+            log('perm changed to=' + result.state);
+          });
+        },
+        (err) => log('perm query failed:', err)
+      );
+    } catch (e) {
+      log('perm query not supported:', e);
+    }
 
-    log('watch starting options=', JSON.stringify(watchOptions));
-    watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, watchOptions);
-    log('watch started id=' + watchId);
+    const watchOpts: PositionOptions = {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0,
+    };
+    log('watchPosition starting with options=', JSON.stringify(watchOpts));
 
-    log('getCurrentPosition fallback firing...');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lng, accuracy, speed } = pos.coords;
-        log('getCurrentPosition OK lat=' + lat.toFixed(6) + ' lng=' + lng.toFixed(6) + ' acc=' + accuracy.toFixed(0) + ' speed=' + (speed ?? 'null'));
-        if (accuracy <= ACCURACY_LIMIT) {
-          addPointAndMaybeSend(lat, lng, accuracy, 'getCurrentPosition');
-        } else {
-          log('getCurrentPosition skipped — acc=' + accuracy.toFixed(0) + ' > ' + ACCURACY_LIMIT);
-        }
-      },
-      (err) => {
-        log('getCurrentPosition FAILED code=' + err.code + ' message=' + err.message);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+    try {
+      watchId = navigator.geolocation.watchPosition(onWatchPosition, onWatchError, watchOpts);
+      log('watchPosition started id=' + watchId);
+    } catch (e) {
+      log('watchPosition THREW', e);
+    }
 
-    flushIntervalId = setInterval(flushBuffer, 30000);
+    log('getCurrentPosition fallback firing (enableHighAccuracy, timeout=15s)...');
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          log('firstFix lat=' + latitude.toFixed(6) + ' lng=' + longitude.toFixed(6) + ' acc=' + accuracy.toFixed(0));
+          handlePosition(pos, 'firstFix');
+        },
+        (err) => {
+          log('firstFix ERROR code=' + err.code + ' message="' + err.message + '"');
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    } catch (e) {
+      log('getCurrentPosition THREW', e);
+    }
+
+    flushIntervalId = setInterval(() => {
+      log('heartbeat tick — pointCount=' + pointCount + ' sessionId=' + currentSessionId);
+    }, 30000);
+
+    log('start() complete — watch and fallback initiated');
   },
 
   stop() {
-    log('stop sessionId=' + sessionId);
+    log('stop sessionId=' + currentSessionId + ' totalPoints=' + pointCount);
     if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId);
       log('watch cleared id=' + watchId);
@@ -169,10 +221,9 @@ const geoTracking = {
       clearInterval(flushIntervalId);
       flushIntervalId = null;
     }
-    flushBuffer();
-    sessionId = null;
-    buffer = [];
+    currentSessionId = null;
     lastSentPoint = null;
+    pointCount = 0;
   },
 };
 
