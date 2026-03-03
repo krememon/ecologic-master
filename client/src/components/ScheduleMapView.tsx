@@ -944,8 +944,10 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                               }
                               const apps = getAvailableMapApps();
                               if (apps.length === 1) {
+                                console.log(`[DirectionsPicker] open jobId=${m.id} (auto=${apps[0]})`);
                                 openDirections({ lat: m.lat, lng: m.lng, address: m.address, label: m.customerName || m.title }, apps[0]);
                               } else {
+                                console.log(`[DirectionsPicker] open jobId=${m.id}`);
                                 setDirectionsTarget(m);
                               }
                             }}
@@ -1019,6 +1021,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
               <div className="px-3 pb-3 space-y-1.5">
                 <button
                   onClick={() => {
+                    console.log(`[DirectionsPicker] selected provider=apple jobId=${directionsTarget.id}`);
                     openDirections(
                       { lat: directionsTarget.lat, lng: directionsTarget.lng, address: directionsTarget.address, label: directionsTarget.customerName || directionsTarget.title },
                       'apple'
@@ -1027,13 +1030,12 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors active:bg-slate-100 dark:active:bg-slate-700"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center flex-shrink-0">
-                    <MapPin className="h-4 w-4 text-white" />
-                  </div>
+                  <img src={appleMapsIcon} alt="Apple Maps" style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'contain', flexShrink: 0 }} />
                   <span className="text-[15px] font-medium text-slate-900 dark:text-slate-100">Apple Maps</span>
                 </button>
                 <button
                   onClick={() => {
+                    console.log(`[DirectionsPicker] selected provider=google jobId=${directionsTarget.id}`);
                     openDirections(
                       { lat: directionsTarget.lat, lng: directionsTarget.lng, address: directionsTarget.address, label: directionsTarget.customerName || directionsTarget.title },
                       'google'
@@ -1042,9 +1044,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors active:bg-slate-100 dark:active:bg-slate-700"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
-                    <Navigation className="h-4 w-4 text-white" />
-                  </div>
+                  <img src={googleMapsIcon} alt="Google Maps" style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'contain', flexShrink: 0 }} />
                   <span className="text-[15px] font-medium text-slate-900 dark:text-slate-100">Google Maps</span>
                 </button>
               </div>
