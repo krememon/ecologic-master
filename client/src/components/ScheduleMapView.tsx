@@ -577,6 +577,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         onUnmount={onUnmount}
         options={{
           styles: mapStyles,
+          gestureHandling: 'greedy',
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
