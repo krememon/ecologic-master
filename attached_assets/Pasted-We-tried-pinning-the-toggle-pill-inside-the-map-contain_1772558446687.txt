@@ -1,0 +1,179 @@
+We tried pinning the toggle pill inside the map container, but it’s still ending up off-screen on iPhone. That usually means one of these is happening on iOS WKWebView:
+
+The pill is inside a parent that gets clipped (overflow: hidden/auto) or has the wrong height
+
+A parent has a CSS transform (translate/scale) which breaks position: fixed
+
+The “viewport” height is not what we think on iPhone (Safari/WKWebView dynamic toolbar)
+
+So we’re going to fix this the reliable iOS way: render the pill in a fixed, top-level portal to document.body (outside ALL layout containers), and position it using visualViewport + safe-area.
+
+✅ GOAL
+
+On Schedule → Map (native iPhone):
+
+The toggle pill (“^ / X locations”) is ALWAYS visible + tappable on first load
+
+Tapping it does not shift layout and does not create page scroll
+
+Keep current bottom cards + map behavior intact
+
+(Keep) 1-finger map pan with gestureHandling: "greedy"
+
+TASK A — Add a “FixedOverlayPortal” for iOS-safe UI
+1) Create a reusable portal component
+
+Create: src/components/FixedOverlayPortal.tsx
+
+Uses createPortal(children, document.body)
+
+Creates a fixed container: position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999;
+
+Inside, children can be pointer-events: auto
+
+2) Make sure NOTHING breaks fixed positioning
+
+Search global CSS / layouts for any parent wrappers that apply transform on root (common in animation wrappers).
+If the app uses something like transform: translateZ(0) on #root or the main shell, that can mess with fixed children inside it — but portal to body avoids this.
+
+TASK B — Render the toggle pill in the portal (not inside the map)
+1) Move the pill render into the portal
+
+In Schedule Map screen component (Schedule Map view), do:
+
+Keep the existing toggle pill UI component as-is (same design)
+
+But render it like:
+
+<FixedOverlayPortal>{...pill...}</FixedOverlayPortal>
+
+2) Positioning rules (must stay in frame)
+
+Position it with fixed bottom-center:
+
+left: 50%
+
+transform: translateX(-50%)
+
+bottom: computedBottomPx
+
+Where computedBottomPx must account for:
+
+safe area: env(safe-area-inset-bottom)
+
+bottom cards “peek” height when collapsed
+
+if cards are expanded, pill should sit just above them
+
+Use JS to compute bottom reliably on iOS
+
+On iPhone, 100vh lies. Use window.visualViewport:
+
+Read visualViewport.height
+
+Read visualViewport.offsetTop (sometimes non-zero)
+
+Compute usable bottom edge: offsetTop + height
+
+Then set pill container style to:
+
+top: 0; bottom: 0; (full overlay)
+
+but for pill: position:absolute; top: (usableBottomEdge - pillHeight - padding - sheetPeek) is harder
+
+Simpler: keep pill as position: fixed and set bottom: (sheetPeek + 16) but ALSO ensure we’re not being clipped by weird viewport sizing:
+
+Add a “viewport sync” CSS var on body: --vvh: ${visualViewport.height}px
+
+Then portal container uses height: var(--vvh) instead of 100vh
+
+3) Implement VisualViewport sync
+
+In Schedule Map screen (or app init), add an effect:
+
+On mount + on visualViewport.resize + visualViewport.scroll:
+
+set document.documentElement.style.setProperty('--vvh', ${visualViewport.height}px)
+
+set document.documentElement.style.setProperty('--vvo', ${visualViewport.offsetTop}px)
+
+Then in portal container style:
+
+height: var(--vvh, 100vh);
+
+top: var(--vvo, 0px);
+
+This ensures the overlay exactly matches the iPhone visible viewport.
+
+TASK C — Make sure pill exists immediately on Map screen load
+
+Right now it sounds like the pill only appears after selecting a job/marker.
+
+Fix:
+
+When Schedule Map mounts, set default state:
+
+isCardsCollapsed = true
+
+showPill = true if map view active AND there are locations/jobs
+
+Do NOT gate pill rendering on “selectedJob”.
+
+If there are 0 locations, either:
+
+hide pill completely, OR show disabled pill. Your choice.
+
+TASK D — Prevent page scroll ONLY on Schedule Map screen
+
+Even with portal, the underlying page scroll can still happen.
+
+On Schedule Map route/screen only:
+
+Apply to the screen root container:
+
+height: 100dvh; overflow: hidden;
+
+Also apply to your app shell scroll container:
+
+if you have a main wrapper with overflow-y:auto, disable it via a route class:
+
+Add data-screen="schedule-map"
+
+CSS: [data-screen="schedule-map"] { overflow: hidden !important; }
+
+Do NOT affect other pages.
+
+TASK E — 1-finger map pan (keep / ensure)
+
+In Google Map options:
+
+gestureHandling: "greedy"
+
+Ensure you are NOT setting a conflicting option like gestureHandling: "cooperative" anywhere.
+
+DEBUG (TEMP, remove after)
+
+To prove the pill is in-frame:
+
+Log once on map screen mount:
+
+visualViewport values
+
+pill getBoundingClientRect()
+
+confirm rect.bottom <= visualViewport.height
+Remove logs after verified.
+
+✅ Deliverables
+
+Toggle pill ALWAYS visible and tappable immediately on Schedule → Map open (native iPhone)
+
+Tapping pill does NOT reflow header/map; no layout jumping
+
+No vertical page scroll on Map screen
+
+Map pans with 1 finger
+
+No regressions to bottom cards swiper or marker highlighting
+
+Proceed now.

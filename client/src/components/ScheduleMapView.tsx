@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
+import { FixedOverlayPortal } from "@/components/FixedOverlayPortal";
 
 interface ScheduleItem {
   type: 'job' | 'estimate';
@@ -732,106 +733,109 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         </div>
       )}
 
-      {markers.length > 0 && trayExpanded && (
-        <div
-          className="absolute bottom-0 left-0 right-0 z-20"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        >
-          <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t border-slate-200/80 dark:border-slate-700/80">
-            <div className="flex justify-center pt-2 pb-1">
-              <div className="w-8 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-            </div>
-            <div
-              ref={carouselRef}
-              onScroll={handleCardScroll}
-              className="flex gap-3 overflow-x-auto px-4 pb-3 pt-1 snap-x snap-mandatory scrollbar-hide"
-              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
-            >
-              {markers.map((m) => {
-                const isActive = m.id === selectedJobId;
-                return (
-                  <div
-                    key={`${m.type}-${m.id}`}
-                    ref={(el) => { if (el) cardRefs.current.set(m.id, el); }}
-                    onClick={() => selectJob(m.id, 'card')}
-                    className={`flex-shrink-0 w-[240px] snap-center rounded-xl border p-3 cursor-pointer transition-all duration-200 ${
-                      isActive
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-md ring-1 ring-blue-500/30'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <span className={`text-[13px] font-bold leading-tight ${
-                        isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-slate-100'
-                      }`}>
-                        {getTimeRange(m)}
-                      </span>
-                      <span className={`flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
-                        m.type === 'estimate'
-                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
-                          : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
-                      }`}>
-                        {m.type === 'estimate' ? 'EST' : 'JOB'}
-                      </span>
-                    </div>
-                    <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate leading-tight">
-                      {m.customerName || m.title}
-                    </p>
-                    {m.address && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 leading-tight">
-                        {m.address}
+      <FixedOverlayPortal active={markers.length > 0}>
+        {trayExpanded && (
+          <div
+            className="absolute bottom-0 left-0 right-0"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', pointerEvents: 'auto' }}
+          >
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t border-slate-200/80 dark:border-slate-700/80">
+              <div className="flex justify-center pt-2 pb-1">
+                <div className="w-8 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+              </div>
+              <div
+                ref={carouselRef}
+                onScroll={handleCardScroll}
+                className="flex gap-3 overflow-x-auto px-4 pb-3 pt-1 snap-x snap-mandatory scrollbar-hide"
+                style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
+              >
+                {markers.map((m) => {
+                  const isActive = m.id === selectedJobId;
+                  return (
+                    <div
+                      key={`${m.type}-${m.id}`}
+                      ref={(el) => { if (el) cardRefs.current.set(m.id, el); }}
+                      onClick={() => selectJob(m.id, 'card')}
+                      className={`flex-shrink-0 w-[240px] snap-center rounded-xl border p-3 cursor-pointer transition-all duration-200 ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-md ring-1 ring-blue-500/30'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <span className={`text-[13px] font-bold leading-tight ${
+                          isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-slate-100'
+                        }`}>
+                          {getTimeRange(m)}
+                        </span>
+                        <span className={`flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
+                          m.type === 'estimate'
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+                            : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                        }`}>
+                          {m.type === 'estimate' ? 'EST' : 'JOB'}
+                        </span>
+                      </div>
+                      <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate leading-tight">
+                        {m.customerName || m.title}
                       </p>
-                    )}
-                    <div className="flex items-center justify-between mt-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleInfoCardClick(m);
-                        }}
-                        className="text-[11px] font-medium text-blue-600 dark:text-blue-400 flex items-center gap-0.5"
-                      >
-                        View details
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
                       {m.address && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 leading-tight">
+                          {m.address}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between mt-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const addr = encodeURIComponent(m.address!);
-                            window.open(`https://maps.apple.com/?daddr=${addr}`, '_blank');
+                            handleInfoCardClick(m);
                           }}
-                          className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center"
+                          className="text-[11px] font-medium text-blue-600 dark:text-blue-400 flex items-center gap-0.5"
                         >
-                          <Navigation className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+                          View details
+                          <ChevronRight className="h-3 w-3" />
                         </button>
-                      )}
+                        {m.address && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const addr = encodeURIComponent(m.address!);
+                              window.open(`https://maps.apple.com/?daddr=${addr}`, '_blank');
+                            }}
+                            className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center"
+                          >
+                            <Navigation className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {markers.length > 0 && (
-        <div
-          className="absolute left-0 right-0 z-30 flex justify-center pointer-events-none"
-          style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${trayExpanded && markers.length > 0 ? '170px' : '12px'})`, transition: 'bottom 0.3s ease-out' }}
+        <button
+          onClick={() => setTrayExpanded(!trayExpanded)}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bottom: `calc(env(safe-area-inset-bottom, 0px) + ${trayExpanded ? '170px' : '16px'})`,
+            transition: 'bottom 0.3s ease-out',
+            pointerEvents: 'auto',
+          }}
+          className="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
         >
-          <button
-            onClick={() => setTrayExpanded(!trayExpanded)}
-            className="pointer-events-auto flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
-          >
-            <ChevronUp
-              className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${trayExpanded ? 'rotate-180' : ''}`}
-            />
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              {markers.length} {markers.length === 1 ? 'location' : 'locations'}
-            </span>
-          </button>
-        </div>
-      )}
+          <ChevronUp
+            className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${trayExpanded ? 'rotate-180' : ''}`}
+          />
+          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            {markers.length} {markers.length === 1 ? 'location' : 'locations'}
+          </span>
+        </button>
+      </FixedOverlayPortal>
 
       {(crewLocations.length > 0 && markers.length === 0) && (
         <div className="absolute left-4 z-10" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
