@@ -1,0 +1,101 @@
+Replit Agent Prompt (Polish the live-location popup UI)
+
+Goal: Replace the ugly default Google “InfoWindow” look (huge white space, scroll bar, weird close button) with a modern EcoLogic-style popup that matches the app UI.
+
+UI Requirements
+
+No extra white space (tight height)
+
+No internal scroll bar ever
+
+Rounded card, subtle shadow, clean spacing
+
+Small “X” close button (top-right), not oversized
+
+Avatar circle + name on one line (truncate if long)
+
+Second line shows:
+
+green dot + “Live” (or “Updated 35s ago”)
+
+Optional: show “Accuracy: 6m” in lighter text if we have it
+
+Width: clamp to ~260–300px max, responsive
+
+Mobile: looks like Apple-style card (clean + compact)
+
+Implementation Plan
+
+Stop using <InfoWindow> for the popup UI.
+
+Use a custom <OverlayView> (from @react-google-maps/api) anchored to the marker’s lat/lng.
+
+Build the popup as a Tailwind card so we fully control spacing and eliminate Google’s default padding/scroll.
+
+Ensure card uses:
+
+whitespace-nowrap / truncate on name
+
+overflow-hidden on the card
+
+no scroll containers
+
+Clicking the marker opens popup. Clicking X closes it. Clicking elsewhere closes it (optional).
+
+Keep the little “pointer” triangle under the card (small + centered).
+
+Files to touch
+
+The schedule map component where the live marker + popup is rendered (where the InfoWindow currently is)
+
+Any shared map UI component if you already have one
+
+Deliverables
+
+Replace the current popup with a custom OverlayView popup card
+
+Confirm:
+
+no scroll bar
+
+no giant white area
+
+card height is compact
+
+matches EcoLogic UI style
+
+Suggested Tailwind card spec
+
+Container:
+
+rounded-2xl bg-white shadow-lg ring-1 ring-black/5 px-4 py-3
+
+max-w-[300px] w-[280px] overflow-hidden
+
+Close button:
+
+absolute top-2 right-2 h-7 w-7 rounded-full hover:bg-black/5 flex items-center justify-center
+
+icon size 16–18px
+
+Name row:
+
+avatar 32px
+
+name: text-[15px] font-semibold text-slate-900 truncate
+
+Sub row:
+
+green dot h-2 w-2 rounded-full bg-emerald-500
+
+time text text-[13px] text-slate-500
+
+Extra polish (do this too)
+
+If marker is “You”, label should still truncate properly.
+
+If the popup opens near top edge, it should still be visible (adjust y-offset in OverlayView / pixelOffset).
+
+Make sure clicking inside popup doesn’t trigger map click-close unless intended.
+
+Now implement it and show me a screenshot of the new popup on mobile + desktop.
