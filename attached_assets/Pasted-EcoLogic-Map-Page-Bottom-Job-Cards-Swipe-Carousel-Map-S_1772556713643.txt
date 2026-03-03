@@ -1,0 +1,207 @@
+EcoLogic — Map Page: Bottom Job Cards (Swipe Carousel) + Map Sync
+Goal
+
+On the Map tab, add a Jobber-style bottom job card tray:
+
+A small handle button sits above the tray (like Jobber).
+
+Tap the handle → tray slides up showing job cards.
+
+Cards are horizontal swipeable (carousel).
+
+Swiping cards highlights the matching marker on the map and centers the map on it.
+
+Tapping a marker also selects the matching card (sync both ways).
+
+Must stay mobile-first, modern, and must NOT re-enable page scrolling (the page itself should not scroll; only the map and the horizontal cards).
+
+Important Constraints
+
+Keep the “hidden not disabled” permissions behavior (RBAC).
+
+Do not break the existing Map tab, schedule header, or location marker logic.
+
+No duplicate buttons.
+
+Keep touch gestures clean on iOS (map should still be 1-finger pan).
+
+UI Tasks (Frontend)
+1) Layout: Lock page scroll + fixed map viewport
+
+Ensure the Map tab page uses a fixed-height layout:
+
+height: 100dvh (or equivalent)
+
+overflow: hidden on the outer container
+
+Only the Google Map itself is interactive.
+
+The bottom tray overlays the map using position: absolute.
+
+2) Build a “BottomSheetTray” (Jobber-style)
+
+Create a reusable component like:
+
+components/map/BottomSheetTray.tsx
+
+Behavior:
+
+2 states: collapsed and expanded
+
+Collapsed: shows a small pill/handle button centered near bottom
+
+Expanded: slides up to show the carousel
+
+Add nice animation (Framer Motion if already used; otherwise CSS transitions)
+
+Specs:
+
+Snap heights:
+
+Collapsed height: ~64px (just handle)
+
+Expanded height: ~220–260px (cards visible)
+
+Rounded corners (top only), subtle shadow
+
+iOS-safe bottom padding (respect home indicator)
+
+3) Job Cards Carousel
+
+Create:
+
+components/map/JobCarousel.tsx
+
+Horizontal scroll with snap:
+
+display:flex; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling: touch;
+
+Each card shows:
+
+time range (bold)
+
+customer name
+
+address line
+
+small right-side quick actions (optional): open job details / navigate icon (only if already exists)
+
+Keep it clean, modern, minimal whitespace.
+
+4) Map ↔ Card Sync (core logic)
+
+In Map page (where the map renders now):
+
+Maintain state:
+
+selectedJobId
+
+selectedIndex
+
+When user swipes to a card:
+
+Set selectedJobId
+
+Highlight that marker (bigger / different color / zIndex)
+
+map.panTo({lat,lng}) (and optionally map.setZoom if too far out)
+
+When user taps a marker:
+
+Set selectedJobId
+
+Scroll carousel to that card (scrollIntoView({behavior:'smooth', inline:'center'}))
+
+5) Marker Highlighting
+
+Selected marker should visually pop:
+
+larger size
+
+higher zIndex
+
+optional ring/glow
+
+Keep unselected markers normal.
+
+6) Prevent gesture conflicts
+
+The carousel must capture horizontal swipes without dragging the map.
+
+Use:
+
+touch-action: pan-x; on the carousel container
+
+pointer-events configured so map remains interactive elsewhere
+
+The bottom tray background should not “steal” map gestures above it.
+
+Data Tasks (Frontend + Backend only if needed)
+7) Confirm we have “map-ready” jobs
+
+We need a list of jobs that can be shown on the map with:
+
+id
+
+title or customerName
+
+address
+
+startTime/endTime (or scheduled time)
+
+lat/lng
+
+If the current Map tab already has mapItems, reuse that.
+
+If not guaranteed, add a backend endpoint:
+
+GET /api/map/jobs?date=YYYY-MM-DD
+Returns map-ready jobs for that day based on RBAC:
+
+Owner/Supervisor/Dispatcher/Estimator: per existing access rules
+
+Technician: assigned jobs only
+
+Do not expose jobs the user can’t see.
+
+Deliverables
+
+Bottom job tray implemented on Map tab (collapsed + expanded).
+
+Swipeable job cards carousel.
+
+Swiping selects job → highlights marker + centers map.
+
+Tapping marker selects job → scrolls carousel to that card.
+
+Map page itself does not vertically scroll.
+
+No RBAC regressions.
+
+Add targeted logs only:
+
+[MapTray] selectedJobId=... source=card|marker
+
+[MapTray] scrollToIndex=...
+
+[MapTray] panTo lat,lng
+
+Acceptance Tests
+
+On iPhone native build:
+
+The page does NOT scroll up/down.
+
+The Google map pans normally.
+
+The bottom handle expands/collapses smoothly.
+
+You can swipe cards left/right smoothly.
+
+Swiping cards updates highlighted marker and centers map.
+
+Tapping marker brings correct card into view.
+
+Technician only sees their assigned jobs.
+
+Dispatcher sees all jobs (per existing rules).

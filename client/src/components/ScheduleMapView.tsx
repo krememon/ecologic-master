@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
 import { GoogleMap, useJsApiLoader, InfoWindow, OverlayViewF, OVERLAY_MOUSE_TARGET } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, X } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, X, ChevronUp, Navigation } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,31 +120,31 @@ function formatTimeDisplay(time: string | null): string {
   }
 }
 
-function createJobMarkerIcon(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
-    <defs>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
-      </filter>
-    </defs>
-    <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill="#16a34a" filter="url(#shadow)"/>
-    <circle cx="18" cy="16" r="12" fill="#ffffff" fill-opacity="0.2"/>
-    <path d="M12 14h12v2H12v-2zm0 4h8v2h-8v-2zm10-6h-8v-2h8v2z" fill="#ffffff" transform="translate(0, 2)"/>
-    <path d="M24 16l-2-2h-4v4h6v-2zm-8 0v-2h-4l-2 2v2h6v-2z" fill="#ffffff" transform="translate(0, 2)"/>
+function createJobMarkerIcon(selected = false): string {
+  const size = selected ? 44 : 36;
+  const h = selected ? 54 : 44;
+  const cx = size / 2;
+  const color = selected ? '#059669' : '#16a34a';
+  const stroke = selected ? `<circle cx="${cx}" cy="${cx}" r="${cx - 1}" fill="none" stroke="#ffffff" stroke-width="3"/>` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${h}" viewBox="0 0 ${size} ${h}">
+    <defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="${selected ? 3 : 2}" flood-opacity="${selected ? 0.5 : 0.3}"/></filter></defs>
+    <path d="M${cx} 0C${cx * 0.447} 0 0 ${cx * 0.447} 0 ${cx}c0 ${cx * 0.75} ${cx} ${h - cx} ${cx} ${h - cx}s${cx}-${(h - cx) * 0.48} ${cx}-${h - cx}C${size} ${cx * 0.447} ${size - cx * 0.447} 0 ${cx} 0z" fill="${color}" filter="url(#s)"/>
+    ${stroke}
   </svg>`;
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
 
-function createEstimateMarkerIcon(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
-    <defs>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
-      </filter>
-    </defs>
-    <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill="#9333ea" filter="url(#shadow)"/>
-    <circle cx="18" cy="16" r="12" fill="#ffffff" fill-opacity="0.2"/>
-    <text x="18" y="21" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" font-family="Arial, sans-serif">$</text>
+function createEstimateMarkerIcon(selected = false): string {
+  const size = selected ? 44 : 36;
+  const h = selected ? 54 : 44;
+  const cx = size / 2;
+  const color = selected ? '#7e22ce' : '#9333ea';
+  const stroke = selected ? `<circle cx="${cx}" cy="${cx}" r="${cx - 1}" fill="none" stroke="#ffffff" stroke-width="3"/>` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${h}" viewBox="0 0 ${size} ${h}">
+    <defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="${selected ? 3 : 2}" flood-opacity="${selected ? 0.5 : 0.3}"/></filter></defs>
+    <path d="M${cx} 0C${cx * 0.447} 0 0 ${cx * 0.447} 0 ${cx}c0 ${cx * 0.75} ${cx} ${h - cx} ${cx} ${h - cx}s${cx}-${(h - cx) * 0.48} ${cx}-${h - cx}C${size} ${cx * 0.447} ${size - cx * 0.447} 0 ${cx} 0z" fill="${color}" filter="url(#s)"/>
+    ${stroke}
+    <text x="${cx}" y="${cx + 4}" text-anchor="middle" fill="#ffffff" font-size="${selected ? 16 : 14}" font-weight="bold" font-family="Arial, sans-serif">$</text>
   </svg>`;
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
@@ -217,6 +217,11 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const crewMarkersRef = useRef<google.maps.Marker[]>([]);
   const crewClustererRef = useRef<MarkerClusterer | null>(null);
   const hasFittedCrewRef = useRef(false);
+
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const [trayExpanded, setTrayExpanded] = useState(false);
+  const carouselRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
@@ -229,6 +234,49 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
   const role = (userRole || '').toUpperCase();
   const isSelf = (locUserId: string) => userId && locUserId === userId;
+
+  const selectJob = useCallback((id: number, source: 'card' | 'marker') => {
+    setSelectedJobId(id);
+    setSelectedMarker(null);
+    setSelectedCrewMarker(null);
+
+    const marker = markers.find(m => m.id === id);
+    if (!marker) return;
+
+    if (source === 'card' && mapRef.current) {
+      mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
+      const zoom = mapRef.current.getZoom();
+      if (zoom && zoom < 14) mapRef.current.setZoom(14);
+    }
+
+    if (source === 'marker') {
+      const el = cardRefs.current.get(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+      if (!trayExpanded) setTrayExpanded(true);
+    }
+  }, [markers, trayExpanded]);
+
+  useEffect(() => {
+    if (selectedJobId === null) return;
+    googleMarkersRef.current.forEach((gm, idx) => {
+      const md = markers[idx];
+      if (!md) return;
+      const isSelected = md.id === selectedJobId;
+      const iconUrl = md.type === 'estimate'
+        ? createEstimateMarkerIcon(isSelected)
+        : createJobMarkerIcon(isSelected);
+      const size = isSelected ? 44 : 36;
+      const h = isSelected ? 54 : 44;
+      gm.setIcon({
+        url: iconUrl,
+        scaledSize: new google.maps.Size(size, h),
+        anchor: new google.maps.Point(size / 2, h)
+      });
+      gm.setZIndex(isSelected ? 999 : 1);
+    });
+  }, [selectedJobId, markers]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -310,21 +358,25 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
     const newGoogleMarkers: google.maps.Marker[] = [];
 
     markers.forEach((markerData) => {
+      const isSelected = markerData.id === selectedJobId;
       const iconUrl = markerData.type === 'estimate' 
-        ? createEstimateMarkerIcon() 
-        : createJobMarkerIcon();
+        ? createEstimateMarkerIcon(isSelected) 
+        : createJobMarkerIcon(isSelected);
+      const size = isSelected ? 44 : 36;
+      const h = isSelected ? 54 : 44;
       
       const googleMarker = new google.maps.Marker({
         position: { lat: markerData.lat, lng: markerData.lng },
         icon: {
           url: iconUrl,
-          scaledSize: new google.maps.Size(36, 44),
-          anchor: new google.maps.Point(18, 44)
-        }
+          scaledSize: new google.maps.Size(size, h),
+          anchor: new google.maps.Point(size / 2, h)
+        },
+        zIndex: isSelected ? 999 : 1
       });
 
       googleMarker.addListener('click', () => {
-        setSelectedMarker(markerData);
+        selectJob(markerData.id, 'marker');
       });
 
       newGoogleMarkers.push(googleMarker);
@@ -361,7 +413,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
     const bounds = new google.maps.LatLngBounds();
     markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
-    mapRef.current.fitBounds(bounds, 50);
+    mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
 
     if (markers.length === 1) {
       setTimeout(() => {
@@ -424,6 +476,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         marker.addListener('click', () => {
           setSelectedCrewMarker(loc);
           setSelectedMarker(null);
+          setSelectedJobId(null);
         });
 
         newCrewMarkers.push(marker);
@@ -489,6 +542,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
     mapRef.current = map;
     map.addListener('click', () => {
       setSelectedCrewMarker(null);
+      setSelectedJobId(null);
     });
   }, []);
 
@@ -515,13 +569,35 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
     }
   };
 
-  const getTimeRange = (item: MarkerData) => {
+  const getTimeRange = (item: MarkerData | ScheduleItem) => {
     const start = formatTimeDisplay(item.scheduledTime);
     const end = formatTimeDisplay(item.scheduledEndTime);
     if (start && end) return `${start} – ${end}`;
     if (start) return start;
     return 'Scheduled';
   };
+
+  const handleCardScroll = useCallback(() => {
+    if (!carouselRef.current || markers.length === 0) return;
+    const container = carouselRef.current;
+    const centerX = container.scrollLeft + container.clientWidth / 2;
+    
+    let closestId: number | null = null;
+    let closestDist = Infinity;
+    
+    cardRefs.current.forEach((el, id) => {
+      const cardCenter = el.offsetLeft + el.clientWidth / 2;
+      const dist = Math.abs(cardCenter - centerX);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestId = id;
+      }
+    });
+
+    if (closestId !== null && closestId !== selectedJobId) {
+      selectJob(closestId, 'card');
+    }
+  }, [markers, selectedJobId, selectJob]);
 
   if (!hasApiKey) {
     return (
@@ -568,7 +644,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const showNoMappableLocations = hasScheduledItems && !hasMappableLocations && !isGeocoding;
 
   return (
-    <div className="h-full w-full relative rounded-lg overflow-hidden">
+    <div className="h-full w-full relative overflow-hidden">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
@@ -586,59 +662,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
           }
         }}
       >
-        {selectedMarker && (
-          <InfoWindow
-            position={{ lat: selectedMarker.lat, lng: selectedMarker.lng }}
-            onCloseClick={() => setSelectedMarker(null)}
-            options={{ maxWidth: 320 }}
-          >
-            <div 
-              className="p-1 cursor-pointer hover:bg-slate-50 rounded transition-colors"
-              onClick={() => handleInfoCardClick(selectedMarker)}
-            >
-              <div className="flex items-start gap-2 mb-2">
-                <Badge 
-                  variant={selectedMarker.type === 'estimate' ? 'secondary' : 'default'}
-                  className={selectedMarker.type === 'estimate' 
-                    ? 'bg-purple-100 text-purple-700 text-xs' 
-                    : 'bg-green-100 text-green-700 text-xs'
-                  }
-                >
-                  {selectedMarker.type === 'estimate' ? 'Estimate' : 'Job'}
-                </Badge>
-              </div>
-              
-              <h3 className="font-semibold text-slate-900 text-sm mb-1 line-clamp-2">
-                {selectedMarker.title}
-              </h3>
-              
-              {selectedMarker.customerName && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-1">
-                  <User className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{selectedMarker.customerName}</span>
-                </div>
-              )}
-              
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-1">
-                <Clock className="h-3 w-3 flex-shrink-0" />
-                <span>{getTimeRange(selectedMarker)}</span>
-              </div>
-              
-              {selectedMarker.address && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <MapPin className="h-3 w-3 flex-shrink-0" />
-                  <span className="line-clamp-2">{selectedMarker.address}</span>
-                </div>
-              )}
-              
-              <div className="flex items-center justify-end mt-2 text-xs text-primary font-medium">
-                <span>View details</span>
-                <ChevronRight className="h-3 w-3" />
-              </div>
-            </div>
-          </InfoWindow>
-        )}
-
         {selectedCrewMarker && (
           <OverlayViewF
             position={{ lat: selectedCrewMarker.lat, lng: selectedCrewMarker.lng }}
@@ -687,21 +710,21 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
       </GoogleMap>
 
       {isGeocoding && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2 z-10">
           <Loader2 className="h-4 w-4 text-primary animate-spin" />
           <span className="text-sm text-slate-600 dark:text-slate-300">Finding locations...</span>
         </div>
       )}
 
       {showNoAppointments && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2 z-10">
           <Calendar className="h-4 w-4 text-slate-400" />
           <span className="text-sm text-slate-600 dark:text-slate-300">No scheduled appointments</span>
         </div>
       )}
 
       {showNoMappableLocations && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-2 flex items-center gap-2">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-2 flex items-center gap-2 z-10">
           <MapPin className="h-4 w-4 text-amber-500" />
           <span className="text-sm text-amber-700 dark:text-amber-300">
             {items.length} appointment{items.length > 1 ? 's' : ''} scheduled, but no mappable addresses
@@ -709,29 +732,111 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         </div>
       )}
 
-      {(markers.length > 0 || crewLocations.length > 0) && (
-        <div className="absolute bottom-4 left-4 bg-white dark:bg-slate-800 rounded-lg shadow-lg px-3 py-2">
-          <div className="flex items-center gap-3 text-xs">
-            {markers.filter(m => m.type === 'job').length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-slate-600 dark:text-slate-300">Jobs ({markers.filter(m => m.type === 'job').length})</span>
-              </div>
-            )}
-            {markers.filter(m => m.type === 'estimate').length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-purple-500" />
-                <span className="text-slate-600 dark:text-slate-300">Estimates ({markers.filter(m => m.type === 'estimate').length})</span>
-              </div>
-            )}
-            {crewLocations.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-slate-600 dark:text-slate-300">
-                  {role === 'TECHNICIAN' ? 'You' : `Crew (${crewLocations.length})`}
+      {markers.length > 0 && (
+        <div
+          className="absolute bottom-0 left-0 right-0 z-20"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
+          <div
+            className="transition-transform duration-300 ease-out"
+            style={{ transform: trayExpanded ? 'translateY(0)' : 'translateY(calc(100% - 44px))' }}
+          >
+            <div className="flex justify-center pb-1">
+              <button
+                onClick={() => setTrayExpanded(!trayExpanded)}
+                className="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+              >
+                <ChevronUp
+                  className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${trayExpanded ? 'rotate-180' : ''}`}
+                />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {markers.length} {markers.length === 1 ? 'location' : 'locations'}
                 </span>
+              </button>
+            </div>
+
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t border-slate-200/80 dark:border-slate-700/80">
+              <div
+                ref={carouselRef}
+                onScroll={handleCardScroll}
+                className="flex gap-3 overflow-x-auto px-4 py-3 snap-x snap-mandatory scrollbar-hide"
+                style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
+              >
+                {markers.map((m) => {
+                  const isActive = m.id === selectedJobId;
+                  return (
+                    <div
+                      key={`${m.type}-${m.id}`}
+                      ref={(el) => { if (el) cardRefs.current.set(m.id, el); }}
+                      onClick={() => selectJob(m.id, 'card')}
+                      className={`flex-shrink-0 w-[240px] snap-center rounded-xl border p-3 cursor-pointer transition-all duration-200 ${
+                        isActive
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-md ring-1 ring-blue-500/30'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <span className={`text-[13px] font-bold leading-tight ${
+                          isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-slate-100'
+                        }`}>
+                          {getTimeRange(m)}
+                        </span>
+                        <span className={`flex-shrink-0 px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
+                          m.type === 'estimate'
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200'
+                            : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                        }`}>
+                          {m.type === 'estimate' ? 'EST' : 'JOB'}
+                        </span>
+                      </div>
+                      <p className="text-[13px] font-medium text-slate-800 dark:text-slate-200 truncate leading-tight">
+                        {m.customerName || m.title}
+                      </p>
+                      {m.address && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 leading-tight">
+                          {m.address}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between mt-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleInfoCardClick(m);
+                          }}
+                          className="text-[11px] font-medium text-blue-600 dark:text-blue-400 flex items-center gap-0.5"
+                        >
+                          View details
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
+                        {m.address && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const addr = encodeURIComponent(m.address!);
+                              window.open(`https://maps.apple.com/?daddr=${addr}`, '_blank');
+                            }}
+                            className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center"
+                          >
+                            <Navigation className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(crewLocations.length > 0 && markers.length === 0) && (
+        <div className="absolute bottom-4 left-4 bg-white dark:bg-slate-800 rounded-lg shadow-lg px-3 py-2 z-10">
+          <div className="flex items-center gap-1.5 text-xs">
+            <div className="w-3 h-3 rounded-full bg-blue-500" />
+            <span className="text-slate-600 dark:text-slate-300">
+              {role === 'TECHNICIAN' ? 'You' : `Crew (${crewLocations.length})`}
+            </span>
           </div>
         </div>
       )}
