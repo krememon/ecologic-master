@@ -1,0 +1,51 @@
+Replit Agent Prompt — Fix “Open directions” sheet appearing behind cards
+
+GOAL
+The “Open directions” modal/bottom sheet must ALWAYS render on top of the job carousel cards + map.
+Right now it’s behind the cards because of z-index / stacking context. Fix it properly.
+
+REQUIREMENTS
+1) The directions sheet must be above everything (map + carousel + any bottom sheet).
+2) When open, background must NOT be clickable/scrollable (cards cannot swipe, map cannot pan).
+3) Tapping the dimmed backdrop closes the sheet.
+4) This must work on iOS Safari + Capacitor iOS (important: transform/translate parents create stacking contexts).
+
+IMPLEMENTATION (DO THIS EXACTLY)
+A) Render the directions sheet via a React Portal to document.body
+- Create a small reusable Portal component if you don’t already have one:
+  - import { createPortal } from "react-dom";
+  - if typeof document === "undefined" return null
+  - return createPortal(children, document.body)
+
+- Move the “Open directions” sheet markup OUT of the map/carousel component tree
+  and render it inside the Portal so it is not trapped inside any stacking context.
+
+B) Use a top-level overlay wrapper with a very high z-index
+- Backdrop: position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.35); backdrop-filter: blur(2px)
+- Sheet: position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 10000;
+- Give the sheet its own rounded corners + shadow.
+
+C) Hard-disable interaction behind the modal
+When isDirectionsOpen === true:
+- Add `overflow: hidden` to document.body (cleanup on close)
+- Backdrop must capture all pointer events
+- The map + carousel containers should not receive touch events (the overlay will block it)
+
+D) Ensure carousel layer can’t still “float” above due to transforms
+If the carousel uses `transform: translate3d(...)` / `will-change: transform`,
+it can create stacking contexts. The Portal removes the problem. Still:
+- Make sure the carousel container z-index is lower than 9999 (ex: 10–100 range).
+
+DELIVERABLES
+- A Portal-based DirectionsSheet component (e.g. DirectionsSheet.tsx)
+- Replace old inline directions UI with <DirectionsSheet open={...} job={...} onClose={...} />
+- Confirm: directions sheet is ALWAYS above the cards, and cards/map are not interactive while open.
+
+DO NOT
+- Do not “just increase z-index” inside the same parent tree. That will keep breaking because of stacking contexts.
+- Do not change any job carousel behavior besides blocking it when modal is open.
+
+TEST
+- Open map page, open carousel, tap navigation icon, confirm sheet overlays cards.
+- Try swiping cards / panning map while sheet open -> should do nothing.
+- Tap backdrop -> sheet closes and interactions return.

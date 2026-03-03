@@ -1,4 +1,5 @@
 import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { GoogleMap, useJsApiLoader, InfoWindow, OverlayViewF, OVERLAY_MOUSE_TARGET } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, X, ChevronUp, Navigation, Crosshair } from "lucide-react";
@@ -245,6 +246,13 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const crewMarkersRef = useRef<google.maps.Marker[]>([]);
   const crewClustererRef = useRef<MarkerClusterer | null>(null);
   const hasFittedCrewRef = useRef(false);
+
+  useEffect(() => {
+    if (directionsTarget) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [directionsTarget]);
 
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [trayExpanded, setTrayExpanded] = useState(false);
@@ -987,18 +995,19 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         </div>
       )}
 
-      {directionsTarget && (
+      {directionsTarget && createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex items-end justify-center"
+          style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
           onClick={() => setDirectionsTarget(null)}
+          onTouchMove={(e) => e.preventDefault()}
         >
-          <div className="absolute inset-0 bg-black/40" />
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }} />
           <div
-            className="relative w-full max-w-sm mx-4 mb-4 animate-in slide-in-from-bottom-4 duration-200"
+            style={{ position: 'relative', width: '100%', maxWidth: '384px', margin: '0 16px 16px', paddingBottom: 'env(safe-area-inset-bottom, 0px)', zIndex: 100000 }}
             onClick={(e) => e.stopPropagation()}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            className="animate-in slide-in-from-bottom-4 duration-200"
           >
-            <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden" style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)' }}>
               <div className="px-4 pt-4 pb-2">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 text-center">Open directions</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-0.5 truncate">
@@ -1014,7 +1023,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                     );
                     setDirectionsTarget(null);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors active:bg-slate-100 dark:active:bg-slate-700"
                 >
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center flex-shrink-0">
                     <MapPin className="h-4 w-4 text-white" />
@@ -1029,7 +1038,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                     );
                     setDirectionsTarget(null);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors active:bg-slate-100 dark:active:bg-slate-700"
                 >
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
                     <Navigation className="h-4 w-4 text-white" />
@@ -1040,12 +1049,14 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
             </div>
             <button
               onClick={() => setDirectionsTarget(null)}
-              className="w-full mt-2 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-[15px] font-semibold text-blue-600 dark:text-blue-400 shadow-2xl active:scale-[0.98] transition-transform"
+              className="w-full mt-2 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-[15px] font-semibold text-blue-600 dark:text-blue-400 active:scale-[0.98] transition-transform"
+              style={{ boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)' }}
             >
               Cancel
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
