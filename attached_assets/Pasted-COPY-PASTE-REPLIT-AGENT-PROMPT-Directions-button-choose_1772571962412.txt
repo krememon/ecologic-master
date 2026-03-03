@@ -1,0 +1,139 @@
+COPY/PASTE REPLIT AGENT PROMPT — “Directions” button: choose Apple Maps or Google Maps (iOS + Android + Web)
+Goal
+
+On the Schedule → Map carousel card, when the user taps the paper-airplane / directions icon (screenshot), show a native-looking picker to open directions in:
+
+Apple Maps
+
+Google Maps (if installed; otherwise fall back to web Google Maps)
+
+Must work on:
+
+iOS Native (Capacitor)
+
+Android Native (Capacitor)
+
+Web
+
+Keep UX modern + clean, match EcoLogic (use our Dialog/ActionSheet styling). No breaking existing UI.
+
+UX Requirements
+
+Tap directions icon → open a small modal/action sheet:
+
+Title: “Open directions”
+
+Options:
+
+Apple Maps
+
+Google Maps
+
+Cancel button
+
+If job has no valid lat/lng and no address → show toast “No address available” and do nothing.
+
+If lat/lng exists, prefer that (more accurate). If not, use encoded address string.
+
+Implementation Plan
+1) Add helper: openDirections({ lat, lng, address, label })
+
+Create a small utility file (ex: client/src/lib/maps/openDirections.ts) that:
+
+Detects platform via existing isNative / Capacitor check
+
+Builds URL schemes:
+
+Apple Maps
+
+Prefer coordinates: http://maps.apple.com/?daddr=lat,lng&q=Label
+
+Or address: http://maps.apple.com/?daddr=ENCODED_ADDRESS&q=Label
+
+Google Maps
+
+iOS scheme (if installed): comgooglemaps://?daddr=lat,lng&directionsmode=driving
+
+Android scheme: google.navigation:q=lat,lng
+
+Web fallback: https://www.google.com/maps/dir/?api=1&destination=...
+
+Important: For iOS/Android native, open external apps using Capacitor:
+
+Use @capacitor/browser or @capacitor/app openUrl (whichever you already use reliably).
+
+If you already have a helper like openExternalUrl(url) use that.
+
+For Google Maps scheme on iOS: attempt open; if it fails, fallback to web URL.
+
+2) Add the picker UI (Action Sheet style)
+
+In the component that renders the card and the directions icon (paper plane button):
+
+Replace the current click handler with setDirectionsTarget(job) and setDirectionsOpen(true)
+
+Create a small modal:
+
+Dialog (shadcn) styled like an action sheet
+
+Buttons:
+
+“Apple Maps”
+
+“Google Maps”
+
+“Cancel”
+
+On selection:
+
+Close modal
+
+Call openDirections(...) with the job’s best location data.
+
+3) Get the job destination data
+
+For a job card, build:
+
+label: customer name or job title
+
+address: street + city + state + zip (whatever exists)
+
+lat/lng: use your geocoded job coordinates if available (map marker position)
+
+If your map items already store lat/lng, use that directly.
+If not available, use the address and rely on Apple/Google geocoding.
+
+4) Edge cases
+
+If Apple Maps option chosen on Android, still open Google Maps (or show “Apple Maps not available”). Keep it simple:
+
+iOS: show both
+
+Android: show only Google Maps
+
+Web: show only Google Maps (or both but Apple Maps just opens apple maps web — not great)
+Implement logic:
+
+If platform === iOS: show Apple + Google
+
+Else: show Google only (and keep Cancel)
+
+5) Don’t break layout / events
+
+Ensure clicking the directions icon does NOT trigger card selection/hyperfocus.
+
+Stop propagation on the icon button click.
+
+Keep carousel swipe working.
+
+Deliverables
+
+Tapping the directions icon opens a picker (iOS shows Apple + Google).
+
+Apple Maps opens in Apple Maps app with destination set.
+
+Google Maps opens in Google Maps app if installed; otherwise opens Google Maps in browser.
+
+Android/web: show Google Maps only (clean UX).
+
+No change to card selection swipe behavior; no layout shifts.

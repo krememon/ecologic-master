@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { FixedOverlayPortal } from "@/components/FixedOverlayPortal";
 import geoTracking from "@/services/geoTracking";
+import { openDirections, getAvailableMapApps, type MapApp } from "@/lib/openDirections";
+import { useToast } from "@/hooks/use-toast";
 
 interface ScheduleItem {
   type: 'job' | 'estimate';
@@ -229,9 +231,11 @@ function formatTimeAgo(dateStr: string): string {
 
 function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [directionsTarget, setDirectionsTarget] = useState<MarkerData | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
@@ -920,12 +924,20 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                           View details
                           <ChevronRight className="h-3 w-3" />
                         </button>
-                        {m.address && (
+                        {(m.address || (m.lat && m.lng)) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const addr = encodeURIComponent(m.address!);
-                              window.open(`https://maps.apple.com/?daddr=${addr}`, '_blank');
+                              if (!m.address && !m.lat && !m.lng) {
+                                toast({ title: "No address available", variant: "destructive" });
+                                return;
+                              }
+                              const apps = getAvailableMapApps();
+                              if (apps.length === 1) {
+                                openDirections({ lat: m.lat, lng: m.lng, address: m.address, label: m.customerName || m.title }, apps[0]);
+                              } else {
+                                setDirectionsTarget(m);
+                              }
                             }}
                             className="h-7 w-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center"
                           >
@@ -971,6 +983,67 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                 {role === 'TECHNICIAN' ? 'You' : `Crew (${crewLocations.length})`}
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {directionsTarget && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-end justify-center"
+          onClick={() => setDirectionsTarget(null)}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-sm mx-4 mb-4 animate-in slide-in-from-bottom-4 duration-200"
+            onClick={(e) => e.stopPropagation()}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="px-4 pt-4 pb-2">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 text-center">Open directions</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-0.5 truncate">
+                  {directionsTarget.customerName || directionsTarget.title}
+                </p>
+              </div>
+              <div className="px-3 pb-3 space-y-1.5">
+                <button
+                  onClick={() => {
+                    openDirections(
+                      { lat: directionsTarget.lat, lng: directionsTarget.lng, address: directionsTarget.address, label: directionsTarget.customerName || directionsTarget.title },
+                      'apple'
+                    );
+                    setDirectionsTarget(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-green-400 to-green-600 flex items-center justify-center flex-shrink-0">
+                    <MapPin className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="text-[15px] font-medium text-slate-900 dark:text-slate-100">Apple Maps</span>
+                </button>
+                <button
+                  onClick={() => {
+                    openDirections(
+                      { lat: directionsTarget.lat, lng: directionsTarget.lng, address: directionsTarget.address, label: directionsTarget.customerName || directionsTarget.title },
+                      'google'
+                    );
+                    setDirectionsTarget(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
+                    <Navigation className="h-4 w-4 text-white" />
+                  </div>
+                  <span className="text-[15px] font-medium text-slate-900 dark:text-slate-100">Google Maps</span>
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={() => setDirectionsTarget(null)}
+              className="w-full mt-2 py-3.5 bg-white dark:bg-slate-800 rounded-2xl text-[15px] font-semibold text-blue-600 dark:text-blue-400 shadow-2xl active:scale-[0.98] transition-transform"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
