@@ -1,0 +1,122 @@
+TASK: Replace WebView Geolocation With Native Capacitor Geolocation
+
+We are currently using navigator.geolocation inside geoTracking.start().
+
+This is causing iOS to use WebView permissions ("When I Share") instead of native location permissions.
+
+We must switch to @capacitor/geolocation so iOS treats this as native location access and enables proper live tracking.
+
+🎯 OBJECTIVE
+
+Replace ALL usage of:
+
+navigator.geolocation.watchPosition
+navigator.geolocation.getCurrentPosition
+
+With the Capacitor Geolocation plugin.
+
+Ensure:
+
+• Native iOS location permission dialog is used
+• "While Using the App" appears in Settings
+• Continuous watch tracking works
+• Heartbeat batching logic remains unchanged
+• geoTracking.start(sessionId) still functions the same
+• geoTracking.stop() still clears watcher
+
+🛠 IMPLEMENTATION STEPS
+1️⃣ Install Plugin
+
+If not installed:
+
+npm install @capacitor/geolocation
+
+Then sync iOS:
+
+npx cap sync ios
+2️⃣ Import Plugin
+
+In geoTracking file:
+
+import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
+3️⃣ Replace Permission Request
+
+Replace any permission logic with:
+
+await Geolocation.requestPermissions();
+4️⃣ Replace watchPosition
+
+Replace this:
+
+navigator.geolocation.watchPosition(success, error, options)
+
+With:
+
+const watchId = await Geolocation.watchPosition(
+  {
+    enableHighAccuracy: true,
+    timeout: 20000,
+    maximumAge: 0
+  },
+  (position, err) => {
+    if (err) {
+      console.log('[geo] watch ERROR', err);
+      return;
+    }
+
+    if (position) {
+      handleNewPoint(position.coords);
+    }
+  }
+);
+
+Store watchId so stop() can clear it.
+
+5️⃣ Replace getCurrentPosition Fallback
+
+Replace:
+
+navigator.geolocation.getCurrentPosition(...)
+
+With:
+
+const position = await Geolocation.getCurrentPosition({
+  enableHighAccuracy: true,
+  timeout: 15000
+});
+handleNewPoint(position.coords);
+6️⃣ Replace clearWatch
+
+Replace:
+
+navigator.geolocation.clearWatch(id);
+
+With:
+
+await Geolocation.clearWatch({ id: watchId });
+⚠️ IMPORTANT
+
+• Do NOT change batching logic
+• Do NOT change backend API
+• Do NOT remove heartbeat
+• Only replace geolocation implementation
+• Maintain existing console logging format
+
+✅ Expected Result After Deployment
+
+After rebuilding iOS:
+
+Settings → EcoLogic → Location should show:
+
+• Never
+• While Using the App
+• Always
+
+NOT "When I Share"
+
+And:
+
+• No more PERMISSION_DENIED
+• Heartbeat tick should show pointCount increasing
+• /api/location/live should return points
