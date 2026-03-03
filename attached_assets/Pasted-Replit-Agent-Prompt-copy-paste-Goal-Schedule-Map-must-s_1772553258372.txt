@@ -1,0 +1,125 @@
+Replit Agent Prompt (copy/paste)
+
+Goal: Schedule → Map must show:
+
+Technician: a “My Location” marker (only for the logged-in tech, only if clocked in + permission granted)
+
+Owner/Admin/Dispatcher/Supervisor: live tech markers from backend /api/location/live
+
+Keep existing “scheduled items pins” logic unchanged.
+
+Preserve RBAC (“hidden not disabled”): tech only sees themselves; office roles see all relevant techs.
+
+UI CHANGES (Frontend)
+
+ScheduleMapView / AIScheduling Map tab
+
+Add a new map overlay layer called Live Locations.
+
+Do NOT bring back old iframe banners / locate-me button / accuracy circle. Keep it simple.
+
+Technician “My Location” marker
+
+When role is TECHNICIAN:
+
+If user is clocked in, show a single marker:
+
+label: “You”
+
+position: latest location from geoTracking (client-side) OR from /api/location/live filtered to self
+
+Implement a tiny polling fallback:
+
+every 5 seconds while on Map tab, call /api/location/live
+
+find the record for the logged-in userId
+
+if present, render it as “You”
+
+If no location yet, do nothing (no banners).
+
+Office “Live Tech” markers
+
+When role is OWNER/ADMIN/DISPATCHER/SUPERVISOR:
+
+Poll /api/location/live every 5 seconds while on Map tab.
+
+Render a marker for each tech record returned:
+
+label: technician name (or email fallback)
+
+tiny status text like “Live”
+
+Clicking a marker opens a small popup with:
+
+tech name
+
+timestamp (relative “x min ago”)
+
+accuracy if available
+
+sessionId
+
+Map auto-centering behavior
+
+If there are scheduled pins → keep existing fit-bounds behavior.
+
+If there are NO scheduled pins but there ARE live markers:
+
+fit map bounds to live markers.
+
+If there are neither:
+
+keep default Long Island center (40.73, -73.13).
+
+Add logs (temporary)
+
+When map receives live locations:
+
+[MapLive] role=... count=n
+
+When tech finds self location:
+
+[MapLive] self found=YES/NO
+
+BACKEND CHECK (Express)
+
+Verify /api/location/live returns live points for the company:
+
+It must return at least:
+
+userId
+
+lat
+
+lng
+
+timestamp
+
+sessionId
+
+accuracy (optional)
+
+displayName/email
+
+Add a temporary debug log in that endpoint:
+
+[geo-live] requesterUserId=... companyId=... returned=n
+
+Make sure TECHNICIAN calling /api/location/live only returns:
+
+their own record (not other techs)
+
+DELIVERABLES
+
+Working Schedule → Map where:
+
+Tech sees “You” marker after clock-in + permission granted
+
+Owner sees tech markers updating every ~5 seconds
+
+No schedule items = map still shows live markers if available
+
+Leave existing schedule pin rendering intact
+
+Remove debug logs once confirmed working (or keep but gated behind DEV flag)

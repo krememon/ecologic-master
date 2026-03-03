@@ -3399,6 +3399,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filtered = fresh.filter(l => l.userId === userId);
       }
 
+      console.log(`[geo-live] requester=${userId} companyId=${company.id} role=${userRole} totalActive=${allLocations.length} fresh=${fresh.length} filtered=${filtered.length}`);
+
       if (filtered.length === 0) {
         return res.json([]);
       }
@@ -3426,7 +3428,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      console.log(`[geo-live] requester=${userId} companyId=${company.id} role=${userRole} totalActive=${allLocations.length} fresh=${fresh.length} returned=${enriched.length}`);
       res.json(enriched);
     } catch (error: any) {
       console.error('[GEO] Error fetching live locations:', error);

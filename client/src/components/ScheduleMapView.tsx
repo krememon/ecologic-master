@@ -247,6 +247,8 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
             lng: parseFloat(d.lng) || 0,
             lastUpdatedAt: d.updatedAt || new Date().toISOString(),
           }));
+          const selfFound = userId ? mapped.some(l => l.userId === userId) : false;
+          console.log(`[MapLive] role=${role} count=${mapped.length} selfFound=${selfFound ? 'YES' : 'NO'}`);
           setCrewLocations(mapped);
         }
       } catch {}
