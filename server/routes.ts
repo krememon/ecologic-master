@@ -3341,6 +3341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      console.log('[geo-api] received batch userId=' + userId + ' sessionId=' + sessionId + ' points=' + (accepted + rejected));
       console.log('[GEO] batch accepted', { userId, sessionId, accepted, rejected });
       res.json({ success: true, accepted, rejected });
     } catch (error: any) {

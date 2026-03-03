@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
-import { GoogleMap, useJsApiLoader, InfoWindow, Circle } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, InfoWindow } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, Navigation, LocateFixed } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,7 +99,7 @@ const containerStyle = {
   minHeight: '400px'
 };
 
-const defaultCenter = { lat: 40.7282, lng: -73.0861 };
+const defaultCenter = { lat: 40.73, lng: -73.13 };
 
 const mapStyles = [
   { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
@@ -198,16 +198,9 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
-  const [isLocating, setIsLocating] = useState(false);
-  const [geoStatus, setGeoStatus] = useState<'unknown' | 'granted' | 'prompt' | 'denied' | 'iframe'>('unknown');
-  const [geoError, setGeoError] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
-  const userMarkerRef = useRef<google.maps.Marker | null>(null);
-  const watchIdRef = useRef<number | null>(null);
 
   const showCrewMarkers = userRole && ['OWNER', 'SUPERVISOR'].includes(userRole.toUpperCase());
   const [crewLocations, setCrewLocations] = useState<CrewLocation[]>([]);
@@ -223,187 +216,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
     googleMapsApiKey: apiKey,
     libraries: ['places']
   });
-
-  const isInIframe = (): boolean => {
-    try {
-      return window.self !== window.top;
-    } catch (e) {
-      return true;
-    }
-  };
-
-  const openInNewTab = () => {
-    window.open(window.location.href, '_blank', 'noopener,noreferrer');
-  };
-
-  const startWatchingLocation = useCallback(() => {
-    if (watchIdRef.current !== null) return;
-    if (!navigator.geolocation) return;
-
-    console.log('[Geolocation] Starting watchPosition...');
-    setIsLocating(true);
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        console.log('[Geolocation] Position update:', position.coords);
-        const coords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-        setUserLocation(coords);
-        setUserAccuracy(position.coords.accuracy);
-        setIsLocating(false);
-        setGeoError(null);
-        setGeoStatus('granted');
-      },
-      (error) => {
-        console.error('[Geolocation] Watch error:', error.code, error.message);
-        setIsLocating(false);
-        if (error.code === 1) {
-          setGeoStatus('denied');
-          setGeoError('denied');
-        } else if (error.code === 2) {
-          setGeoError('Location unavailable. Turn on Location Services on your device.');
-        } else if (error.code === 3) {
-          setGeoError('Location request timed out. Try again.');
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-    );
-  }, []);
-
-  const stopWatchingLocation = useCallback(() => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-  }, []);
-
-  const requestLocationPermission = useCallback(() => {
-    if (isInIframe()) {
-      setGeoStatus('iframe');
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      setGeoError('Geolocation is not supported by this browser.');
-      return;
-    }
-
-    setIsLocating(true);
-    console.log('[Geolocation] Requesting permission via getCurrentPosition...');
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        console.log('[Geolocation] Permission granted:', position.coords);
-        setGeoStatus('granted');
-        startWatchingLocation();
-      },
-      (error) => {
-        console.error('[Geolocation] Permission error:', error.code, error.message);
-        setIsLocating(false);
-        if (error.code === 1) {
-          setGeoStatus('denied');
-          setGeoError('denied');
-        } else {
-          setGeoError('Could not get location. Please try again.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  }, [startWatchingLocation]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    if (isInIframe()) {
-      setGeoStatus('iframe');
-      return;
-    }
-
-    const checkPermissionAndStart = async () => {
-      if (navigator.permissions?.query) {
-        try {
-          const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-          console.log('[Geolocation] Permission state:', perm.state);
-          
-          if (perm.state === 'granted') {
-            setGeoStatus('granted');
-            startWatchingLocation();
-          } else if (perm.state === 'prompt') {
-            setGeoStatus('prompt');
-          } else if (perm.state === 'denied') {
-            setGeoStatus('denied');
-          }
-
-          perm.addEventListener('change', () => {
-            console.log('[Geolocation] Permission changed to:', perm.state);
-            if (perm.state === 'granted') {
-              setGeoStatus('granted');
-              startWatchingLocation();
-            } else if (perm.state === 'denied') {
-              setGeoStatus('denied');
-              stopWatchingLocation();
-            }
-          });
-        } catch (e) {
-          console.log('[Geolocation] Permissions API not supported, will prompt on button click');
-          setGeoStatus('prompt');
-        }
-      } else {
-        setGeoStatus('prompt');
-      }
-    };
-
-    checkPermissionAndStart();
-
-    return () => {
-      stopWatchingLocation();
-    };
-  }, [isLoaded, startWatchingLocation, stopWatchingLocation]);
-
-  useEffect(() => {
-    if (!mapRef.current || !isLoaded || !userLocation) return;
-
-    if (userMarkerRef.current) {
-      userMarkerRef.current.setPosition(userLocation);
-    } else {
-      const blueDotSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" fill="#4285F4" fill-opacity="0.2" stroke="#4285F4" stroke-width="2"/>
-        <circle cx="12" cy="12" r="6" fill="#4285F4"/>
-        <circle cx="12" cy="12" r="3" fill="#ffffff"/>
-      </svg>`;
-      
-      userMarkerRef.current = new google.maps.Marker({
-        position: userLocation,
-        map: mapRef.current,
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(blueDotSvg),
-          scaledSize: new google.maps.Size(24, 24),
-          anchor: new google.maps.Point(12, 12)
-        },
-        zIndex: 999
-      });
-    }
-
-    return () => {
-      if (userMarkerRef.current) {
-        userMarkerRef.current.setMap(null);
-        userMarkerRef.current = null;
-      }
-    };
-  }, [userLocation, isLoaded]);
-
-  const handleLocateMe = () => {
-    if (userLocation && mapRef.current) {
-      mapRef.current.panTo(userLocation);
-      mapRef.current.setZoom(15);
-    } else if (geoStatus === 'prompt' || geoStatus === 'unknown') {
-      requestLocationPermission();
-    } else if (geoStatus === 'iframe') {
-      openInNewTab();
-    }
-  };
 
   const geocodeAddresses = useCallback(async () => {
     console.log('[Map] Starting geocode, items count:', items.length);
@@ -746,20 +558,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
           }
         }}
       >
-        {userLocation && userAccuracy && (
-          <Circle
-            center={userLocation}
-            radius={userAccuracy}
-            options={{
-              fillColor: '#4285F4',
-              fillOpacity: 0.1,
-              strokeColor: '#4285F4',
-              strokeOpacity: 0.3,
-              strokeWeight: 1
-            }}
-          />
-        )}
-        
         {selectedMarker && (
           <InfoWindow
             position={{ lat: selectedMarker.lat, lng: selectedMarker.lng }}
@@ -846,103 +644,19 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
         </div>
       )}
 
-      {showNoAppointments && !geoError && (
+      {showNoAppointments && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 flex items-center gap-2">
           <Calendar className="h-4 w-4 text-slate-400" />
           <span className="text-sm text-slate-600 dark:text-slate-300">No scheduled appointments</span>
         </div>
       )}
 
-      {showNoMappableLocations && !geoError && (
+      {showNoMappableLocations && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-2 flex items-center gap-2">
           <MapPin className="h-4 w-4 text-amber-500" />
           <span className="text-sm text-amber-700 dark:text-amber-300">
             {items.length} appointment{items.length > 1 ? 's' : ''} scheduled, but no mappable addresses
           </span>
-        </div>
-      )}
-
-      {geoStatus === 'iframe' && (
-        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
-          <MapPin className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
-              Location isn't available in embedded preview. Open EcoLogic in a new tab to enable GPS.
-            </p>
-            <button
-              onClick={openInNewTab}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-            >
-              <Navigation className="h-4 w-4" />
-              Open in new tab
-            </button>
-          </div>
-        </div>
-      )}
-
-      {geoStatus === 'prompt' && !userLocation && (
-        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
-          <LocateFixed className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
-              Enable location to show your position on the map.
-            </p>
-            <button
-              onClick={requestLocationPermission}
-              disabled={isLocating}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
-            >
-              {isLocating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Enabling...
-                </>
-              ) : (
-                <>
-                  <LocateFixed className="h-4 w-4" />
-                  Enable location
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {geoStatus === 'denied' && (
-        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              Location blocked — click the lock icon in the address bar → Location → Allow.
-            </p>
-          </div>
-          <button 
-            onClick={() => setGeoStatus('unknown')}
-            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
-          >
-            <span className="sr-only">Dismiss</span>
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {geoError && geoError !== 'denied' && geoStatus !== 'iframe' && (
-        <div className="absolute top-4 left-4 right-4 mx-auto max-w-md bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm text-amber-800 dark:text-amber-200">{geoError}</p>
-          </div>
-          <button 
-            onClick={() => setGeoError(null)}
-            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
-          >
-            <span className="sr-only">Dismiss</span>
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
       )}
 
@@ -970,19 +684,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
           </div>
         </div>
       )}
-
-      <button
-        onClick={handleLocateMe}
-        disabled={isLocating}
-        className="absolute bottom-4 right-4 w-10 h-10 bg-white dark:bg-slate-800 rounded-lg shadow-lg flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-        title="My location"
-      >
-        {isLocating ? (
-          <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-        ) : (
-          <LocateFixed className={`h-5 w-5 ${userLocation ? 'text-blue-600' : 'text-slate-500'}`} />
-        )}
-      </button>
     </div>
   );
 }

@@ -160,12 +160,8 @@ export default function Home() {
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setShowJobPicker(false);
       setJobSearchQuery('');
-      if (data?.timeSessionId && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          () => { geoTracking.start(data.timeSessionId); },
-          () => {},
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
+      if (data?.timeSessionId) {
+        geoTracking.start(data.timeSessionId);
       }
     },
     onError: () => {
@@ -189,12 +185,8 @@ export default function Home() {
       setJobSearchQuery('');
       geoTracking.stop();
       const newSessionId = data?.started?.id;
-      if (newSessionId && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          () => { geoTracking.start(newSessionId); },
-          () => {},
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
+      if (newSessionId) {
+        geoTracking.start(newSessionId);
       }
     },
     onError: () => {

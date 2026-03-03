@@ -1,0 +1,94 @@
+PROMPT — FIX GEO TRACKING NOT STARTING + REMOVE VIEWER GPS FROM SCHEDULING MAP
+
+Scheduling Map: remove all viewer-location logic
+
+Find the Scheduling “Map” view component.
+
+Remove any calls to:
+
+Geolocation.getCurrentPosition()
+
+“Locate me”
+
+anything that tries to center map on the viewer automatically
+
+Replace with:
+
+default center = company HQ if available, else last saved map center (localStorage), else (40.73, -73.13) (Long Island)
+
+Delete/disable the yellow/blue banners:
+
+“Enable location to show your position on the map.”
+
+“Location request timed out. Try again.”
+
+The map should render regardless of viewer GPS settings.
+
+Ensure tracking starts on successful clock-in for TECHNICIAN
+
+Locate the clock-in handler that receives { timeSessionId } from POST /api/time/clock-in.
+
+Immediately after a successful clock-in response, call:
+
+geoTracking.start(timeSessionId)
+
+Ensure geoTracking.start():
+
+requests permission (if needed) but does not block clock-in
+
+starts a watcher and logs:
+
+[geo] start sessionId=...
+
+[geo] point lat=... lng=... acc=...
+
+[geo] sent batch n=...
+
+On clock-out success, call:
+
+geoTracking.stop()
+
+Confirm backend ingestion route exists and is being hit
+
+Ensure the tracking service POSTs to one of these:
+
+POST /api/location/batch OR POST /api/location/point
+
+Add a TEMP backend log line inside the route:
+
+[geo-api] received batch userId=... sessionId=... points=n
+
+After a technician clocks in and moves, we should see this log.
+
+Fix endpoint mismatch
+
+The logs show the frontend is calling:
+
+GET /api/location/live
+
+Make sure this endpoint exists and returns latest locations.
+
+If the new endpoint is /api/location/active, then:
+
+Either alias /api/location/live → same handler, OR update frontend to call the correct endpoint.
+
+Keep response shape:
+{ userId, name, avatarUrl, lat, lng, lastUpdatedAt }
+
+Apply stale hide: only return locations updated within 10 minutes.
+
+Do NOT require viewer GPS
+
+Owner should see tech dots even if owner phone Location Services are OFF.
+
+DELIVERABLE:
+
+After this patch:
+
+Scheduling Map shows no “enable location” banner.
+
+When technician clocks in and moves, server logs show [geo-api] received batch...
+
+GET /api/location/live returns at least 1 tech location.
+
+Map displays avatar marker(s).
