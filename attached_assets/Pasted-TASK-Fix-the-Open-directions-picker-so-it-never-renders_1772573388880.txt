@@ -1,0 +1,83 @@
+TASK: Fix the “Open directions” picker so it never renders behind the Map job cards carousel, and replace the Apple/Google option icons with the provided images.
+
+CONTEXT
+- We have Schedule → Map view with a bottom job-cards carousel/bottom sheet.
+- Tapping the small navigation/arrow icon on a job card opens an “Open directions” picker (Apple Maps / Google Maps).
+- Right now the picker is appearing BEHIND the cards (z-index/stacking/portal issue).
+- Also we want to swap the option icons to custom images:
+  - Google Maps icon file already available: /mnt/data/google-maps.png
+  - Apple Maps icon file already available: /mnt/data/intro_icon__dfyvjc1ohbcm_large.png
+- Keep behavior: user taps card arrow → picker opens → user chooses Apple or Google → open directions.
+
+GOALS
+1) Picker must ALWAYS appear on top of everything (including carousel cards), on iPhone native build + web.
+2) Picker must be centered and fully clickable, never clipped or overlapped.
+3) Replace the option icons with the new images.
+4) Do NOT change overall map layout / framing. This is only the picker layering + icons.
+
+UI REQUIREMENTS
+- Picker should render as a proper modal/sheet overlay:
+  - Backdrop overlay (dim) behind it
+  - Modal container with rounded corners
+  - Must be on top of the carousel and map UI
+- Ensure correct safe-area handling on iOS:
+  - Use env(safe-area-inset-top/bottom) if needed
+- Replace option icons:
+  - Apple row uses the Apple Maps image
+  - Google row uses the Google Maps image
+  - Icons: 36–44px square, borderRadius 10–12, no ugly stretching (object-fit: contain)
+- Keep typography + spacing consistent with EcoLogic (clean, modern).
+
+IMPLEMENTATION DETAILS (IMPORTANT)
+A) FIX THE “BEHIND THE CARDS” BUG
+- The root cause is stacking context: the carousel/bottom sheet likely has higher z-index or creates a new stacking context via transform/translate.
+- Solution: render the picker using a Portal to document.body (or to a top-level overlay root) AND give it a guaranteed highest z-index.
+- If we’re using shadcn Dialog/Sheet: ensure it uses <DialogPortal> / <SheetPortal> and set:
+  - overlay: fixed inset-0, z-[99999]
+  - content: fixed, z-[100000] (or similar)
+- If current picker is NOT using a portal (e.g., it’s inside the map container), refactor it to a dedicated component that uses ReactDOM.createPortal to body.
+- Make sure no parent element’s transform/overflow clips it.
+- Ensure the overlay catches clicks and the close (X) works.
+
+B) ADD/USE ICON ASSETS
+- Copy the two PNGs into the app’s static assets:
+  - e.g. /public/assets/maps/google-maps.png
+  - e.g. /public/assets/maps/apple-maps.png
+- Update the picker rows to use <img> with those paths.
+- Add simple CSS classes:
+  - width/height
+  - rounded
+  - object-contain
+
+C) DO NOT BREAK DIRECTIONS LOGIC
+- Keep existing URL logic exactly (Apple Maps vs Google Maps).
+- Just change the presentation + layering.
+- Ensure it works in:
+  - iOS Capacitor native build (opens external maps)
+  - Web (opens new tab)
+
+D) DEBUG LOGS (TARGETED)
+- Add one log when picker opens and when an option is selected:
+  - [DirectionsPicker] open jobId=...
+  - [DirectionsPicker] selected provider=apple|google jobId=...
+- No spam logs.
+
+FILES TO TOUCH (LIKELY)
+- Schedule/Map view component (where the arrow click triggers picker)
+- Directions picker component (or create one)
+- Any UI overlay/modal components
+
+DELIVERABLES
+1) Picker always appears above carousel (verified by visual test on iPhone).
+2) New icons used in Apple/Google rows.
+3) No layout shift of map page.
+4) Short note of what you changed + where.
+
+ACCEPTANCE TESTS
+- Open Schedule → Map
+- Tap arrow on a job card
+- Picker appears fully visible above cards (not behind)
+- Tap Apple Maps → opens Apple Maps directions
+- Tap Google Maps → opens Google Maps directions
+- Tap outside / X → closes picker
+- Repeat with carousel open/closed; same result.

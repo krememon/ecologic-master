@@ -11,6 +11,8 @@ import { FixedOverlayPortal } from "@/components/FixedOverlayPortal";
 import geoTracking from "@/services/geoTracking";
 import { openDirections, getAvailableMapApps, type MapApp } from "@/lib/openDirections";
 import { useToast } from "@/hooks/use-toast";
+import appleMapsIcon from "@assets/intro_icon__dfyvjc1ohbcm_large_1772573403059.png";
+import googleMapsIcon from "@assets/google-maps_1772573394272.png";
 
 interface ScheduleItem {
   type: 'job' | 'estimate';
