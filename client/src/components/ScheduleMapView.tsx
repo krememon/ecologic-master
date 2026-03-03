@@ -228,7 +228,25 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const userInteractedRef = useRef(false);
   const didInitialFitRef = useRef(false);
   const isProgrammaticMoveRef = useRef(false);
-  
+  const initialCenterRef = useRef<google.maps.LatLngLiteral>(defaultCenter);
+
+  const cameraMove = useCallback((reason: string, fn: () => void) => {
+    const allowed = !userInteractedRef.current ||
+      reason === 'recenter_button' ||
+      reason === 'explicit_focus_job' ||
+      reason === 'initial_fit_once';
+    console.log(`[MapCamera] ${allowed ? 'MOVE' : 'BLOCKED'} reason=${reason}`, {
+      userInteracted: userInteractedRef.current,
+      didInitialFit: didInitialFitRef.current,
+      hasFittedCrew: hasFittedCrewRef.current,
+      isProgrammatic: isProgrammaticMoveRef.current,
+    });
+    if (!allowed) return;
+    isProgrammaticMoveRef.current = true;
+    try { fn(); }
+    finally { setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500); }
+  }, []);
+
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
   
@@ -431,21 +449,16 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
       }
     });
 
-    if (!didInitialFitRef.current && !userInteractedRef.current) {
+    if (!didInitialFitRef.current) {
       didInitialFitRef.current = true;
-      isProgrammaticMoveRef.current = true;
-      const bounds = new google.maps.LatLngBounds();
-      markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
-      mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
-
-      if (markers.length === 1) {
-        setTimeout(() => {
-          mapRef.current?.setZoom(15);
-          setTimeout(() => { isProgrammaticMoveRef.current = false; }, 200);
-        }, 100);
-      } else {
-        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
-      }
+      cameraMove('initial_fit_once', () => {
+        const bounds = new google.maps.LatLngBounds();
+        markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
+        mapRef.current!.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
+        if (markers.length === 1) {
+          setTimeout(() => { mapRef.current?.setZoom(15); }, 100);
+        }
+      });
     }
 
     return () => {
@@ -542,19 +555,19 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         newCrewMarkers.forEach(m => m.setMap(mapRef.current));
       }
 
-      if (!hasFittedCrewRef.current && !userInteractedRef.current && markers.length === 0 && freshLocations.length > 0 && mapRef.current) {
+      if (!hasFittedCrewRef.current && !didInitialFitRef.current && freshLocations.length > 0 && mapRef.current) {
         hasFittedCrewRef.current = true;
         didInitialFitRef.current = true;
-        isProgrammaticMoveRef.current = true;
-        if (freshLocations.length === 1) {
-          mapRef.current.panTo({ lat: freshLocations[0].lat, lng: freshLocations[0].lng });
-          mapRef.current.setZoom(15);
-        } else {
-          const bounds = new google.maps.LatLngBounds();
-          freshLocations.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
-          mapRef.current.fitBounds(bounds, 50);
-        }
-        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
+        cameraMove('initial_fit_once', () => {
+          if (freshLocations.length === 1) {
+            mapRef.current!.panTo({ lat: freshLocations[0].lat, lng: freshLocations[0].lng });
+            mapRef.current!.setZoom(15);
+          } else {
+            const bounds = new google.maps.LatLngBounds();
+            freshLocations.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
+            mapRef.current!.fitBounds(bounds, 50);
+          }
+        });
       }
     };
 
@@ -571,36 +584,31 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const handleRecenter = useCallback(() => {
     if (!mapRef.current) return;
     userInteractedRef.current = false;
-    isProgrammaticMoveRef.current = true;
 
     if (markers.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
-      mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
-      if (markers.length === 1) {
-        setTimeout(() => {
-          mapRef.current?.setZoom(15);
-          setTimeout(() => { isProgrammaticMoveRef.current = false; }, 200);
-        }, 100);
-      } else {
-        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
-      }
+      cameraMove('recenter_button', () => {
+        const bounds = new google.maps.LatLngBounds();
+        markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
+        mapRef.current!.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
+        if (markers.length === 1) {
+          setTimeout(() => { mapRef.current?.setZoom(15); }, 100);
+        }
+      });
     } else if (crewLocations.length > 0) {
       const tenMinAgo = Date.now() - 10 * 60 * 1000;
       const fresh = crewLocations.filter(l => new Date(l.lastUpdatedAt).getTime() > tenMinAgo);
-      if (fresh.length === 1) {
-        mapRef.current.panTo({ lat: fresh[0].lat, lng: fresh[0].lng });
-        mapRef.current.setZoom(15);
-      } else if (fresh.length > 1) {
-        const bounds = new google.maps.LatLngBounds();
-        fresh.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
-        mapRef.current.fitBounds(bounds, 50);
-      }
-      setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
-    } else {
-      isProgrammaticMoveRef.current = false;
+      cameraMove('recenter_button', () => {
+        if (fresh.length === 1) {
+          mapRef.current!.panTo({ lat: fresh[0].lat, lng: fresh[0].lng });
+          mapRef.current!.setZoom(15);
+        } else if (fresh.length > 1) {
+          const bounds = new google.maps.LatLngBounds();
+          fresh.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
+          mapRef.current!.fitBounds(bounds, 50);
+        }
+      });
     }
-  }, [markers, crewLocations]);
+  }, [markers, crewLocations, cameraMove]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
@@ -706,12 +714,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
     );
   }
 
-  const center = markers.length > 0 
-    ? { lat: markers[0].lat, lng: markers[0].lng }
-    : crewLocations.length > 0
-      ? { lat: crewLocations[0].lat, lng: crewLocations[0].lng }
-      : defaultCenter;
-
   const hasScheduledItems = items.length > 0;
   const hasMappableLocations = markers.length > 0;
   const showNoAppointments = !hasScheduledItems && !isGeocoding && crewLocations.length === 0;
@@ -721,8 +723,8 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
     <div className="h-full w-full relative overflow-hidden">
       <GoogleMap
         mapContainerStyle={containerStyle}
-        center={center}
-        zoom={markers.length > 0 || crewLocations.length > 0 ? 12 : 11}
+        center={initialCenterRef.current}
+        zoom={11}
         onLoad={onLoad}
         onUnmount={onUnmount}
         options={{

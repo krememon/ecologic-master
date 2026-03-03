@@ -1,0 +1,180 @@
+User still sees instant relocate back to job after moving the map. Your summary claims guards exist, but behavior still happens. This means there is another camera move occurring OR the map is controlled and re-renders reset camera.
+
+✅ Goal
+
+After the user drags/zooms the map, the camera must be 100% free range:
+
+NO auto fitBounds
+
+NO auto panTo
+
+NO auto setCenter / setZoom
+
+NO implicit recenter from re-render
+Only allowed camera moves:
+
+Explicit tap Recenter button
+
+Explicit tap “Focus” action (if exists) or explicit tap on a job card (only if we choose)
+
+Optional: ONE initial fit on first load before any interaction
+
+TASK 1 — Instrument ALL camera moves (must be undeniable)
+
+Create a tiny helper mapCamera.ts (or inside component) and route every camera move through it:
+
+function cameraMove(reason: string, fn: () => void) {
+  console.log('[MapCamera] MOVE', reason, {
+    userInteracted: userInteractedRef.current,
+    didInitialFit: didInitialFitRef.current,
+    hasFittedCrew: hasFittedCrewRef?.current,
+    isProgrammatic: isProgrammaticMoveRef.current,
+    ts: Date.now()
+  });
+  isProgrammaticMoveRef.current = true;
+  try { fn(); }
+  finally {
+    setTimeout(() => { isProgrammaticMoveRef.current = false; }, 0);
+  }
+}
+
+Then replace ALL:
+
+fitBounds
+
+panTo
+
+setCenter
+
+setZoom
+
+with cameraMove("reason string", () => map.fitBounds(...)), etc.
+
+Also add a global search across the repo for:
+
+fitBounds(
+
+panTo(
+
+setCenter(
+
+setZoom(
+
+center:
+
+zoom:
+
+defaultCenter
+
+defaultZoom
+
+Make sure there are zero direct calls left.
+
+TASK 2 — Make map UNCONTROLLED (stop re-render snapping)
+
+If the Google Map component is receiving props like:
+
+center={someState}
+
+zoom={someState}
+
+This will cause snapping if state changes during live updates.
+
+Fix:
+
+Do NOT pass center or zoom as controlled props after initial mount.
+
+Use only:
+
+defaultCenter
+
+defaultZoom
+
+If you still need to “follow selection”, do it ONLY in explicit actions via cameraMove.
+
+Also ensure nothing is remounting the map:
+
+check if the map component has a key={...} that changes
+
+check if libraries={[...]} is being recreated (you already have warnings about LoadScript being reloaded). That can remount map and reset camera.
+
+Move libraries array to a top-level constant: const MAP_LIBS = ['places'] as const;
+
+Ensure it is not created inline.
+
+TASK 3 — Kill “initial crew fit” re-firing
+
+Agent says there is initial crew location fit (guarded by hasFittedCrewRef + userInteractedRef).
+
+If the map is still snapping, this guard is failing.
+
+Fix:
+
+hasFittedCrewRef MUST be a useRef(false) defined at top of component, not derived from state or recreated.
+
+The effect that triggers “initial crew fit” MUST:
+
+run only once AFTER the map instance exists AND crew markers exist
+
+set hasFittedCrewRef.current = true immediately before moving camera
+
+never reset unless user hits Recenter
+
+Also: if crew locations update every poll, do NOT treat that as needing a refit.
+
+Remove crew-fit effect dependency on live polling arrays.
+
+Only allow crew-fit when hasFittedCrewRef.current === false.
+
+TASK 4 — Respect user interaction HARD LOCK
+
+After any dragstart or zoom_changed caused by the user:
+
+set userInteractedRef.current = true
+
+and from that point on, BLOCK any cameraMove unless reason is explicitly allowed:
+
+allowlist: 'recenter_button', 'explicit_focus_job', 'initial_fit_once'
+
+Implement:
+
+function allowCameraMove(reason: string) {
+  if (!userInteractedRef.current) return true;
+  return reason === 'recenter_button' || reason === 'explicit_focus_job';
+}
+
+In cameraMove, if not allowed:
+
+log [MapCamera] BLOCKED reason=...
+
+do nothing.
+
+TASK 5 — Confirm with reproduction
+
+After changes:
+
+Open map → initial fit allowed once
+
+Drag map away → should never snap back
+
+Wait through several live poll refreshes → should never snap back
+
+Swipe cards → highlight only, no snap
+
+Tap Recenter → snap allowed
+
+Drag again → free range again
+
+The console must show either BLOCKED or MOVE with explicit reasons. No silent moves.
+
+Deliverables
+
+Uncontrolled map (no controlled center/zoom)
+
+All camera moves routed through cameraMove with logs + allowlist
+
+Remove any remount triggers (stable MAP_LIBS, no changing key)
+
+Fix crew-fit effect so it cannot re-run on live updates
+
+Do this now.
