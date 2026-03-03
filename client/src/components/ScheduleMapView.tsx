@@ -640,28 +640,28 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
           <InfoWindow
             position={{ lat: selectedCrewMarker.lat, lng: selectedCrewMarker.lng }}
             onCloseClick={() => setSelectedCrewMarker(null)}
-            options={{ maxWidth: 240 }}
+            options={{ maxWidth: 260, minWidth: 180, pixelOffset: new google.maps.Size(0, -4) }}
           >
-            <div className="p-1">
-              <div className="flex items-center gap-2 mb-1">
+            <div style={{ margin: '-8px -12px -12px -12px', padding: '8px 10px 8px 10px', minWidth: 160, maxWidth: 220 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {isSelf(selectedCrewMarker.userId) ? (
-                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                    <div className="w-3 h-3 rounded-full bg-white" />
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#fff' }} />
                   </div>
                 ) : selectedCrewMarker.avatarUrl ? (
-                  <img src={selectedCrewMarker.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  <img src={selectedCrewMarker.avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff', fontSize: 11, fontWeight: 700 }}>
                     {selectedCrewMarker.initials}
                   </div>
                 )}
-                <h3 className="font-semibold text-slate-900 text-sm">
+                <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isSelf(selectedCrewMarker.userId) ? 'You' : selectedCrewMarker.name}
-                </h3>
+                </span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Clock className="h-3 w-3 flex-shrink-0" />
-                <span>Last updated {formatTimeAgo(selectedCrewMarker.lastUpdatedAt)}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, fontSize: 12, color: '#94a3b8', lineHeight: 1.2 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+                <span>{formatTimeAgo(selectedCrewMarker.lastUpdatedAt)}</span>
               </div>
             </div>
           </InfoWindow>

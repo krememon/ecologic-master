@@ -1,0 +1,71 @@
+REPLIT AGENT PROMPT — Tighten Live Location Popup (Remove Extra White Space)
+
+GOAL
+The live-location popup card has too much padding/white space. Make it compact, tight, and modern while keeping functionality unchanged.
+
+DO NOT BREAK
+- Marker click opens popup
+- Close X works
+- “Last updated …” text updates correctly
+- No permission / RBAC changes
+
+WHAT TO CHANGE (VISUAL ONLY)
+
+1) CARD SIZE + PADDING
+- Reduce overall padding to a compact layout:
+  - outer padding: 10–12px (NOT 20+)
+  - border radius: 14–16px
+  - card width: auto-fit to content, but clamp:
+    - min-width: 200px
+    - max-width: 260px
+- Make the card height shrink to content (no forced height)
+
+2) HEADER ROW LAYOUT
+Top row should be:
+[Avatar] [Name]             [X]
+- Avatar: 28–32px circle
+- Name: single line, truncate with ellipsis if too long
+- X: 20px target, but visually small (12–14px icon)
+- Reduce spacing between avatar and name (8px)
+
+3) “LAST UPDATED” ROW
+Second row should be tighter:
+- Use a smaller text (12–13px)
+- Keep icon small (12–14px) OR replace with a tiny dot (preferred)
+- Spacing:
+  - margin-top from name row: 4–6px
+  - icon-to-text gap: 6px
+- Make it one line only
+
+4) REMOVE WASTED SPACE
+- Remove any:
+  - extra line-heights (set leading-tight)
+  - default margins on p/div
+  - fixed width/height on popup container
+  - overly large gap utilities (gap-4, p-6, etc.)
+- If using Tailwind:
+  - Replace p-4/p-5 with p-2.5 or p-3
+  - Replace gap-3/gap-4 with gap-2
+  - Use leading-tight and text-sm for subtitle
+
+5) POINTER / CALLOUT
+- Keep the little pointer triangle but make it smaller and centered under the card.
+- Ensure pointer doesn’t add extra vertical padding.
+
+IMPLEMENTATION NOTES
+- Find the popup component used by the map marker click (likely InfoWindow content or a custom overlay div).
+- Tighten styles directly on the card container and inner rows.
+- If using Google Maps InfoWindow, wrap content in a div and style that div; also override default InfoWindow padding if needed.
+
+DELIVERABLE
+- Popup looks compact with minimal whitespace:
+  - Avatar + name + close on one line
+  - “Last updated …” directly under it
+  - Card height ~55–65px, not huge
+
+QA
+- Test desktop (Replit preview) and iPhone native build
+- Confirm close X still easy to tap
+- Confirm long names truncate cleanly
+
+Make ONLY style/layout changes; do not touch data logic.
