@@ -1421,6 +1421,7 @@ export default function AIScheduling() {
                   items={mapItems}
                   selectedDate={selectedDate}
                   userRole={role || undefined}
+                  userId={user?.id ? String(user.id) : undefined}
                 />
               );
             })()}

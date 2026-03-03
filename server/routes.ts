@@ -3426,7 +3426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      console.log('[GEO] live locations served', { userId, role: userRole, totalActive: allLocations.length, fresh: fresh.length, returned: enriched.length });
+      console.log(`[geo-live] requester=${userId} companyId=${company.id} role=${userRole} totalActive=${allLocations.length} fresh=${fresh.length} returned=${enriched.length}`);
       res.json(enriched);
     } catch (error: any) {
       console.error('[GEO] Error fetching live locations:', error);

@@ -35,6 +35,7 @@ interface ScheduleMapViewProps {
   items: ScheduleItem[];
   selectedDate: Date;
   userRole?: string;
+  userId?: string;
 }
 
 interface MarkerData extends ScheduleItem {
@@ -101,6 +102,8 @@ const containerStyle = {
 
 const defaultCenter = { lat: 40.73, lng: -73.13 };
 
+const LIBRARIES: ("places")[] = ['places'];
+
 const mapStyles = [
   { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
   { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] }
@@ -155,6 +158,14 @@ function createCrewInitialsIcon(initials: string): string {
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
 
+function createYouMarkerIcon(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="18" fill="#4285F4" stroke="#ffffff" stroke-width="2"/>
+    <circle cx="20" cy="20" r="6" fill="#ffffff"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+
 function createCrewAvatarIcon(avatarUrl: string): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -193,7 +204,7 @@ function formatTimeAgo(dateStr: string): string {
   return `${hours}h ago`;
 }
 
-function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapViewProps) {
+function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
@@ -202,11 +213,11 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
   const clustererRef = useRef<MarkerClusterer | null>(null);
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
 
-  const showCrewMarkers = userRole && ['OWNER', 'SUPERVISOR'].includes(userRole.toUpperCase());
   const [crewLocations, setCrewLocations] = useState<CrewLocation[]>([]);
   const [selectedCrewMarker, setSelectedCrewMarker] = useState<CrewLocation | null>(null);
   const crewMarkersRef = useRef<google.maps.Marker[]>([]);
   const crewClustererRef = useRef<MarkerClusterer | null>(null);
+  const hasFittedCrewRef = useRef(false);
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
@@ -214,11 +225,38 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey,
-    libraries: ['places']
+    libraries: LIBRARIES
   });
 
+  const role = (userRole || '').toUpperCase();
+  const isSelf = (locUserId: string) => userId && locUserId === userId;
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    const fetchCrew = async () => {
+      try {
+        const res = await fetch('/api/location/live', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped: CrewLocation[] = (data || []).map((d: any) => ({
+            userId: String(d.userId),
+            name: d.name || 'Unknown',
+            initials: d.initials || '??',
+            avatarUrl: d.avatarUrl || null,
+            lat: parseFloat(d.lat) || 0,
+            lng: parseFloat(d.lng) || 0,
+            lastUpdatedAt: d.updatedAt || new Date().toISOString(),
+          }));
+          setCrewLocations(mapped);
+        }
+      } catch {}
+    };
+    fetchCrew();
+    const interval = setInterval(fetchCrew, 5000);
+    return () => clearInterval(interval);
+  }, [isLoaded]);
+
   const geocodeAddresses = useCallback(async () => {
-    console.log('[Map] Starting geocode, items count:', items.length);
     if (!items.length) {
       setMarkers([]);
       return;
@@ -228,15 +266,9 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
     const geocoded: MarkerData[] = [];
 
     for (const item of items) {
-      console.log('[Map] Processing item:', item.type, item.id, 'address:', item.address, 'lat/lng:', item.latitude, item.longitude);
-      
-      if (!item.address && !item.latitude) {
-        console.log('[Map] Skipping item - no address or coords');
-        continue;
-      }
+      if (!item.address && !item.latitude) continue;
 
       if (item.latitude && item.longitude) {
-        console.log('[Map] Using cached coords:', item.latitude, item.longitude);
         geocoded.push({ ...item, lat: item.latitude, lng: item.longitude });
         continue;
       }
@@ -244,24 +276,17 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
       if (!item.address) continue;
 
       try {
-        console.log('[Map] Geocoding address:', item.address);
         const response = await apiRequest('POST', '/api/geocode', {
           address: item.address,
           customerId: item.customerId
         });
         if (response.ok) {
           const data = await response.json();
-          console.log('[Map] Geocode result:', data.latitude, data.longitude);
           geocoded.push({ ...item, lat: data.latitude, lng: data.longitude });
-        } else {
-          console.warn('[Map] Geocode failed:', response.status, await response.text());
         }
-      } catch (error) {
-        console.warn('[Map] Failed to geocode:', item.address, error);
-      }
+      } catch {}
     }
 
-    console.log('[Map] Final markers count:', geocoded.length);
     setMarkers(geocoded);
     setIsGeocoding(false);
   }, [items]);
@@ -352,31 +377,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
   }, [markers, isLoaded]);
 
   useEffect(() => {
-    if (!showCrewMarkers || !isLoaded) return;
-    const fetchCrew = async () => {
-      try {
-        const res = await fetch('/api/location/live', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          const mapped: CrewLocation[] = (data || []).map((d: any) => ({
-            userId: d.userId,
-            name: d.name || 'Unknown',
-            initials: d.initials || '??',
-            avatarUrl: d.avatarUrl || null,
-            lat: parseFloat(d.lat) || 0,
-            lng: parseFloat(d.lng) || 0,
-            lastUpdatedAt: d.updatedAt || new Date().toISOString(),
-          }));
-          setCrewLocations(mapped);
-        }
-      } catch {}
-    };
-    fetchCrew();
-    const interval = setInterval(fetchCrew, 12000);
-    return () => clearInterval(interval);
-  }, [showCrewMarkers, isLoaded]);
-
-  useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
 
     crewMarkersRef.current.forEach(m => m.setMap(null));
@@ -386,7 +386,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
       crewClustererRef.current = null;
     }
 
-    if (!showCrewMarkers || crewLocations.length === 0) return;
+    if (crewLocations.length === 0) return;
 
     const tenMinAgo = Date.now() - 10 * 60 * 1000;
     const freshLocations = crewLocations.filter(loc => new Date(loc.lastUpdatedAt).getTime() > tenMinAgo);
@@ -397,8 +397,12 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
       const newCrewMarkers: google.maps.Marker[] = [];
 
       for (const loc of freshLocations) {
+        const isMe = isSelf(loc.userId);
         let iconUrl: string;
-        if (loc.avatarUrl) {
+        
+        if (isMe) {
+          iconUrl = createYouMarkerIcon();
+        } else if (loc.avatarUrl) {
           const avatarIcon = await createCrewAvatarIcon(loc.avatarUrl);
           iconUrl = avatarIcon || createCrewInitialsIcon(loc.initials);
         } else {
@@ -412,7 +416,8 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
             scaledSize: new google.maps.Size(40, 40),
             anchor: new google.maps.Point(20, 20),
           },
-          zIndex: 500,
+          title: isMe ? 'You' : loc.name,
+          zIndex: isMe ? 999 : 500,
         });
 
         marker.addListener('click', () => {
@@ -425,32 +430,48 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
 
       crewMarkersRef.current = newCrewMarkers;
 
-      crewClustererRef.current = new MarkerClusterer({
-        map: mapRef.current!,
-        markers: newCrewMarkers,
-        renderer: {
-          render: ({ count, position }) => {
-            return new google.maps.Marker({
-              position,
-              icon: {
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 18,
-                fillColor: '#10b981',
-                fillOpacity: 1,
-                strokeColor: '#ffffff',
-                strokeWeight: 3,
-              },
-              label: {
-                text: String(count),
-                color: '#ffffff',
-                fontSize: '12px',
-                fontWeight: 'bold',
-              },
-              zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
-            });
+      if (newCrewMarkers.length > 1) {
+        crewClustererRef.current = new MarkerClusterer({
+          map: mapRef.current!,
+          markers: newCrewMarkers,
+          renderer: {
+            render: ({ count, position }) => {
+              return new google.maps.Marker({
+                position,
+                icon: {
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 18,
+                  fillColor: '#10b981',
+                  fillOpacity: 1,
+                  strokeColor: '#ffffff',
+                  strokeWeight: 3,
+                },
+                label: {
+                  text: String(count),
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                },
+                zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
+              });
+            },
           },
-        },
-      });
+        });
+      } else {
+        newCrewMarkers.forEach(m => m.setMap(mapRef.current));
+      }
+
+      if (!hasFittedCrewRef.current && markers.length === 0 && freshLocations.length > 0 && mapRef.current) {
+        hasFittedCrewRef.current = true;
+        if (freshLocations.length === 1) {
+          mapRef.current.panTo({ lat: freshLocations[0].lat, lng: freshLocations[0].lng });
+          mapRef.current.setZoom(15);
+        } else {
+          const bounds = new google.maps.LatLngBounds();
+          freshLocations.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
+          mapRef.current.fitBounds(bounds, 50);
+        }
+      }
     };
 
     createMarkers();
@@ -461,7 +482,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
         crewClustererRef.current.clearMarkers();
       }
     };
-  }, [crewLocations, isLoaded, showCrewMarkers]);
+  }, [crewLocations, isLoaded, markers.length]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
@@ -533,11 +554,13 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
 
   const center = markers.length > 0 
     ? { lat: markers[0].lat, lng: markers[0].lng }
-    : defaultCenter;
+    : crewLocations.length > 0
+      ? { lat: crewLocations[0].lat, lng: crewLocations[0].lng }
+      : defaultCenter;
 
   const hasScheduledItems = items.length > 0;
   const hasMappableLocations = markers.length > 0;
-  const showNoAppointments = !hasScheduledItems && !isGeocoding;
+  const showNoAppointments = !hasScheduledItems && !isGeocoding && crewLocations.length === 0;
   const showNoMappableLocations = hasScheduledItems && !hasMappableLocations && !isGeocoding;
 
   return (
@@ -545,7 +568,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
-        zoom={markers.length > 0 ? 12 : 11}
+        zoom={markers.length > 0 || crewLocations.length > 0 ? 12 : 11}
         onLoad={onLoad}
         onUnmount={onUnmount}
         options={{
@@ -619,14 +642,20 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
           >
             <div className="p-1">
               <div className="flex items-center gap-2 mb-1">
-                {selectedCrewMarker.avatarUrl ? (
+                {isSelf(selectedCrewMarker.userId) ? (
+                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                    <div className="w-3 h-3 rounded-full bg-white" />
+                  </div>
+                ) : selectedCrewMarker.avatarUrl ? (
                   <img src={selectedCrewMarker.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
                     {selectedCrewMarker.initials}
                   </div>
                 )}
-                <h3 className="font-semibold text-slate-900 text-sm">{selectedCrewMarker.name}</h3>
+                <h3 className="font-semibold text-slate-900 text-sm">
+                  {isSelf(selectedCrewMarker.userId) ? 'You' : selectedCrewMarker.name}
+                </h3>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <Clock className="h-3 w-3 flex-shrink-0" />
@@ -660,7 +689,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
         </div>
       )}
 
-      {(markers.length > 0 || (showCrewMarkers && crewLocations.length > 0)) && (
+      {(markers.length > 0 || crewLocations.length > 0) && (
         <div className="absolute bottom-4 left-4 bg-white dark:bg-slate-800 rounded-lg shadow-lg px-3 py-2">
           <div className="flex items-center gap-3 text-xs">
             {markers.filter(m => m.type === 'job').length > 0 && (
@@ -675,10 +704,12 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
                 <span className="text-slate-600 dark:text-slate-300">Estimates ({markers.filter(m => m.type === 'estimate').length})</span>
               </div>
             )}
-            {showCrewMarkers && crewLocations.length > 0 && (
+            {crewLocations.length > 0 && (
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-slate-600 dark:text-slate-300">Crew ({crewLocations.length})</span>
+                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="text-slate-600 dark:text-slate-300">
+                  {role === 'TECHNICIAN' ? 'You' : `Crew (${crewLocations.length})`}
+                </span>
               </div>
             )}
           </div>
@@ -688,12 +719,12 @@ function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapView
   );
 }
 
-export function ScheduleMapView({ items, selectedDate, userRole }: ScheduleMapViewProps) {
+export function ScheduleMapView({ items, selectedDate, userRole, userId }: ScheduleMapViewProps) {
   const [retryKey, setRetryKey] = useState(0);
   
   return (
     <MapErrorBoundary onRetry={() => setRetryKey(k => k + 1)}>
-      <ScheduleMapViewInner key={retryKey} items={items} selectedDate={selectedDate} userRole={userRole} />
+      <ScheduleMapViewInner key={retryKey} items={items} selectedDate={selectedDate} userRole={userRole} userId={userId} />
     </MapErrorBoundary>
   );
 }

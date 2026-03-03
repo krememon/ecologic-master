@@ -1,0 +1,46 @@
+TITLE: Show Live Technician Location Dots on Schedule Map (Tech + Owner)
+
+CONTEXT:
+Geo tracking is now working on iOS: Capacitor Geolocation plugin returns coords, and the 1-point batch send is accepted (batch OK accepted=1). However, ScheduleMapView shows no dot because it only renders scheduled mapItems (currently 0). We removed viewer GPS UI earlier, so we now need a dedicated “Live Location” layer.
+
+GOAL:
+1) In TECHNICIAN map view, show “My Location” dot when clocked in (using latest tracked point).
+2) In OWNER/ADMIN map view, show live locations for all currently clocked-in techs (poll /api/location/live).
+3) Keep the existing schedule map pins unchanged; live layer should be additive.
+
+REQUIREMENTS:
+- Do NOT re-add “Locate me” UI or viewer GPS banners.
+- “Hidden not disabled” permissions: only Owner/Admin (and maybe Dispatcher/Supervisor if they can see crew) can see other techs.
+- Tech can only see their own dot.
+- Map should not crash if no points exist.
+- Add lightweight logs only during implementation, remove noisy ones after confirmed.
+
+FRONTEND TASKS:
+1) ScheduleMapView:
+   - Add a liveLocations state.
+   - If role is TECHNICIAN:
+       - Fetch latest point for self OR read from geoTracking in-memory store if available.
+       - Render a marker labeled “You”.
+   - If role is OWNER/ADMIN (and any other allowed roles):
+       - Poll GET /api/location/live every 5s while the map tab is open.
+       - Render markers for each tech (name/initials) + small “last updated” tooltip.
+   - If there are markers, fit bounds; otherwise keep default center (40.73, -73.13).
+
+2) Performance fix:
+   - The warning “LoadScript reloaded unintentionally” indicates `libraries` prop is being passed as a new array.
+   - Move libraries const to module scope: `const LIBRARIES = ['places'] as const;` and pass that.
+
+BACKEND TASKS:
+1) Confirm /api/location/live returns live points for currently clocked-in techs.
+   - If it currently returns [], fix query logic:
+     - Join latest location per active time session / active timelog.
+     - Filter to same companyId as requester and only technicians.
+2) Add a temporary debug log on /api/location/live:
+   - “[geo-live] requester=... companyId=... returned=n”
+   - Remove once confirmed.
+
+DELIVERABLES:
+- Tech map shows a “You” dot after clock-in.
+- Owner web preview shows the tech dot updating every ~5 seconds.
+- No more LoadScript reload warning.
+- Provide exact files changed and a quick manual test checklist.
