@@ -1,0 +1,170 @@
+COPY/PASTE REPLIT AGENT PROMPT (EcoLogic) — Map: job marker icon + “hyperfocus” only on card tap
+
+Goal
+
+Put the EcoLogic “Jobs” clipboard icon inside the GREEN job pins (the same icon the Jobs tab uses).
+
+Add “hyperfocus” (pan + zoom) to the job location ONLY when the user taps a carousel card (not when swiping).
+
+Do NOT re-introduce auto-refocus when the user drags/zooms the map. Free-range stays.
+
+Keep RBAC + current map behavior stable (live location, crew pins, recenter button, no page scroll issues, etc).
+
+UI Requirements
+A) Job marker icon
+
+Use the provided transparent clipboard icon image (the Jobs icon) as the center glyph inside the green circular head of the pin.
+
+Style:
+
+Centered
+
+White glyph
+
+Scales cleanly on retina (no blur)
+
+Works for both normal and “selected job” states (selected can be slightly larger and/or thicker ring like you already have).
+
+B) Hyperfocus on card TAP only
+
+Carousel behavior:
+
+Swipe between cards: should ONLY highlight the marker (no map movement).
+
+Tap a card: should pan + zoom to that job’s marker.
+
+“Hyperfocus” feel:
+
+Smooth animation (panTo + setZoom; or panTo + setZoom after short timeout).
+
+Zoom level: pick a good default like 15–16 (streets visible) unless you already have a standard.
+
+If bottom sheet/cards cover the marker, offset the center slightly upward (or use panBy after panTo).
+
+C) Free-range map stays free-range
+
+After the user drags/zooms the map, never auto-pan back unless they press the explicit recenter/crosshair button or tap a card (explicit action).
+
+Keep all your existing refs/guards (userInteractedRef, isProgrammaticMoveRef, didInitialFitRef, etc.) — don’t break them.
+
+Implementation Steps (Frontend)
+1) Add the icon asset
+
+Put the transparent clipboard icon into a stable path the app can load in production.
+
+Preferred: client/public/map/job-glyph.png (or .svg if you convert it cleanly).
+
+Ensure it’s actually transparent background and white glyph.
+
+If the icon is currently black or not white, create a white version (don’t rely on CSS filters inside the Google Marker icon).
+
+2) Update job marker rendering to use a custom icon
+
+Find the component that renders the green job pins (likely in Schedule Map view / AIScheduling map code / job markers loop).
+
+Depending on what you’re using:
+
+If using standard Marker from @react-google-maps/api
+
+Use icon with a custom SVG marker via data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}.
+
+Build an SVG that draws:
+
+The green pin shape (or circle+pin)
+
+The white ring for selected state (optional)
+
+The clipboard glyph as an <image href="..."> or embed the glyph as SVG path.
+
+Preferred: embed the glyph as SVG path for crispness.
+If you must use PNG:
+
+Use <image href="${absoluteUrlOrDataUri}"> inside SVG.
+
+Make sure it resolves correctly in Capacitor (use absolute like ${window.location.origin}/map/job-glyph.png).
+
+If using AdvancedMarkerElement
+
+Render a React/DOM marker: green pin div + img inside. This is often easiest to make pixel-perfect.
+
+Deliverable here: job pins show the clipboard icon inside the green bubble exactly like your screenshot mock.
+
+3) Selected vs unselected styles
+
+Unselected: green pin + clipboard glyph centered.
+
+Selected: slightly larger bubble + thicker white ring (like your current design).
+
+Keep performance good (no rerender storms). Memoize marker icons.
+
+4) Implement “hyperfocus” ONLY on card tap
+
+Locate carousel card component / handlers (the bottom cards you added).
+
+Keep current swipe handler that updates selectedJobId / highlight only.
+
+Add explicit onCardTap(job) handler:
+
+Sets selectedJobId
+
+Calls focusJob(job) which does:
+
+isProgrammaticMoveRef.current = true
+
+map.panTo(jobLatLng)
+
+map.setZoom(16) (or your chosen)
+
+Optional: after pan/zoom, map.panBy(0, -120) to account for bottom sheet/cards
+
+setTimeout(() => isProgrammaticMoveRef.current = false, 300) (or after idle event)
+
+Important: This focus MUST NOT flip userInteractedRef to true (so it doesn’t break the guard logic). Use your existing isProgrammaticMoveRef logic.
+
+5) Do not reintroduce auto-refocus
+
+Ensure there is no effect that pans/fitBounds based on selectedJobId changes.
+
+Ensure card swipe does not call panTo.
+
+Keep initial fitBounds only once.
+
+Keep recenter button as the only non-card way to reposition.
+
+Fix “live location not displaying” regression (quick guard)
+
+You reported: [MapLive] role=TECHNICIAN count=0 selfFound=NO
+While doing the above, ensure we did NOT break:
+
+live locations query/poll
+
+filtering logic (fresh vs all)
+
+matching current user id
+
+Add a small debug log only in dev:
+
+console.log('[MapLive] count=', locations.length, 'selfFound=', !!self)
+But do NOT spam (log only when values change).
+
+If current user is TECHNICIAN and API returns 0:
+
+Verify the fetch endpoint is still being called on an interval
+
+Verify auth/session is attached
+
+Verify filter isn’t accidentally requiring manager role
+
+Do not change backend unless clearly broken.
+
+Deliverables
+
+Green job pins now show the clipboard “Jobs” icon inside the bubble (crisp + centered).
+
+Swipe carousel: highlight only, no map movement.
+
+Tap a carousel card: smooth pan + zoom to that job location (hyperfocus), with slight upward offset so marker isn’t hidden.
+
+Map remains free-range after user interaction; no auto-refocus unless recenter button or card tap.
+
+Live location still works (blue dot / self marker or whatever current logic is), no regression.

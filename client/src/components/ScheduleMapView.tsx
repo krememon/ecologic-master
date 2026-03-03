@@ -132,26 +132,25 @@ function createJobMarkerIcon(selected = false): string {
   const H = 80;
   const cx = W / 2;
   const cy = W / 2;
-  const r = cx - 2;
   const color = selected ? '#059669' : '#16a34a';
-  const ringW = selected ? 3 : 0;
+  const ringW = selected ? 3.5 : 0;
   const shadow = selected ? 3 : 2;
   const shadowOp = selected ? 0.5 : 0.3;
 
-  const clipboardIcon = `
-    <g transform="translate(${cx - 12}, ${cy - 14})" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="2" y="4" width="20" height="24" rx="2"/>
-      <rect x="6" y="0" width="12" height="6" rx="1.5"/>
-      <line x1="8" y1="12" x2="16" y2="12"/>
-      <line x1="8" y1="16" x2="16" y2="16"/>
-      <line x1="8" y1="20" x2="13" y2="20"/>
+  const glyph = `
+    <g transform="translate(${cx - 11}, ${cy - 13})" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="0" y="5" width="22" height="21" rx="2.5" stroke-width="2"/>
+      <path d="M7 1h8a2 2 0 0 1 2 2v2H5V3a2 2 0 0 1 2-2z" stroke-width="1.8"/>
+      <line x1="6" y1="12" x2="16" y2="12" stroke-width="1.8"/>
+      <line x1="6" y1="16" x2="16" y2="16" stroke-width="1.8"/>
+      <line x1="6" y1="20" x2="12" y2="20" stroke-width="1.8"/>
     </g>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <defs><filter id="js" x="-20%" y="-10%" width="140%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="${shadow}" flood-opacity="${shadowOp}"/></filter></defs>
-    <path d="M${cx} 0C${cx * 0.447} 0 0 ${cx * 0.447} 0 ${cx}c0 ${r * 0.75} ${cx} ${H - cx} ${cx} ${H - cx}s${cx}-${(H - cx) * 0.48} ${cx}-${H - cx}C${W} ${cx * 0.447} ${W - cx * 0.447} 0 ${cx} 0z" fill="${color}" filter="url(#js)"/>
-    ${ringW > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="none" stroke="#ffffff" stroke-width="${ringW}"/>` : ''}
-    ${clipboardIcon}
+    <path d="M${cx} 0C${cx * 0.447} 0 0 ${cx * 0.447} 0 ${cx}c0 ${(cx - 2) * 0.75} ${cx} ${H - cx} ${cx} ${H - cx}s${cx}-${(H - cx) * 0.48} ${cx}-${H - cx}C${W} ${cx * 0.447} ${W - cx * 0.447} 0 ${cx} 0z" fill="${color}" filter="url(#js)"/>
+    ${ringW > 0 ? `<circle cx="${cx}" cy="${cy}" r="${cx - 3}" fill="none" stroke="#ffffff" stroke-width="${ringW}"/>` : ''}
+    ${glyph}
   </svg>`;
 
   const url = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
@@ -298,6 +297,24 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
       if (!trayExpanded) setTrayExpanded(true);
     }
   }, [markers, trayExpanded]);
+
+  const focusJob = useCallback((id: number) => {
+    setSelectedJobId(id);
+    setSelectedMarker(null);
+    setSelectedCrewMarker(null);
+
+    const marker = markers.find(m => m.id === id);
+    if (!marker || !mapRef.current) return;
+
+    cameraMove('explicit_focus_job', () => {
+      mapRef.current!.panTo({ lat: marker.lat, lng: marker.lng });
+      mapRef.current!.setZoom(16);
+      setTimeout(() => {
+        mapRef.current?.panBy(0, -60);
+      }, 200);
+    });
+    console.log(`[MapCamera] focusJob id=${id}`);
+  }, [markers, cameraMove]);
 
   useEffect(() => {
     if (selectedJobId === null) return;
@@ -863,7 +880,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
                     <div
                       key={`${m.type}-${m.id}`}
                       ref={(el) => { if (el) cardRefs.current.set(m.id, el); }}
-                      onClick={() => selectJob(m.id, 'card')}
+                      onClick={() => focusJob(m.id)}
                       className={`flex-shrink-0 w-[240px] snap-center rounded-xl border p-3 cursor-pointer transition-all duration-200 ${
                         isActive
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 shadow-md ring-1 ring-blue-500/30'
