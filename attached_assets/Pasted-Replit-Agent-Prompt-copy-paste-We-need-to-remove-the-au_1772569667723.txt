@@ -1,0 +1,152 @@
+Replit Agent Prompt (copy/paste)
+
+We need to remove the “auto relocate / auto refocus” behavior on the Schedule → Map view.
+
+Right now: if the user pans/zooms the map, it snaps back to a job (or re-centers to fit markers) automatically (shown in my screen recording). I do NOT want that.
+
+✅ Goal
+
+User should have free range to move/zoom the map.
+
+The map should NOT re-center itself after the user drags.
+
+Only recenter in these cases:
+
+User explicitly selects a job card (tap a card)
+
+User taps a “recenter” button (we can add one if needed)
+
+Optional: initial load only (once)
+
+Step 1 — Find and remove the auto-centering triggers
+
+Search the Map page component(s) for any of these being called repeatedly:
+
+map.fitBounds(...)
+
+map.panTo(...)
+
+map.setCenter(...)
+
+map.setZoom(...)
+
+“fit markers” logic inside useEffect
+
+anything listening to:
+
+selected job changes
+
+scheduleItems/mapItems changes
+
+live location updates
+
+Most likely this is in a useEffect that fires whenever markers update.
+
+Change it so auto-centering runs ONLY on initial load OR explicit user action.
+
+Step 2 — Add a “userHasInteracted” guard (IMPORTANT)
+
+Implement a boolean state/ref:
+
+const userHasInteractedRef = useRef(false);
+
+Set it to true when the user starts moving the map:
+
+onDragStart
+
+onZoomChanged
+
+onTouchStart (mobile)
+
+onClick (optional)
+
+Using @react-google-maps/api map props:
+
+onDragStart={() => (userHasInteractedRef.current = true)}
+
+onZoomChanged={() => (userHasInteractedRef.current = true)}
+
+onTouchStart={() => (userHasInteractedRef.current = true)}
+
+Then in ANY effect that tries to recenter/fit:
+
+do nothing if userHasInteractedRef.current === true
+
+Example rule:
+
+Initial load: allowed once
+
+After user moves: NEVER auto recenter again
+
+Step 3 — Still allow recenter on explicit actions
+A) When a user taps a job card / swipes to a job
+
+That’s an explicit selection. In that handler:
+
+set userHasInteractedRef.current = false temporarily OR
+
+bypass the guard with a parameter like recenter({ force: true })
+
+So:
+
+focusJob(job, { force: true }) => panTo that job
+
+Otherwise (non-force) => no panTo
+
+B) Add a “Recenter” control (if it doesn’t exist)
+
+Add a small floating round button on map (bottom-right) that:
+
+sets userHasInteractedRef.current = false
+
+then runs fitBounds or panTo to selected job / all jobs
+
+Keep it clean and matching EcoLogic UI (light pill/round, subtle shadow).
+
+Step 4 — Stop “fitBounds” from running on every render
+
+If there’s a useEffect(() => fitBounds(), [mapItems]) or similar:
+
+change it to run only once:
+
+Use:
+
+const didInitialFitRef = useRef(false);
+
+If didInitialFitRef.current return
+
+else run fit once, then set true
+
+And STILL respect the interaction guard.
+
+Step 5 — Logging for verification
+
+Add logs (temporary, minimal):
+
+[Map] autoCenter blocked: userHasInteracted=true
+
+[Map] autoCenter initial fit running
+
+[Map] focusJob force=true jobId=...
+
+Acceptance Criteria
+
+Open Schedule → Map: it can optionally center once initially.
+
+User drags map: it NEVER snaps back automatically.
+
+User swipes/taps a job card: it centers that job (allowed).
+
+User taps “Recenter”: it recenters (allowed).
+
+No layout changes / no scrollbars introduced.
+
+Deliverables
+
+Implement interaction guard + stop repeated fitBounds/panTo loops
+
+Add optional recenter button if needed
+
+Keep map free-range behavior on iPhone native build
+
+Proceed now.
