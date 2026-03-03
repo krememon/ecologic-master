@@ -1,0 +1,147 @@
+We need to stop the auto refocus / auto re-center behavior on the Schedule → Map screen. Right now, when the user pans/zooms away, the map snaps back (likely due to an effect that calls fitBounds() / panTo() / setCenter() whenever jobs/markers/selected job changes, or when the bottom sheet changes).
+
+✅ Goal
+
+After the user touches the map (pan/zoom), the map becomes free range and never auto-centers again
+
+The ONLY time we re-center is when the user explicitly taps a Recenter control (we can add one if needed), or when the screen first loads before any user interaction.
+
+TASK A — Find and isolate the auto-centering code
+
+Search Schedule Map code for ANY of these:
+
+fitBounds(
+
+panTo(
+
+setCenter(
+
+setZoom(
+
+mapRef.current?.fitBounds
+
+map?.fitBounds
+
+any useEffect that depends on: mapItems, locations, selectedJob, selectedMarker, cardsOpen, sheetState, activeIndex, date, etc.
+
+Do not delete it—we’ll gate it.
+
+TASK B — Add “userHasInteracted” lock
+
+In the Schedule Map component:
+
+1) State + refs
+
+Add:
+
+const [userHasInteracted, setUserHasInteracted] = useState(false)
+
+const userInteractedRef = useRef(false)
+
+helper:
+
+const markUserInteracted = () => { if (!userInteractedRef.current) { userInteractedRef.current = true; setUserHasInteracted(true); } }
+
+2) Detect real map interaction
+
+On the Google Map instance, attach listeners once after map loads:
+
+dragstart → markUserInteracted()
+
+zoom_changed → markUserInteracted() (but debounce so it doesn’t spam)
+
+touchstart on map div (optional) → markUserInteracted()
+
+Implementation options:
+
+If using @react-google-maps/api, use onLoad={(map)=>{ ... }} and google.maps.event.addListener(map, 'dragstart', ...).
+
+TASK C — Gate ALL auto-center / fitBounds logic
+
+Wherever you currently do any of these:
+
+initial fitBounds to show all jobs
+
+panTo selected job when card changes
+
+“keep markers centered” on changes
+
+Wrap it like:
+
+If it’s initial load:
+
+allow once, only if !userInteractedRef.current
+
+If it’s triggered by state changes (selected job / cards / locations updates):
+
+do NOT auto-center if userInteractedRef.current === true
+
+Use “didInitialFit” guard
+
+Add:
+
+const didInitialFitRef = useRef(false)
+
+Then:
+
+On first render where map is ready and we have markers:
+
+if !didInitialFitRef.current && !userInteractedRef.current → run fitBounds() then set didInitialFitRef.current = true
+
+After that:
+
+NEVER call fit/pan automatically unless user taps recenter.
+
+TASK D — Add explicit “Recenter” button (recommended)
+
+Add a small floating button (matches EcoLogic UI) in the map overlay:
+
+icon: crosshair / target
+
+label optional
+
+onTap:
+
+set userInteractedRef.current = false
+
+setUserHasInteracted(false)
+
+run fitBounds() (or center to current tech location if that’s better)
+
+set didInitialFitRef.current = true (so it doesn’t refit repeatedly)
+
+Important: This button must not break the existing pill/bar/cards overlay we already added.
+
+TASK E — Stop “card swipe = auto pan”
+
+Currently swiping jobs likely pans to that job each time.
+Change behavior:
+
+Swiping cards should ONLY “highlight” the marker visually (bigger/outlined), not move the camera.
+
+If user taps the card “View on map” (new small action) then we pan/zoom to it.
+OR keep it simple:
+
+Swiping does not move map at all.
+
+Acceptance checks
+
+Open Schedule → Map: it can do ONE initial fit to show markers.
+
+User drags map away: it NEVER snaps back.
+
+User swipes cards: map does NOT re-center.
+
+Only “Recenter” button re-focuses.
+
+Deliverables
+
+Implement userHasInteracted + didInitialFitRef
+
+Gate all fitBounds/panTo/setCenter calls
+
+Add Recenter button
+
+Ensure no regressions to markers/cards/pill overlay and iPhone layout
+
+Proceed now.

@@ -1,7 +1,7 @@
 import { useCallback, useState, useRef, useEffect, Component, ReactNode } from "react";
 import { GoogleMap, useJsApiLoader, InfoWindow, OverlayViewF, OVERLAY_MOUSE_TARGET } from "@react-google-maps/api";
 import { MarkerClusterer } from "@googlemaps/markerclusterer";
-import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, X, ChevronUp, Navigation } from "lucide-react";
+import { MapPin, Clock, User, ChevronRight, Loader2, RefreshCw, AlertCircle, Calendar, X, ChevronUp, Navigation, Crosshair } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -224,6 +224,10 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   
+  const userInteractedRef = useRef(false);
+  const didInitialFitRef = useRef(false);
+  const isProgrammaticMoveRef = useRef(false);
+  
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
   
@@ -243,12 +247,6 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
     const marker = markers.find(m => m.id === id);
     if (!marker) return;
-
-    if (source === 'card' && mapRef.current) {
-      mapRef.current.panTo({ lat: marker.lat, lng: marker.lng });
-      const zoom = mapRef.current.getZoom();
-      if (zoom && zoom < 14) mapRef.current.setZoom(14);
-    }
 
     if (source === 'marker') {
       const el = cardRefs.current.get(id);
@@ -412,14 +410,21 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
       }
     });
 
-    const bounds = new google.maps.LatLngBounds();
-    markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
-    mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
+    if (!didInitialFitRef.current && !userInteractedRef.current) {
+      didInitialFitRef.current = true;
+      isProgrammaticMoveRef.current = true;
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
+      mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
 
-    if (markers.length === 1) {
-      setTimeout(() => {
-        mapRef.current?.setZoom(15);
-      }, 100);
+      if (markers.length === 1) {
+        setTimeout(() => {
+          mapRef.current?.setZoom(15);
+          setTimeout(() => { isProgrammaticMoveRef.current = false; }, 200);
+        }, 100);
+      } else {
+        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
+      }
     }
 
     return () => {
@@ -516,8 +521,10 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         newCrewMarkers.forEach(m => m.setMap(mapRef.current));
       }
 
-      if (!hasFittedCrewRef.current && markers.length === 0 && freshLocations.length > 0 && mapRef.current) {
+      if (!hasFittedCrewRef.current && !userInteractedRef.current && markers.length === 0 && freshLocations.length > 0 && mapRef.current) {
         hasFittedCrewRef.current = true;
+        didInitialFitRef.current = true;
+        isProgrammaticMoveRef.current = true;
         if (freshLocations.length === 1) {
           mapRef.current.panTo({ lat: freshLocations[0].lat, lng: freshLocations[0].lng });
           mapRef.current.setZoom(15);
@@ -526,6 +533,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
           freshLocations.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
           mapRef.current.fitBounds(bounds, 50);
         }
+        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
       }
     };
 
@@ -539,11 +547,55 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
     };
   }, [crewLocations, isLoaded, markers.length]);
 
+  const handleRecenter = useCallback(() => {
+    if (!mapRef.current) return;
+    userInteractedRef.current = false;
+    isProgrammaticMoveRef.current = true;
+
+    if (markers.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      markers.forEach(m => bounds.extend({ lat: m.lat, lng: m.lng }));
+      mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 80, left: 50 });
+      if (markers.length === 1) {
+        setTimeout(() => {
+          mapRef.current?.setZoom(15);
+          setTimeout(() => { isProgrammaticMoveRef.current = false; }, 200);
+        }, 100);
+      } else {
+        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
+      }
+    } else if (crewLocations.length > 0) {
+      const tenMinAgo = Date.now() - 10 * 60 * 1000;
+      const fresh = crewLocations.filter(l => new Date(l.lastUpdatedAt).getTime() > tenMinAgo);
+      if (fresh.length === 1) {
+        mapRef.current.panTo({ lat: fresh[0].lat, lng: fresh[0].lng });
+        mapRef.current.setZoom(15);
+      } else if (fresh.length > 1) {
+        const bounds = new google.maps.LatLngBounds();
+        fresh.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
+        mapRef.current.fitBounds(bounds, 50);
+      }
+      setTimeout(() => { isProgrammaticMoveRef.current = false; }, 500);
+    } else {
+      isProgrammaticMoveRef.current = false;
+    }
+  }, [markers, crewLocations]);
+
   const onLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
     map.addListener('click', () => {
       setSelectedCrewMarker(null);
       setSelectedJobId(null);
+    });
+    map.addListener('dragstart', () => {
+      if (!isProgrammaticMoveRef.current) {
+        userInteractedRef.current = true;
+      }
+    });
+    map.addListener('zoom_changed', () => {
+      if (!isProgrammaticMoveRef.current) {
+        userInteractedRef.current = true;
+      }
     });
   }, []);
 
@@ -732,6 +784,14 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
           </span>
         </div>
       )}
+
+      <button
+        onClick={handleRecenter}
+        className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center active:scale-95 transition-all"
+        title="Recenter map"
+      >
+        <Crosshair className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+      </button>
 
       <FixedOverlayPortal active={markers.length > 0}>
         {trayExpanded && (
