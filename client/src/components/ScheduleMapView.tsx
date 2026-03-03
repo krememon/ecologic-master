@@ -70,7 +70,7 @@ class MapErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState>
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
+        <div className="flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
           <AlertCircle className="h-16 w-16 text-red-400 dark:text-red-500 mb-4" />
           <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Map couldn't load</p>
           <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-4 max-w-md">
@@ -97,7 +97,6 @@ class MapErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState>
 const containerStyle = {
   width: '100%',
   height: '100%',
-  minHeight: '400px'
 };
 
 const defaultCenter = { lat: 40.73, lng: -73.13 };
@@ -526,7 +525,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
   if (!hasApiKey) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
+      <div className="flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
         <MapPin className="h-16 w-16 text-amber-400 dark:text-amber-500 mb-4" />
         <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Map API Key Missing</p>
         <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">
@@ -538,7 +537,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
   if (loadError) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
+      <div className="flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-900 rounded-lg p-8">
         <AlertCircle className="h-16 w-16 text-red-400 dark:text-red-500 mb-4" />
         <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">Failed to load Google Maps</p>
         <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">
@@ -550,7 +549,7 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
   if (!isLoaded) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-slate-50 dark:bg-slate-900 rounded-lg">
+      <div className="flex flex-col items-center justify-center h-full bg-slate-50 dark:bg-slate-900 rounded-lg">
         <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
         <p className="text-sm text-slate-500">Loading map...</p>
       </div>

@@ -763,6 +763,21 @@ export default function AIScheduling() {
     return () => window.removeEventListener('openCreateEvent', handleOpenCreateEvent);
   }, [canManageEvents, openCreateEvent]);
 
+  useEffect(() => {
+    if (viewMode !== 'map') return;
+    const prevOverflow = document.body.style.overflow;
+    const prevDocOverflow = document.documentElement.style.overflow;
+    const prevHeight = document.body.style.height;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.height = '100%';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.documentElement.style.overflow = prevDocOverflow;
+      document.body.style.height = prevHeight;
+    };
+  }, [viewMode]);
+
   const openViewEvent = useCallback((evt: ScheduleEvent) => {
     setSelectedEvent(evt);
     setIsViewEventOpen(true);
@@ -1012,7 +1027,7 @@ export default function AIScheduling() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen h-screen bg-white dark:bg-slate-900">
+    <div className="flex flex-col bg-white dark:bg-slate-900 overflow-hidden" style={{ height: '100dvh' }}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2">
           <button
@@ -1151,7 +1166,7 @@ export default function AIScheduling() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-hidden bg-white dark:bg-slate-900">
+      <div className="flex-1 min-h-0 overflow-hidden bg-white dark:bg-slate-900">
         {viewMode === 'day' && (
           <div 
             ref={timelineRef}
@@ -1402,7 +1417,7 @@ export default function AIScheduling() {
         )}
 
         {viewMode === 'map' && (
-          <div className="flex-1 h-full min-h-[500px]">
+          <div className="flex-1 min-h-0 h-full relative">
             {(() => {
               const mapItems = scheduleItems
                 .filter(item => item.type === 'job' || item.type === 'estimate')

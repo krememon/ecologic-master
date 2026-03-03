@@ -1,0 +1,66 @@
+GOAL
+On the Scheduling → Map tab, eliminate the page-level vertical scroll (the browser/app page should be fixed-height like Jobber). The Google Map itself should still be fully interactive (pan/zoom), but the surrounding page must not scroll/bounce. The header/segmented control/date row should stay fixed, and the map should take the remaining viewport height exactly.
+
+CONTEXT
+Currently, the Map tab renders inside a page that can scroll up/down (you can see the scrollbar and iOS bounce). This is NOT the map panning — it’s the page container being taller than the viewport.
+
+WHAT TO CHANGE (UI)
+1) Identify the Map tab route/component (Scheduling screen with Day/List/Map segmented control). Find the wrapper that contains:
+   - top header / month selector area
+   - Day/List/Map segmented control
+   - date row (numbers)
+   - the Map container
+
+2) Make the outermost container for this screen:
+   - height: 100dvh (fallback 100vh)
+   - overflow: hidden
+   - prevent page scroll on this route only (do NOT affect other pages)
+
+3) Convert layout to a fixed column layout:
+   - Outer: display:flex; flex-direction:column; height:100dvh; overflow:hidden
+   - Header section (everything above map): flex: 0 0 auto
+   - Map section: flex: 1 1 auto; min-height:0; overflow:hidden
+   - The Google map element inside must be set to width/height: 100% so it fills its container
+
+4) iOS specifics:
+   - Use 100dvh when supported to avoid Safari/Capacitor viewport weirdness.
+   - Make sure no extra padding/margins cause overflow.
+   - If a bottom sheet / selected job card exists, it should overlay the map (position: absolute or fixed within the screen) and NOT increase page height.
+
+5) If the segmented control / calendar row currently pushes the map down but still causes scroll, ensure the map container is computed as remaining space only (flex layout with min-h-0 is key).
+
+6) IMPORTANT: Do not break:
+   - Google map gestures
+   - marker click popover
+   - bottom job card
+   - existing Scheduling Day/List layouts
+
+IMPLEMENTATION NOTES (TAILWIND OK)
+- Prefer Tailwind classes:
+  - outer: `h-[100dvh] overflow-hidden flex flex-col`
+  - mapWrap: `flex-1 min-h-0 overflow-hidden relative`
+  - mapDiv: `absolute inset-0` OR `h-full w-full`
+- Add a safe fallback for older browsers: if 100dvh not available, use 100vh.
+
+PAGE-SCROLL LOCK (ROUTE-SCOPED)
+If the app still scrolls because body scroll is enabled, add a route-scoped body lock:
+- When Map tab is active, set:
+  - document.documentElement.style.overflow = 'hidden'
+  - document.body.style.overflow = 'hidden'
+  - document.body.style.height = '100%'
+- Cleanup on unmount/when leaving Map tab to restore prior values.
+This must be scoped ONLY to the Map tab, not the entire app.
+
+DELIVERABLES
+- No vertical page scroll on Scheduling → Map tab in:
+  - desktop browser
+  - iOS native build (Capacitor)
+- Map still pans/zooms normally
+- Header stays fixed; map fills remaining height perfectly like Jobber
+- No regression to Day/List tabs or any other page
+
+DEBUG
+Add temporary console logs to confirm:
+- viewport height (window.innerHeight)
+- map container clientHeight
+Remove noisy logs after verified.
