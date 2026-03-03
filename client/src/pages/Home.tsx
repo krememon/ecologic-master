@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { useCan } from "@/hooks/useCan";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCompactCurrency } from "@/lib/utils";
+import geoTracking from "@/services/geoTracking";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -150,13 +151,22 @@ export default function Home() {
   const [jobSearchQuery, setJobSearchQuery] = useState('');
 
   const clockInMutation = useMutation({
-    mutationFn: (data: { jobId?: number; category?: string }) => 
-      apiRequest('POST', '/api/time/clock-in', data),
-    onSuccess: () => {
+    mutationFn: async (data: { jobId?: number; category?: string }) => {
+      const res = await apiRequest('POST', '/api/time/clock-in', data);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setShowJobPicker(false);
       setJobSearchQuery('');
+      if (data?.timeSessionId && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          () => { geoTracking.start(data.timeSessionId); },
+          () => {},
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }
     },
     onError: () => {
       toast({
@@ -168,13 +178,24 @@ export default function Home() {
   });
 
   const switchJobMutation = useMutation({
-    mutationFn: (data: { jobId?: number; category?: string }) => 
-      apiRequest('POST', '/api/time/switch', data),
-    onSuccess: () => {
+    mutationFn: async (data: { jobId?: number; category?: string }) => {
+      const res = await apiRequest('POST', '/api/time/switch', data);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
       setShowJobPicker(false);
       setJobSearchQuery('');
+      geoTracking.stop();
+      const newSessionId = data?.started?.id;
+      if (newSessionId && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          () => { geoTracking.start(newSessionId); },
+          () => {},
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }
     },
     onError: () => {
       toast({
@@ -188,6 +209,7 @@ export default function Home() {
   const clockOutMutation = useMutation({
     mutationFn: () => apiRequest('POST', '/api/time/clock-out'),
     onSuccess: () => {
+      geoTracking.stop();
       queryClient.invalidateQueries({ queryKey: ["/api/time/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/org/users"] });
     },

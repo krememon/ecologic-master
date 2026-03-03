@@ -3261,6 +3261,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/location/batch - Record multiple location pings in one request
+  app.post('/api/location/batch', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getUserId(req.user);
+      const { sessionId, points } = req.body;
+
+      if (!sessionId) {
+        return res.status(400).json({ error: 'sessionId is required' });
+      }
+      if (!Array.isArray(points) || points.length === 0) {
+        return res.status(400).json({ error: 'points array is required and must not be empty' });
+      }
+
+      const member = await storage.getCompanyMemberByUserId(userId);
+      if (!member) {
+        return res.status(404).json({ error: 'Not a company member' });
+      }
+
+      const timeEntry = await storage.getTimeEntryById(sessionId);
+      if (!timeEntry) {
+        return res.status(404).json({ error: 'Time session not found' });
+      }
+      if (timeEntry.userId !== userId) {
+        return res.status(403).json({ error: 'Time session does not belong to you' });
+      }
+      if (timeEntry.companyId !== member.companyId) {
+        return res.status(403).json({ error: 'Time session does not belong to your company' });
+      }
+      if (timeEntry.clockOutAt) {
+        return res.status(403).json({ error: 'Time session already ended' });
+      }
+
+      let accepted = 0;
+      let rejected = 0;
+      let latestAccepted: { lat: number; lng: number; accuracy: number | null; recordedAt?: string } | null = null;
+      let latestTime = 0;
+
+      for (const point of points) {
+        if (point.accuracy != null && point.accuracy > 100) {
+          rejected++;
+          continue;
+        }
+
+        const capturedAt = point.recordedAt ? new Date(point.recordedAt) : new Date();
+
+        await storage.createLocationPing({
+          companyId: member.companyId,
+          userId,
+          timeLogId: sessionId,
+          jobId: timeEntry.jobId || null,
+          latitude: point.lat,
+          longitude: point.lng,
+          accuracy: point.accuracy || null,
+          heading: null,
+          speed: null,
+          altitude: null,
+          capturedAt,
+        });
+
+        accepted++;
+
+        const pointTime = capturedAt.getTime();
+        if (pointTime >= latestTime) {
+          latestTime = pointTime;
+          latestAccepted = point;
+        }
+      }
+
+      if (latestAccepted) {
+        await storage.upsertUserLiveLocation({
+          userId,
+          companyId: member.companyId,
+          timeLogId: sessionId,
+          jobId: timeEntry.jobId || null,
+          latitude: latestAccepted.lat,
+          longitude: latestAccepted.lng,
+          accuracy: latestAccepted.accuracy || null,
+        });
+      }
+
+      console.log('[GEO] batch accepted', { userId, sessionId, accepted, rejected });
+      res.json({ success: true, accepted, rejected });
+    } catch (error: any) {
+      console.error('[GEO] Error recording batch location:', error);
+      res.status(500).json({ error: 'Failed to record batch location' });
+    }
+  });
+
   // GET /api/location/live - Get live locations for CLOCKED-IN employees only (uses user_live_locations table)
   app.get('/api/location/live', isAuthenticated, async (req: any, res) => {
     try {
@@ -3278,13 +3366,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userRole = (member.role || 'TECHNICIAN').toUpperCase();
       const allLocations = await storage.getActiveLiveLocations(company.id);
 
-      // RBAC: Owner sees all clocked-in employees, everyone else sees only themselves
-      const canSeeAll = userRole === 'OWNER';
-      const filtered = canSeeAll
-        ? allLocations
-        : allLocations.filter(l => l.userId === userId);
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const fresh = allLocations.filter(l => l.updatedAt && new Date(l.updatedAt) > tenMinAgo);
 
-      if (!canSeeAll && filtered.length === 0) {
+      let filtered: typeof fresh;
+      if (userRole === 'OWNER') {
+        filtered = fresh;
+      } else if (userRole === 'SUPERVISOR') {
+        const supervisorAssignments = await storage.getUserJobAssignments(userId);
+        const supervisorJobIds = new Set(supervisorAssignments.map(a => a.jobId));
+
+        const filteredResults: typeof fresh = [];
+        for (const loc of fresh) {
+          if (loc.userId === userId) {
+            filteredResults.push(loc);
+            continue;
+          }
+          if (loc.jobId && supervisorJobIds.has(loc.jobId)) {
+            filteredResults.push(loc);
+            continue;
+          }
+          const locUserAssignments = await storage.getUserJobAssignments(loc.userId);
+          const hasSharedJob = locUserAssignments.some(a => supervisorJobIds.has(a.jobId));
+          if (hasSharedJob) {
+            filteredResults.push(loc);
+          }
+        }
+        filtered = filteredResults;
+      } else {
+        filtered = fresh.filter(l => l.userId === userId);
+      }
+
+      if (filtered.length === 0) {
         return res.json([]);
       }
 
@@ -3298,6 +3411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             initials: user
               ? `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase()
               : '??',
+            avatarUrl: user?.profileImageUrl || null,
             role: locMember?.role || 'TECHNICIAN',
             lat: loc.latitude,
             lng: loc.longitude,
@@ -3310,7 +3424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      console.log('[GEO] live locations served', { userId, role: userRole, totalActive: allLocations.length, returned: enriched.length });
+      console.log('[GEO] live locations served', { userId, role: userRole, totalActive: allLocations.length, fresh: fresh.length, returned: enriched.length });
       res.json(enriched);
     } catch (error: any) {
       console.error('[GEO] Error fetching live locations:', error);

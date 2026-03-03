@@ -1,0 +1,289 @@
+COPY/PASTE TO REPLIT AGENT — GEO-TRACKING MVP (TECHS ONLY + OWNER/SUPERVISOR VIEW, Live Avatar Dots + Clustering)
+
+IMPORTANT UPDATE (RBAC)
+
+EcoLogic does NOT have Dispatcher or Estimator roles. Only:
+
+Owner/Admin
+
+Supervisor
+
+Technician
+
+Remove all Dispatcher/Estimator logic from this feature.
+
+GOAL
+
+Implement Geo-Tracking tied to Clock In/Clock Out. When a Technician clocks in, request OS location permission (native popup only). If granted, start tracking while clocked in and send movement-based updates to backend. On Scheduling page, show live crew locations as profile-photo avatar markers with clustering, tap tooltip = Name + Last updated only, and hide markers if stale.
+
+No custom EcoLogic permission/explainer screens. Do NOT block clock-in if permission denied.
+
+NON-NEGOTIABLE PRODUCT RULES
+
+Tracking runs ONLY when clocked in (work-only).
+
+Clock-in must always succeed even if location is denied.
+
+Scheduling map must show crew dots even if the viewer’s own device location is off (no “Location unavailable…” banner).
+
+Marker = user’s profile photo (circular). If no photo → initials bubble.
+
+Tap marker → small tooltip with Name + “Last updated Xs/Xm ago”. No job name.
+
+Zoomed out → clustering.
+
+Stale behavior: HIDE marker if last update is older than 10 minutes.
+
+RBAC enforced server-side:
+
+Owner/Admin: can see all active technician locations in org
+
+Supervisor: can see active technician locations only for jobs they can access (use existing job access rules)
+
+Technician: can see only their own location (optional to render map panel; if you do render it, it must only show self)
+
+“Hidden not disabled” in UI:
+
+If user role cannot view crew map → do not render crew map panel at all
+
+TRACKING CONFIG (Slightly Optimized “Google Maps feel”)
+
+Distance filter: send a point when moved ≥ 50 meters
+
+Heartbeat: send a point every 60 seconds even if not moving
+
+Accuracy filter: ignore very bad GPS points (e.g., accuracy > ~100m) so markers don’t jump
+
+Batch sending: buffer points locally and POST in batches every 30–60 seconds (or immediately if buffer reaches N points)
+
+BACKEND (DB + API)
+1) DB tables (Postgres)
+
+Create migrations:
+
+time_sessions
+
+id (uuid)
+
+org_id
+
+user_id
+
+clock_in_at (timestamptz)
+
+clock_out_at (timestamptz nullable)
+
+status (text: clocked_in | break | clocked_out) (break optional now)
+
+created_at, updated_at
+
+location_points
+
+id (uuid)
+
+org_id
+
+user_id
+
+session_id (uuid, FK to time_sessions)
+
+lat (double precision)
+
+lng (double precision)
+
+accuracy (double precision nullable)
+
+recorded_at (timestamptz)
+
+source (text: foreground | background | unknown)
+
+created_at
+
+Indexes:
+
+location_points(org_id, user_id, recorded_at desc)
+
+location_points(session_id, recorded_at desc)
+
+time_sessions(org_id, user_id, clock_out_at)
+
+2) API routes
+
+POST /api/time/clock-in
+
+Creates session row
+
+Returns sessionId
+
+MUST succeed even if location permission is denied.
+
+POST /api/time/clock-out
+
+Closes active session
+
+POST /api/location/batch
+
+Body: { sessionId, points: [{lat,lng,accuracy,recordedAt,source}] }
+
+Validate:
+
+user authenticated
+
+sessionId belongs to user and is active (clock_out_at is null)
+
+org matches
+
+Insert points
+
+Return ok
+
+GET /api/location/active
+Return latest location per “active” user (clocked in) filtered by RBAC.
+
+Response items:
+{ userId, name, avatarUrl, lat, lng, lastUpdatedAt }
+
+Only include users whose lastUpdatedAt is within 10 minutes (server-side stale filter)
+
+RBAC enforcement (server-side, mandatory):
+
+If role == Owner/Admin: include all active users in org
+
+If role == Supervisor: include only active users tied to jobs the supervisor can access (use your existing job access logic)
+
+If role == Technician: only include self
+
+FRONTEND (Capacitor + Web)
+1) Permission request (NO custom screens)
+
+When user taps Clock In:
+
+Immediately call OS permission request (native popup)
+
+Proceed to call /clock-in regardless of outcome
+
+After /clock-in returns sessionId:
+
+If permission allows location access → start tracking
+
+If not → do nothing (clock-in still succeeded)
+
+2) Tracking service
+
+Create src/services/geoTracking.ts:
+
+start(sessionId)
+
+stop()
+
+Uses Geolocation watcher
+
+Applies distance 50m + heartbeat 60s + accuracy filter
+
+Buffers points and POSTs to /api/location/batch
+
+Stops immediately on clock-out
+
+Must not run if not clocked in
+
+Add targeted logs (DEV only):
+
+[geo] permission=...
+
+[geo] start session=...
+
+[geo] point lat/lng acc=...
+
+[geo] sent batch n=...
+
+[geo] stop
+
+SCHEDULING PAGE MAP (Live Avatar Dots + Clustering)
+Requirements
+
+Must render without requesting viewer’s own location.
+
+Default center: org HQ OR last saved center (localStorage). DO NOT call getCurrentPosition.
+
+Poll /api/location/active every 10–15 seconds.
+
+Render markers:
+
+circular avatar image if avatarUrl exists
+
+else initials bubble (matches Profile styling)
+
+Clustering enabled:
+
+cluster bubble with count
+
+tap cluster zooms in
+
+Tap marker tooltip:
+
+Name
+
+Last updated: Xs / Xm ago
+
+Hide stale: already filtered server-side; also guard client-side.
+
+If /api/location/active is empty:
+
+show subtle text: “No active crew locations.”
+
+FEATURE FLAG
+
+Env:
+
+GEO_TRACKING_ENABLED=true
+If false:
+
+no tracking
+
+hide crew map panel entirely
+
+DELIVERABLES
+
+DB migrations + indexes
+
+time clock session integration
+
+location batch ingestion + validation
+
+active locations endpoint with NEW RBAC (Owner/Admin, Supervisor, Technician only) + 10-min stale filter
+
+geoTracking service
+
+scheduling map panel with avatar markers + clustering + tooltip
+
+ensure viewer GPS not required
+
+logs DEV-gated and cleaned up
+
+TEST PLAN
+
+Technician:
+
+Deny location → clock-in works, no dot
+
+Allow once → dot appears; next clock-in asks again
+
+While using → dot updates while app open
+
+Always allow (where available) → dot updates in background
+
+Clock out → dot disappears
+
+Owner/Admin:
+
+sees all active tech avatar dots without enabling their own GPS
+
+Supervisor:
+
+sees only allowed techs
+
+Stale:
+
+no updates for 10 min → dot disappears
+
+Build it end-to-end now.

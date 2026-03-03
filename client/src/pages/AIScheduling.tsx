@@ -1420,6 +1420,7 @@ export default function AIScheduling() {
                 <ScheduleMapView 
                   items={mapItems}
                   selectedDate={selectedDate}
+                  userRole={role || undefined}
                 />
               );
             })()}

@@ -44,6 +44,7 @@ EcoLogic is a multi-tenant web application. The frontend is built with React 18 
 - **Invoice Sending**: Invoices can be sent via Email (Resend) or SMS (Twilio) with payment links.
 - **Leads Management**: Dedicated section for tracking potential customers with RBAC.
 - **Time Tracking**: Job-aware clock-in/out for technicians, with aggregated "Labor Today" for managers and auto clock-out.
+- **Geo-Tracking**: GPS tracking tied to clock-in/clock-out. On clock-in, requests location permission (non-blocking). If granted, tracks movement via `watchPosition` with 50m distance filter, 60s heartbeat, accuracy ≤100m, batched to `POST /api/location/batch` every 30s. Live crew positions shown on Schedule map as avatar markers (circular photo or initials). Polling every 12s. RBAC: Owner sees all, Supervisor sees shared-job techs, Technician sees self. 10-min stale filter server-side. Service: `client/src/services/geoTracking.ts`. Tables: `employee_location_pings`, `user_live_locations`.
 - **Timesheet Editing**: Manager-only timesheet editing with audit trails and RBAC.
 - **Archival**: Automatic archival for estimates and jobs based on conversion or full payment status, with a restore option.
 - **Schedule Events**: Manager-created company calendar events (holidays, meetings) with RBAC-enforced visibility and CRUD.

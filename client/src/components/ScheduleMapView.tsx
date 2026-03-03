@@ -21,9 +21,20 @@ interface ScheduleItem {
   longitude?: number | null;
 }
 
+interface CrewLocation {
+  userId: string;
+  name: string;
+  initials: string;
+  avatarUrl: string | null;
+  lat: number;
+  lng: number;
+  lastUpdatedAt: string;
+}
+
 interface ScheduleMapViewProps {
   items: ScheduleItem[];
   selectedDate: Date;
+  userRole?: string;
 }
 
 interface MarkerData extends ScheduleItem {
@@ -136,7 +147,53 @@ function createEstimateMarkerIcon(): string {
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
 
-function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
+function createCrewInitialsIcon(initials: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="18" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
+    <text x="20" y="26" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" font-family="Arial, sans-serif">${initials}</text>
+  </svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+
+function createCrewAvatarIcon(avatarUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 40;
+      canvas.height = 40;
+      const ctx = canvas.getContext('2d')!;
+      ctx.beginPath();
+      ctx.arc(20, 20, 18, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, 2, 2, 36, 36);
+      ctx.beginPath();
+      ctx.arc(20, 20, 18, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => {
+      resolve('');
+    };
+    img.src = avatarUrl;
+  });
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
+function ScheduleMapViewInner({ items, selectedDate, userRole }: ScheduleMapViewProps) {
   const [, setLocation] = useLocation();
   const [selectedMarker, setSelectedMarker] = useState<MarkerData | null>(null);
   const [markers, setMarkers] = useState<MarkerData[]>([]);
@@ -151,6 +208,12 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   const googleMarkersRef = useRef<google.maps.Marker[]>([]);
   const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const watchIdRef = useRef<number | null>(null);
+
+  const showCrewMarkers = userRole && ['OWNER', 'SUPERVISOR'].includes(userRole.toUpperCase());
+  const [crewLocations, setCrewLocations] = useState<CrewLocation[]>([]);
+  const [selectedCrewMarker, setSelectedCrewMarker] = useState<CrewLocation | null>(null);
+  const crewMarkersRef = useRef<google.maps.Marker[]>([]);
+  const crewClustererRef = useRef<MarkerClusterer | null>(null);
   
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey);
@@ -476,6 +539,118 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     };
   }, [markers, isLoaded]);
 
+  useEffect(() => {
+    if (!showCrewMarkers || !isLoaded) return;
+    const fetchCrew = async () => {
+      try {
+        const res = await fetch('/api/location/live', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped: CrewLocation[] = (data || []).map((d: any) => ({
+            userId: d.userId,
+            name: d.name || 'Unknown',
+            initials: d.initials || '??',
+            avatarUrl: d.avatarUrl || null,
+            lat: parseFloat(d.lat) || 0,
+            lng: parseFloat(d.lng) || 0,
+            lastUpdatedAt: d.updatedAt || new Date().toISOString(),
+          }));
+          setCrewLocations(mapped);
+        }
+      } catch {}
+    };
+    fetchCrew();
+    const interval = setInterval(fetchCrew, 12000);
+    return () => clearInterval(interval);
+  }, [showCrewMarkers, isLoaded]);
+
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+
+    crewMarkersRef.current.forEach(m => m.setMap(null));
+    crewMarkersRef.current = [];
+    if (crewClustererRef.current) {
+      crewClustererRef.current.clearMarkers();
+      crewClustererRef.current = null;
+    }
+
+    if (!showCrewMarkers || crewLocations.length === 0) return;
+
+    const tenMinAgo = Date.now() - 10 * 60 * 1000;
+    const freshLocations = crewLocations.filter(loc => new Date(loc.lastUpdatedAt).getTime() > tenMinAgo);
+
+    if (freshLocations.length === 0) return;
+
+    const createMarkers = async () => {
+      const newCrewMarkers: google.maps.Marker[] = [];
+
+      for (const loc of freshLocations) {
+        let iconUrl: string;
+        if (loc.avatarUrl) {
+          const avatarIcon = await createCrewAvatarIcon(loc.avatarUrl);
+          iconUrl = avatarIcon || createCrewInitialsIcon(loc.initials);
+        } else {
+          iconUrl = createCrewInitialsIcon(loc.initials);
+        }
+
+        const marker = new google.maps.Marker({
+          position: { lat: loc.lat, lng: loc.lng },
+          icon: {
+            url: iconUrl,
+            scaledSize: new google.maps.Size(40, 40),
+            anchor: new google.maps.Point(20, 20),
+          },
+          zIndex: 500,
+        });
+
+        marker.addListener('click', () => {
+          setSelectedCrewMarker(loc);
+          setSelectedMarker(null);
+        });
+
+        newCrewMarkers.push(marker);
+      }
+
+      crewMarkersRef.current = newCrewMarkers;
+
+      crewClustererRef.current = new MarkerClusterer({
+        map: mapRef.current!,
+        markers: newCrewMarkers,
+        renderer: {
+          render: ({ count, position }) => {
+            return new google.maps.Marker({
+              position,
+              icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 18,
+                fillColor: '#10b981',
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 3,
+              },
+              label: {
+                text: String(count),
+                color: '#ffffff',
+                fontSize: '12px',
+                fontWeight: 'bold',
+              },
+              zIndex: Number(google.maps.Marker.MAX_ZINDEX) + count,
+            });
+          },
+        },
+      });
+    };
+
+    createMarkers();
+
+    return () => {
+      crewMarkersRef.current.forEach(m => m.setMap(null));
+      if (crewClustererRef.current) {
+        crewClustererRef.current.clearMarkers();
+      }
+    };
+  }, [crewLocations, isLoaded, showCrewMarkers]);
+
   const onLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
@@ -485,6 +660,11 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
     if (clustererRef.current) {
       clustererRef.current.clearMarkers();
       clustererRef.current = null;
+    }
+    crewMarkersRef.current.forEach(m => m.setMap(null));
+    if (crewClustererRef.current) {
+      crewClustererRef.current.clearMarkers();
+      crewClustererRef.current = null;
     }
     mapRef.current = null;
   }, []);
@@ -632,6 +812,31 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
             </div>
           </InfoWindow>
         )}
+
+        {selectedCrewMarker && (
+          <InfoWindow
+            position={{ lat: selectedCrewMarker.lat, lng: selectedCrewMarker.lng }}
+            onCloseClick={() => setSelectedCrewMarker(null)}
+            options={{ maxWidth: 240 }}
+          >
+            <div className="p-1">
+              <div className="flex items-center gap-2 mb-1">
+                {selectedCrewMarker.avatarUrl ? (
+                  <img src={selectedCrewMarker.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                    {selectedCrewMarker.initials}
+                  </div>
+                )}
+                <h3 className="font-semibold text-slate-900 text-sm">{selectedCrewMarker.name}</h3>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Clock className="h-3 w-3 flex-shrink-0" />
+                <span>Last updated {formatTimeAgo(selectedCrewMarker.lastUpdatedAt)}</span>
+              </div>
+            </div>
+          </InfoWindow>
+        )}
       </GoogleMap>
 
       {isGeocoding && (
@@ -741,17 +946,27 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
         </div>
       )}
 
-      {markers.length > 0 && (
+      {(markers.length > 0 || (showCrewMarkers && crewLocations.length > 0)) && (
         <div className="absolute bottom-4 left-4 bg-white dark:bg-slate-800 rounded-lg shadow-lg px-3 py-2">
           <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-slate-600 dark:text-slate-300">Jobs ({markers.filter(m => m.type === 'job').length})</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-purple-500" />
-              <span className="text-slate-600 dark:text-slate-300">Estimates ({markers.filter(m => m.type === 'estimate').length})</span>
-            </div>
+            {markers.filter(m => m.type === 'job').length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+                <span className="text-slate-600 dark:text-slate-300">Jobs ({markers.filter(m => m.type === 'job').length})</span>
+              </div>
+            )}
+            {markers.filter(m => m.type === 'estimate').length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-purple-500" />
+                <span className="text-slate-600 dark:text-slate-300">Estimates ({markers.filter(m => m.type === 'estimate').length})</span>
+              </div>
+            )}
+            {showCrewMarkers && crewLocations.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                <span className="text-slate-600 dark:text-slate-300">Crew ({crewLocations.length})</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -772,12 +987,12 @@ function ScheduleMapViewInner({ items, selectedDate }: ScheduleMapViewProps) {
   );
 }
 
-export function ScheduleMapView({ items, selectedDate }: ScheduleMapViewProps) {
+export function ScheduleMapView({ items, selectedDate, userRole }: ScheduleMapViewProps) {
   const [retryKey, setRetryKey] = useState(0);
   
   return (
     <MapErrorBoundary onRetry={() => setRetryKey(k => k + 1)}>
-      <ScheduleMapViewInner key={retryKey} items={items} selectedDate={selectedDate} />
+      <ScheduleMapViewInner key={retryKey} items={items} selectedDate={selectedDate} userRole={userRole} />
     </MapErrorBoundary>
   );
 }
