@@ -1428,9 +1428,6 @@ export default function AIScheduling() {
                 latitude: item.latitude,
                 longitude: item.longitude
               }));
-              console.log('[AIScheduling] Map view selectedDate:', selectedDate);
-              console.log('[AIScheduling] scheduleItems for map:', scheduleItems.length, scheduleItems);
-              console.log('[AIScheduling] mapItems:', mapItems.length, mapItems);
               return (
                 <ScheduleMapView 
                   items={mapItems}

@@ -1,0 +1,130 @@
+Replit Agent Prompt (copy/paste)
+
+Goal: Fix the Schedule → Map view so the little “^ / 2 locations” toggle pill is ALWAYS visible + clickable on iPhone, even on first load (before clicking any job). Also enable 1-finger map movement (not 2-finger), without breaking the current layout or the new bottom job cards.
+
+✅ What’s broken right now
+
+On iPhone native build, when you first open Schedule → Map, the toggle pill (“^ / 2 locations”) is off-screen / not in frame, so the user can’t press it.
+
+If the user clicks a job/marker, the UI recalculates and the pill appears — but it must be visible immediately on page load.
+
+Map pan requires 2 fingers — we want 1 finger like normal maps.
+
+✅ What we want
+
+The toggle pill is always pinned inside the visible viewport on iPhone (native Capacitor WebView), even on initial load.
+
+Tapping the pill does not cause the page to scroll or shift layout out of frame.
+
+The map container is full height and the page itself is not vertically scrollable (only the map moves + bottom cards swipe).
+
+Map pan should be 1 finger (gestureHandling greedy).
+
+TASK 1 — Pin the toggle pill to the viewport (always in-frame)
+Implementation requirements
+
+The toggle pill must be rendered inside an overlay layer that is positioned relative to the MAP viewport, not inside any scrollable content.
+
+Use safe area bottom padding for iPhone: env(safe-area-inset-bottom)
+
+Use a stable height strategy on iOS: 100dvh (not 100vh) to avoid WebView viewport bugs.
+
+Do this:
+
+Find the Schedule Map screen component (whatever renders the Google Map + markers + the bottom cards).
+
+Likely something like: AIScheduling.tsx, ScheduleMap.tsx, MapView.tsx, etc.
+
+Identify the toggle pill component (the “^ / X locations” control).
+
+It is currently being placed too low OR inside a container that shifts.
+
+It may only render after a job click — remove that dependency.
+
+Create a MapViewport wrapper with this layout:
+
+Outer screen: height: 100dvh; overflow: hidden; display:flex; flex-direction:column;
+
+Header stays normal
+
+Map viewport becomes flex:1; position:relative; overflow:hidden;
+
+All floating controls (toggle pill, map controls, etc.) live inside overlay with position:absolute; inset:0; pointer-events:none;
+
+Individual buttons/pills use pointer-events:auto;
+
+Place the pill like this (example):
+
+position:absolute; left:50%; transform:translateX(-50%);
+
+bottom: calc(env(safe-area-inset-bottom) + 16px + var(--bottom-sheet-peek, 0px));
+
+z-index: 50;
+
+The pill must be visible on initial load:
+
+Render it when map view is active, regardless of selection state.
+
+If there are 0 items, it can still render but disabled, or hidden — your call, but it must not rely on “clicked job”.
+
+Add a small “peek” variable so when the bottom sheet/cards are collapsed you don’t overlap them.
+
+Example: when collapsed, --bottom-sheet-peek: 90px
+
+when expanded, --bottom-sheet-peek: 240px
+
+OR compute it from your existing bottom sheet state.
+
+TASK 2 — Stop the PAGE from scrolling (only map moves)
+
+Right now the page can scroll vertically. We want the layout locked like Jobber.
+
+Do this:
+
+Ensure the Schedule Map page root container uses:
+
+height: 100dvh; overflow: hidden;
+
+Ensure no parent wrapper (like main, content, page) is applying overflow-y:auto for this screen.
+
+If your app shell has a global scroll container, add a per-route override for the Map screen:
+
+e.g. data-route="schedule-map" → disable scrolling on that route only.
+
+Important: Do not break other pages. Only disable page scrolling for this map route/screen.
+
+TASK 3 — Make the map move with 1 finger (iOS)
+
+This is a common Google Maps behavior when embedded in scrollable pages.
+
+Do this:
+
+In Google Maps options (where the map is created), set:
+
+gestureHandling: "greedy"
+
+Also ensure the map container is not fighting touch gestures:
+
+The map viewport should be overflow:hidden
+
+Avoid parent containers with touch-action: pan-y if they interfere
+
+Confirm on iPhone: 1 finger pans, 2 fingers still zooms, works naturally.
+
+✅ Deliverables
+
+Toggle pill is always visible + clickable on iPhone immediately on opening Schedule → Map (no job click needed).
+
+Page itself cannot scroll vertically on Map screen.
+
+Google map pans with 1 finger (gestureHandling: "greedy").
+
+No layout shifting when tapping the pill. No regressions to:
+
+markers
+
+job cards bottom swiper
+
+current map centering/highlighting behavior
+
+Add minimal logs only if needed, then remove.

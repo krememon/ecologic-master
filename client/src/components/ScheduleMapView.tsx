@@ -814,22 +814,24 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
         </div>
       )}
 
-      <div
-        className="absolute left-0 right-0 z-30 flex justify-center pointer-events-none"
-        style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${trayExpanded ? '170px' : '12px'})`, transition: 'bottom 0.3s ease-out' }}
-      >
-        <button
-          onClick={() => setTrayExpanded(!trayExpanded)}
-          className="pointer-events-auto flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+      {markers.length > 0 && (
+        <div
+          className="absolute left-0 right-0 z-30 flex justify-center pointer-events-none"
+          style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${trayExpanded && markers.length > 0 ? '170px' : '12px'})`, transition: 'bottom 0.3s ease-out' }}
         >
-          <ChevronUp
-            className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${trayExpanded ? 'rotate-180' : ''}`}
-          />
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            {markers.length} {markers.length === 1 ? 'location' : 'locations'}
-          </span>
-        </button>
-      </div>
+          <button
+            onClick={() => setTrayExpanded(!trayExpanded)}
+            className="pointer-events-auto flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-full shadow-lg px-4 py-2 border border-slate-200 dark:border-slate-700 active:scale-95 transition-all"
+          >
+            <ChevronUp
+              className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${trayExpanded ? 'rotate-180' : ''}`}
+            />
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+              {markers.length} {markers.length === 1 ? 'location' : 'locations'}
+            </span>
+          </button>
+        </div>
+      )}
 
       {(crewLocations.length > 0 && markers.length === 0) && (
         <div className="absolute left-4 z-10" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
