@@ -1,0 +1,121 @@
+COPY/PASTE TO REPLIT AGENT (Prompt Format)
+UI
+
+Goal: On Schedule → Map screen, the bottom “peek bar” (chevron pill / “2 locations” handle) must be fully in-frame + tappable on initial load (before selecting any job). Right now it’s clipped/offscreen until a job is clicked. Also: tapping the bar must NOT shift the overall page layout (no page jump / no reflow that causes the header/map to move).
+
+Key Requirements
+
+The page itself must remain non-scrollable (no vertical page scroll).
+
+The map fills the available area.
+
+The bottom handle is an overlay anchored to the viewport-safe bottom (accounts for iPhone home indicator).
+
+When the handle expands the card carousel, the map should resize/pad underneath, not push the whole page down or create scroll.
+
+BACKEND
+
+No backend changes.
+
+WHAT TO CHANGE
+1) Make the Map screen a fixed-height frame (no page scroll)
+
+In the Schedule Map view container:
+
+Ensure the top-level wrapper is something like:
+
+height: 100dvh (or 100vh fallback)
+
+overflow: hidden
+
+display: flex
+
+flex-direction: column
+
+Then the map region becomes:
+
+flex: 1
+
+min-height: 0 (important so it doesn’t overflow and create scroll)
+
+This prevents the page from being taller than the screen.
+
+2) Convert the “peek bar” to a true bottom overlay (always visible)
+
+Whatever component renders the bottom handle / pill:
+
+Render it even when no job is selected (it should represent “X locations/jobs today”)
+
+Place it inside the map region wrapper and position it absolutely:
+
+Use a wrapper like:
+
+Map wrapper: position: relative; flex:1; min-height:0;
+
+Bottom overlay container: position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 12px); display:flex; justify-content:center; z-index: 50; pointer-events:none;
+
+The pill/button itself: pointer-events:auto;
+
+This ensures it’s always in-frame and clickable.
+
+3) Prevent layout shift when opening the carousel
+
+Right now, opening the bar likely mounts a bottom sheet in normal document flow, causing reflow.
+
+Fix:
+
+The expanded carousel must also be an absolute overlay inside the map wrapper (NOT a normal div that pushes content).
+
+When expanded, do not change the header container. Only adjust the map’s internal padding to keep Google watermark/UI visible.
+
+Implementation approach:
+
+Track isTrayOpen state.
+
+When tray opens, apply bottom padding to the map container (or a transparent spacer overlay) equal to tray height so the map content doesn’t get covered, but without moving the page.
+
+Example behavior:
+
+Closed: map has padding-bottom: 0
+
+Open: map has padding-bottom: TRAY_HEIGHT_PX
+
+(Do NOT apply padding to the whole page, only the map wrapper / map container.)
+
+4) Initial load positioning bug (why it’s offscreen until click)
+
+This usually happens because the overlay is conditionally rendered only after a job click OR it’s positioned relative to a container that doesn’t have the correct height until after interaction.
+
+Fixes:
+
+Always render the pill from the start.
+
+Ensure the map wrapper has a real height immediately (flex:1; min-height:0; position:relative;)
+
+If using Google Maps, call google.maps.event.trigger(map, "resize") (or your map ref resize method) after tray open/close so map re-centers correctly—BUT this should not be necessary just to show the pill.
+
+DELIVERABLES
+
+The bottom pill/handle is visible and tappable immediately on entering Schedule → Map.
+
+Tapping the pill opens the job card carousel without shifting the screen layout (no page jump).
+
+The page cannot be vertically scrolled; only the map pans/zooms normally.
+
+Works on iPhone safe area (home indicator) and different iPhone sizes.
+
+DEBUG LOGGING (temporary)
+
+Add 2 logs:
+
+On Schedule Map mount: log viewport + wrapper heights, and whether tray is rendered.
+
+On tray open/close: log tray height and applied map padding.
+
+Remove logs once confirmed.
+
+NOTES
+
+Do NOT change map gesture settings (this task is not about 1-finger/2-finger map dragging).
+
+Keep styling consistent with EcoLogic (rounded pill, subtle shadow, clean spacing).
