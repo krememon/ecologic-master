@@ -1,0 +1,89 @@
+COPY/PASTE REPLIT AGENT PROMPT (EcoLogic — Map Job Marker Icon Inside Green Bubble)
+
+Goal: Update the Google Map “JOB” markers so the green teardrop/bubble has our Jobs icon centered inside the circle (like a “badge” inside the pin). Keep everything else the same (live tech location marker stays as-is). Must look crisp on iPhone (retina), no blurry icon.
+
+Assets:
+
+Use this existing transparent Jobs icon image (already provided): ChatGPT Image Mar 3, 2026, 03_48_03 PM.png
+
+Put it in the frontend as a static asset:
+
+Option A: client/public/icons/jobs-marker.png
+
+Option B: client/src/assets/jobs-marker.png (only if you already have an asset pipeline importing images cleanly)
+
+What to implement:
+
+Create a custom SVG marker for job pins that includes:
+
+The existing green teardrop pin shape (or visually identical to current job marker)
+
+A circle “bubble” at the top
+
+The Jobs icon inside the bubble, centered, sized correctly
+
+The Jobs icon should be white (if the icon is black/gray, apply an SVG filter or use a white version; if easiest, invert it within SVG)
+
+Add subtle depth: small shadow or white ring (match current design language)
+
+Implementation detail (important):
+
+Use Google Maps marker icon with an SVG data URL.
+
+Embed the Jobs icon inside the SVG using <image href="..."> and make that href either:
+
+A base64 data URL generated once at runtime, or
+
+A static data:image/png;base64,... string checked into a small helper file, or
+
+If easier: convert the PNG into a simple SVG path (only if feasible quickly).
+
+Must be retina sharp:
+
+Provide SVG viewBox like 0 0 64 64 (or similar)
+
+Use scaledSize and correct anchor so the pin tip points exactly to the location.
+
+Update only job markers:
+
+Wherever we render job markers (the green pins), replace the current icon with the new SVG icon.
+
+Do NOT change the blue “You”/live location marker or crew markers unless we explicitly want them updated later.
+
+Selected/highlight state:
+
+If the job is selected (from swipe card / marker click), the marker should look slightly emphasized:
+
+Example: thicker white ring around bubble, or slightly larger scale, or stronger shadow.
+
+Keep it subtle and modern (match the rest of the app).
+
+Deliverables:
+
+Add a helper: makeJobMarkerIcon({ selected?: boolean }) that returns { url, scaledSize, anchor }
+
+Put any base64 conversion logic in a single place (avoid re-encoding per marker render).
+
+Ensure no map performance regressions (no recreating huge strings inside render loops).
+
+Keep existing functionality: marker click, card swipe highlight, map free-range behavior, etc.
+
+Acceptance criteria:
+
+Green job markers now show the Jobs icon inside the bubble.
+
+Looks clean (centered), no extra whitespace, no misalignment.
+
+Crisp on iPhone.
+
+Selected job marker has a subtle highlight.
+
+No changes to map pan/zoom logic, no broken interactions.
+
+Notes:
+
+If you need to quickly base64 the PNG, do it with a small node script or a one-time conversion and paste the base64 constant into a helper file (preferred for speed + consistency).
+
+Ensure the SVG data URL is properly URI-encoded.
+
+Proceed and implement now.

@@ -122,18 +122,41 @@ function formatTimeDisplay(time: string | null): string {
   }
 }
 
+const jobMarkerCache = new Map<string, string>();
 function createJobMarkerIcon(selected = false): string {
-  const size = selected ? 44 : 36;
-  const h = selected ? 54 : 44;
-  const cx = size / 2;
+  const key = selected ? 's' : 'n';
+  const cached = jobMarkerCache.get(key);
+  if (cached) return cached;
+
+  const W = 64;
+  const H = 80;
+  const cx = W / 2;
+  const cy = W / 2;
+  const r = cx - 2;
   const color = selected ? '#059669' : '#16a34a';
-  const stroke = selected ? `<circle cx="${cx}" cy="${cx}" r="${cx - 1}" fill="none" stroke="#ffffff" stroke-width="3"/>` : '';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${h}" viewBox="0 0 ${size} ${h}">
-    <defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="${selected ? 3 : 2}" flood-opacity="${selected ? 0.5 : 0.3}"/></filter></defs>
-    <path d="M${cx} 0C${cx * 0.447} 0 0 ${cx * 0.447} 0 ${cx}c0 ${cx * 0.75} ${cx} ${h - cx} ${cx} ${h - cx}s${cx}-${(h - cx) * 0.48} ${cx}-${h - cx}C${size} ${cx * 0.447} ${size - cx * 0.447} 0 ${cx} 0z" fill="${color}" filter="url(#s)"/>
-    ${stroke}
+  const ringW = selected ? 3 : 0;
+  const shadow = selected ? 3 : 2;
+  const shadowOp = selected ? 0.5 : 0.3;
+
+  const clipboardIcon = `
+    <g transform="translate(${cx - 12}, ${cy - 14})" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="20" height="24" rx="2"/>
+      <rect x="6" y="0" width="12" height="6" rx="1.5"/>
+      <line x1="8" y1="12" x2="16" y2="12"/>
+      <line x1="8" y1="16" x2="16" y2="16"/>
+      <line x1="8" y1="20" x2="13" y2="20"/>
+    </g>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <defs><filter id="js" x="-20%" y="-10%" width="140%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="${shadow}" flood-opacity="${shadowOp}"/></filter></defs>
+    <path d="M${cx} 0C${cx * 0.447} 0 0 ${cx * 0.447} 0 ${cx}c0 ${r * 0.75} ${cx} ${H - cx} ${cx} ${H - cx}s${cx}-${(H - cx) * 0.48} ${cx}-${H - cx}C${W} ${cx * 0.447} ${W - cx * 0.447} 0 ${cx} 0z" fill="${color}" filter="url(#js)"/>
+    ${ringW > 0 ? `<circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="none" stroke="#ffffff" stroke-width="${ringW}"/>` : ''}
+    ${clipboardIcon}
   </svg>`;
-  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+
+  const url = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  jobMarkerCache.set(key, url);
+  return url;
 }
 
 function createEstimateMarkerIcon(selected = false): string {
@@ -282,11 +305,12 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
       const md = markers[idx];
       if (!md) return;
       const isSelected = md.id === selectedJobId;
-      const iconUrl = md.type === 'estimate'
-        ? createEstimateMarkerIcon(isSelected)
-        : createJobMarkerIcon(isSelected);
-      const size = isSelected ? 44 : 36;
-      const h = isSelected ? 54 : 44;
+      const isJob = md.type !== 'estimate';
+      const iconUrl = isJob
+        ? createJobMarkerIcon(isSelected)
+        : createEstimateMarkerIcon(isSelected);
+      const size = isJob ? (isSelected ? 48 : 40) : (isSelected ? 44 : 36);
+      const h = isJob ? (isSelected ? 60 : 50) : (isSelected ? 54 : 44);
       gm.setIcon({
         url: iconUrl,
         scaledSize: new google.maps.Size(size, h),
@@ -397,11 +421,12 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
 
     markers.forEach((markerData) => {
       const isSelected = markerData.id === selectedJobId;
-      const iconUrl = markerData.type === 'estimate' 
-        ? createEstimateMarkerIcon(isSelected) 
-        : createJobMarkerIcon(isSelected);
-      const size = isSelected ? 44 : 36;
-      const h = isSelected ? 54 : 44;
+      const isJob = markerData.type !== 'estimate';
+      const iconUrl = isJob
+        ? createJobMarkerIcon(isSelected) 
+        : createEstimateMarkerIcon(isSelected);
+      const size = isJob ? (isSelected ? 48 : 40) : (isSelected ? 44 : 36);
+      const h = isJob ? (isSelected ? 60 : 50) : (isSelected ? 54 : 44);
       
       const googleMarker = new google.maps.Marker({
         position: { lat: markerData.lat, lng: markerData.lng },
