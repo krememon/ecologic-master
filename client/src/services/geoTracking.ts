@@ -29,6 +29,7 @@ let watchId: string | null = null;
 let webWatchId: number | null = null;
 let flushIntervalId: ReturnType<typeof setInterval> | null = null;
 let lastSentPoint: { lat: number; lng: number; time: number } | null = null;
+let lastKnownCoords: { lat: number; lng: number; accuracy: number } | null = null;
 let pointCount = 0;
 
 function log(...args: any[]) {
@@ -74,12 +75,10 @@ function handleCoords(lat: number, lng: number, accuracy: number, speed: number 
     'lat=' + lat.toFixed(6),
     'lng=' + lng.toFixed(6),
     'acc=' + accuracy.toFixed(0),
-    'speed=' + (speed ?? 'null'),
-    'heading=' + (heading ?? 'null'),
-    'alt=' + (altitude ?? 'null'),
-    'ts=' + timestamp,
     'source=' + source
   );
+
+  lastKnownCoords = { lat, lng, accuracy };
 
   if (accuracy > ACCURACY_LIMIT) {
     log('point SKIPPED — acc=' + accuracy.toFixed(0) + ' > limit=' + ACCURACY_LIMIT);
@@ -95,11 +94,8 @@ function handleCoords(lat: number, lng: number, accuracy: number, speed: number 
   } else {
     const dist = haversineDistance(lastSentPoint.lat, lastSentPoint.lng, lat, lng);
     const elapsed = now - lastSentPoint.time;
-    log('filter check dist=' + dist.toFixed(0) + 'm elapsed=' + (elapsed / 1000).toFixed(0) + 's');
     if (dist >= DISTANCE_THRESHOLD || elapsed >= HEARTBEAT_MS) {
       shouldSend = true;
-    } else {
-      log('point filtered out (dist < 50m and elapsed < 60s)');
     }
   }
 
@@ -285,6 +281,14 @@ const geoTracking = {
 
     flushIntervalId = setInterval(() => {
       log('heartbeat tick — pointCount=' + pointCount + ' sessionId=' + currentSessionId);
+      if (lastKnownCoords && currentSessionId !== null) {
+        const elapsed = lastSentPoint ? Date.now() - lastSentPoint.time : Infinity;
+        if (elapsed >= HEARTBEAT_MS) {
+          log('heartbeat keepalive — sending last known coords');
+          lastSentPoint = { lat: lastKnownCoords.lat, lng: lastKnownCoords.lng, time: Date.now() };
+          sendOnePoint(lastKnownCoords.lat, lastKnownCoords.lng, lastKnownCoords.accuracy, 'heartbeat');
+        }
+      }
     }, 30000);
 
     log('start() complete');
@@ -317,7 +321,16 @@ const geoTracking = {
 
     currentSessionId = null;
     lastSentPoint = null;
+    lastKnownCoords = null;
     pointCount = 0;
+  },
+
+  getLastKnownCoords() {
+    return lastKnownCoords;
+  },
+
+  isActive() {
+    return currentSessionId !== null;
   },
 };
 

@@ -3369,7 +3369,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allLocations = await storage.getActiveLiveLocations(company.id);
 
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
-      const fresh = allLocations.filter(l => l.updatedAt && new Date(l.updatedAt) > tenMinAgo);
+      const fresh = allLocations.filter(l => {
+        if (!l.updatedAt) return false;
+        const age = Date.now() - new Date(l.updatedAt).getTime();
+        if (age > 10 * 60 * 1000) {
+          if (l.userId === userId) {
+            console.log(`[geo-live] self location stale: age=${Math.round(age/1000)}s updatedAt=${l.updatedAt}`);
+          }
+          return false;
+        }
+        return true;
+      });
 
       let filtered: typeof fresh;
       if (userRole === 'OWNER') {
@@ -3399,7 +3409,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filtered = fresh.filter(l => l.userId === userId);
       }
 
-      console.log(`[geo-live] requester=${userId} companyId=${company.id} role=${userRole} totalActive=${allLocations.length} fresh=${fresh.length} filtered=${filtered.length}`);
+      const selfInAll = allLocations.some(l => l.userId === userId);
+      const selfInFresh = fresh.some(l => l.userId === userId);
+      const selfInFiltered = filtered.some(l => l.userId === userId);
+      console.log(`[geo-live] requester=${userId} companyId=${company.id} role=${userRole} totalActive=${allLocations.length} fresh=${fresh.length} filtered=${filtered.length} selfInAll=${selfInAll} selfInFresh=${selfInFresh} selfInFiltered=${selfInFiltered}`);
 
       if (filtered.length === 0) {
         return res.json([]);

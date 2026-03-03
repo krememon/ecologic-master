@@ -1,0 +1,170 @@
+Replit Agent Prompt (copy/paste)
+
+Live location stopped showing on Map. Logs show:
+
+[MapLive] role=TECHNICIAN count=0 selfFound=NO
+
+So the Google map is fine — we’re not receiving live location points (or we’re filtering them out / not including “self” for TECHNICIAN). The WEBP errors are noise.
+
+✅ Goal
+
+Restore “You” live marker on map for TECHNICIAN (and others) without re-introducing the auto-refocus behavior we just fixed.
+
+Step 1 — Add focused logging (server + client)
+Client (MapLive)
+
+In the file/component where [MapLive] logs are printed:
+
+Log the raw response payload from the live location API (first 1-3 entries max)
+
+Log the request params used (date, selected tech/crew filters, companyId, userId, role)
+
+Log the exact reason we end up with count=0:
+
+response empty?
+
+filtered out by role?
+
+filtered out by date?
+
+filtered out by “assigned jobs only”?
+
+filtered out by “isClockedIn”?
+
+filtered out by “stale timestamp”?
+
+filtered out by “missing lat/lng”?
+
+Example logs:
+
+[MapLive] fetch url=/api/location/live params=...
+
+[MapLive] resp count=X sample=...
+
+[MapLive] afterFilters count=Y reasons={...}
+
+Server
+
+Find the route: GET /api/location/live
+Add logs:
+
+userId, role, companyId
+
+how many rows found before filters
+
+how many after filters
+
+whether “self” is included/excluded
+
+Step 2 — Verify that we are still sending points
+
+We previously confirmed geoTracking was sending batches. Now verify again:
+
+On the TECHNICIAN device
+
+Search logs for:
+
+[geo] sending
+
+/api/location POST endpoint hits
+
+[geo] batch OK
+
+If these are missing:
+
+geo tracking may have been disabled accidentally (gated by the “free range” change, or a state variable)
+
+confirm geoTracking.start still runs on clock-in and continues while on map
+
+Add a log in the geo tracking module at the exact moment it POSTs location to backend:
+
+endpoint
+
+sessionId
+
+lat/lng
+
+response
+
+Step 3 — Fix common root causes (DO THIS IN ORDER)
+Cause A: MapLive is using the wrong data source
+
+There are two different things:
+
+“Schedule job markers” (appointments)
+
+“Live device locations” (tech location tracking)
+
+Make sure the “You” marker comes from live location endpoint, not from schedule items.
+
+If the map is only rendering job pins now, restore the live marker layer:
+
+even when there are 0 schedule jobs, it should still show “You” if live exists.
+
+Cause B: TECHNICIAN is being filtered out
+
+If the server route is only returning locations for office roles, fix it:
+
+TECHNICIAN should be allowed to fetch:
+
+at minimum: their own live location
+
+optionally: assigned crew (depends on RBAC)
+
+Minimum safe behavior:
+
+If role === TECHNICIAN → return ONLY their own latest point
+
+If role is Dispatcher/Owner/Supervisor → return all permitted tech locations
+
+Cause C: Over-filtering by “selected date”
+
+Live location should NOT depend on schedule day.
+If code is filtering live points by “selectedDate”, remove that.
+Live points should be based on recency (ex: last 5–10 minutes), not calendar day.
+
+Cause D: Stale-time threshold too strict
+
+If we only accept points newer than, say, 30s, that can show 0.
+Set threshold to something like:
+
+show marker if last update <= 10 minutes
+
+show “Last updated X min ago” in UI
+
+Step 4 — Hard requirement: show self even if list is empty
+
+Even if /api/location/live returns empty for some reason, add a fallback:
+
+If we have a currentPosition in the app (from geoTracking state), we can render self marker from that cached point.
+But do NOT re-center the map.
+
+Step 5 — Confirm we didn’t break “free range”
+
+When restoring live marker:
+
+do NOT call panTo / fitBounds automatically
+
+only update marker position
+
+Acceptance checks
+
+Clock in as TECHNICIAN → “You” marker appears within 5–10s
+
+MapLive logs show count>=1 selfFound=YES
+
+Panning map does NOT snap back
+
+If location is stale, UI shows “Last updated Xm ago” but marker still stays
+
+Deliverables
+
+Fix backend /api/location/live (role/filters) so TECHNICIAN gets self location
+
+Fix frontend MapLive filters so it doesn’t drop self
+
+Add logs to prove where it breaks
+
+Keep free-range behavior intact
+
+Proceed now.

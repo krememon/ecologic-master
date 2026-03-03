@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { FixedOverlayPortal } from "@/components/FixedOverlayPortal";
+import geoTracking from "@/services/geoTracking";
 
 interface ScheduleItem {
   type: 'job' | 'estimate';
@@ -293,16 +294,36 @@ function ScheduleMapViewInner({ items, selectedDate, userRole, userId }: Schedul
             lng: parseFloat(d.lng) || 0,
             lastUpdatedAt: d.updatedAt || new Date().toISOString(),
           }));
+
           const selfFound = userId ? mapped.some(l => l.userId === userId) : false;
-          console.log(`[MapLive] role=${role} count=${mapped.length} selfFound=${selfFound ? 'YES' : 'NO'}`);
+
+          if (!selfFound && userId && geoTracking.isActive()) {
+            const coords = geoTracking.getLastKnownCoords();
+            if (coords) {
+              console.log(`[MapLive] self NOT in API response — using geoTracking fallback lat=${coords.lat.toFixed(5)} lng=${coords.lng.toFixed(5)}`);
+              mapped.push({
+                userId,
+                name: 'You',
+                initials: 'ME',
+                avatarUrl: null,
+                lat: coords.lat,
+                lng: coords.lng,
+                lastUpdatedAt: new Date().toISOString(),
+              });
+            }
+          }
+
+          console.log(`[MapLive] role=${role} count=${mapped.length} selfFound=${mapped.some(l => l.userId === userId) ? 'YES' : 'NO'}`);
           setCrewLocations(mapped);
         }
-      } catch {}
+      } catch (e) {
+        console.log('[MapLive] fetch error', e);
+      }
     };
     fetchCrew();
     const interval = setInterval(fetchCrew, 5000);
     return () => clearInterval(interval);
-  }, [isLoaded]);
+  }, [isLoaded, role, userId]);
 
   const geocodeAddresses = useCallback(async () => {
     if (!items.length) {
