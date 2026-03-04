@@ -84,7 +84,7 @@ const CATEGORY_LABELS: Record<TimeCategory, string> = {
   job: 'Job',
   shop: 'Shop',
   drive: 'Drive',
-  admin: 'Admin',
+  admin: 'Work',
   break: 'Break',
 };
 
@@ -954,7 +954,7 @@ export default function Home() {
                   className="flex items-center gap-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
                   <Building className="h-5 w-5 text-slate-500" />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Admin</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Work</span>
                 </button>
                 <button
                   onClick={() => handleCategorySelect('break')}
