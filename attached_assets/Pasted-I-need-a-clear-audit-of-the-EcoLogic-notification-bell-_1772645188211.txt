@@ -1,0 +1,111 @@
+I need a clear audit of the EcoLogic notification bell/system because I forgot exactly how it currently works. Please inspect the code and tell me what the notification bell does right now and what notifications actually feed into it.
+
+What I need you to check
+
+Review the full notification flow, including:
+
+the notification bell icon
+
+the notifications screen/modal/panel it opens
+
+the backend sources that create notifications
+
+any database table/model used to store notifications
+
+any real-time / websocket / polling behavior
+
+read/unread state
+
+badge counts
+
+push/in-app behavior (if both exist)
+
+Questions I need answered
+
+What happens right now when a user taps the notification bell?
+
+Where does it pull notification data from?
+
+What notification types are currently implemented?
+
+Exactly what app events create a notification right now?
+
+new message?
+
+job assigned?
+
+document uploaded?
+
+approval needed?
+
+estimate/invoice updates?
+
+schedule changes?
+
+reminders?
+
+clock-in related?
+
+subscription/billing?
+
+Which of those are actually wired up and working vs just partially scaffolded?
+
+Are notifications:
+
+stored in the database
+
+generated live only
+
+or both?
+
+Does the bell show an unread badge/count? If yes, how is that calculated?
+
+How is a notification marked as read?
+
+Are there different notifications by role (Owner vs Supervisor vs Technician, etc.)?
+
+Are mobile push notifications implemented, or is this only in-app right now?
+
+Deliverables
+
+Give me a concise but complete breakdown of:
+
+A) Current bell behavior
+
+what clicking it does
+
+where it routes/opens
+
+how unread count works
+
+B) Current implemented notification types
+
+List every notification currently in use and the trigger for each one.
+
+C) Code locations
+
+Tell me the main files involved:
+
+frontend notification UI files
+
+backend routes/services
+
+DB schema/table/model
+
+any websocket/realtime code
+
+D) What is missing / not fully wired
+
+Tell me what notification types appear planned but are not actually functioning yet.
+
+Important
+
+Do not change any code yet
+
+This is an inspection/audit only
+
+I want a plain-English explanation, easy to understand
+
+If something is unclear in the code, say so clearly instead of guessing
+
+If you want, after the agent reports back, send me its response here and I’ll help you decide what notification types to improve first.
