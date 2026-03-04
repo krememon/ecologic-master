@@ -883,16 +883,17 @@ export default function Home() {
             
             <div className="space-y-2">
               <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                Your Jobs
+                Today's Jobs
               </p>
               <div className="space-y-1">
                 {myJobs
-                  .filter(job => 
-                    job.status !== 'completed' && 
-                    job.status !== 'cancelled' &&
-                    (jobSearchQuery === '' || 
-                      (job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())))
-                  )
+                  .filter(job => {
+                    if (job.status === 'completed' || job.status === 'cancelled') return false;
+                    const jobDate = getJobDate(job);
+                    if (!jobDate || !isToday(jobDate)) return false;
+                    if (jobSearchQuery !== '' && !job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())) return false;
+                    return true;
+                  })
                   .slice(0, 10)
                   .map(job => (
                     <button
@@ -912,14 +913,15 @@ export default function Home() {
                       )}
                     </button>
                   ))}
-                {myJobs.filter(job => 
-                  job.status !== 'completed' && 
-                  job.status !== 'cancelled' &&
-                  (jobSearchQuery === '' || 
-                    (job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())))
-                ).length === 0 && (
+                {myJobs.filter(job => {
+                  if (job.status === 'completed' || job.status === 'cancelled') return false;
+                  const jobDate = getJobDate(job);
+                  if (!jobDate || !isToday(jobDate)) return false;
+                  if (jobSearchQuery !== '' && !job.title?.toLowerCase().includes(jobSearchQuery.toLowerCase())) return false;
+                  return true;
+                }).length === 0 && (
                   <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
-                    No jobs available
+                    No jobs scheduled for today
                   </p>
                 )}
               </div>
