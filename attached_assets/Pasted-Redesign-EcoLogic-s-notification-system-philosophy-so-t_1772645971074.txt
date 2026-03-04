@@ -1,0 +1,222 @@
+Redesign EcoLogic’s notification system philosophy so the notification bell stops feeling like a spam folder. Right now, too many system events are being treated as bell notifications, which makes the bell feel noisy, cluttered, and low-value. I want the bell to feel like a smart attention center, not a dumping ground for every event.
+
+Core goal
+
+Refactor the notification experience so the bell primarily surfaces:
+
+items that need user attention
+
+important updates the user would be upset to miss
+
+clear, actionable alerts
+
+Lower-value operational events should either be:
+
+deprioritized visually
+
+grouped differently
+
+filtered out of the main bell experience
+
+or moved into a quieter “activity/update” style section if that can be done cleanly without overbuilding
+
+New notification philosophy
+
+The bell should not behave like a system log.
+
+Instead, structure notifications conceptually into 3 buckets:
+
+1) Action Required
+
+These should be highest priority and feel most prominent in the bell.
+Examples:
+
+direct messages
+
+job assigned / unassigned
+
+job cancelled
+
+major schedule/reschedule affecting today
+
+estimate approved
+
+invoice overdue
+
+payment failed
+
+missed clock-out
+
+anything requiring manager/owner action
+
+2) Important Updates
+
+Still useful, but less urgent than true action items.
+Examples:
+
+payment collected
+
+refund issued
+
+payment succeeded
+
+technician clocked in/out (for managers, if kept)
+
+certain significant status changes
+
+3) Activity / Low Priority
+
+These should not dominate the bell and should feel quieter if they remain visible.
+Examples:
+
+generic job status changes
+
+repetitive reminders like job_starting_soon
+
+announcements
+
+minor system updates
+
+duplicate/overlapping payment confirmations
+
+What I want changed
+
+Please audit the existing notification rendering and adjust the system so the bell feels more curated and less spammy.
+
+Priority behavior changes
+
+Reduce noise in the main bell
+
+De-emphasize or hide low-value notifications from the main default view
+
+Do not give all notifications equal visual weight
+
+Prioritize truly important notifications
+
+Surface urgent/actionable items first
+
+Make it obvious what matters most
+
+Introduce lightweight grouping or filtering
+If possible without making the UI bloated, add one of these:
+
+sections like:
+
+Needs Attention
+
+Recent Updates
+
+OR simple tabs/filters like:
+
+All
+
+Action Needed
+
+Messages
+Keep this clean and mobile-friendly.
+
+Demote spammy notification types
+These are the biggest candidates to reduce/deprioritize in the bell:
+
+job_status_changed (unless major)
+
+job_starting_soon
+
+tech_clocked_in
+
+tech_clocked_out
+
+announcement
+
+duplicate payment success-style notifications
+
+Keep the bell meaningful
+Strong bell-worthy candidates:
+
+dm_message
+
+job_assigned
+
+job_unassigned
+
+job_cancelled
+
+major job_rescheduled
+
+estimate_approved
+
+invoice_overdue
+
+payment_failed (if/when wired)
+
+missed_clockout (if/when wired)
+
+Implementation direction
+
+Use the existing notification infrastructure, but improve how notifications are classified and displayed.
+
+Possible implementation approaches (choose the cleanest one):
+
+add a frontend priority mapping by notification type
+
+add a backend priority/category field if that is cleaner
+
+add a render grouping layer in the panel
+
+default-sort by priority first, then recency
+
+optionally collapse or visually soften low-priority notifications
+
+UX requirements
+
+Keep the bell simple and premium-feeling
+
+Make the panel easier to scan
+
+Avoid clutter
+
+Preserve mobile usability
+
+Do not create a giant complicated inbox UI
+
+The user should immediately understand:
+
+what needs attention
+
+what is just an update
+
+what can be ignored for now
+
+Important
+
+Do not break existing notification creation logic unless necessary
+
+Prefer changing classification, sorting, grouping, and visual hierarchy first
+
+Do not remove backend notification records entirely unless there is a strong reason
+
+We still want history — we just don’t want everything shouting at the user equally
+
+Keep current mark-read / clear-all behavior unless there is a very clean improvement
+
+Deliverables
+
+Refactor the notification panel so it feels less like spam and more like an attention center
+
+Add priority/grouping logic for current notification types
+
+Deprioritize noisy low-value notifications in the UI
+
+Keep the experience clean on both desktop and mobile
+
+Give me a short summary of:
+
+what files were changed
+
+how notifications are now grouped/prioritized
+
+which notification types were downgraded
+
+which types remain top-priority in the bell
+
+Do this in a clean, restrained way — I want it to feel smarter and calmer, not overengineered.

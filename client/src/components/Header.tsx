@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase, DollarSign, AlertTriangle, ClipboardCheck, Calendar, FileText, UserMinus, RefreshCw, Clock, Timer } from "lucide-react";
+import { Menu, Bell, Check, Trash2, Megaphone, MessageSquare, Briefcase, DollarSign, AlertTriangle, ClipboardCheck, Calendar, FileText, UserMinus, RefreshCw, Clock, Timer, Filter } from "lucide-react";
 import { useSidebar } from "@/hooks/useSidebar";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
@@ -24,6 +24,41 @@ interface Notification {
   readAt: string | null;
   createdAt: string;
   meta?: { conversationId?: number; senderId?: string; messageId?: number; senderName?: string };
+}
+
+type NotificationPriority = 'action' | 'update' | 'activity';
+type FilterTab = 'all' | 'action' | 'messages';
+
+const PRIORITY_MAP: Record<string, NotificationPriority> = {
+  dm_message: 'action',
+  job_assigned: 'action',
+  job_unassigned: 'action',
+  job_cancelled: 'action',
+  job_rescheduled: 'action',
+  estimate_approved: 'action',
+  invoice_overdue: 'action',
+  payment_failed: 'action',
+  missed_clockout: 'action',
+  payment_collected: 'update',
+  payment_succeeded: 'update',
+  invoice_paid: 'update',
+  manual_payment_recorded: 'update',
+  refund_issued: 'update',
+  estimate_created: 'update',
+  job_status_changed: 'update',
+  tech_clocked_in: 'activity',
+  tech_clocked_out: 'activity',
+  job_starting_soon: 'activity',
+  announcement: 'activity',
+  job_updated: 'activity',
+  job_completed: 'activity',
+  document_uploaded: 'activity',
+};
+
+const PRIORITY_ORDER: Record<NotificationPriority, number> = { action: 0, update: 1, activity: 2 };
+
+function getPriority(type: string): NotificationPriority {
+  return PRIORITY_MAP[type] || 'activity';
 }
 
 const getNotificationIcon = (type: string) => {
@@ -80,6 +115,7 @@ interface HeaderProps {
 export default function Header({ title, subtitle, user, className }: HeaderProps) {
   const { toggle } = useSidebar();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [, setLocation] = useLocation();
 
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
@@ -101,6 +137,33 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
     },
     enabled: notificationsOpen,
   });
+
+  const sortedAndFiltered = useMemo(() => {
+    let filtered = [...notifications];
+
+    if (activeTab === 'action') {
+      filtered = filtered.filter(n => getPriority(n.type) === 'action');
+    } else if (activeTab === 'messages') {
+      filtered = filtered.filter(n => n.type === 'dm_message');
+    }
+
+    filtered.sort((a, b) => {
+      const pa = PRIORITY_ORDER[getPriority(a.type)];
+      const pb = PRIORITY_ORDER[getPriority(b.type)];
+      if (pa !== pb) return pa - pb;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return filtered;
+  }, [notifications, activeTab]);
+
+  const actionCount = useMemo(() => {
+    return notifications.filter(n => getPriority(n.type) === 'action' && !n.readAt).length;
+  }, [notifications]);
+
+  const messageCount = useMemo(() => {
+    return notifications.filter(n => n.type === 'dm_message' && !n.readAt).length;
+  }, [notifications]);
 
   const markReadMutation = useMutation({
     mutationFn: async (notificationId: number) => {
@@ -164,6 +227,12 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
     return date.toLocaleDateString();
   };
 
+  const tabs: { key: FilterTab; label: string; count?: number }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'action', label: 'Action Needed', count: actionCount },
+    { key: 'messages', label: 'Messages', count: messageCount },
+  ];
+
   return (
     <>
       <header className={cn(
@@ -200,7 +269,9 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
             )}
           </button>
           <GlobalCreateMenu />
@@ -208,9 +279,9 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
       </header>
 
       <Sheet open={notificationsOpen} onOpenChange={setNotificationsOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader className="space-y-0 pb-0">
-            <div className="flex items-center justify-between px-0 py-1">
+        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
+          <SheetHeader className="px-6 pt-6 pb-0 space-y-0">
+            <div className="flex items-center justify-between">
               <SheetTitle className="text-base font-semibold">Notifications</SheetTitle>
               <div className="flex items-center gap-1">
                 {unreadCount > 0 && (
@@ -240,76 +311,132 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
               </div>
             </div>
           </SheetHeader>
-          <div className="border-b -mx-6 mt-2" />
+
+          <div className="px-6 pt-3 pb-0">
+            <div className="flex gap-1">
+              {tabs.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                    activeTab === tab.key
+                      ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  )}
+                >
+                  {tab.label}
+                  {tab.count !== undefined && tab.count > 0 && (
+                    <span className={cn(
+                      "ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold leading-none",
+                      activeTab === tab.key
+                        ? "bg-white/20 text-white dark:bg-slate-900/30 dark:text-slate-900"
+                        : "bg-red-500 text-white"
+                    )}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-b mx-6 mt-3" />
           
           {clearError && (
-            <div className="mt-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded">
+            <div className="mx-6 mt-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded">
               {clearError}
             </div>
           )}
           
-          <div className="mt-4 -mx-6 px-6 overflow-y-auto max-h-[calc(100vh-8rem)]">
+          <div className="flex-1 overflow-y-auto px-6 pt-2 pb-6">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-600" />
               </div>
-            ) : notifications.length === 0 ? (
+            ) : sortedAndFiltered.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[40vh] text-center">
                 <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-                  <Bell className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+                  {activeTab === 'messages' ? (
+                    <MessageSquare className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+                  ) : activeTab === 'action' ? (
+                    <Filter className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+                  ) : (
+                    <Bell className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+                  )}
                 </div>
                 <p className="text-slate-600 dark:text-slate-400 text-sm">
-                  No notifications yet
+                  {activeTab === 'all' ? 'No notifications yet' : activeTab === 'action' ? 'No action items' : 'No messages'}
                 </p>
               </div>
             ) : (
-              <div className="space-y-1">
-                {notifications.map((notification) => (
-                  <button
-                    key={notification.id}
-                    onClick={() => handleNotificationClick(notification)}
-                    className={cn(
-                      "w-full text-left px-3 py-3 rounded-lg transition-colors",
-                      notification.readAt
-                        ? "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
-                        : "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1 flex-shrink-0 flex items-center gap-2">
-                        {!notification.readAt && (
-                          <span className="w-2 h-2 rounded-full bg-blue-600" />
-                        )}
-                        {getNotificationIcon(notification.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                          {notification.type === 'announcement' ? (
-                            <>
-                              Announcement
-                              {notification.meta?.senderName && (
-                                <span className="font-normal text-slate-500 dark:text-slate-400"> from {notification.meta.senderName}</span>
-                              )}
-                            </>
-                          ) : notification.type === 'dm_message' ? (
-                            <>
-                              {notification.title}
-                              <span className="font-normal text-slate-500 dark:text-slate-400"> sent you a message</span>
-                            </>
-                          ) : (
-                            notification.title
+              <div className="space-y-0.5">
+                {sortedAndFiltered.map((notification) => {
+                  const priority = getPriority(notification.type);
+                  const isActivity = priority === 'activity';
+
+                  return (
+                    <button
+                      key={notification.id}
+                      onClick={() => handleNotificationClick(notification)}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 rounded-lg transition-colors",
+                        notification.readAt
+                          ? "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
+                          : priority === 'action'
+                            ? "bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                            : priority === 'update'
+                              ? "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              : "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800"
+                      )}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="mt-0.5 flex-shrink-0 flex items-center gap-1.5">
+                          {!notification.readAt && (
+                            <span className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              priority === 'action' ? "bg-blue-600" : priority === 'update' ? "bg-slate-400" : "bg-slate-300"
+                            )} />
                           )}
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
-                          {notification.type === 'dm_message' ? `"${notification.body}"` : notification.body}
-                        </p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                          {formatTime(notification.createdAt)}
-                        </p>
+                          <span className={cn(isActivity && notification.readAt && "opacity-50")}>
+                            {getNotificationIcon(notification.type)}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "text-sm truncate",
+                            isActivity ? "font-normal text-slate-600 dark:text-slate-400" : "font-medium text-slate-900 dark:text-slate-100"
+                          )}>
+                            {notification.type === 'announcement' ? (
+                              <>
+                                Announcement
+                                {notification.meta?.senderName && (
+                                  <span className="font-normal text-slate-500 dark:text-slate-400"> from {notification.meta.senderName}</span>
+                                )}
+                              </>
+                            ) : notification.type === 'dm_message' ? (
+                              <>
+                                {notification.title}
+                                <span className="font-normal text-slate-500 dark:text-slate-400"> sent you a message</span>
+                              </>
+                            ) : (
+                              notification.title
+                            )}
+                          </p>
+                          <p className={cn(
+                            "text-sm line-clamp-2",
+                            isActivity ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-400"
+                          )}>
+                            {notification.type === 'dm_message' ? `"${notification.body}"` : notification.body}
+                          </p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                            {formatTime(notification.createdAt)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
