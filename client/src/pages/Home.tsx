@@ -498,101 +498,107 @@ export default function Home() {
             ) : timeData?.role === 'technician' ? (
               <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-slate-900 dark:text-white">Time Today</h3>
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                      timeData.isClockedIn 
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    }`}>
-                      {timeData.isClockedIn && (
-                        <span className="relative flex h-1.5 w-1.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
-                        </span>
-                      )}
-                      {timeData.isClockedIn ? 'Clocked in' : 'Not clocked in'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${timeData.isClockedIn ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                        <Clock className={`h-5 w-5 ${timeData.isClockedIn ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'}`} />
-                      </div>
-                      <div>
-                        <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                          {timeData.hoursToday.toFixed(1)} hrs
-                        </p>
-                        {timeData.isClockedIn ? (
-                          <div className="space-y-0.5">
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {timeData.currentJobTitle 
-                                ? `Working on: ${timeData.currentJobTitle}` 
-                                : timeData.currentCategory && timeData.currentCategory !== 'job'
-                                  ? `Activity: ${CATEGORY_LABELS[timeData.currentCategory as TimeCategory] || timeData.currentCategory}`
-                                  : 'Working'}
-                            </p>
-                            {timeData.clockedInAt && (
-                              <ElapsedTime startTime={timeData.clockedInAt} />
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Clock in to start tracking time
+                  {timeData.isClockedIn ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Time Today</p>
+                          <p className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+                            {timeData.hoursToday.toFixed(1)} <span className="text-base font-medium text-slate-400 dark:text-slate-500">hrs</span>
                           </p>
-                        )}
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                          </span>
+                          Clocked in
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="flex items-center gap-2">
-                        {timeData.isClockedIn ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={handleSwitchClick}
-                              disabled={switchJobMutation.isPending}
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2"
-                            >
-                              Switch
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => clockOutMutation.mutate()}
-                              disabled={clockOutMutation.isPending}
-                              className="border-slate-300 dark:border-slate-700"
-                            >
-                              {clockOutMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Square className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                                  Clock Out
-                                </>
-                              )}
-                            </Button>
-                          </>
+
+                      <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2.5">
+                        <div className="min-w-0 flex-1 mr-3">
+                          <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">Working on</p>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate mt-0.5">
+                            {timeData.currentJobTitle 
+                              || (timeData.currentCategory && timeData.currentCategory !== 'job'
+                                ? (CATEGORY_LABELS[timeData.currentCategory as TimeCategory] || timeData.currentCategory)
+                                : 'General')}
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleSwitchClick}
+                          disabled={switchJobMutation.isPending}
+                          className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 whitespace-nowrap px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors shrink-0"
+                        >
+                          Switch
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-0.5">
+                        {timeData.clockedInAt ? (
+                          <ElapsedTime startTime={timeData.clockedInAt} />
                         ) : (
-                          <Button
-                            size="sm"
-                            onClick={handleClockInClick}
-                            disabled={clockInMutation.isPending}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            {clockInMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                                Clock In
-                              </>
-                            )}
-                          </Button>
+                          <span />
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => clockOutMutation.mutate()}
+                          disabled={clockOutMutation.isPending}
+                          className="border-slate-300 dark:border-slate-700 h-9 px-4"
+                        >
+                          {clockOutMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Square className="h-3 w-3 mr-1.5 fill-current" />
+                              Clock Out
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-slate-900 dark:text-white">Time Today</h3>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                          Not clocked in
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-full bg-slate-100 dark:bg-slate-800">
+                            <Clock className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                          </div>
+                          <div>
+                            <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                              {timeData.hoursToday.toFixed(1)} hrs
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Clock in to start tracking time
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleClockInClick}
+                          disabled={clockInMutation.isPending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          {clockInMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                              Clock In
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : timeData?.role === 'manager' ? (
@@ -1007,7 +1013,7 @@ function ElapsedTime({ startTime }: { startTime: string }) {
   }, [startTime]);
   
   return (
-    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+    <p className="text-[11px] text-slate-400 dark:text-slate-500">
       {elapsed}
     </p>
   );

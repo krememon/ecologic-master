@@ -1,0 +1,113 @@
+Copy/paste this to the Replit Agent:
+
+Clean up the clocked-in state of the Time Today card so it looks less cluttered and more polished. Right now, when a user is clocked in, the card feels cramped and visually messy. I want a cleaner, more premium layout with better spacing and hierarchy.
+
+Goal
+
+Redesign the clocked-in version only of this card to make it feel organized, easy to scan, and less crowded — without changing the underlying clock-in/clock-out functionality.
+
+Current issues
+
+The current clocked-in card feels cluttered because:
+
+too many elements are crammed into a small space
+
+the job name wraps awkwardly
+
+Switch is jammed into the content area
+
+Elapsed pulls too much attention
+
+the left green icon and top-right Clocked In badge feel redundant
+
+the Clock Out button does not have enough breathing room
+
+New layout direction
+
+Rework the card into 3 clean zones:
+
+1) Top row
+
+Left: Time Today
+
+Main time value should be clearly emphasized and easier to read (example: 0.1 hrs)
+
+Right: keep the green Clocked In status pill
+
+2) Middle section
+
+Show the active work item in a cleaner stacked format:
+
+Working on
+
+job/activity name underneath in smaller muted text
+
+Move Switch out of the text flow and place it as a subtle secondary action aligned to the right of this section (or otherwise clearly separated)
+
+3) Bottom row
+
+Left: small muted helper text for elapsed time (example: Elapsed 0m)
+
+Right: Clock Out button as the primary action, with proper spacing
+
+Design requirements
+
+Keep the same overall card style/theme as EcoLogic
+
+Make spacing more balanced on mobile
+
+Reduce visual noise
+
+Improve text hierarchy so the eye naturally scans:
+
+status
+
+total time
+
+current job/activity
+
+actions
+
+Prevent awkward wrapping as much as possible
+
+If needed, truncate long job names gracefully instead of letting the layout break
+
+Keep it compact, but not cramped
+
+Important
+
+This is a UI/UX cleanup only
+
+Do not break any clock-in, switch, or clock-out logic
+
+Do not change data flow, timers, or tracking behavior
+
+Only update the clocked-in state of this card
+
+The not-clocked-in state should remain unchanged unless absolutely necessary for consistency
+
+Optional cleanup
+
+If the left green icon is visually redundant because the Clocked In pill already communicates status, either remove it or reduce its visual weight
+
+Make Elapsed less visually aggressive than it is now
+
+Ensure the Clock Out button has enough spacing and looks intentional
+
+Deliverables
+
+Redesign the clocked-in card layout to look cleaner and less cluttered
+
+Preserve all existing functionality
+
+Confirm which component/file was updated
+
+Give a short summary of:
+
+what changed in the layout
+
+whether anything was removed/repositioned
+
+how long job names are handled
+
+Do not redesign the whole page — only polish and reorganize this specific clocked-in card state.
