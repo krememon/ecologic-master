@@ -1,0 +1,102 @@
+Goal: When the hamburger menu opens the left Sidebar, I want the map UI (carousel + “2 locations” pill + any floating map buttons) to stay EXACTLY where they are normally (no repositioning, no layout shifts), but they must be visually hidden BEHIND the sidebar and not clickable while the sidebar is open.
+
+Key requirement (do not misunderstand)
+
+DO NOT move, reflow, resize, translate, or reposition the carousel/pill/buttons at all.
+
+DO NOT change any map page spacing.
+
+Only change layering + click-through behavior while the sidebar is open.
+
+What’s happening
+
+On iOS native, the map page floating UI (carousel/pill/etc.) is rendering above the sidebar due to z-index/layering and stays clickable.
+
+Fix approach (only layering + pointer events)
+1) Make Sidebar always top-most
+
+Ensure the Sidebar container (and its dim/backdrop) has a higher z-index than any map overlay.
+
+Sidebar: z-[9999] (or CSS z-index: 9999)
+
+Backdrop (if used): z-[9998]
+
+Nothing else should exceed this.
+
+2) Force map overlays UNDER the sidebar when open (without moving them)
+
+Do NOT set display:none for the carousel/pill/buttons because that can change measurements and cause re-layout.
+
+Instead, when sidebar is open:
+
+set those overlay wrappers to a lower z-index (or set them to a lower stacking context)
+
+set pointer-events: none so they can’t be tapped
+
+optionally reduce opacity to 0 ONLY if still visible due to any weird compositing (but prefer z-index first)
+
+Important: Use only z-index + pointer-events. No transform. No position changes.
+
+Implementation steps
+
+Find the single source of truth boolean for sidebar open state:
+
+isSidebarOpen, isNavOpen, or similar in the app shell/layout where the hamburger toggles the sidebar.
+
+If it doesn’t exist globally, lift it to the layout that renders both Sidebar + page content so Map overlays can read it.
+
+In the Sidebar component:
+
+Ensure the Sidebar root has position: fixed (or whatever it already uses) and set:
+
+z-index: 9999
+
+Ensure the overlay/backdrop is below the sidebar but above app content:
+
+z-index: 9998
+
+In the Schedule Map page component (ONLY map page):
+
+Wrap every floating overlay UI block (carousel sheet, “2 locations” pill/handle, any FAB buttons, etc.) in a single wrapper div like:
+
+When sidebar is open:
+
+pointer-events: none
+
+z-index: 0 (or very low)
+
+When sidebar is closed:
+
+restore the original z-index (whatever it was before — do not change visuals)
+
+Example pattern (use existing styles, do not change positions):
+
+Keep all existing classes for layout/positioning untouched.
+
+Only add conditional class additions like:
+
+pointer-events-none
+
+z-[0] vs original z-[X]
+
+Prevent accidental “click-through”
+
+Even if the sidebar visually covers it, iOS sometimes lets underlying elements receive taps if layering is weird.
+
+So make sure overlays are pointer-events: none when sidebar open.
+
+Deliverables
+
+Sidebar always renders above everything (no map UI visible on top of it).
+
+Carousel + pill + floating buttons remain EXACTLY the same positions when sidebar is closed.
+
+When sidebar is open, those map UI elements are behind it and not clickable.
+
+No regressions on other pages.
+
+Debugging (add temporary logs, then remove)
+
+Log the sidebar open state at the layout level and map page level to confirm the boolean is flowing correctly.
+
+Verify in iOS native build.

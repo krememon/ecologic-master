@@ -14,7 +14,6 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const toggle = () => {
-    console.log('Toggle sidebar clicked, current state:', isOpen);
     setIsOpen(!isOpen);
   };
   const close = () => setIsOpen(false);
@@ -33,4 +32,9 @@ export function useSidebar() {
     throw new Error('useSidebar must be used within a SidebarProvider');
   }
   return context;
+}
+
+export function useSidebarSafe() {
+  const context = useContext(SidebarContext);
+  return context ?? { isOpen: false, toggle: () => {}, close: () => {}, open: () => {} };
 }

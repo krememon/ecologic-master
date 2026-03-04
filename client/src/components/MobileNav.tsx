@@ -33,6 +33,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { Permission } from "@shared/permissions";
+import { useSidebar } from "@/hooks/useSidebar";
 
 interface Notification {
   id: number;
@@ -67,7 +68,7 @@ interface MobileNavProps {
 }
 
 export default function MobileNav({ user, company }: MobileNavProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, toggle: toggleSidebar, close: closeSidebar } = useSidebar();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const { can, canAny, role } = useCan();
@@ -182,18 +183,16 @@ export default function MobileNav({ user, company }: MobileNavProps) {
   }, [effectiveRole, can, canAny]);
 
   const handleToggle = () => {
-    console.log('Mobile nav toggle clicked, current state:', isOpen);
-    setIsOpen(!isOpen);
+    toggleSidebar();
   };
 
   const handleClose = () => {
-    setIsOpen(false);
+    closeSidebar();
   };
 
   const handleNavItemClick = () => {
-    // Add a small delay for visual feedback before closing
     setTimeout(() => {
-      setIsOpen(false);
+      closeSidebar();
     }, 150);
   };
 
@@ -230,9 +229,9 @@ export default function MobileNav({ user, company }: MobileNavProps) {
 
       {/* Mobile Menu Overlay */}
       <div className={cn(
-        "fixed inset-0 z-50 sm:hidden transition-all duration-300 ease-in-out",
+        "fixed inset-0 sm:hidden transition-all duration-300 ease-in-out",
         isOpen ? "opacity-100 visible" : "opacity-0 invisible"
-      )}>
+      )} style={{ zIndex: 10000 }}>
         {/* Background overlay */}
         <div 
           className={cn(

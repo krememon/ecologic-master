@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSidebarSafe } from "@/hooks/useSidebar";
 
 interface FixedOverlayPortalProps {
   children: ReactNode;
@@ -8,6 +9,7 @@ interface FixedOverlayPortalProps {
 
 export function FixedOverlayPortal({ children, active = true }: FixedOverlayPortalProps) {
   const [mounted, setMounted] = useState(false);
+  const { isOpen: sidebarOpen } = useSidebarSafe();
 
   useEffect(() => {
     setMounted(true);
@@ -54,7 +56,7 @@ export function FixedOverlayPortal({ children, active = true }: FixedOverlayPort
         width: '100vw',
         height: 'var(--vvh, 100vh)',
         pointerEvents: 'none',
-        zIndex: 9999,
+        zIndex: sidebarOpen ? 1 : 9999,
         overflow: 'hidden',
       }}
     >
