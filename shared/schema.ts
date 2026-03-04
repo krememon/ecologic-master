@@ -1594,7 +1594,7 @@ export const insertTimeLogSchema = createInsertSchema(timeLogs).omit({
 
 export type TimeLog = typeof timeLogs.$inferSelect;
 export type InsertTimeLog = z.infer<typeof insertTimeLogSchema>;
-export type TimeEntryCategory = "job" | "shop" | "drive" | "admin" | "break";
+export type TimeEntryCategory = "job" | "shop" | "drive" | "work" | "admin" | "break";
 
 // Notification type enum
 export const notificationTypeEnum = pgEnum("notification_type", [

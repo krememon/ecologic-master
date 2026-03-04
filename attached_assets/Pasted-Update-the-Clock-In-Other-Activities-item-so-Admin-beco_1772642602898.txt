@@ -1,0 +1,87 @@
+Update the Clock In → Other Activities item so Admin becomes Work everywhere, including the backend/internal activity key.
+
+Goal
+
+Right now the visible label was changed, but the internal category key still remains admin. I want this fully converted so the system uses Work instead of Admin across the stack.
+
+Required change
+
+Replace the old activity key/value/category from:
+
+admin
+
+to:
+
+work
+
+Scope
+
+Update this safely across all places that reference this activity type, including:
+
+Frontend
+
+Clock In modal / Other Activities button
+
+Any labels, mappings, display helpers, dropdowns, pills, filters, summaries, or history views that show this activity
+
+Any client-side logic that sends admin when clocking in/out
+
+Backend
+
+API routes / request validation
+
+Enums / constants / allowed activity types
+
+Any timesheet, time-entry, or tracking logic that stores or reads this activity type
+
+Any analytics/event names only if they directly depend on the activity value
+
+Any reports, exports, or summaries that group by this activity type
+
+Database compatibility
+
+Do this in a backward-safe way so existing records using admin do not break.
+
+Migration / compatibility requirements
+
+New clock-ins should save as work
+
+Existing records already stored as admin should still be readable
+
+Wherever old admin records are displayed, they should render as Work in the UI
+
+If needed, add a compatibility mapping so:
+
+stored admin → display as Work
+
+new writes use work
+
+If there is a centralized normalization layer, use it
+
+Important
+
+Do not break existing time entries
+
+Do not break filtering, totals, payroll, or summaries
+
+Keep the same icon, layout, and behavior in the Clock In modal unless a label reference must be updated
+
+Preserve all current functionality for Shop / Drive / Break
+
+Deliverables
+
+Update all relevant frontend/backend references from admin to work
+
+Add a safe compatibility layer for legacy admin records
+
+Confirm whether a DB migration was needed or whether this was handled through normalization/mapping
+
+Give me a short summary of:
+
+files changed
+
+where admin was replaced
+
+how legacy admin entries are handled
+
+whether new records now save as work

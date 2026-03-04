@@ -2768,6 +2768,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Time tracking endpoints
   // =====================
   
+  const normalizeCategory = (cat: string | null | undefined): string | null => {
+    if (!cat) return null;
+    return cat === 'admin' ? 'work' : cat;
+  };
+
   // Get time data for today (role-aware response)
   app.get('/api/time/today', isAuthenticated, async (req: any, res) => {
     try {
@@ -2802,7 +2807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hoursToday: Math.round(totalMinutes / 60 * 100) / 100,
           currentJobId: activeLogWithJob?.jobId || null,
           currentJobTitle: activeLogWithJob?.job?.title || null,
-          currentCategory: activeLogWithJob?.category || null,
+          currentCategory: normalizeCategory(activeLogWithJob?.category),
         });
       }
       
@@ -2839,13 +2844,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         myHoursToday: Math.round(myMinutes / 60 * 100) / 100,
         currentJobId: myActiveLogWithJob?.jobId || null,
         currentJobTitle: myActiveLogWithJob?.job?.title || null,
-        currentCategory: myActiveLogWithJob?.category || null,
+        currentCategory: normalizeCategory(myActiveLogWithJob?.category),
         activeLog: myActiveLogWithJob ? {
           id: myActiveLogWithJob.id,
           jobId: myActiveLogWithJob.jobId,
           jobTitle: myActiveLogWithJob.job?.title || null,
           clockInAt: myActiveLogWithJob.clockInAt,
-          category: myActiveLogWithJob.category,
+          category: normalizeCategory(myActiveLogWithJob.category),
         } : null,
       });
     } catch (error: any) {
@@ -2917,13 +2922,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Validate category if provided
-      const validCategories = ['job', 'shop', 'drive', 'admin', 'break'];
+      const validCategories = ['job', 'shop', 'drive', 'admin', 'work', 'break'];
       if (category && !validCategories.includes(category)) {
         return res.status(400).json({ error: 'Invalid category' });
       }
+      const dbCategory = category === 'work' ? 'admin' : category;
       
-      const log = await storage.clockIn(userId, member.companyId, jobId, category);
+      const log = await storage.clockIn(userId, member.companyId, jobId, dbCategory);
       console.log('[Time] clocked in', { userId, logId: log.id, jobId, category });
 
       const clockUser = await storage.getUser(userId);
@@ -2944,7 +2949,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         excludeUserIds: [userId],
       }).catch(err => console.error('[Clock-in notification error]', err));
 
-      res.json({ success: true, timeSessionId: log.id, clockedInAt: log.clockInAt, jobId: log.jobId, category: log.category });
+      res.json({ success: true, timeSessionId: log.id, clockedInAt: log.clockInAt, jobId: log.jobId, category: normalizeCategory(log.category) });
     } catch (error: any) {
       console.error('Error clocking in:', error);
       res.status(500).json({ error: 'Unable to clock in' });
@@ -2982,18 +2987,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Validate category if provided
-      const validCategories = ['job', 'shop', 'drive', 'admin', 'break'];
+      const validCategories = ['job', 'shop', 'drive', 'admin', 'work', 'break'];
       if (category && !validCategories.includes(category)) {
         return res.status(400).json({ error: 'Invalid category' });
       }
+      const dbCategory = category === 'work' ? 'admin' : category;
       
-      const result = await storage.switchJob(userId, member.companyId, jobId, category);
+      const result = await storage.switchJob(userId, member.companyId, jobId, dbCategory);
       console.log('[Time] switched job', { userId, endedId: result.ended.id, startedId: result.started.id, jobId, category });
       res.json({ 
         success: true, 
         ended: { id: result.ended.id, clockOutAt: result.ended.clockOutAt },
-        started: { id: result.started.id, clockInAt: result.started.clockInAt, jobId: result.started.jobId, category: result.started.category },
+        started: { id: result.started.id, clockInAt: result.started.clockInAt, jobId: result.started.jobId, category: normalizeCategory(result.started.category) },
       });
     } catch (error: any) {
       console.error('Error switching job:', error);
@@ -3061,7 +3066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         clockedOutAt: log.clockOutAt,
         durationMinutes,
         jobId: log.jobId,
-        category: log.category,
+        category: normalizeCategory(log.category),
       });
     } catch (error: any) {
       console.error('Error clocking out:', error);
@@ -3092,17 +3097,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'startDate and endDate are required' });
       }
 
-      // Technicians can only see their own entries - auto-close their own first
+      const normEntries = (arr: any[]) => arr.map(e => ({ ...e, category: normalizeCategory(e.category) ?? e.category }));
+
       if (role === 'TECHNICIAN') {
         await storage.autoCloseExpiredTimeEntries(userId, member.companyId);
         const entries = await storage.getTimeEntriesForUser(userId, member.companyId, startDate, endDate);
-        return res.json({ role: 'technician', entries });
+        return res.json({ role: 'technician', entries: normEntries(entries) });
       }
 
-      // Managers see all entries - auto-close all company entries first
       await storage.autoCloseExpiredTimeEntriesForCompany(member.companyId);
       const entries = await storage.getTimeEntriesForCompany(member.companyId, startDate, endDate);
-      return res.json({ role: 'manager', entries });
+      return res.json({ role: 'manager', entries: normEntries(entries) });
     } catch (error: any) {
       console.error('Error getting time entries:', error);
       res.status(500).json({ error: 'Failed to get time entries' });

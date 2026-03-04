@@ -62,7 +62,8 @@ function calculateMinutes(start: string, end: string): number {
 function getJobOrCategory(entry: TimeEntry): { title: string; subtitle?: string } {
   if (entry.job?.title) return { title: entry.job.title };
   if (entry.category && entry.category !== "job") {
-    return { title: entry.category.charAt(0).toUpperCase() + entry.category.slice(1) };
+    const displayCat = entry.category === 'admin' ? 'work' : entry.category;
+    return { title: displayCat.charAt(0).toUpperCase() + displayCat.slice(1) };
   }
   // Job was deleted - jobId is null but category was "job"
   if (entry.category === "job" && !entry.job) {

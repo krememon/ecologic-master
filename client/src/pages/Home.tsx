@@ -78,12 +78,13 @@ interface ManagerTimeData {
 
 type TimeData = TechnicianTimeData | ManagerTimeData;
 
-type TimeCategory = 'job' | 'shop' | 'drive' | 'admin' | 'break';
+type TimeCategory = 'job' | 'shop' | 'drive' | 'work' | 'break';
 
-const CATEGORY_LABELS: Record<TimeCategory, string> = {
+const CATEGORY_LABELS: Record<string, string> = {
   job: 'Job',
   shop: 'Shop',
   drive: 'Drive',
+  work: 'Work',
   admin: 'Work',
   break: 'Break',
 };
@@ -949,7 +950,7 @@ export default function Home() {
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Drive</span>
                 </button>
                 <button
-                  onClick={() => handleCategorySelect('admin')}
+                  onClick={() => handleCategorySelect('work')}
                   disabled={clockInMutation.isPending || switchJobMutation.isPending}
                   className="flex items-center gap-3 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 >
