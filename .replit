@@ -42,7 +42,7 @@ integrations = ["javascript_websocket:1.0.0", "javascript_openai:1.0.0", "javasc
 [userenv]
 
 [userenv.shared]
-SUPPORT_INBOX_EMAIL = "ppellegrino@ecologicc.com"
+SUPPORT_INBOX_EMAIL = "support@ecologicc.com"
 
 [userenv.development]
 BYPASS_EMAIL_CODE = "true"
