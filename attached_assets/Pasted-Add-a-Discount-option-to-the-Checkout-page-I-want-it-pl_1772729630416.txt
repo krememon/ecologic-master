@@ -1,0 +1,201 @@
+Add a Discount option to the Checkout page. I want it placed directly under Partial Payment and it should behave similarly: when the user turns on the toggle, it expands/reveals fields to apply a discount.
+
+Goal
+
+Implement a proper Discount feature in Checkout that:
+
+lets the user toggle discounts on/off
+
+reveals a clean discount input area when enabled
+
+correctly reduces the total bill amount
+
+carries through to the final receipt/email so the client clearly sees that a discount was applied
+
+UI / placement
+
+Add a new card/section directly under Partial Payment.
+
+It should match the same style language as the Partial Payment section:
+
+clean card row
+
+title + short helper text
+
+toggle on the right
+
+New row
+
+Title: Discount
+
+Helper text: something like Apply a discount to this payment
+
+Behavior
+
+When toggle is off: only the collapsed row shows
+
+When toggle is on: expand/drop down a discount input area below it
+
+Keep the animation/expand behavior smooth and consistent with the rest of the checkout UI.
+
+Discount input area
+
+When expanded, show a clean way to enter the discount.
+
+Required inputs
+
+Discount type
+
+Flat amount ($)
+
+Percentage (%)
+
+Discount value
+
+numeric input
+
+Optional but recommended
+
+Reason / note (optional)
+
+short text field like “Loyalty discount” or “Service issue adjustment”
+
+Keep the layout simple and mobile-friendly.
+
+Calculation requirements
+
+The discount must actually affect the bill correctly.
+
+Rules
+
+Discount applies to the current invoice/payment amount being checked out
+
+It must reduce the displayed amount in real time
+
+Update:
+
+subtotal display (if needed)
+
+total display
+
+any payment amount shown to the client
+
+Flat discount
+
+Example: $50 off reduces total by $50
+
+Percentage discount
+
+Example: 10% off on $700 reduces total by $70
+
+Validation
+
+Do not allow discount to reduce total below $0.00
+
+Do not allow invalid percentage values (example: over 100%)
+
+Prevent negative values
+
+Show clean validation if invalid
+
+Receipt / email requirements
+
+This is important:
+
+When the client receives their emailed receipt, it must clearly show the discount.
+
+Receipt should display
+
+original subtotal
+
+discount line item (example: Discount: -$50.00 or Discount (10%): -$70.00)
+
+final total after discount
+
+If a reason/note is included and it makes sense to display, include it cleanly (only if appropriate in the receipt layout).
+
+The final emailed receipt and any payment confirmation should accurately reflect:
+
+the original amount
+
+the discount applied
+
+the final charged amount
+
+Data / backend requirements
+
+Make sure this is not just visual.
+
+The discount must be properly included in:
+
+checkout/payment payload
+
+stored payment/invoice record (where appropriate)
+
+receipt generation/email payload
+
+any displayed payment summary after checkout
+
+Persist the data
+
+Store enough information to accurately reconstruct the discount later, such as:
+
+discount enabled
+
+discount type (flat or percent)
+
+discount value
+
+calculated discount amount
+
+optional discount reason
+
+Important compatibility requirements
+
+Do not break Partial Payment
+
+Discount must work correctly whether Partial Payment is on or off
+
+If both Partial Payment and Discount are enabled, make sure the math is correct and consistent
+
+Use the cleanest business logic for ordering calculations. If there is an existing standard in the app, follow it. Otherwise, use a clear and consistent approach and document it in the summary.
+
+UX requirements
+
+Keep EcoLogic’s current checkout vibe
+
+Match the Partial Payment section style closely
+
+Mobile-first
+
+Clean and easy to understand
+
+Smooth expand/collapse
+
+Real-time total updates so the user can instantly see the result
+
+Deliverables
+
+Add Discount directly under Partial Payment
+
+Add toggle + expandable discount inputs
+
+Make discount update totals correctly in real time
+
+Ensure receipts/emails clearly show the discount applied
+
+Persist discount data properly in the checkout/payment flow
+
+Give me a short summary of:
+
+files changed
+
+how discount math works
+
+how it interacts with Partial Payment
+
+where the discount is stored
+
+how it appears on the receipt/email
+
+Make this a real billing feature, not just a UI mockup.
