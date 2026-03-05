@@ -161,7 +161,7 @@ export default function TermsOfService() {
           <p>If you have questions about these Terms, contact us at:</p>
           <div className="mt-2 space-y-0.5">
             <p className="font-semibold">EcoLogic LLC</p>
-            <p>ppellegrino@ecologicc.com</p>
+            <p>support@ecologicc.com</p>
             <p>631-379-5827</p>
           </div>
         </div>

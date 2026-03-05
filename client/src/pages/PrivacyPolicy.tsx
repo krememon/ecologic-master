@@ -177,7 +177,7 @@ export default function PrivacyPolicy() {
           <p>If you have questions about this Privacy Policy or want to make a privacy-related request, contact us at:</p>
           <div className="mt-2 space-y-0.5">
             <p className="font-semibold">EcoLogic LLC</p>
-            <p>ppellegrino@ecologicc.com</p>
+            <p>support@ecologicc.com</p>
             <p>https://ecologicc.com</p>
           </div>
         </div>
