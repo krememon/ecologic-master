@@ -1,0 +1,250 @@
+Upgrade the Support → FAQs page into a much more robust troubleshooting/help center. Right now it’s too basic. I want it to be very detailed, include a lot more questions, and have a search bar so users can quickly find answers.
+
+Goal
+
+Turn the FAQ page into a real self-serve troubleshooting page that helps users solve common issues without needing to contact support.
+
+Core requirements
+1) Add a search bar
+
+At the top of the FAQ page, add a clean search bar that lets users search FAQ questions/answers.
+
+Search should:
+
+filter results live as the user types
+
+match against both question titles and answer content
+
+be fast and simple
+
+show a clean “no results found” state if nothing matches
+
+Keep the search bar styled to match EcoLogic’s vibe.
+
+2) Add a lot more FAQ content
+
+Expand the FAQ page significantly. I want many more questions and much more detailed answers, especially focused on troubleshooting.
+
+Organize FAQs into useful sections like:
+
+Getting Started
+
+Account & Login
+
+Clock In / Time Tracking
+
+Schedule
+
+Jobs
+
+Notifications
+
+Documents
+
+Estimates & Invoices
+
+Payments & Billing
+
+Mobile App Troubleshooting
+
+Permissions / Access
+
+Support & Reporting Issues
+
+You can use section headers, grouped accordions, or another clean structure — but keep it mobile-friendly and easy to scan.
+
+3) Make the answers detailed and practical
+
+The FAQ answers should not be one-line filler.
+
+They should be:
+
+clear
+
+actually helpful
+
+troubleshooting-focused
+
+step-by-step when appropriate
+
+written in plain English
+
+For troubleshooting questions, answers should explain:
+
+what might be causing the issue
+
+what the user should check first
+
+what steps to try next
+
+when to contact support if it still isn’t resolved
+
+Content direction
+
+Add a strong set of FAQs covering common real-world EcoLogic issues, such as:
+
+Account / Login
+
+I’m not receiving my login code
+
+I entered the code but still can’t log in
+
+Why am I being logged out?
+
+How do I change my email or password?
+
+Why can’t I access certain pages?
+
+Clock In / Time Tracking
+
+Why can’t I clock in?
+
+Why aren’t today’s jobs showing in Clock In?
+
+Why is my clock-in location not working?
+
+Why did my time entry stop?
+
+What happens if I forget to clock out?
+
+Why is my elapsed time wrong?
+
+Why can’t I switch jobs while clocked in?
+
+Schedule
+
+Why don’t I see my assigned jobs?
+
+Why is a job on the wrong day?
+
+Why is the map not showing jobs?
+
+How do I use Day / List / Month / Map views?
+
+Why are schedule changes not updating?
+
+Jobs
+
+Why can’t I open a job?
+
+Why can’t I see certain job details?
+
+Why can’t I edit a job?
+
+Why was I removed from a job?
+
+Why is a job marked with the wrong status?
+
+Notifications
+
+Why am I not getting notifications?
+
+Why did a notification disappear?
+
+Why is the bell not updating right away?
+
+What notifications are considered important?
+
+Why don’t I see a message notification?
+
+Documents
+
+Why can’t I see a document?
+
+Why did my upload fail?
+
+Why can’t I preview a PDF/image?
+
+Why are some documents hidden from me?
+
+Estimates / Invoices / Payments
+
+Why can’t I send an estimate?
+
+Why wasn’t a payment recorded?
+
+Why is an invoice marked overdue?
+
+What happens when a payment fails?
+
+Why can’t I edit an invoice?
+
+App / Device Troubleshooting
+
+The app is slow or frozen
+
+A page is stuck loading
+
+A button does nothing when I tap it
+
+The app looks broken on my phone
+
+Location permissions are not working
+
+Notifications are blocked on my device
+
+Permissions / Access
+
+Why can the owner see something I can’t?
+
+Why can’t I access a document/job/message?
+
+How do role permissions work?
+
+Support
+
+How do I contact support?
+
+How do I report a bug?
+
+How do I request a feature?
+
+What details should I include in a bug report?
+
+UX / design requirements
+
+Keep EcoLogic’s current aesthetic
+
+Mobile-first
+
+Clean, organized, and easy to scan
+
+Search bar at top
+
+FAQ items should be expandable/collapsible
+
+Do not make it feel cluttered even though content is much larger
+
+If needed, use section grouping plus accordions for readability
+
+Important
+
+This should feel like a polished in-app help center, not a giant wall of text
+
+Keep answers detailed, but readable
+
+Preserve smooth performance even with more FAQ items
+
+Make the search/filter experience clean and intuitive
+
+Deliverables
+
+Add a search bar to the FAQ page
+
+Greatly expand the FAQ content with many detailed troubleshooting questions
+
+Organize the FAQs into clear sections
+
+Keep the page clean, searchable, and mobile-friendly
+
+Give me a short summary of:
+
+files changed
+
+how search works
+
+how FAQs are organized
+
+approximately how many FAQ items were added
+
+Make this feel like a real troubleshooting hub users can actually rely on.
