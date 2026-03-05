@@ -1,0 +1,145 @@
+There is still a bug in the Notifications panel: when I delete notifications, they disappear at first, but then they come back into the inbox. That means deletion is not being fully persisted or stale data is being repopulated after refresh/reopen/refetch.
+
+Goal
+
+Fix notification deletion so when a user deletes notifications, they are actually gone and do not reappear later.
+
+Current bad behavior
+
+User enters Select mode
+
+Deletes one or more notifications
+
+They appear removed initially
+
+Then later (after refetch, reopen, reload, or app restart), the same notifications show back up
+
+That should never happen.
+
+What to investigate
+
+Please audit the full delete flow end-to-end:
+
+Frontend
+
+How selected notifications are removed from local UI state
+
+Whether React Query / cache / local state is being updated correctly
+
+Whether the app is optimistically removing them but not syncing with the backend
+
+Whether after a refetch the old records are coming back because cache invalidation is wrong
+
+Backend
+
+Whether the delete route is actually deleting from the real data source
+
+Whether it is deleting only in memory / partial state / wrong user scope
+
+Whether the endpoint returns success without actually removing rows
+
+Whether bulk delete is wired correctly for selected notification IDs
+
+Database / storage
+
+Confirm deleted notifications are actually removed (or properly soft-deleted if that’s the pattern)
+
+Make sure future reads do not return deleted notifications
+
+If soft delete exists, ensure query filters exclude deleted rows
+
+Likely root causes to check
+
+Please specifically verify these:
+
+The frontend is only removing items locally but not persisting delete
+
+The delete API is not actually deleting the rows
+
+The delete API deletes the wrong records or wrong user scope
+
+The fetch query still returns deleted records
+
+The query cache is stale and being restored after re-open
+
+There is a polling/refetch loop reloading old notifications
+
+Delete is hitting one endpoint, but the panel is reading from another source/path
+
+Bulk delete UI is calling the wrong payload shape (IDs not sent correctly)
+
+Required behavior
+
+When notifications are deleted:
+
+they should disappear immediately from the panel
+
+they should be removed from the true backend/data source
+
+they should stay gone after:
+
+closing/reopening the panel
+
+page refresh
+
+app reload
+
+reopening the app later
+
+unread dot/count should update correctly after deletion
+
+Fix requirements
+
+Make deletion persistent
+
+Ensure selected IDs are correctly passed to the backend
+
+Ensure the backend actually deletes those specific notifications for that user
+
+Ensure notification fetches do not re-return deleted notifications
+
+Invalidate/refetch frontend cache correctly after delete succeeds
+
+Keep the Select mode UX as-is unless a tiny adjustment is needed for correctness
+
+Add debugging
+
+Add targeted temporary logs for the delete flow:
+
+selected notification IDs being sent from frontend
+
+API request payload received on backend
+
+number of notifications actually deleted
+
+IDs deleted
+
+IDs returned on the next fetch after deletion
+
+Then remove/minimize noisy logs once confirmed.
+
+Deliverables
+
+Fix notification deletion so deleted items do not reappear
+
+Confirm whether the issue was:
+
+frontend state/cache
+
+backend delete route
+
+database query/storage
+
+or a combination
+
+Give me a short summary of:
+
+files changed
+
+root cause
+
+how delete now persists correctly
+
+how refetch/reopen is prevented from restoring deleted notifications
+
+This is a bug fix only — do not redesign the panel again, just make deletion actually work.

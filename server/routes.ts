@@ -14862,6 +14862,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getUserId(req.user);
       const { ids } = req.body;
+      console.log('[notify-delete] bulk request', { userId, ids, bodyType: typeof req.body, hasIds: !!ids });
       if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ message: 'ids array is required' });
       }
@@ -14869,7 +14870,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Cannot delete more than 200 at once' });
       }
       const numericIds = ids.map(Number).filter((n: number) => !isNaN(n));
+      console.log('[notify-delete] deleting', { userId, numericIds });
       const deleted = await storage.deleteNotificationsByIds(userId, numericIds);
+      console.log('[notify-delete] result', { deleted, requestedCount: numericIds.length });
       res.json({ ok: true, deleted });
     } catch (error: any) {
       console.error('Error bulk deleting notifications:', error);

@@ -174,13 +174,26 @@ export default function Header({ title, subtitle, user, className }: HeaderProps
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
-      return apiRequest('DELETE', '/api/notifications/bulk', { ids });
+      console.log('[notify-delete] sending ids:', ids);
+      const res = await apiRequest('DELETE', '/api/notifications/bulk', { ids });
+      const data = await res.json();
+      console.log('[notify-delete] response:', data);
+      return { ...data, deletedIds: ids };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[notify-delete] success, deleted:', data?.deleted);
+      const deletedSet = new Set(data.deletedIds);
       setSelectMode(false);
       setSelectedIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      queryClient.setQueryData(
+        ['/api/notifications', { view: 'home' }],
+        (old: Notification[] | undefined) => old ? old.filter(n => !deletedSet.has(n.id)) : []
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    },
+    onError: (error) => {
+      console.error('[notify-delete] mutation error:', error);
     },
   });
 
