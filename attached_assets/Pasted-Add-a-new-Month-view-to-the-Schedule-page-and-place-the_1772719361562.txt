@@ -1,0 +1,222 @@
+Add a new Month view to the Schedule page, and place the new tab between List and Map so the tab order becomes:
+
+Day
+
+List
+
+Month
+
+Map
+
+I want this to take inspiration from how Apple Calendar functions and animates — especially the smoothness, clarity, and premium feel — but it must still look like EcoLogic. Do not make it look like a copy of Apple Calendar. Keep EcoLogic’s existing vibe, styling, spacing language, and overall aesthetic.
+
+Core goal
+
+Create a Month calendar view that feels:
+
+smooth
+
+polished
+
+premium
+
+easy to scan
+
+mobile-first
+
+It should borrow the interaction quality and clean structure of Apple Calendar, while staying visually consistent with EcoLogic.
+
+Important design direction
+
+I am not asking for an Apple clone.
+
+Use Apple Calendar only as inspiration for:
+
+smooth transitions
+
+clean month navigation
+
+simple calendar hierarchy
+
+intuitive tap behavior
+
+polished month-to-day interaction
+
+But keep EcoLogic’s:
+
+design theme
+
+colors
+
+component style
+
+rounded corners
+
+spacing rhythm
+
+typography feel
+
+overall product aesthetic
+
+The end result should feel like:
+“EcoLogic’s version of a premium native-feeling month calendar.”
+
+What to implement
+1) Add the Month tab
+
+Insert the new Month tab between List and Map
+
+Keep the existing segmented control style/theme
+
+Match the current tab switcher exactly
+
+Do not make Month feel visually different from the other tabs
+
+2) Build the Month view
+
+Create a full monthly calendar grid that shows:
+
+current month label at the top
+
+a standard month layout
+
+all days in the month
+
+leading/trailing days if needed for a clean full grid
+
+a clear selected day state
+
+subtle indicators for days with scheduled jobs/events
+
+Functional behavior
+
+The Month view should feel smooth and intuitive like a polished native app:
+
+Tapping a day selects it
+
+The selected date should feel clearly active
+
+Days with jobs/events should show subtle indicators (dots, counts, or another restrained EcoLogic-friendly treatment)
+
+The user should be able to move between months smoothly
+
+Month switching should feel fluid and intentional, not abrupt or clunky
+
+Animation / motion requirements
+
+This is important: I specifically want smooth Apple-like motion quality, while keeping EcoLogic styling.
+
+That means:
+
+smooth tab transition into Month view
+
+smooth month-to-month navigation
+
+smooth selected-day state changes
+
+no janky or harsh snapping
+
+use restrained, polished animations only
+
+The animations should feel:
+
+subtle
+
+responsive
+
+premium
+
+native-like
+
+Do not overanimate.
+I want elegant motion, not flashy motion.
+
+UX expectations
+
+The Month view should be:
+
+easy to read at a glance
+
+clean on mobile
+
+touch-friendly
+
+not overcrowded
+
+visually calm
+
+It should prioritize:
+
+understanding the month quickly
+
+seeing which days have scheduled work
+
+tapping into a day naturally
+
+EcoLogic-specific behavior
+
+Use EcoLogic scheduling data as the source of truth.
+
+The Month view should:
+
+reflect real scheduled jobs/events
+
+show which dates have items scheduled
+
+use the currently selected date/day logic where appropriate
+
+integrate cleanly with the existing schedule page flow
+
+If tapping a day should sync with the Day/List views’ selected date, do that in the cleanest way possible.
+
+Visual guidance
+
+Keep the visual styling aligned with the rest of the app:
+
+same overall aesthetic
+
+same quality level as the rest of Schedule
+
+dark-mode friendly
+
+modern and minimal
+
+clean spacing
+
+premium mobile UI
+
+Again: Apple-like function and smoothness, EcoLogic look and feel.
+
+Important
+
+Do not redesign the entire Schedule page
+
+Do not break Day, List, or Map
+
+Do not replace EcoLogic’s style with Apple’s visual style
+
+This should feel like a natural extension of EcoLogic, just more polished and premium
+
+Deliverables
+
+Add the Month tab between List and Map
+
+Build a polished monthly calendar view
+
+Add smooth, restrained, native-feeling transitions/animations
+
+Keep the visual design aligned with EcoLogic
+
+Hook the month grid into real schedule/job data
+
+Give me a short summary of:
+
+files changed
+
+how month navigation works
+
+how days with jobs are indicated
+
+how the selected day interacts with the rest of the Schedule page
+
+Focus on making this feel smooth like Apple, but branded and styled like EcoLogic.

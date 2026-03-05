@@ -177,7 +177,7 @@ function getInitialViewFromParams(): { view: ExtendedViewMode; date: Date } {
   const dateParam = params.get('date');
   
   let view: ExtendedViewMode = 'day';
-  if (viewParam === 'list' || viewParam === 'week' || viewParam === 'map') {
+  if (viewParam === 'list' || viewParam === 'month' || viewParam === 'week' || viewParam === 'map') {
     view = viewParam;
   }
   
@@ -208,6 +208,8 @@ export default function AIScheduling() {
   const [memberFilterInitialized, setMemberFilterInitialized] = useState(false);
   
   const timelineRef = useRef<HTMLDivElement>(null);
+  const monthTouchStartX = useRef<number | null>(null);
+  const [monthTransition, setMonthTransition] = useState<'left' | 'right' | null>(null);
 
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
   const [isViewEventOpen, setIsViewEventOpen] = useState(false);
@@ -264,8 +266,20 @@ export default function AIScheduling() {
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDaysLocal(selectedWeek, i)), [selectedWeek]);
   const selectedDayStr = dateToYmdLocal(selectedDate);
 
-  const weekStart = useMemo(() => `${dateToYmdLocal(weekDates[0])}T00:00:00`, [weekDates]);
-  const weekEnd = useMemo(() => `${dateToYmdLocal(weekDates[6])}T23:59:59`, [weekDates]);
+  const weekStart = useMemo(() => {
+    if (viewMode === 'month') {
+      const first = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+      return `${dateToYmdLocal(first)}T00:00:00`;
+    }
+    return `${dateToYmdLocal(weekDates[0])}T00:00:00`;
+  }, [weekDates, viewMode, selectedDate]);
+  const weekEnd = useMemo(() => {
+    if (viewMode === 'month') {
+      const last = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
+      return `${dateToYmdLocal(last)}T23:59:59`;
+    }
+    return `${dateToYmdLocal(weekDates[6])}T23:59:59`;
+  }, [weekDates, viewMode, selectedDate]);
 
   const { data: rawJobs = [] } = useQuery<JobWithSchedule[]>({
     queryKey: ["/api/jobs"],
@@ -699,11 +713,21 @@ export default function AIScheduling() {
       });
   }, [dailyJobs, employees, role, user?.id, selectedMemberIds]);
 
-  const navigateMonth = (direction: number) => {
-    const newDate = new Date(selectedDate);
-    newDate.setMonth(newDate.getMonth() + direction);
-    setSelectedDate(newDate);
-  };
+  const navigateMonth = useCallback((direction: number) => {
+    if (viewMode === 'month') {
+      setMonthTransition(direction > 0 ? 'left' : 'right');
+      setTimeout(() => {
+        const newDate = new Date(selectedDate);
+        newDate.setMonth(newDate.getMonth() + direction);
+        setSelectedDate(newDate);
+        setMonthTransition(null);
+      }, 180);
+    } else {
+      const newDate = new Date(selectedDate);
+      newDate.setMonth(newDate.getMonth() + direction);
+      setSelectedDate(newDate);
+    }
+  }, [viewMode, selectedDate]);
 
   const navigateWeek = (direction: number) => {
     const newDate = new Date(selectedDate);
@@ -1013,6 +1037,32 @@ export default function AIScheduling() {
 
   const layoutItems = useMemo(() => computeOverlapLayout(scheduleItems), [scheduleItems]);
 
+  const itemCountsByDate = useMemo(() => {
+    const counts: Record<string, { jobs: number; estimates: number; events: number }> = {};
+    const inc = (dateStr: string, type: 'jobs' | 'estimates' | 'events') => {
+      if (!counts[dateStr]) counts[dateStr] = { jobs: 0, estimates: 0, events: 0 };
+      counts[dateStr][type]++;
+    };
+    (jobs || []).forEach(job => {
+      if (!job.startDate) return;
+      const raw = job.startDate;
+      const ds = typeof raw === 'string' ? (raw.includes('T') ? raw.split('T')[0] : raw) : dateToYmdLocal(new Date(raw as any));
+      inc(ds, 'jobs');
+    });
+    (estimates || []).forEach(est => {
+      if (!est.scheduledDate) return;
+      const raw = est.scheduledDate;
+      const ds = typeof raw === 'string' ? (raw.includes('T') ? raw.split('T')[0] : raw) : dateToYmdLocal(new Date(raw as any));
+      inc(ds, 'estimates');
+    });
+    (scheduleEventsRaw || []).forEach(evt => {
+      if (!evt.startAt) return;
+      const ds = dateToYmdLocal(new Date(evt.startAt));
+      inc(ds, 'events');
+    });
+    return counts;
+  }, [jobs, estimates, scheduleEventsRaw]);
+
   const monthName = selectedDate.toLocaleDateString('en-US', { month: 'long' });
   const year = selectedDate.getFullYear();
   const dayOfWeekShort = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -1108,6 +1158,16 @@ export default function AIScheduling() {
             List
           </button>
           <button
+            onClick={() => setViewMode('month')}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              viewMode === 'month'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            Month
+          </button>
+          <button
             onClick={() => setViewMode('map')}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
               viewMode === 'map'
@@ -1120,51 +1180,53 @@ export default function AIScheduling() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-2 py-2 border-b border-slate-200 dark:border-slate-800">
-        <button
-          onClick={() => navigateWeek(-1)}
-          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4 text-slate-500" />
-        </button>
-        
-        <div className="flex gap-1">
-          {weekDates.map((date, idx) => {
-            const dateStr = dateToYmdLocal(date);
-            const isSelected = dateStr === selectedDayStr;
-            const isToday = dateStr === dateToYmdLocal(new Date());
-            const dayNum = date.getDate();
-            
-            return (
-              <button
-                key={dateStr}
-                onClick={() => setSelectedDate(date)}
-                className="flex flex-col items-center w-10 py-1"
-              >
-                <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                  {dayOfWeekShort[idx]}
-                </span>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                  isSelected
-                    ? 'bg-blue-600 text-white'
-                    : isToday
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}>
-                  {dayNum}
-                </div>
-              </button>
-            );
-          })}
+      {viewMode !== 'month' && (
+        <div className="flex items-center justify-between px-2 py-2 border-b border-slate-200 dark:border-slate-800">
+          <button
+            onClick={() => navigateWeek(-1)}
+            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4 text-slate-500" />
+          </button>
+          
+          <div className="flex gap-1">
+            {weekDates.map((date, idx) => {
+              const dateStr = dateToYmdLocal(date);
+              const isSelected = dateStr === selectedDayStr;
+              const isToday = dateStr === dateToYmdLocal(new Date());
+              const dayNum = date.getDate();
+              
+              return (
+                <button
+                  key={dateStr}
+                  onClick={() => setSelectedDate(date)}
+                  className="flex flex-col items-center w-10 py-1"
+                >
+                  <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                    {dayOfWeekShort[idx]}
+                  </span>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                    isSelected
+                      ? 'bg-blue-600 text-white'
+                      : isToday
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}>
+                    {dayNum}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          
+          <button
+            onClick={() => navigateWeek(1)}
+            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          >
+            <ChevronRight className="h-4 w-4 text-slate-500" />
+          </button>
         </div>
-        
-        <button
-          onClick={() => navigateWeek(1)}
-          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
-        >
-          <ChevronRight className="h-4 w-4 text-slate-500" />
-        </button>
-      </div>
+      )}
 
       <div className="flex-1 min-h-0 overflow-hidden bg-white dark:bg-slate-900">
         {viewMode === 'day' && (
@@ -1407,6 +1469,195 @@ export default function AIScheduling() {
             )}
           </div>
         )}
+
+        {viewMode === 'month' && (() => {
+          const viewMonth = selectedDate.getMonth();
+          const viewYear = selectedDate.getFullYear();
+          const firstDay = new Date(viewYear, viewMonth, 1);
+          const startDow = firstDay.getDay();
+          const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+          const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+          const totalCells = Math.ceil((startDow + daysInMonth) / 7) * 7;
+          const todayStr = dateToYmdLocal(new Date());
+
+          const cells: { date: Date; dateStr: string; dayNum: number; isCurrentMonth: boolean }[] = [];
+          for (let i = 0; i < totalCells; i++) {
+            let d: Date;
+            if (i < startDow) {
+              const prevDay = prevMonthDays - startDow + i + 1;
+              d = new Date(viewYear, viewMonth - 1, prevDay);
+            } else if (i - startDow >= daysInMonth) {
+              const nextDay = i - startDow - daysInMonth + 1;
+              d = new Date(viewYear, viewMonth + 1, nextDay);
+            } else {
+              d = new Date(viewYear, viewMonth, i - startDow + 1);
+            }
+            d.setHours(0, 0, 0, 0);
+            const ds = dateToYmdLocal(d);
+            cells.push({ date: d, dateStr: ds, dayNum: d.getDate(), isCurrentMonth: d.getMonth() === viewMonth });
+          }
+
+          const weeks: typeof cells[] = [];
+          for (let i = 0; i < cells.length; i += 7) {
+            weeks.push(cells.slice(i, i + 7));
+          }
+
+          const handleMonthSwipeStart = (e: React.TouchEvent) => {
+            monthTouchStartX.current = e.touches[0].clientX;
+          };
+          const handleMonthSwipeEnd = (e: React.TouchEvent) => {
+            if (monthTouchStartX.current === null) return;
+            const diff = e.changedTouches[0].clientX - monthTouchStartX.current;
+            monthTouchStartX.current = null;
+            if (Math.abs(diff) > 60) {
+              const dir = diff > 0 ? -1 : 1;
+              setMonthTransition(dir > 0 ? 'left' : 'right');
+              setTimeout(() => {
+                navigateMonth(dir);
+                setMonthTransition(null);
+              }, 180);
+            }
+          };
+
+          return (
+            <div className="flex flex-col h-full overflow-y-auto">
+              <div
+                className={`px-3 pt-3 pb-1 transition-all duration-200 ease-out ${
+                  monthTransition === 'left' ? 'opacity-0 -translate-x-4' :
+                  monthTransition === 'right' ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'
+                }`}
+                onTouchStart={handleMonthSwipeStart}
+                onTouchEnd={handleMonthSwipeEnd}
+              >
+                <div className="grid grid-cols-7 mb-1">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                    <div key={d} className="text-center text-xs font-medium text-slate-400 dark:text-slate-500 py-1">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+
+                {weeks.map((week, wi) => (
+                  <div key={wi} className="grid grid-cols-7">
+                    {week.map(cell => {
+                      const isSelected = cell.dateStr === selectedDayStr;
+                      const isToday = cell.dateStr === todayStr;
+                      const counts = itemCountsByDate[cell.dateStr];
+                      const total = counts ? counts.jobs + counts.estimates + counts.events : 0;
+                      const hasJobs = counts?.jobs ? counts.jobs > 0 : false;
+                      const hasEstimates = counts?.estimates ? counts.estimates > 0 : false;
+                      const hasEvents = counts?.events ? counts.events > 0 : false;
+
+                      return (
+                        <button
+                          key={cell.dateStr}
+                          onClick={() => setSelectedDate(cell.date)}
+                          className={`relative flex flex-col items-center py-1.5 transition-all duration-200 ${
+                            cell.isCurrentMonth ? '' : 'opacity-30'
+                          }`}
+                        >
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : isToday
+                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400'
+                                : 'text-slate-700 dark:text-slate-300'
+                          }`}>
+                            {cell.dayNum}
+                          </div>
+                          <div className="flex items-center gap-0.5 mt-0.5 h-2">
+                            {hasJobs && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/70' : 'bg-green-500'}`} />}
+                            {hasEstimates && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/70' : 'bg-purple-500'}`} />}
+                            {hasEvents && <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white/70' : 'bg-blue-500'}`} />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex-1 border-t border-slate-200 dark:border-slate-800 mt-1">
+                <div className="px-4 py-2.5 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </h3>
+                  {scheduleItems.length > 0 && (
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {scheduleItems.length} item{scheduleItems.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+
+                {scheduleItems.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-500">
+                    <CalendarIcon className="h-10 w-10 mb-2 opacity-30" />
+                    <p className="text-sm">No items scheduled</p>
+                  </div>
+                ) : (
+                  <div className="px-4 pb-4 space-y-2">
+                    {scheduleItems.map(item => {
+                      const isEstimate = item.type === 'estimate';
+                      const isEvent = item.type === 'event';
+                      const timeStr = item.scheduledTime && item.scheduledEndTime
+                        ? `${formatTime(item.scheduledTime)} – ${formatTime(item.scheduledEndTime)}`
+                        : formatTime(item.scheduledTime) || 'No time';
+
+                      return (
+                        <button
+                          key={`${item.type}-${item.id}`}
+                          onClick={() => {
+                            if (isEvent) {
+                              handleEventClick(item);
+                            } else {
+                              const returnParams = `?from=schedule&view=month&date=${selectedDayStr}`;
+                              setLocation(isEstimate ? `/estimates/${item.id}${returnParams}` : `/jobs/${item.id}${returnParams}`);
+                            }
+                          }}
+                          className="w-full flex bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-750 transition-all overflow-hidden text-left"
+                        >
+                          <div
+                            className={`w-1 flex-shrink-0 ${
+                              isEvent ? '' : isEstimate ? 'bg-purple-500' : 'bg-green-500'
+                            }`}
+                            style={isEvent ? { backgroundColor: item.eventColor || '#2563EB' } : undefined}
+                          />
+                          <div className="flex-1 px-3 py-2.5 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                              {isEvent ? item.title : (item.jobType || item.title || 'Untitled')}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-slate-500 dark:text-slate-400">{timeStr}</span>
+                              {item.customerName && (
+                                <>
+                                  <span className="text-xs text-slate-300 dark:text-slate-600">·</span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{item.customerName}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center pr-3">
+                            <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                              isEvent
+                                ? 'text-white'
+                                : isEstimate
+                                  ? 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200'
+                                  : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200'
+                            }`}
+                            style={isEvent ? { backgroundColor: item.eventColor || '#2563EB' } : undefined}
+                            >
+                              {isEvent ? 'Event' : isEstimate ? 'Est' : 'Job'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {viewMode === 'week' && (
           <div className="flex flex-col items-center justify-center min-h-full text-slate-500 dark:text-slate-400">

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { X, Search, Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
-export type ExtendedViewMode = 'day' | 'list' | 'week' | 'map';
+export type ExtendedViewMode = 'day' | 'list' | 'month' | 'week' | 'map';
 
 interface TeamMember {
   id: string;
@@ -96,6 +96,7 @@ export function ViewOptionsModal({
   const viewOptions: { key: ExtendedViewMode; label: string }[] = [
     { key: 'day', label: 'Day' },
     { key: 'list', label: 'List' },
+    { key: 'month', label: 'Month' },
     { key: 'week', label: 'Week' },
     { key: 'map', label: 'Map' }
   ];
